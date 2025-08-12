@@ -1,0 +1,100 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:tool_name",
+ "creation": "2025-08-11 18:39:47.986430",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "tool_name",
+  "description",
+  "column_break_lrkj",
+  "types",
+  "reference_doctype",
+  "parameters_section",
+  "parameters",
+  "params",
+  "function_definition"
+ ],
+ "fields": [
+  {
+   "fieldname": "tool_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Tool Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_lrkj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "types",
+   "fieldtype": "Select",
+   "label": "Types",
+   "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nSend Message\nAttach File to Document\nGet Report Result\nGet Value\nSet Value"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "parameters_section",
+   "fieldtype": "Section Break",
+   "label": "Parameters"
+  },
+  {
+   "fieldname": "parameters",
+   "fieldtype": "Table",
+   "label": "Parameters",
+   "options": "Agent Function Params"
+  },
+  {
+   "fieldname": "params",
+   "fieldtype": "JSON",
+   "label": "Params"
+  },
+  {
+   "fieldname": "function_definition",
+   "fieldtype": "JSON",
+   "label": "Function Definition",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-08-11 19:13:16.981037",
+ "modified_by": "Administrator",
+ "module": "AgentFlo",
+ "name": "Agent Tool Function",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
