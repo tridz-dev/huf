@@ -11,6 +11,7 @@
   "temperature",
   "column_break_df8m",
   "model",
+  "top_p",
   "section_break_nyhh",
   "instructions",
   "agent_tool"
@@ -54,6 +55,7 @@
    "label": "Instructions"
   },
   {
+   "default": "1",
    "description": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.",
    "fieldname": "temperature",
    "fieldtype": "Float",
@@ -65,12 +67,19 @@
    "fieldtype": "Table",
    "label": "Agent Tool",
    "options": "Agent Tool"
+  },
+  {
+   "default": "1",
+   "description": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or temperature but not both.",
+   "fieldname": "top_p",
+   "fieldtype": "Float",
+   "label": "Top P"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-11 19:15:35.066506",
+ "modified": "2025-08-12 18:01:49.631023",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
