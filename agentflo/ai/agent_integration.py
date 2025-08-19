@@ -10,13 +10,13 @@ from agents import OpenAIProvider,Agent, Runner,RunConfig, Tool, function_tool,M
 from frappe import _
 from frappe.client import get
 from .tool_functions import (
-	cancel_document,
 	create_document,
-	delete_document,
-	get_document,
+    get_document,
 	get_list,
-	submit_document,
 	update_document,
+    submit_document,
+    cancel_document,
+	delete_document,
 )
 
 
@@ -84,13 +84,12 @@ class AgentManager:
                 doctype: The DocType name
                 data: Document data as dictionary
             """
-            # Pass bot function if exists
-            function = self._get_bot_function(doctype)
-            return create_document(doctype, data, function)
+            tool = self._get_agent_tool(doctype)
+            return create_document(doctype, data, tool)
 
         # Tool for update_document
         @function_tool
-        def update_document_tool(document_id: str, data: dict, reference_doctype: str) -> dict:
+        def update_document_tool(document_id: str, data: dict, doctype: str) -> dict:
             """Update a document in the database
 
             Args:
@@ -98,10 +97,9 @@ class AgentManager:
                 document_id: The document ID
                 data: Fields to update
             """
-            function = self._get_bot_function(doctype)
-            return update_document(doctype, document_id, data, function)
+            tool = self._get_aget_tool(doctype)
+            return update_document(doctype, document_id, data, tool)
 
-        # Tool for delete_document
         @function_tool
         def delete_document_tool(doctype: str, document_id: str) -> dict:
             """Delete a document from the database
@@ -164,20 +162,12 @@ class AgentManager:
         return self.tools or []
 
     
-    def _get_bot_function(self, doctype: str):
-        for func in self.agent_doc.agent_tool:
-            function_doc = frappe.get_doc("Agent Tool Function", func.tool)
-            if function_doc.reference_doctype == doctype:
-                return function_doc
+    def _get_agent_tool(self, doctype: str):
+        for tool in self.agent_doc.agent_tool:
+            tool_doc = frappe.get_doc("Agent Tool Function", tool.tool)
+            if tool_doc.reference_doctype == doctype:
+                return tool_doc
         return None
-
-    # def _get_bot_function(self, doctype: str):
-    #     print(f"Getting bot function for doctype......................: {doctype}")
-    #     """Get agent function configuration for a DocType"""
-    #     for func in self.agent_doc.agent_tool:
-    #         if func.linked_doctype == doctype:
-    #             return func
-    #     return None
 
 
     def create_agent(self) -> Agent:
@@ -246,12 +236,6 @@ async def run_agent(agent_name: str, prompt: str):
     except Exception as e:
         frappe.log_error(f"Error running agent: {frappe.get_traceback()}", "Agent Integration Error")
         return _("An error occurred while running the agent.")
-
-@frappe.whitelist(allow_guest=True)
-def test_get_todo(doc_id):
-    from .tool_functions import get_document
-    return get_document("ToDo", doc_id)
-
 
 
 @frappe.whitelist(allow_guest=True)

@@ -3,7 +3,7 @@ from frappe import _, client
 
 
 def get_document(doctype: str, document_id: str):
-	print(doctype, document_ids,".....................doc")
+	print(doctype, document_id,".....................doc")
 	
 	"""
 	Get a document from the database
@@ -56,27 +56,42 @@ def create_documents(doctype: str, data: list, function=None):
 	return {"documents": docs, "message": "Documents created", "doctype": doctype}
 
 
-def update_document(doctype: str, document_id: str, data: dict, function=None):
-	"""
-	Update a document in the database
-	"""
-	if function:
-		# Get any default values
-		for param in function.parameters:
-			if param.default_value:
-				# Check if this value was not to be asked by the AI
-				if param.do_not_ask_ai:
-					data[param.fieldname] = param.default_value
-
-				# Check if the value was not provided
-				if not data.get(param.fieldname):
-					data[param.fieldname] = param.default_value
-
-	doc = frappe.get_doc(doctype, document_id)
-	doc.update(data)
-	doc.save()
-	return {"document_id": doc.name, "message": "Document updated", "doctype": doctype}
-
+def update_document(doctype: str, document_id: str, data: dict, tool=None):
+    """
+    Update a document in the database with proper error handling
+    
+    Args:
+        doctype: DocType name
+        document_id: Document ID to update
+        data: Dictionary of fields to update
+        tool: Optional tool reference for default values
+    """
+    try:
+        if not doctype or not document_id:
+            return {"success": False, "error": "Doctype and document_id are required"}
+            
+        if not frappe.db.exists(doctype, document_id):
+            return {"success": False, "error": f"{doctype} {document_id} not found"}
+            
+        doc = frappe.get_doc(doctype, document_id)
+        
+        # Apply default values from tool if available
+        if tool:
+            for param in tool.parameters:
+                if param.default_value and not data.get(param.fieldname):
+                    data[param.fieldname] = param.default_value
+        
+        doc.update(data)
+        doc.save()
+        
+        return {
+            "success": True,
+            "message": f"{doctype} {document_id} updated successfully",
+            "document": doc.as_dict()
+        }
+    except Exception as e:
+        frappe.log_error(f"Error updating {doctype} {document_id}: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 def update_documents(doctype: str, data: dict, function=None):
 	"""
@@ -94,12 +109,25 @@ def update_documents(doctype: str, data: dict, function=None):
 
 
 def delete_document(doctype: str, document_id: str):
-	"""
-	Delete a document from the database
-	"""
-	frappe.delete_doc(doctype, document_id)
-	return {"document_id": document_id, "message": "Document deleted", "doctype": doctype}
-
+    """
+    Delete a document with proper error handling
+    
+    Args:
+        doctype: DocType name
+        document_id: Document ID to delete
+    """
+    try:
+        if not doctype or not document_id:
+            return {"success": False, "error": "Doctype and document_id are required"}
+            
+        if not frappe.db.exists(doctype, document_id):
+            return {"success": False, "error": f"{doctype} {document_id} not found"}
+            
+        frappe.delete_doc(doctype, document_id)
+        return {"success": True, "message": f"{doctype} {document_id} deleted successfully"}
+    except Exception as e:
+        frappe.log_error(f"Error deleting {doctype} {document_id}: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 def delete_documents(doctype: str, document_ids: list):
 	"""

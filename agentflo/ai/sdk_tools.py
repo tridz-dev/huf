@@ -632,94 +632,41 @@ def handle_get_list(
 
 
 def handle_update_document(document_id=None, data=None, reference_doctype=None, **kwargs):
-	"""
-	Update a document
+    """
+    Update a document in the database
+    """
+    if data is None:
+        data = {}
+        for key, value in kwargs.items():
+            if key not in ["document_id", "reference_doctype"]:
+                data[key] = value
 
-	Args:
-	    document_id (str): ID of the document to update
-	    data (dict): Fields to update
-	    reference_doctype (str): DocType of the document (provided by function configuration)
-	    **kwargs: Additional parameters from function schema
+    if not reference_doctype:
+        reference_doctype = frappe.flags.get("current_function_doctype")
 
-	Returns:
-	    dict: Updated document data
-	"""
+    if not reference_doctype:
+        return {"success": False, "error": "No reference doctype provided."}
 
-	# Handle different parameter formats
-	# If data is not provided, build it from kwargs
-	if data is None:
-		data = {}
-		# Extract update fields from kwargs
-		for key, value in kwargs.items():
-			if key not in ["document_id", "item_code", "reference_doctype"]:
-				data[key] = value
+    if not frappe.db.exists(reference_doctype, document_id):
+        return {"success": False, "error": f"{reference_doctype} {document_id} not found"}
 
-	# Try to get document_id from different sources
-	if not document_id:
-		# Check if item_code was provided
-		if "item_code" in kwargs:
-			document_id = kwargs["item_code"]
-		elif "item_name" in kwargs:
-			document_id = kwargs["item_name"]
+    try:
+        doc = frappe.get_doc(reference_doctype, document_id)
 
-	try:
-		# Get the reference doctype from function configuration
-		if not reference_doctype:
-			# Try to get from context
-			reference_doctype = frappe.flags.get("current_function_doctype")
+        for field, value in data.items():
+            doc.set(field, value)
 
-		if not reference_doctype:
-			return {
-				"success": False,
-				"error": "No reference doctype provided. Please specify a valid DocType.",
-			}
+        doc.save()
+        frappe.db.commit() 
 
-		# Validate the doctype exists
-		if not frappe.db.exists("DocType", reference_doctype):
-			return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
-
-		# Validate document exists
-		if not frappe.db.exists(reference_doctype, document_id):
-			return {
-				"success": False,
-				"error": f"Document '{document_id}' not found in DocType '{reference_doctype}'.",
-			}
-
-		try:
-			# Get document
-			doc = frappe.get_doc(reference_doctype, document_id)
-
-			# Update fields
-			for field, value in data.items():
-				if hasattr(doc, field):
-					setattr(doc, field, value)
-
-			# Save document
-			doc.save()
-
-			# Ensure datetime objects are converted to strings
-			import datetime
-
-			doc_dict = doc.as_dict()
-			for key, value in doc_dict.items():
-				if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
-					doc_dict[key] = str(value)
-
-			return {
-				"success": True,
-				"result": doc_dict,
-				"message": f"Document '{document_id}' updated successfully.",
-			}
-
-		except frappe.DoesNotExistError:
-			return {
-				"success": False,
-				"error": f"Document '{document_id}' not found in DocType '{reference_doctype}'.",
-			}
-
-	except Exception as e:
-		frappe.log_error("SDK Functions Debug", f"Error in handle_update_document: {str(e)}")
-		return {"success": False, "error": str(e)}
+        return {
+            "success": True,
+            "result": doc.as_dict(),
+            "message": f"{reference_doctype} {document_id} updated successfully.",
+        }
+    except Exception as e:
+        frappe.log_error("SDK Functions Debug", f"Error in handle_update_document: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 
 def handle_get_document(document_id, reference_doctype=None):
