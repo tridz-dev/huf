@@ -439,7 +439,6 @@ class AgentToolFunction(Document):
 
 		for agents in agents:
 			agent = frappe.get_doc("Agent", agents)
-			agent.update_openai_assistant()
 
 	def get_params_as_dict(self):
 		if isinstance(self.params, dict):
