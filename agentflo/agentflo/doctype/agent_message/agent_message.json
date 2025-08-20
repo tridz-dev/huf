@@ -1,16 +1,21 @@
 {
  "actions": [],
  "allow_rename": 1,
+ "autoname": "naming_series:naming_series",
  "creation": "2025-08-11 19:48:02.779437",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "naming_series",
   "conversation",
-  "text",
+  "exchange_data_section",
   "content",
+  "section_break_hm0d",
   "run",
+  "kind",
   "user",
-  "kind"
+  "role",
+  "conversation_index"
  ],
  "fields": [
   {
@@ -32,29 +37,55 @@
    "options": "User"
   },
   {
+   "default": "MSG-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series",
+   "options": "MSG-.YYYY.-"
+  },
+  {
+   "fieldname": "conversation_index",
+   "fieldtype": "Int",
+   "label": "Index in Conversation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "exchange_data_section",
+   "fieldtype": "Section Break",
+   "label": "Exchange Data"
+  },
+  {
+   "fieldname": "section_break_hm0d",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "label": "Content"
+  },
+  {
    "fieldname": "kind",
    "fieldtype": "Select",
    "label": "Kind",
    "options": "\nMessage\nTool Call\nTool Result\nStatus\nError"
   },
   {
-   "fieldname": "text",
-   "fieldtype": "Long Text",
-   "label": "Text"
-  },
-  {
-   "fieldname": "content",
-   "fieldtype": "Long Text",
-   "label": "Content"
+   "default": "user",
+   "fieldname": "role",
+   "fieldtype": "Select",
+   "label": "Role",
+   "options": "user\nassistant\nsystem"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-19 13:39:26.257384",
+ "modified": "2025-08-20 13:52:51.635485",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Message",
+ "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [
   {

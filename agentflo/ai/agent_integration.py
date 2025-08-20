@@ -18,6 +18,7 @@ from .tool_functions import (
     cancel_document,
 	delete_document,
 )
+from .conversation_manager import ConversationManager
 
 
 class AgentManager:
@@ -237,16 +238,34 @@ async def run_agent(agent_name: str, prompt: str):
         return _("An error occurred while running the agent.")
 
 
-@frappe.whitelist(allow_guest=True)
-def run_agent_sync(agent_name: str = None, prompt: str = None, channel_id: str = "API", conversation_history: list = None):
+# Add this function to your agent_integration.py file
+
+@frappe.whitelist()
+def run_agent_sync(agent_name: str = None, prompt: str = None, 
+                  channel_id: str = "API", conversation_id: str = None):
     if not agent_name or not prompt:
         frappe.throw(_("Both agent_name and prompt are required"))
 
+    # Initialize conversation manager
+    conv_manager = ConversationManager(agent_name)
+    
+    # Get or create conversation
+    conversation = conv_manager.get_or_create_conversation(
+        title=f"Chat with {agent_name}", 
+        conversation_id=conversation_id
+    )
+    
+    # Add user message to conversation
+    conv_manager.add_message(conversation, "user", prompt)
+    
+    # Get conversation history for context
+    history = conv_manager.get_conversation_history(conversation.name)
+    
     run_doc = frappe.get_doc({
         "doctype": "Agent Run",
         "agent": agent_name,
         "status": "Queued",
-        "conversation": json.dumps(conversation_history) if conversation_history else None,
+        "conversation": conversation.name,
     })
     run_doc.insert(ignore_permissions=True)
     frappe.db.commit()
@@ -261,14 +280,26 @@ def run_agent_sync(agent_name: str = None, prompt: str = None, channel_id: str =
             "user": frappe.session.user,
             "channel": channel_id,
             "company": frappe.defaults.get_user_default("company"),
+            "conversation_history": history  # Pass history to agent
         }
+
+        # Enhance prompt with conversation context
+        enhanced_prompt = f"""
+        Conversation history:
+        {json.dumps(history, indent=2)}
+        
+        Current user message: {prompt}
+        """
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         result = loop.run_until_complete(
-            Runner.run(agent, prompt, max_turns=8, context=context)
+            Runner.run(agent, enhanced_prompt, max_turns=8, context=context)
         )
         loop.close()
+
+        # Add agent response to conversation
+        conv_manager.add_message(conversation, "assistant", result.final_output, run_doc.name)
 
         run_doc.db_set("status", "Success", update_modified=True)
         run_doc.db_set("response", result.final_output)
@@ -279,6 +310,7 @@ def run_agent_sync(agent_name: str = None, prompt: str = None, channel_id: str =
             "response": result.final_output,
             "provider": manager.agent_doc.provider,
             "agent_run_id": run_doc.name,
+            "conversation_id": conversation.name
         }
 
     except Exception as e:
@@ -290,5 +322,5 @@ def run_agent_sync(agent_name: str = None, prompt: str = None, channel_id: str =
             "success": False,
             "error": str(e),
             "agent_run_id": run_doc.name,
+            "conversation_id": conversation.name
         }
-

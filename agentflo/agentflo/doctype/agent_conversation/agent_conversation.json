@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "field:title",
+ "autoname": "naming_series:naming_series",
  "creation": "2025-08-11 19:20:54.822241",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -9,17 +9,19 @@
   "title",
   "agent",
   "created_by",
+  "is_active",
+  "total_messages",
   "column_break_9v4t",
   "created_at",
-  "last_activity"
+  "last_activity",
+  "naming_series"
  ],
  "fields": [
   {
    "fieldname": "title",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Title",
-   "unique": 1
+   "label": "Title"
   },
   {
    "fieldname": "agent",
@@ -49,16 +51,36 @@
   {
    "fieldname": "column_break_9v4t",
    "fieldtype": "Column Break"
+  },
+  {
+   "default": "CONV-.YYYY.-",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series",
+   "options": "CONV-.YYYY.-"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active"
+  },
+  {
+   "fieldname": "total_messages",
+   "fieldtype": "Int",
+   "label": "Total Messages",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-11 19:26:30.233893",
+ "modified": "2025-08-20 13:01:28.983708",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Conversation",
- "naming_rule": "By fieldname",
+ "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [
   {
