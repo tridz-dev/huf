@@ -220,7 +220,6 @@ class AgentManager:
 
 
 async def run_agent(agent_name: str, prompt: str):
-    print(f"Running agent: {agent_name} with prompt: {prompt}")
     try:
         manager = AgentManager(agent_name=agent_name)
         agent = manager.create_agent()
@@ -240,45 +239,56 @@ async def run_agent(agent_name: str, prompt: str):
 
 @frappe.whitelist(allow_guest=True)
 def run_agent_sync(agent_name: str = None, prompt: str = None, channel_id: str = "API", conversation_history: list = None):
-    """Run an AI Agent synchronously via API"""
     if not agent_name or not prompt:
         frappe.throw(_("Both agent_name and prompt are required"))
 
+    run_doc = frappe.get_doc({
+        "doctype": "Agent Run",
+        "agent": agent_name,
+        "status": "Queued",
+        "conversation": json.dumps(conversation_history) if conversation_history else None,
+    })
+    run_doc.insert(ignore_permissions=True)
+    frappe.db.commit()
+
     try:
-        # Load the Agent doctype record
-        agent_doc = frappe.get_doc("Agent", agent_name)
+        run_doc.db_set("status", "Started", update_modified=True)
 
-        # Init manager
         manager = AgentManager(agent_name)
-
-        # Create agent
         agent = manager.create_agent()
 
-        # Build conversation context
         context = {
             "user": frappe.session.user,
             "channel": channel_id,
             "company": frappe.defaults.get_user_default("company"),
         }
 
-        # Run the agent
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         result = loop.run_until_complete(
-            Runner.run(agent, prompt, max_turns=8, context=context)   # was 3
+            Runner.run(agent, prompt, max_turns=8, context=context)
         )
-
         loop.close()
+
+        run_doc.db_set("status", "Success", update_modified=True)
+        run_doc.db_set("response", result.final_output)
+        run_doc.db_set("prompt", prompt, update_modified=True)
 
         return {
             "success": True,
             "response": result.final_output,
             "provider": manager.agent_doc.provider,
+            "agent_run_id": run_doc.name,
         }
 
     except Exception as e:
-        frappe.log_error(f"Agent Run Error: {str(e)}\n", "AgentFlo")
+        run_doc.db_set("status", "Failed", update_modified=True)
+        run_doc.db_set("error_message", str(e))
+        frappe.log_error(f"Agent Run Error: {str(e)}", "AgentFlo")
+
         return {
             "success": False,
             "error": str(e),
+            "agent_run_id": run_doc.name,
         }
+

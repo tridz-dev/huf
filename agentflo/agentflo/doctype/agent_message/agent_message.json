@@ -6,6 +6,8 @@
  "engine": "InnoDB",
  "field_order": [
   "conversation",
+  "text",
+  "content",
   "run",
   "user",
   "kind"
@@ -34,12 +36,22 @@
    "fieldtype": "Select",
    "label": "Kind",
    "options": "\nMessage\nTool Call\nTool Result\nStatus\nError"
+  },
+  {
+   "fieldname": "text",
+   "fieldtype": "Long Text",
+   "label": "Text"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "label": "Content"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-12 10:13:08.501850",
+ "modified": "2025-08-19 13:39:26.257384",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Message",

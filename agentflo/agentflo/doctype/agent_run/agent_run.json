@@ -7,10 +7,11 @@
  "field_order": [
   "conversation",
   "agent",
+  "prompt",
+  "response",
   "status",
   "error_code",
-  "error_message",
-  "amended_from"
+  "error_message"
  ],
  "fields": [
   {
@@ -22,6 +23,7 @@
   {
    "fieldname": "agent",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Agent",
    "options": "Agent"
   },
@@ -29,6 +31,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "hidden": 1,
+   "in_list_view": 1,
    "label": "Status",
    "options": "\nStarted\nQueued\nSuccess\nFailed"
   },
@@ -43,21 +46,20 @@
    "label": "Error Message"
   },
   {
-   "fieldname": "amended_from",
-   "fieldtype": "Link",
-   "label": "Amended From",
-   "no_copy": 1,
-   "options": "Agent Run",
-   "print_hide": 1,
-   "read_only": 1,
-   "search_index": 1
+   "fieldname": "response",
+   "fieldtype": "Small Text",
+   "label": "Response"
+  },
+  {
+   "fieldname": "prompt",
+   "fieldtype": "Small Text",
+   "label": "Prompt"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
- "is_submittable": 1,
  "links": [],
- "modified": "2025-08-11 19:42:31.687933",
+ "modified": "2025-08-19 18:59:10.595035",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Run",
