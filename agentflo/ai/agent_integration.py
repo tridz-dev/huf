@@ -238,34 +238,42 @@ async def run_agent(agent_name: str, prompt: str):
         return _("An error occurred while running the agent.")
 
 
-# Add this function to your agent_integration.py file
 
 @frappe.whitelist()
-def run_agent_sync(agent_name: str = None, prompt: str = None, 
-                  channel_id: str = "API", conversation_id: str = None):
+def run_agent_sync(
+    agent_name: str,
+    prompt: str,
+    channel_id: str = None,
+    external_id: str = None,
+    conversation_id: str = None
+):
+
     if not agent_name or not prompt:
         frappe.throw(_("Both agent_name and prompt are required"))
+    if not channel_id:
+        channel_id = "api"
+    conv_manager = ConversationManager(
+        agent_name=agent_name,
+        channel=channel_id,
+        external_id=external_id
+    )
 
-    # Initialize conversation manager
-    conv_manager = ConversationManager(agent_name)
-    
-    # Get or create conversation
     conversation = conv_manager.get_or_create_conversation(
-        title=f"Chat with {agent_name}", 
+        title=f"Chat with {agent_name}",
         conversation_id=conversation_id
     )
-    
+
     # Add user message to conversation
     conv_manager.add_message(conversation, "user", prompt)
-    
-    # Get conversation history for context
+
+    # Get history for context
     history = conv_manager.get_conversation_history(conversation.name)
-    
     run_doc = frappe.get_doc({
         "doctype": "Agent Run",
         "agent": agent_name,
         "status": "Queued",
         "conversation": conversation.name,
+        "prompt": prompt,
     })
     run_doc.insert(ignore_permissions=True)
     frappe.db.commit()
@@ -277,18 +285,16 @@ def run_agent_sync(agent_name: str = None, prompt: str = None,
         agent = manager.create_agent()
 
         context = {
-            "user": frappe.session.user,
             "channel": channel_id,
-            "company": frappe.defaults.get_user_default("company"),
-            "conversation_history": history  # Pass history to agent
+            "external_id": external_id,
+            "conversation_history": history
         }
 
-        # Enhance prompt with conversation context
         enhanced_prompt = f"""
-        Conversation history:
-        {json.dumps(history, indent=2)}
-        
-        Current user message: {prompt}
+            Conversation history:
+            {json.dumps(history, indent=2)}
+            Current user message:
+            {prompt}
         """
 
         loop = asyncio.new_event_loop()
@@ -298,29 +304,34 @@ def run_agent_sync(agent_name: str = None, prompt: str = None,
         )
         loop.close()
 
-        # Add agent response to conversation
-        conv_manager.add_message(conversation, "assistant", result.final_output, run_doc.name)
+        final_output = getattr(result, "final_output", str(result))
+
+        conv_manager.add_message(conversation, "agent", final_output, run_doc.name)
 
         run_doc.db_set("status", "Success", update_modified=True)
-        run_doc.db_set("response", result.final_output)
+        run_doc.db_set("response", final_output)
         run_doc.db_set("prompt", prompt, update_modified=True)
 
         return {
             "success": True,
-            "response": result.final_output,
+            "response": final_output,
             "provider": manager.agent_doc.provider,
             "agent_run_id": run_doc.name,
-            "conversation_id": conversation.name
+            "conversation_id": conversation.name,
+            "session_id": conv_manager.session_id
         }
 
     except Exception as e:
+        error_msg = str(e)
         run_doc.db_set("status", "Failed", update_modified=True)
-        run_doc.db_set("error_message", str(e))
-        frappe.log_error(f"Agent Run Error: {str(e)}", "AgentFlo")
+        run_doc.db_set("error_message", error_msg)
+
+        frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "AgentFlo")
 
         return {
             "success": False,
-            "error": str(e),
+            "error": error_msg,
             "agent_run_id": run_doc.name,
-            "conversation_id": conversation.name
+            "conversation_id": conversation.name,
+            "session_id": conv_manager.session_id
         }

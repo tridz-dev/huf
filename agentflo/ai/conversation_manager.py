@@ -3,10 +3,12 @@ from frappe.utils import now
 import json
 
 class ConversationManager:
-    def __init__(self, agent_name, user=None):
+    def __init__(self, agent_name, channel=None, external_id=None, session_id=None):
         self.agent_name = agent_name
-        self.user = user or frappe.session.user
-    
+        self.channel = channel
+        self.external_id = external_id
+        self.session_id = session_id or f"{channel}:{external_id or frappe.session.user}"
+
     def get_or_create_conversation(self, title=None, conversation_id=None):
         """Get active conversation or create new one"""
         if conversation_id:
@@ -16,31 +18,38 @@ class ConversationManager:
                     return conversation
             except frappe.DoesNotExistError:
                 pass
-        
+
         # Try to get existing active conversation
-        conversation = frappe.get_all("Agent Conversation",
-            filters={"agent": self.agent_name, "created_by": self.user, "is_active": 1},
+        conversation = frappe.get_all(
+            "Agent Conversation",
+            filters={
+                "agent": self.agent_name,
+                "session_id": self.session_id,
+                "is_active": 1
+            },
             order_by="creation desc",
             limit=1
         )
-        
+
         if conversation:
             return frappe.get_doc("Agent Conversation", conversation[0].name)
-        
+
         # Create new conversation
         title = title or f"Conversation with {self.agent_name}"
         conv = frappe.get_doc({
             "doctype": "Agent Conversation",
             "title": title,
             "agent": self.agent_name,
-            "created_by": self.user,
+            "session_id": self.session_id,
+            "channel": self.channel,
+            "external_id": self.external_id,
             "created_at": now(),
             "last_activity": now(),
             "is_active": 1
         })
         conv.insert()
         return conv
-    
+
     def add_message(self, conversation, role, content, run_name=None):
         """Add message to conversation"""
         # Get next index
@@ -49,38 +58,39 @@ class ConversationManager:
             FROM `tabAgent Message`
             WHERE conversation = %s
         """, conversation.name, as_dict=1)
-        
+
         last_index = last_index[0].last_index if last_index and last_index[0].last_index else 0
-        
+
         message = frappe.get_doc({
             "doctype": "Agent Message",
             "conversation": conversation.name,
             "role": role,
             "content": content if isinstance(content, str) else json.dumps(content),
-            "user": self.user if role == "user" else "Administrator",
+            "user": self.external_id or frappe.session.user if role == "user" else "Agent",
             "kind": "Message",
             "run": run_name,
             "conversation_index": last_index + 1
         })
         message.insert()
-        
+
         # Update conversation stats
         frappe.db.set_value("Agent Conversation", conversation.name, {
             "total_messages": last_index + 1,
             "last_activity": now()
         })
-        
+
         return message
-    
+
     def get_conversation_history(self, conversation_name, limit=20):
         """Get conversation history for context"""
-        messages = frappe.get_all("Agent Message",
+        messages = frappe.get_all(
+            "Agent Message",
             filters={"conversation": conversation_name},
             fields=["role", "content", "creation"],
             order_by="conversation_index asc",
             limit=limit
         )
-        
+
         return [
             {
                 "role": msg.role,
@@ -88,7 +98,7 @@ class ConversationManager:
             }
             for msg in messages
         ]
-    
+
     def close_conversation(self, conversation_name):
         """Mark conversation as inactive"""
         frappe.db.set_value("Agent Conversation", conversation_name, "is_active", 0)

@@ -12,6 +12,7 @@
   "content",
   "section_break_hm0d",
   "run",
+  "session_id",
   "kind",
   "user",
   "role",
@@ -21,6 +22,7 @@
   {
    "fieldname": "conversation",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Conversation",
    "options": "Agent Conversation"
   },
@@ -32,9 +34,8 @@
   },
   {
    "fieldname": "user",
-   "fieldtype": "Link",
-   "label": "User",
-   "options": "User"
+   "fieldtype": "Data",
+   "label": "User"
   },
   {
    "default": "MSG-.YYYY.-",
@@ -75,13 +76,19 @@
    "fieldname": "role",
    "fieldtype": "Select",
    "label": "Role",
-   "options": "user\nassistant\nsystem"
+   "options": "user\nagent\nsystem"
+  },
+  {
+   "fieldname": "session_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Session ID"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-20 13:52:51.635485",
+ "modified": "2025-08-22 17:05:58.574809",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Message",

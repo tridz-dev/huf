@@ -8,12 +8,14 @@
  "field_order": [
   "title",
   "agent",
-  "created_by",
-  "is_active",
-  "total_messages",
+  "session_id",
+  "channel",
+  "external_id",
   "column_break_9v4t",
+  "is_active",
   "created_at",
   "last_activity",
+  "total_messages",
   "naming_series"
  ],
  "fields": [
@@ -29,13 +31,6 @@
    "in_list_view": 1,
    "label": "Agent",
    "options": "Agent"
-  },
-  {
-   "fieldname": "created_by",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Created By",
-   "options": "User"
   },
   {
    "fieldname": "created_at",
@@ -64,19 +59,37 @@
    "default": "1",
    "fieldname": "is_active",
    "fieldtype": "Check",
-   "label": "Is Active"
+   "label": "Is Active",
+   "read_only": 1
   },
   {
    "fieldname": "total_messages",
    "fieldtype": "Int",
    "label": "Total Messages",
    "read_only": 1
+  },
+  {
+   "fieldname": "session_id",
+   "fieldtype": "Data",
+   "label": "Session ID",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "channel",
+   "fieldtype": "Data",
+   "label": "Channel"
+  },
+  {
+   "fieldname": "external_id",
+   "fieldtype": "Data",
+   "label": "External ID"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-20 13:01:28.983708",
+ "modified": "2025-08-22 16:29:57.241584",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Conversation",
