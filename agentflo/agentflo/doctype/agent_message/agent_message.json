@@ -15,6 +15,7 @@
   "session_id",
   "kind",
   "user",
+  "is_agent_message",
   "role",
   "conversation_index"
  ],
@@ -83,12 +84,19 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Session ID"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_agent_message",
+   "fieldtype": "Check",
+   "label": "Is Agent Message",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-22 17:05:58.574809",
+ "modified": "2025-08-25 10:14:02.529952",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Message",

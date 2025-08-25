@@ -98,7 +98,7 @@ class AgentManager:
                 document_id: The document ID
                 data: Fields to update
             """
-            tool = self._get_aget_tool(doctype)
+            tool = self._get_agent_tool(doctype)
             return update_document(doctype, document_id, data, tool)
 
         @function_tool
@@ -275,11 +275,12 @@ def run_agent_sync(
         "conversation": conversation.name,
         "prompt": prompt,
     })
-    run_doc.insert(ignore_permissions=True)
+    run_doc.insert()
     frappe.db.commit()
 
     try:
-        run_doc.db_set("status", "Started", update_modified=True)
+        frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
+        frappe.db.commit()
 
         manager = AgentManager(agent_name)
         agent = manager.create_agent()
@@ -308,9 +309,13 @@ def run_agent_sync(
 
         conv_manager.add_message(conversation, "agent", final_output, run_doc.name)
 
-        run_doc.db_set("status", "Success", update_modified=True)
-        run_doc.db_set("response", final_output)
-        run_doc.db_set("prompt", prompt, update_modified=True)
+        # Update run status to Success
+        frappe.db.set_value("Agent Run", run_doc.name, {
+            "status": "Success",
+            "response": final_output,
+            "prompt": prompt
+        }, update_modified=True)
+        frappe.db.commit()
 
         return {
             "success": True,

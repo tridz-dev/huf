@@ -7,7 +7,12 @@ class ConversationManager:
         self.agent_name = agent_name
         self.channel = channel
         self.external_id = external_id
-        self.session_id = session_id or f"{channel}:{external_id or frappe.session.user}"
+        if session_id:
+            self.session_id = session_id
+        elif channel and external_id:
+            self.session_id = f"{channel}:{external_id}"
+        else:
+            self.session_id = f"{channel}:{frappe.session.user}"
 
     def get_or_create_conversation(self, title=None, conversation_id=None):
         """Get active conversation or create new one"""
@@ -53,33 +58,38 @@ class ConversationManager:
     def add_message(self, conversation, role, content, run_name=None):
         """Add message to conversation"""
         # Get next index
-        last_index = frappe.db.sql("""
-            SELECT MAX(conversation_index) as last_index
-            FROM `tabAgent Message`
-            WHERE conversation = %s
-        """, conversation.name, as_dict=1)
+        try:
+            last_index = frappe.db.sql("""
+                SELECT MAX(conversation_index) as last_index
+                FROM `tabAgent Message`
+                WHERE conversation = %s
+            """, conversation.name, as_dict=1)
 
-        last_index = last_index[0].last_index if last_index and last_index[0].last_index else 0
+            last_index = last_index[0].last_index if last_index and last_index[0].last_index is not None else 0
+            message = frappe.get_doc({
+                "doctype": "Agent Message",
+                "conversation": conversation.name,
+                "role": role,
+                "content": content if isinstance(content, str) else json.dumps(content),
+                "user": self.external_id or frappe.session.user if role == "user" else "Agent",
+                "session_id": self.session_id,
+                "kind": "Message",
+                "run": run_name,
+                "conversation_index": last_index + 1,
+                "is_agent_message": 1 if role == "agent" else 0
+            })
+            message.insert()
 
-        message = frappe.get_doc({
-            "doctype": "Agent Message",
-            "conversation": conversation.name,
-            "role": role,
-            "content": content if isinstance(content, str) else json.dumps(content),
-            "user": self.external_id or frappe.session.user if role == "user" else "Agent",
-            "kind": "Message",
-            "run": run_name,
-            "conversation_index": last_index + 1
-        })
-        message.insert()
+            # Update conversation stats
+            frappe.db.set_value("Agent Conversation", conversation.name, {
+                "total_messages": last_index + 1,
+                "last_activity": now()
+            })
 
-        # Update conversation stats
-        frappe.db.set_value("Agent Conversation", conversation.name, {
-            "total_messages": last_index + 1,
-            "last_activity": now()
-        })
-
-        return message
+            return message
+        except Exception as e:
+            frappe.log_error(f"Error adding message: {str(e)}", "Conversation Manager")
+            raise
 
     def get_conversation_history(self, conversation_name, limit=20):
         """Get conversation history for context"""
