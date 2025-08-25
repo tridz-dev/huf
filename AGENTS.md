@@ -1,20 +1,29 @@
-### AgentFlo
+# AGENTS.md
 
-AgentFlo is a Frappe application for creating and managing AI agents. It allows you to define intelligent agents, equip them with tools to interact with your Frappe site, and manage conversations with them.
+This file provides context and instructions for AI coding agents to effectively work on the AgentFlo Frappe application.
 
-### Installation
+## Project Overview
+AgentFlo is a Frappe application for creating and managing conversational AI agents. It allows developers to define agents, equip them with tools to interact with the Frappe framework (e.g., CRUD operations on DocTypes), and manage conversation histories.
 
-You can install this app using the [bench](https://github.com/frappe/bench) CLI:
+The application is built on the Frappe Framework (Python) and uses the standard Frappe directory structure. The core logic for agent integration is located in `agentflo/ai/`.
 
-```bash
-cd $PATH_TO_YOUR_BENCH
-bench get-app $URL_OF_THIS_REPO --branch develop
-bench install-app agentflo
-```
+## Repo Layout
+-   `agentflo/`: The root of the Frappe app.
+-   `agentflo/agentflo/`: The main Python module.
+-   `agentflo/agentflo/doctype/`: Contains all DocType definitions, each in its own folder.
+    -   `<doctype_name>/<doctype_name>.json`: Schema definition.
+    -   `<doctype_name>/<doctype_name>.py`: Server-side controller class.
+    -   `<doctype_name>/<doctype_name>.js`: Client-side script.
+-   `agentflo/ai/`: Core Python modules for AI agent integration.
+-   `.github/workflows/`: CI definitions for tests and linting.
 
-## Architecture Overview
+## Security Considerations
+-   Do not commit secrets or API keys. The `AI Provider` DocType stores API keys in the database using the `Password` field type, which encrypts the value.
+-   Custom functions exposed to agents via `Agent Tool Function` must be carefully designed. They are executed with the permissions of the user running the agent. Always validate inputs and perform permission checks inside custom tool functions.
 
-AgentFlo is built around a set of interconnected DocTypes that define the components of an AI agent. The core logic is handled by Python classes that integrate with an AI provider (like OpenAI) and manage the agent's lifecycle.
+## Detailed Architecture
+
+This section provides a deep dive into the application's structure, including DocTypes and core Python classes, to give the agent maximum context.
 
 ### Core Concepts
 
@@ -24,11 +33,11 @@ AgentFlo is built around a set of interconnected DocTypes that define the compon
 4.  **Conversation**: When a user interacts with an agent, a `Agent Conversation` is created to track the entire interaction. Each message back-and-forth is stored as an `Agent Message`.
 5.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run`.
 
-## Doctypes
+### Doctypes
 
 Here is a detailed breakdown of the DocTypes used in AgentFlo.
 
-### 1. AI Provider
+#### 1. AI Provider
 
 Stores credentials for different AI service providers.
 
@@ -42,7 +51,7 @@ Stores credentials for different AI service providers.
 | **Provide Name** | `provide_name` | Data       | The unique name of the provider (e.g., OpenAI). |
 | **API Key**    | `api_key`      | Password   | The API key for the provider.             |
 
-### 2. AI Model
+#### 2. AI Model
 
 Defines a specific AI model available from a provider.
 
@@ -56,7 +65,7 @@ Defines a specific AI model available from a provider.
 | **Model Name** | `model_name` | Data | The name of the model (e.g., `gpt-4-turbo`). |
 | **Provider**   | `provider`   | Link | A link to the `AI Provider` DocType.      |
 
-### 3. Agent Tool Function
+#### 3. Agent Tool Function
 
 Defines a function or "tool" that an agent can use. This is the core of the agent's capabilities.
 
@@ -75,7 +84,7 @@ Defines a function or "tool" that an agent can use. This is the core of the agen
 | **Parameters**          | `parameters`              | Table   | A table of parameters (`Agent Function Params`) the function accepts.                                   |
 | **Function Definition** | `function_definition`     | JSON    | (Read Only) The final JSON schema of the function, which is passed to the AI.                           |
 
-### 4. Agent
+#### 4. Agent
 
 The main DocType for creating an AI agent.
 
@@ -94,7 +103,7 @@ The main DocType for creating an AI agent.
 | **Temperature**  | `temperature`  | Float     | Controls the randomness of the AI's output.                                                             |
 | **Top P**        | `top_p`        | Float     | An alternative to temperature for controlling randomness.                                               |
 
-### 5. Agent Conversation
+#### 5. Agent Conversation
 
 Tracks a continuous conversation with an agent.
 
@@ -111,7 +120,7 @@ Tracks a continuous conversation with an agent.
 | **Is Active**    | `is_active`      | Check    | Indicates if the conversation is ongoing.                                |
 | **Total Messages** | `total_messages` | Int      | The total number of messages exchanged.                                  |
 
-### 6. Agent Message
+#### 6. Agent Message
 
 Represents a single message within a conversation.
 
@@ -128,7 +137,7 @@ Represents a single message within a conversation.
 | **Kind**         | `kind`         | Select    | The type of message (`Message`, `Tool Call`, `Tool Result`, `Error`).    |
 | **Run**          | `run`          | Link      | Link to the `Agent Run` that generated this message.                     |
 
-### 7. Agent Run
+#### 7. Agent Run
 
 Logs a single, complete execution cycle of an agent in response to a user prompt.
 
@@ -146,13 +155,11 @@ Logs a single, complete execution cycle of an agent in response to a user prompt
 | **Status**       | `status`        | Select     | The status of the run (`Started`, `Queued`, `Success`, `Failed`).        |
 | **Error Message**| `error_message` | Small Text | Any error message if the run failed.                                     |
 
----
-
-## Core Classes and Methods
+### Core Classes and Methods
 
 The primary logic is located in the `agentflo/ai` directory.
 
-### `agent_integration.py`
+#### `agent_integration.py`
 
 This file contains the main logic for creating and running agents.
 
@@ -173,7 +180,7 @@ This file contains the main logic for creating and running agents.
         7.  Adds the agent's final response to the conversation.
         8.  Updates the `Agent Run` status to `Success` or `Failed`.
 
-### `conversation_manager.py`
+#### `conversation_manager.py`
 
 This file handles the persistence of conversation history.
 
@@ -182,7 +189,7 @@ This file handles the persistence of conversation history.
     -   `add_message(self, ...)`: Creates a new `Agent Message` document and links it to the current conversation.
     -   `get_conversation_history(self, ...)`: Fetches the last N messages from the conversation to provide context to the AI.
 
-### `sdk_tools.py`
+#### `sdk_tools.py`
 
 This file acts as a bridge between AgentFlo's `Agent Tool Function` DocType and the `agents` SDK's `FunctionTool` class.
 
@@ -194,10 +201,9 @@ This file acts as a bridge between AgentFlo's `Agent Tool Function` DocType and 
 -   **Method: `handle_get_list`, `handle_create_document`, etc.**
     -   These are the actual functions that get executed when a standard DocType tool is called. They contain the logic to interact with the Frappe database (e.g., `frappe.get_list`, `frappe.get_doc`) and format the response in a way the AI can understand.
 
-### `tool_functions.py`
+#### `tool_functions.py`
 
 This file contains the low-level functions that directly perform Frappe database operations.
 
 -   **Methods**: `get_document`, `create_document`, `update_document`, `delete_document`, `submit_document`, `get_list`, etc.
 -   These functions are the final step in the tool-use chain, wrapping `frappe.client` or `frappe.get_doc` calls to ensure data is fetched, created, or modified correctly and with proper permissions checks.
-
