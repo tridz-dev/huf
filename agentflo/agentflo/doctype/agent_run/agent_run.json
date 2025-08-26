@@ -5,9 +5,11 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "request_tab",
   "conversation",
   "agent",
   "prompt",
+  "response_tab",
   "response",
   "status",
   "error_code",
@@ -54,12 +56,22 @@
    "fieldname": "prompt",
    "fieldtype": "Small Text",
    "label": "Prompt"
+  },
+  {
+   "fieldname": "request_tab",
+   "fieldtype": "Tab Break",
+   "label": "Request"
+  },
+  {
+   "fieldname": "response_tab",
+   "fieldtype": "Tab Break",
+   "label": "Response"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-19 18:59:10.595035",
+ "modified": "2025-08-26 11:19:43.028758",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Run",
