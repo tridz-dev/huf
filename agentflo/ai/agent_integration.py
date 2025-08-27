@@ -157,7 +157,7 @@ class AgentManager:
                 delete_document_tool,
                 search_documents,
                 submit_document_tool,
-                cancel_document_tool,
+                cancel_document_tool
             ]
         )
 
@@ -223,25 +223,6 @@ def safe_commit():
     if not hasattr(frappe.local, "_realtime_log"):
         frappe.local._realtime_log = []
     frappe.db.commit()
-
-
-async def run_agent(agent_name: str, prompt: str):
-    try:
-        manager = AgentManager(agent_name=agent_name)
-        agent = manager.create_agent()
-
-        run_config = RunConfig(model_provider=manager.provider)
-        result = await Runner.run(agent, prompt, run_config=run_config)
-
-        return result.final_output if hasattr(result, "final_output") else str(result)
-
-    except InputGuardrailTripwireTriggered as e:
-        conv_manager.add_message(conversation, "agent", _("Guardrail blocked this input."), run_doc.name)
-        frappe.db.set_value("Agent Run", run_doc.name, {"status":"Failed","error_message":str(e)}, update_modified=True)
-        safe_commit()
-        return {"success": False, "error": ("Guardrail blocked this input.")}
-
-
 
 
 @frappe.whitelist()
