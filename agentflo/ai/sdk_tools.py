@@ -8,6 +8,11 @@ import frappe
 from agents import FunctionTool
 from frappe import client
 
+from .tool_functions import (
+    create_documents,update_documents,
+    delete_documents,submit_document, cancel_document,
+    get_value, set_value, get_report_result,
+)
 
 def create_agent_tools(agent) -> list[FunctionTool]:
     """
@@ -22,7 +27,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                 function_doc = frappe.get_doc("Agent Tool Function", func.tool)
 
                 function_path = None
-                if function_doc.types == "Custom Function" or function_doc.types == "App Provided":
+                if function_doc.types in ["Custom Function", "App Provided"]:
                     if not function_doc.function_path:
                         continue
                     function_path = function_doc.function_path
@@ -37,42 +42,65 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "agentflo.ai.sdk_tools.handle_create_document"
                     elif function_doc.types == "Delete Document":
                         function_path = "agentflo.ai.sdk_tools.handle_delete_document"
+                    elif function_doc.types == "Get Multiple Documents":
+                        function_path = "agentflo.ai.sdk_tools.handle_get_documents"
+                    elif function_doc.types == "Create Multiple Documents":
+                        function_path = "agentflo.ai.sdk_tools.handle_create_documents"
+                    elif function_doc.types == "Update Multiple Documents":
+                        function_path = "agentflo.ai.sdk_tools.handle_update_documents"
+                    elif function_doc.types == "Delete Multiple Documents":
+                        function_path = "agentflo.ai.sdk_tools.handle_delete_documents"
+                    elif function_doc.types == "Submit Document":
+                        function_path = "agentflo.ai.sdk_tools.handle_submit_document"
+                    elif function_doc.types == "Cancel Document":
+                        function_path = "agentflo.ai.sdk_tools.handle_cancel_document"
+                    elif function_doc.types == "Get Value":
+                        function_path = "agentflo.ai.sdk_tools.handle_get_value"
+                    elif function_doc.types == "Set Value":
+                        function_path = "agentflo.ai.sdk_tools.handle_set_value"
+                    elif function_doc.types == "Get Report Result":
+                        function_path = "agentflo.ai.sdk_tools.handle_get_report_result"
+                    # (Attach File left out unless you store/read server-side paths safely)
                     else:
                         continue
 
-                params = {}
-                if function_doc.params:
-                    try:
-                        params = json.loads(function_doc.params)
-                    except Exception as e:
-                        frappe.log_error("SDK Functions Debug",
-                            f"Error parsing params for {function_doc.name}: {str(e)}"
-                        )
+                if function_doc:
+                    params = {}
+                    if function_doc.params:
+                        try:
+                            params = json.loads(function_doc.params)
+                        except Exception as e:
+                            frappe.log_error(
+                                "SDK Functions Debug",
+                                f"Error parsing params for {function_doc.name}: {str(e)}"
+                            )
 
-                if "additionalProperties" in params:
-                    del params["additionalProperties"]
+                    if "additionalProperties" in params:
+                        del params["additionalProperties"]
 
-                extra_args = {}
-                if (
-                    function_doc.types
-                    in ["Get Document","Get Multiple Documents","Get List",
-                        "Create Document","Create Multiple Documents",
-                        "Update Document","Update Multiple Documents",
-                        "Delete Document","Delete Multiple Documents"]
-                    and function_doc.reference_doctype
-                ):
-                    extra_args["reference_doctype"] = function_doc.reference_doctype
+                    extra_args = {}
+                    if (
+                        function_doc.types
+                        in [
+                            "Get Document", "Get Multiple Documents", "Get List",
+                            "Create Document", "Create Multiple Documents",
+                            "Update Document", "Update Multiple Documents",
+                            "Delete Document", "Delete Multiple Documents"
+                        ]
+                        and function_doc.reference_doctype
+                    ):
+                        extra_args["reference_doctype"] = function_doc.reference_doctype
 
-                tool = create_function_tool(
-                    function_doc.tool_name,
-                    function_doc.description,
-                    function_path,
-                    params,
-                    extra_args=extra_args,
-                )
+                    tool = create_function_tool(
+                        function_doc.tool_name,
+                        function_doc.description,
+                        function_path,
+                        params,
+                        extra_args=extra_args,
+                    )
 
-                if tool:
-                    tools.append(tool)
+                    if tool:
+                        tools.append(tool)
 
             except Exception as e:
                 frappe.log_error("SDK Functions Debug", f"Error processing function {func.tool}: {str(e)}")
@@ -83,7 +111,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
 def create_function_tool(
 	name: str,
 	description: str,
-	function_name: str,
+	tool_name: str,
 	parameters: dict[str, Any],
 	extra_args: dict[str, Any] = None,
 ) -> FunctionTool:
@@ -102,7 +130,7 @@ def create_function_tool(
 	"""
 
 	# Get the actual function to call
-	function = get_function_from_name(function_name)
+	function = get_function_from_name(tool_name)
 
 	if not function:
 		return None
@@ -186,7 +214,7 @@ def create_function_tool(
 		return None
 
 
-def get_function_from_name(function_name: str) -> Callable:
+def get_function_from_name(tool_name: str) -> Callable:
 	"""
 	Get a function from its name
 
@@ -200,11 +228,11 @@ def get_function_from_name(function_name: str) -> Callable:
 	try:
 		# Split module and function
 		try:
-			module_name, func_name = function_name.rsplit(".", 1)
+			module_name, func_name = tool_name.rsplit(".", 1)
 		except ValueError as ve:
 			frappe.log_error(
 				"SDK Functions Debug",
-				f"Invalid function name format: {function_name}. Should be 'module.function'",
+				f"Invalid function name format: {tool_name}. Should be 'module.function'",
 			)
 			return None
 
@@ -236,7 +264,7 @@ def get_function_from_name(function_name: str) -> Callable:
 
 	except Exception as e:
 		frappe.log_error(
-			"SDK Functions Debug", f"Unexpected error getting function {function_name}: {str(e)}"
+			"SDK Functions Debug", f"Unexpected error getting function {tool_name}: {str(e)}"
 		)
 		return None
 
@@ -277,6 +305,32 @@ def wrap_frappe_function(func: Callable) -> Callable:
 	wrapper.__signature__ = inspect.signature(func)
 
 	return wrapper
+
+def _sanitize_for_doctype(doctype: str, data: dict) -> dict:
+    """Keep only valid fields for doctype and sanitize child tables."""
+    meta = frappe.get_meta(doctype)
+    valid = {df.fieldname for df in meta.fields}
+    cleaned = {}
+
+    for key, val in (data or {}).items():
+        df = meta.get_field(key)
+        if not df:
+            # ignore unknown fields silently; avoids agent sending labels etc.
+            continue
+
+        if df.fieldtype == "Table":
+            # val must be list[dict]; sanitize each row for the child doctype
+            if isinstance(val, list):
+                cleaned[key] = [
+                    _sanitize_for_doctype(df.options, row) for row in val if isinstance(row, dict)
+                ]
+            else:
+                # ignore bad shapes for table fields
+                continue
+        else:
+            cleaned[key] = val
+
+    return cleaned
 
 
 # Standard CRUD function generators
@@ -740,3 +794,100 @@ def handle_get_document(document_id, reference_doctype=None):
 	except Exception as e:
 		frappe.log_error("SDK Functions Debug", f"Error in handle_get_document: {str(e)}")
 		return {"success": False, "error": str(e)}
+
+def handle_create_documents(reference_doctype: str, documents: list = None, data: list = None, **kwargs):
+    """
+    Create multiple documents.
+    Accepts either 'documents' or 'data' depending on schema auto-generation.
+    """
+    docs = documents or data or []
+    sanitized = [
+        _sanitize_for_doctype(reference_doctype, d)
+        for d in docs if isinstance(d, dict)
+    ]
+    return create_documents(reference_doctype, sanitized)
+
+
+def handle_update_documents(reference_doctype: str, documents: list = None, data: list = None, **kwargs):
+    docs = documents or data or []
+    sanitized = []
+    for d in docs:
+        if not isinstance(d, dict):
+            continue
+        d = dict(d)
+        doc_id = d.get("document_id") or d.get("name")
+        if not doc_id:
+            continue
+        fields = {k: v for k, v in d.items() if k not in ("document_id", "name")}
+        fields = _sanitize_for_doctype(reference_doctype, fields)
+        sanitized.append({"document_id": doc_id, **fields})
+    return update_documents(reference_doctype, sanitized)
+
+
+def handle_delete_documents(reference_doctype: str, document_ids: list, **kwargs):
+    return delete_documents(reference_doctype, document_ids or [])
+
+def handle_submit_document(reference_doctype: str, document_id: str, **kwargs):
+    return submit_document(reference_doctype, document_id)
+
+def handle_cancel_document(reference_doctype: str, document_id: str, **kwargs):
+    return cancel_document(reference_doctype, document_id)
+
+def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, **kwargs):
+    """
+    Get a field value (or multiple values) from a DocType.
+    Matches the auto-generated JSON schema: doctype + filters + fieldname.
+    """
+    if not doctype or not filters or not fieldname:
+        return {
+            "success": False,
+            "error": "Missing required parameters: doctype, filters, fieldname"
+        }
+
+    try:
+        value = frappe.db.get_value(doctype, filters, fieldname)
+        return {
+            "success": True,
+            "doctype": doctype,
+            "filters": filters,
+            "fieldname": fieldname,
+            "value": value,
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+
+def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, **kwargs):
+    """
+    Set a field value on a document that matches filters.
+    """
+    if not doctype or not filters or not fieldname:
+        return {"success": False, "error": "Missing required parameters"}
+
+    try:
+        doc_name = frappe.db.get_value(doctype, filters, "name")
+        if not doc_name:
+            return {
+                "success": False,
+                "error": f"No {doctype} found matching filters {filters}"
+            }
+
+        updated = frappe.db.set_value(doctype, doc_name, fieldname, value)
+        frappe.db.commit()
+
+        return {
+            "success": True,
+            "doctype": doctype,
+            "name": doc_name,
+            "fieldname": fieldname,
+            "new_value": updated[fieldname] if isinstance(updated, dict) else value
+        }
+
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "handle_set_value failed")
+        return {"success": False, "error": str(e)}
+
+
+def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, **kwargs):
+    return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)

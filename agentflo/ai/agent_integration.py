@@ -36,7 +36,7 @@ class AgentManager:
     def _setup_tools(self):
         """Create SDK Tools from existing functions"""
         # Always include built-in CRUD tools first
-        self.tools.extend(self.create_tools())
+        self.tools=[]
 
         try:
             from agentflo.ai.sdk_tools import create_agent_tools  
@@ -161,7 +161,7 @@ class AgentManager:
             ]
         )
 
-        return self.tools or []
+        return tools or []
 
     
     def _get_agent_tool(self, doctype: str):

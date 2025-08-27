@@ -206,9 +206,10 @@ class AgentToolFunction(Document):
 						"default": 20,
 					},
 				},
-				"required": ["filters", "fields"],
 				"additionalProperties": False,
 			}
+			params["required"] = list(params["properties"].keys())
+
 		elif self.types == "Get Value":
 			params = {
 				"type": "object",

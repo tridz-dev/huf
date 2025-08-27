@@ -45,14 +45,30 @@ def create_document(doctype: str, data: dict, function=None):
 
 
 def create_documents(doctype: str, data: list, function=None):
-	"""
-	Create documents in the database
-	"""
-	docs = []
-	for item in data:
-		docs.append(create_document(doctype, item, function).get("document_id"))
+    """
+    Create multiple documents.
+    Returns created document_ids and a summary.
+    """
+    created_ids = []
+    errors = []
 
-	return {"documents": docs, "message": "Documents created", "doctype": doctype}
+    for idx, item in enumerate(data or []):
+        try:
+            res = create_document(doctype, item, function)
+            if not res or not res.get("document_id"):
+                raise Exception("Create returned no document_id")
+            created_ids.append(res["document_id"])
+        except Exception as e:
+            errors.append({"index": idx, "error": str(e)})
+
+    return {
+        "success": len(errors) == 0,
+        "doctype": doctype,
+        "document_ids": created_ids,
+        "errors": errors,
+        "message": f"Created {len(created_ids)} document(s)"
+    }
+
 
 
 def update_document(doctype: str, document_id: str, data: dict, tool=None):
@@ -92,19 +108,36 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
         frappe.log_error(f"Error updating {doctype} {document_id}: {str(e)}")
         return {"success": False, "error": str(e)}
 
-def update_documents(doctype: str, data: dict, function=None):
-	"""
-	Update documents in the database
-	"""
-	updated_docs = []
-	for document in data:
-		document_without_id = document.copy()
-		document_id = document_without_id.pop("document_id")
-		updated_docs.append(
-			update_document(doctype, document_id, document_without_id, function).get("document_id")
-		)
+def update_documents(doctype: str, data: list, function=None):
+    """
+    Update multiple documents.
+    Each item must contain 'document_id' (or 'name') and the fields to update.
+    """
+    updated_ids = []
+    errors = []
 
-	return {"document_ids": updated_docs, "message": "Documents updated", "doctype": doctype}
+    for idx, doc in enumerate(data or []):
+        try:
+            payload = dict(doc or {})
+            document_id = payload.pop("document_id", None) or payload.pop("name", None)
+            if not document_id:
+                raise Exception("Missing 'document_id' (or 'name') in item")
+
+            res = update_document(doctype, document_id, payload, function)
+            if not res or not res.get("success"):
+                raise Exception((res or {}).get("error") or "Unknown error")
+            updated_ids.append(res["document"]["name"])
+        except Exception as e:
+            errors.append({"index": idx, "error": str(e)})
+
+    return {
+        "success": len(errors) == 0,
+        "doctype": doctype,
+        "document_ids": updated_ids,
+        "errors": errors,
+        "message": f"Updated {len(updated_ids)} document(s)"
+    }
+
 
 
 def delete_document(doctype: str, document_id: str):
@@ -175,14 +208,13 @@ def get_amended_document_id(doctype: str, document_id: str):
 
 
 def get_amended_document(doctype: str, document_id: str):
-	"""
-	Get the amended document for a given document
-	"""
-	amended_doc = frappe.db.exists(doctype, {"amended_from": document_id})
-	if amended_doc:
-		return client.get(doctype, name=document_id)
-	else:
-		return {"message": f"{doctype} {document_id} is not amended", "doctype": doctype}
+    """
+    Return the amended document (first match) for a given document, if any.
+    """
+    amended_name = frappe.db.exists(doctype, {"amended_from": document_id})
+    if amended_name:
+        return client.get(doctype, name=amended_name)
+    return {"message": f"{doctype} {document_id} is not amended", "doctype": doctype}
 
 
 def attach_file_to_document(doctype: str, document_id: str, file_path: str):
