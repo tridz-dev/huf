@@ -218,6 +218,23 @@ class AgentManager:
 
         return agent
 
+def _safe_commit():
+    """Commit without crashing on missing frappe.local._realtime_log."""
+    try:
+        if not hasattr(frappe, "local") or frappe.local is None:
+            frappe.local = frappe._dict()
+        if not hasattr(frappe.local, "_realtime_log"):
+            frappe.local._realtime_log = []
+
+        frappe.db.commit()
+    except Exception as e:
+        if isinstance(e, AttributeError) or "_realtime_log" in str(e):
+            frappe.db.sql("COMMIT")
+            if not hasattr(frappe.local, "_realtime_log"):
+                frappe.local._realtime_log = []
+        else:
+            raise
+
 
 
 async def run_agent(agent_name: str, prompt: str):
@@ -263,10 +280,8 @@ def run_agent_sync(
         conversation_id=conversation_id
     )
 
-    # Add user message to conversation
     conv_manager.add_message(conversation, "user", prompt)
 
-    # Get history for context
     history = conv_manager.get_conversation_history(conversation.name)
     run_doc = frappe.get_doc({
         "doctype": "Agent Run",
@@ -276,11 +291,10 @@ def run_agent_sync(
         "prompt": prompt,
     })
     run_doc.insert()
-    frappe.db.commit()
-
+    _safe_commit()
     try:
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
-        frappe.db.commit()
+        _safe_commit()
 
         manager = AgentManager(agent_name)
         agent = manager.create_agent()
@@ -306,16 +320,15 @@ def run_agent_sync(
         loop.close()
 
         final_output = getattr(result, "final_output", str(result))
-
+        
         conv_manager.add_message(conversation, "agent", final_output, run_doc.name)
 
-        # Update run status to Success
         frappe.db.set_value("Agent Run", run_doc.name, {
             "status": "Success",
             "response": final_output,
             "prompt": prompt
         }, update_modified=True)
-        frappe.db.commit()
+        _safe_commit()
 
         return {
             "success": True,

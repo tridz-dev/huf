@@ -11,7 +11,7 @@ from frappe.model.document import Document
 
 class AgentToolFunction(Document):
 	def before_validate(self):
-		self.validate_reference_doctype()
+		# self.validate_reference_doctype()
 		self.validate_fields_for_doctype()
 		self.prepare_function_params()
 

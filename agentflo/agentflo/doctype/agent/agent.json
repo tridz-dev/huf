@@ -8,9 +8,10 @@
  "field_order": [
   "agent_name",
   "provider",
-  "temperature",
+  "async",
   "column_break_df8m",
   "model",
+  "temperature",
   "top_p",
   "section_break_nyhh",
   "instructions",
@@ -74,12 +75,18 @@
    "fieldname": "top_p",
    "fieldtype": "Float",
    "label": "Top P"
+  },
+  {
+   "default": "0",
+   "fieldname": "async",
+   "fieldtype": "Check",
+   "label": "Async"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-12 18:01:49.631023",
+ "modified": "2025-08-26 10:29:19.320002",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
