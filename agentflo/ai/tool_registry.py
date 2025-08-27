@@ -25,7 +25,7 @@ def upsert_tool_doc(d):
         "doctype": TOOL_DOCTYPE,
         "tool_name": d["tool_name"],
         "description": d["description"],
-        "types":"Custom Function",
+        "types":"App Provided",
         "function_path": d["function_path"],
         "parameters": [{"param_name": p["name"], "param_type": p["type"], "required": int(p.get("required", False))}
                        for p in d["parameters"]],
@@ -58,7 +58,7 @@ def sync_discovered_tools():
                 "doctype": "Agent Tool Function",
                 "tool_name": d["tool_name"],
                 "description": d.get("description"),
-                "types":"Custom Function",
+                "types":"App Provided",
                 "function_path": d["function_path"],
                 "parameters": [
                     {
@@ -69,7 +69,6 @@ def sync_discovered_tools():
                     }
                     for p in d.get("parameters", [])
                 ],
-                "origin": "App-Provided",
                 "provider_app": app,
             }
             if docname:

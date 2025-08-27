@@ -11,7 +11,6 @@
   "column_break_lrkj",
   "types",
   "reference_doctype",
-  "origin",
   "provider_app",
   "pass_parameters_as_json",
   "function_path",
@@ -43,7 +42,7 @@
    "fieldname": "types",
    "fieldtype": "Select",
    "label": "Types",
-   "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nAttach File to Document\nGet Report Result\nGet Value\nSet Value"
+   "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value"
   },
   {
    "fieldname": "reference_doctype",
@@ -74,7 +73,7 @@
    "read_only": 1
   },
   {
-   "depends_on": "eval: doc.types == \"Custom Function\";",
+   "depends_on": "eval: doc.types == \"Custom Function\" ||  doc.types == \"App Provided\";",
    "fieldname": "function_path",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -82,18 +81,13 @@
   },
   {
    "default": "eval: doc.types == \"Custom Function\";",
+   "depends_on": "eval: doc.types == \"Custom Function\";",
    "fieldname": "pass_parameters_as_json",
    "fieldtype": "Check",
-   "label": "Pass parameters as JSON",
-   "read_only_depends_on": "eval: doc.types == \"Custom Function\";"
+   "label": "Pass parameters as JSON"
   },
   {
-   "fieldname": "origin",
-   "fieldtype": "Select",
-   "label": "Origin",
-   "options": "\nStandard\nApp-Provided\nCustom"
-  },
-  {
+   "depends_on": "eval: doc.types == \"App Provided\";",
    "fieldname": "provider_app",
    "fieldtype": "Data",
    "label": "Provider App"
@@ -102,7 +96,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-26 14:23:13.146921",
+ "modified": "2025-08-27 11:31:55.922639",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Tool Function",

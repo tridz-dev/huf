@@ -22,8 +22,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                 function_doc = frappe.get_doc("Agent Tool Function", func.tool)
 
                 function_path = None
-                if function_doc.types == "Custom Function":
-                    if not hasattr(function_doc, "function_path") or not function_doc.function_path:
+                if function_doc.types == "Custom Function" or function_doc.types == "App Provided":
+                    if not function_doc.function_path:
                         continue
                     function_path = function_doc.function_path
                 else:
