@@ -48,21 +48,28 @@ def get_tools_by_app():
 @frappe.whitelist()
 def sync_discovered_tools():
     tools_by_app = get_tools_by_app()
+
+    valid_tool_names = set()
+
     for app, tools in tools_by_app.items():
         for d in tools:
             mod, fn = d["function_path"].rsplit(".", 1)
             if not callable(getattr(importlib.import_module(mod), fn, None)):
                 frappe.throw(f"Not callable: {d['function_path']}")
-            docname = frappe.db.get_value("Agent Tool Function", {"tool_name": d["tool_name"]})
+            
+            tool_name = d["tool_name"]
+            valid_tool_names.add(tool_name)
+
+            docname = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name})
             payload = {
                 "doctype": "Agent Tool Function",
-                "tool_name": d["tool_name"],
+                "tool_name": tool_name,
                 "description": d.get("description"),
-                "types":"App Provided",
+                "types": "App Provided",
                 "function_path": d["function_path"],
                 "parameters": [
                     {
-                        "label": p["name"].title(),            
+                        "label": p["name"].title(),
                         "fieldname": p["name"],
                         "param_type": p["type"],
                         "required": int(p.get("required", False)),
@@ -77,3 +84,12 @@ def sync_discovered_tools():
                 doc.save(ignore_permissions=True)
             else:
                 frappe.get_doc(payload).insert(ignore_permissions=True)
+
+    existing_tools = frappe.get_all(
+        "Agent Tool Function",
+        filters={"types": "App Provided"},
+        fields=["name", "tool_name"]
+    )
+    for t in existing_tools:
+        if t.tool_name not in valid_tool_names:
+            frappe.delete_doc("Agent Tool Function", t.name, ignore_permissions=True, force=True)

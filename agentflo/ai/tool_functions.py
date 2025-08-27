@@ -3,7 +3,6 @@ from frappe import _, client
 
 
 def get_document(doctype: str, document_id: str):
-	print(doctype, document_id,".....................doc")
 	
 	"""
 	Get a document from the database
@@ -13,7 +12,7 @@ def get_document(doctype: str, document_id: str):
 
 
 def get_documents(doctype: str, document_ids: list):
-	print(doctype, document_ids,".....................doc")
+	
 	"""
 	Get documents from the database
 	"""
