@@ -72,8 +72,7 @@
    "fieldname": "session_id",
    "fieldtype": "Data",
    "label": "Session ID",
-   "reqd": 1,
-   "unique": 1
+   "reqd": 1
   },
   {
    "fieldname": "channel",
@@ -89,7 +88,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-22 16:29:57.241584",
+ "modified": "2025-08-27 12:37:24.920412",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Conversation",

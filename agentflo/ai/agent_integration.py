@@ -1,6 +1,7 @@
 import asyncio
 import json
 import openai
+import logging
 
 import frappe
 from pydantic import BaseModel
@@ -218,23 +219,10 @@ class AgentManager:
 
         return agent
 
-def _safe_commit():
-    """Commit without crashing on missing frappe.local._realtime_log."""
-    try:
-        if not hasattr(frappe, "local") or frappe.local is None:
-            frappe.local = frappe._dict()
-        if not hasattr(frappe.local, "_realtime_log"):
-            frappe.local._realtime_log = []
-
-        frappe.db.commit()
-    except Exception as e:
-        if isinstance(e, AttributeError) or "_realtime_log" in str(e):
-            frappe.db.sql("COMMIT")
-            if not hasattr(frappe.local, "_realtime_log"):
-                frappe.local._realtime_log = []
-        else:
-            raise
-
+def safe_commit():
+    if not hasattr(frappe.local, "_realtime_log"):
+        frappe.local._realtime_log = []
+    frappe.db.commit()
 
 
 async def run_agent(agent_name: str, prompt: str):
@@ -248,11 +236,11 @@ async def run_agent(agent_name: str, prompt: str):
         return result.final_output if hasattr(result, "final_output") else str(result)
 
     except InputGuardrailTripwireTriggered as e:
-        frappe.log_error(f"Guardrail blocked this input: {e}", "Agent Integration Error")
-        return _("Guardrail blocked this input.")
-    except Exception as e:
-        frappe.log_error(f"Error running agent: {frappe.get_traceback()}", "Agent Integration Error")
-        return _("An error occurred while running the agent.")
+        conv_manager.add_message(conversation, "agent", _("Guardrail blocked this input."), run_doc.name)
+        frappe.db.set_value("Agent Run", run_doc.name, {"status":"Failed","error_message":str(e)}, update_modified=True)
+        safe_commit()
+        return {"success": False, "error": ("Guardrail blocked this input.")}
+
 
 
 
@@ -291,10 +279,10 @@ def run_agent_sync(
         "prompt": prompt,
     })
     run_doc.insert()
-    _safe_commit()
+    safe_commit()
     try:
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
-        _safe_commit()
+        safe_commit()
 
         manager = AgentManager(agent_name)
         agent = manager.create_agent()
@@ -314,10 +302,12 @@ def run_agent_sync(
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(
-            Runner.run(agent, enhanced_prompt, max_turns=8, context=context)
-        )
-        loop.close()
+        try:
+            result = loop.run_until_complete(
+                Runner.run(agent, enhanced_prompt, max_turns=8, context=context)
+            )
+        finally:
+            loop.close()
 
         final_output = getattr(result, "final_output", str(result))
         
@@ -328,7 +318,7 @@ def run_agent_sync(
             "response": final_output,
             "prompt": prompt
         }, update_modified=True)
-        _safe_commit()
+        safe_commit()
 
         return {
             "success": True,

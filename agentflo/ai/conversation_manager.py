@@ -63,7 +63,7 @@ class ConversationManager:
                 SELECT MAX(conversation_index) as last_index
                 FROM `tabAgent Message`
                 WHERE conversation = %s
-            """, conversation.name, as_dict=1)
+            """, (conversation.name,), as_dict=1)
 
             last_index = last_index[0].last_index if last_index and last_index[0].last_index is not None else 0
             message = frappe.get_doc({
