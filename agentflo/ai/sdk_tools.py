@@ -60,7 +60,10 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "agentflo.ai.sdk_tools.handle_set_value"
                     elif function_doc.types == "Get Report Result":
                         function_path = "agentflo.ai.sdk_tools.handle_get_report_result"
-                    # (Attach File left out unless you store/read server-side paths safely)
+                    elif function_doc.types == "GET":
+                        function_path = "agentflo.ai.http_handler.handle_get_request"
+                    elif function_doc.types == "POST":
+                        function_path = "agentflo.ai.http_handler.handle_post_request"
                     else:
                         continue
 
@@ -103,7 +106,10 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         tools.append(tool)
 
             except Exception as e:
-                frappe.log_error("SDK Functions Debug", f"Error processing function {func.tool}: {str(e)}")
+                frappe.log_error(
+                    "SDK Functions Debug",
+                    f"Error processing function {func.tool}: {str(e)}"
+                )
 
     return tools
 
@@ -150,19 +156,10 @@ def create_function_tool(
 		_cache_ttl = 5  # seconds - short TTL to prevent duplicates in same conversation
 
 		# Create an async handler that will invoke our function
+		# In sdk_tools.py - update the on_invoke_tool function
+
 		async def on_invoke_tool(ctx, args_json: str) -> str:
 			try:
-				# Create a unique hash for this request to detect duplicates
-				request_hash = hashlib.md5(args_json.encode()).hexdigest()
-				now = datetime.now()
-
-				# Check if we've seen this exact request recently (deduplication)
-				if request_hash in _request_cache:
-					last_time, cached_result = _request_cache[request_hash]
-					# If the request was made very recently, return cached result
-					if now - last_time < timedelta(seconds=_cache_ttl):
-						return cached_result
-
 				# Parse arguments from JSON
 				args_dict = json.loads(args_json)
 
@@ -170,10 +167,10 @@ def create_function_tool(
 				for key, value in _extra_args.items():
 					if key not in args_dict:
 						args_dict[key] = value
-
-				# Set context for reference_doctype
-				if "reference_doctype" in _extra_args:
-					frappe.flags.current_function_doctype = _extra_args["reference_doctype"]
+						
+				# Add tool name for HTTP handlers
+				if _function.__name__ in ["handle_get_request", "handle_post_request"]:
+					args_dict["tool_name"] = name  # Pass the tool name
 
 				# Call the function
 				result = _function(**args_dict)
@@ -181,18 +178,9 @@ def create_function_tool(
 				# Convert result to string (JSON)
 				result_str = ""
 				if isinstance(result, dict) or isinstance(result, list):
-					# Use default=str to handle datetime objects
 					result_str = json.dumps(result, default=str)
 				else:
 					result_str = str(result)
-
-				# Store in cache to prevent duplicate executions
-				_request_cache[request_hash] = (now, result_str)
-
-				# Clean up old cache entries
-				for hash_key in list(_request_cache.keys()):
-					if now - _request_cache[hash_key][0] > timedelta(seconds=_cache_ttl * 2):
-						del _request_cache[hash_key]
 
 				return result_str
 			except Exception as e:

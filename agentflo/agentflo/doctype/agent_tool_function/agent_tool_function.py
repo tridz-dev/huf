@@ -281,6 +281,45 @@ class AgentToolFunction(Document):
 				},
 				"required": ["report_name"],
 			}
+
+		elif self.types == "GET":
+			params = {
+				"type": "object",
+				"properties": {
+					"url": {
+						"type": "string",
+						"description": f"The URL to send the GET request to. Base URL: {self.base_url or 'Not set'}"
+					},
+					"params": {
+						"type": "object",
+						"description": "Query parameters to include in the URL",
+						"additionalProperties": {"type": "string"}
+					}
+				},
+				"required": ["url"],
+				"additionalProperties": False
+			}
+			
+		elif self.types == "POST":
+			params = {
+				"type": "object",
+				"properties": {
+					"url": {
+						"type": "string",
+						"description": f"The URL to send the POST request to. Base URL: {self.base_url or 'Not set'}"
+					},
+					"data": {
+						"type": "object",
+						"description": "Data to send in the request body"
+					},
+					"json": {
+						"type": "object",
+						"description": "JSON data to send in the request body"
+					}
+				},
+				"required": ["url"],
+				"additionalProperties": False
+			}
 		else:
 			params = self.build_params_json_from_table()
 

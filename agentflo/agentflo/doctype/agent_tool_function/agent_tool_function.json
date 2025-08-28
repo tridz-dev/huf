@@ -11,9 +11,12 @@
   "column_break_lrkj",
   "types",
   "reference_doctype",
+  "base_url",
   "provider_app",
   "pass_parameters_as_json",
   "function_path",
+  "header_section",
+  "http_headers",
   "parameters_section",
   "parameters",
   "params",
@@ -64,7 +67,7 @@
   {
    "fieldname": "params",
    "fieldtype": "JSON",
-   "label": "Params"
+   "label": "Params JSON"
   },
   {
    "fieldname": "function_definition",
@@ -91,12 +94,31 @@
    "fieldname": "provider_app",
    "fieldtype": "Data",
    "label": "Provider App"
+  },
+  {
+   "depends_on": "eval:doc.types == 'GET' || doc.types == 'POST'",
+   "description": "Optional base URL that will be prefixed to the URL provided by the agent",
+   "fieldname": "base_url",
+   "fieldtype": "Data",
+   "label": "Base URL"
+  },
+  {
+   "fieldname": "http_headers",
+   "fieldtype": "Table",
+   "label": "HTTP Headers",
+   "options": "Agent Tool HTTP Header"
+  },
+  {
+   "depends_on": "eval:doc.types == 'GET' || doc.types == 'POST'",
+   "fieldname": "header_section",
+   "fieldtype": "Section Break",
+   "label": "Header"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-27 15:50:27.496696",
+ "modified": "2025-08-28 11:14:09.459978",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Tool Function",
