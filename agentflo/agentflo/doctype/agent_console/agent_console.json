@@ -1,5 +1,12 @@
 {
- "actions": [],
+ "actions": [
+    {
+        "action": "agentflo.ai.agent_integration.run_agent_sync",
+        "action_type": "Server Action",
+        "hidden": 1,
+        "label": "Run Agent"
+    }
+ ],
  "allow_rename": 1,
  "creation": "2025-08-26 11:32:50.361259",
  "doctype": "DocType",
@@ -24,14 +31,15 @@
   {
    "fieldname": "response",
    "fieldtype": "Long Text",
-   "label": "Response"
+   "label": "Response",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-08-26 17:28:04.040378",
+ "modified": "2025-08-28 11:32:34.062245",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Console",
