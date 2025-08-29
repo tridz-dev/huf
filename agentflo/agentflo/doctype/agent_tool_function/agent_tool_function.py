@@ -299,8 +299,21 @@ class AgentToolFunction(Document):
 				"required": ["url"],
 				"additionalProperties": False
 			}
-			
 		elif self.types == "POST":
+			# Build schema for JSON body from parameters table
+			body_properties = {}
+			body_required = []
+
+			for param in self.parameters:
+				field_schema = {"type": param.type, "description": param.label}
+
+				if param.type == "string" and param.options:
+					field_schema["enum"] = param.options.split("\n")
+
+				body_properties[param.fieldname] = field_schema
+				if param.required:
+					body_required.append(param.fieldname)
+
 			params = {
 				"type": "object",
 				"properties": {
@@ -308,18 +321,18 @@ class AgentToolFunction(Document):
 						"type": "string",
 						"description": f"The URL to send the POST request to. Base URL: {self.base_url or 'Not set'}"
 					},
-					"data": {
+					"json_data": {
 						"type": "object",
-						"description": "Data to send in the request body"
-					},
-					"json": {
-						"type": "object",
-						"description": "JSON data to send in the request body"
+						"properties": body_properties,
+						"required": body_required,
+						"additionalProperties": False,
 					}
 				},
-				"required": ["url"],
-				"additionalProperties": False
+				"required": ["url", "json_data"],
+				"additionalProperties": False,
 			}
+
+					
 		else:
 			params = self.build_params_json_from_table()
 
