@@ -283,6 +283,19 @@ class AgentToolFunction(Document):
 			}
 
 		elif self.types == "GET":
+			# Build schema for query parameters from parameters table
+			query_properties = {}
+			query_required = []
+
+			for param in self.parameters:
+				field_schema = {"type": param.type, "description": param.label}
+				if param.type == "string" and param.options:
+					field_schema["enum"] = param.options.split("\n")
+
+				query_properties[param.fieldname] = field_schema
+				if param.required:
+					query_required.append(param.fieldname)
+
 			params = {
 				"type": "object",
 				"properties": {
@@ -292,13 +305,16 @@ class AgentToolFunction(Document):
 					},
 					"params": {
 						"type": "object",
-						"description": "Query parameters to include in the URL",
-						"additionalProperties": {"type": "string"}
+						"properties": query_properties,
+						"required": query_required,
+						"additionalProperties": False
 					}
 				},
-				"required": ["url"],
-				"additionalProperties": False
+				"required": ["url", "params"] if query_required else ["url"],
+				"additionalProperties": False,
 			}
+
+
 		elif self.types == "POST":
 			# Build schema for JSON body from parameters table
 			body_properties = {}
