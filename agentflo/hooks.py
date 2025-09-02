@@ -147,24 +147,11 @@ app_license = "mit"
 
 # Scheduled Tasks
 # ---------------
-
-# scheduler_events = {
-# 	"all": [
-# 		"agentflo.tasks.all"
-# 	],
-# 	"daily": [
-# 		"agentflo.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"agentflo.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"agentflo.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"agentflo.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+    "all": [
+        "agentflo.ai.agent_scheduler.run_scheduled_agents"
+    ]
+}
 
 # Testing
 # -------

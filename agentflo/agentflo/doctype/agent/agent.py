@@ -11,4 +11,9 @@ class Agent(Document):
 		if  not self.instructions:
 			frappe.throw(_("Please provide an instruction for this AI Agent."))
 
-		
+	def get_indicator(doc):
+		if doc.disabled:
+			return _("Disabled"), "red", "disabled,=,Yes"
+		else:
+			return _("Enabled"), "green", "disabled,=,No"
+
