@@ -1,15 +1,10 @@
 import asyncio
 import json
-import openai
-import logging
 
 import frappe
-from pydantic import BaseModel
-from agents.exceptions import InputGuardrailTripwireTriggered
-from agents import OpenAIProvider,Agent, Runner,RunConfig, Tool, function_tool,ModelSettings
+from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
 
 from frappe import _
-from frappe.client import get
 from .tool_functions import (
 	create_document,
     get_document,
@@ -20,6 +15,7 @@ from .tool_functions import (
 	delete_document,
 )
 from .conversation_manager import ConversationManager
+from .run import RunProvider
 
 
 class AgentManager:
@@ -55,10 +51,8 @@ class AgentManager:
         if not api_key:
             frappe.throw(_("API key is not configured in AI Provider."))
 
-        # Directly use OpenAIProvider — no need for AsyncOpenAI
         self.provider = OpenAIProvider(api_key=api_key, use_responses=True)
 
-        # Keep reference if you want backward compatibility
         self.client = self.provider
 
 
@@ -229,6 +223,8 @@ def safe_commit():
 def run_agent_sync(
     agent_name: str,
     prompt: str,
+    provider : str= None,
+    model : str= None,
     channel_id: str = None,
     external_id: str = None,
     conversation_id: str = None
@@ -284,9 +280,12 @@ def run_agent_sync(
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            result = loop.run_until_complete(
-                Runner.run(agent, enhanced_prompt, max_turns=8, context=context)
-            )
+            if provider.lower() == "openai":
+                run = Runner.run(agent, enhanced_prompt, max_turns=8, context=context)
+            else:  
+                run = RunProvider.run(agent_name, enhanced_prompt, provider, model)
+
+            result = loop.run_until_complete(run)
         finally:
             loop.close()
 
