@@ -4,12 +4,15 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from agentflo.ai.agent_hooks import clear_doc_event_agents_cache
 
 
 class Agent(Document):
 	def validate(self):
-		if  not self.instructions:
+		if not self.instructions:
 			frappe.throw(_("Please provide an instruction for this AI Agent."))
+		if self.is_scheduled and self.is_doc_event:
+			frappe.throw(_("An Agent cannot be both Scheduled and Doc Event based. Please choose only one."))
 
 	def get_indicator(doc):
 		if doc.disabled:
@@ -17,3 +20,8 @@ class Agent(Document):
 		else:
 			return _("Enabled"), "green", "disabled,=,No"
 
+	def on_update(self):
+		clear_doc_event_agents_cache()
+
+	def on_trash(self):
+		clear_doc_event_agents_cache()

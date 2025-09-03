@@ -22,6 +22,11 @@
   "last_execution",
   "next_execution",
   "section_break_nyhh",
+  "is_doc_event",
+  "reference_doctype",
+  "column_break_2be0",
+  "doc_event",
+  "section_break_yyoa",
   "instructions",
   "agent_tool"
  ],
@@ -55,6 +60,7 @@
    "reqd": 1
   },
   {
+   "depends_on": "eval: doc.is_scheduled == 0",
    "fieldname": "section_break_nyhh",
    "fieldtype": "Section Break"
   },
@@ -125,6 +131,7 @@
    "read_only": 1
   },
   {
+   "depends_on": "eval: doc.is_doc_event == 0",
    "fieldname": "section_break_r94q",
    "fieldtype": "Section Break"
   },
@@ -137,12 +144,40 @@
    "fieldname": "disabled",
    "fieldtype": "Check",
    "label": "Disabled"
+  },
+  {
+   "fieldname": "section_break_yyoa",
+   "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "eval: doc.is_doc_event == 1",
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "column_break_2be0",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.is_doc_event == 1",
+   "fieldname": "doc_event",
+   "fieldtype": "Select",
+   "label": "Doc Event",
+   "options": "before_insert\nafter_insert\nvalidate\nbefore_save\nafter_save\nbefore_submit\non_submit\nafter_submit\non_cancel\nbefore_rename\nafter_rename\non_trash\nafter_delete"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_doc_event",
+   "fieldtype": "Check",
+   "label": "Is Doc Event Agent"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-02 16:27:42.944066",
+ "modified": "2025-09-03 20:20:59.962806",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
