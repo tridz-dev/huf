@@ -23,7 +23,7 @@ class AgentManager:
     def __init__(self, agent_name, file_handler=None):
         self.agent_doc = frappe.get_doc("Agent", agent_name)
         self.settings = frappe.get_doc("AI Provider", self.agent_doc.provider)
-        self.file_handler = file_handler
+        # self.file_handler = file_handler
         self.tools = []
         self._setup_client()
         self._setup_tools()
@@ -223,8 +223,8 @@ def safe_commit():
 def run_agent_sync(
     agent_name: str,
     prompt: str,
-    provider : str= None,
-    model : str= None,
+    provider : str,
+    model : str,
     channel_id: str = None,
     external_id: str = None,
     conversation_id: str = None
@@ -283,7 +283,7 @@ def run_agent_sync(
             if provider.lower() == "openai":
                 run = Runner.run(agent, enhanced_prompt, max_turns=8, context=context)
             else:  
-                run = RunProvider.run(agent_name, enhanced_prompt, provider, model)
+                run = RunProvider.run(agent, enhanced_prompt, provider, model)
 
             result = loop.run_until_complete(run)
         finally:

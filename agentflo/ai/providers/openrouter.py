@@ -1,6 +1,6 @@
 import json, requests, asyncio
 
-async def run(agent_name, enhanced_prompt, provider, model):
+async def run(agent, enhanced_prompt, provider, model):
     def _sync_call():
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
@@ -9,12 +9,17 @@ async def run(agent_name, enhanced_prompt, provider, model):
                 "Content-Type": "application/json"
             },
             data=json.dumps({
-                "model": model or "google/gemma-3-27b-it:free",
+                "model": model,
                 "messages": [
                     {"role": "user", "content": enhanced_prompt}
                 ]
             })
         )
-        return response.json()
+        data = response.json()
+
+        try:
+            return data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, TypeError):
+            return data.get("error", {}).get("message", str(data))
 
     return await asyncio.to_thread(_sync_call)

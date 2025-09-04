@@ -14,6 +14,8 @@ frappe.ui.form.on("Agent Console", {
                 args: {
                     agent_name: frm.doc.agent_name,
                     prompt: frm.doc.prompt,
+                    provider:frm.doc.provider,
+                    model:frm.doc.model
                 },
                 callback: function(r) {
                     if (r.message) {

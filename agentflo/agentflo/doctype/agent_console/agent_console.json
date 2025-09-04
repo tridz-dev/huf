@@ -1,11 +1,11 @@
 {
  "actions": [
-    {
-        "action": "agentflo.ai.agent_integration.run_agent_sync",
-        "action_type": "Server Action",
-        "hidden": 1,
-        "label": "Run Agent"
-    }
+  {
+   "action": "agentflo.ai.agent_integration.run_agent_sync",
+   "action_type": "Server Action",
+   "hidden": 1,
+   "label": "Run Agent"
+  }
  ],
  "allow_rename": 1,
  "creation": "2025-08-26 11:32:50.361259",
@@ -13,6 +13,8 @@
  "engine": "InnoDB",
  "field_order": [
   "agent_name",
+  "provider",
+  "model",
   "prompt",
   "response"
  ],
@@ -33,13 +35,27 @@
    "fieldtype": "Long Text",
    "label": "Response",
    "read_only": 1
+  },
+  {
+   "fetch_from": "agent_name.provider",
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "label": "Provider",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "agent_name.model",
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-08-28 11:32:34.062245",
+ "modified": "2025-09-04 12:35:00.482591",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Console",
