@@ -31,7 +31,6 @@ class AgentManager:
     
     def _setup_tools(self):
         """Create SDK Tools from existing functions"""
-        # Always include built-in CRUD tools first
         self.tools=[]
 
         try:
@@ -280,10 +279,7 @@ def run_agent_sync(
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            if provider.lower() == "openai":
-                run = Runner.run(agent, enhanced_prompt, max_turns=8, context=context)
-            else:  
-                run = RunProvider.run(agent, enhanced_prompt, provider, model)
+            run = RunProvider.run(agent, enhanced_prompt, provider, model)
 
             result = loop.run_until_complete(run)
         finally:

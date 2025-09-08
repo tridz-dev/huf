@@ -1,20 +1,18 @@
 import frappe
-from frappe.utils import now
-import json
-import requests
-from .providers import openrouter
 
-class RunProvider:    
+class RunProvider:
     @staticmethod
     def run(agent, enhanced_prompt, provider, model):
-        match provider.lower():
-            case "openrouter":
-                return openrouter.run(agent, enhanced_prompt, provider, model)
-            case "openai":
-                pass
-                # return openai.run(agent_name, enhanced_prompt, provider, model)
-            case "google":
-                pass
-                # return google.run(agent_name, enhanced_prompt, provider, model)
-            case _:
-                raise ValueError(f"Unknown provider: {provider}")
+        provider = provider.lower()
+
+        try:
+            module_path = f"agentflo.ai.providers.{provider}"
+            module = frappe.get_module(module_path)
+
+            if not hasattr(module, "run"):
+                frappe.throw(f"Provider {provider} is missing a run() function")
+
+            return module.run(agent, enhanced_prompt, provider, model)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), f"Provider Run Error: {provider}")
+            frappe.throw(f"Error running provider {provider}")
