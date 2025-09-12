@@ -2,6 +2,8 @@
 
 AgentFlo is a Frappe application for creating and managing AI agents. It allows you to define intelligent agents, equip them with tools to interact with your Frappe site, and manage conversations with them.
 
+>  ⚠️ AgentFlo is actively being migrated from an existing implementation into an independent app. The system may not work as expected and is not recommended for use in production environments at this stage. ⚠️ 
+
 ### Installation
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:
