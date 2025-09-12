@@ -3,7 +3,7 @@ import frappe
 from agentflo.ai.tool_serializer import serialize_tools
 
 
-async def run(agent, enhanced_prompt, provider, model):
+async def run(agent, enhanced_prompt, provider, model,context=None):
     def _sync_call():
         payload = {
             "model": model,

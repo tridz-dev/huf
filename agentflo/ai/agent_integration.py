@@ -279,7 +279,7 @@ def run_agent_sync(
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            run = RunProvider.run(agent, enhanced_prompt, provider, model)
+            run = RunProvider.run(agent, enhanced_prompt, provider, model,context)
 
             result = loop.run_until_complete(run)
         finally:

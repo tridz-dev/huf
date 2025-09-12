@@ -1,6 +1,7 @@
 import inspect
 import json
 from typing import Any, Callable
+from frappe.utils.background_jobs import enqueue
 
 import frappe
 
@@ -64,6 +65,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "agentflo.ai.http_handler.handle_get_request"
                     elif function_doc.types == "POST":
                         function_path = "agentflo.ai.http_handler.handle_post_request"
+                    elif function_doc.types == "Run Agent":
+                        function_path = "agentflo.ai.sdk_tools.handle_run_agent"
                     else:
                         continue
 
@@ -151,38 +154,32 @@ def create_function_tool(
 		import hashlib
 		from datetime import datetime, timedelta
 
-		# Create a simple cache to prevent duplicate function executions
-		_request_cache = {}
-		_cache_ttl = 5  # seconds - short TTL to prevent duplicates in same conversation
 
 		# Create an async handler that will invoke our function
 		# In sdk_tools.py - update the on_invoke_tool function
 
-		async def on_invoke_tool(ctx, args_json: str) -> str:
+		async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
 			try:
-				# Parse arguments from JSON
-				args_dict = json.loads(args_json)
+				if args_json is None and isinstance(ctx, str):
+					args_json = ctx
+					ctx = None
 
-				# Add extra arguments from function configuration
+				args_dict = json.loads(args_json or "{}")
+
 				for key, value in _extra_args.items():
 					if key not in args_dict:
 						args_dict[key] = value
-						
-				# Add tool name for HTTP handlers
-				if _function.__name__ in ["handle_get_request", "handle_post_request"]:
-					args_dict["tool_name"] = name  # Pass the tool name
 
-				# Call the function
+				if _function.__name__ in ["handle_get_request", "handle_post_request"]:
+					args_dict["tool_name"] = name
+
 				result = _function(**args_dict)
 
-				# Convert result to string (JSON)
-				result_str = ""
-				if isinstance(result, dict) or isinstance(result, list):
-					result_str = json.dumps(result, default=str)
-				else:
-					result_str = str(result)
+				if hasattr(result, "as_dict"):
+					result = result.as_dict()
 
-				return result_str
+				return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
+
 			except Exception as e:
 				frappe.log_error("SDK Functions Debug", f"Error in on_invoke_tool: {str(e)}")
 				return json.dumps({"error": str(e)})
@@ -296,30 +293,29 @@ def wrap_frappe_function(func: Callable) -> Callable:
 
 def _sanitize_for_doctype(doctype: str, data: dict) -> dict:
     """Keep only valid fields for doctype and sanitize child tables."""
-    meta = frappe.get_meta(doctype)
-    valid = {df.fieldname for df in meta.fields}
-    cleaned = {}
-
-    for key, val in (data or {}).items():
-        df = meta.get_field(key)
-        if not df:
-            # ignore unknown fields silently; avoids agent sending labels etc.
-            continue
-
-        if df.fieldtype == "Table":
-            # val must be list[dict]; sanitize each row for the child doctype
-            if isinstance(val, list):
-                cleaned[key] = [
-                    _sanitize_for_doctype(df.options, row) for row in val if isinstance(row, dict)
-                ]
-            else:
-                # ignore bad shapes for table fields
+    try:
+        meta = frappe.get_meta(doctype)
+        valid_fields = {df.fieldname for df in meta.fields}
+        cleaned = {}
+        
+        for key, value in (data or {}).items():
+            if key not in valid_fields:
                 continue
-        else:
-            cleaned[key] = val
-
-    return cleaned
-
+                
+            df = meta.get_field(key)
+            if df.fieldtype == "Table":
+                if isinstance(value, list):
+                    cleaned[key] = [
+                        _sanitize_for_doctype(df.options, row) 
+                        for row in value 
+                        if isinstance(row, dict)
+                    ]
+            else:
+                cleaned[key] = value
+                
+        return cleaned
+    except Exception:
+        return data or {}
 
 # Standard CRUD function generators
 def create_get_function(doctype: str) -> Callable:
@@ -879,3 +875,29 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
 
 def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, **kwargs):
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
+
+def handle_run_agent(agent_name: str, prompt: str):
+    """
+    Queue another agent execution instead of blocking.
+    """
+    try:
+        if not frappe.db.exists("Agent", agent_name):
+            return {"success": False, "error": f"Agent '{agent_name}' does not exist"}
+
+        target_agent = frappe.get_doc("Agent", agent_name)
+
+        job = enqueue(
+            "agentflo.ai.agent_integration.run_agent_sync",
+            queue="default",
+            timeout=300,
+            is_async=True,
+            agent_name=agent_name,
+            prompt=prompt,
+            provider=target_agent.provider,
+            model=target_agent.model,
+        )
+
+        return {"success": True, "queued": True, "job_id": job.id}
+    except Exception as e:
+        frappe.log_error("Run Agent Tool Error", str(e))
+        return {"success": False, "error": str(e)}
