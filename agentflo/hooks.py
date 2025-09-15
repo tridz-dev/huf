@@ -137,23 +137,23 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-#     "*": {
-#         "validate": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "before_insert": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "after_insert": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "before_save": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "after_save": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "before_submit": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "after_submit": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "before_cancel": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "on_submit": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "before_rename": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "after_rename": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "on_trash": "agentflo.ai.agent_hooks.run_hooked_agents",
-#         "after_delete": "agentflo.ai.agent_hooks.run_hooked_agents",
-#     }
-# }
+doc_events = {
+    "*": {
+        "validate": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "before_insert": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "after_insert": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "before_save": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "after_save": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "before_submit": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "after_submit": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "before_cancel": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "on_submit": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "before_rename": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "after_rename": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "on_trash": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "after_delete": "agentflo.ai.agent_hooks.run_hooked_agents",
+    }
+}
 
 # Scheduled Tasks
 # ---------------

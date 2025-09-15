@@ -21,7 +21,7 @@ class Agent(Document):
 			return _("Enabled"), "green", "disabled,=,No"
 
 	def on_update(self):
-		clear_doc_event_agents_cache()
+		clear_doc_event_agents_cache() #recreate= clear then create 
 
 	def on_trash(self):
 		clear_doc_event_agents_cache()
