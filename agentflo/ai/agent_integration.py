@@ -296,9 +296,16 @@ def run_agent_sync(
         }, update_modified=True)
         safe_commit()
 
+        structured = None
+        try:
+            structured = json.loads(final_output)
+        except (TypeError, ValueError):
+            pass
+
         return {
             "success": True,
             "response": final_output,
+            "structured": structured,
             "provider": manager.agent_doc.provider,
             "agent_run_id": run_doc.name,
             "conversation_id": conversation.name,
