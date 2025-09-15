@@ -6,14 +6,17 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "content_tab",
   "naming_series",
   "conversation",
-  "exchange_data_section",
   "content",
-  "section_break_hm0d",
+  "metadata_tab",
   "run",
-  "session_id",
+  "provider",
+  "model",
   "kind",
+  "column_break_asyu",
+  "session_id",
   "user",
   "is_agent_message",
   "role",
@@ -53,15 +56,6 @@
    "read_only": 1
   },
   {
-   "fieldname": "exchange_data_section",
-   "fieldtype": "Section Break",
-   "label": "Exchange Data"
-  },
-  {
-   "fieldname": "section_break_hm0d",
-   "fieldtype": "Section Break"
-  },
-  {
    "fieldname": "content",
    "fieldtype": "Long Text",
    "label": "Content"
@@ -69,6 +63,7 @@
   {
    "fieldname": "kind",
    "fieldtype": "Select",
+   "hidden": 1,
    "label": "Kind",
    "options": "\nMessage\nTool Call\nTool Result\nStatus\nError"
   },
@@ -76,6 +71,7 @@
    "default": "user",
    "fieldname": "role",
    "fieldtype": "Select",
+   "hidden": 1,
    "label": "Role",
    "options": "user\nagent\nsystem"
   },
@@ -91,12 +87,38 @@
    "fieldtype": "Check",
    "label": "Is Agent Message",
    "read_only": 1
+  },
+  {
+   "fieldname": "content_tab",
+   "fieldtype": "Tab Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "metadata_tab",
+   "fieldtype": "Tab Break",
+   "label": "Metadata"
+  },
+  {
+   "fieldname": "column_break_asyu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "label": "Provider",
+   "options": "AI Provider"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "AI Model"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-25 10:14:02.529952",
+ "modified": "2025-09-15 14:32:30.889740",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Message",

@@ -55,7 +55,7 @@ class ConversationManager:
         conv.insert()
         return conv
 
-    def add_message(self, conversation, role, content, run_name=None):
+    def add_message(self, conversation, role, content, provider, model,run_name=None):
         """Add message to conversation"""
         # Get next index
         try:
@@ -75,6 +75,8 @@ class ConversationManager:
                 "session_id": self.session_id,
                 "kind": "Message",
                 "run": run_name,
+                "provider":provider,
+                "model":model,
                 "conversation_index": last_index + 1,
                 "is_agent_message": 1 if role == "agent" else 0
             })
