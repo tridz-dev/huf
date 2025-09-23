@@ -7,7 +7,7 @@
  "field_order": [
   "agent_run",
   "conversation",
-  "tool_name",
+  "tool",
   "tool_args",
   "tool_result",
   "status",
@@ -27,13 +27,6 @@
    "fieldtype": "Link",
    "label": "Conversation",
    "options": "Agent Conversation",
-   "read_only": 1
-  },
-  {
-   "fieldname": "tool_name",
-   "fieldtype": "Link",
-   "label": "Tool Name",
-   "options": "Agent Tool Function",
    "read_only": 1
   },
   {
@@ -66,12 +59,19 @@
    "hidden": 1,
    "label": "Status",
    "options": "Started\nQueued\nCompleted\nFailed"
+  },
+  {
+   "fieldname": "tool",
+   "fieldtype": "Link",
+   "label": "Tool Name",
+   "options": "Agent Tool Function",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-23 11:23:58.168657",
+ "modified": "2025-09-23 16:18:09.232868",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Tool Call",

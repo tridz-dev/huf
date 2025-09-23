@@ -244,7 +244,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "doctype": "Agent Tool Call",
                 "agent_run": agent_run,
                 "conversation": conversation,
-                "tool_name": name,
+                "tool": name,
                 "tool_args": json.dumps(args) if args else None,
                 "tool_result": json.dumps(result) if result else None,
                 "error_message": error,
@@ -302,9 +302,10 @@ def run_agent_sync(
         "conversation": conversation.name,
         "prompt": prompt,
     })
-    run_doc.insert()
-    safe_commit()
+    run_doc.insert()  
     conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name)
+    safe_commit()
+    
     try:
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
         safe_commit()
@@ -379,7 +380,7 @@ def run_agent_sync(
         error_msg = str(e)
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
-        conv_manager.add_message(conversation, role="system", content=error_msg, provider=provider, model=model, agent_name=agent_name, run_name=run_doc.name)
+        # conv_manager.add_message(conversation, role="system", content=error_msg, provider=provider, model=model, agent_name=agent_name, run_name=run_doc.name)
 
         frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "AgentFlo")
 

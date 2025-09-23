@@ -23,6 +23,7 @@
   "next_execution",
   "section_break_nyhh",
   "reference_doctype",
+  "condition",
   "is_doc_event",
   "column_break_2be0",
   "doc_event",
@@ -173,12 +174,19 @@
    "fieldname": "is_doc_event",
    "fieldtype": "Check",
    "label": "Is Doc Event Agent"
+  },
+  {
+   "description": "This event will occur if this expression is true",
+   "fieldname": "condition",
+   "fieldtype": "Code",
+   "ignore_xss_filter": 1,
+   "label": "Condition"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-16 16:54:13.335816",
+ "modified": "2025-09-23 16:32:54.726018",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
