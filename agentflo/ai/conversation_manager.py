@@ -55,7 +55,7 @@ class ConversationManager:
         conv.insert()
         return conv
 
-    def add_message(self, conversation, role, content, provider, model,run_name=None):
+    def add_message(self, conversation, role, content, provider, model, agent,run_name=None):
         """Add message to conversation"""
         # Get next index
         try:
@@ -74,7 +74,8 @@ class ConversationManager:
                 "user": self.external_id or frappe.session.user if role == "user" else "Agent",
                 "session_id": self.session_id,
                 "kind": "Message",
-                "run": run_name,
+                "agent_run": run_name,
+                "agent":agent,
                 "provider":provider,
                 "model":model,
                 "conversation_index": last_index + 1,

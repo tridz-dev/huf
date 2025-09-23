@@ -293,7 +293,6 @@ def run_agent_sync(
         conversation_id=conversation_id
     )
 
-    conv_manager.add_message(conversation, "user", prompt, provider, model)
 
     history = conv_manager.get_conversation_history(conversation.name)
     run_doc = frappe.get_doc({
@@ -305,6 +304,7 @@ def run_agent_sync(
     })
     run_doc.insert()
     safe_commit()
+    conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name)
     try:
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
         safe_commit()
@@ -350,7 +350,7 @@ def run_agent_sync(
         
         final_output = getattr(result, "final_output", str(result))
 
-        conv_manager.add_message(conversation, "agent", final_output, provider, model, run_doc.name)
+        conv_manager.add_message(conversation, "agent", final_output, provider, model, agent_name, run_doc.name)
 
         frappe.db.set_value("Agent Run", run_doc.name, {
             "status": "Success",
@@ -379,7 +379,7 @@ def run_agent_sync(
         error_msg = str(e)
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
-        conv_manager.add_message(conversation, role="system", content=error_msg, provider=provider, model=model, run_name=run_doc.name)
+        conv_manager.add_message(conversation, role="system", content=error_msg, provider=provider, model=model, agent_name=agent_name, run_name=run_doc.name)
 
         frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "AgentFlo")
 

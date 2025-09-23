@@ -10,10 +10,11 @@
   "naming_series",
   "content",
   "metadata_tab",
-  "run",
-  "provider",
+  "agent_run",
   "conversation",
+  "provider",
   "model",
+  "agent",
   "kind",
   "column_break_asyu",
   "session_id",
@@ -28,18 +29,14 @@
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Conversation",
-   "options": "Agent Conversation"
-  },
-  {
-   "fieldname": "run",
-   "fieldtype": "Link",
-   "label": "Run",
-   "options": "Agent Run"
+   "options": "Agent Conversation",
+   "read_only": 1
   },
   {
    "fieldname": "user",
    "fieldtype": "Data",
-   "label": "User"
+   "label": "User",
+   "read_only": 1
   },
   {
    "default": "MSG-.YYYY.-",
@@ -58,7 +55,8 @@
   {
    "fieldname": "content",
    "fieldtype": "Long Text",
-   "label": "Content"
+   "label": "Content",
+   "read_only": 1
   },
   {
    "fieldname": "kind",
@@ -72,13 +70,15 @@
    "fieldtype": "Select",
    "hidden": 1,
    "label": "Role",
-   "options": "user\ntool\nagent\nsystem"
+   "options": "user\ntool\nagent\nsystem",
+   "read_only": 1
   },
   {
    "fieldname": "session_id",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Session ID"
+   "label": "Session ID",
+   "read_only": 1
   },
   {
    "default": "0",
@@ -105,19 +105,35 @@
    "fieldname": "provider",
    "fieldtype": "Link",
    "label": "Provider",
-   "options": "AI Provider"
+   "options": "AI Provider",
+   "read_only": 1
   },
   {
    "fieldname": "model",
    "fieldtype": "Link",
    "label": "Model",
-   "options": "AI Model"
+   "options": "AI Model",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "label": "Run",
+   "options": "Agent Run",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-22 12:43:53.446230",
+ "modified": "2025-09-23 15:59:22.638985",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Message",
