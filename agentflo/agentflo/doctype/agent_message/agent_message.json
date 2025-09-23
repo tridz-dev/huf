@@ -8,11 +8,11 @@
  "field_order": [
   "content_tab",
   "naming_series",
-  "conversation",
   "content",
   "metadata_tab",
   "run",
   "provider",
+  "conversation",
   "model",
   "kind",
   "column_break_asyu",
@@ -63,7 +63,6 @@
   {
    "fieldname": "kind",
    "fieldtype": "Select",
-   "hidden": 1,
    "label": "Kind",
    "options": "\nMessage\nTool Call\nTool Result\nStatus\nError"
   },
@@ -73,7 +72,7 @@
    "fieldtype": "Select",
    "hidden": 1,
    "label": "Role",
-   "options": "user\nagent\nsystem"
+   "options": "user\ntool\nagent\nsystem"
   },
   {
    "fieldname": "session_id",
@@ -91,7 +90,7 @@
   {
    "fieldname": "content_tab",
    "fieldtype": "Tab Break",
-   "label": "Content"
+   "label": "Message"
   },
   {
    "fieldname": "metadata_tab",
@@ -118,7 +117,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-15 14:32:30.889740",
+ "modified": "2025-09-22 12:43:53.446230",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Message",

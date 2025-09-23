@@ -66,7 +66,7 @@
   },
   {
    "fieldname": "instructions",
-   "fieldtype": "Long Text",
+   "fieldtype": "Code",
    "label": "Instructions"
   },
   {
@@ -178,7 +178,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-15 14:21:14.467031",
+ "modified": "2025-09-16 16:54:13.335816",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",

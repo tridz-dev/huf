@@ -3,6 +3,7 @@ import json
 
 import frappe
 from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
+from frappe.utils.background_jobs import enqueue
 
 from frappe import _
 from .tool_functions import (
@@ -217,6 +218,54 @@ def safe_commit():
         frappe.local._realtime_log = []
     frappe.db.commit()
 
+def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False):
+    """Process tool call - update existing record or create new one"""
+    try:
+        existing = frappe.get_all(
+            "Agent Tool Call",
+            filters={"agent_run": agent_run},
+            pluck="name"
+        )
+        if existing:
+            doc = frappe.get_doc("Agent Tool Call", existing[0])
+            update_data = {}
+            if result is not None:
+                update_data["tool_result"] = json.dumps(result)
+            if error:
+                update_data["status"] = "Failed"
+                update_data["error_message"] = error
+            else:
+                update_data["status"] = "Completed"
+            
+            doc.update(update_data)
+            doc.save(ignore_permissions=True)
+        else:
+            doc = frappe.get_doc({
+                "doctype": "Agent Tool Call",
+                "agent_run": agent_run,
+                "conversation": conversation,
+                "tool_name": name,
+                "tool_args": json.dumps(args) if args else None,
+                "tool_result": json.dumps(result) if result else None,
+                "error_message": error,
+                "status": "Queued" if not is_output else "Completed"
+            })
+            doc.insert(ignore_permissions=True)
+
+        frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(f"Error processing tool call: {str(e)}", "Agent Tool Call")
+
+def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None, is_output=False):
+    frappe.enqueue(process_tool_call, queue='long', job_name='tool_call',
+        agent_run=run_doc.name,
+        conversation=conversation.name,
+        name=getattr(raw_call, "name", None),
+        args=getattr(raw_call, "arguments", None) if not is_output else None,
+        result=tool_result,
+        error=error,
+        is_output=is_output
+    )
 
 @frappe.whitelist()
 def run_agent_sync(
@@ -285,8 +334,22 @@ def run_agent_sync(
         finally:
             loop.close()
 
-        final_output = getattr(result, "final_output", str(result))
+        for item in getattr(result, "new_items", []):
+            if item.type == "tool_call_item":
+                raw = item.raw_item  
+                log_tool_call(run_doc, conversation, raw, is_output=False)
+
+            elif item.type == "tool_call_output_item":
+                raw = item.raw_item
+                try:
+                    tool_result = json.loads(raw.get("output")) if raw and raw.get("output") else None
+                except Exception:
+                    tool_result = raw.get("output")
+
+                log_tool_call(run_doc, conversation, raw, tool_result=tool_result, is_output=True)
         
+        final_output = getattr(result, "final_output", str(result))
+
         conv_manager.add_message(conversation, "agent", final_output, provider, model, run_doc.name)
 
         frappe.db.set_value("Agent Run", run_doc.name, {
@@ -316,6 +379,7 @@ def run_agent_sync(
         error_msg = str(e)
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
+        conv_manager.add_message(conversation, role="system", content=error_msg, provider=provider, model=model, run_name=run_doc.name)
 
         frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "AgentFlo")
 
