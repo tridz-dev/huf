@@ -21,7 +21,8 @@
   "user",
   "is_agent_message",
   "role",
-  "conversation_index"
+  "conversation_index",
+  "status"
  ],
  "fields": [
   {
@@ -128,12 +129,19 @@
    "label": "Run",
    "options": "Agent Run",
    "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Status",
+   "options": "\nStarted\nQueues\nCompleted\nFailed"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-23 15:59:22.638985",
+ "modified": "2025-09-24 12:47:12.375071",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Message",

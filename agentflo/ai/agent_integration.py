@@ -378,7 +378,7 @@ def run_agent_sync(
 
     except Exception as e:
         error_msg = str(e)
-        run_doc.db_set("status", "Failed", update_modified=True)
+        # run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
         # conv_manager.add_message(conversation, role="system", content=error_msg, provider=provider, model=model, agent_name=agent_name, run_name=run_doc.name)
 

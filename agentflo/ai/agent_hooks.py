@@ -1,6 +1,7 @@
 import frappe
 from frappe.utils.background_jobs import enqueue
 from .agent_integration import run_agent_sync
+from frappe.utils.safe_exec import get_safe_globals,safe_eval
 
 CACHE_KEY = "agentflo:doc_event_agents"
 
@@ -40,6 +41,19 @@ def run_hooked_agents(doc, event):
 
     
     for agent in matching:
+        condition = frappe.db.get_value("Agent", agent["name"], "condition")
+        if condition:
+            try:
+                passed = safe_eval(
+                    condition,
+                    get_safe_globals(),
+                    {"doc": doc}  
+                )
+                if not passed:
+                    continue
+            except Exception as e:
+                frappe.log_error(f"Condition error in Agent {agent['name']}: {e}")
+                continue
         enqueue(
             run_agent_for_doc,
             queue="long",
