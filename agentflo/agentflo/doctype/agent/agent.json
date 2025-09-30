@@ -14,6 +14,9 @@
   "disabled",
   "temperature",
   "top_p",
+  "section_break_tuak",
+  "allow_chat",
+  "persist_conversation",
   "section_break_r94q",
   "is_scheduled",
   "scheduled_interval",
@@ -182,12 +185,28 @@
    "fieldtype": "Code",
    "ignore_xss_filter": 1,
    "label": "Condition"
+  },
+  {
+   "fieldname": "section_break_tuak",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "allow_chat",
+   "fieldtype": "Check",
+   "label": "Allow Chat"
+  },
+  {
+   "default": "0",
+   "fieldname": "persist_conversation",
+   "fieldtype": "Check",
+   "label": "Persist Conversation"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-24 12:47:46.220415",
+ "modified": "2025-09-30 19:31:57.463837",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
