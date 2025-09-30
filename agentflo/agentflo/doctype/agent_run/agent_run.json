@@ -14,7 +14,16 @@
   "response",
   "status",
   "error_code",
-  "error_message"
+  "error_message",
+  "metadata",
+  "provider",
+  "start_time",
+  "input_tokens",
+  "cost",
+  "column_break_qy3x",
+  "model",
+  "end_time",
+  "output_tokens"
  ],
  "fields": [
   {
@@ -82,12 +91,70 @@
    "label": "Job ID",
    "options": "Agent Run Group",
    "read_only": 1
+  },
+  {
+   "fieldname": "metadata",
+   "fieldtype": "Tab Break",
+   "label": "Metadate"
+  },
+  {
+   "description": "Time stamp before requesting provider API.\n",
+   "fieldname": "start_time",
+   "fieldtype": "Datetime",
+   "label": "Start Time",
+   "read_only": 1
+  },
+  {
+   "description": "Time stamp after provider response is completely generated.",
+   "fieldname": "end_time",
+   "fieldtype": "Datetime",
+   "label": "End Time",
+   "read_only": 1
+  },
+  {
+   "description": "Number of tokens fed into the model for this response.\n\n",
+   "fieldname": "input_tokens",
+   "fieldtype": "Int",
+   "label": "Input Tokens",
+   "read_only": 1
+  },
+  {
+   "description": "Number of tokens in the model response.\n\n",
+   "fieldname": "output_tokens",
+   "fieldtype": "Int",
+   "label": "Output Tokens",
+   "read_only": 1
+  },
+  {
+   "description": "Cost of generating this response. Might not be accurate.",
+   "fieldname": "cost",
+   "fieldtype": "Currency",
+   "label": "Cost",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_qy3x",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "label": "Provider",
+   "options": "AI Provider",
+   "read_only": 1
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "AI Model",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-23 10:49:04.277885",
+ "modified": "2025-09-25 10:45:50.009904",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Run",

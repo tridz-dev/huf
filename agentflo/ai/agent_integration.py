@@ -4,6 +4,7 @@ import json
 import frappe
 from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
 from frappe.utils.background_jobs import enqueue
+from frappe.utils import now_datetime
 
 from frappe import _
 from .tool_functions import (
@@ -301,9 +302,12 @@ def run_agent_sync(
         "status": "Queued",
         "conversation": conversation.name,
         "prompt": prompt,
+        "model": model,
+        "provider": provider
     })
     run_doc.insert()  
     conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name)
+    run_doc.db_set("start_time", now_datetime())
     safe_commit()
     
     try:
@@ -350,13 +354,37 @@ def run_agent_sync(
                 log_tool_call(run_doc, conversation, raw, tool_result=tool_result, is_output=True)
         
         final_output = getattr(result, "final_output", str(result))
+        print(result,".....................result")
+        print(final_output,".....................final_output")
+        usage = getattr(result, "usage", None)
+        if usage:
+            input_tokens = 0
+            output_tokens = 0
+
+            if isinstance(usage, dict):
+                input_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
+            else: 
+                input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
+                output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
+
+            cost = 0
+
+            frappe.db.set_value("Agent Run", run_doc.name, {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost": cost
+            })
 
         conv_manager.add_message(conversation, "agent", final_output, provider, model, agent_name, run_doc.name)
 
         frappe.db.set_value("Agent Run", run_doc.name, {
             "status": "Success",
             "response": final_output,
-            "prompt": prompt
+            "prompt": prompt,
+            "model": model,
+            "provider": provider,
+            "end_time": now_datetime()
         }, update_modified=True)
         safe_commit()
 
@@ -378,7 +406,7 @@ def run_agent_sync(
 
     except Exception as e:
         error_msg = str(e)
-        # run_doc.db_set("status", "Failed", update_modified=True)
+        run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
         # conv_manager.add_message(conversation, role="system", content=error_msg, provider=provider, model=model, agent_name=agent_name, run_name=run_doc.name)
 

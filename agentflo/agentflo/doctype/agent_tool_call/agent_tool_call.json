@@ -63,6 +63,7 @@
   {
    "fieldname": "tool",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Tool Name",
    "options": "Agent Tool Function",
    "read_only": 1
@@ -71,7 +72,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-23 16:18:09.232868",
+ "modified": "2025-09-24 19:42:43.241277",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Tool Call",
