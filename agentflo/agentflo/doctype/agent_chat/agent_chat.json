@@ -12,16 +12,10 @@
  ],
  "fields": [
   {
-   "fieldname": "agent",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Agent",
-   "options": "Agent",
-   "reqd": 1
-  },
-  {
    "fieldname": "conversation",
    "fieldtype": "Link",
+   "hidden": 1,
+   "in_list_view": 1,
    "label": "Conversation",
    "options": "Agent Conversation",
    "read_only": 1
@@ -31,13 +25,21 @@
    "fieldtype": "HTML",
    "label": "Chat UI",
    "read_only": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "in_list_view": 1,
+   "label": "Agent",
+   "options": "Agent"
   }
  ],
  "grid_page_length": 50,
  "hide_toolbar": 1,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-30 19:01:32.589771",
+ "modified": "2025-10-01 16:40:19.462425",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Chat",

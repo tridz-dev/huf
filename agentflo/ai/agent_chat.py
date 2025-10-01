@@ -38,17 +38,21 @@ def get_history(conversation_id: str = None, limit: int = 200):
 
 
 @frappe.whitelist()
-def send_message(docname: str, message: str):
-    """Send a chat message via Agent Chat"""
+def send_message(docname: str, message: str, agent: str = None):
+    """Send a chat message via Agent Chat."""
     if not docname:
         frappe.throw(_("docname is required"))
 
     chat = frappe.get_doc("Agent Chat", docname)
 
+    if agent:
+        if chat.agent != agent:
+            chat.db_set("agent", agent)
+            chat.agent = agent
+
     if not chat.agent:
         frappe.throw(_("Agent must be set before sending a message"))
 
-    # Run agent (this handles creating conversation + storing messages)
     result = run_agent_sync(
         agent_name=chat.agent,
         prompt=message,
@@ -63,3 +67,19 @@ def send_message(docname: str, message: str):
         chat.db_set("conversation", result["conversation_id"])
 
     return result
+
+
+@frappe.whitelist()
+def render_markdown(content: str = "") -> str:
+    """
+    Render Markdown to sanitized HTML using frappe's built-in markdown util.
+    Returns safe HTML string.
+    """
+    try:
+        if not isinstance(content, str):
+            content = json.dumps(content, indent=2)
+
+        from frappe.utils.markdown import markdown as md
+        return md(content or "")
+    except Exception:
+        return frappe.utils.escape_html(content or "")
