@@ -1,16 +1,45 @@
-### AgentFlo
+# AgentFlo
 
-AgentFlo is a Frappe application for creating and managing AI agents. It allows you to define intelligent agents, equip them with tools to interact with your Frappe site, and manage conversations with them.
+AgentFlo is a powerful Frappe application for create, manage, and integrate AI agents directly into Frappe ecosystem. These agents can be equipped with tools to interact with your site's data, automate tasks, and provide intelligent assistance.
 
 >  ⚠️ AgentFlo is actively being migrated from an existing implementation into an independent app. The system may not work as expected and is not recommended for use in production environments at this stage. ⚠️ 
 
-### Installation
+## Key Features
+
+-   **AI Provider & Model Management:**
+    -   Configure multiple AI providers (OpenAI, OpenRouter, etc.).
+    -   Manage different AI models for each provider.
+
+-   **Flexible Agent Creation:**
+    -   Create agents with custom instructions, models, and parameters (temperature, top-p).
+    -   **Event-Driven Agents:** Trigger agents to run based on any DocType event (e.g., `on_submit`, `after_insert`).
+    -   **Scheduled Agents:** Schedule agents to run at regular intervals (hourly, daily, weekly, etc.).
+    -   **Chat Agents:** Enable agents for real-time chat conversations.
+
+-   **Powerful Tool System:**
+    -   Equip agents with tools to interact with your Frappe site.
+    -   **CRUD Operations:** Tools for getting, creating, updating, and deleting documents.
+    -   **Custom Functions:** Create tools from your own whitelisted Python functions.
+    -   **HTTP Requests:** Allow agents to make `GET` and `POST` requests to external APIs.
+    -   **Run Agent Tool:** Enable agents to trigger other agents.
+
+-   **Interactive Interfaces:**
+    -   **Agent Console:** A simple interface for testing and debugging agents.
+    -   **Agent Chat:** A dedicated, real-time chat UI for interacting with conversational agents.
+
+-   **Comprehensive Logging & Auditing:**
+    -   **Agent Run:** Tracks every agent execution, including status, prompt, response, and token usage.
+    -   **Agent Conversation:** Stores the complete history of chat sessions.
+    -   **Agent Message:** Logs every message exchanged in a conversation.
+    -   **Agent Tool Call:** Records every time an agent uses a tool, including the arguments and result.
+
+## Installation
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
-bench get-app $URL_OF_THIS_REPO --branch develop
+bench get-app https://github.com/Tridz/agentflo.git
 bench install-app agentflo
 ```
 
@@ -20,15 +49,21 @@ AgentFlo is built around a set of interconnected DocTypes that define the compon
 
 ### Core Concepts
 
-1.  **Provider & Model**: You start by defining an `AI Provider` (e.g., OpenAI) and the `AI Model` you want to use (e.g., `gpt-4`).
+1.  **AI Provider & Model**: You start by defining an `AI Provider` (e.g., OpenAI) and the `AI Model` you want to use (e.g., `gpt-4`).
 2.  **Tools**: Agents need tools to be useful. An `Agent Tool Function` defines a specific action the agent can perform, such as fetching a document, creating a new one, or calling a custom Python function.
-3.  **Agent**: An `Agent` is the central entity. You give it a name, instructions (prompt), and assign it a set of tools.
-4.  **Conversation**: When a user interacts with an agent, a `Agent Conversation` is created to track the entire interaction. Each message back-and-forth is stored as an `Agent Message`.
-5.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run`.
+3.  **Agent**: The central entity. You give it a name, instructions (prompt), and assign it a set of tools. You can also configure it to run on a schedule or in response to a DocType event.
+4.  **Agent Conversation & Chat**: When a user interacts with a chat-enabled agent, an `Agent Conversation` is created to track the interaction. The `Agent Chat` doctype provides the UI for this.
+5.  **Execution & Logging**: Every agent task is logged as an `Agent Run`, and each message is stored as an `Agent Message`. Tool calls are logged in `Agent Tool Call`.
 
-## Doctypes
+## How It Works
 
-Here is a detailed breakdown of the DocTypes used in AgentFlo.
+1.  **Trigger**: An agent run is initiated either manually (via Agent Console or Agent Chat), on a schedule, or by a DocType event.
+2.  **Agent Preparation**: The `AgentManager` class loads the agent's configuration, including its instructions and tools.
+3.  **Tool Serialization**: The `sdk_tools.py` module converts the AgentFlo tools into a format that the AI provider's SDK can understand.
+4.  **Execution**: The `run_agent_sync` function sends the prompt, conversation history, and available tools to the AI model via the selected provider.
+5.  **Tool Use**: If the AI decides to use a tool, the `on_invoke_tool` handler executes the corresponding Python function (e.g., `handle_get_list`, `handle_create_document`, or a custom function).
+6.  **Response**: The result of the tool's execution is sent back to the AI, which then formulates a final response.
+7.  **Logging**: The entire process, including the final response and any tool calls, is logged in the corresponding doctypes (`Agent Run`, `Agent Message`, `Agent Tool Call`).
 
 ### 1. AI Provider
 
