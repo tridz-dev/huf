@@ -10,12 +10,13 @@
   "provider",
   "model",
   "async",
-  "column_break_df8m",
   "disabled",
+  "column_break_df8m",
   "temperature",
   "top_p",
   "section_break_tuak",
   "allow_chat",
+  "column_break_vfhq",
   "persist_conversation",
   "section_break_r94q",
   "is_scheduled",
@@ -36,6 +37,7 @@
  ],
  "fields": [
   {
+   "description": "A unique name for this agent.",
    "fieldname": "agent_name",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -44,6 +46,7 @@
    "unique": 1
   },
   {
+   "description": "The AI provider that will power this agent (e.g., OpenAI, OpenRouter).",
    "fieldname": "provider",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -56,6 +59,7 @@
    "fieldtype": "Column Break"
   },
   {
+   "description": "The specific AI model to use from the selected provider (e.g., gpt-4-turbo).",
    "fieldname": "model",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -69,6 +73,7 @@
    "fieldtype": "Section Break"
   },
   {
+   "description": "The system prompt or instructions that define the agent's personality, goals, and constraints. This is the core logic of the agent.",
    "fieldname": "instructions",
    "fieldtype": "Code",
    "label": "Instructions"
@@ -82,6 +87,7 @@
    "non_negative": 1
   },
   {
+   "description": "The set of tools this agent is allowed to use to interact with the system.",
    "fieldname": "agent_tool",
    "fieldtype": "Table",
    "label": "Agent Tool",
@@ -103,6 +109,7 @@
   },
   {
    "default": "0",
+   "description": "If checked, this agent will run automatically based on the defined schedule.",
    "fieldname": "is_scheduled",
    "fieldtype": "Check",
    "label": "Is Scheduled Agent"
@@ -110,6 +117,7 @@
   {
    "default": "Daily",
    "depends_on": "eval: doc.is_scheduled == 1",
+   "description": "The frequency at which the scheduled agent will run.",
    "fieldname": "scheduled_interval",
    "fieldtype": "Select",
    "label": "Scheduled Interval",
@@ -118,18 +126,21 @@
   {
    "default": "1",
    "depends_on": "eval: doc.is_scheduled == 1",
+   "description": "The number of intervals to wait before running the agent again (e.g., if interval is 'Hourly' and count is 2, it will run every 2 hours).",
    "fieldname": "interval_count",
    "fieldtype": "Int",
    "label": "Interval count"
   },
   {
    "depends_on": "eval: doc.is_scheduled == 1",
+   "description": "The timestamp of the last time this scheduled agent was executed.",
    "fieldname": "last_execution",
    "fieldtype": "Datetime",
    "label": "Last Execution",
    "read_only": 1
   },
   {
+   "description": "The timestamp of the next scheduled execution.",
    "fieldname": "next_execution",
    "fieldtype": "Datetime",
    "label": "Next Execution",
@@ -146,6 +157,7 @@
   },
   {
    "default": "0",
+   "description": "If checked, this agent will be disabled and will not run.",
    "fieldname": "disabled",
    "fieldtype": "Check",
    "label": "Disabled"
@@ -156,6 +168,7 @@
   },
   {
    "depends_on": "eval: doc.is_doc_event == 1",
+   "description": "The DocType to monitor for the selected event.",
    "fieldname": "reference_doctype",
    "fieldtype": "Link",
    "label": "Reference DocType",
@@ -167,6 +180,7 @@
   },
   {
    "depends_on": "eval: doc.is_doc_event == 1",
+   "description": "The specific DocType event that will trigger this agent (e.g., on_submit, before_save).",
    "fieldname": "doc_event",
    "fieldtype": "Select",
    "label": "Doc Event",
@@ -174,13 +188,14 @@
   },
   {
    "default": "0",
+   "description": "If checked, this agent will be triggered by a DocType event.",
    "fieldname": "is_doc_event",
    "fieldtype": "Check",
    "label": "Is Doc Event Agent"
   },
   {
    "depends_on": "eval: doc.is_doc_event == 1",
-   "description": "This event will occur if this expression is true",
+   "description": "A Python expression that must evaluate to true for the agent to be triggered by the DocType event. You can use `doc` to refer to the document.",
    "fieldname": "condition",
    "fieldtype": "Code",
    "ignore_xss_filter": 1,
@@ -192,6 +207,7 @@
   },
   {
    "default": "0",
+   "description": "If checked, this agent can be interacted with in the Agent Chat window.",
    "fieldname": "allow_chat",
    "fieldtype": "Check",
    "label": "Allow Chat"
@@ -199,15 +215,20 @@
   {
    "default": "1",
    "depends_on": "eval: doc.allow_chat == 1;",
+   "description": "If checked, the conversation history with this agent will be saved and loaded for future sessions.",
    "fieldname": "persist_conversation",
    "fieldtype": "Check",
    "label": "Persist Conversation"
+  },
+  {
+   "fieldname": "column_break_vfhq",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-10-01 13:02:09.988542",
+ "modified": "2025-10-03 16:20:05.848310",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
