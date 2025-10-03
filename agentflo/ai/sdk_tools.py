@@ -2,7 +2,9 @@ import inspect
 import json
 from typing import Any, Callable
 from frappe.utils.background_jobs import enqueue
-
+import base64
+from frappe.utils.file_manager import save_file
+import asyncio
 import frappe
 
 # Import the SDK directly - no fallback needed
@@ -12,7 +14,7 @@ from frappe import client
 from .tool_functions import (
     create_documents,update_documents,
     delete_documents,submit_document, cancel_document,
-    get_value, set_value, get_report_result,
+    get_value, set_value, get_report_result,attach_file_to_document
 )
 
 def create_agent_tools(agent) -> list[FunctionTool]:
@@ -67,6 +69,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "agentflo.ai.http_handler.handle_post_request"
                     elif function_doc.types == "Run Agent":
                         function_path = "agentflo.ai.sdk_tools.handle_run_agent"
+                    elif function_doc.types == "Attach File to Document":
+                        function_path = "agentflo.ai.sdk_tools.handle_attach_file_to_document"
                     else:
                         continue
 
@@ -115,6 +119,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                 )
 
     return tools
+
 
 
 def create_function_tool(
@@ -900,4 +905,25 @@ def handle_run_agent(agent_name: str, prompt: str):
         return {"success": True, "queued": True, "job_id": job.id}
     except Exception as e:
         frappe.log_error("Run Agent Tool Error", str(e))
+        return {"success": False, "error": str(e)}
+
+def handle_attach_file_to_document(reference_doctype=None, document_id=None, file_path=None, **kwargs):
+    """
+    Attach a file to a document.
+
+    Args:
+        reference_doctype (str): DocType name
+        document_id (str): Target document ID
+        file_path (str): File URL or path to attach
+
+    Returns:
+        dict: Result message with file_id if success
+    """
+    if not reference_doctype or not document_id or not file_path:
+        return {"success": False, "error": "doctype, document_id, and file_path are required"}
+    try:
+        result = attach_file_to_document(reference_doctype, document_id, file_path)
+        return {"success": True, "result": result}
+    except Exception as e:
+        frappe.log_error("SDK Functions Debug", f"Error in handle_attach_file_to_document: {str(e)}")
         return {"success": False, "error": str(e)}
