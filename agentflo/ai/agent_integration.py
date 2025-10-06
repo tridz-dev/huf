@@ -283,16 +283,24 @@ def run_agent_sync(
         frappe.throw(_("Both agent_name and prompt are required"))
     if not channel_id:
         channel_id = "api"
+
+    agent_doc = frappe.get_doc("Agent", agent_name)
+
     conv_manager = ConversationManager(
         agent_name=agent_name,
         channel=channel_id,
         external_id=external_id
     )
+    if agent_doc.persist_conversation:
+        conversation = conv_manager.get_or_create_conversation(
+            title=f"Chat with {agent_name}",
+            conversation_id=conversation_id
+        )
 
-    conversation = conv_manager.get_or_create_conversation(
-        title=f"Chat with {agent_name}",
-        conversation_id=conversation_id
-    )
+    else:
+        conversation = conv_manager.create_new_conversation(
+            title=f"Chat with {agent_name}"
+        )
 
 
     history = conv_manager.get_conversation_history(conversation.name)

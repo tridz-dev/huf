@@ -14,6 +14,23 @@ class ConversationManager:
         else:
             self.session_id = f"{channel}:{frappe.session.user}"
 
+    def create_new_conversation(self, title=None):
+        """Always create a fresh conversation"""
+        title = title or f"Conversation with {self.agent_name}"
+        conv = frappe.get_doc({
+            "doctype": "Agent Conversation",
+            "title": title,
+            "agent": self.agent_name,
+            "session_id": self.session_id,
+            "channel": self.channel,
+            "external_id": self.external_id,
+            "created_at": now(),
+            "last_activity": now(),
+            "is_active": 1
+        })
+        conv.insert()
+        return conv
+
     def get_or_create_conversation(self, title=None, conversation_id=None):
         """Get active conversation or create new one"""
         if conversation_id:
