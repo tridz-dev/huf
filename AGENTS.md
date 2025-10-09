@@ -29,9 +29,10 @@ This section provides a deep dive into the application's structure, including Do
 
 1.  **Provider & Model**: You start by defining an `AI Provider` (e.g., OpenAI) and the `AI Model` you want to use (e.g., `gpt-4`).
 2.  **Tools**: Agents need tools to be useful. An `Agent Tool Function` defines a specific action the agent can perform, such as fetching a document, creating a new one, or calling a custom Python function.
-3.  **Agent**: An `Agent` is the central entity. You give it a name, instructions (prompt), and assign it a set of tools.
+3.  **Agent**: An `Agent` is the central entity. You give it a name, instructions (prompt), and assign it a set of tools. Agents can be configured for scheduling, doc events, or chat.
 4.  **Conversation**: When a user interacts with an agent, a `Agent Conversation` is created to track the entire interaction. Each message back-and-forth is stored as an `Agent Message`.
-5.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run`.
+5.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run` with token usage and cost tracking.
+6.  **Chat Interface**: `Agent Chat` provides a real-time chat UI for conversational agents with markdown rendering.
 
 ### Doctypes
 
@@ -102,6 +103,8 @@ The main DocType for creating an AI agent.
 | **Agent Tool**   | `agent_tool`   | Table     | A child table (`Agent Tool`) linking to the `Agent Tool Function`s that this agent is allowed to use. |
 | **Temperature**  | `temperature`  | Float     | Controls the randomness of the AI's output.                                                             |
 | **Top P**        | `top_p`        | Float     | An alternative to temperature for controlling randomness.                                               |
+| **Enable Chat**  | `enable_chat`  | Check     | Enables the Agent Chat interface for real-time conversations.                                           |
+| **Condition**    | `condition`    | Code      | Python expression for conditional triggering on document events (e.g., `doc.grand_total > 10000`).     |
 
 #### 5. Agent Conversation
 
@@ -154,6 +157,23 @@ Logs a single, complete execution cycle of an agent in response to a user prompt
 | **Response**     | `response`      | Small Text | The final response from the agent.                                       |
 | **Status**       | `status`        | Select     | The status of the run (`Started`, `Queued`, `Success`, `Failed`).        |
 | **Error Message**| `error_message` | Small Text | Any error message if the run failed.                                     |
+| **Input Tokens** | `input_tokens`  | Int        | Number of tokens in the input (prompt + context).                        |
+| **Output Tokens**| `output_tokens` | Int        | Number of tokens in the output (response).                               |
+| **Total Tokens** | `total_tokens`  | Int        | Total tokens used (input + output).                                      |
+| **Total Cost**   | `total_cost`    | Currency   | Total cost of the agent run based on token usage.                        |
+
+#### 8. Agent Chat
+
+A single DocType providing a real-time chat interface for conversational agents.
+
+-   **Python Class**: `AgentChat(Document)`
+-   **File**: `agentflo/agentflo/doctype/agent_chat/agent_chat.py`
+
+**Features:**
+-   Real-time chat UI with markdown rendering
+-   Message history display
+-   Only available for agents with `enable_chat` enabled
+-   Server Actions: `agentflo.ai.agent_chat.get_agent_chat_messages`, `agentflo.ai.agent_chat.send_agent_chat_message`
 
 ### Core Classes and Methods
 
@@ -188,6 +208,7 @@ This file handles the persistence of conversation history.
     -   `get_or_create_conversation(self, ...)`: Finds the active `Agent Conversation` for a given session or creates a new one.
     -   `add_message(self, ...)`: Creates a new `Agent Message` document and links it to the current conversation.
     -   `get_conversation_history(self, ...)`: Fetches the last N messages from the conversation to provide context to the AI.
+    -   `persist_conversation(self, ...)`: Saves conversation state and ensures database commits for real-time updates.
 
 #### `sdk_tools.py`
 
@@ -207,3 +228,15 @@ This file contains the low-level functions that directly perform Frappe database
 
 -   **Methods**: `get_document`, `create_document`, `update_document`, `delete_document`, `submit_document`, `get_list`, etc.
 -   These functions are the final step in the tool-use chain, wrapping `frappe.client` or `frappe.get_doc` calls to ensure data is fetched, created, or modified correctly and with proper permissions checks.
+
+#### `agent_chat.py`
+
+This file provides the backend API for the Agent Chat interface.
+
+-   **Method: `get_agent_chat_messages(...)` (Whitelisted)**
+    -   Retrieves message history for the chat UI.
+    -   Returns formatted messages with role, content, and timestamps.
+-   **Method: `send_agent_chat_message(...)` (Whitelisted)**
+    -   Processes user input from the chat interface.
+    -   Calls the agent and returns the response.
+    -   Manages chat-specific conversation persistence and message formatting.
