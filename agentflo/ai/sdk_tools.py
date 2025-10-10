@@ -712,77 +712,56 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
         return {"success": False, "error": str(e)}
 
 
-def handle_get_document(document_id, reference_doctype=None):
-	"""
-	Get a document by ID
+def handle_get_document(document_id=None, reference_doctype=None, **filters):
+    """
+    Enhanced Get Document handler.
+    Allows fetching by any field (like email, mobile_no, etc.) instead of only document_id.
+    """
 
-	Args:
-	    document_id (str): ID of the document to retrieve
-	    reference_doctype (str): DocType of the document (provided by function configuration)
+    try:
+        if not reference_doctype:
+            reference_doctype = frappe.flags.get("current_function_doctype")
 
-	Returns:
-	    dict: Document data
-	"""
+        if not reference_doctype:
+            return {"success": False, "error": "No reference doctype provided."}
 
-	try:
-		# Get the reference doctype from function configuration
-		if not reference_doctype:
-			# Try to get from context
-			reference_doctype = frappe.flags.get("current_function_doctype")
+        if not frappe.db.exists("DocType", reference_doctype):
+            return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
 
-		if not reference_doctype:
-			return {
-				"success": False,
-				"error": "No reference doctype provided. Please specify a valid DocType.",
-			}
+        # If user provided a document_id, use it directly
+        if document_id:
+            if not frappe.db.exists(reference_doctype, document_id):
+                return {"success": False, "error": f"Document '{document_id}' not found in '{reference_doctype}'"}
+            doc_name = document_id
+        else:
+            # Otherwise, build filters dynamically from other params (like email, mobile_no, etc.)
+            valid_fields = [f.fieldname for f in frappe.get_meta(reference_doctype).fields]
+            applied_filters = {k: v for k, v in filters.items() if k in valid_fields and v}
 
-		# Validate the doctype exists
-		if not frappe.db.exists("DocType", reference_doctype):
-			return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
+            if not applied_filters:
+                return {"success": False, "error": "No valid filter fields provided to find the document."}
 
-		# Validate document exists
-		if not frappe.db.exists(reference_doctype, document_id):
-			return {
-				"success": False,
-				"error": f"Document '{document_id}' not found in DocType '{reference_doctype}'.",
-			}
+            doc_name = frappe.db.get_value(reference_doctype, applied_filters, "name")
+            if not doc_name:
+                return {
+                    "success": False,
+                    "error": f"No {reference_doctype} found matching filters {applied_filters}",
+                }
 
-		try:
-			# Get document
-			doc = frappe.get_doc(reference_doctype, document_id)
-			doc.check_permission()
-			doc.apply_fieldlevel_read_permissions()
+        # Now retrieve the full document safely
+        doc = frappe.get_doc(reference_doctype, doc_name)
+        doc.check_permission()
+        doc.apply_fieldlevel_read_permissions()
 
-			# Convert to dict
-			if hasattr(doc, "as_dict"):
-				doc_dict = doc.as_dict()
-			else:
-				doc_dict = {
-					key: getattr(doc, key)
-					for key in dir(doc)
-					if not key.startswith("_") and not callable(getattr(doc, key))
-				}
+        return {
+            "success": True,
+            "result": doc.as_dict(),
+            "message": f"{reference_doctype} '{doc_name}' fetched successfully",
+        }
 
-			# Get valid fields for reference
-			meta = frappe.get_meta(reference_doctype)
-			valid_fields = ["name", "creation", "modified", "modified_by", "owner", "docstatus"]
-			for df in meta.fields:
-				valid_fields.append(df.fieldname)
-
-			return {
-				"success": True,
-				"result": doc_dict,
-				"valid_fields": valid_fields[:20],  # Show first 20 fields
-			}
-		except frappe.DoesNotExistError:
-			return {
-				"success": False,
-				"error": f"Document '{document_id}' not found in DocType '{reference_doctype}'.",
-			}
-
-	except Exception as e:
-		frappe.log_error("SDK Functions Debug", f"Error in handle_get_document: {str(e)}")
-		return {"success": False, "error": str(e)}
+    except Exception as e:
+        frappe.log_error(f"Error in handle_get_document: {str(e)}", "SDK Functions Debug")
+        return {"success": False, "error": str(e)}
 
 def handle_create_documents(reference_doctype: str, documents: list = None, data: list = None, **kwargs):
     """

@@ -77,15 +77,23 @@ class AgentToolFunction(Document):
 		"""
 		params = {}
 		if self.types == "Get Document":
+			properties = {
+				"document_id": {
+					"type": "string",
+					"description": f"The ID of the {self.reference_doctype} to get (optional)"
+				}
+			}
+
+			for param in self.parameters:
+				properties[param.fieldname] = {
+					"type": param.type,
+					"description": param.label,
+				}
+
 			params = {
 				"type": "object",
-				"properties": {
-					"document_id": {
-						"type": "string",
-						"description": f"The ID of the {self.reference_doctype} to get",
-					}
-				},
-				"required": ["document_id"],
+				"properties": properties,
+				"required": [],
 				"additionalProperties": False,
 			}
 
