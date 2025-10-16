@@ -748,7 +748,6 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
                     "error": f"No {reference_doctype} found matching filters {applied_filters}",
                 }
 
-        # Now retrieve the full document safely
         doc = frappe.get_doc(reference_doctype, doc_name)
         doc.check_permission()
         doc.apply_fieldlevel_read_permissions()
