@@ -18,6 +18,10 @@ class Agent(Document):
 		if self.is_scheduled and self.is_doc_event:
 			frappe.throw(_("An Agent cannot be both Scheduled and Doc Event based. Please choose only one."))
 		self.validate_condition()
+		if self.allow_chat == 1 and self.persist_conversation == 0:
+			frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
+
+
 
 	def get_indicator(doc):
 		if doc.disabled:
