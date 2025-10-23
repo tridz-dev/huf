@@ -46,10 +46,10 @@
    "fieldname": "types",
    "fieldtype": "Select",
    "label": "Types",
-   "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent"
+   "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent\nSpeech to Text"
   },
   {
-   "depends_on": "eval:doc.types != 'Run Agent'",
+   "depends_on": "eval:doc.types != 'Run Agent' && doc.types != 'Speech to Text'",
    "fieldname": "reference_doctype",
    "fieldtype": "Link",
    "label": "Reference DocType",
@@ -127,7 +127,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-09 13:50:21.885954",
+ "modified": "2025-10-23 17:50:38.952678",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Tool Function",

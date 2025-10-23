@@ -11,7 +11,7 @@ from frappe.model.document import Document
 
 class AgentToolFunction(Document):
 	def before_validate(self):
-		# self.validate_reference_doctype()
+		self.validate_reference_doctype()
 		self.validate_fields_for_doctype()
 		self.prepare_function_params()
 
@@ -34,7 +34,7 @@ class AgentToolFunction(Document):
 		doctype = frappe.get_meta(self.reference_doctype)
 
 		for param in self.parameters:
-			# Check if the fieldname belongs to a child table
+
 			if param.child_table_name:
 				child_table = doctype.get_field(param.child_table_name)
 				if not child_table:
@@ -42,12 +42,12 @@ class AgentToolFunction(Document):
 						_("Child table {0} not found in {1}").format(param.child_table_name, self.reference_doctype)
 					)
 
-				# Check if the child table is a valid doctype
+
 				child_meta = frappe.get_meta(child_table.options)
 				if not child_meta:
 					frappe.throw(_("Child table {0} is not a valid doctype").format(param.child_table_name))
 
-				# Check if the child table variable has a valid name
+
 				docfield = child_meta.get_field(param.fieldname)
 				if not docfield:
 					frappe.throw(_("Field {0} not found in {1}").format(param.fieldname, child_table.options))
@@ -297,7 +297,7 @@ class AgentToolFunction(Document):
 			}
 
 		elif self.types == "GET":
-			# Build schema for query parameters from parameters table
+
 			query_properties = {}
 			query_required = []
 
@@ -330,7 +330,7 @@ class AgentToolFunction(Document):
 
 
 		elif self.types == "POST":
-			# Build schema for JSON body from parameters table
+
 			body_properties = {}
 			body_required = []
 
@@ -361,7 +361,44 @@ class AgentToolFunction(Document):
 				"required": ["url", "json_data"],
 				"additionalProperties": False,
 			}
-
+		elif self.types == "Speech to Text":
+			params = {
+				"type": "object",
+				"properties": {
+					"file_id": {
+						"type": "string",
+						"description": "Existing File document ID (optional). If provided, file_url not required."
+					},
+					"file_url": {
+						"type": "string",
+						"description": "Path/URL of audio file (optional). Example: /files/my-audio.mp3"
+					},
+					"language": {
+						"type": "string",
+						"description": "Optional language code (e.g. en, ml). If omitted, auto-detect is used."
+					},
+					"translate": {
+						"type": "boolean",
+						"description": "If true, translate audio to English (if model supports).",
+						"default": False
+					},
+					"model": {
+						"type": "string",
+						"description": "Speech model to use (default: whisper-1)",
+						"default": "whisper-1"
+					},
+					"provider": {
+						"type": "string",
+						"description": "Optional AI Provider name from 'AI Provider' doctype (used to get API key)."
+					},
+					"api_key": {
+						"type": "string",
+						"description": "Optional API key override (leave empty to use AI Provider)."
+					}
+				},
+				"required": [],
+				"additionalProperties": False
+			}
 					
 		else:
 			params = self.build_params_json_from_table()
@@ -420,9 +457,7 @@ class AgentToolFunction(Document):
 		for child_table_name, child_table in child_tables.items():
 			doctype_meta = frappe.get_meta(self.reference_doctype)
 			table_field = doctype_meta.get_field(child_table_name)
-			# if table_field.reqd and not self.strict:
-			# 	child_table["minItems"] = 1
-
+			
 			properties[child_table_name] = child_table
 
 		if self.types == "Create Multiple Documents" or self.types == "Update Multiple Documents":
@@ -437,8 +472,7 @@ class AgentToolFunction(Document):
 					},
 				}
 			}
-			# if not self.strict:
-			# 	params["properties"]["data"]["minItems"] = 1
+			
 		else:
 			params["properties"] = properties
 			params["required"] = required
@@ -450,7 +484,7 @@ class AgentToolFunction(Document):
 			if not self.function_path:
 				frappe.throw(_("Function path is required for Custom Functions"))
 
-			# Check if JSON is valid and format it
+
 			try:
 				json.loads(self.params)
 			except json.JSONDecodeError:
@@ -459,7 +493,7 @@ class AgentToolFunction(Document):
 			self.params = json.dumps(json.loads(self.params), indent=4)
 
 	def validate(self):
-		# Functions cannot be named after core functions
+
 		INVALID_FUNCTION_NAMES = [
 			"get_document",
 			"get_documents",
@@ -494,7 +528,7 @@ class AgentToolFunction(Document):
 			if not self.reference_doctype:
 				frappe.throw(_("Please select a DocType for this function."))
 
-		# Validate if the function is whitelisted
+
 		if self.types == "Custom Function":
 			f = frappe.get_attr(self.function_path)
 			if not f:
@@ -503,20 +537,19 @@ class AgentToolFunction(Document):
 			is_whitelisted(f)
 
 	def before_save(self):
-		# Generate the function definition from the variables + function name + description
+
 		params = self.get_params_as_dict()
 
 		function_definition = {
 			"name": self.tool_name,
 			"description": self.description,
-			# "strict": True if self.strict else False,
 			"parameters": params,
 		}
 
 		self.function_definition = json.dumps(function_definition, indent=4)
 
 	def on_update(self):
-		# Update all the Agents that use this function
+
 
 		agents = frappe.get_all("Agent Tool", filters={"tool": self.name}, pluck="parent")
 

@@ -6,8 +6,11 @@ import base64
 from frappe.utils.file_manager import save_file
 import asyncio
 import frappe
-
-# Import the SDK directly - no fallback needed
+import io
+import requests
+import base64
+from frappe.utils.file_manager import save_file
+from frappe import _
 from agents import FunctionTool
 from frappe import client
 
@@ -71,6 +74,9 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "agentflo.ai.sdk_tools.handle_run_agent"
                     elif function_doc.types == "Attach File to Document":
                         function_path = "agentflo.ai.sdk_tools.handle_attach_file_to_document"
+                    elif function_doc.types == "Speech to Text":
+                        function_path = "agentflo.ai.sdk_tools.handle_speech_to_text"
+
                     else:
                         continue
 
@@ -143,25 +149,17 @@ def create_function_tool(
 	    FunctionTool: Function tool
 	"""
 
-	# Get the actual function to call
 	function = get_function_from_name(tool_name)
 
 	if not function:
 		return None
 
 	try:
-		# Based on the OpenAI Agents SDK documentation, we need to create an async invoke handler
-		# Store extra_args in a closure
 		_extra_args = extra_args or {}
 		_function = function
 
-		# Create a tracking mechanism for duplicate requests
 		import hashlib
 		from datetime import datetime, timedelta
-
-
-		# Create an async handler that will invoke our function
-		# In sdk_tools.py - update the on_invoke_tool function
 
 		async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
 			try:
@@ -189,13 +187,12 @@ def create_function_tool(
 				frappe.log_error("SDK Functions Debug", f"Error in on_invoke_tool: {str(e)}")
 				return json.dumps({"error": str(e)})
 
-		# Create and return the tool
 		tool = FunctionTool(
 			name=name,
 			description=description,
 			params_json_schema=parameters,
 			on_invoke_tool=on_invoke_tool,
-			strict_json_schema=False,  # Disable strict mode to allow more flexible schemas
+			strict_json_schema=False
 		)
 
 		return tool
@@ -216,7 +213,6 @@ def get_function_from_name(tool_name: str) -> Callable:
 	"""
 
 	try:
-		# Split module and function
 		try:
 			module_name, func_name = tool_name.rsplit(".", 1)
 		except ValueError as ve:
@@ -226,27 +222,23 @@ def get_function_from_name(tool_name: str) -> Callable:
 			)
 			return None
 
-		# Import module
 		try:
 			module = __import__(module_name, fromlist=[func_name])
 		except ImportError as ie:
 			frappe.log_error("SDK Functions Debug", f"Module import error: {str(ie)}")
 			return None
 
-		# Check for available attributes in the module
 		try:
 			available_attrs = dir(module)
 		except Exception as e:
 			frappe.log_error("SDK Functions Debug", f"Error getting module attributes: {str(e)}")
 
-		# Get function
 		try:
 			function = getattr(module, func_name)
 		except AttributeError as ae:
 			frappe.log_error("SDK Functions Debug", f"Function not found in module: {str(ae)}")
 			return None
 
-		# Verify the object is callable
 		if not callable(function):
 			return None
 
@@ -259,7 +251,6 @@ def get_function_from_name(tool_name: str) -> Callable:
 		return None
 
 
-# Function wrapper to adapt Frappe functions to Agents SDK
 def wrap_frappe_function(func: Callable) -> Callable:
 	"""
 	Wrap a Frappe function to handle exceptions
@@ -275,11 +266,11 @@ def wrap_frappe_function(func: Callable) -> Callable:
 		try:
 			result = func(*args, **kwargs)
 
-			# Convert Frappe document to dictionary if needed
+
 			if hasattr(result, "as_dict"):
 				result = result.as_dict()
 
-			# If result is a list of Frappe documents, convert each to dictionary
+
 			elif isinstance(result, list) and result and hasattr(result[0], "as_dict"):
 				result = [item.as_dict() if hasattr(item, "as_dict") else item for item in result]
 
@@ -288,7 +279,7 @@ def wrap_frappe_function(func: Callable) -> Callable:
 			frappe.log_error(f"Error in function {func.__name__}: {e}")
 			return {"success": False, "error": str(e)}
 
-	# Copy function metadata
+
 	wrapper.__name__ = func.__name__
 	wrapper.__doc__ = func.__doc__
 	wrapper.__module__ = func.__module__
@@ -408,7 +399,7 @@ def create_update_function(doctype: str) -> Callable:
 		"""
 		doc = frappe.get_doc(doctype, name)
 
-		# Update fields
+
 		for key, value in kwargs.items():
 			if hasattr(doc, key):
 				setattr(doc, key, value)
@@ -575,9 +566,9 @@ def handle_get_list(
 	"""
 
 	try:
-		# Get the reference doctype from function configuration
+
 		if not reference_doctype:
-			# Try to get from context
+
 			reference_doctype = frappe.flags.get("current_function_doctype")
 
 		if not reference_doctype:
@@ -586,21 +577,21 @@ def handle_get_list(
 				"error": "No reference doctype provided. Please specify a valid DocType.",
 			}
 
-		# Validate the doctype exists
+
 		if not frappe.db.exists("DocType", reference_doctype):
 			return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
 
-		# Get the meta for this doctype to validate fields
+
 		meta = frappe.get_meta(reference_doctype)
 		valid_fields = ["name", "creation", "modified", "modified_by", "owner", "docstatus"]
 		for df in meta.fields:
 			valid_fields.append(df.fieldname)
 
-		# Set default fields if not provided
+
 		if not fields:
 			fields = ["name", "modified"]
 
-		# Validate fields exist in doctype
+
 		filtered_fields = []
 		invalid_fields = []
 		for field in fields:
@@ -610,22 +601,22 @@ def handle_get_list(
 				invalid_fields.append(field)
 
 		if invalid_fields:
-			# Add a warning but continue with valid fields
+
 			warning = f"Fields {', '.join(invalid_fields)} do not exist in DocType '{reference_doctype}' and were ignored."
 
-			# If all fields are invalid, use name and modified
+
 			if not filtered_fields:
 				filtered_fields = ["name", "modified"]
 		else:
 			warning = None
 
-		# If filters provided, make sure field names are valid
+
 		if filters and isinstance(filters, dict):
 			cleaned_filters = {}
 			invalid_filter_fields = []
 
 			for key, value in filters.items():
-				# Handle special operators like >, <, >=, etc.
+
 				base_field = key.split()[0] if " " in key else key
 
 				if base_field in valid_fields:
@@ -636,11 +627,11 @@ def handle_get_list(
 			if invalid_filter_fields:
 				filters = cleaned_filters
 
-				# Add to warning message
+
 				filter_warning = f"Filter fields {', '.join(invalid_filter_fields)} do not exist in DocType '{reference_doctype}' and were ignored."
 				warning = f"{warning}\n{filter_warning}" if warning else filter_warning
 
-		# Get list of documents with validated fields
+
 		result = frappe.get_all(
 			reference_doctype,
 			filters=filters,
@@ -649,7 +640,7 @@ def handle_get_list(
 			order_by=order_by,
 		)
 
-		# Ensure all datetime objects are converted to strings
+
 		import datetime
 
 		for item in result:
@@ -659,12 +650,12 @@ def handle_get_list(
 
 		response = {"success": True, "result": result}
 
-		# Add warning if applicable
+
 		if warning:
 			response["warning"] = warning
 
-		# Suggest valid fields to help the AI learn
-		response["valid_fields"] = valid_fields[:20]  # Show first 20 fields to avoid overflow
+
+		response["valid_fields"] = valid_fields[:20]  
 		if len(valid_fields) > 20:
 			response["valid_fields_note"] = f"Showing first 20 of {len(valid_fields)} available fields"
 
@@ -728,13 +719,13 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
         if not frappe.db.exists("DocType", reference_doctype):
             return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
 
-        # If user provided a document_id, use it directly
+
         if document_id:
             if not frappe.db.exists(reference_doctype, document_id):
                 return {"success": False, "error": f"Document '{document_id}' not found in '{reference_doctype}'"}
             doc_name = document_id
         else:
-            # Otherwise, build filters dynamically from other params (like email, mobile_no, etc.)
+
             valid_fields = [f.fieldname for f in frappe.get_meta(reference_doctype).fields]
             applied_filters = {k: v for k, v in filters.items() if k in valid_fields and v}
 
@@ -904,4 +895,135 @@ def handle_attach_file_to_document(reference_doctype=None, document_id=None, fil
         return {"success": True, "result": result}
     except Exception as e:
         frappe.log_error("SDK Functions Debug", f"Error in handle_attach_file_to_document: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
+def _read_file_bytes_from_file_doc(file_doc):
+
+    url = file_doc.file_url
+
+    if url.startswith("/files/") or url.startswith("files/"):
+
+        path = frappe.get_site_path("public", url.lstrip("/"))
+        with open(path, "rb") as f:
+            return f.read(), file_doc.file_name
+
+    try:
+        site_url = frappe.utils.get_url()
+        resp = requests.get(site_url.rstrip("/") + url)
+        resp.raise_for_status()
+        return resp.content, file_doc.file_name
+    except Exception:
+        return None, None
+
+def handle_speech_to_text(
+    file_id: str = None,
+    file_url: str = None,
+    language: str = None,
+    translate: bool = False,
+    model: str = "whisper-1",
+    provider: str = None,
+    api_key: str = None,
+    conversation: str = None,
+    reference_doctype: str = None,
+    document_id: str = None,
+    message_id: str = None,
+    **kwargs
+):
+    """
+    Transcribe audio via OpenAI Whisper API and store result as Agent Message + File.
+
+    If `message_id` is provided, update that Agent Message's `content`; else create a new
+    user message in `conversation`. If `file_id` is missing but `file_url` is provided,
+    the audio is fetched directly (and can be saved back to a File doc if you want).
+    """
+    try:
+
+        if not api_key and provider:
+            try:
+                prov_doc = frappe.get_doc("AI Provider", provider)
+                api_key = prov_doc.get_password("api_key")
+            except Exception:
+                pass
+        if not api_key:
+            return {"success": False, "error": "No API key provided or configured for provider."}
+
+
+        audio_bytes, file_name = None, None
+        file_doc = None
+
+        if file_id:
+            file_doc = frappe.get_doc("File", file_id)
+            audio_bytes, file_name = _read_file_bytes_from_file_doc(file_doc)
+        elif file_url:
+            r = requests.get(file_url, timeout=120)
+            r.raise_for_status()
+            audio_bytes = r.content
+            file_name = file_url.rsplit("/", 1)[-1] or "audio.wav"
+        else:
+            return {"success": False, "error": "file_id or file_url is required."}
+
+        if not audio_bytes:
+            return {"success": False, "error": "Could not read audio bytes."}
+
+
+        transcribe_url = "https://api.openai.com/v1/audio/transcriptions"
+        files = {"file": (file_name or "audio.wav", io.BytesIO(audio_bytes))}
+        data = {"model": model}
+        if language:
+            data["language"] = language
+        if translate:
+            data["task"] = "translate"
+
+        headers = {"Authorization": f"Bearer {api_key}"}
+        http_resp = requests.post(transcribe_url, headers=headers, files=files, data=data, timeout=180)
+        http_resp.raise_for_status()
+
+        result_json = http_resp.json()  
+        text = (result_json.get("text") or result_json.get("transcript") or "").strip()
+
+
+        saved_file_id = file_id
+        if not file_doc and reference_doctype and document_id:
+            saved_file = save_file(
+                file_name or "audio.wav",
+                audio_bytes,
+                reference_doctype,   
+                document_id,         
+                is_private=False
+            )
+            saved_file_id = getattr(saved_file, "name", None) or (saved_file.get("name") if isinstance(saved_file, dict) else None)
+
+        final_message_id = message_id
+        if message_id:
+            frappe.db.set_value("Agent Message", message_id, "content", text or "(empty transcript)", update_modified=True)
+        elif conversation:
+            msg = frappe.get_doc({
+                "doctype": "Agent Message",
+                "conversation": conversation,
+                "role": "user",
+                "content": text or "(empty transcript)",
+                "user": frappe.session.user if hasattr(frappe, "session") else None
+            })
+            msg.insert(ignore_permissions=True)
+            final_message_id = msg.name
+
+        return {
+            "success": True,
+            "text": text,
+            "file_id": saved_file_id or file_id,
+            "message_id": final_message_id,
+            "raw_result": result_json,
+        }
+
+    except requests.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.response.text
+        except Exception:
+            pass
+        frappe.log_error(f"Speech to Text HTTPError: {str(e)} | {detail}", "SpeechToText")
+        return {"success": False, "error": f"Transcriptions API failed: {str(e)}"}
+    except Exception as e:
+        frappe.log_error(f"Speech to Text error: {frappe.get_traceback()}", "SpeechToText")
         return {"success": False, "error": str(e)}

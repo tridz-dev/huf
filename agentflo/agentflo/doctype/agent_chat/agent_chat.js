@@ -3,7 +3,7 @@ frappe.ui.form.on("Agent Chat", {
         frm.disable_save();
         render_chat_ui(frm);
     },
-    
+
     onload(frm) {
         frm.refresh_fields();
     }
@@ -41,6 +41,20 @@ function render_chat_ui(frm) {
                         style="flex:1; resize:none; border:1px solid #d1d5db; border-radius:8px; padding:12px; font-size:14px; line-height:1.4; min-height:44px; max-height:120px; outline:none; transition:border-color 0.2s;"
                         rows="1"
                     ></textarea>
+                    <input type="file" accept="audio/*" class="audio-file-input" style="display:none;" />
+                    <button class="audio-upload-btn btn" title="Upload audio">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </button>
+                    <button class="audio-record-btn btn" title="Record audio">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                        </svg>
+                    </button>
                     <button class="chat-send btn btn-primary" style="border-radius:8px; padding:10px 20px; height:44px; display:flex; align-items:center; gap:4px;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -58,8 +72,90 @@ function render_chat_ui(frm) {
         const messagesEl = wrapper.find(".agent-chat-messages");
         const textarea = wrapper.find(".chat-input");
         const sendBtn = wrapper.find(".chat-send");
+        const audioInput = wrapper.find(".audio-file-input");
+        const uploadBtn = wrapper.find(".audio-upload-btn");
+        const recordBtn = wrapper.find(".audio-record-btn");
+        let mediaRecorder = null;
+        let chunks = [];
 
-        textarea.on("input", function() {
+        uploadBtn.on("click", () => audioInput.click());
+        audioInput.on("change", function (e) {
+            const file = this.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (evt) {
+                const b64 = evt.target.result;
+                sendAudioToServer(frm, b64, file.name);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        recordBtn.on("click", async function () {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                frappe.msgprint("Recording is not supported in this browser.");
+                return;
+            }
+            if (!mediaRecorder) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: "audio/webm" });
+                    chunks = [];
+                    const reader = new FileReader();
+                    reader.onload = function (evt) {
+                        const b64 = evt.target.result;
+                        sendAudioToServer(frm, b64, `recording_${Date.now()}.webm`);
+                    };
+                    reader.readAsDataURL(blob);
+                    stream.getTracks().forEach(t => t.stop());
+                    mediaRecorder = null;
+                };
+                mediaRecorder.start();
+                recordBtn.text("⏹ Stop");
+                setTimeout(() => { if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop(); }, 1000 * 60 * 3);
+            } else {
+                mediaRecorder.stop();
+                recordBtn.html(`<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                                </svg>`);
+            }
+        });
+
+        function sendAudioToServer(frm, dataUrl, filename) {
+            const messagesEl = $(frm.fields_dict.chat_ui.wrapper).find(".agent-chat-messages");
+            append_message(messagesEl, "user", frappe.session.user, `(voice message: ${filename})`, new Date());
+
+            frappe.call({
+                method: "agentflo.ai.agent_chat.upload_audio_and_transcribe",
+                args: {
+                    docname: frm.doc.name,
+                    filename: filename,
+                    b64data: dataUrl,
+                    agent: frm.doc.agent,
+                    conversation: frm.doc.conversation
+                },
+                callback: function (r) {
+                    if (r.message && r.message.success) {
+                        append_message(messagesEl, "user", frappe.session.user, r.message.transcript, new Date());
+
+                        if (r.message.run && r.message.run.success) {
+                            append_message(messagesEl, "agent", frm.doc.agent, r.message.run.response, new Date());
+                            if (r.message.run.conversation_id && !frm.doc.conversation) {
+                                frm.set_value("conversation", r.message.run.conversation_id);
+                            }
+                        }
+                        scroll_to_bottom(messagesEl);
+                    } else {
+                        append_message(messagesEl, "system", "System", "Transcription failed: " + (r.message?.error || "Unknown"), new Date());
+                    }
+                }
+
+            });
+        }
+
+        textarea.on("input", function () {
             this.style.height = "auto";
             this.style.height = Math.min(this.scrollHeight, 120) + "px";
         });
@@ -90,11 +186,11 @@ function render_chat_ui(frm) {
             }
         });
 
-        agentSelect.on("change", function() {
+        agentSelect.on("change", function () {
             const selectedAgent = $(this).val();
             frm.set_value("agent", selectedAgent);
         });
-        
+
         // Load history
         load_history(frm, messagesEl);
 
@@ -196,7 +292,7 @@ function do_send(frm, msg, textarea, messagesEl) {
         args: {
             docname: frm.doc.name,
             message: msg,
-            agent: selectedAgent 
+            agent: selectedAgent
         },
         callback(r) {
             if (r.message && r.message.success) {
@@ -212,7 +308,7 @@ function do_send(frm, msg, textarea, messagesEl) {
                 append_message(messagesEl, "system", "System", "Error: " + (r.message?.error || "Unknown"), new Date());
             }
         },
-        always: function() {
+        always: function () {
             sendBtn.html(sendBtn.data("original-icon"));
             sendBtn.prop("disabled", false);
             textarea.prop("disabled", false);
@@ -224,15 +320,15 @@ function do_send(frm, msg, textarea, messagesEl) {
 function append_message(messagesEl, role, sender, content, ts) {
     const isUser = role === "user";
     const isSystem = role === "system";
-    
-    const bubbleStyle = isUser ? 
-        "background:#f3f4f6; color:#374151;" : 
-        isSystem ? 
-        "background:#fee2e2; color:#dc2626; border:1px solid #fecaca;" : 
-        "background:#f3f4f6; color:#374151;";
-    
+
+    const bubbleStyle = isUser ?
+        "background:#f3f4f6; color:#374151;" :
+        isSystem ?
+            "background:#fee2e2; color:#dc2626; border:1px solid #fecaca;" :
+            "background:#f3f4f6; color:#374151;";
+
     const align = isUser ? "flex-end" : "flex-start";
-    const time = ts ? new Date(ts).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
+    const time = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
     const displayName = isUser ? "You" : (isSystem ? "System" : sender);
     const msgId = "msg-" + frappe.utils.get_random(6);
 
@@ -264,12 +360,12 @@ function append_message(messagesEl, role, sender, content, ts) {
     bubble.on("mouseenter", () => copyBtn.show());
     bubble.on("mouseleave", () => copyBtn.hide());
 
-    copyBtn.off("click").on("click", function() {
+    copyBtn.off("click").on("click", function () {
         const text = bubble.text().trim();
         navigator.clipboard.writeText(text).then(() => {
-            frappe.show_alert({message: "Message copied!", indicator: "green"});
+            frappe.show_alert({ message: "Message copied!", indicator: "green" });
         }).catch(() => {
-            frappe.show_alert({message: "Failed to copy", indicator: "red"});
+            frappe.show_alert({ message: "Failed to copy", indicator: "red" });
         });
     });
 }
