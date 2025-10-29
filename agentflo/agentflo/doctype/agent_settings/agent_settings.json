@@ -11,7 +11,6 @@
  ],
  "fields": [
   {
-   "default": "0",
    "fieldname": "default_provider",
    "fieldtype": "Link",
    "label": "Default Provider",
@@ -32,7 +31,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-10-16 18:55:13.015956",
+ "modified": "2025-10-29 11:16:51.068652",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Settings",
