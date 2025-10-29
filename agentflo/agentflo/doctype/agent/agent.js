@@ -23,4 +23,17 @@ frappe.ui.form.on("Agent", {
 			}
 		}
 	},
+		provider(frm) {
+			frm.set_value("model", "");
+	
+			if (frm.doc.provider) {
+				frm.set_query("model", () => ({
+					filters: { provider: frm.doc.provider }
+				}));
+			} else {
+				frm.set_query("model", () => ({}));
+			}
+		},
+	
+	
 });
