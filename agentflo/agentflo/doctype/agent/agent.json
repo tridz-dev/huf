@@ -6,15 +6,18 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "general_tab",
+  "llm_configuration_section",
   "agent_name",
   "provider",
+  "temperature",
+  "column_break_df8m",
   "model",
   "async",
   "disabled",
-  "column_break_df8m",
-  "temperature",
   "top_p",
-  "section_break_tuak",
+  "behaviour_tab",
+  "conversation_settings_section",
   "allow_chat",
   "column_break_vfhq",
   "persist_conversation",
@@ -33,6 +36,7 @@
   "doc_event",
   "section_break_yyoa",
   "instructions",
+  "tools_and_mcp_tab",
   "agent_tool"
  ],
  "fields": [
@@ -163,8 +167,10 @@
    "label": "Disabled"
   },
   {
+   "description": "Define system prompt, goal, and constraints",
    "fieldname": "section_break_yyoa",
-   "fieldtype": "Section Break"
+   "fieldtype": "Section Break",
+   "label": "Instruction"
   },
   {
    "depends_on": "eval: doc.is_doc_event == 1",
@@ -202,10 +208,6 @@
    "label": "Condition"
   },
   {
-   "fieldname": "section_break_tuak",
-   "fieldtype": "Section Break"
-  },
-  {
    "default": "0",
    "description": "If checked, this agent can be interacted with in the Agent Chat window.",
    "fieldname": "allow_chat",
@@ -222,12 +224,39 @@
   {
    "fieldname": "column_break_vfhq",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
+  {
+   "fieldname": "behaviour_tab",
+   "fieldtype": "Tab Break",
+   "label": "Behaviour"
+  },
+  {
+   "fieldname": "tools_and_mcp_tab",
+   "fieldtype": "Tab Break",
+   "label": "Tools and MCP"
+  },
+  {
+   "description": "Configure language model settings ",
+   "fieldname": "llm_configuration_section",
+   "fieldtype": "Section Break",
+   "label": "LLM Configuration"
+  },
+  {
+   "description": "Configure conversation behaviour",
+   "fieldname": "conversation_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Conversation Settings"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-10-17 12:44:36.944129",
+ "modified": "2025-10-31 16:39:54.689349",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
