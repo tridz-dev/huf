@@ -2,12 +2,20 @@ import frappe
 from frappe.utils.background_jobs import enqueue
 from .agent_integration import run_agent_sync
 from frappe.utils.safe_exec import get_safe_globals,safe_eval
+from frappe.exceptions import DoesNotExistError
 
 CACHE_KEY = "agentflo:doc_event_agents"
 
 
 def get_doc_event_agents(event):
     """Fetch and cache all active Doc Event agents"""
+
+    try:
+        if not frappe.db.exists("DocType", "Agent"):
+            return []
+    except Exception:
+        return []
+
     agents = frappe.cache().hget(CACHE_KEY, "agentflo_doc_event_agents") #ADD EXPIRY
     if agents:
         return frappe.parse_json(agents)
