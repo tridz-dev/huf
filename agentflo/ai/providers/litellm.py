@@ -125,16 +125,20 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 	- OpenAI-compatible tool format (works with existing serialize_tools)
 	
 	Args:
-		agent: Agent object with tools, instructions, temperature, top_p
+		agent: Agent object from agents SDK with tools, instructions, model_settings
 		enhanced_prompt: User prompt with conversation history
 		provider: Provider name (e.g., "OpenAI", "Anthropic", "Google")
 		model: Model name (e.g., "gpt-4-turbo", "claude-3-opus-20240229")
-		context: Optional context dictionary
+		context: Optional context dictionary (may contain agent_name for debugging)
 	
 	Returns:
 		SimpleResult: Result with final_output, usage, and new_items
 	"""
 	try:
+		# Configure LiteLLM to drop unsupported params (for models like gpt-5 that only support temperature=1)
+		# This prevents errors when models don't support certain parameters
+		litellm.drop_params = True
+		
 		# Get API key from AI Provider doc (same as current implementation)
 		provider_doc = frappe.get_doc("AI Provider", provider)
 		api_key = provider_doc.get_password("api_key")
@@ -169,15 +173,36 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 		
 		for round_num in range(MAX_ROUNDS):
 			# Prepare completion parameters
+			# Get temperature from agent.model_settings (set from Agent DocType)
+			# The SDK Agent has model_settings with temperature/top_p from the Frappe DocType
+			temperature = None
+			if hasattr(agent, "model_settings") and agent.model_settings:
+				temperature = getattr(agent.model_settings, "temperature", None)
+			
+			# Fallback to default if not set (log warning for debugging)
+			if temperature is None:
+				temperature = 0.7
+				if context and context.get("agent_name"):
+					frappe.log_error(
+						f"⚠️ Temperature not found in agent.model_settings, using default {temperature}. "
+						f"Agent: {context.get('agent_name')}. "
+						f"Check Agent DocType has temperature field set.",
+						"LiteLLM Parameter Warning"
+					)
+			
 			completion_kwargs = {
 				"model": normalized_model,
 				"messages": messages,
-				"temperature": getattr(agent, "temperature", 0.7),
+				"temperature": temperature,
 			}
 			
-			# Add top_p if specified
-			if hasattr(agent, "top_p") and agent.top_p:
-				completion_kwargs["top_p"] = agent.top_p
+			# Add top_p if specified (also from model_settings)
+			top_p = None
+			if hasattr(agent, "model_settings") and agent.model_settings:
+				top_p = getattr(agent.model_settings, "top_p", None)
+			
+			if top_p:
+				completion_kwargs["top_p"] = top_p
 			
 			# Set API key based on provider
 			provider_name = normalized_model.split("/")[0]

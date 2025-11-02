@@ -328,7 +328,8 @@ def run_agent_sync(
         context = {
             "channel": channel_id,
             "external_id": external_id,
-            "conversation_history": history
+            "conversation_history": history,
+            "agent_name": agent_name  # Add agent_name for debugging
         }
 
         enhanced_prompt = f"""
