@@ -329,7 +329,7 @@ def run_agent_sync(
             "channel": channel_id,
             "external_id": external_id,
             "conversation_history": history,
-            "agent_name": agent_name  # Add agent_name for debugging
+            "agent_name": agent_name  # Required for LiteLLM provider to access Agent DocType settings
         }
 
         enhanced_prompt = f"""
