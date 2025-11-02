@@ -22,6 +22,7 @@ from types import SimpleNamespace
 
 import frappe
 import litellm
+from litellm import InternalServerError, RateLimitError, APIError
 
 from agentflo.ai.tool_serializer import serialize_tools
 
@@ -190,11 +191,37 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 			# Call LiteLLM
 			# LiteLLM completion() is synchronous, so we wrap it in asyncio.to_thread
 			# to avoid blocking the async event loop
+			# LiteLLM has built-in retry logic, but we can add additional context
 			try:
 				response = await asyncio.to_thread(litellm.completion, **completion_kwargs)
+			except InternalServerError as e:
+				# OpenAI server error - might be transient
+				error_msg = (
+					f"OpenAI API server error while processing request with model '{normalized_model}'. "
+					f"This may be a temporary issue. Please try again. "
+					f"Error details: {str(e)}"
+				)
+				frappe.log_error(error_msg, "LiteLLM Provider")
+				return SimpleResult(error_msg, total_usage, all_new_items)
+			except RateLimitError as e:
+				# Rate limit error
+				error_msg = (
+					f"Rate limit exceeded for model '{normalized_model}'. "
+					f"Please wait a moment and try again. "
+					f"Error details: {str(e)}"
+				)
+				frappe.log_error(error_msg, "LiteLLM Provider")
+				return SimpleResult(error_msg, total_usage, all_new_items)
+			except APIError as e:
+				# Other API errors
+				error_msg = f"API error for model '{normalized_model}': {str(e)}"
+				frappe.log_error(error_msg, "LiteLLM Provider")
+				return SimpleResult(error_msg, total_usage, all_new_items)
 			except Exception as e:
-				frappe.log_error(f"LiteLLM API Error: {str(e)}", "LiteLLM Provider")
-				return SimpleResult(f"LiteLLM API Error: {str(e)}", total_usage, all_new_items)
+				# General errors
+				error_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+				frappe.log_error(error_msg, "LiteLLM Provider")
+				return SimpleResult(error_msg, total_usage, all_new_items)
 			
 			# Extract response (OpenAI format - consistent across all providers)
 			choice = response.choices[0].message
