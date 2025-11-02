@@ -83,7 +83,7 @@ app_license = "mit"
 # ------------
 
 # before_install = "agentflo.install.before_install"
-# after_install = "agentflo.install.after_install"
+after_install = "agentflo.install.after_install"
 
 # Uninstallation
 # ------------

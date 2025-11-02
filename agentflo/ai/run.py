@@ -1,4 +1,5 @@
 import frappe
+from frappe import _
 
 
 class RunProvider:
@@ -25,12 +26,22 @@ class RunProvider:
 			try:
 				from agentflo.ai.providers import litellm
 				return litellm.run(agent, enhanced_prompt, provider, model, context=context)
-			except ImportError:
+			except ImportError as e:
+				# LiteLLM not installed - provide helpful error message
+				error_msg = (
+					f"LiteLLM package is required but not installed.\n\n"
+					f"To install:\n"
+					f"1. Run: bench setup requirements\n"
+					f"2. Or manually: pip install litellm>=1.0.0\n"
+					f"3. Then restart your site: bench restart\n\n"
+					f"The litellm package is listed in pyproject.toml dependencies, "
+					f"so running 'bench setup requirements' should install it automatically."
+				)
 				frappe.log_error(
-					f"LiteLLM not installed. Please install with: pip install litellm",
+					f"LiteLLM Import Error: {str(e)}\n\n{error_msg}",
 					"LiteLLM Provider Error"
 				)
-				frappe.throw(f"LiteLLM provider requires litellm package. Please install it.")
+				frappe.throw(_(error_msg))
 			except Exception as e:
 				frappe.log_error(
 					frappe.get_traceback(),

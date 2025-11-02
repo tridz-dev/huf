@@ -41,7 +41,10 @@ You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 cd $PATH_TO_YOUR_BENCH
 bench get-app https://github.com/Tridz/agentflo.git
 bench install-app agentflo
+bench setup requirements  # Installs dependencies including litellm
 ```
+
+**Note**: After installation or update, run `bench setup requirements` to ensure all dependencies (including `litellm`) are installed. Then restart your site with `bench restart`.
 
 ## Architecture Overview
 
