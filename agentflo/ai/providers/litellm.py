@@ -139,6 +139,15 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 		# This prevents errors when models don't support certain parameters
 		litellm.drop_params = True
 		
+		# Get Agent DocType directly to access temperature/top_p (most reliable source)
+		# This ensures we always get the correct values from the Agent DocType
+		agent_doc = None
+		if context and context.get("agent_name"):
+			try:
+				agent_doc = frappe.get_doc("Agent", context.get("agent_name"))
+			except Exception as e:
+				frappe.log_error(f"Could not load Agent DocType: {str(e)}", "LiteLLM Debug")
+		
 		# Get API key from AI Provider doc (same as current implementation)
 		provider_doc = frappe.get_doc("AI Provider", provider)
 		api_key = provider_doc.get_password("api_key")
@@ -176,16 +185,69 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 			# Get temperature from agent.model_settings (set from Agent DocType)
 			# The SDK Agent has model_settings with temperature/top_p from the Frappe DocType
 			temperature = None
-			if hasattr(agent, "model_settings") and agent.model_settings:
-				temperature = getattr(agent.model_settings, "temperature", None)
+			top_p = None
 			
-			# Fallback to default if not set (log warning for debugging)
+			# Debug: Log agent structure for troubleshooting (only first round)
+			if context and context.get("agent_name") and round_num == 0:
+				try:
+					debug_info = {
+						"has_model_settings": hasattr(agent, "model_settings"),
+						"model_settings_type": type(agent.model_settings).__name__ if hasattr(agent, "model_settings") else None,
+					}
+					if hasattr(agent, "model_settings") and agent.model_settings:
+						# Try to get model_settings as dict
+						try:
+							debug_info["model_settings_dict"] = vars(agent.model_settings)
+						except:
+							try:
+								debug_info["model_settings_dict"] = agent.model_settings.__dict__
+							except:
+								debug_info["model_settings_dict"] = str(agent.model_settings)
+					
+					frappe.log_error(
+						f"LiteLLM Debug - Agent structure for {context.get('agent_name')}:\n{json.dumps(debug_info, indent=2, default=str)}",
+						"LiteLLM Debug"
+					)
+				except Exception as debug_err:
+					frappe.log_error(f"Debug logging error: {str(debug_err)}", "LiteLLM Debug")
+			
+			# Priority 1: Get from Agent DocType (most reliable - direct from database)
+			if agent_doc:
+				temperature = agent_doc.temperature
+				top_p = agent_doc.top_p
+			
+			# Priority 2: Try multiple ways to access from agent.model_settings
+			if temperature is None and hasattr(agent, "model_settings") and agent.model_settings:
+				# Method 1: Direct attribute access
+				temperature = getattr(agent.model_settings, "temperature", None)
+				top_p = getattr(agent.model_settings, "top_p", None) if top_p is None else top_p
+				
+				# Method 2: Try dict-like access if it's a dict-like object
+				if temperature is None and hasattr(agent.model_settings, "__dict__"):
+					temperature = agent.model_settings.__dict__.get("temperature")
+				if top_p is None and hasattr(agent.model_settings, "__dict__"):
+					top_p = agent.model_settings.__dict__.get("top_p")
+				
+				# Method 3: Try as dict if it's dict-like
+				if temperature is None and isinstance(agent.model_settings, dict):
+					temperature = agent.model_settings.get("temperature")
+				if top_p is None and isinstance(agent.model_settings, dict):
+					top_p = agent.model_settings.get("top_p")
+			
+			# Priority 3: Fallback - Try direct agent attributes (shouldn't work but helps debug)
+			if temperature is None:
+				temperature = getattr(agent, "temperature", None)
+			if top_p is None:
+				top_p = getattr(agent, "top_p", None)
+			
+			# Final fallback to default if not set (log warning for debugging)
 			if temperature is None:
 				temperature = 0.7
 				if context and context.get("agent_name"):
 					frappe.log_error(
 						f"⚠️ Temperature not found in agent.model_settings, using default {temperature}. "
 						f"Agent: {context.get('agent_name')}. "
+						f"agent.model_settings: {agent.model_settings if hasattr(agent, 'model_settings') else 'None'}. "
 						f"Check Agent DocType has temperature field set.",
 						"LiteLLM Parameter Warning"
 					)
@@ -196,13 +258,17 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 				"temperature": temperature,
 			}
 			
-			# Add top_p if specified (also from model_settings)
-			top_p = None
-			if hasattr(agent, "model_settings") and agent.model_settings:
-				top_p = getattr(agent.model_settings, "top_p", None)
-			
+			# Add top_p if specified
 			if top_p:
 				completion_kwargs["top_p"] = top_p
+			
+			# Log actual values being used (only first round to avoid spam)
+			if context and context.get("agent_name") and round_num == 0:
+				frappe.log_error(
+					f"LiteLLM Parameters - Model: {normalized_model}, Temperature: {temperature}, TopP: {top_p}, "
+					f"Agent: {context.get('agent_name')}",
+					"LiteLLM Debug"
+				)
 			
 			# Set API key based on provider
 			provider_name = normalized_model.split("/")[0]
