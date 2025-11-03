@@ -1,4 +1,8 @@
+import { Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { UserProvider } from './contexts/UserContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
 import { ModalProvider } from './contexts/ModalContext';
 import { UnifiedLayout } from './layouts/UnifiedLayout';
@@ -20,73 +24,124 @@ import { NotFoundPage } from './pages/NotFoundPage';
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <UnifiedLayout headerActions={<HomeHeaderActions />}>
-              <HomePage />
-            </UnifiedLayout>
-          }
-        />
-        <Route
-          path="/agents"
-          element={
-            <UnifiedLayout headerActions={<AgentsHeaderActions />}>
-              <AgentsPage />
-            </UnifiedLayout>
-          }
-        />
-        <Route
-          path="/agents/:id"
-          element={<AgentFormPageWrapper />}
-        />
-        <Route
-          path="/data"
-          element={
-            <UnifiedLayout headerActions={<DataHeaderActions />}>
-              <DataPage />
-            </UnifiedLayout>
-          }
-        />
-        <Route
-          path="/integrations"
-          element={
-            <UnifiedLayout headerActions={<IntegrationsHeaderActions />}>
-              <IntegrationsPage />
-            </UnifiedLayout>
-          }
-        />
-        <Route path="/flows" element={
-          <FlowProvider>
-            <UnifiedLayout headerActions={<FlowsHeaderActions />}>
-              <FlowListPage />
-            </UnifiedLayout>
-          </FlowProvider>
-        } />
-        <Route path="/flows/:flowId" element={
-          <FlowProvider>
-            <ModalProvider>
-              <FlowCanvasPageWrapper />
-            </ModalProvider>
-          </FlowProvider>
-        } />
-        <Route
-          path="/chat"
-          element={
-            <UnifiedLayout>
-              <ChatPage />
-            </UnifiedLayout>
-          }
-        />
-        <Route path="/settings" element={<UnifiedLayout><NotFoundPage /></UnifiedLayout>} />
-        <Route path="/help" element={<UnifiedLayout><NotFoundPage /></UnifiedLayout>} />
-        <Route path="*" element={
-          <UnifiedLayout>
-            <NotFoundPage />
-          </UnifiedLayout>
-        } />
-      </Routes>
+      <UserProvider>
+        <Suspense fallback={<AuthenticatingPage />}>
+          <Routes>
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<HomeHeaderActions />}>
+                  <HomePage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agents"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<AgentsHeaderActions />}>
+                  <AgentsPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agents/:id"
+            element={
+              <ProtectedRoute>
+                <AgentFormPageWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<DataHeaderActions />}>
+                  <DataPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integrations"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<IntegrationsHeaderActions />}>
+                  <IntegrationsPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flows"
+            element={
+              <ProtectedRoute>
+                <FlowProvider>
+                  <UnifiedLayout headerActions={<FlowsHeaderActions />}>
+                    <FlowListPage />
+                  </UnifiedLayout>
+                </FlowProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/flows/:flowId"
+            element={
+              <ProtectedRoute>
+                <FlowProvider>
+                  <ModalProvider>
+                    <FlowCanvasPageWrapper />
+                  </ModalProvider>
+                </FlowProvider>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <ChatPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <NotFoundPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/help"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <NotFoundPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <NotFoundPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          </Routes>
+        </Suspense>
+      </UserProvider>
     </BrowserRouter>
   );
 }
