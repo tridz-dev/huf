@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build --base=/assets/agentflo/frontend/ && yarn copy-html-entry",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json"
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "copy-html-entry": "cp ../agentflo/public/frontend/index.html ../agentflo/www/huf.html"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

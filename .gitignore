@@ -5,3 +5,6 @@
 tags
 node_modules
 __pycache__
+
+agentflo/public/frontend
+agentflo/www/huf.html
