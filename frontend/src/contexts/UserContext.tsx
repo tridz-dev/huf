@@ -18,7 +18,7 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
-const HOME_URL = '/';
+const HOME_URL = '/huf';
 const LOGIN_URL = '/login/?redirect_to=';
 
 interface UserProviderProps {

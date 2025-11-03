@@ -23,7 +23,7 @@ import { NotFoundPage } from './pages/NotFoundPage';
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/huf">
       <UserProvider>
         <Suspense fallback={<AuthenticatingPage />}>
           <Routes>
