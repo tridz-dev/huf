@@ -84,6 +84,7 @@ app_license = "mit"
 
 # before_install = "agentflo.install.before_install"
 after_install = "agentflo.install.after_install"
+after_migrate = "agentflo.install.after_migrate"
 
 # Uninstallation
 # ------------
@@ -97,7 +98,7 @@ after_install = "agentflo.install.after_install"
 # Name of the app being installed is passed as an argument
 
 # before_app_install = "agentflo.utils.before_app_install"
-# after_app_install = "agentflo.utils.after_app_install"
+after_app_install = "agentflo.ai.tool_registry.sync_app_tools"
 
 # Integration Cleanup
 # -------------------

@@ -25,3 +25,22 @@ def after_install():
 			title="Dependency Missing"
 		)
 
+
+def after_migrate():
+	"""
+	Called after app migration.
+	Syncs all discovered tools from all installed apps.
+	"""
+	try:
+		from agentflo.ai.tool_registry import sync_discovered_tools
+		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
+		frappe.log_error(
+			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps",
+			"Tool Sync"
+		)
+	except Exception as e:
+		frappe.log_error(
+			f"Failed to sync tools after migrate: {str(e)}",
+			"Tool Sync Error"
+		)
+

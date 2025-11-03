@@ -37,17 +37,38 @@ def upsert_tool_doc(d):
     else:
         frappe.get_doc(payload).insert(ignore_permissions=True)
 
-def get_tools_by_app():
+def get_tools_by_app(apps_to_scan=None):
+    """
+    Get tools from hooks for specified apps or all installed apps.
+    
+    Args:
+        apps_to_scan: List of app names to scan, or None for all installed apps
+    
+    Returns:
+        dict: {app_name: [list of tools]}
+    """
     tools_by_app = {}
-    for app in frappe.get_installed_apps():
+    apps = apps_to_scan if apps_to_scan is not None else frappe.get_installed_apps()
+    
+    for app in apps:
         app_hooks = frappe.get_hooks("agentflo_tools", app_name=app) or []
         if app_hooks:
             tools_by_app[app] = app_hooks
     return tools_by_app
 
 @frappe.whitelist()
-def sync_discovered_tools():
-    tools_by_app = get_tools_by_app()
+def sync_discovered_tools(apps_to_scan=None):
+    """
+    Sync discovered tools from hooks.
+    
+    Args:
+        apps_to_scan: List of app names to scan, or None for all installed apps
+                     (None = full scan, used for manual sync and after_migrate)
+    
+    Returns:
+        dict: Summary of sync results
+    """
+    tools_by_app = get_tools_by_app(apps_to_scan)
 
     valid_tool_names = set()
 
@@ -85,11 +106,37 @@ def sync_discovered_tools():
             else:
                 frappe.get_doc(payload).insert(ignore_permissions=True)
 
-    existing_tools = frappe.get_all(
-        "Agent Tool Function",
-        filters={"types": "App Provided"},
-        fields=["name", "tool_name"]
-    )
-    for t in existing_tools:
-        if t.tool_name not in valid_tool_names:
-            frappe.delete_doc("Agent Tool Function", t.name, ignore_permissions=True, force=True)
+    # Only cleanup orphaned tools if scanning all apps (not incremental)
+    if apps_to_scan is None:
+        existing_tools = frappe.get_all(
+            "Agent Tool Function",
+            filters={"types": "App Provided"},
+            fields=["name", "tool_name"]
+        )
+        for t in existing_tools:
+            if t.tool_name not in valid_tool_names:
+                frappe.delete_doc("Agent Tool Function", t.name, ignore_permissions=True, force=True)
+    
+    return {
+        "synced_apps": list(tools_by_app.keys()),
+        "total_tools": len(valid_tool_names)
+    }
+
+def sync_app_tools(app_name):
+    """
+    Sync tools for a specific app (called from after_app_install hook).
+    
+    Args:
+        app_name: Name of the app to sync tools for
+    """
+    try:
+        result = sync_discovered_tools(apps_to_scan=[app_name])
+        frappe.log_error(
+            f"Synced tools for app '{app_name}': {result.get('total_tools', 0)} tools",
+            "Tool Sync"
+        )
+    except Exception as e:
+        frappe.log_error(
+            f"Failed to sync tools for app '{app_name}': {str(e)}",
+            "Tool Sync Error"
+        )
