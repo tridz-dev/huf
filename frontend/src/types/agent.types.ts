@@ -119,3 +119,42 @@ export type AgentRun = {
   latency_ms?: number;
   created_at: string;
 };
+
+/**
+ * Agent document type from Frappe
+ * Represents the raw Agent document structure from Frappe database
+ * Based on the Agent doctype schema
+ */
+export interface AgentDoc {
+  // Standard Frappe fields
+  name: string;
+  owner: string;
+  creation: string;
+  modified: string;
+  modified_by: string;
+  docstatus: number;
+  idx: number;
+  doctype: "Agent";
+
+  // Agent specific fields
+  agent_name: string;
+  provider: string;
+  model: string;
+  async: number; // 0 or 1
+  disabled: number; // 0 or 1
+  temperature: number;
+  top_p: number;
+  allow_chat: number; // 0 or 1
+  persist_conversation: number; // 0 or 1
+  is_scheduled: number; // 0 or 1
+  scheduled_interval: ScheduledInterval | null;
+  interval_count: number | null;
+  last_execution: string | null;
+  next_execution: string | null;
+  reference_doctype: string | null;
+  condition: string | null;
+  is_doc_event: number; // 0 or 1
+  doc_event: DocEventType | null;
+  instructions: string;
+  agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
+}

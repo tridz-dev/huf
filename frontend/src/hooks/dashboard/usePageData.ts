@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 
 interface UsePageDataOptions<T> {
   fetchFn?: () => Promise<T[]>;
@@ -18,9 +18,11 @@ export function usePageData<T>({
   const [error, setError] = useState<Error | null>(null);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
-    if (fetchFn) {
+    if (fetchFn && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       setLoading(true);
       fetchFn()
         .then((result) => {
@@ -33,7 +35,7 @@ export function usePageData<T>({
         .finally(() => {
           setLoading(false);
         });
-    } else {
+    } else if (!fetchFn) {
       setData(initialData);
     }
   }, [fetchFn, initialData]);

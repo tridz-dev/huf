@@ -1,7 +1,10 @@
+import { useCallback } from 'react';
 import { Calendar, Zap, Activity, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PageLayout, FilterBar, GridView, ItemCard } from '../components/dashboard';
 import { usePageData } from '../hooks/dashboard/usePageData';
+import { getAgents } from '../services/agentApi';
+import type { AgentDoc } from '../types/agent.types';
 
 interface Agent {
   id: string;
@@ -14,68 +17,30 @@ interface Agent {
   category: string;
 }
 
-const agents: Agent[] = [
-  {
-    id: '1',
-    name: 'Customer Support Agent',
-    description: 'Handles customer inquiries and provides support',
-    model: 'GPT-4',
-    status: 'active',
-    runs: 1247,
-    lastRun: '2 minutes ago',
-    category: 'Support',
-  },
-  {
-    id: '2',
-    name: 'Data Analyst Agent',
-    description: 'Analyzes data and generates insights',
-    model: 'Claude 3 Opus',
-    status: 'active',
-    runs: 856,
-    lastRun: '15 minutes ago',
-    category: 'Analytics',
-  },
-  {
-    id: '3',
-    name: 'Content Writer Agent',
-    description: 'Creates and optimizes content',
-    model: 'GPT-4 Turbo',
-    status: 'idle',
-    runs: 423,
-    lastRun: '3 hours ago',
-    category: 'Content',
-  },
-  {
-    id: '4',
-    name: 'Sales Assistant Agent',
-    description: 'Qualifies leads and schedules meetings',
-    model: 'GPT-4',
-    status: 'active',
-    runs: 672,
-    lastRun: '5 minutes ago',
-    category: 'Sales',
-  },
-  {
-    id: '5',
-    name: 'Research Agent',
-    description: 'Conducts research and summarizes findings',
-    model: 'Claude 3 Sonnet',
-    status: 'idle',
-    runs: 234,
-    lastRun: '1 day ago',
-    category: 'Research',
-  },
-  {
-    id: '6',
-    name: 'Code Review Agent',
-    description: 'Reviews code and suggests improvements',
-    model: 'GPT-4 Turbo',
-    status: 'error',
-    runs: 189,
-    lastRun: '2 days ago',
-    category: 'Development',
-  },
-];
+// Map AgentDoc to Agent display type
+function mapAgentDocToAgent(doc: AgentDoc): Agent {
+  // Determine status based on disabled field
+  let status: 'active' | 'idle' | 'error' = 'active';
+  if (doc.disabled === 1) {
+    status = 'idle';
+  }
+
+  // Format last execution date
+  const lastRun = doc.last_execution
+    ? new Date(doc.last_execution).toLocaleDateString()
+    : 'Never';
+
+  return {
+    id: doc.name,
+    name: doc.agent_name || doc.name,
+    description: doc.instructions?.slice(0, 100) || 'No description',
+    model: doc.model || 'Unknown',
+    status,
+    runs: 0, // TODO: Fetch from stats or runs
+    lastRun,
+    category: 'General', // TODO: Add category field if available
+  };
+}
 
 const statusOptions = [
   { label: 'All Status', value: 'all' },
@@ -105,8 +70,14 @@ function getStatusVariant(status: Agent['status']) {
 
 export function AgentsPage() {
   const navigate = useNavigate();
-  const { data, search, setSearch, filters, setFilters } = usePageData<Agent>({
-    initialData: agents,
+  
+  const fetchAgents = useCallback(async () => {
+    const agents = await getAgents();
+    return agents.map(mapAgentDocToAgent);
+  }, []);
+
+  const { data, search, setSearch, filters, setFilters, loading } = usePageData<Agent>({
+    fetchFn: fetchAgents,
     searchFields: ['name', 'description'],
     filterFn: (agent, filters) => {
       if (filters.status && filters.status !== 'all' && agent.status !== filters.status) {
@@ -147,6 +118,7 @@ export function AgentsPage() {
       <GridView
         items={data}
         columns={{ sm: 1, md: 2, lg: 3 }}
+        loading={loading}
         renderItem={(agent) => (
           <ItemCard
             title={agent.name}

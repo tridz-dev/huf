@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { auth, db } from '@/lib/frappe-sdk';
+import { doctype } from '@/data/doctypes';
 
 interface User {
   name: string;
@@ -30,7 +31,7 @@ export function UserProvider({ children }: UserProviderProps) {
 
   const fetchUserDetails = async (userId: string): Promise<User | null> => {
     try {
-      const userDoc = await db.getDoc('User', userId);
+      const userDoc = await db.getDoc(doctype.User, userId);
       return {
         name: userDoc.name || userId,
         email: userDoc.email,

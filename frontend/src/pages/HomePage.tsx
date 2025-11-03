@@ -36,13 +36,7 @@ const metrics = [
   },
 ];
 
-const activeAgents = [
-  { id: '1', name: 'Customer Support Agent', status: 'active', runs: 456, success_rate: 96.5 },
-  { id: '2', name: 'Data Analyst Agent', status: 'active', runs: 234, success_rate: 92.1 },
-  { id: '3', name: 'Email Assistant', status: 'active', runs: 189, success_rate: 98.3 },
-  { id: '4', name: 'Sales Bot', status: 'active', runs: 156, success_rate: 91.2 },
-  { id: '5', name: 'Content Generator', status: 'active', runs: 212, success_rate: 89.7 },
-];
+const activeAgents: unknown[] = [];
 
 const activeFlows = [
   { id: '1', name: 'Webform Handler', status: 'active', runs: 523, last_run: '2 minutes ago' },
@@ -129,21 +123,27 @@ export function HomePage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {activeAgents.map((agent) => (
-                    <div
-                      key={agent.id}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/agents/${agent.id}`)}
-                    >
-                      <div className="flex-1">
-                        <div className="font-medium">{agent.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {agent.runs} runs • {agent.success_rate}% success rate
-                        </div>
-                      </div>
-                      <Badge variant="default">Active</Badge>
+                  {activeAgents.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No active agents
                     </div>
-                  ))}
+                  ) : (
+                    activeAgents.map((agent: any) => (
+                      <div
+                        key={agent.id}
+                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={() => navigate(`/agents/${agent.id}`)}
+                      >
+                        <div className="flex-1">
+                          <div className="font-medium">{agent.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {agent.runs} runs • {agent.success_rate}% success rate
+                          </div>
+                        </div>
+                        <Badge variant="default">Active</Badge>
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
