@@ -177,41 +177,94 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
     
     tools_by_app = get_tools_by_app(apps_to_scan, use_cache=cache_enabled)
 
-    valid_tool_names = set()
-
+    # BATCH 1: Collect all tools to process
+    tools_to_process = []
     for app, tools in tools_by_app.items():
         for d in tools:
-            mod, fn = d["function_path"].rsplit(".", 1)
-            if not callable(getattr(importlib.import_module(mod), fn, None)):
-                frappe.throw(f"Not callable: {d['function_path']}")
-            
-            tool_name = d["tool_name"]
-            valid_tool_names.add(tool_name)
-
-            docname = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name})
-            payload = {
-                "doctype": "Agent Tool Function",
-                "tool_name": tool_name,
-                "description": d.get("description"),
-                "types": "App Provided",
-                "function_path": d["function_path"],
-                "parameters": [
-                    {
-                        "label": p["name"].title(),
-                        "fieldname": p["name"],
-                        "param_type": p["type"],
-                        "required": int(p.get("required", False)),
-                    }
-                    for p in d.get("parameters", [])
-                ],
-                "provider_app": app,
-            }
-            if docname:
-                doc = frappe.get_doc("Agent Tool Function", docname)
-                doc.update(payload)
-                doc.save(ignore_permissions=True)
-            else:
-                frappe.get_doc(payload).insert(ignore_permissions=True)
+            tools_to_process.append((app, d))
+    
+    # BATCH 2: Validate all functions first (before any DB operations)
+    validated_tools = []
+    validation_cache = {}  # function_path -> bool
+    
+    for app, d in tools_to_process:
+        func_path = d.get("function_path")
+        tool_name = d.get("tool_name")
+        
+        if not tool_name or not func_path:
+            continue
+        
+        # Use cache to avoid re-validating same function
+        if func_path not in validation_cache:
+            try:
+                mod, fn = func_path.rsplit(".", 1)
+                module_obj = importlib.import_module(mod)
+                func_obj = getattr(module_obj, fn, None)
+                validation_cache[func_path] = callable(func_obj)
+            except Exception:
+                validation_cache[func_path] = False
+        
+        if validation_cache[func_path]:
+            validated_tools.append((app, d))
+    
+    # BATCH 3: Get all existing tools in one query
+    valid_tool_names = set()
+    existing_tools = {}
+    
+    if validated_tools:
+        tool_names = [d.get("tool_name") for _, d in validated_tools]
+        existing_docs = frappe.get_all(
+            "Agent Tool Function",
+            filters={"tool_name": ["in", tool_names]},
+            fields=["name", "tool_name"]
+        )
+        existing_tools = {t.tool_name: t.name for t in existing_docs}
+    
+    # BATCH 4: Prepare bulk operations
+    to_create = []
+    to_update = []
+    
+    for app, d in validated_tools:
+        tool_name = d.get("tool_name")
+        valid_tool_names.add(tool_name)
+        
+        payload = {
+            "tool_name": tool_name,
+            "description": d.get("description"),
+            "types": "App Provided",
+            "function_path": d.get("function_path"),
+            "parameters": [
+                {
+                    "label": p["name"].title(),
+                    "fieldname": p["name"],
+                    "param_type": p["type"],
+                    "required": int(p.get("required", False)),
+                }
+                for p in d.get("parameters", [])
+            ],
+            "provider_app": app,
+        }
+        
+        if tool_name in existing_tools:
+            to_update.append((existing_tools[tool_name], payload))
+        else:
+            payload["doctype"] = "Agent Tool Function"
+            to_create.append(payload)
+    
+    # BATCH 5: Execute database operations
+    for docname, payload in to_update:
+        try:
+            doc = frappe.get_doc("Agent Tool Function", docname)
+            doc.update(payload)
+            doc.save(ignore_permissions=True)
+        except Exception as e:
+            frappe.log_error(f"Failed to update tool {docname}: {str(e)}", "Tool Sync Error")
+    
+    for payload in to_create:
+        try:
+            frappe.get_doc(payload).insert(ignore_permissions=True)
+        except Exception as e:
+            frappe.log_error(f"Failed to create tool {payload.get('tool_name')}: {str(e)}", "Tool Sync Error")
 
     # Only cleanup orphaned tools if scanning all apps (not incremental)
     if apps_to_scan is None:
