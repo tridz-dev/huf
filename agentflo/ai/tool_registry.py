@@ -70,10 +70,12 @@ def _get_cached_scans():
         dict: {app_name: datetime}
     """
     try:
-        settings = frappe.get_single(CACHE_DOCTYPE)
-        if hasattr(settings, "last_app_scans") and settings.last_app_scans:
-            return json.loads(settings.last_app_scans)
+        if frappe.db.exists("DocType", CACHE_DOCTYPE):
+            settings = frappe.get_single(CACHE_DOCTYPE)
+            if hasattr(settings, "last_app_scans") and settings.last_app_scans:
+                return json.loads(settings.last_app_scans)
     except Exception:
+        # DocType might not exist yet, fail silently
         pass
     return {}
 
@@ -85,12 +87,20 @@ def _update_cached_scans(apps_scanned):
         apps_scanned: List of app names that were scanned
     """
     try:
+        # Only update cache if Agent Settings DocType exists
+        if not frappe.db.exists("DocType", CACHE_DOCTYPE):
+            return
+        
         settings = frappe.get_single(CACHE_DOCTYPE)
         cache = _get_cached_scans()
         current_time = now_datetime().isoformat()
         
         for app in apps_scanned:
             cache[app] = current_time
+        
+        # Create field if it doesn't exist (for backward compatibility)
+        if not hasattr(settings, "last_app_scans"):
+            return
         
         settings.last_app_scans = json.dumps(cache)
         settings.save(ignore_permissions=True)
