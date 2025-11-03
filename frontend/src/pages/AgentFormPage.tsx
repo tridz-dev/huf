@@ -67,8 +67,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
-import { AgentTrigger, TriggerType, ScheduledInterval, DocEventType } from '../types/agent.types';
-import { mockApi } from '../services/mockApi';
+import { AgentTrigger, TriggerType, ScheduledInterval, DocEventType, AIProvider, AIModel } from '../types/agent.types';
+import { getAgent } from '../services/agentApi';
+import { getProviders, getModels } from '../services/providerApi';
+import type { AgentDoc } from '../types/agent.types';
 
 const agentFormSchema = z.object({
   agent_name: z.string().min(1, 'Agent name is required'),
@@ -112,29 +114,6 @@ const triggerFormSchema = z.object({
 
 type TriggerFormValues = z.infer<typeof triggerFormSchema>;
 
-const providers = [
-  { name: 'OpenAI', provider_name: 'openai' },
-  { name: 'Anthropic', provider_name: 'anthropic' },
-  { name: 'Google', provider_name: 'google' },
-];
-
-const models: Record<string, { name: string; model_name: string }[]> = {
-  openai: [
-    { name: 'GPT-4', model_name: 'gpt-4' },
-    { name: 'GPT-4 Turbo', model_name: 'gpt-4-turbo' },
-    { name: 'GPT-3.5 Turbo', model_name: 'gpt-3.5-turbo' },
-  ],
-  anthropic: [
-    { name: 'Claude 3 Opus', model_name: 'claude-3-opus' },
-    { name: 'Claude 3 Sonnet', model_name: 'claude-3-sonnet' },
-    { name: 'Claude 3 Haiku', model_name: 'claude-3-haiku' },
-  ],
-  google: [
-    { name: 'Gemini Pro', model_name: 'gemini-pro' },
-    { name: 'Gemini Ultra', model_name: 'gemini-ultra' },
-  ],
-};
-
 const scheduledIntervals: ScheduledInterval[] = ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly'];
 
 const docEvents: DocEventType[] = [
@@ -163,6 +142,8 @@ export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [providers, setProviders] = useState<AIProvider[]>([]);
+  const [models, setModels] = useState<AIModel[]>([]);
   const [triggers, setTriggers] = useState<AgentTrigger[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTrigger | null>(null);
@@ -199,24 +180,60 @@ export function AgentFormPage() {
   const watchDisabled = form.watch('disabled');
   const watchTriggerType = triggerForm.watch('trigger_type');
 
+  // Load providers and models on mount
+  useEffect(() => {
+    Promise.all([
+      getProviders(),
+      getModels(),
+    ]).then(([providersData, modelsData]) => {
+      setProviders(providersData);
+      setModels(modelsData);
+    }).catch((error) => {
+      console.error('Error loading providers/models:', error);
+      toast.error('Failed to load providers and models');
+    });
+  }, []);
+
+  // Load models when provider changes
+  useEffect(() => {
+    if (watchProvider) {
+      getModels(watchProvider).then((modelsData) => {
+        setModels(modelsData);
+        // Clear model selection if current model doesn't belong to selected provider
+        const currentModel = form.getValues('model');
+        if (currentModel && !modelsData.find(m => m.name === currentModel)) {
+          form.setValue('model', '');
+        }
+      }).catch((error) => {
+        console.error('Error loading models:', error);
+      });
+    } else {
+      setModels([]);
+    }
+  }, [watchProvider, form]);
+
+  // Load agent data when id is available
   useEffect(() => {
     if (id) {
-      mockApi.agents.get(id).then((data) => {
-        if (data) {
-          form.reset({
-            agent_name: data.agent_name,
-            provider: data.provider,
-            model: data.model,
-            temperature: data.temperature ?? 1,
-            top_p: data.top_p ?? 1,
-            async: data.async ?? false,
-            disabled: data.disabled ?? false,
-            allow_chat: data.allow_chat ?? true,
-            persist_conversation: data.persist_conversation ?? true,
-            instructions: data.instructions,
-          });
-          setTriggers(data.triggers || []);
-        }
+      getAgent(id).then((data: AgentDoc) => {
+        form.reset({
+          agent_name: data.agent_name || '',
+          provider: data.provider || '',
+          model: data.model || '',
+          temperature: data.temperature ?? 1,
+          top_p: data.top_p ?? 1,
+          async: data.async === 1,
+          disabled: data.disabled === 1,
+          allow_chat: data.allow_chat === 1,
+          persist_conversation: data.persist_conversation === 1,
+          instructions: data.instructions || '',
+        });
+        // Triggers are not stored in AgentDoc directly, will be empty for now
+        setTriggers([]);
+        setLoading(false);
+      }).catch((error) => {
+        console.error('Error loading agent:', error);
+        toast.error('Failed to load agent details');
         setLoading(false);
       });
     } else {
@@ -406,8 +423,12 @@ export function AgentFormPage() {
               <Badge variant={watchDisabled ? 'secondary' : 'default'}>
                 {watchDisabled ? 'Disabled' : 'Active'}
               </Badge>
-              <Badge variant="outline">{form.watch('provider') || 'Provider'}</Badge>
-              <Badge variant="outline">{form.watch('model') || 'Model'}</Badge>
+              <Badge variant="outline">
+                {providers.find(p => p.name === form.watch('provider'))?.provider_name || form.watch('provider') || 'Provider'}
+              </Badge>
+              <Badge variant="outline">
+                {models.find(m => m.name === form.watch('model'))?.model_name || form.watch('model') || 'Model'}
+              </Badge>
             </div>
             {activeTriggerCount > 0 && (
               <div className="text-sm text-muted-foreground flex items-center gap-2">
@@ -514,8 +535,8 @@ export function AgentFormPage() {
                             </FormControl>
                             <SelectContent>
                               {providers.map((provider) => (
-                                <SelectItem key={provider.provider_name} value={provider.provider_name}>
-                                  {provider.name}
+                                <SelectItem key={provider.name} value={provider.name}>
+                                  {provider.provider_name || provider.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -542,10 +563,11 @@ export function AgentFormPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {watchProvider &&
-                                models[watchProvider]?.map((model) => (
-                                  <SelectItem key={model.model_name} value={model.model_name}>
-                                    {model.name}
+                              {models
+                                .filter((model) => model.provider === watchProvider)
+                                .map((model) => (
+                                  <SelectItem key={model.name} value={model.name}>
+                                    {model.model_name || model.name}
                                   </SelectItem>
                                 ))}
                             </SelectContent>

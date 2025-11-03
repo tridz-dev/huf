@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { UnifiedLayout } from '../layouts/UnifiedLayout';
 import { AgentFormPage } from './AgentFormPage';
-import { mockApi } from '../services/mockApi';
+import { getAgent } from '../services/agentApi';
 
 export function AgentFormPageWrapper() {
   const { id } = useParams<{ id: string }>();
@@ -10,16 +10,17 @@ export function AgentFormPageWrapper() {
 
   useEffect(() => {
     if (id) {
-      mockApi.agents.get(id).then((agent) => {
-        if (agent) {
-          setAgentName(agent.agent_name);
-        }
+      getAgent(id).then((agent) => {
+        setAgentName(agent.agent_name || agent.name);
+      }).catch((error) => {
+        console.error('Error loading agent:', error);
+        setAgentName('Agent');
       });
     }
   }, [id]);
 
   const breadcrumbs = [
-    { label: 'Agents', href: '/huf/agents' },
+    { label: 'Agents', href: '/agents' },
     { label: agentName },
   ];
 
