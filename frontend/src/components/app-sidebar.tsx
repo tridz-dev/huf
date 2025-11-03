@@ -53,11 +53,6 @@ const systemItems = [
   },
 ]
 
-const userData = {
-  name: "Safwan Erooth",
-  email: "hey@tridz.com",
-}
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -69,7 +64,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={systemItems} label="System" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={userData} />
+        <NavUser />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

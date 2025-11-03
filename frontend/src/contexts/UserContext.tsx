@@ -1,16 +1,15 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { auth } from '@/lib/frappe-sdk';
+import { auth, db } from '@/lib/frappe-sdk';
 
-// interface User {
-//   name: string;
-//   email?: string;
-//   full_name?: string;
-// }
-
-type LoggedInUser = string;
+interface User {
+  name: string;
+  email?: string;
+  full_name?: string;
+  user_image?: string;
+}
 
 interface UserContextType {
-  user: LoggedInUser | null;
+  user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   logout: () => Promise<void>;
@@ -26,15 +25,35 @@ interface UserProviderProps {
 }
 
 export function UserProvider({ children }: UserProviderProps) {
-  const [user, setUser] = useState<LoggedInUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const fetchUserDetails = async (userId: string): Promise<User | null> => {
+    try {
+      const userDoc = await db.getDoc('User', userId);
+      return {
+        name: userDoc.name || userId,
+        email: userDoc.email,
+        full_name: userDoc.full_name || userDoc.name,
+        user_image: userDoc.user_image,
+      };
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      // Return basic user info if fetch fails
+      return {
+        name: userId,
+        full_name: userId,
+      };
+    }
+  };
 
   const checkAuth = async () => {
     try {
       setIsLoading(true);
-      const loggedUser = await auth.getLoggedInUser();
-      if (loggedUser) {
-        setUser(loggedUser);
+      const loggedUserId = await auth.getLoggedInUser();
+      if (loggedUserId) {
+        const userDetails = await fetchUserDetails(loggedUserId);
+        setUser(userDetails);
       } else {
         setUser(null);
         // Redirect to login with return URL
