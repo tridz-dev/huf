@@ -24,6 +24,7 @@ class AgentToolFunction(Document):
 				"Send Message",
 				"Get Report Result",
 				"Attach File to Document",
+				"Google Search",
 			]:
 				frappe.throw(_("Please select a DocType for this function."))
 
@@ -399,7 +400,51 @@ class AgentToolFunction(Document):
 				"required": [],
 				"additionalProperties": False
 			}
-					
+		elif self.types == "Google Search":
+			params = {
+				"type": "object",
+				"properties": {
+					"query": {
+						"type": "string",
+						"description": "The search query string"
+					},
+					"max_results": {
+						"type": "integer",
+						"description": "Maximum number of search results to return (default: 10)",
+						"default": 10
+					},
+					"search_domain_filter": {
+						"type": "array",
+						"items": {"type": "string"},
+						"description": "Optional list of domains to restrict search to (e.g., ['arxiv.org'])"
+					},
+					"date_restrict": {
+						"type": "string",
+						"description": "Optional date restriction filter (e.g., 'm6' for last 6 months, 'd7' for last 7 days)"
+					},
+					"language_restrict": {
+						"type": "string",
+						"description": "Optional language restriction (e.g., 'lang_en', 'lang_es')"
+					},
+					"safe": {
+						"type": "string",
+						"enum": ["active", "off"],
+						"description": "Search safety level ('active' or 'off', default: 'active')",
+						"default": "active"
+					},
+					"exact_terms": {
+						"type": "string",
+						"description": "Optional phrase that all documents must contain"
+					},
+					"file_type": {
+						"type": "string",
+						"description": "Optional file type to restrict results to (e.g., 'pdf')"
+					}
+				},
+				"required": ["query"],
+				"additionalProperties": False
+			}
+				
 		else:
 			params = self.build_params_json_from_table()
 
