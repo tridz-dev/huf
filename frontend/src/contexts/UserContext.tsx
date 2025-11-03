@@ -19,7 +19,7 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 const HOME_URL = '/huf';
-const LOGIN_URL = '/login/?redirect_to=';
+const LOGIN_URL = '/login?redirect-to=';
 
 interface UserProviderProps {
   children: ReactNode;
@@ -39,14 +39,14 @@ export function UserProvider({ children }: UserProviderProps) {
         setUser(null);
         // Redirect to login with return URL
         const redirectTo = encodeURIComponent(HOME_URL);
-        window.location.href = `${LOGIN_URL}${redirectTo}`;
+        window.location.href = `${LOGIN_URL}${redirectTo}#login`;
       }
     } catch (error) {
       console.error('Error checking authentication:', error);
       setUser(null);
       // Redirect to login on error
       const redirectTo = encodeURIComponent(HOME_URL);
-      window.location.href = `${LOGIN_URL}${redirectTo}`;
+      window.location.href = `${LOGIN_URL}${redirectTo}#login`;
     } finally {
       setIsLoading(false);
     }
@@ -60,8 +60,8 @@ export function UserProvider({ children }: UserProviderProps) {
     try {
       await auth.logout();
       setUser(null);
-      const redirectTo = encodeURIComponent('/huf');
-      window.location.href = `/login/?redirect_to=${redirectTo}`;
+      const redirectTo = encodeURIComponent(HOME_URL);
+      window.location.href = `${LOGIN_URL}${redirectTo}#login`;
     } catch (error) {
       console.error('Error logging out:', error);
     }
