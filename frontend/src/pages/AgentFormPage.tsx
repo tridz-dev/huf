@@ -181,6 +181,9 @@ export function AgentFormPage() {
   const watchProvider = form.watch('provider');
   const watchDisabled = form.watch('disabled');
   const watchTriggerType = triggerForm.watch('trigger_type');
+  const isDirty = form.formState.isDirty;
+  // Show save button for new agents or when form is dirty
+  const showSaveButton = isNew || isDirty;
 
   // Load providers and models on mount
   useEffect(() => {
@@ -265,12 +268,38 @@ export function AgentFormPage() {
         // Create new agent
         const newAgent = await createAgent(agentData);
         toast.success('Agent created successfully!');
+        // Reset form state with the created agent's values
+        form.reset({
+          agent_name: newAgent.agent_name || '',
+          provider: newAgent.provider || '',
+          model: newAgent.model || '',
+          temperature: newAgent.temperature ?? 1,
+          top_p: newAgent.top_p ?? 1,
+          async: newAgent.async === 1,
+          disabled: newAgent.disabled === 1,
+          allow_chat: newAgent.allow_chat === 1,
+          persist_conversation: newAgent.persist_conversation === 1,
+          instructions: newAgent.instructions || '',
+        });
         // Navigate to the edit page with the new agent's ID
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
         // Update existing agent
         await updateAgent(id, agentData);
         toast.success('Agent updated successfully!');
+        // Reset form state with the updated values to mark form as clean
+        form.reset({
+          agent_name: values.agent_name,
+          provider: values.provider,
+          model: values.model,
+          temperature: values.temperature,
+          top_p: values.top_p,
+          async: values.async,
+          disabled: values.disabled,
+          allow_chat: values.allow_chat,
+          persist_conversation: values.persist_conversation,
+          instructions: values.instructions,
+        });
       }
     } catch (error) {
       console.error(`Error ${isNew ? 'creating' : 'updating'} agent:`, error);
@@ -478,10 +507,12 @@ export function AgentFormPage() {
               <MessageSquare className="w-4 h-4 mr-2" />
               Chat
             </Button>
-            <Button size="sm" onClick={form.handleSubmit(onSubmit)} disabled={saving}>
-              <Save className="w-4 h-4 mr-2" />
-              {saving ? (isNew ? 'Creating...' : 'Saving...') : (isNew ? 'Create' : 'Save')}
-            </Button>
+            {showSaveButton && (
+              <Button size="sm" onClick={form.handleSubmit(onSubmit)} disabled={saving}>
+                <Save className="w-4 h-4 mr-2" />
+                {saving ? (isNew ? 'Creating...' : 'Saving...') : (isNew ? 'Create' : 'Save')}
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -498,15 +529,6 @@ export function AgentFormPage() {
                     <DropdownMenuItem onClick={handleViewLogs}>
                       <FileText className="w-4 h-4 mr-2" />
                       View Logs
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => form.setValue('disabled', !watchDisabled)}
-                    >
-                      <Switch
-                        checked={watchDisabled}
-                        className="mr-2 pointer-events-none"
-                      />
-                      Disable
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDelete} className="text-destructive">
                       <Trash2 className="w-4 h-4 mr-2" />
