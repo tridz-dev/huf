@@ -20,6 +20,7 @@ import { DataPage } from './pages/DataPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
 import { ChatPage } from './pages/ChatPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { Toaster } from './components/ui/sonner';
 
 function App() {
   return (
@@ -141,6 +142,7 @@ function App() {
           />
           </Routes>
         </Suspense>
+        <Toaster />
       </UserProvider>
     </BrowserRouter>
   );

@@ -1,24 +1,36 @@
-import { useTheme } from 'next-themes';
 import { Toaster as Sonner } from 'sonner';
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = 'system' } = useTheme();
-
   return (
     <Sonner
-      theme={theme as ToasterProps['theme']}
+      theme="system"
+      expand
+      visibleToasts={5}
+      duration={3000}
       className="toaster group"
+      position="bottom-right"
       toastOptions={{
         classNames: {
           toast:
-            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg',
-          description: 'group-[.toast]:text-muted-foreground',
+            '!rounded-xl !border !bg-card !text-card-foreground !shadow-lg',
+          title: '!text-card-foreground !font-semibold',
+          description: '!text-muted-foreground',
           actionButton:
-            'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
+            '!bg-primary !text-primary-foreground !rounded-md !hover:!bg-primary/90 !transition-colors',
           cancelButton:
-            'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
+            '!bg-muted !text-muted-foreground !rounded-md !hover:!bg-muted/80 !transition-colors',
+          closeButton:
+            '!bg-transparent !text-muted-foreground !hover:!bg-muted !border-border',
+          success:
+            '!border-emerald-500/50 !bg-card dark:!bg-card',
+          error:
+            '!border-destructive/50 !bg-card dark:!bg-card',
+          warning:
+            '!border-amber-500/50 !bg-card dark:!bg-card',
+          info:
+            '!border-blue-500/50 !bg-card dark:!bg-card',
         },
       }}
       {...props}
