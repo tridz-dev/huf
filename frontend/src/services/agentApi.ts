@@ -43,3 +43,18 @@ export async function getAgent(name: string): Promise<AgentDoc> {
     throw error;
   }
 }
+
+/**
+ * Update an agent document
+ */
+export async function updateAgent(name: string, data: Partial<AgentDoc>): Promise<AgentDoc> {
+  try {
+    await db.updateDoc(doctype.Agent, name, data);
+    // Fetch updated document to return
+    const updatedAgent = await db.getDoc(doctype.Agent, name);
+    return updatedAgent as AgentDoc;
+  } catch (error) {
+    console.error(`Error updating agent ${name}:`, error);
+    throw error;
+  }
+}

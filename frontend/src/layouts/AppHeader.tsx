@@ -18,10 +18,10 @@ export function AppHeader() {
 
   const getBreadcrumbs = () => {
     const paths = location.pathname.split('/').filter(Boolean);
-    if (paths.length === 0) return [{ label: 'Home', path: '/' }];
+    if (paths.length === 0) return [{ label: 'Home', path: '/huf/' }];
 
     const breadcrumbs = paths.map((path, index) => {
-      const fullPath = '/' + paths.slice(0, index + 1).join('/');
+      const fullPath = '/huf/' + paths.slice(0, index + 1).join('/');
       const label = path.charAt(0).toUpperCase() + path.slice(1);
       return { label, path: fullPath };
     });
@@ -30,6 +30,7 @@ export function AppHeader() {
   };
 
   const breadcrumbs = getBreadcrumbs();
+  console.log(breadcrumbs);
 
   return (
     <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">

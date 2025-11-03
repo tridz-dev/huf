@@ -23,7 +23,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path === '/') return 'Dashboard';
-    if (path.startsWith('/agents')) return 'Agents';
+    if (path.startsWith('/agents')) return 'Agent';
     if (path.startsWith('/flows')) return 'Flows';
     if (path.startsWith('/data')) return 'Data';
     if (path.startsWith('/integrations')) return 'Integrations';

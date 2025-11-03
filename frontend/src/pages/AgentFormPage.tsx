@@ -68,7 +68,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
 import { AgentTrigger, TriggerType, ScheduledInterval, DocEventType, AIProvider, AIModel } from '../types/agent.types';
-import { getAgent } from '../services/agentApi';
+import { getAgent, updateAgent } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import type { AgentDoc } from '../types/agent.types';
 
@@ -142,6 +142,7 @@ export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [triggers, setTriggers] = useState<AgentTrigger[]>([]);
@@ -241,10 +242,36 @@ export function AgentFormPage() {
     }
   }, [id, form]);
 
-  const onSubmit = (values: AgentFormValues) => {
-    console.log('Form values:', values);
-    console.log('Triggers:', triggers);
-    toast.success('Agent saved successfully!');
+  const onSubmit = async (values: AgentFormValues) => {
+    if (!id) {
+      toast.error('Agent ID is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Convert form values (booleans) to AgentDoc format (numbers 0/1)
+      const updateData: Partial<AgentDoc> = {
+        agent_name: values.agent_name,
+        provider: values.provider,
+        model: values.model,
+        temperature: values.temperature,
+        top_p: values.top_p,
+        async: values.async ? 1 : 0,
+        disabled: values.disabled ? 1 : 0,
+        allow_chat: values.allow_chat ? 1 : 0,
+        persist_conversation: values.persist_conversation ? 1 : 0,
+        instructions: values.instructions,
+      };
+
+      await updateAgent(id, updateData);
+      toast.success('Agent updated successfully!');
+    } catch (error) {
+      console.error('Error updating agent:', error);
+      toast.error('Failed to update agent. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleOptimizePrompt = () => {
@@ -445,9 +472,9 @@ export function AgentFormPage() {
               <MessageSquare className="w-4 h-4 mr-2" />
               Chat
             </Button>
-            <Button size="sm" onClick={form.handleSubmit(onSubmit)}>
+            <Button size="sm" onClick={form.handleSubmit(onSubmit)} disabled={saving || !id}>
               <Save className="w-4 h-4 mr-2" />
-              Save
+              {saving ? 'Saving...' : 'Save'}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -629,6 +656,50 @@ export function AgentFormPage() {
 
               {/* Behavior Tab */}
               <TabsContent value="behavior" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Execution Settings</CardTitle>
+                    <CardDescription>Configure agent execution behavior</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="async"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Async Execution</FormLabel>
+                            <FormDescription>
+                              Run agent asynchronously
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="disabled"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">Disabled</FormLabel>
+                            <FormDescription>
+                              Disable this agent
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
                 <Card>
                   <CardHeader>
                     <CardTitle>Conversation Settings</CardTitle>
