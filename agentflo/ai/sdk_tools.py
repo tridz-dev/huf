@@ -76,7 +76,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "agentflo.ai.sdk_tools.handle_attach_file_to_document"
                     elif function_doc.types == "Speech to Text":
                         function_path = "agentflo.ai.sdk_tools.handle_speech_to_text"
-
+                    elif function_doc.types == "Perplexity Search":
+                        function_path = "agentflo.ai.sdk_tools.handle_perplexity_search"
                     else:
                         continue
 
@@ -1026,4 +1027,81 @@ def handle_speech_to_text(
         return {"success": False, "error": f"Transcriptions API failed: {str(e)}"}
     except Exception as e:
         frappe.log_error(f"Speech to Text error: {frappe.get_traceback()}", "SpeechToText")
+        return {"success": False, "error": str(e)}
+
+
+def handle_perplexity_search(
+    query: str,
+    max_results: int = 5,
+    **kwargs
+):
+    """
+    Perform a search using Perplexity AI via LiteLLM's search functionality.
+    
+    Reads API key from site_config.
+    
+    Args:
+        query: The search query string
+        max_results: Maximum number of results (default: 5)
+    
+    Returns:
+        dict: Search results with success status
+    """
+    try:
+        from litellm import search
+        
+        # Get API key from site_config
+        site_config = frappe.get_site_config()
+        api_key = site_config.get("perplexity_api_key")
+        
+        if not api_key:
+            return {
+                "success": False,
+                "error": "Perplexity API key not found in site_config. Please set 'perplexity_api_key' in site_config."
+            }
+        
+        # Set environment variable for LiteLLM
+        import os
+        os.environ["PERPLEXITYAI_API_KEY"] = api_key
+        
+        # Prepare search parameters
+        search_kwargs = {
+            "query": query,
+            "search_provider": "perplexity",
+            "max_results": max_results,
+        }
+        
+        # Perform search
+        response = search(**search_kwargs)
+        
+        # Format response
+        if isinstance(response, dict):
+            results = response.get("results", [])
+            return {
+                "success": True,
+                "query": query,
+                "results": results,
+                "total_results": len(results),
+            }
+        elif isinstance(response, list):
+            return {
+                "success": True,
+                "query": query,
+                "results": response,
+                "total_results": len(response),
+            }
+        else:
+            return {
+                "success": True,
+                "query": query,
+                "results": response,
+            }
+            
+    except ImportError:
+        return {
+            "success": False,
+            "error": "LiteLLM is not installed. Please install it using: pip install litellm"
+        }
+    except Exception as e:
+        frappe.log_error(f"Perplexity Search error: {frappe.get_traceback()}", "PerplexitySearch")
         return {"success": False, "error": str(e)}

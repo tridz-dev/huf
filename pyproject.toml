@@ -10,6 +10,7 @@ dynamic = ["version"]
 dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
     "openai-agents",
+    "litellm>=1.0.0",
 ]
 
 [build-system]

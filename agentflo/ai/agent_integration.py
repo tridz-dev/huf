@@ -328,7 +328,8 @@ def run_agent_sync(
         context = {
             "channel": channel_id,
             "external_id": external_id,
-            "conversation_history": history
+            "conversation_history": history,
+            "agent_name": agent_name  # Required for LiteLLM provider to access Agent DocType settings
         }
 
         enhanced_prompt = f"""
@@ -362,8 +363,6 @@ def run_agent_sync(
                 log_tool_call(run_doc, conversation, raw, tool_result=tool_result, is_output=True)
         
         final_output = getattr(result, "final_output", str(result))
-        print(result,".....................result")
-        print(final_output,".....................final_output")
         usage = getattr(result, "usage", None)
         if usage:
             input_tokens = 0

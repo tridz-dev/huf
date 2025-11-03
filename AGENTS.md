@@ -20,6 +20,7 @@ The application is built on the Frappe Framework (Python) and uses the standard 
 ## Security Considerations
 -   Do not commit secrets or API keys. The `AI Provider` DocType stores API keys in the database using the `Password` field type, which encrypts the value.
 -   Custom functions exposed to agents via `Agent Tool Function` must be carefully designed. They are executed with the permissions of the user running the agent. Always validate inputs and perform permission checks inside custom tool functions.
+-   **LiteLLM Dependency**: The `litellm` package (>=1.0.0) is required and listed in `pyproject.toml`. It will be automatically installed when running `bench setup requirements`. The post-install hook (`agentflo/install.py`) checks for LiteLLM and provides guidance if it's missing.
 
 ## Detailed Architecture
 
@@ -27,12 +28,13 @@ This section provides a deep dive into the application's structure, including Do
 
 ### Core Concepts
 
-1.  **Provider & Model**: You start by defining an `AI Provider` (e.g., OpenAI) and the `AI Model` you want to use (e.g., `gpt-4`).
-2.  **Tools**: Agents need tools to be useful. An `Agent Tool Function` defines a specific action the agent can perform, such as fetching a document, creating a new one, or calling a custom Python function.
-3.  **Agent**: An `Agent` is the central entity. You give it a name, instructions (prompt), and assign it a set of tools. Agents can be configured for scheduling, doc events, or chat.
-4.  **Conversation**: When a user interacts with an agent, a `Agent Conversation` is created to track the entire interaction. Each message back-and-forth is stored as an `Agent Message`.
-5.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run` with token usage and cost tracking.
-6.  **Chat Interface**: `Agent Chat` provides a real-time chat UI for conversational agents with markdown rendering.
+1.  **Provider & Model**: You start by defining an `AI Provider` (e.g., OpenAI, Anthropic, Google) and the `AI Model` you want to use (e.g., `gpt-4-turbo`, `claude-3-opus`). AgentFlo uses LiteLLM to provide unified access to 100+ LLM providers through a single interface.
+2.  **Unified Provider Architecture**: All LLM providers are accessed via LiteLLM, which provides automatic model name normalization, built-in retry logic, cost tracking, and error handling. Model names can be specified in user-friendly format (e.g., `gpt-4-turbo`) and are automatically normalized to LiteLLM format (e.g., `openai/gpt-4-turbo`).
+3.  **Tools**: Agents need tools to be useful. An `Agent Tool Function` defines a specific action the agent can perform, such as fetching a document, creating a new one, or calling a custom Python function.
+4.  **Agent**: An `Agent` is the central entity. You give it a name, instructions (prompt), temperature, top_p, and assign it a set of tools. Each agent has its own individual settings that are read directly from the Agent DocType. Agents can be configured for scheduling, doc events, or chat.
+5.  **Conversation**: When a user interacts with an agent, a `Agent Conversation` is created to track the entire interaction. Each message back-and-forth is stored as an `Agent Message`.
+6.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run` with token usage and cost tracking.
+7.  **Chat Interface**: `Agent Chat` provides a real-time chat UI for conversational agents with markdown rendering.
 
 ### Doctypes
 
@@ -40,7 +42,7 @@ Here is a detailed breakdown of the DocTypes used in AgentFlo.
 
 #### 1. AI Provider
 
-Stores credentials for different AI service providers.
+Stores credentials for different AI service providers. AgentFlo uses LiteLLM to provide unified access to 100+ LLM providers, including OpenAI, Anthropic, Google, OpenRouter, xAI (Grok), Mistral, and many more.
 
 -   **Python Class**: `AIProvider(Document)`
 -   **File**: `agentflo/agentflo/doctype/ai_provider/ai_provider.py`
@@ -49,12 +51,23 @@ Stores credentials for different AI service providers.
 
 | Label          | Fieldname      | Type       | Description                               |
 | :------------- | :------------- | :--------- | :---------------------------------------- |
-| **Provide Name** | `provide_name` | Data       | The unique name of the provider (e.g., OpenAI). |
-| **API Key**    | `api_key`      | Password   | The API key for the provider.             |
+| **Provide Name** | `provide_name` | Data       | The unique name of the provider (e.g., OpenAI, Anthropic, Google, OpenRouter). Provider names are case-insensitive and automatically routed to LiteLLM. |
+| **API Key**    | `api_key`      | Password   | The API key for the provider. Stored securely using Frappe's Password field type.             |
+
+**Supported Providers via LiteLLM:**
+- OpenAI (OpenAI, OpenRouter with OpenAI models)
+- Anthropic (Claude models)
+- Google (Gemini models)
+- OpenRouter (access to 500+ models)
+- xAI (Grok models)
+- Mistral
+- And 100+ other providers supported by LiteLLM
+
+For providers not in the standard list, you can use LiteLLM format in the model name (e.g., `xai/grok-4` for Grok, `mistral/mistral-large` for Mistral).
 
 #### 2. AI Model
 
-Defines a specific AI model available from a provider.
+Defines a specific AI model available from a provider. Model names are automatically normalized to LiteLLM format, so you can use user-friendly names (e.g., `gpt-4-turbo`) or LiteLLM format (e.g., `openai/gpt-4-turbo`).
 
 -   **Python Class**: `AIModel(Document)`
 -   **File**: `agentflo/agentflo/doctype/ai_model/ai_model.py`
@@ -63,8 +76,13 @@ Defines a specific AI model available from a provider.
 
 | Label        | Fieldname    | Type | Description                               |
 | :----------- | :----------- | :--- | :---------------------------------------- |
-| **Model Name** | `model_name` | Data | The name of the model (e.g., `gpt-4-turbo`). |
-| **Provider**   | `provider`   | Link | A link to the `AI Provider` DocType.      |
+| **Model Name** | `model_name` | Data | The name of the model (e.g., `gpt-4-turbo`, `claude-3-opus`, `gpt-5-mini`). Can be specified in user-friendly format - the system automatically adds provider prefix. Alternatively, use LiteLLM format (e.g., `openai/gpt-4-turbo`) for explicit provider specification. |
+| **Provider**   | `provider`   | Link | A link to the `AI Provider` DocType. The provider name is used to determine the provider prefix for model normalization.      |
+
+**Model Name Normalization:**
+- User-friendly names: `gpt-4-turbo` → automatically normalized to `openai/gpt-4-turbo`
+- Provider prefix mapping: `gemini` → `google`, `grok` → `xai`
+- LiteLLM format: `openai/gpt-4-turbo` → used as-is (no normalization needed)
 
 #### 3. Agent Tool Function
 
@@ -187,7 +205,7 @@ This file contains the main logic for creating and running agents.
     -   This class is responsible for preparing an agent for execution.
     -   `__init__(self, agent_name, ...)`: Initializes the manager by loading the `Agent` DocType, the `AI Provider` settings, and setting up the tools.
     -   `_setup_tools(self)`: Dynamically creates and loads the toolset for the agent. It combines built-in CRUD tools with custom tools defined in `Agent Tool Function`.
-    -   `create_agent(self)`: Constructs an `Agent` object from the `agents` SDK, passing the instructions, model, and tools.
+    -   `create_agent(self)`: Constructs an `Agent` object from the `agents` SDK, passing the instructions, model, tools, and model_settings (temperature, top_p) from the Agent DocType.
 -   **Method: `run_agent_sync(...)`**
     -   This is the main whitelisted Frappe API endpoint for running an agent.
     -   It orchestrates the entire process:
@@ -196,9 +214,10 @@ This file contains the main logic for creating and running agents.
         3.  Adds the user's new message to the conversation.
         4.  Creates an `Agent Run` document to log the execution.
         5.  Initializes `AgentManager` to prepare the agent.
-        6.  Calls `Runner.run()` from the `agents` SDK to execute the agent with the prompt and conversation history.
-        7.  Adds the agent's final response to the conversation.
-        8.  Updates the `Agent Run` status to `Success` or `Failed`.
+        6.  Creates context dictionary with `agent_name` (required for LiteLLM provider to access Agent DocType settings).
+        7.  Calls `RunProvider.run()` which routes to the appropriate provider (LiteLLM for most providers).
+        8.  Adds the agent's final response to the conversation.
+        9.  Updates the `Agent Run` status to `Success` or `Failed`.
 
 #### `conversation_manager.py`
 
@@ -228,6 +247,41 @@ This file contains the low-level functions that directly perform Frappe database
 
 -   **Methods**: `get_document`, `create_document`, `update_document`, `delete_document`, `submit_document`, `get_list`, etc.
 -   These functions are the final step in the tool-use chain, wrapping `frappe.client` or `frappe.get_doc` calls to ensure data is fetched, created, or modified correctly and with proper permissions checks.
+
+#### `run.py`
+
+This file provides the central routing layer for AI providers.
+
+-   **Class: `RunProvider`**
+    -   Central routing layer that directs provider requests to the appropriate implementation.
+    -   `run(agent, enhanced_prompt, provider, model, context=None)`: Routes provider requests to LiteLLM for supported providers (OpenAI, Anthropic, Google, Gemini, OpenRouter).
+    -   **Provider Routing**: Automatically routes standard providers to LiteLLM unified provider.
+    -   **Fallback Mechanism**: For unsupported providers, attempts to load custom provider modules.
+    -   **Error Handling**: Provides helpful error messages if LiteLLM is not installed or if provider is not found.
+
+#### `providers/litellm.py`
+
+This file implements the unified LiteLLM provider that handles all LLM interactions.
+
+-   **Function: `run(agent, enhanced_prompt, provider, model, context=None)`**
+    -   Main async function that handles LLM interactions via LiteLLM.
+    -   **Agent Settings Access**: Reads temperature and top_p directly from Agent DocType (priority 1), falls back to `agent.model_settings` (priority 2), or uses defaults.
+    -   **Model Normalization**: Automatically normalizes model names to LiteLLM format (e.g., `gpt-4-turbo` → `openai/gpt-4-turbo`).
+    -   **Multi-turn Tool Calling**: Supports multiple rounds of tool calling in a single agent run.
+    -   **Error Handling**: Specific handling for `InternalServerError`, `RateLimitError`, and general `APIError`.
+    -   **Parameter Handling**: Automatically drops unsupported parameters for models with restrictions (e.g., gpt-5 models only support temperature=1).
+    -   **API Key Management**: Handles API key setup for different providers, including special handling for OpenRouter (requires environment variable).
+-   **Function: `_normalize_model_name(model, provider)`**
+    -   Normalizes model names to LiteLLM format by adding provider prefix.
+    -   Handles provider aliases (e.g., `gemini` → `google`, `grok` → `xai`).
+    -   Supports both user-friendly names and LiteLLM format names.
+-   **Function: `_setup_api_key(provider_name, api_key, completion_kwargs)`**
+    -   Sets up API key for LiteLLM completion call.
+    -   Handles special cases like OpenRouter (requires `OPENROUTER_API_KEY` environment variable).
+-   **Function: `_execute_tool_call(tool, args_json)`**
+    -   Executes a tool call and returns the result.
+-   **Function: `_find_tool(agent, tool_name)`**
+    -   Finds a tool by name in the agent's tools list.
 
 #### `agent_chat.py`
 
