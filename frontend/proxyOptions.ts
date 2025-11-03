@@ -56,10 +56,10 @@ const proxyOptions: Record<string, ProxyOptions> = {
     changeOrigin: true,
     secure: false,
     ws: true,
-    router(req) {
-      const reqSite = req.headers.host?.split(':')[0] || site_name;
-      return `http://${reqSite}:${webserver_port}`;
-    },
+    // router(req) {
+    //   const reqSite = req.headers.host?.split(':')[0] || site_name;
+    //   return `http://${reqSite}:${webserver_port}`;
+    // },
   },
 };
 

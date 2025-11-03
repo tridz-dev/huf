@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { auth } from '@/lib/frappe-sdk';
 
-interface User {
-  name: string;
-  email?: string;
-  full_name?: string;
-}
+// interface User {
+//   name: string;
+//   email?: string;
+//   full_name?: string;
+// }
 
 type LoggedInUser = string;
 
@@ -18,6 +18,8 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
+const HOME_URL = '/';
+const LOGIN_URL = '/login/?redirect_to=';
 
 interface UserProviderProps {
   children: ReactNode;
@@ -31,21 +33,20 @@ export function UserProvider({ children }: UserProviderProps) {
     try {
       setIsLoading(true);
       const loggedUser = await auth.getLoggedInUser();
-      
       if (loggedUser) {
         setUser(loggedUser);
       } else {
         setUser(null);
         // Redirect to login with return URL
-        const redirectTo = encodeURIComponent('/huf');
-        window.location.href = `/login/?redirect_to=${redirectTo}`;
+        const redirectTo = encodeURIComponent(HOME_URL);
+        window.location.href = `${LOGIN_URL}${redirectTo}`;
       }
     } catch (error) {
       console.error('Error checking authentication:', error);
       setUser(null);
       // Redirect to login on error
-      const redirectTo = encodeURIComponent('/huf');
-      window.location.href = `/login/?redirect_to=${redirectTo}`;
+      const redirectTo = encodeURIComponent(HOME_URL);
+      window.location.href = `${LOGIN_URL}${redirectTo}`;
     } finally {
       setIsLoading(false);
     }
