@@ -76,7 +76,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "agentflo.ai.sdk_tools.handle_attach_file_to_document"
                     elif function_doc.types == "Speech to Text":
                         function_path = "agentflo.ai.sdk_tools.handle_speech_to_text"
-
+                    elif function_doc.types == "Google Search":
+                        function_path = "agentflo.ai.sdk_tools.handle_google_search"
                     else:
                         continue
 
@@ -1026,4 +1027,115 @@ def handle_speech_to_text(
         return {"success": False, "error": f"Transcriptions API failed: {str(e)}"}
     except Exception as e:
         frappe.log_error(f"Speech to Text error: {frappe.get_traceback()}", "SpeechToText")
+        return {"success": False, "error": str(e)}
+
+
+def handle_google_search(
+    query: str,
+    max_results: int = 10,
+    search_domain_filter: list = None,
+    date_restrict: str = None,
+    language_restrict: str = None,
+    safe: str = "active",
+    exact_terms: str = None,
+    file_type: str = None,
+    **kwargs
+):
+    """
+    Perform a Google search using LiteLLM's search functionality.
+    
+    Reads API key and search engine ID from site_config.
+    
+    Args:
+        query: The search query string
+        max_results: Maximum number of results (default: 10)
+        search_domain_filter: Optional list of domains to restrict search to
+        date_restrict: Optional date restriction (e.g., 'm6', 'd7')
+        language_restrict: Optional language restriction (e.g., 'lang_en')
+        safe: Search safety level ('active' or 'off', default: 'active')
+        exact_terms: Optional phrase that all documents must contain
+        file_type: Optional file type to restrict results to (e.g., 'pdf')
+    
+    Returns:
+        dict: Search results with success status
+    """
+    try:
+        from litellm import search
+        
+        # Get API key and engine ID from site_config
+        site_config = frappe.get_site_config()
+        api_key = site_config.get("google_pse_api_key")
+        engine_id = site_config.get("google_pse_engine_id")
+        
+        if not api_key:
+            return {
+                "success": False,
+                "error": "Google PSE API key not found in site_config. Please set 'google_pse_api_key' in site_config."
+            }
+        
+        if not engine_id:
+            return {
+                "success": False,
+                "error": "Google PSE Engine ID not found in site_config. Please set 'google_pse_engine_id' in site_config."
+            }
+        
+        # Set environment variables for LiteLLM
+        import os
+        os.environ["GOOGLE_PSE_API_KEY"] = api_key
+        os.environ["GOOGLE_PSE_ENGINE_ID"] = engine_id
+        
+        # Prepare search parameters
+        search_kwargs = {
+            "query": query,
+            "search_provider": "google_pse",
+            "max_results": max_results,
+        }
+        
+        # Add optional Google PSE-specific parameters
+        if search_domain_filter:
+            search_kwargs["search_domain_filter"] = search_domain_filter
+        if date_restrict:
+            search_kwargs["dateRestrict"] = date_restrict
+        if language_restrict:
+            search_kwargs["lr"] = language_restrict
+        if safe:
+            search_kwargs["safe"] = safe
+        if exact_terms:
+            search_kwargs["exactTerms"] = exact_terms
+        if file_type:
+            search_kwargs["fileType"] = file_type
+        
+        # Perform search
+        response = search(**search_kwargs)
+        
+        # Format response
+        if isinstance(response, dict):
+            results = response.get("results", [])
+            return {
+                "success": True,
+                "query": query,
+                "results": results,
+                "total_results": len(results),
+            }
+        elif isinstance(response, list):
+            return {
+                "success": True,
+                "query": query,
+                "results": response,
+                "total_results": len(response),
+            }
+        else:
+            return {
+                "success": True,
+                "query": query,
+                "results": response,
+            }
+            
+    except ImportError:
+        return {
+            "success": False,
+            "error": "LiteLLM is not installed. Please install it using: pip install litellm"
+        }
+    except Exception as e:
+        frappe.log_error(f"Google Search error: {frappe.get_traceback()}", "GoogleSearch")
         return {"success": False, "error": str(e)}
