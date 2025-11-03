@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.65rem;
+    --background: 100% 0 0;
+    --foreground: 14.1% 0.005 285.823;
+    --card: 100% 0 0;
+    --card-foreground: 14.1% 0.005 285.823;
+    --popover: 100% 0 0;
+    --popover-foreground: 14.1% 0.005 285.823;
+    --primary: 54.1% 0.281 293.009;
+    --primary-foreground: 96.9% 0.016 293.756;
+    --secondary: 96.7% 0.001 286.375;
+    --secondary-foreground: 21% 0.006 285.885;
+    --muted: 96.7% 0.001 286.375;
+    --muted-foreground: 55.2% 0.016 285.938;
+    --accent: 96.7% 0.001 286.375;
+    --accent-foreground: 21% 0.006 285.885;
+    --destructive: 57.7% 0.245 27.325;
+    --border: 92% 0.004 286.32;
+    --input: 92% 0.004 286.32;
+    --ring: 70.2% 0.183 293.541;
+    --chart-1: 81.1% 0.111 293.571;
+    --chart-2: 60.6% 0.25 292.717;
+    --chart-3: 54.1% 0.281 293.009;
+    --chart-4: 49.1% 0.27 292.581;
+    --chart-5: 43.2% 0.232 292.759;
+    --sidebar: 98.5% 0 0;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 0 0% 98%;
+  }
+
+  .dark {
+    --background: 14.1% 0.005 285.823;
+    --foreground: 98.5% 0 0;
+    --card: 21% 0.006 285.885;
+    --card-foreground: 98.5% 0 0;
+    --popover: 21% 0.006 285.885;
+    --popover-foreground: 98.5% 0 0;
+    --primary: 60.6% 0.25 292.717;
+    --primary-foreground: 96.9% 0.016 293.756;
+    --secondary: 27.4% 0.006 286.033;
+    --secondary-foreground: 98.5% 0 0;
+    --muted: 27.4% 0.006 286.033;
+    --muted-foreground: 70.5% 0.015 286.067;
+    --accent: 27.4% 0.006 286.033;
+    --accent-foreground: 98.5% 0 0;
+    --destructive: 70.4% 0.191 22.216;
+    --border: 100% 0 0 / 10%;
+    --input: 100% 0 0 / 15%;
+    --ring: 38% 0.189 293.745;
+    --chart-1: 81.1% 0.111 293.571;
+    --chart-2: 60.6% 0.25 292.717;
+    --chart-3: 54.1% 0.281 293.009;
+    --chart-4: 49.1% 0.27 292.581;
+    --chart-5: 43.2% 0.232 292.759;
+    --sidebar: 21% 0.006 285.885;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 240 5.9% 10%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html, body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+  }
+  #root {
+    height: 100%;
+    width: 100%;
+  }
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

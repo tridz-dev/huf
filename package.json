@@ -1,0 +1,13 @@
+{
+    "private": true,
+    "type": "module",
+    "name": "huf",
+    "version": "0.0.1",
+    "description": "Messaging Application",
+    "main": "index.js",
+    "scripts": {
+      "dev": "cd frontend && yarn dev",
+      "build": "cd frontend && yarn build",
+      "postinstall": "cd frontend && yarn install"
+    }
+}

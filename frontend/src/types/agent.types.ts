@@ -1,0 +1,121 @@
+export type AIProvider = {
+  name: string;
+  provider_name: string;
+};
+
+export type AIModel = {
+  name: string;
+  model_name: string;
+  provider: string;
+};
+
+export type AgentToolFunctionRef = {
+  name: string;
+  tool_name: string;
+  description?: string;
+  types?: "Get Document" | "Create Document" | "Custom Function";
+  reference_doctype?: string;
+  function_path?: string;
+};
+
+export type AgentCategory = "Sales" | "Support" | "Operations" | "Marketing" | "Finance" | "HR" | "General";
+export type AgentVisibility = "Private" | "Team" | "Global";
+export type AgentEnvironment = "Dev" | "Prod";
+export type AgentStatus = "Draft" | "Active" | "Archived";
+
+export type ScheduledInterval = "Hourly" | "Daily" | "Weekly" | "Monthly" | "Yearly";
+export type DocEventType = "before_insert" | "after_insert" | "validate" | "before_save" | "after_save" | "before_submit" | "on_submit" | "after_submit" | "on_cancel" | "before_rename" | "after_rename" | "on_trash" | "after_delete";
+export type TriggerType = "Schedule" | "Doc Event" | "Webhook" | "App Event" | "Manual";
+
+export type AgentTrigger = {
+  id: string;
+  trigger_type: TriggerType;
+  active: boolean;
+
+  // Schedule fields
+  schedule_interval?: ScheduledInterval;
+  interval_count?: number;
+  last_execution?: string;
+  next_execution?: string;
+
+  // Doc Event fields
+  reference_doctype?: string;
+  doc_event?: DocEventType;
+  condition?: string;
+
+  // Webhook fields
+  webhook_url?: string;
+  webhook_slug?: string;
+
+  // App Event fields
+  app_name?: string;
+  event_name?: string;
+
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type Agent = {
+  name: string;
+  agent_name: string;
+  provider: string;
+  model: string;
+  instructions: string;
+  temperature?: number;
+  top_p?: number;
+  async?: boolean;
+  disabled?: boolean;
+  allow_chat?: boolean;
+  persist_conversation?: boolean;
+  triggers: AgentTrigger[];
+  tags?: string[];
+  category?: AgentCategory;
+  visibility?: AgentVisibility;
+  environment?: AgentEnvironment;
+  status?: AgentStatus;
+  tools: AgentToolFunctionRef[];
+  stats?: {
+    conversations: number;
+    lastRunAt?: string;
+    successRate?: number;
+    avgCost?: number;
+    avgLatencyMs?: number;
+    token24h?: { input: number; output: number; total: number };
+  };
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type AgentConversation = {
+  name: string;
+  title: string;
+  agent: string;
+  session_id?: string;
+  is_active: boolean;
+  total_messages: number;
+  last_message_at?: string;
+};
+
+export type AgentMessage = {
+  name: string;
+  conversation: string;
+  role: "user" | "agent" | "system";
+  content: string;
+  created_at: string;
+};
+
+export type AgentRun = {
+  name: string;
+  conversation: string;
+  agent: string;
+  prompt: string;
+  response?: string;
+  status: "Started" | "Queued" | "Success" | "Failed";
+  error_message?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  total_cost?: number;
+  latency_ms?: number;
+  created_at: string;
+};
