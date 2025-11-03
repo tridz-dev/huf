@@ -52,7 +52,7 @@ export function ItemCard({
           <CardDescription className="text-sm line-clamp-2 min-h-[2.5rem]">{description}</CardDescription>
         )}
         {status && (
-          <CardAction>
+          <CardAction className="top-5">
             <Badge variant={status.variant || 'default'} className="text-xs">
               {status.label}
             </Badge>

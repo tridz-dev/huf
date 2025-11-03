@@ -19,7 +19,7 @@ export function AgentFormPageWrapper() {
   }, [id]);
 
   const breadcrumbs = [
-    { label: 'Agents', href: '/agents' },
+    { label: 'Agents', href: '/huf/agents' },
     { label: agentName },
   ];
 

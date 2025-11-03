@@ -3,13 +3,25 @@ import { doctype } from '@/data/doctypes';
 import type { AgentDoc } from '@/types/agent.types';
 
 /**
- * Fetch all agents from Frappe
+ * Fields needed for the agents list page
+ */
+const AGENT_LIST_FIELDS = [
+  'name',
+  'agent_name',
+  'instructions',
+  'model',
+  'disabled',
+  'last_execution',
+];
+
+/**
+ * Fetch agents from Frappe
  */
 export async function getAgents(): Promise<AgentDoc[]> {
   try {
     const agents = await db.getDocList(doctype.Agent, {
-      fields: ['*'],
-      limit: 20,
+      fields: AGENT_LIST_FIELDS,
+      limit: 1000,
     });
     return agents as AgentDoc[];
   } catch (error) {
@@ -20,6 +32,7 @@ export async function getAgents(): Promise<AgentDoc[]> {
 
 /**
  * Fetch a single agent by name
+ * Fetches all fields for detail view
  */
 export async function getAgent(name: string): Promise<AgentDoc> {
   try {
@@ -30,4 +43,3 @@ export async function getAgent(name: string): Promise<AgentDoc> {
     throw error;
   }
 }
-
