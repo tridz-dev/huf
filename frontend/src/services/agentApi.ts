@@ -45,6 +45,20 @@ export async function getAgent(name: string): Promise<AgentDoc> {
 }
 
 /**
+ * Create a new agent document
+ */
+export async function createAgent(data: Partial<AgentDoc>): Promise<AgentDoc> {
+  try {
+    // Frappe JS SDK uses createDoc method
+    const newAgent = await db.createDoc(doctype.Agent, data);
+    return newAgent as AgentDoc;
+  } catch (error) {
+    console.error('Error creating agent:', error);
+    throw error;
+  }
+}
+
+/**
  * Update an agent document
  */
 export async function updateAgent(name: string, data: Partial<AgentDoc>): Promise<AgentDoc> {

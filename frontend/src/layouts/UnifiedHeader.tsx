@@ -1,6 +1,6 @@
 import { Search } from 'lucide-react';
 import { Input } from '../components/ui/input';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ReactNode } from 'react';
 import {
   Breadcrumb,
@@ -45,7 +45,9 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
                     {index === breadcrumbs.length - 1 ? (
                       <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
                     ) : crumb.href ? (
-                      <BreadcrumbLink href={crumb.href}>{crumb.label}</BreadcrumbLink>
+                      <BreadcrumbLink href={crumb.href} asChild>
+                        <Link to={crumb.href}>{crumb.label}</Link>
+                      </BreadcrumbLink>
                     ) : (
                       <span>{crumb.label}</span>
                     )}

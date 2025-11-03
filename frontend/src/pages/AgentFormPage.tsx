@@ -68,7 +68,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
 import { AgentTrigger, TriggerType, ScheduledInterval, DocEventType, AIProvider, AIModel } from '../types/agent.types';
-import { getAgent, updateAgent } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import type { AgentDoc } from '../types/agent.types';
 
@@ -141,7 +141,8 @@ const mockMCPs = [
 export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const isNew = id === 'new';
+  const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
@@ -213,9 +214,9 @@ export function AgentFormPage() {
     }
   }, [watchProvider, form]);
 
-  // Load agent data when id is available
+  // Load agent data when id is available (only for edit mode)
   useEffect(() => {
-    if (id) {
+    if (id && !isNew) {
       getAgent(id).then((data: AgentDoc) => {
         form.reset({
           agent_name: data.agent_name || '',
@@ -237,21 +238,17 @@ export function AgentFormPage() {
         toast.error('Failed to load agent details');
         setLoading(false);
       });
-    } else {
+    } else if (isNew) {
+      // New agent mode - form already has default values
       setLoading(false);
     }
-  }, [id, form]);
+  }, [id, isNew, form]);
 
   const onSubmit = async (values: AgentFormValues) => {
-    if (!id) {
-      toast.error('Agent ID is required');
-      return;
-    }
-
     setSaving(true);
     try {
       // Convert form values (booleans) to AgentDoc format (numbers 0/1)
-      const updateData: Partial<AgentDoc> = {
+      const agentData: Partial<AgentDoc> = {
         agent_name: values.agent_name,
         provider: values.provider,
         model: values.model,
@@ -264,11 +261,20 @@ export function AgentFormPage() {
         instructions: values.instructions,
       };
 
-      await updateAgent(id, updateData);
-      toast.success('Agent updated successfully!');
+      if (isNew) {
+        // Create new agent
+        const newAgent = await createAgent(agentData);
+        toast.success('Agent created successfully!');
+        // Navigate to the edit page with the new agent's ID
+        navigate(`/agents/${newAgent.name}`);
+      } else if (id) {
+        // Update existing agent
+        await updateAgent(id, agentData);
+        toast.success('Agent updated successfully!');
+      }
     } catch (error) {
-      console.error('Error updating agent:', error);
-      toast.error('Failed to update agent. Please try again.');
+      console.error(`Error ${isNew ? 'creating' : 'updating'} agent:`, error);
+      toast.error(`Failed to ${isNew ? 'create' : 'update'} agent. Please try again.`);
     } finally {
       setSaving(false);
     }
@@ -472,9 +478,9 @@ export function AgentFormPage() {
               <MessageSquare className="w-4 h-4 mr-2" />
               Chat
             </Button>
-            <Button size="sm" onClick={form.handleSubmit(onSubmit)} disabled={saving || !id}>
+            <Button size="sm" onClick={form.handleSubmit(onSubmit)} disabled={saving}>
               <Save className="w-4 h-4 mr-2" />
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? (isNew ? 'Creating...' : 'Saving...') : (isNew ? 'Create' : 'Save')}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -483,27 +489,31 @@ export function AgentFormPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleDuplicate}>
-                  <Copy className="w-4 h-4 mr-2" />
-                  Duplicate
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleViewLogs}>
-                  <FileText className="w-4 h-4 mr-2" />
-                  View Logs
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => form.setValue('disabled', !watchDisabled)}
-                >
-                  <Switch
-                    checked={watchDisabled}
-                    className="mr-2 pointer-events-none"
-                  />
-                  Disable
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDelete} className="text-destructive">
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
+                {!isNew && (
+                  <>
+                    <DropdownMenuItem onClick={handleDuplicate}>
+                      <Copy className="w-4 h-4 mr-2" />
+                      Duplicate
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleViewLogs}>
+                      <FileText className="w-4 h-4 mr-2" />
+                      View Logs
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => form.setValue('disabled', !watchDisabled)}
+                    >
+                      <Switch
+                        checked={watchDisabled}
+                        className="mr-2 pointer-events-none"
+                      />
+                      Disable
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDelete} className="text-destructive">
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
