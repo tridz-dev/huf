@@ -8,7 +8,7 @@ import type { AgentDoc } from '@/types/agent.types';
 const AGENT_LIST_FIELDS = [
   'name',
   'agent_name',
-  'instructions',
+  'description',
   'model',
   'disabled',
   'last_run',
