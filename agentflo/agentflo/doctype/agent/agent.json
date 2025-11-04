@@ -39,7 +39,7 @@
   "instructions",
   "tools_and_mcp_tab",
   "agent_tool",
-  "metadate_tab",
+  "metadata_tab",
   "last_run",
   "total_run"
  ],
@@ -263,25 +263,27 @@
    "label": "Description"
   },
   {
-   "fieldname": "metadate_tab",
-   "fieldtype": "Tab Break",
-   "label": "Metadate"
-  },
-  {
    "fieldname": "last_run",
    "fieldtype": "Datetime",
-   "label": "Last Run"
+   "label": "Last Run",
+   "read_only": 1
   },
   {
    "fieldname": "total_run",
    "fieldtype": "Int",
-   "label": "Total Run"
+   "label": "Total Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "metadata_tab",
+   "fieldtype": "Tab Break",
+   "label": "Metadata"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-04 13:50:25.890937",
+ "modified": "2025-11-04 14:03:31.195755",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
