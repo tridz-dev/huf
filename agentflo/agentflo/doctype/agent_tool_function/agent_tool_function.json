@@ -135,11 +135,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
-<<<<<<< Updated upstream
- "modified": "2025-11-04 10:35:45.143045",
-=======
  "modified": "2025-11-04 12:32:41.637905",
->>>>>>> Stashed changes
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Tool Function",
