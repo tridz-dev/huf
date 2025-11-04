@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -151,6 +151,7 @@ export function AgentFormPage() {
   const [optimizingPrompt, setOptimizingPrompt] = useState(false);
   const [showToolsModal, setShowToolsModal] = useState(false);
   const [selectedTools, setSelectedTools] = useState<AgentToolFunctionRef[]>([]);
+  const [initialTools, setInitialTools] = useState<AgentToolFunctionRef[]>([]); // Track initial tools state
   const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
 
   const form = useForm<AgentFormValues>({
@@ -182,8 +183,24 @@ export function AgentFormPage() {
   const watchDisabled = form.watch('disabled');
   const watchTriggerType = triggerForm.watch('trigger_type');
   const isDirty = form.formState.isDirty;
-  // Show save button for new agents or when form is dirty
-  const showSaveButton = isNew || isDirty;
+  
+  // Check if tools have changed by comparing tool names
+  const toolsChanged = useMemo(() => {
+    if (isNew) return selectedTools.length > 0; // New agent with tools selected
+    const initialToolNames = new Set(initialTools.map((t) => t.name));
+    const currentToolNames = new Set(selectedTools.map((t) => t.name));
+    
+    if (initialToolNames.size !== currentToolNames.size) return true;
+    
+    for (const name of currentToolNames) {
+      if (!initialToolNames.has(name)) return true;
+    }
+    
+    return false;
+  }, [selectedTools, initialTools, isNew]);
+  
+  // Show save button for new agents, when form is dirty, or when tools have changed
+  const showSaveButton = isNew || isDirty || toolsChanged;
 
   // Load providers, models, and tool types on mount
   useEffect(() => {
@@ -245,16 +262,20 @@ export function AgentFormPage() {
               .then((allTools) => {
                 const tools = allTools.filter((tool) => toolNames.includes(tool.name));
                 setSelectedTools(tools);
+                setInitialTools(tools); // Store initial tools state for change detection
               })
               .catch((error) => {
                 console.error('Error loading tool details:', error);
                 setSelectedTools([]);
+                setInitialTools([]);
               });
           } else {
             setSelectedTools([]);
+            setInitialTools([]);
           }
         } else {
           setSelectedTools([]);
+          setInitialTools([]);
         }
         // Triggers are not stored in AgentDoc directly, will be empty for now
         setTriggers([]);
@@ -267,6 +288,7 @@ export function AgentFormPage() {
     } else if (isNew) {
       // New agent mode - form already has default values
       setSelectedTools([]);
+      setInitialTools([]);
       setLoading(false);
     }
   }, [id, isNew, form]);
@@ -328,6 +350,8 @@ export function AgentFormPage() {
           persist_conversation: values.persist_conversation,
           instructions: values.instructions,
         });
+        // Reset tools state after successful update to mark tools as unchanged
+        setInitialTools([...selectedTools]);
       }
     } catch (error) {
       console.error(`Error ${isNew ? 'creating' : 'updating'} agent:`, error);
