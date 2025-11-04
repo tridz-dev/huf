@@ -85,6 +85,7 @@ const agentFormSchema = z.object({
   disabled: z.boolean(),
   allow_chat: z.boolean(),
   persist_conversation: z.boolean(),
+  description: z.string().optional(),
   instructions: z.string(),
 });
 
@@ -166,6 +167,7 @@ export function AgentFormPage() {
         disabled: false,
         allow_chat: true,
         persist_conversation: true,
+        description: '',
         instructions: '',
       },
   });
@@ -255,6 +257,7 @@ export function AgentFormPage() {
           disabled: data.disabled === 1,
           allow_chat: data.allow_chat === 1,
           persist_conversation: data.persist_conversation === 1,
+          description: data.description || '',
           instructions: data.instructions || '',
         });
         // Track initial disabled state
@@ -314,6 +317,7 @@ export function AgentFormPage() {
         disabled: values.disabled ? 1 : 0,
         allow_chat: values.allow_chat ? 1 : 0,
         persist_conversation: values.persist_conversation ? 1 : 0,
+        description: values.description || '',
         instructions: values.instructions,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
@@ -335,6 +339,7 @@ export function AgentFormPage() {
           disabled: newAgent.disabled === 1,
           allow_chat: newAgent.allow_chat === 1,
           persist_conversation: newAgent.persist_conversation === 1,
+          description: newAgent.description || '',
           instructions: newAgent.instructions || '',
         });
         setInitialDisabled(newAgent.disabled === 1);
@@ -354,6 +359,7 @@ export function AgentFormPage() {
           disabled: values.disabled,
           allow_chat: values.allow_chat,
           persist_conversation: values.persist_conversation,
+          description: values.description,
           instructions: values.instructions,
         });
         // Reset tools and disabled state after successful update to mark as unchanged
@@ -648,6 +654,25 @@ export function AgentFormPage() {
                             <Input placeholder="my-agent" {...field} />
                           </FormControl>
                           <FormDescription>Unique agent name</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem className="sm:col-span-2">
+                          <FormLabel>Description</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="A short summary describing what this agent does or is designed for."
+                              className="min-h-[80px] resize-y"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormDescription>A brief description of the agent's purpose</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}

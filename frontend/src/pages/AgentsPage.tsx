@@ -38,7 +38,7 @@ export function AgentsPage() {
 
   const { data, search, setSearch, filters, setFilters, loading } = usePageData<AgentDoc>({
     fetchFn: fetchAgents,
-    searchFields: ['agent_name', 'instructions'],
+    searchFields: ['agent_name', 'description'],
     filterFn: (agent, filters) => {
       if (filters.status && filters.status !== 'all') {
         const agentStatus = getStatusLabel(agent);
@@ -79,7 +79,7 @@ export function AgentsPage() {
           return (
             <ItemCard
               title={agent.agent_name || agent.name}
-              description={agent.instructions?.slice(0, 100) || 'No description'}
+              description={agent.description?.slice(0, 100) || 'No description'}
               status={{
                 label: status,
                 variant: getStatusVariant(status),
