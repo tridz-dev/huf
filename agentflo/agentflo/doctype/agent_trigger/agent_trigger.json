@@ -1,0 +1,196 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2025-10-31 12:52:52.017670",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "trigger_name",
+  "status",
+  "column_break_4hgn",
+  "agent",
+  "disabled",
+  "section_break_ypqu",
+  "trigger_type",
+  "doc_event",
+  "scheduled_interval",
+  "next_execution",
+  "event_name",
+  "webhook_slug",
+  "column_break_hz7t",
+  "reference_doctype",
+  "interval_count",
+  "last_execution",
+  "condition",
+  "webhook_key",
+  "app_name",
+  "section_break_qam6",
+  "source_system",
+  "metadata",
+  "disabled_reason",
+  "is_virtual"
+ ],
+ "fields": [
+  {
+   "fieldname": "trigger_name",
+   "fieldtype": "Data",
+   "label": "Trigger Name",
+   "unique": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Agent",
+   "options": "Agent",
+   "reqd": 1
+  },
+  {
+   "fieldname": "trigger_type",
+   "fieldtype": "Select",
+   "label": "Trigger Type",
+   "options": "\nSchedule\nDoc Event\nWebhook\nApp Event\nManual"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Status",
+   "options": "\nDraft\nActive\nDisabled\nError"
+  },
+  {
+   "fieldname": "interval_count",
+   "fieldtype": "Int",
+   "label": "Interval Count"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference Doctype",
+   "options": "DocType"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "fieldname": "doc_event",
+   "fieldtype": "Select",
+   "label": "Doc Event",
+   "options": "\nbefore_insert\nafter_insert\nvalidate\nbefore_save\nafter_save\nbefore_submit\non_submit\non_update\nafter_submit\non_cancel\nbefore_rename\nafter_rename\non_trash\nafter_delete"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "fieldname": "condition",
+   "fieldtype": "Code",
+   "label": "Condition"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "webhook_key",
+   "fieldtype": "Data",
+   "label": "Webhook Key"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "webhook_slug",
+   "fieldtype": "Data",
+   "label": "Webhook Slug"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"App Event\"",
+   "fieldname": "app_name",
+   "fieldtype": "Data",
+   "label": "App Name"
+  },
+  {
+   "fieldname": "event_name",
+   "fieldtype": "Data",
+   "label": "Event Name"
+  },
+  {
+   "fieldname": "last_execution",
+   "fieldtype": "Datetime",
+   "label": "Last Execution"
+  },
+  {
+   "fieldname": "next_execution",
+   "fieldtype": "Datetime",
+   "label": "Next Execution"
+  },
+  {
+   "fieldname": "metadata",
+   "fieldtype": "JSON",
+   "label": "MetaData"
+  },
+  {
+   "fieldname": "disabled_reason",
+   "fieldtype": "Small Text",
+   "label": "Disabled Reason"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_virtual",
+   "fieldtype": "Check",
+   "label": "Is Virtual"
+  },
+  {
+   "fieldname": "source_system",
+   "fieldtype": "Data",
+   "label": "Source System"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "scheduled_interval",
+   "fieldtype": "Select",
+   "label": "Scheduled Interval",
+   "options": "\nHourly\nDaily\nWeekly\nMonthly\nYearly"
+  },
+  {
+   "fieldname": "section_break_ypqu",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_4hgn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_hz7t",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_break_qam6",
+   "fieldtype": "Section Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-11-04 19:03:22.731316",
+ "modified_by": "Administrator",
+ "module": "AgentFlo",
+ "name": "Agent Trigger",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
