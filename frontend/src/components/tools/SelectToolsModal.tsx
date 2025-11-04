@@ -230,7 +230,7 @@ export function SelectToolsModal({
         </div>
 
         {/* Tool List */}
-        <div className="flex-1 overflow-y-auto min-h-0 px-6 space-y-2">
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 space-y-2 pb-2">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-muted-foreground">Loading tools...</div>
