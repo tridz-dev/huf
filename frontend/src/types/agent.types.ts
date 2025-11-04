@@ -94,7 +94,6 @@ export type Agent = {
   instructions: string;
   temperature?: number;
   top_p?: number;
-  async?: boolean;
   disabled?: boolean;
   allow_chat?: boolean;
   persist_conversation?: boolean;
@@ -171,7 +170,6 @@ export interface AgentDoc {
   agent_name: string;
   provider: string;
   model: string;
-  async: number; // 0 or 1
   disabled: number; // 0 or 1
   temperature: number;
   top_p: number;

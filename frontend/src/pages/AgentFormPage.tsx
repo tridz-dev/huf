@@ -46,6 +46,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import {
@@ -81,7 +82,6 @@ const agentFormSchema = z.object({
   model: z.string().min(1, 'Model is required'),
   temperature: z.number().min(0).max(2),
   top_p: z.number().min(0).max(1),
-  async: z.boolean(),
   disabled: z.boolean(),
   allow_chat: z.boolean(),
   persist_conversation: z.boolean(),
@@ -153,21 +153,21 @@ export function AgentFormPage() {
   const [selectedTools, setSelectedTools] = useState<AgentToolFunctionRef[]>([]);
   const [initialTools, setInitialTools] = useState<AgentToolFunctionRef[]>([]); // Track initial tools state
   const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
+  const [initialDisabled, setInitialDisabled] = useState(false); // Track initial disabled state
 
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
-    defaultValues: {
-      agent_name: '',
-      provider: '',
-      model: '',
-      temperature: 1,
-      top_p: 1,
-      async: false,
-      disabled: false,
-      allow_chat: true,
-      persist_conversation: true,
-      instructions: '',
-    },
+      defaultValues: {
+        agent_name: '',
+        provider: '',
+        model: '',
+        temperature: 1,
+        top_p: 1,
+        disabled: false,
+        allow_chat: true,
+        persist_conversation: true,
+        instructions: '',
+      },
   });
 
   const triggerForm = useForm<TriggerFormValues>({
@@ -199,8 +199,14 @@ export function AgentFormPage() {
     return false;
   }, [selectedTools, initialTools, isNew]);
   
-  // Show save button for new agents, when form is dirty, or when tools have changed
-  const showSaveButton = isNew || isDirty || toolsChanged;
+  // Check if disabled state has changed
+  const disabledChanged = useMemo(() => {
+    if (isNew) return watchDisabled !== false; // New agent with disabled changed
+    return watchDisabled !== initialDisabled;
+  }, [watchDisabled, initialDisabled, isNew]);
+  
+  // Show save button for new agents, when form is dirty, when tools have changed, or when disabled changed
+  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged;
 
   // Load providers, models, and tool types on mount
   useEffect(() => {
@@ -246,12 +252,13 @@ export function AgentFormPage() {
           model: data.model || '',
           temperature: data.temperature ?? 1,
           top_p: data.top_p ?? 1,
-          async: data.async === 1,
           disabled: data.disabled === 1,
           allow_chat: data.allow_chat === 1,
           persist_conversation: data.persist_conversation === 1,
           instructions: data.instructions || '',
         });
+        // Track initial disabled state
+        setInitialDisabled(data.disabled === 1);
         // Load tools from agent_tool field
         // agent_tool is a child table with format: [{ tool: "tool-name" }, ...]
         if (data.agent_tool && Array.isArray(data.agent_tool) && data.agent_tool.length > 0) {
@@ -289,6 +296,7 @@ export function AgentFormPage() {
       // New agent mode - form already has default values
       setSelectedTools([]);
       setInitialTools([]);
+      setInitialDisabled(false);
       setLoading(false);
     }
   }, [id, isNew, form]);
@@ -303,7 +311,6 @@ export function AgentFormPage() {
         model: values.model,
         temperature: values.temperature,
         top_p: values.top_p,
-        async: values.async ? 1 : 0,
         disabled: values.disabled ? 1 : 0,
         allow_chat: values.allow_chat ? 1 : 0,
         persist_conversation: values.persist_conversation ? 1 : 0,
@@ -325,12 +332,12 @@ export function AgentFormPage() {
           model: newAgent.model || '',
           temperature: newAgent.temperature ?? 1,
           top_p: newAgent.top_p ?? 1,
-          async: newAgent.async === 1,
           disabled: newAgent.disabled === 1,
           allow_chat: newAgent.allow_chat === 1,
           persist_conversation: newAgent.persist_conversation === 1,
           instructions: newAgent.instructions || '',
         });
+        setInitialDisabled(newAgent.disabled === 1);
         // Navigate to the edit page with the new agent's ID
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
@@ -344,14 +351,14 @@ export function AgentFormPage() {
           model: values.model,
           temperature: values.temperature,
           top_p: values.top_p,
-          async: values.async,
           disabled: values.disabled,
           allow_chat: values.allow_chat,
           persist_conversation: values.persist_conversation,
           instructions: values.instructions,
         });
-        // Reset tools state after successful update to mark tools as unchanged
+        // Reset tools and disabled state after successful update to mark as unchanged
         setInitialTools([...selectedTools]);
+        setInitialDisabled(values.disabled);
       }
     } catch (error) {
       console.error(`Error ${isNew ? 'creating' : 'updating'} agent:`, error);
@@ -539,7 +546,7 @@ export function AgentFormPage() {
             <div className="flex items-center gap-3 flex-wrap">
               <Input
                 value={form.watch('agent_name')}
-                onChange={(e) => form.setValue('agent_name', e.target.value)}
+                onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
                 className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
                 placeholder="Agent Name"
               />
@@ -581,8 +588,19 @@ export function AgentFormPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <div className="px-2 py-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Disable</span>
+                    <Switch 
+                      checked={watchDisabled} 
+                      onCheckedChange={(checked) => form.setValue('disabled', checked)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                </div>
                 {!isNew && (
                   <>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleDuplicate}>
                       <Copy className="w-4 h-4 mr-2" />
                       Duplicate
@@ -749,50 +767,6 @@ export function AgentFormPage() {
 
               {/* Behavior Tab */}
               <TabsContent value="behavior" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Execution Settings</CardTitle>
-                    <CardDescription>Configure agent execution behavior</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="async"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Async Execution</FormLabel>
-                            <FormDescription>
-                              Run agent asynchronously
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="disabled"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Disabled</FormLabel>
-                            <FormDescription>
-                              Disable this agent
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-
                 <Card>
                   <CardHeader>
                     <CardTitle>Conversation Settings</CardTitle>
