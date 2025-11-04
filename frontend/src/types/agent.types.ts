@@ -186,4 +186,6 @@ export interface AgentDoc {
   doc_event: DocEventType | null;
   instructions: string;
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
+  last_run?: string | null; // Last execution timestamp
+  total_run?: number; // Total number of runs
 }

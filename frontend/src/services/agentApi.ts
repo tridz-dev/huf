@@ -11,7 +11,8 @@ const AGENT_LIST_FIELDS = [
   'instructions',
   'model',
   'disabled',
-  'last_execution',
+  'last_run',
+  'total_run',
 ];
 
 /**

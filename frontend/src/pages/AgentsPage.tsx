@@ -1,9 +1,10 @@
 import { useCallback } from 'react';
-import { Calendar, Activity, Settings } from 'lucide-react';
+import { Calendar, Activity, Settings, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PageLayout, FilterBar, GridView, ItemCard } from '../components/dashboard';
 import { usePageData } from '../hooks/dashboard/usePageData';
 import { getAgents } from '../services/agentApi';
+import { formatTimeAgo } from '../utils/time';
 import type { AgentDoc } from '../types/agent.types';
 
 const statusOptions = [
@@ -25,15 +26,6 @@ function getStatusVariant(status: 'active' | 'disabled') {
 
 function getStatusLabel(agent: AgentDoc): 'active' | 'disabled' {
   return agent.disabled === 1 ? 'disabled' : 'active';
-}
-
-function formatLastExecution(lastExecution: string | null): string {
-  if (!lastExecution) return 'Never';
-  try {
-    return new Date(lastExecution).toLocaleDateString();
-  } catch {
-    return 'Never';
-  }
 }
 
 export function AgentsPage() {
@@ -94,7 +86,8 @@ export function AgentsPage() {
               }}
               metadata={[
                 { label: 'Model', value: agent.model || 'Unknown' },
-                { label: 'Last Run', value: formatLastExecution(agent.last_execution), icon: Calendar },
+                { label: 'Runs', value: agent.total_run?.toString() || '0', icon: Zap },
+                { label: 'Last Run', value: formatTimeAgo(agent.last_run), icon: Calendar },
               ]}
               actions={[
                 {
