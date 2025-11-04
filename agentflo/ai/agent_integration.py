@@ -322,6 +322,15 @@ def run_agent_sync(
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
         safe_commit()
 
+        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
+        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
+
+        frappe.db.set_value("Agent", agent_name, {
+            "total_run": total_runs,
+            "last_run": last_run_time
+        })
+        safe_commit()
+
         manager = AgentManager(agent_name)
         agent = manager.create_agent()
 
