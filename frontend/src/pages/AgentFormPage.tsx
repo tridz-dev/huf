@@ -67,10 +67,13 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
-import { AgentTrigger, TriggerType, ScheduledInterval, DocEventType, AIProvider, AIModel } from '../types/agent.types';
+import { AgentTrigger, TriggerType, ScheduledInterval, DocEventType, AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
+import { getToolFunctions, getToolTypes } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
+import type { AgentToolType } from '../types/agent.types';
+import { SelectToolsModal } from '../components/tools';
 
 const agentFormSchema = z.object({
   agent_name: z.string().min(1, 'Agent name is required'),
@@ -124,12 +127,6 @@ const docEvents: DocEventType[] = [
 
 const triggerTypes: TriggerType[] = ['Schedule', 'Doc Event', 'Webhook', 'App Event', 'Manual'];
 
-const mockTools = [
-  { id: '1', name: 'Create Helpdesk Ticket', description: 'Create support tickets in helpdesk system', category: 'Support', status: 'active' },
-  { id: '2', name: 'Fetch Invoices', description: 'Retrieve invoice data from accounting system', category: 'Finance', status: 'active' },
-  { id: '3', name: 'Send Email', description: 'Send email notifications to customers', category: 'Communication', status: 'active' },
-  { id: '4', name: 'Send WhatsApp', description: 'Send WhatsApp messages via Business API', category: 'Communication', status: 'active' },
-];
 
 const mockMCPs = [
   { id: 'm1', name: 'Zendesk MCP', description: 'Query and manage Zendesk tickets', provider: 'Zendesk', status: 'connected' },
@@ -152,6 +149,9 @@ export function AgentFormPage() {
   const [triggerFilter, setTriggerFilter] = useState<string>('all');
   const [triggerStatusFilter, setTriggerStatusFilter] = useState<string>('all');
   const [optimizingPrompt, setOptimizingPrompt] = useState(false);
+  const [showToolsModal, setShowToolsModal] = useState(false);
+  const [selectedTools, setSelectedTools] = useState<AgentToolFunctionRef[]>([]);
+  const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
 
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
@@ -185,16 +185,18 @@ export function AgentFormPage() {
   // Show save button for new agents or when form is dirty
   const showSaveButton = isNew || isDirty;
 
-  // Load providers and models on mount
+  // Load providers, models, and tool types on mount
   useEffect(() => {
     Promise.all([
       getProviders(),
       getModels(),
-    ]).then(([providersData, modelsData]) => {
+      getToolTypes(),
+    ]).then(([providersData, modelsData, toolTypesData]) => {
       setProviders(providersData);
       setModels(modelsData);
+      setToolTypes(toolTypesData);
     }).catch((error) => {
-      console.error('Error loading providers/models:', error);
+      console.error('Error loading providers/models/types:', error);
       toast.error('Failed to load providers and models');
     });
   }, []);
@@ -233,6 +235,27 @@ export function AgentFormPage() {
           persist_conversation: data.persist_conversation === 1,
           instructions: data.instructions || '',
         });
+        // Load tools from agent_tool field
+        // agent_tool is a child table with format: [{ tool: "tool-name" }, ...]
+        if (data.agent_tool && Array.isArray(data.agent_tool) && data.agent_tool.length > 0) {
+          // Fetch full tool details for each tool reference
+          const toolNames = data.agent_tool.map((item: any) => item.tool).filter(Boolean);
+          if (toolNames.length > 0) {
+            getToolFunctions()
+              .then((allTools) => {
+                const tools = allTools.filter((tool) => toolNames.includes(tool.name));
+                setSelectedTools(tools);
+              })
+              .catch((error) => {
+                console.error('Error loading tool details:', error);
+                setSelectedTools([]);
+              });
+          } else {
+            setSelectedTools([]);
+          }
+        } else {
+          setSelectedTools([]);
+        }
         // Triggers are not stored in AgentDoc directly, will be empty for now
         setTriggers([]);
         setLoading(false);
@@ -243,6 +266,7 @@ export function AgentFormPage() {
       });
     } else if (isNew) {
       // New agent mode - form already has default values
+      setSelectedTools([]);
       setLoading(false);
     }
   }, [id, isNew, form]);
@@ -262,6 +286,10 @@ export function AgentFormPage() {
         allow_chat: values.allow_chat ? 1 : 0,
         persist_conversation: values.persist_conversation ? 1 : 0,
         instructions: values.instructions,
+        // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
+        agent_tool: selectedTools.map((tool) => ({
+          tool: tool.name,
+        })) as any,
       };
 
       if (isNew) {
@@ -335,6 +363,15 @@ export function AgentFormPage() {
 
   const handleViewLogs = () => {
     toast.info('Opening logs...');
+  };
+
+  const handleAddTools = (tools: AgentToolFunctionRef[]) => {
+    setSelectedTools([...selectedTools, ...tools]);
+  };
+
+  const handleRemoveTool = (toolId: string) => {
+    setSelectedTools(selectedTools.filter((t) => t.name !== toolId));
+    toast.success('Tool removed');
   };
 
   const handleAddTrigger = () => {
@@ -933,38 +970,58 @@ export function AgentFormPage() {
                         </CardTitle>
                         <CardDescription>Function tools available to this agent</CardDescription>
                       </div>
-                      <Button size="sm" variant="outline">
+                      <Button size="sm" variant="outline" onClick={() => setShowToolsModal(true)} type="button">
                         <Plus className="w-4 h-4 mr-2" />
                         Add Tool
                       </Button>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {mockTools.map((tool) => (
-                        <div
-                          key={tool.id}
-                          className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-medium text-sm">{tool.name}</h4>
-                              <Badge variant="outline" className="text-xs shrink-0">
-                                {tool.category}
-                              </Badge>
+                    {selectedTools.length === 0 ? (
+                      <div className="text-center py-12">
+                        <p className="text-muted-foreground mb-4">No tools added yet.</p>
+                        <Button onClick={() => setShowToolsModal(true)} variant="outline" type="button">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Tool
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {selectedTools.map((tool) => {
+                          // Get tool type display name from tool_type link field
+                          const toolType = toolTypes.find((tt) => tt.name === tool.tool_type);
+                          const toolTypeDisplayName = toolType?.name1;
+
+                          return (
+                            <div
+                              key={tool.name}
+                              className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
+                                  {toolTypeDisplayName && (
+                                    <Badge variant="outline" className="text-xs shrink-0">
+                                      {toolTypeDisplayName}
+                                    </Badge>
+                                  )}
+                                </div>
+                                {tool.description && (
+                                  <p className="text-xs text-muted-foreground">{tool.description}</p>
+                                )}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveTool(tool.name)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </div>
-                            <p className="text-xs text-muted-foreground">{tool.description}</p>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toast.info(`Removing ${tool.name}`)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1282,6 +1339,14 @@ export function AgentFormPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Select Tools Modal */}
+      <SelectToolsModal
+        open={showToolsModal}
+        onOpenChange={setShowToolsModal}
+        selectedTools={selectedTools}
+        onAddTools={handleAddTools}
+      />
     </div>
   );
 }
