@@ -56,6 +56,10 @@ app_license = "mit"
 # Home Pages
 # ----------
 
+website_route_rules = [
+    {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
+]
+
 # application home page (will override Website Settings)
 # home_page = "login"
 

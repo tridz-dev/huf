@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "tool_name",
+  "tool_type",
   "description",
   "column_break_lrkj",
   "types",
@@ -122,12 +123,19 @@
    "fieldtype": "Link",
    "label": "Agent",
    "options": "Agent"
+  },
+  {
+   "fieldname": "tool_type",
+   "fieldtype": "Link",
+   "label": "Tool Type",
+   "options": "Agent Tool Type",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-04 10:35:45.143045",
+ "modified": "2025-11-04 12:32:41.637905",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Tool Function",
@@ -148,6 +156,7 @@
   }
  ],
  "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": []
