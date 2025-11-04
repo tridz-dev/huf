@@ -91,6 +91,7 @@ export type Agent = {
   agent_name: string;
   provider: string;
   model: string;
+  description?: string;
   instructions: string;
   temperature?: number;
   top_p?: number;
@@ -184,6 +185,7 @@ export interface AgentDoc {
   condition: string | null;
   is_doc_event: number; // 0 or 1
   doc_event: DocEventType | null;
+  description?: string | null;
   instructions: string;
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
   last_run?: string | null; // Last execution timestamp
