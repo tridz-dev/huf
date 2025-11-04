@@ -24,7 +24,8 @@ class AgentToolFunction(Document):
 				"Send Message",
 				"Get Report Result",
 				"Attach File to Document",
-				"App Provided"
+				"App Provided",
+				"Speech to Text"
 			]:
 				frappe.throw(_("Please select a DocType for this function."))
 
