@@ -7,7 +7,7 @@ def get_data():
         'transactions': [
             {
                 'label': _('Execution'),
-                'items': ['Agent Run']
+                'items': ['Agent Run','Agent Trigger']
             },
             {
                 'label': _('Context'),
