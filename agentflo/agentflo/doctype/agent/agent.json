@@ -5,7 +5,7 @@
  "creation": "2025-08-11 18:33:44.565632",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": [
+  "field_order": [
   "general_tab",
   "llm_configuration_section",
   "agent_name",
@@ -41,7 +41,8 @@
   "agent_tool",
   "metadata_tab",
   "last_run",
-  "total_run"
+  "total_run",
+  "is_standard"
  ],
  "fields": [
   {
@@ -278,6 +279,13 @@
    "fieldname": "metadata_tab",
    "fieldtype": "Tab Break",
    "label": "Metadata"
+  },
+  {
+   "default": "0",
+   "description": "If checked, this agent can be exported and imported. Standard agents are provided by apps and should not be modified.",
+   "fieldname": "is_standard",
+   "fieldtype": "Check",
+   "label": "Is Standard"
   }
  ],
  "grid_page_length": 50,

@@ -102,7 +102,10 @@ after_migrate = "agentflo.install.after_migrate"
 # Name of the app being installed is passed as an argument
 
 # before_app_install = "agentflo.utils.before_app_install"
-after_app_install = "agentflo.ai.tool_registry.sync_app_tools"
+after_app_install = [
+	"agentflo.ai.tool_registry.sync_app_tools",
+	"agentflo.app_integration.after_app_install"
+]
 
 # Integration Cleanup
 # -------------------
@@ -243,4 +246,15 @@ scheduler_events = {
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
+
+# Fixtures
+# --------
+# Fixtures to be loaded during installation and migration
+
+fixtures = [
+	"Agent",
+	"AI Provider",
+	"AI Model",
+	"Agent Tool Function"
+]
 
