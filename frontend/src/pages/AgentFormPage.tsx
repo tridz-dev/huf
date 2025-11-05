@@ -67,6 +67,7 @@ import type { AgentDoc } from '../types/agent.types';
 import type { AgentToolType } from '../types/agent.types';
 import { SelectToolsModal } from '../components/tools';
 import { TriggerModal } from '../components/agent/TriggerModal';
+import { getFrappeErrorMessage } from '../lib/frappe-error';
 
 const agentFormSchema = z.object({
   agent_name: z.string().min(1, 'Agent name is required'),
@@ -288,7 +289,8 @@ export function AgentFormPage() {
         setLoading(false);
       }).catch((error) => {
         console.error('Error loading agent:', error);
-        toast.error('Failed to load agent details');
+        const errorMessage = getFrappeErrorMessage(error);
+        toast.error(errorMessage || 'Failed to load agent details');
         setLoading(false);
       });
     } else if (isNew) {
@@ -364,7 +366,8 @@ export function AgentFormPage() {
       }
     } catch (error) {
       console.error(`Error ${isNew ? 'creating' : 'updating'} agent:`, error);
-      toast.error(`Failed to ${isNew ? 'create' : 'update'} agent. Please try again.`);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || `Failed to ${isNew ? 'create' : 'update'} agent. Please try again.`);
     } finally {
       setSaving(false);
     }
@@ -419,7 +422,8 @@ export function AgentFormPage() {
       setShowTriggerModal(true);
     } catch (error) {
       console.error('Error loading trigger:', error);
-      toast.error('Failed to load trigger details');
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to load trigger details');
     }
   };
 
@@ -481,7 +485,8 @@ export function AgentFormPage() {
       setEditingTrigger(null);
     } catch (error) {
       console.error('Error saving trigger:', error);
-      toast.error(`Failed to ${editingTrigger ? 'update' : 'create'} trigger`);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || `Failed to ${editingTrigger ? 'update' : 'create'} trigger`);
     }
   };
 

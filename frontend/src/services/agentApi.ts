@@ -1,6 +1,7 @@
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AgentDoc } from '@/types/agent.types';
+import { handleFrappeError } from '@/lib/frappe-error';
 
 /**
  * Trigger type from API
@@ -19,8 +20,7 @@ export async function getTriggerTypes(): Promise<TriggerTypeOption[]> {
     // Frappe API might return { message: [...] } or just the array directly
     return result.message as TriggerTypeOption[];
   } catch (error) {
-    console.error('Error fetching trigger types:', error);
-    throw error;
+    handleFrappeError(error, 'Error fetching trigger types');
   }
 }
 
@@ -85,8 +85,7 @@ export async function getAgents(): Promise<AgentDoc[]> {
     });
     return agents as AgentDoc[];
   } catch (error) {
-    console.error('Error fetching agents:', error);
-    throw error;
+    handleFrappeError(error, 'Error fetching agents');
   }
 }
 
@@ -99,8 +98,7 @@ export async function getAgent(name: string): Promise<AgentDoc> {
     const agent = await db.getDoc(doctype.Agent, name);
     return agent as AgentDoc;
   } catch (error) {
-    console.error(`Error fetching agent ${name}:`, error);
-    throw error;
+    handleFrappeError(error, `Error fetching agent ${name}`);
   }
 }
 
@@ -128,8 +126,7 @@ export async function getAgentTrigger(triggerName: string): Promise<AgentTrigger
     const trigger = await db.getDoc(doctype['Agent Trigger'], triggerName);
     return trigger as AgentTriggerDoc;
   } catch (error) {
-    console.error(`Error fetching trigger ${triggerName}:`, error);
-    throw error;
+    handleFrappeError(error, `Error fetching trigger ${triggerName}`);
   }
 }
 
@@ -141,8 +138,7 @@ export async function createAgentTrigger(data: Partial<AgentTriggerDoc>): Promis
     const newTrigger = await db.createDoc(doctype['Agent Trigger'], data);
     return newTrigger as AgentTriggerDoc;
   } catch (error) {
-    console.error('Error creating agent trigger:', error);
-    throw error;
+    handleFrappeError(error, 'Error creating agent trigger');
   }
 }
 
@@ -155,8 +151,7 @@ export async function updateAgentTrigger(name: string, data: Partial<AgentTrigge
     const updatedTrigger = await db.getDoc(doctype['Agent Trigger'], name);
     return updatedTrigger as AgentTriggerDoc;
   } catch (error) {
-    console.error(`Error updating trigger ${name}:`, error);
-    throw error;
+    handleFrappeError(error, `Error updating trigger ${name}`);
   }
 }
 
@@ -172,8 +167,7 @@ export async function getDocTypes(): Promise<Array<{ name: string }>> {
     // Sort alphabetically by name
     return (doctypes as Array<{ name: string }>).sort((a, b) => a.name.localeCompare(b.name));
   } catch (error) {
-    console.error('Error fetching DocTypes:', error);
-    throw error;
+    handleFrappeError(error, 'Error fetching DocTypes');
   }
 }
 
@@ -189,8 +183,7 @@ export async function getAgentTriggers(agentName: string): Promise<AgentTriggerL
     });
     return triggers.map(mapAgentTriggerListItem);
   } catch (error) {
-    console.error(`Error fetching triggers for agent ${agentName}:`, error);
-    throw error;
+    handleFrappeError(error, `Error fetching triggers for agent ${agentName}`);
   }
 }
 
@@ -203,8 +196,7 @@ export async function createAgent(data: Partial<AgentDoc>): Promise<AgentDoc> {
     const newAgent = await db.createDoc(doctype.Agent, data);
     return newAgent as AgentDoc;
   } catch (error) {
-    console.error('Error creating agent:', error);
-    throw error;
+    handleFrappeError(error, 'Error creating agent');
   }
 }
 
@@ -218,7 +210,6 @@ export async function updateAgent(name: string, data: Partial<AgentDoc>): Promis
     const updatedAgent = await db.getDoc(doctype.Agent, name);
     return updatedAgent as AgentDoc;
   } catch (error) {
-    console.error(`Error updating agent ${name}:`, error);
-    throw error;
+    handleFrappeError(error, `Error updating agent ${name}`);
   }
 }

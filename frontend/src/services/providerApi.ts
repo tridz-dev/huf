@@ -1,6 +1,7 @@
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AIProvider, AIModel } from '@/types/agent.types';
+import { handleFrappeError } from '@/lib/frappe-error';
 
 /**
  * Fetch all AI Providers from Frappe
@@ -16,8 +17,7 @@ export async function getProviders(): Promise<AIProvider[]> {
       provider_name: p.provide_name || p.name,
     })) as AIProvider[];
   } catch (error) {
-    console.error('Error fetching providers:', error);
-    throw error;
+    handleFrappeError(error, 'Error fetching providers');
   }
 }
 
@@ -37,8 +37,7 @@ export async function getModels(providerId?: string): Promise<AIModel[]> {
       provider: m.provider,
     })) as AIModel[];
   } catch (error) {
-    console.error('Error fetching models:', error);
-    throw error;
+    handleFrappeError(error, 'Error fetching models');
   }
 }
 

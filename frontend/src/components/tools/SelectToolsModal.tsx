@@ -15,6 +15,7 @@ import { ToolCard } from './ToolCard';
 import { getToolFunctions, getToolTypes } from '@/services/toolApi';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import { toast } from 'sonner';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 interface SelectToolsModalProps {
   open: boolean;
@@ -53,7 +54,8 @@ export function SelectToolsModal({
         })
         .catch((error) => {
           console.error('Error loading tools/types:', error);
-          toast.error('Failed to load tools');
+          const errorMessage = getFrappeErrorMessage(error);
+          toast.error(errorMessage || 'Failed to load tools');
           setLoading(false);
         });
       
