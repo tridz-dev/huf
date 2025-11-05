@@ -1,0 +1,33 @@
+{
+  "agent": {
+    "agent_name": "Basic Chat Agent",
+    "description": "A simple conversational agent for general-purpose chat and assistance",
+    "provider": "OpenAI",
+    "model": "gpt-4-turbo",
+    "instructions": "You are a helpful AI assistant. Be polite, informative, and concise in your responses. Answer questions clearly and provide relevant information when asked.",
+    "temperature": 0.7,
+    "top_p": 1.0,
+    "disabled": 0,
+    "allow_chat": 1,
+    "persist_conversation": 1,
+    "is_scheduled": 0,
+    "is_doc_event": 0,
+    "is_standard": 1
+  },
+  "dependencies": {
+    "ai_provider": {
+      "provide_name": "OpenAI",
+      "api_key": ""
+    },
+    "ai_model": {
+      "model_name": "gpt-4-turbo",
+      "provider_name": "OpenAI"
+    },
+    "agent_tool_functions": []
+  },
+  "metadata": {
+    "version": "1.0",
+    "app": "agentflo",
+    "is_seed": true
+  }
+}
