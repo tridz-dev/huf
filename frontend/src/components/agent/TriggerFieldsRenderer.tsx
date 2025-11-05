@@ -135,22 +135,11 @@ export function TriggerFieldsRenderer({
                     <FormLabel>{fieldConfig.label}</FormLabel>
                     <FormControl>
                       <Input
-                        type={fieldConfig.field === 'interval_count' ? 'number' : 'text'}
-                        min={fieldConfig.field === 'interval_count' ? 1 : undefined}
-                        step={fieldConfig.field === 'interval_count' ? 1 : undefined}
+                        type="text"
+                        inputMode={fieldConfig.field === 'interval_count' ? 'numeric' : undefined}
                         placeholder={fieldConfig.placeholder}
                         {...field}
-                        value={fieldConfig.field === 'interval_count' ? field.value || '' : field.value}
-                        onChange={
-                          fieldConfig.field === 'interval_count'
-                            ? (e) => {
-                                const value = e.target.value;
-                                if (value === '' || /^\d+$/.test(value)) {
-                                  field.onChange(value === '' ? undefined : parseInt(value, 10));
-                                }
-                              }
-                            : field.onChange
-                        }
+                        value={field.value || ''}
                       />
                     </FormControl>
                     {fieldConfig.description && (

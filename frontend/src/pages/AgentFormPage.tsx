@@ -367,7 +367,7 @@ export function AgentFormPage() {
     trigger_type: string;
     active: boolean;
     scheduled_interval?: string;
-    interval_count?: number;
+    interval_count?: string;
     reference_doctype?: string;
     doc_event?: string;
     condition?: string;
@@ -391,7 +391,9 @@ export function AgentFormPage() {
         trigger_type: values.trigger_type,
         disabled: values.active ? 0 : 1,
         scheduled_interval: values.scheduled_interval,
-        interval_count: values.interval_count,
+        interval_count: values.interval_count && values.interval_count.trim() !== '' 
+          ? parseInt(values.interval_count, 10) 
+          : undefined,
         reference_doctype: values.reference_doctype,
         doc_event: values.doc_event,
         condition: values.condition,

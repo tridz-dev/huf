@@ -69,7 +69,15 @@ const triggerFormSchema = z.object({
   trigger_type: z.enum(['Schedule', 'Doc Event', 'Webhook', 'App Event', 'Manual']),
   active: z.boolean(),
   scheduled_interval: z.string().optional(),
-  interval_count: z.number().int().min(1).optional(),
+  interval_count: z.string()
+    .optional()
+    .refine(
+      (val) => {
+        if (!val || val.trim() === '') return true; // Allow empty
+        return /^\d+$/.test(val) && parseInt(val, 10) > 0; // Must be positive integer
+      },
+      { message: 'Interval count must be a positive whole number' }
+    ),
   reference_doctype: z.string().optional(),
   doc_event: z.string().optional(),
   condition: z.string().optional(),
@@ -117,7 +125,7 @@ export function TriggerModal({
       trigger_name: '',
       trigger_type: 'Schedule',
       active: true,
-      interval_count: 1,
+      interval_count: undefined,
     },
   });
 
@@ -132,7 +140,7 @@ export function TriggerModal({
           trigger_type: (editingTrigger.trigger_type || 'Schedule') as TriggerType,
           active: editingTrigger.disabled === 0 || editingTrigger.disabled === undefined,
           scheduled_interval: editingTrigger.scheduled_interval,
-          interval_count: editingTrigger.interval_count,
+          interval_count: editingTrigger.interval_count?.toString() || undefined,
           reference_doctype: editingTrigger.reference_doctype,
           doc_event: editingTrigger.doc_event,
           condition: editingTrigger.condition,
@@ -142,7 +150,7 @@ export function TriggerModal({
           trigger_name: '',
           trigger_type: 'Schedule',
           active: true,
-          interval_count: 1,
+          interval_count: undefined,
           scheduled_interval: undefined,
           reference_doctype: undefined,
           doc_event: undefined,
