@@ -83,6 +83,95 @@ export async function getAgent(name: string): Promise<AgentDoc> {
 }
 
 /**
+ * Fields needed for agent trigger editing
+ */
+const AGENT_TRIGGER_EDIT_FIELDS = [
+  'name',
+  'trigger_name',
+  'agent',
+  'trigger_type',
+  'disabled',
+  'scheduled_interval',
+  'interval_count',
+  'reference_doctype',
+  'doc_event',
+  'condition',
+];
+
+/**
+ * Agent Trigger document from Frappe (for editing)
+ */
+export interface AgentTriggerDoc {
+  name: string;
+  trigger_name: string;
+  agent: string;
+  trigger_type?: string;
+  disabled?: 0 | 1;
+  scheduled_interval?: string;
+  interval_count?: number;
+  reference_doctype?: string;
+  doc_event?: string;
+  condition?: string;
+}
+
+/**
+ * Fetch a single agent trigger by name
+ */
+export async function getAgentTrigger(triggerName: string): Promise<AgentTriggerDoc> {
+  try {
+    const trigger = await db.getDoc(doctype['Agent Trigger'], triggerName);
+    return trigger as AgentTriggerDoc;
+  } catch (error) {
+    console.error(`Error fetching trigger ${triggerName}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Create a new agent trigger
+ */
+export async function createAgentTrigger(data: Partial<AgentTriggerDoc>): Promise<AgentTriggerDoc> {
+  try {
+    const newTrigger = await db.createDoc(doctype['Agent Trigger'], data);
+    return newTrigger as AgentTriggerDoc;
+  } catch (error) {
+    console.error('Error creating agent trigger:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update an agent trigger
+ */
+export async function updateAgentTrigger(name: string, data: Partial<AgentTriggerDoc>): Promise<AgentTriggerDoc> {
+  try {
+    await db.updateDoc(doctype['Agent Trigger'], name, data);
+    const updatedTrigger = await db.getDoc(doctype['Agent Trigger'], name);
+    return updatedTrigger as AgentTriggerDoc;
+  } catch (error) {
+    console.error(`Error updating trigger ${name}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch all DocTypes (for reference_doctype select)
+ */
+export async function getDocTypes(): Promise<Array<{ name: string }>> {
+  try {
+    const doctypes = await db.getDocList('DocType', {
+      fields: ['name'],
+      limit: 1000,
+    });
+    // Sort alphabetically by name
+    return (doctypes as Array<{ name: string }>).sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    console.error('Error fetching DocTypes:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetch agent triggers filtered by agent name (for listing)
  */
 export async function getAgentTriggers(agentName: string): Promise<AgentTriggerListItem[]> {

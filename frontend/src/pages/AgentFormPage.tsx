@@ -69,7 +69,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
 import { AgentTrigger, TriggerType, ScheduledInterval, DocEventType, AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, type AgentTriggerListItem } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, type AgentTriggerListItem, type AgentTriggerDoc } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolFunctions, getToolTypes } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -92,6 +92,7 @@ const agentFormSchema = z.object({
 type AgentFormValues = z.infer<typeof agentFormSchema>;
 
 const triggerFormSchema = z.object({
+  trigger_name: z.string().min(1, 'Trigger name is required').optional(),
   trigger_type: z.enum(['Schedule', 'Doc Event', 'Webhook', 'App Event', 'Manual']),
   active: z.boolean(),
   schedule_interval: z.string().optional(),
@@ -102,6 +103,8 @@ const triggerFormSchema = z.object({
   app_name: z.string().optional(),
   event_name: z.string().optional(),
 }).refine((data) => {
+  // trigger_name is required when creating (not editing)
+  // This will be validated in the component
   if (data.trigger_type === 'Schedule') {
     return data.schedule_interval && data.interval_count;
   }
@@ -119,12 +122,6 @@ const triggerFormSchema = z.object({
 type TriggerFormValues = z.infer<typeof triggerFormSchema>;
 
 const scheduledIntervals: ScheduledInterval[] = ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly'];
-
-const docEvents: DocEventType[] = [
-  'before_insert', 'after_insert', 'validate', 'before_save', 'after_save',
-  'before_submit', 'on_submit', 'after_submit', 'on_cancel', 'before_rename',
-  'after_rename', 'on_trash', 'after_delete',
-];
 
 const triggerTypes: TriggerType[] = ['Schedule', 'Doc Event', 'Webhook', 'App Event', 'Manual'];
 
@@ -146,7 +143,7 @@ export function AgentFormPage() {
   const [models, setModels] = useState<AIModel[]>([]);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
-  const [editingTrigger, setEditingTrigger] = useState<AgentTrigger | null>(null);
+  const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
   const [triggerFilter, setTriggerFilter] = useState<string>('all');
   const [triggerStatusFilter, setTriggerStatusFilter] = useState<string>('all');
   const [optimizingPrompt, setOptimizingPrompt] = useState(false);
@@ -155,6 +152,8 @@ export function AgentFormPage() {
   const [initialTools, setInitialTools] = useState<AgentToolFunctionRef[]>([]); // Track initial tools state
   const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
   const [initialDisabled, setInitialDisabled] = useState(false); // Track initial disabled state
+  const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
+  const [loadingDocTypes, setLoadingDocTypes] = useState(false);
 
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
@@ -175,6 +174,7 @@ export function AgentFormPage() {
   const triggerForm = useForm<TriggerFormValues>({
     resolver: zodResolver(triggerFormSchema),
     defaultValues: {
+      trigger_name: '',
       trigger_type: 'Schedule',
       active: true,
       interval_count: 1,
@@ -209,6 +209,22 @@ export function AgentFormPage() {
   
   // Show save button for new agents, when form is dirty, when tools have changed, or when disabled changed
   const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged;
+
+  // Load DocTypes when modal opens
+  useEffect(() => {
+    if (showTriggerModal && docTypes.length === 0 && !loadingDocTypes) {
+      setLoadingDocTypes(true);
+      getDocTypes()
+        .then((data) => {
+          setDocTypes(data);
+          setLoadingDocTypes(false);
+        })
+        .catch((error) => {
+          console.error('Error loading DocTypes:', error);
+          setLoadingDocTypes(false);
+        });
+    }
+  }, [showTriggerModal, docTypes.length, loadingDocTypes]);
 
   // Load providers, models, and tool types on mount
   useEffect(() => {
@@ -420,27 +436,37 @@ export function AgentFormPage() {
   const handleAddTrigger = () => {
     setEditingTrigger(null);
     triggerForm.reset({
+      trigger_name: '',
       trigger_type: 'Schedule',
       active: true,
       interval_count: 1,
+      schedule_interval: undefined,
+      reference_doctype: undefined,
+      doc_event: undefined,
+      condition: undefined,
     });
     setShowTriggerModal(true);
   };
 
-  const handleEditTrigger = (trigger: AgentTrigger) => {
-    setEditingTrigger(trigger);
-    triggerForm.reset({
-      trigger_type: trigger.trigger_type,
-      active: trigger.active,
-      schedule_interval: trigger.schedule_interval,
-      interval_count: trigger.interval_count,
-      reference_doctype: trigger.reference_doctype,
-      doc_event: trigger.doc_event,
-      condition: trigger.condition,
-      app_name: trigger.app_name,
-      event_name: trigger.event_name,
-    });
-    setShowTriggerModal(true);
+  const handleEditTrigger = async (trigger: AgentTriggerListItem) => {
+    try {
+      const fullTrigger = await getAgentTrigger(trigger.name);
+      setEditingTrigger(fullTrigger);
+      triggerForm.reset({
+        trigger_name: fullTrigger.trigger_name,
+        trigger_type: (fullTrigger.trigger_type || 'Schedule') as TriggerType,
+        active: fullTrigger.disabled === 0 || fullTrigger.disabled === undefined,
+        schedule_interval: fullTrigger.scheduled_interval,
+        interval_count: fullTrigger.interval_count,
+        reference_doctype: fullTrigger.reference_doctype,
+        doc_event: fullTrigger.doc_event,
+        condition: fullTrigger.condition,
+      });
+      setShowTriggerModal(true);
+    } catch (error) {
+      console.error('Error loading trigger:', error);
+      toast.error('Failed to load trigger details');
+    }
   };
 
   const handleDeleteTrigger = (triggerId: string) => {
@@ -448,10 +474,50 @@ export function AgentFormPage() {
     toast.success('Trigger deleted');
   };
 
-  const handleSaveTrigger = (values: TriggerFormValues) => {
-    // TODO: Implement trigger creation/editing API integration
-    toast.info('Trigger creation/editing will be integrated soon');
-    setShowTriggerModal(false);
+  const handleSaveTrigger = async (values: TriggerFormValues) => {
+    if (!id || id === 'new') {
+      toast.error('Please save the agent first before adding triggers');
+      return;
+    }
+
+    // Validate trigger_name when creating
+    if (!editingTrigger && !values.trigger_name) {
+      toast.error('Trigger name is required');
+      return;
+    }
+
+    try {
+      const triggerData: Partial<AgentTriggerDoc> = {
+        trigger_name: editingTrigger ? editingTrigger.trigger_name : (values.trigger_name || ''),
+        trigger_type: values.trigger_type,
+        disabled: values.active ? 0 : 1,
+        scheduled_interval: values.schedule_interval,
+        interval_count: values.interval_count,
+        reference_doctype: values.reference_doctype,
+        doc_event: values.doc_event,
+        condition: values.condition,
+      };
+
+      if (editingTrigger) {
+        // Update existing trigger
+        await updateAgentTrigger(editingTrigger.name, triggerData);
+        toast.success('Trigger updated successfully');
+      } else {
+        // Create new trigger
+        triggerData.agent = id;
+        await createAgentTrigger(triggerData);
+        toast.success('Trigger created successfully');
+      }
+
+      // Reload triggers list
+      const updatedTriggers = await getAgentTriggers(id);
+      setTriggers(updatedTriggers);
+      setShowTriggerModal(false);
+      setEditingTrigger(null);
+    } catch (error) {
+      console.error('Error saving trigger:', error);
+      toast.error(`Failed to ${editingTrigger ? 'update' : 'create'} trigger`);
+    }
   };
 
   const getTriggerDetails = (trigger: AgentTrigger): string => {
@@ -925,13 +991,15 @@ export function AgentFormPage() {
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-2">
                                     <Button
+                                      type="button"
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => toast.info('Edit trigger functionality coming soon')}
+                                      onClick={() => handleEditTrigger(trigger)}
                                     >
                                       <Edit className="w-4 h-4" />
                                     </Button>
                                     <Button
+                                      type="button"
                                       variant="ghost"
                                       size="sm"
                                       onClick={() => handleDeleteTrigger(trigger.name)}
@@ -1093,6 +1161,35 @@ export function AgentFormPage() {
           </DialogHeader>
           <Form {...triggerForm}>
             <form onSubmit={triggerForm.handleSubmit(handleSaveTrigger)} className="space-y-4">
+              {/* Trigger Name Field - Only editable when adding */}
+              {!editingTrigger && (
+                <FormField
+                  control={triggerForm.control}
+                  name="trigger_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Trigger Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter trigger name" {...field} />
+                      </FormControl>
+                      <FormDescription>A unique name for this trigger</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Trigger Name Display - Read-only when editing */}
+              {editingTrigger && (
+                <FormItem>
+                  <FormLabel>Trigger Name</FormLabel>
+                  <FormControl>
+                    <Input value={editingTrigger.trigger_name} disabled />
+                  </FormControl>
+                  <FormDescription>Trigger name cannot be changed after creation</FormDescription>
+                </FormItem>
+              )}
+
               <FormField
                 control={triggerForm.control}
                 name="trigger_type"
@@ -1172,8 +1269,15 @@ export function AgentFormPage() {
                           <Input
                             type="number"
                             min={1}
+                            step={1}
                             {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            value={field.value || ''}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '' || /^\d+$/.test(value)) {
+                                field.onChange(value === '' ? undefined : parseInt(value, 10));
+                              }
+                            }}
                           />
                         </FormControl>
                         <FormDescription>Run every n intervals</FormDescription>
@@ -1194,9 +1298,24 @@ export function AgentFormPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>DocType</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g., Sales Invoice" {...field} />
-                          </FormControl>
+                          <Select 
+                            onValueChange={field.onChange} 
+                            value={field.value}
+                            disabled={loadingDocTypes}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={loadingDocTypes ? "Loading..." : "Select DocType"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {docTypes.map((dt) => (
+                                <SelectItem key={dt.name} value={dt.name}>
+                                  {dt.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormDescription>Target document type</FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -1208,7 +1327,7 @@ export function AgentFormPage() {
                       name="doc_event"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Event</FormLabel>
+                          <FormLabel>Doc Event</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
@@ -1216,7 +1335,7 @@ export function AgentFormPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {docEvents.map((event) => (
+                              {['before_insert', 'after_insert', 'validate'].map((event) => (
                                 <SelectItem key={event} value={event}>
                                   {event}
                                 </SelectItem>
@@ -1258,7 +1377,7 @@ export function AgentFormPage() {
                   <Label>Webhook URL</Label>
                   <div className="flex gap-2">
                     <Input
-                      value={editingTrigger?.webhook_url || `https://api.hufai.com/agent/${id}/webhook/${Date.now()}`}
+                      value={`https://api.hufai.com/agent/${id}/webhook/${Date.now()}`}
                       readOnly
                       className="flex-1 font-mono text-sm"
                     />
@@ -1267,9 +1386,9 @@ export function AgentFormPage() {
                       variant="outline"
                       size="icon"
                       onClick={() => {
-                        const url = editingTrigger?.webhook_url || '';
+                        const url = `https://api.hufai.com/agent/${id}/webhook/${Date.now()}`;
                         navigator.clipboard.writeText(url);
-                        toast.success('URL copied');
+                        toast.success('Webhook URL copied to clipboard');
                       }}
                     >
                       <Copy className="w-4 h-4" />
