@@ -2,62 +2,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import {
-  Play,
-  Save,
-  MoreVertical,
-  Copy,
-  Trash2,
-  FileText,
-  Plus,
-  Edit,
-  Clock,
-  Sparkles,
-  Filter,
-  Server,
-  Plug,
-  MessageSquare,
-} from 'lucide-react';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
-import { Switch } from '../components/ui/switch';
-import { Input } from '../components/ui/input';
-import { Textarea } from '../components/ui/textarea';
-import { Slider } from '../components/ui/slider';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '../components/ui/form';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../components/ui/table';
+import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption } from '../services/agentApi';
@@ -68,28 +14,12 @@ import type { AgentToolType } from '../types/agent.types';
 import { SelectToolsModal } from '../components/tools';
 import { TriggerModal } from '../components/agent/TriggerModal';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
-
-const agentFormSchema = z.object({
-  agent_name: z.string().min(1, 'Agent name is required'),
-  provider: z.string().min(1, 'Provider is required'),
-  model: z.string().min(1, 'Model is required'),
-  temperature: z.number().min(0).max(2),
-  top_p: z.number().min(0).max(1),
-  disabled: z.boolean(),
-  allow_chat: z.boolean(),
-  persist_conversation: z.boolean(),
-  description: z.string().optional(),
-  instructions: z.string(),
-});
-
-type AgentFormValues = z.infer<typeof agentFormSchema>;
-
-const mockMCPs = [
-  { id: 'm1', name: 'Zendesk MCP', description: 'Query and manage Zendesk tickets', provider: 'Zendesk', status: 'connected' },
-  { id: 'm2', name: 'Slack MCP', description: 'Send messages and read channels', provider: 'Slack', status: 'connected' },
-  { id: 'm3', name: 'PostgreSQL MCP', description: 'Query customer database', provider: 'PostgreSQL', status: 'connected' },
-  { id: 'm4', name: 'Stripe MCP', description: 'Access payment and subscription data', provider: 'Stripe', status: 'inactive' },
-];
+import { AgentHeader } from '../components/agent/AgentHeader';
+import { GeneralTab } from '../components/agent/GeneralTab';
+import { BehaviorTab } from '../components/agent/BehaviorTab';
+import { TriggersTab } from '../components/agent/TriggersTab';
+import { ToolsTab } from '../components/agent/ToolsTab';
+import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 
 
 export function AgentFormPage() {
@@ -491,13 +421,6 @@ export function AgentFormPage() {
   };
 
 
-  const filteredTriggers = triggers.filter(trigger => {
-    if (triggerFilter !== 'all' && trigger.type !== triggerFilter) return false;
-    if (triggerStatusFilter === 'active' && trigger.status !== 'active') return false;
-    if (triggerStatusFilter === 'disabled' && trigger.status === 'active') return false;
-    return true;
-  });
-
   const activeTriggerCount = triggers.filter(t => t.status === 'active').length;
 
   if (loading) {
@@ -511,85 +434,21 @@ export function AgentFormPage() {
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="flex-1 space-y-2">
-            <div className="flex items-center gap-3 flex-wrap">
-              <Input
-                value={form.watch('agent_name')}
-                onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
-                className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-                placeholder="Agent Name"
-              />
-              <Badge variant={watchDisabled ? 'secondary' : 'default'}>
-                {watchDisabled ? 'Disabled' : 'Active'}
-              </Badge>
-              <Badge variant="outline">
-                {providers.find(p => p.name === form.watch('provider'))?.provider_name || form.watch('provider') || 'Provider'}
-              </Badge>
-              <Badge variant="outline">
-                {models.find(m => m.name === form.watch('model'))?.model_name || form.watch('model') || 'Model'}
-              </Badge>
-            </div>
-            {activeTriggerCount > 0 && (
-              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                {activeTriggerCount} active {activeTriggerCount === 1 ? 'trigger' : 'triggers'}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={handleRunTest} type="button">
-              <Play className="w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="sm" type="button">
-              <MessageSquare className="w-4 h-4 mr-2" />
-              Chat
-            </Button>
-            {showSaveButton && (
-              <Button size="sm" onClick={form.handleSubmit(onSubmit)} disabled={saving}>
-                <Save className="w-4 h-4 mr-2" />
-                {saving ? (isNew ? 'Creating...' : 'Saving...') : (isNew ? 'Create' : 'Save')}
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <div className="px-2 py-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Disable</span>
-                    <Switch 
-                      checked={watchDisabled} 
-                      onCheckedChange={(checked) => form.setValue('disabled', checked)}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                </div>
-                {!isNew && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleDuplicate}>
-                      <Copy className="w-4 h-4 mr-2" />
-                      Duplicate
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleViewLogs}>
-                      <FileText className="w-4 h-4 mr-2" />
-                      View Logs
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleDelete} className="text-destructive">
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+        <AgentHeader
+          form={form}
+          watchDisabled={watchDisabled}
+          providers={providers}
+          models={models}
+          activeTriggerCount={activeTriggerCount}
+          isNew={isNew}
+          showSaveButton={showSaveButton}
+          saving={saving}
+          onSave={form.handleSubmit(onSubmit)}
+          onRunTest={handleRunTest}
+          onDuplicate={handleDuplicate}
+          onViewLogs={handleViewLogs}
+          onDelete={handleDelete}
+        />
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -601,487 +460,35 @@ export function AgentFormPage() {
                 <TabsTrigger value="tools">Tools & MCP</TabsTrigger>
               </TabsList>
 
-              {/* General Tab */}
               <TabsContent value="general" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>LLM Configuration</CardTitle>
-                    <CardDescription>Configure language model settings</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-6 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="agent_name"
-                      render={({ field }) => (
-                        <FormItem className="sm:col-span-2">
-                          <FormLabel>Agent Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="my-agent" {...field} />
-                          </FormControl>
-                          <FormDescription>Unique agent name</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem className="sm:col-span-2">
-                          <FormLabel>Description</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="A short summary describing what this agent does or is designed for."
-                              className="min-h-[80px] resize-y"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>A brief description of the agent's purpose</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="provider"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Provider</FormLabel>
-                          <Select
-                            onValueChange={(value) => {
-                              field.onChange(value);
-                              form.setValue('model', '');
-                            }}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select provider" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {providers.map((provider) => (
-                                <SelectItem key={provider.name} value={provider.name}>
-                                  {provider.provider_name || provider.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="model"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Model</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                            disabled={!watchProvider}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select model" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {models
-                                .filter((model) => model.provider === watchProvider)
-                                .map((model) => (
-                                  <SelectItem key={model.name} value={model.name}>
-                                    {model.model_name || model.name}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                          <FormDescription>Filtered by selected provider</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="temperature"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Temperature: {field.value}</FormLabel>
-                          <FormControl>
-                            <Slider
-                              min={0}
-                              max={2}
-                              step={0.1}
-                              value={[field.value]}
-                              onValueChange={(vals) => field.onChange(vals[0])}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Lower = focused, higher = creative
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="top_p"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Top P: {field.value}</FormLabel>
-                          <FormControl>
-                            <Slider
-                              min={0}
-                              max={1}
-                              step={0.05}
-                              value={[field.value]}
-                              onValueChange={(vals) => field.onChange(vals[0])}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Nucleus sampling parameter
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
+                <GeneralTab form={form} providers={providers} models={models} watchProvider={watchProvider} />
               </TabsContent>
 
-              {/* Behavior Tab */}
               <TabsContent value="behavior" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Conversation Settings</CardTitle>
-                    <CardDescription>Configure conversation behavior</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="allow_chat"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Allow Chat</FormLabel>
-                            <FormDescription>
-                              Enable in Chat window
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="persist_conversation"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-base">Persist History</FormLabel>
-                            <FormDescription>
-                              Save conversation logs
-                            </FormDescription>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Instructions</CardTitle>
-                    <CardDescription>Define system prompt, goals, and constraints</CardDescription>
-                  </CardHeader>
-                  <CardContent className="relative">
-                    <FormField
-                      control={form.control}
-                      name="instructions"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Define system prompt, goals, constraints..."
-                              className="min-h-[300px] font-mono resize-y"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="absolute top-6 right-10"
-                      onClick={handleOptimizePrompt}
-                      disabled={optimizingPrompt}
-                    >
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      {optimizingPrompt ? 'Optimizing...' : 'Optimize'}
-                    </Button>
-                  </CardContent>
-                </Card>
+                <BehaviorTab form={form} optimizingPrompt={optimizingPrompt} onOptimizePrompt={handleOptimizePrompt} />
               </TabsContent>
 
-              {/* Triggers Tab */}
               <TabsContent value="triggers" className="space-y-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                    <div className="space-y-1.5">
-                      <CardTitle>Agent Triggers</CardTitle>
-                      <CardDescription>
-                        Define multiple ways this agent can run
-                      </CardDescription>
-                    </div>
-                    <Button onClick={handleAddTrigger} size="sm" type="button">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Trigger
-                    </Button>
-                  </CardHeader>
-                  <CardContent>
-                    {triggers.length === 0 ? (
-                      <div className="text-center py-12">
-                        <p className="text-muted-foreground mb-4">No triggers added yet.</p>
-                        <Button onClick={handleAddTrigger} variant="outline" type="button">
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add Trigger
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="flex items-center gap-2">
-                            <Filter className="w-4 h-4 text-muted-foreground" />
-                            <Select value={triggerFilter} onValueChange={setTriggerFilter}>
-                              <SelectTrigger className="w-[180px]">
-                                <SelectValue placeholder="Filter by type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All Types</SelectItem>
-                                {Array.isArray(triggerTypes) && triggerTypes.map((type) => (
-                                  <SelectItem key={type.name} value={type.name}>
-                                    {type.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <Select value={triggerStatusFilter} onValueChange={setTriggerStatusFilter}>
-                            <SelectTrigger className="w-[150px]">
-                              <SelectValue placeholder="Filter by status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">All Status</SelectItem>
-                              <SelectItem value="active">Active</SelectItem>
-                              <SelectItem value="disabled">Disabled</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <div className="text-sm text-muted-foreground ml-auto">
-                            {filteredTriggers.length} of {triggers.length} triggers
-                          </div>
-                        </div>
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Type</TableHead>
-                              <TableHead>Details</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Last Run</TableHead>
-                              <TableHead>Next Run</TableHead>
-                              <TableHead className="text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {filteredTriggers.map((trigger) => (
-                              <TableRow key={trigger.name}>
-                                <TableCell className="font-medium">{trigger.type}</TableCell>
-                                <TableCell className="max-w-xs truncate">{trigger.trigger_name}</TableCell>
-                                <TableCell>
-                                  <Badge variant={trigger.status === 'active' ? 'default' : 'secondary'}>
-                                    {trigger.status === 'active' ? 'Active' : 'Disabled'}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>—</TableCell>
-                                <TableCell>—</TableCell>
-                                <TableCell className="text-right">
-                                  <div className="flex justify-end gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleEditTrigger(trigger)}
-                                    >
-                                      <Edit className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleDeleteTrigger(trigger.name)}
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
+                <TriggersTab
+                  triggers={triggers}
+                  triggerTypes={triggerTypes}
+                  triggerFilter={triggerFilter}
+                  triggerStatusFilter={triggerStatusFilter}
+                  onTriggerFilterChange={setTriggerFilter}
+                  onTriggerStatusFilterChange={setTriggerStatusFilter}
+                  onAddTrigger={handleAddTrigger}
+                  onEditTrigger={handleEditTrigger}
+                  onDeleteTrigger={handleDeleteTrigger}
+                />
               </TabsContent>
 
-              {/* Tools & MCP Tab */}
               <TabsContent value="tools" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <Server className="w-5 h-5" />
-                          Tools
-                        </CardTitle>
-                        <CardDescription>Function tools available to this agent</CardDescription>
-                      </div>
-                      <Button size="sm" variant="outline" onClick={() => setShowToolsModal(true)} type="button">
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Tool
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {selectedTools.length === 0 ? (
-                      <div className="text-center py-12">
-                        <p className="text-muted-foreground mb-4">No tools added yet.</p>
-                        <Button onClick={() => setShowToolsModal(true)} variant="outline" type="button">
-                          <Plus className="w-4 h-4 mr-2" />
-                          Add Tool
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {selectedTools.map((tool) => {
-                          // Get tool type display name from tool_type link field
-                          const toolType = toolTypes.find((tt) => tt.name === tool.tool_type);
-                          const toolTypeDisplayName = toolType?.name1;
-
-                          return (
-                            <div
-                              key={tool.name}
-                              className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
-                                  {toolTypeDisplayName && (
-                                    <Badge variant="outline" className="text-xs shrink-0">
-                                      {toolTypeDisplayName}
-                                    </Badge>
-                                  )}
-                                </div>
-                                {tool.description && (
-                                  <p className="text-xs text-muted-foreground">{tool.description}</p>
-                                )}
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleRemoveTool(tool.name)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <Plug className="w-5 h-5" />
-                          Model Context Protocol (MCP)
-                        </CardTitle>
-                        <CardDescription>Connected MCP servers for extended capabilities</CardDescription>
-                      </div>
-                      <Button 
-                        type="button"
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => toast.info('Coming soon')}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Connect MCP
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-3">
-                      {mockMCPs.map((mcp) => (
-                        <div
-                          key={mcp.id}
-                          className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-medium text-sm">{mcp.name}</h4>
-                              <Badge variant="outline" className="text-xs shrink-0">
-                                {mcp.provider}
-                              </Badge>
-                              <Badge
-                                variant={mcp.status === 'connected' ? 'default' : 'secondary'}
-                                className="text-xs shrink-0"
-                              >
-                                {mcp.status}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground">{mcp.description}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toast.info('Coming soon')}
-                            >
-                              <Switch checked={mcp.status === 'connected'} className="pointer-events-none" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toast.info('Coming soon')}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                <ToolsTab
+                  selectedTools={selectedTools}
+                  toolTypes={toolTypes}
+                  onAddTools={() => setShowToolsModal(true)}
+                  onRemoveTool={handleRemoveTool}
+                />
               </TabsContent>
             </Tabs>
           </form>

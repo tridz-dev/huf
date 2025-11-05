@@ -1,4 +1,3 @@
-import React from 'react';
 import { Control } from 'react-hook-form';
 import {
   FormControl,
@@ -18,7 +17,7 @@ import {
 import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { triggerFieldsConfig, type TriggerFieldConfig } from './TriggerFieldsConfig';
+import { triggerFieldsConfig } from './TriggerFieldsConfig';
 
 interface TriggerFieldsRendererProps {
   triggerType: string;
