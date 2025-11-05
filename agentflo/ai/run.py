@@ -14,7 +14,7 @@ class RunProvider:
 	"""
 	
 	@staticmethod
-	def run(agent, enhanced_prompt, provider, model, context=None):
+	def run(agent, enhanced_prompt, provider, model, context=None, stream=False, stream_callbacks=None):
 		provider_lower = provider.lower()
 		
 		# Route existing providers to LiteLLM
@@ -25,7 +25,7 @@ class RunProvider:
 			# Use LiteLLM for these providers
 			try:
 				from agentflo.ai.providers import litellm
-				return litellm.run(agent, enhanced_prompt, provider, model, context=context)
+				return litellm.run(agent, enhanced_prompt, provider, model, context=context, stream=stream, stream_callbacks=stream_callbacks)
 			except ImportError as e:
 				# LiteLLM not installed - provide helpful error message
 				error_msg = (
