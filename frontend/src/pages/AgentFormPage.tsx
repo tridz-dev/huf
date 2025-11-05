@@ -539,10 +539,10 @@ export function AgentFormPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={handleRunTest}>
+            <Button variant="outline" size="icon" onClick={handleRunTest} type="button">
               <Play className="w-4 h-4" />
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" type="button">
               <MessageSquare className="w-4 h-4 mr-2" />
               Chat
             </Button>
@@ -1001,6 +1001,7 @@ export function AgentFormPage() {
                                 )}
                               </div>
                               <Button
+                                type="button"
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleRemoveTool(tool.name)}
@@ -1025,7 +1026,12 @@ export function AgentFormPage() {
                         </CardTitle>
                         <CardDescription>Connected MCP servers for extended capabilities</CardDescription>
                       </div>
-                      <Button size="sm" variant="outline">
+                      <Button 
+                        type="button"
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => toast.info('Coming soon')}
+                      >
                         <Plus className="w-4 h-4 mr-2" />
                         Connect MCP
                       </Button>
@@ -1055,16 +1061,18 @@ export function AgentFormPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
+                              type="button"
                               variant="ghost"
                               size="sm"
-                              onClick={() => toast.info(mcp.status === 'connected' ? `Disabling ${mcp.name}` : `Enabling ${mcp.name}`)}
+                              onClick={() => toast.info('Coming soon')}
                             >
                               <Switch checked={mcp.status === 'connected'} className="pointer-events-none" />
                             </Button>
                             <Button
+                              type="button"
                               variant="ghost"
                               size="sm"
-                              onClick={() => toast.info(`Removing ${mcp.name}`)}
+                              onClick={() => toast.info('Coming soon')}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>

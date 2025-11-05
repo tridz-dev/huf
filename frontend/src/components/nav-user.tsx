@@ -95,7 +95,7 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
+            {/* <DropdownMenuGroup>
               <DropdownMenuItem>
                 <Sparkles className="mr-2 h-4 w-4" />
                 Upgrade to Pro
@@ -120,8 +120,8 @@ export function NavUser() {
                 {isDark ? 'Light Mode' : 'Dark Mode'}
               </DropdownMenuItem>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout}>
+            <DropdownMenuSeparator /> */}
+            <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-700">
               <LogOut className="mr-2 h-4 w-4" />
               Log out
             </DropdownMenuItem>
