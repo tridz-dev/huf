@@ -1,6 +1,28 @@
-import { db } from '@/lib/frappe-sdk';
+import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AgentDoc } from '@/types/agent.types';
+
+/**
+ * Trigger type from API
+ */
+export interface TriggerTypeOption {
+  name: string;
+}
+
+/**
+ * Fetch trigger types from API
+ */
+export async function getTriggerTypes(): Promise<TriggerTypeOption[]> {
+  try {
+    const result = await call.get('agentflo.agentflo.doctype.agent_trigger.agent_trigger.get_trigger_type');
+    // Handle different response formats
+    // Frappe API might return { message: [...] } or just the array directly
+    return result.message as TriggerTypeOption[];
+  } catch (error) {
+    console.error('Error fetching trigger types:', error);
+    throw error;
+  }
+}
 
 /**
  * Fields needed for the agents list page
@@ -81,22 +103,6 @@ export async function getAgent(name: string): Promise<AgentDoc> {
     throw error;
   }
 }
-
-/**
- * Fields needed for agent trigger editing
- */
-const AGENT_TRIGGER_EDIT_FIELDS = [
-  'name',
-  'trigger_name',
-  'agent',
-  'trigger_type',
-  'disabled',
-  'scheduled_interval',
-  'interval_count',
-  'reference_doctype',
-  'doc_event',
-  'condition',
-];
 
 /**
  * Agent Trigger document from Frappe (for editing)

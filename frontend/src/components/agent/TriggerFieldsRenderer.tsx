@@ -1,0 +1,162 @@
+import React from 'react';
+import { Control } from 'react-hook-form';
+import {
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { triggerFieldsConfig, type TriggerFieldConfig } from './TriggerFieldsConfig';
+
+interface TriggerFieldsRendererProps {
+  triggerType: string;
+  control: Control<any>;
+  docTypes: Array<{ name: string }>;
+  loadingDocTypes: boolean;
+  agentId?: string;
+}
+
+/**
+ * Reusable component to render trigger fields based on configuration
+ * This makes it easy to add new trigger types and fields
+ */
+export function TriggerFieldsRenderer({
+  triggerType,
+  control,
+  docTypes,
+  loadingDocTypes,
+  agentId,
+}: TriggerFieldsRendererProps) {
+  const fields = triggerFieldsConfig[triggerType];
+  if (!fields) return null;
+
+  return (
+    <div className="space-y-4">
+      {fields.map((fieldConfig) => {
+        // Custom render function
+        if (fieldConfig.type === 'custom' && fieldConfig.render) {
+          return (
+            <div key={fieldConfig.field}>
+              {fieldConfig.render(control, null, null, agentId)}
+            </div>
+          );
+        }
+
+        // Regular form fields
+        return (
+          <FormField
+            key={fieldConfig.field}
+            control={control}
+            name={fieldConfig.field}
+            render={({ field }) => {
+              if (fieldConfig.type === 'select') {
+                const options = Array.isArray(fieldConfig.options)
+                  ? fieldConfig.options
+                  : docTypes.map((dt) => dt.name); // For reference_doctype
+
+                return (
+                  <FormItem>
+                    <FormLabel>{fieldConfig.label}</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={fieldConfig.field === 'reference_doctype' && loadingDocTypes}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              fieldConfig.field === 'reference_doctype' && loadingDocTypes
+                                ? 'Loading...'
+                                : fieldConfig.placeholder || `Select ${fieldConfig.label}`
+                            }
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {options.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {fieldConfig.description && (
+                      <FormDescription>{fieldConfig.description}</FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }
+
+              if (fieldConfig.type === 'input') {
+                return (
+                  <FormItem>
+                    <FormLabel>{fieldConfig.label}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type={fieldConfig.field === 'interval_count' ? 'number' : 'text'}
+                        min={fieldConfig.field === 'interval_count' ? 1 : undefined}
+                        step={fieldConfig.field === 'interval_count' ? 1 : undefined}
+                        placeholder={fieldConfig.placeholder}
+                        {...field}
+                        value={fieldConfig.field === 'interval_count' ? field.value || '' : field.value}
+                        onChange={
+                          fieldConfig.field === 'interval_count'
+                            ? (e) => {
+                                const value = e.target.value;
+                                if (value === '' || /^\d+$/.test(value)) {
+                                  field.onChange(value === '' ? undefined : parseInt(value, 10));
+                                }
+                              }
+                            : field.onChange
+                        }
+                      />
+                    </FormControl>
+                    {fieldConfig.description && (
+                      <FormDescription>{fieldConfig.description}</FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }
+
+              if (fieldConfig.type === 'textarea') {
+                return (
+                  <FormItem>
+                    <FormLabel>{fieldConfig.label}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder={fieldConfig.placeholder}
+                        className="font-mono resize-y min-h-[100px]"
+                        {...field}
+                      />
+                    </FormControl>
+                    {fieldConfig.description && (
+                      <FormDescription>{fieldConfig.description}</FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }
+
+              return <div key={fieldConfig.field} />;
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+

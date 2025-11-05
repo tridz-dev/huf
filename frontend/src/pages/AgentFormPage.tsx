@@ -23,7 +23,6 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Slider } from '../components/ui/slider';
 import {
@@ -50,14 +49,6 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/dialog';
-import {
   Table,
   TableBody,
   TableCell,
@@ -68,13 +59,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
-import { AgentTrigger, TriggerType, ScheduledInterval, DocEventType, AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, type AgentTriggerListItem, type AgentTriggerDoc } from '../services/agentApi';
+import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolFunctions, getToolTypes } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
 import type { AgentToolType } from '../types/agent.types';
 import { SelectToolsModal } from '../components/tools';
+import { TriggerModal } from '../components/agent/TriggerModal';
 
 const agentFormSchema = z.object({
   agent_name: z.string().min(1, 'Agent name is required'),
@@ -91,47 +83,13 @@ const agentFormSchema = z.object({
 
 type AgentFormValues = z.infer<typeof agentFormSchema>;
 
-const triggerFormSchema = z.object({
-  trigger_name: z.string().min(1, 'Trigger name is required').optional(),
-  trigger_type: z.enum(['Schedule', 'Doc Event', 'Webhook', 'App Event', 'Manual']),
-  active: z.boolean(),
-  schedule_interval: z.string().optional(),
-  interval_count: z.number().int().min(1).optional(),
-  reference_doctype: z.string().optional(),
-  doc_event: z.string().optional(),
-  condition: z.string().optional(),
-  app_name: z.string().optional(),
-  event_name: z.string().optional(),
-}).refine((data) => {
-  // trigger_name is required when creating (not editing)
-  // This will be validated in the component
-  if (data.trigger_type === 'Schedule') {
-    return data.schedule_interval && data.interval_count;
-  }
-  if (data.trigger_type === 'Doc Event') {
-    return data.reference_doctype && data.doc_event;
-  }
-  if (data.trigger_type === 'App Event') {
-    return data.app_name && data.event_name;
-  }
-  return true;
-}, {
-  message: "Required fields missing for selected trigger type",
-});
-
-type TriggerFormValues = z.infer<typeof triggerFormSchema>;
-
-const scheduledIntervals: ScheduledInterval[] = ['Hourly', 'Daily', 'Weekly', 'Monthly', 'Yearly'];
-
-const triggerTypes: TriggerType[] = ['Schedule', 'Doc Event', 'Webhook', 'App Event', 'Manual'];
-
-
 const mockMCPs = [
   { id: 'm1', name: 'Zendesk MCP', description: 'Query and manage Zendesk tickets', provider: 'Zendesk', status: 'connected' },
   { id: 'm2', name: 'Slack MCP', description: 'Send messages and read channels', provider: 'Slack', status: 'connected' },
   { id: 'm3', name: 'PostgreSQL MCP', description: 'Query customer database', provider: 'PostgreSQL', status: 'connected' },
   { id: 'm4', name: 'Stripe MCP', description: 'Access payment and subscription data', provider: 'Stripe', status: 'inactive' },
 ];
+
 
 export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -154,6 +112,8 @@ export function AgentFormPage() {
   const [initialDisabled, setInitialDisabled] = useState(false); // Track initial disabled state
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+  const [triggerTypes, setTriggerTypes] = useState<TriggerTypeOption[]>([]);
+  const [loadingTriggerTypes, setLoadingTriggerTypes] = useState(false);
 
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
@@ -171,19 +131,8 @@ export function AgentFormPage() {
       },
   });
 
-  const triggerForm = useForm<TriggerFormValues>({
-    resolver: zodResolver(triggerFormSchema),
-    defaultValues: {
-      trigger_name: '',
-      trigger_type: 'Schedule',
-      active: true,
-      interval_count: 1,
-    },
-  });
-
   const watchProvider = form.watch('provider');
   const watchDisabled = form.watch('disabled');
-  const watchTriggerType = triggerForm.watch('trigger_type');
   const isDirty = form.formState.isDirty;
   
   // Check if tools have changed by comparing tool names
@@ -209,6 +158,31 @@ export function AgentFormPage() {
   
   // Show save button for new agents, when form is dirty, when tools have changed, or when disabled changed
   const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged;
+
+  // Load trigger types on mount
+  useEffect(() => {
+    if (triggerTypes.length === 0 && !loadingTriggerTypes) {
+      setLoadingTriggerTypes(true);
+      getTriggerTypes()
+        .then((data) => {
+          // Ensure data is an array before setting state
+          if (Array.isArray(data)) {
+            // Filter out any types that don't have a name
+            const triggerTypes = data.filter((type) => (type.name));
+            setTriggerTypes(triggerTypes);
+          } else {
+            console.error('getTriggerTypes returned non-array:', data);
+            setTriggerTypes([]);
+          }
+          setLoadingTriggerTypes(false);
+        })
+        .catch((error) => {
+          console.error('Error loading trigger types:', error);
+          setTriggerTypes([]);
+          setLoadingTriggerTypes(false);
+        });
+    }
+  }, [triggerTypes.length, loadingTriggerTypes]);
 
   // Load DocTypes when modal opens
   useEffect(() => {
@@ -435,16 +409,6 @@ export function AgentFormPage() {
 
   const handleAddTrigger = () => {
     setEditingTrigger(null);
-    triggerForm.reset({
-      trigger_name: '',
-      trigger_type: 'Schedule',
-      active: true,
-      interval_count: 1,
-      schedule_interval: undefined,
-      reference_doctype: undefined,
-      doc_event: undefined,
-      condition: undefined,
-    });
     setShowTriggerModal(true);
   };
 
@@ -452,16 +416,6 @@ export function AgentFormPage() {
     try {
       const fullTrigger = await getAgentTrigger(trigger.name);
       setEditingTrigger(fullTrigger);
-      triggerForm.reset({
-        trigger_name: fullTrigger.trigger_name,
-        trigger_type: (fullTrigger.trigger_type || 'Schedule') as TriggerType,
-        active: fullTrigger.disabled === 0 || fullTrigger.disabled === undefined,
-        schedule_interval: fullTrigger.scheduled_interval,
-        interval_count: fullTrigger.interval_count,
-        reference_doctype: fullTrigger.reference_doctype,
-        doc_event: fullTrigger.doc_event,
-        condition: fullTrigger.condition,
-      });
       setShowTriggerModal(true);
     } catch (error) {
       console.error('Error loading trigger:', error);
@@ -474,7 +428,18 @@ export function AgentFormPage() {
     toast.success('Trigger deleted');
   };
 
-  const handleSaveTrigger = async (values: TriggerFormValues) => {
+  const handleSaveTrigger = async (values: {
+    trigger_name?: string;
+    trigger_type: string;
+    active: boolean;
+    scheduled_interval?: string;
+    interval_count?: number;
+    reference_doctype?: string;
+    doc_event?: string;
+    condition?: string;
+    app_name?: string;
+    event_name?: string;
+  }) => {
     if (!id || id === 'new') {
       toast.error('Please save the agent first before adding triggers');
       return;
@@ -491,7 +456,7 @@ export function AgentFormPage() {
         trigger_name: editingTrigger ? editingTrigger.trigger_name : (values.trigger_name || ''),
         trigger_type: values.trigger_type,
         disabled: values.active ? 0 : 1,
-        scheduled_interval: values.schedule_interval,
+        scheduled_interval: values.scheduled_interval,
         interval_count: values.interval_count,
         reference_doctype: values.reference_doctype,
         doc_event: values.doc_event,
@@ -520,46 +485,6 @@ export function AgentFormPage() {
     }
   };
 
-  const getTriggerDetails = (trigger: AgentTrigger): string => {
-    switch (trigger.trigger_type) {
-      case 'Schedule':
-        return `${trigger.schedule_interval} × ${trigger.interval_count}`;
-      case 'Doc Event':
-        return `${trigger.reference_doctype} → ${trigger.doc_event}`;
-      case 'Webhook':
-        return trigger.webhook_url?.split('/').pop() || 'Webhook';
-      case 'App Event':
-        return `${trigger.app_name} → ${trigger.event_name}`;
-      case 'Manual':
-        return 'Manual trigger';
-      default:
-        return '';
-    }
-  };
-
-  const getLastRun = (trigger: AgentTrigger): string => {
-    if (trigger.last_execution) {
-      const date = new Date(trigger.last_execution);
-      const now = new Date();
-      const diff = Math.floor((now.getTime() - date.getTime()) / 1000 / 60);
-      if (diff < 60) return `${diff}m ago`;
-      if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
-      return `${Math.floor(diff / 1440)}d ago`;
-    }
-    return '—';
-  };
-
-  const getNextRun = (trigger: AgentTrigger): string => {
-    if (trigger.next_execution) {
-      const date = new Date(trigger.next_execution);
-      const now = new Date();
-      const diff = Math.floor((date.getTime() - now.getTime()) / 1000 / 60);
-      if (diff < 60) return `${diff}m`;
-      if (diff < 1440) return `${Math.floor(diff / 60)}h`;
-      return `${Math.floor(diff / 1440)}d`;
-    }
-    return '—';
-  };
 
   const filteredTriggers = triggers.filter(trigger => {
     if (triggerFilter !== 'all' && trigger.type !== triggerFilter) return false;
@@ -918,7 +843,7 @@ export function AgentFormPage() {
                         Define multiple ways this agent can run
                       </CardDescription>
                     </div>
-                    <Button onClick={handleAddTrigger} size="sm">
+                    <Button onClick={handleAddTrigger} size="sm" type="button">
                       <Plus className="w-4 h-4 mr-2" />
                       Add Trigger
                     </Button>
@@ -927,7 +852,7 @@ export function AgentFormPage() {
                     {triggers.length === 0 ? (
                       <div className="text-center py-12">
                         <p className="text-muted-foreground mb-4">No triggers added yet.</p>
-                        <Button onClick={handleAddTrigger} variant="outline">
+                        <Button onClick={handleAddTrigger} variant="outline" type="button">
                           <Plus className="w-4 h-4 mr-2" />
                           Add Trigger
                         </Button>
@@ -943,9 +868,9 @@ export function AgentFormPage() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="all">All Types</SelectItem>
-                                {triggerTypes.map((type) => (
-                                  <SelectItem key={type} value={type}>
-                                    {type}
+                                {Array.isArray(triggerTypes) && triggerTypes.map((type) => (
+                                  <SelectItem key={type.name} value={type.name}>
+                                    {type.name}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1151,305 +1076,16 @@ export function AgentFormPage() {
       </div>
 
       {/* Trigger Modal */}
-      <Dialog open={showTriggerModal} onOpenChange={setShowTriggerModal}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Configure Trigger</DialogTitle>
-            <DialogDescription>
-              {editingTrigger ? 'Edit trigger configuration' : 'Add a new trigger to this agent'}
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...triggerForm}>
-            <form onSubmit={triggerForm.handleSubmit(handleSaveTrigger)} className="space-y-4">
-              {/* Trigger Name Field - Only editable when adding */}
-              {!editingTrigger && (
-                <FormField
-                  control={triggerForm.control}
-                  name="trigger_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Trigger Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter trigger name" {...field} />
-                      </FormControl>
-                      <FormDescription>A unique name for this trigger</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              {/* Trigger Name Display - Read-only when editing */}
-              {editingTrigger && (
-                <FormItem>
-                  <FormLabel>Trigger Name</FormLabel>
-                  <FormControl>
-                    <Input value={editingTrigger.trigger_name} disabled />
-                  </FormControl>
-                  <FormDescription>Trigger name cannot be changed after creation</FormDescription>
-                </FormItem>
-              )}
-
-              <FormField
-                control={triggerForm.control}
-                name="trigger_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Trigger Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {triggerTypes.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={triggerForm.control}
-                name="active"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Active</FormLabel>
-                      <FormDescription>Enable this trigger</FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              {/* Schedule Fields */}
-              {watchTriggerType === 'Schedule' && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={triggerForm.control}
-                    name="schedule_interval"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Interval</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select interval" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {scheduledIntervals.map((interval) => (
-                              <SelectItem key={interval} value={interval}>
-                                {interval}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={triggerForm.control}
-                    name="interval_count"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Count</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            step={1}
-                            {...field}
-                            value={field.value || ''}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (value === '' || /^\d+$/.test(value)) {
-                                field.onChange(value === '' ? undefined : parseInt(value, 10));
-                              }
-                            }}
-                          />
-                        </FormControl>
-                        <FormDescription>Run every n intervals</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
-
-              {/* Doc Event Fields */}
-              {watchTriggerType === 'Doc Event' && (
-                <div className="space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={triggerForm.control}
-                      name="reference_doctype"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>DocType</FormLabel>
-                          <Select 
-                            onValueChange={field.onChange} 
-                            value={field.value}
-                            disabled={loadingDocTypes}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={loadingDocTypes ? "Loading..." : "Select DocType"} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {docTypes.map((dt) => (
-                                <SelectItem key={dt.name} value={dt.name}>
-                                  {dt.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormDescription>Target document type</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={triggerForm.control}
-                      name="doc_event"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Doc Event</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select event" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {['before_insert', 'after_insert', 'validate'].map((event) => (
-                                <SelectItem key={event} value={event}>
-                                  {event}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={triggerForm.control}
-                    name="condition"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Condition (Python)</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Use 'doc' to reference the document"
-                            className="font-mono resize-y min-h-[100px]"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Optional condition to filter events
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
-
-              {/* Webhook Fields */}
-              {watchTriggerType === 'Webhook' && (
-                <div className="space-y-2">
-                  <Label>Webhook URL</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={`https://api.hufai.com/agent/${id}/webhook/${Date.now()}`}
-                      readOnly
-                      className="flex-1 font-mono text-sm"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        const url = `https://api.hufai.com/agent/${id}/webhook/${Date.now()}`;
-                        navigator.clipboard.writeText(url);
-                        toast.success('Webhook URL copied to clipboard');
-                      }}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground">Auto-generated webhook endpoint</p>
-                </div>
-              )}
-
-              {/* App Event Fields */}
-              {watchTriggerType === 'App Event' && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={triggerForm.control}
-                    name="app_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>App Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., Slack" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={triggerForm.control}
-                    name="event_name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Event Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., message.posted" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              )}
-
-              {/* Manual Fields */}
-              {watchTriggerType === 'Manual' && (
-                <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-                  Manual trigger can be run from workflows or flows. No configuration required.
-                </div>
-              )}
-
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setShowTriggerModal(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  {editingTrigger ? 'Update' : 'Add'} Trigger
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      <TriggerModal
+        open={showTriggerModal}
+        onOpenChange={setShowTriggerModal}
+        editingTrigger={editingTrigger}
+        triggerTypes={triggerTypes}
+        docTypes={docTypes}
+        loadingDocTypes={loadingDocTypes}
+        agentId={id}
+        onSave={handleSaveTrigger}
+      />
 
       {/* Select Tools Modal */}
       <SelectToolsModal
