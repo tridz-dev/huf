@@ -1,11 +1,11 @@
-import { useCallback } from 'react';
-import { Calendar, Activity, Settings, Zap } from 'lucide-react';
+import { Calendar, Activity, Settings, Zap, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PageLayout, FilterBar, GridView, ItemCard } from '../components/dashboard';
-import { usePageData } from '../hooks/dashboard/usePageData';
+import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgents } from '../services/agentApi';
 import { formatTimeAgo } from '../utils/time';
 import type { AgentDoc } from '../types/agent.types';
+import { Button } from '../components/ui/button';
 
 const statusOptions = [
   { label: 'All Status', value: 'all' },
@@ -30,25 +30,51 @@ function getStatusLabel(agent: AgentDoc): 'active' | 'disabled' {
 
 export function AgentsPage() {
   const navigate = useNavigate();
-  
-  const fetchAgents = useCallback(async () => {
-    const agents = await getAgents();
-    return agents;
-  }, []);
 
-  const { data, search, setSearch, filters, setFilters, loading } = usePageData<AgentDoc>({
-    fetchFn: fetchAgents,
-    searchFields: ['agent_name', 'description'],
-    filterFn: (agent, filters) => {
-      if (filters.status && filters.status !== 'all') {
-        const agentStatus = getStatusLabel(agent);
-        if (agentStatus !== filters.status) {
-          return false;
-        }
+  const {
+    items: agents,
+    hasMore,
+    initialLoading,
+    loadingMore,
+    search,
+    setSearch,
+    filters,
+    setFilter,
+    loadMore,
+    total,
+  } = useInfiniteScroll<
+    { status?: 'active' | 'disabled' | 'all'; page?: number; limit?: number; start?: number; search?: string },
+    AgentDoc
+  >({
+    fetchFn: async (params) => {
+      const response = await getAgents({
+        page: params.page,
+        limit: params.limit,
+        start: params.start,
+        search: params.search,
+        status: params.status,
+      });
+
+      // Handle both old (array) and new (paginated) response formats
+      if (Array.isArray(response)) {
+        return {
+          data: response,
+          hasMore: false,
+          total: response.length,
+        };
       }
-      // Category filter can be added when category field is available
-      return true;
+
+      // Convert PaginatedAgentsResponse to PaginatedResponse format
+      return {
+        data: response.items,
+        hasMore: response.hasMore,
+        total: response.total,
+      };
     },
+    initialParams: {},
+    pageSize: 5,
+    debounceMs: 300,
+    autoLoad: true,
   });
 
   return (
@@ -64,16 +90,21 @@ export function AgentsPage() {
               label: 'Status',
               value: filters.status || 'all',
               options: statusOptions,
-              onChange: (value) => setFilters({ ...filters, status: value }),
+              onChange: (value) => setFilter('status', value),
             },
           ]}
         />
       }
     >
       <GridView
-        items={data}
+        items={agents}
         columns={{ sm: 1, md: 2, lg: 3 }}
-        loading={loading}
+        loading={initialLoading}
+        emptyState={
+          <div className="text-center py-12">
+            <p className="text-muted-foreground mb-4">No agents found.</p>
+          </div>
+        }
         renderItem={(agent) => {
           const status = getStatusLabel(agent);
           return (
@@ -107,6 +138,29 @@ export function AgentsPage() {
         }}
         keyExtractor={(agent) => agent.name}
       />
+      {hasMore && (
+        <div className="flex justify-center py-8">
+          <Button
+            onClick={() => loadMore()}
+            disabled={loadingMore}
+            variant="outline"
+          >
+            {loadingMore ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              'Load More'
+            )}
+          </Button>
+        </div>
+      )}
+      {!hasMore && agents.length > 0 && (
+        <div className="text-center py-4 text-sm text-muted-foreground">
+          {total !== undefined ? `Showing all ${total} agents` : 'No more agents to load'}
+        </div>
+      )}
     </PageLayout>
   );
 }

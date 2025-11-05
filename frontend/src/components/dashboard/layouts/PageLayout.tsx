@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, RefObject } from 'react';
 import { cn } from '@/lib/utils';
 
 interface PageLayoutProps {
@@ -7,6 +7,7 @@ interface PageLayoutProps {
   toolbar?: ReactNode;
   children: ReactNode;
   className?: string;
+  scrollRef?: RefObject<HTMLDivElement>;
 }
 
 export function PageLayout({
@@ -15,9 +16,10 @@ export function PageLayout({
   toolbar,
   children,
   className,
+  scrollRef,
 }: PageLayoutProps) {
   return (
-    <div className="h-full overflow-auto">
+    <div ref={scrollRef} className="h-full overflow-auto">
       <div className={cn('p-6 space-y-6', className)}>
         {(subtitle || toolbar) && (
           <div className="flex items-center justify-between gap-4">

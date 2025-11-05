@@ -75,15 +75,101 @@ function mapAgentTriggerListItem(doc: {
 }
 
 /**
- * Fetch agents from Frappe
+ * Pagination parameters for fetching agents
  */
-export async function getAgents(): Promise<AgentDoc[]> {
+export interface GetAgentsParams {
+  page?: number;
+  limit?: number;
+  start?: number;
+  search?: string;
+  status?: 'active' | 'disabled' | 'all';
+}
+
+/**
+ * Paginated response for agents
+ */
+export interface PaginatedAgentsResponse {
+  items: AgentDoc[];
+  hasMore: boolean;
+  total?: number;
+}
+
+/**
+ * Fetch agents from Frappe
+ * Supports pagination, search, and filtering
+ */
+export async function getAgents(
+  params?: GetAgentsParams
+): Promise<PaginatedAgentsResponse | AgentDoc[]> {
   try {
+    // Backward compatibility: if no params, return array (old API)
+    if (!params) {
+      const agents = await db.getDocList(doctype.Agent, {
+        fields: AGENT_LIST_FIELDS,
+        limit: 1000,
+      });
+      return agents as AgentDoc[];
+    }
+
+    const {
+      page = 1,
+      limit = 20,
+      start = (page - 1) * limit,
+      search,
+      status,
+    } = params;
+
+    // Build filters
+    const filters: Array<[string, string, unknown]> = [];
+
+    if (status && status !== 'all' && (status === 'disabled' || status === 'active')) {
+      filters.push(['disabled', '=', status === 'disabled' ? 1 : 0]);
+    }
+
+    // Build search filters if provided
+    if (search && search.trim()) {
+      filters.push(['agent_name', 'like', `%${search.trim()}%`]);
+    }
+
+    // Fetch data
     const agents = await db.getDocList(doctype.Agent, {
       fields: AGENT_LIST_FIELDS,
-      limit: 1000,
+      filters: filters.length > 0 ? (filters as any) : undefined,
+      limit: limit + 1, // Fetch one extra to check if there's more
+      ...(start > 0 && { limit_start: start }), // Only include if start > 0
+      orderBy: { field: 'modified', order: 'desc' },
     });
-    return agents as AgentDoc[];
+
+    const mappedAgents = agents as AgentDoc[];
+    const hasMore = mappedAgents.length > limit;
+    const items = hasMore ? mappedAgents.slice(0, limit) : mappedAgents;
+
+    // Get total count efficiently using Frappe's count(name) field
+    // Only fetch count on first page to avoid unnecessary API calls
+    let total: number | undefined;
+    if (page === 1) {
+      try {
+        // Build filters matching the main query (including search for accuracy)
+        const countFilters = [...filters];
+        const countResult = await db.getDocList(doctype.Agent, {
+          fields: ['count(name) as count'],
+          filters: countFilters.length > 0 ? (countFilters as any) : undefined,
+          limit: 1,
+        });
+        // Extract count from response
+        if (countResult && countResult.length > 0) {
+          total = (countResult[0] as any).count || undefined;
+        }
+      } catch {
+        // Ignore count errors - total is optional
+      }
+    }
+
+    return {
+      items,
+      hasMore,
+      total,
+    };
   } catch (error) {
     handleFrappeError(error, 'Error fetching agents');
   }
