@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Check, ChevronsUpDown } from 'lucide-react';
+import { Search } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -10,24 +10,11 @@ import {
 } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '../ui/popover';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '../ui/command';
+import { Combobox } from '../ui/combobox';
 import { ToolCard } from './ToolCard';
 import { getToolFunctions, getToolTypes } from '@/services/toolApi';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 
 interface SelectToolsModalProps {
   open: boolean;
@@ -47,7 +34,6 @@ export function SelectToolsModal({
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [toolTypeFilter, setToolTypeFilter] = useState<string>('all');
-  const [comboboxOpen, setComboboxOpen] = useState(false);
   const [selectedToolIds, setSelectedToolIds] = useState<Set<string>>(
     new Set(selectedTools.map((t) => t.name))
   );
@@ -74,7 +60,6 @@ export function SelectToolsModal({
       // Reset filters and selection when opening
       setSearchQuery('');
       setToolTypeFilter('all');
-      setComboboxOpen(false);
       setSelectedToolIds(new Set(selectedTools.map((t) => t.name)));
     }
   }, [open, selectedTools]);
@@ -93,6 +78,18 @@ export function SelectToolsModal({
       map.set(type.name, type);
     });
     return map;
+  }, [toolTypes]);
+
+  // Prepare tool type options for Combobox
+  const toolTypeOptions = useMemo(() => {
+    const options = [
+      { value: 'all', label: 'All Tool Types' },
+      ...toolTypes.map((type) => ({
+        value: type.name,
+        label: type.name1 || type.name,
+      })),
+    ];
+    return options;
   }, [toolTypes]);
 
   // Filter tools based on search and tool_type filter
@@ -169,64 +166,14 @@ export function SelectToolsModal({
           </div>
 
           {/* Tool Type Filter - Combobox */}
-          <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={comboboxOpen}
-                className="w-full justify-between"
-              >
-                {toolTypeFilter === 'all'
-                  ? 'All Tool Types'
-                  : toolTypes.find((type) => type.name === toolTypeFilter)?.name1 || 'Select tool type...'}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-              <Command>
-                <CommandInput placeholder="Search tool types..." className="h-9" />
-                <CommandList>
-                  <CommandEmpty>No tool type found.</CommandEmpty>
-                  <CommandGroup>
-                    <CommandItem
-                      value="all"
-                      onSelect={() => {
-                        setToolTypeFilter('all');
-                        setComboboxOpen(false);
-                      }}
-                    >
-                      <Check
-                        className={cn(
-                          'mr-2 h-4 w-4',
-                          toolTypeFilter === 'all' ? 'opacity-100' : 'opacity-0'
-                        )}
-                      />
-                      All Tool Types
-                    </CommandItem>
-                    {toolTypes.map((type) => (
-                      <CommandItem
-                        key={type.name}
-                        value={type.name1}
-                        onSelect={() => {
-                          setToolTypeFilter(type.name === toolTypeFilter ? 'all' : type.name);
-                          setComboboxOpen(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            'mr-2 h-4 w-4',
-                            toolTypeFilter === type.name ? 'opacity-100' : 'opacity-0'
-                          )}
-                        />
-                        {type.name1}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          <Combobox
+            options={toolTypeOptions}
+            value={toolTypeFilter}
+            onValueChange={(value) => setToolTypeFilter(value || 'all')}
+            placeholder="Select tool type..."
+            searchPlaceholder="Search tool types..."
+            emptyText="No tool type found."
+          />
         </div>
 
         {/* Tool List */}

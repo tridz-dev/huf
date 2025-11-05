@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { triggerFieldsConfig, type TriggerFieldConfig } from './TriggerFieldsConfig';
@@ -61,9 +62,43 @@ export function TriggerFieldsRenderer({
             name={fieldConfig.field}
             render={({ field }) => {
               if (fieldConfig.type === 'select') {
+                // Use Combobox for reference_doctype (searchable)
+                if (fieldConfig.field === 'reference_doctype') {
+                  const comboboxOptions = docTypes.map((dt) => ({
+                    value: dt.name,
+                    label: dt.name,
+                  }));
+
+                  return (
+                    <FormItem>
+                      <FormLabel>{fieldConfig.label}</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          options={comboboxOptions}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          placeholder={
+                            loadingDocTypes
+                              ? 'Loading...'
+                              : fieldConfig.placeholder || `Select ${fieldConfig.label}`
+                          }
+                          disabled={loadingDocTypes}
+                          searchPlaceholder="Search DocType..."
+                          emptyText="No DocType found."
+                        />
+                      </FormControl>
+                      {fieldConfig.description && (
+                        <FormDescription>{fieldConfig.description}</FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }
+
+                // Use regular Select for other select fields
                 const options = Array.isArray(fieldConfig.options)
                   ? fieldConfig.options
-                  : docTypes.map((dt) => dt.name); // For reference_doctype
+                  : [];
 
                 return (
                   <FormItem>
@@ -71,16 +106,11 @@ export function TriggerFieldsRenderer({
                     <Select
                       onValueChange={field.onChange}
                       value={field.value}
-                      disabled={fieldConfig.field === 'reference_doctype' && loadingDocTypes}
                     >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue
-                            placeholder={
-                              fieldConfig.field === 'reference_doctype' && loadingDocTypes
-                                ? 'Loading...'
-                                : fieldConfig.placeholder || `Select ${fieldConfig.label}`
-                            }
+                            placeholder={fieldConfig.placeholder || `Select ${fieldConfig.label}`}
                           />
                         </SelectTrigger>
                       </FormControl>

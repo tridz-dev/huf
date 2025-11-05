@@ -56,7 +56,22 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
       type: 'select',
       label: 'Doc Event',
       placeholder: 'Select event',
-      options: ['before_insert', 'after_insert', 'validate'],
+      options: [
+        'before_insert',
+        'after_insert',
+        'validate',
+        'before_save',
+        'after_save',
+        'before_submit',
+        'on_submit',
+        'on_update',
+        'after_submit',
+        'on_cancel',
+        'before_rename',
+        'after_rename',
+        'on_trash',
+        'after_delete'
+      ],
       required: true,
     },
     {
