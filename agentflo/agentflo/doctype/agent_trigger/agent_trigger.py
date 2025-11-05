@@ -34,3 +34,10 @@ class AgentTrigger(Document):
 			frappe.throw(_("The Condition '{0}' is invalid").format(self.condition))
 		
 	
+@frappe.whitelist()
+def get_trigger_type():
+    options = frappe.get_meta("Agent Trigger").get_field("trigger_type").options
+    if options:
+        return [{"name": option} for option in options.split("\n")]
+    else:
+        return []
