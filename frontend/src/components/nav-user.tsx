@@ -1,13 +1,13 @@
 import {
-  BadgeCheck,
-  Bell,
+  // BadgeCheck,
+  // Bell,
   ChevronsUpDown,
-  CreditCard,
+  // CreditCard,
   LogOut,
-  Moon,
-  Sparkles,
+  // Moon,
+  // Sparkles,
 } from "lucide-react"
-import { useState } from "react"
+// import { useState } from "react"
 
 import {
   Avatar,
@@ -17,7 +17,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
+  // DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -33,7 +33,7 @@ import { useUser } from "@/contexts/UserContext"
 
 export function NavUser() {
   const { isMobile } = useSidebar()
-  const [isDark, setIsDark] = useState(false)
+  // const [isDark, setIsDark] = useState(false)
   const { logout, user } = useUser()
 
   if (!user) {
