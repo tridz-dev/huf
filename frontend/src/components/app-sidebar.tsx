@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, Settings, HelpCircle } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -40,18 +40,18 @@ const navItems = [
   },
 ]
 
-const systemItems = [
-  {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
-  },
-  {
-    title: "Help",
-    url: "/help",
-    icon: HelpCircle,
-  },
-]
+// const systemItems = [
+//   {
+//     title: "Settings",
+//     url: "/settings",
+//     icon: Settings,
+//   },
+//   {
+//     title: "Help",
+//     url: "/help",
+//     icon: HelpCircle,
+//   },
+// ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
@@ -61,7 +61,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navItems} />
-        <NavMain items={systemItems} label="System" />
+        {/* <NavMain items={systemItems} label="System" /> */}
       </SidebarContent>
       <SidebarFooter>
         <NavUser />
