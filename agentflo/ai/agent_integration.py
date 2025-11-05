@@ -435,3 +435,246 @@ def run_agent_sync(
             "conversation_id": conversation.name,
             "session_id": conv_manager.session_id
         }
+
+
+def run_agent_sync_stream(
+    agent_name: str,
+    prompt: str,
+    provider: str,
+    model: str,
+    channel_id: str = None,
+    external_id: str = None,
+    conversation_id: str = None
+):
+    """
+    Generator that yields SSE events during agent execution.
+    
+    This function wraps run_agent_sync() logic but yields events progressively
+    for real-time UI updates via Server-Sent Events (SSE).
+    
+    Yields:
+        dict: Event objects with 'type' and 'data' keys
+        Event types:
+        - agent_thinking: Agent is processing
+        - tool_call_start: Tool execution started
+        - tool_call_complete: Tool finished with result
+        - tool_call_error: Tool failed
+        - content_chunk: Streaming text chunk
+        - response_complete: Final response ready
+        - error: Error occurred
+    """
+    if not agent_name or not prompt:
+        yield {"type": "error", "data": {"error": "Both agent_name and prompt are required"}}
+        return
+    
+    if not channel_id:
+        channel_id = "api"
+    
+    try:
+        agent_doc = frappe.get_doc("Agent", agent_name)
+    except Exception as e:
+        yield {"type": "error", "data": {"error": f"Agent not found: {str(e)}"}}
+        return
+    
+    conv_manager = ConversationManager(
+        agent_name=agent_name,
+        channel=channel_id,
+        external_id=external_id
+    )
+    
+    if agent_doc.persist_conversation:
+        conversation = conv_manager.get_or_create_conversation(
+            title=f"Chat with {agent_name}",
+            conversation_id=conversation_id
+        )
+    else:
+        conversation = conv_manager.create_new_conversation(
+            title=f"Chat with {agent_name}"
+        )
+    
+    history = conv_manager.get_conversation_history(conversation.name)
+    
+    run_doc = frappe.get_doc({
+        "doctype": "Agent Run",
+        "agent": agent_name,
+        "status": "Queued",
+        "conversation": conversation.name,
+        "prompt": prompt,
+        "model": model,
+        "provider": provider
+    })
+    run_doc.insert()
+    conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name)
+    run_doc.db_set("start_time", now_datetime())
+    safe_commit()
+    
+    try:
+        yield {"type": "agent_thinking", "data": {"status": "initializing"}}
+        
+        frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
+        safe_commit()
+        
+        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
+        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
+        
+        frappe.db.set_value("Agent", agent_name, {
+            "total_run": total_runs,
+            "last_run": last_run_time
+        })
+        safe_commit()
+        
+        manager = AgentManager(agent_name)
+        agent = manager.create_agent()
+        
+        context = {
+            "channel": channel_id,
+            "external_id": external_id,
+            "conversation_history": history,
+            "agent_name": agent_name
+        }
+        
+        enhanced_prompt = f"""
+            Conversation history:
+            {json.dumps(history, indent=2)}
+            Current user message:
+            {prompt}
+        """
+        
+        # Setup streaming callbacks
+        accumulated_content = ""
+        tool_call_results = {}
+        
+        def on_tool_call_start(tool_name, args):
+            """Callback when tool call starts"""
+            tool_call_results[tool_name] = {"status": "running", "args": args}
+            yield {"type": "tool_call_start", "data": {"tool": tool_name, "args": args}}
+        
+        def on_tool_call_complete(tool_name, result):
+            """Callback when tool call completes"""
+            tool_call_results[tool_name] = {"status": "complete", "result": result}
+            yield {"type": "tool_call_complete", "data": {"tool": tool_name, "result": result}}
+        
+        def on_tool_call_error(tool_name, error):
+            """Callback when tool call errors"""
+            tool_call_results[tool_name] = {"status": "error", "error": error}
+            yield {"type": "tool_call_error", "data": {"tool": tool_name, "error": error}}
+        
+        def on_content_chunk(chunk):
+            """Callback when content chunk arrives"""
+            nonlocal accumulated_content
+            accumulated_content += chunk
+            yield {"type": "content_chunk", "data": {"content": chunk, "accumulated": accumulated_content}}
+        
+        # Create callback collection
+        callback_yields = []
+        
+        def collect_yields(callback_func):
+            """Wrapper to collect yields from callbacks"""
+            def wrapper(*args, **kwargs):
+                for event in callback_func(*args, **kwargs):
+                    callback_yields.append(event)
+            return wrapper
+        
+        stream_callbacks = {
+            "on_tool_call_start": lambda name, args: callback_yields.append({"type": "tool_call_start", "data": {"tool": name, "args": args}}),
+            "on_tool_call_complete": lambda name, result: callback_yields.append({"type": "tool_call_complete", "data": {"tool": name, "result": result}}),
+            "on_tool_call_error": lambda name, error: callback_yields.append({"type": "tool_call_error", "data": {"tool": name, "error": error}}),
+            "on_content_chunk": lambda chunk: callback_yields.append({"type": "content_chunk", "data": {"content": chunk}})
+        }
+        
+        # Track accumulated content
+        accumulated_content = ""
+        
+        def on_content_chunk_wrapper(chunk):
+            nonlocal accumulated_content
+            accumulated_content += chunk
+            callback_yields.append({"type": "content_chunk", "data": {"content": chunk, "accumulated": accumulated_content}})
+        
+        stream_callbacks["on_content_chunk"] = on_content_chunk_wrapper
+        
+        # Run agent with streaming
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            run = RunProvider.run(agent, enhanced_prompt, provider, model, context, stream=True, stream_callbacks=stream_callbacks)
+            result = loop.run_until_complete(run)
+            
+            # Yield all collected callback events (they were collected during execution)
+            for event in callback_yields:
+                yield event
+        finally:
+            loop.close()
+        
+        # Process tool call items for logging
+        for item in getattr(result, "new_items", []):
+            if item.type == "tool_call_item":
+                raw = item.raw_item
+                log_tool_call(run_doc, conversation, raw, is_output=False)
+            elif item.type == "tool_call_output_item":
+                raw = item.raw_item
+                try:
+                    tool_result = json.loads(raw.get("output")) if raw and raw.get("output") else None
+                except Exception:
+                    tool_result = raw.get("output")
+                log_tool_call(run_doc, conversation, raw, tool_result=tool_result, is_output=True)
+        
+        final_output = getattr(result, "final_output", str(result))
+        usage = getattr(result, "usage", None)
+        
+        if usage:
+            input_tokens = 0
+            output_tokens = 0
+            
+            if isinstance(usage, dict):
+                input_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
+            else:
+                input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
+                output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
+            
+            cost = 0
+            
+            frappe.db.set_value("Agent Run", run_doc.name, {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost": cost
+            })
+        
+        # Add final message
+        conv_manager.add_message(conversation, "agent", final_output, provider, model, agent_name, run_doc.name)
+        
+        frappe.db.set_value("Agent Run", run_doc.name, {
+            "status": "Success",
+            "response": final_output,
+            "prompt": prompt,
+            "model": model,
+            "provider": provider,
+            "end_time": now_datetime()
+        }, update_modified=True)
+        safe_commit()
+        
+        # Yield completion event
+        yield {
+            "type": "response_complete",
+            "data": {
+                "response": final_output,
+                "conversation_id": conversation.name,
+                "agent_run_id": run_doc.name
+            }
+        }
+        
+    except Exception as e:
+        error_msg = str(e)
+        run_doc.db_set("status", "Failed", update_modified=True)
+        run_doc.db_set("error_message", error_msg)
+        
+        frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "AgentFlo")
+        
+        yield {
+            "type": "error",
+            "data": {
+                "error": error_msg,
+                "agent_run_id": run_doc.name,
+                "conversation_id": conversation.name if 'conversation' in locals() else None
+            }
+        }

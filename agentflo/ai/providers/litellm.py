@@ -105,7 +105,7 @@ def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
 		completion_kwargs["api_key"] = api_key
 
 
-async def run(agent, enhanced_prompt, provider, model, context=None):
+async def run(agent, enhanced_prompt, provider, model, context=None, stream=False, stream_callbacks=None):
 	"""
 	Unified LiteLLM provider implementation.
 	
@@ -123,6 +123,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 	- Cost tracking
 	- Unified error handling
 	- OpenAI-compatible tool format (works with existing serialize_tools)
+	- Streaming support with callbacks
 	
 	Args:
 		agent: Agent object from agents SDK with tools, instructions, model_settings
@@ -130,9 +131,16 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 		provider: Provider name (e.g., "OpenAI", "Anthropic", "Google")
 		model: Model name (e.g., "gpt-4-turbo", "claude-3-opus-20240229")
 		context: Optional context dictionary (contains agent_name for accessing Agent DocType)
+		stream: If True, enable streaming responses
+		stream_callbacks: Optional dict with callbacks:
+			- on_tool_call_start(tool_name, args)
+			- on_tool_call_complete(tool_name, result)
+			- on_tool_call_error(tool_name, error)
+			- on_content_chunk(chunk)
 	
 	Returns:
 		SimpleResult: Result with final_output, usage, and new_items
+		If stream=True, yields events instead of returning SimpleResult
 	"""
 	try:
 		# Configure LiteLLM to drop unsupported params (for models like gpt-5 that only support temperature=1)
@@ -220,12 +228,20 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 				completion_kwargs["tools"] = tools
 				completion_kwargs["tool_choice"] = "auto"
 			
+			# Enable streaming if requested
+			if stream:
+				completion_kwargs["stream"] = True
+			
 			# Call LiteLLM
-			# LiteLLM completion() is synchronous, so we wrap it in asyncio.to_thread
-			# to avoid blocking the async event loop
-			# LiteLLM has built-in retry logic, but we can add additional context
+			# For streaming, use acompletion (async) directly
+			# For non-streaming, wrap completion() in asyncio.to_thread
 			try:
-				response = await asyncio.to_thread(litellm.completion, **completion_kwargs)
+				if stream:
+					response = await litellm.acompletion(**completion_kwargs)
+				else:
+					# LiteLLM completion() is synchronous, so we wrap it in asyncio.to_thread
+					# to avoid blocking the async event loop
+					response = await asyncio.to_thread(litellm.completion, **completion_kwargs)
 			except InternalServerError as e:
 				# OpenAI server error - might be transient
 				error_msg = (
@@ -255,85 +271,254 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 				frappe.log_error(error_msg, "LiteLLM Provider")
 				return SimpleResult(error_msg, total_usage, all_new_items)
 			
-			# Extract response (OpenAI format - consistent across all providers)
-			choice = response.choices[0].message
-			
-			# Track usage (OpenAI format - consistent)
-			usage = response.usage
-			total_usage["input_tokens"] += usage.prompt_tokens
-			total_usage["output_tokens"] += usage.completion_tokens
-			
-			# Add assistant message to conversation
-			assistant_message = {
-				"role": "assistant",
-				"content": choice.content,
-			}
-			
-			# Add tool_calls if present
-			if hasattr(choice, "tool_calls") and choice.tool_calls:
-				assistant_message["tool_calls"] = choice.tool_calls
-			
-			messages.append(assistant_message)
-			
-			# Check for tool calls
-			if not (hasattr(choice, "tool_calls") and choice.tool_calls):
-				# Final response - no more tool calls
-				return SimpleResult(
-					choice.content or "",
-					total_usage,
-					all_new_items
-				)
-			
-			# Execute tool calls
-			# This is YOUR existing logic - works exactly as-is!
-			tool_results = []
-			
-			for tool_call in choice.tool_calls:
-				function_call = tool_call.function
-				tool_name = function_call.name
-				tool_args = function_call.arguments
+			# Handle streaming vs non-streaming responses
+			if stream:
+				# Streaming mode: iterate through chunks
+				accumulated_content = ""
+				tool_calls_accumulated = {}  # Track tool calls by id
+				final_choice = None
 				
-				# Log tool call (same as your existing providers)
-				all_new_items.append(
-					SimpleNamespace(
-						type="tool_call_item",
-						raw_item=SimpleNamespace(
-							name=tool_name,
-							arguments=tool_args
+				async for chunk in response:
+					if not chunk.choices:
+						continue
+					
+					delta = chunk.choices[0].delta
+					if not delta:
+						continue
+					
+					# Handle content chunks
+					if hasattr(delta, "content") and delta.content:
+						content_chunk = delta.content
+						accumulated_content += content_chunk
+						
+						# Emit content chunk callback
+						if stream_callbacks and "on_content_chunk" in stream_callbacks:
+							stream_callbacks["on_content_chunk"](content_chunk)
+					
+					# Handle tool calls in stream
+					if hasattr(delta, "tool_calls") and delta.tool_calls:
+						for tool_call_delta in delta.tool_calls:
+							if not tool_call_delta:
+								continue
+							
+							tool_call_id = getattr(tool_call_delta, "id", None)
+							if not tool_call_id:
+								continue
+							
+							# Initialize tool call if not seen
+							if tool_call_id not in tool_calls_accumulated:
+								tool_calls_accumulated[tool_call_id] = {
+									"id": tool_call_id,
+									"type": "function",
+									"function": {"name": "", "arguments": ""}
+								}
+							
+							# Accumulate tool call data
+							tc = tool_calls_accumulated[tool_call_id]
+							if hasattr(tool_call_delta, "function"):
+								func_delta = tool_call_delta.function
+								if hasattr(func_delta, "name") and func_delta.name:
+									tc["function"]["name"] = func_delta.name
+								if hasattr(func_delta, "arguments") and func_delta.arguments:
+									tc["function"]["arguments"] += func_delta.arguments
+					
+					# Track usage from chunks
+					if hasattr(chunk, "usage") and chunk.usage:
+						usage = chunk.usage
+						if hasattr(usage, "prompt_tokens"):
+							total_usage["input_tokens"] = getattr(usage, "prompt_tokens", 0)
+						if hasattr(usage, "completion_tokens"):
+							total_usage["output_tokens"] = getattr(usage, "completion_tokens", 0)
+				
+				# After streaming completes, process accumulated tool calls
+				if tool_calls_accumulated:
+					# Convert accumulated tool calls to list
+					tool_calls_list = list(tool_calls_accumulated.values())
+					
+					# Execute tool calls
+					tool_results = []
+					
+					for tool_call_data in tool_calls_list:
+						tool_name = tool_call_data["function"]["name"]
+						tool_args = tool_call_data["function"]["arguments"]
+						
+						# Emit tool call start callback
+						if stream_callbacks and "on_tool_call_start" in stream_callbacks:
+							try:
+								args_json = json.loads(tool_args) if tool_args else {}
+							except:
+								args_json = {}
+							stream_callbacks["on_tool_call_start"](tool_name, args_json)
+						
+						# Log tool call
+						all_new_items.append(
+							SimpleNamespace(
+								type="tool_call_item",
+								raw_item=SimpleNamespace(
+									name=tool_name,
+									arguments=tool_args
+								)
+							)
+						)
+						
+						# Find and execute tool
+						tool_to_run = _find_tool(agent, tool_name)
+						result_content = ""
+						
+						if tool_to_run:
+							try:
+								result_content = await _execute_tool_call(tool_to_run, tool_args)
+							except Exception as e:
+								error_msg = str(e)
+								result_content = f"Error executing tool {tool_name}: {error_msg}"
+								
+								# Emit tool call error callback
+								if stream_callbacks and "on_tool_call_error" in stream_callbacks:
+									stream_callbacks["on_tool_call_error"](tool_name, error_msg)
+						else:
+							result_content = f"Tool '{tool_name}' not found."
+							if stream_callbacks and "on_tool_call_error" in stream_callbacks:
+								stream_callbacks["on_tool_call_error"](tool_name, result_content)
+						
+						# Emit tool call complete callback
+						if stream_callbacks and "on_tool_call_complete" in stream_callbacks:
+							stream_callbacks["on_tool_call_complete"](tool_name, result_content)
+						
+						# Log tool result
+						all_new_items.append(
+							SimpleNamespace(
+								type="tool_call_output_item",
+								raw_item={"name": tool_name, "output": result_content}
+							)
+						)
+						
+						# Add tool result to messages
+						tool_results.append({
+							"role": "tool",
+							"tool_call_id": tool_call_data["id"],
+							"name": tool_name,
+							"content": str(result_content)
+						})
+					
+					# Add tool results to conversation for next round
+					messages.extend(tool_results)
+					
+					# Add assistant message with tool calls
+					messages.append({
+						"role": "assistant",
+						"content": accumulated_content,
+						"tool_calls": tool_calls_list
+					})
+					
+					# Continue to next round if there were tool calls
+					continue
+				else:
+					# No tool calls, final response
+					return SimpleResult(
+						accumulated_content or "",
+						total_usage,
+						all_new_items
+					)
+			else:
+				# Non-streaming mode (existing logic)
+				# Extract response (OpenAI format - consistent across all providers)
+				choice = response.choices[0].message
+				
+				# Track usage (OpenAI format - consistent)
+				usage = response.usage
+				total_usage["input_tokens"] += usage.prompt_tokens
+				total_usage["output_tokens"] += usage.completion_tokens
+				
+				# Add assistant message to conversation
+				assistant_message = {
+					"role": "assistant",
+					"content": choice.content,
+				}
+				
+				# Add tool_calls if present
+				if hasattr(choice, "tool_calls") and choice.tool_calls:
+					assistant_message["tool_calls"] = choice.tool_calls
+				
+				messages.append(assistant_message)
+				
+				# Check for tool calls
+				if not (hasattr(choice, "tool_calls") and choice.tool_calls):
+					# Final response - no more tool calls
+					return SimpleResult(
+						choice.content or "",
+						total_usage,
+						all_new_items
+					)
+				
+				# Execute tool calls
+				# This is YOUR existing logic - works exactly as-is!
+				tool_results = []
+				
+				for tool_call in choice.tool_calls:
+					function_call = tool_call.function
+					tool_name = function_call.name
+					tool_args = function_call.arguments
+					
+					# Emit tool call start callback if streaming callbacks provided
+					if stream_callbacks and "on_tool_call_start" in stream_callbacks:
+						try:
+							args_json = json.loads(tool_args) if tool_args else {}
+						except:
+							args_json = {}
+						stream_callbacks["on_tool_call_start"](tool_name, args_json)
+					
+					# Log tool call (same as your existing providers)
+					all_new_items.append(
+						SimpleNamespace(
+							type="tool_call_item",
+							raw_item=SimpleNamespace(
+								name=tool_name,
+								arguments=tool_args
+							)
 						)
 					)
-				)
-				
-				# Find and execute tool (YOUR existing functions)
-				tool_to_run = _find_tool(agent, tool_name)
-				result_content = ""
-				
-				if tool_to_run:
-					try:
-						result_content = await _execute_tool_call(tool_to_run, tool_args)
-					except Exception as e:
-						result_content = f"Error executing tool {tool_name}: {str(e)}"
-				else:
-					result_content = f"Tool '{tool_name}' not found."
-				
-				# Log tool result (same as your existing providers)
-				all_new_items.append(
-					SimpleNamespace(
-						type="tool_call_output_item",
-						raw_item={"name": tool_name, "output": result_content}
+					
+					# Find and execute tool (YOUR existing functions)
+					tool_to_run = _find_tool(agent, tool_name)
+					result_content = ""
+					
+					if tool_to_run:
+						try:
+							result_content = await _execute_tool_call(tool_to_run, tool_args)
+						except Exception as e:
+							error_msg = str(e)
+							result_content = f"Error executing tool {tool_name}: {error_msg}"
+							
+							# Emit tool call error callback
+							if stream_callbacks and "on_tool_call_error" in stream_callbacks:
+								stream_callbacks["on_tool_call_error"](tool_name, error_msg)
+					else:
+						result_content = f"Tool '{tool_name}' not found."
+						if stream_callbacks and "on_tool_call_error" in stream_callbacks:
+							stream_callbacks["on_tool_call_error"](tool_name, result_content)
+					
+					# Emit tool call complete callback
+					if stream_callbacks and "on_tool_call_complete" in stream_callbacks:
+						stream_callbacks["on_tool_call_complete"](tool_name, result_content)
+					
+					# Log tool result (same as your existing providers)
+					all_new_items.append(
+						SimpleNamespace(
+							type="tool_call_output_item",
+							raw_item={"name": tool_name, "output": result_content}
+						)
 					)
-				)
+					
+					# Add tool result to messages (OpenAI format)
+					tool_results.append({
+						"role": "tool",
+						"tool_call_id": tool_call.id,
+						"name": tool_name,
+						"content": str(result_content)
+					})
 				
-				# Add tool result to messages (OpenAI format)
-				tool_results.append({
-					"role": "tool",
-					"tool_call_id": tool_call.id,
-					"name": tool_name,
-					"content": str(result_content)
-				})
-			
-			# Add tool results to conversation
-			messages.extend(tool_results)
+				# Add tool results to conversation
+				messages.extend(tool_results)
 		
 		# Max rounds reached
 		return SimpleResult(
