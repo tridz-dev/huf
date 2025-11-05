@@ -153,11 +153,17 @@ doc_events = {
         "after_submit": "agentflo.ai.agent_hooks.run_hooked_agents",
         "before_cancel": "agentflo.ai.agent_hooks.run_hooked_agents",
         "on_submit": "agentflo.ai.agent_hooks.run_hooked_agents",
+        "on_update": "agentflo.ai.agent_hooks.run_hooked_agents",
         "before_rename": "agentflo.ai.agent_hooks.run_hooked_agents",
         "after_rename": "agentflo.ai.agent_hooks.run_hooked_agents",
         "on_trash": "agentflo.ai.agent_hooks.run_hooked_agents",
         "after_delete": "agentflo.ai.agent_hooks.run_hooked_agents",
-    }
+    },
+    "Agent Trigger": {
+        "after_insert": "agentflo.ai.agent_hooks.clear_doc_event_agents_cache",
+        "on_update": "agentflo.ai.agent_hooks.clear_doc_event_agents_cache",
+        "on_trash": "agentflo.ai.agent_hooks.clear_doc_event_agents_cache",
+    },
 }
 
 # Scheduled Tasks
