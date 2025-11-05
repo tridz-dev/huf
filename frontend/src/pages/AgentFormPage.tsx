@@ -69,7 +69,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
 import { AgentTrigger, TriggerType, ScheduledInterval, DocEventType, AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, type AgentTriggerListItem } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolFunctions, getToolTypes } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -144,7 +144,7 @@ export function AgentFormPage() {
   const [saving, setSaving] = useState(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
-  const [triggers, setTriggers] = useState<AgentTrigger[]>([]);
+  const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTrigger | null>(null);
   const [triggerFilter, setTriggerFilter] = useState<string>('all');
@@ -287,8 +287,14 @@ export function AgentFormPage() {
           setSelectedTools([]);
           setInitialTools([]);
         }
-        // Triggers are not stored in AgentDoc directly, will be empty for now
-        setTriggers([]);
+        // Load triggers from Agent Trigger doctype
+        getAgentTriggers(id).then((triggersData) => {
+          setTriggers(triggersData);
+        }).catch((error) => {
+          console.error('Error loading triggers:', error);
+          // Don't show error toast for triggers, just log it
+          setTriggers([]);
+        });
         setLoading(false);
       }).catch((error) => {
         console.error('Error loading agent:', error);
@@ -438,50 +444,13 @@ export function AgentFormPage() {
   };
 
   const handleDeleteTrigger = (triggerId: string) => {
-    setTriggers(triggers.filter(t => t.id !== triggerId));
+    setTriggers(triggers.filter(t => t.name !== triggerId));
     toast.success('Trigger deleted');
   };
 
   const handleSaveTrigger = (values: TriggerFormValues) => {
-    if (editingTrigger) {
-      setTriggers(triggers.map(t =>
-        t.id === editingTrigger.id
-          ? {
-              ...t,
-              trigger_type: values.trigger_type,
-              active: values.active,
-              schedule_interval: values.schedule_interval as ScheduledInterval | undefined,
-              interval_count: values.interval_count,
-              reference_doctype: values.reference_doctype,
-              doc_event: values.doc_event as DocEventType | undefined,
-              condition: values.condition,
-              app_name: values.app_name,
-              event_name: values.event_name,
-              updated_at: new Date().toISOString()
-            }
-          : t
-      ));
-      toast.success('Trigger updated');
-    } else {
-      const newTrigger: AgentTrigger = {
-        id: `trigger-${Date.now()}`,
-        trigger_type: values.trigger_type,
-        active: values.active,
-        schedule_interval: values.schedule_interval as ScheduledInterval | undefined,
-        interval_count: values.interval_count,
-        reference_doctype: values.reference_doctype,
-        doc_event: values.doc_event as DocEventType | undefined,
-        condition: values.condition,
-        app_name: values.app_name,
-        event_name: values.event_name,
-        webhook_url: values.trigger_type === 'Webhook'
-          ? `https://api.hufai.com/agent/${id}/webhook/${Date.now()}`
-          : undefined,
-        created_at: new Date().toISOString(),
-      };
-      setTriggers([...triggers, newTrigger]);
-      toast.success('Trigger added');
-    }
+    // TODO: Implement trigger creation/editing API integration
+    toast.info('Trigger creation/editing will be integrated soon');
     setShowTriggerModal(false);
   };
 
@@ -527,13 +496,13 @@ export function AgentFormPage() {
   };
 
   const filteredTriggers = triggers.filter(trigger => {
-    if (triggerFilter !== 'all' && trigger.trigger_type !== triggerFilter) return false;
-    if (triggerStatusFilter === 'active' && !trigger.active) return false;
-    if (triggerStatusFilter === 'inactive' && trigger.active) return false;
+    if (triggerFilter !== 'all' && trigger.type !== triggerFilter) return false;
+    if (triggerStatusFilter === 'active' && trigger.status !== 'active') return false;
+    if (triggerStatusFilter === 'disabled' && trigger.status === 'active') return false;
     return true;
   });
 
-  const activeTriggerCount = triggers.filter(t => t.active).length;
+  const activeTriggerCount = triggers.filter(t => t.status === 'active').length;
 
   if (loading) {
     return (
@@ -923,7 +892,7 @@ export function AgentFormPage() {
                             <SelectContent>
                               <SelectItem value="all">All Status</SelectItem>
                               <SelectItem value="active">Active</SelectItem>
-                              <SelectItem value="inactive">Inactive</SelectItem>
+                              <SelectItem value="disabled">Disabled</SelectItem>
                             </SelectContent>
                           </Select>
                           <div className="text-sm text-muted-foreground ml-auto">
@@ -943,29 +912,29 @@ export function AgentFormPage() {
                           </TableHeader>
                           <TableBody>
                             {filteredTriggers.map((trigger) => (
-                              <TableRow key={trigger.id}>
-                                <TableCell className="font-medium">{trigger.trigger_type}</TableCell>
-                                <TableCell className="max-w-xs truncate">{getTriggerDetails(trigger)}</TableCell>
+                              <TableRow key={trigger.name}>
+                                <TableCell className="font-medium">{trigger.type}</TableCell>
+                                <TableCell className="max-w-xs truncate">{trigger.trigger_name}</TableCell>
                                 <TableCell>
-                                  <Badge variant={trigger.active ? 'default' : 'secondary'}>
-                                    {trigger.active ? 'Active' : 'Disabled'}
+                                  <Badge variant={trigger.status === 'active' ? 'default' : 'secondary'}>
+                                    {trigger.status === 'active' ? 'Active' : 'Disabled'}
                                   </Badge>
                                 </TableCell>
-                                <TableCell>{getLastRun(trigger)}</TableCell>
-                                <TableCell>{getNextRun(trigger)}</TableCell>
+                                <TableCell>—</TableCell>
+                                <TableCell>—</TableCell>
                                 <TableCell className="text-right">
                                   <div className="flex justify-end gap-2">
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => handleEditTrigger(trigger)}
+                                      onClick={() => toast.info('Edit trigger functionality coming soon')}
                                     >
                                       <Edit className="w-4 h-4" />
                                     </Button>
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => handleDeleteTrigger(trigger.id)}
+                                      onClick={() => handleDeleteTrigger(trigger.name)}
                                     >
                                       <Trash2 className="w-4 h-4" />
                                     </Button>

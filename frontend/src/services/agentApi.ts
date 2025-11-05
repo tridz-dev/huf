@@ -16,6 +16,43 @@ const AGENT_LIST_FIELDS = [
 ];
 
 /**
+ * Fields needed for agent triggers listing
+ */
+const AGENT_TRIGGER_FIELDS = [
+  'name',
+  'trigger_name',
+  'trigger_type',
+  'disabled',
+];
+
+/**
+ * Agent Trigger document from Frappe (for listing)
+ */
+export interface AgentTriggerListItem {
+  name: string;
+  trigger_name: string;
+  type: string;
+  status: 'active' | 'disabled';
+}
+
+/**
+ * Map Agent Trigger doctype document to listing format
+ */
+function mapAgentTriggerListItem(doc: {
+  name: string;
+  trigger_name: string;
+  trigger_type?: string;
+  disabled?: 0 | 1;
+}): AgentTriggerListItem {
+  return {
+    name: doc.name,
+    trigger_name: doc.trigger_name,
+    type: doc.trigger_type || 'Manual',
+    status: doc.disabled === 1 ? 'disabled' : 'active',
+  };
+}
+
+/**
  * Fetch agents from Frappe
  */
 export async function getAgents(): Promise<AgentDoc[]> {
@@ -41,6 +78,23 @@ export async function getAgent(name: string): Promise<AgentDoc> {
     return agent as AgentDoc;
   } catch (error) {
     console.error(`Error fetching agent ${name}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch agent triggers filtered by agent name (for listing)
+ */
+export async function getAgentTriggers(agentName: string): Promise<AgentTriggerListItem[]> {
+  try {
+    const triggers = await db.getDocList(doctype['Agent Trigger'], {
+      fields: AGENT_TRIGGER_FIELDS,
+      filters: [['agent', '=', agentName]],
+      limit: 1000,
+    });
+    return triggers.map(mapAgentTriggerListItem);
+  } catch (error) {
+    console.error(`Error fetching triggers for agent ${agentName}:`, error);
     throw error;
   }
 }
