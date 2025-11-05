@@ -22,19 +22,6 @@
   "allow_chat",
   "column_break_vfhq",
   "persist_conversation",
-  "section_break_r94q",
-  "is_scheduled",
-  "scheduled_interval",
-  "interval_count",
-  "column_break_nrfm",
-  "last_execution",
-  "next_execution",
-  "section_break_nyhh",
-  "reference_doctype",
-  "condition",
-  "is_doc_event",
-  "column_break_2be0",
-  "doc_event",
   "section_break_yyoa",
   "instructions",
   "tools_and_mcp_tab",
@@ -76,11 +63,6 @@
    "reqd": 1
   },
   {
-   "depends_on": "eval: doc.is_scheduled == 0",
-   "fieldname": "section_break_nyhh",
-   "fieldtype": "Section Break"
-  },
-  {
    "description": "The system prompt or instructions that define the agent's personality, goals, and constraints. This is the core logic of the agent.",
    "fieldname": "instructions",
    "fieldtype": "Code",
@@ -117,54 +99,6 @@
   },
   {
    "default": "0",
-   "description": "If checked, this agent will run automatically based on the defined schedule.",
-   "fieldname": "is_scheduled",
-   "fieldtype": "Check",
-   "label": "Is Scheduled Agent"
-  },
-  {
-   "default": "Daily",
-   "depends_on": "eval: doc.is_scheduled == 1",
-   "description": "The frequency at which the scheduled agent will run.",
-   "fieldname": "scheduled_interval",
-   "fieldtype": "Select",
-   "label": "Scheduled Interval",
-   "options": "\nHourly\nDaily\nWeekly\nMonthly\nYearly"
-  },
-  {
-   "default": "1",
-   "depends_on": "eval: doc.is_scheduled == 1",
-   "description": "The number of intervals to wait before running the agent again (e.g., if interval is 'Hourly' and count is 2, it will run every 2 hours).",
-   "fieldname": "interval_count",
-   "fieldtype": "Int",
-   "label": "Interval count"
-  },
-  {
-   "depends_on": "eval: doc.is_scheduled == 1",
-   "description": "The timestamp of the last time this scheduled agent was executed.",
-   "fieldname": "last_execution",
-   "fieldtype": "Datetime",
-   "label": "Last Execution",
-   "read_only": 1
-  },
-  {
-   "description": "The timestamp of the next scheduled execution.",
-   "fieldname": "next_execution",
-   "fieldtype": "Datetime",
-   "label": "Next Execution",
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval: doc.is_doc_event == 0",
-   "fieldname": "section_break_r94q",
-   "fieldtype": "Section Break"
-  },
-  {
-   "fieldname": "column_break_nrfm",
-   "fieldtype": "Column Break"
-  },
-  {
-   "default": "0",
    "description": "If checked, this agent will be disabled and will not run.",
    "fieldname": "disabled",
    "fieldtype": "Check",
@@ -175,41 +109,6 @@
    "fieldname": "section_break_yyoa",
    "fieldtype": "Section Break",
    "label": "Instruction"
-  },
-  {
-   "depends_on": "eval: doc.is_doc_event == 1",
-   "description": "The DocType to monitor for the selected event.",
-   "fieldname": "reference_doctype",
-   "fieldtype": "Link",
-   "label": "Reference DocType",
-   "options": "DocType"
-  },
-  {
-   "fieldname": "column_break_2be0",
-   "fieldtype": "Column Break"
-  },
-  {
-   "depends_on": "eval: doc.is_doc_event == 1",
-   "description": "The specific DocType event that will trigger this agent (e.g., on_submit, before_save).",
-   "fieldname": "doc_event",
-   "fieldtype": "Select",
-   "label": "Doc Event",
-   "options": "before_insert\nafter_insert\nvalidate\nbefore_save\nafter_save\nbefore_submit\non_submit\nafter_submit\non_cancel\nbefore_rename\nafter_rename\non_trash\nafter_delete"
-  },
-  {
-   "default": "0",
-   "description": "If checked, this agent will be triggered by a DocType event.",
-   "fieldname": "is_doc_event",
-   "fieldtype": "Check",
-   "label": "Is Doc Event Agent"
-  },
-  {
-   "depends_on": "eval: doc.is_doc_event == 1",
-   "description": "A Python expression that must evaluate to true for the agent to be triggered by the DocType event. You can use `doc` to refer to the document.",
-   "fieldname": "condition",
-   "fieldtype": "Code",
-   "ignore_xss_filter": 1,
-   "label": "Condition"
   },
   {
    "default": "0",
@@ -283,7 +182,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-04 14:03:31.195755",
+ "modified": "2025-11-05 14:44:16.304542",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
