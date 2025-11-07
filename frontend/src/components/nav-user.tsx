@@ -1,13 +1,13 @@
 import {
-  BadgeCheck,
-  Bell,
+  // BadgeCheck,
+  // Bell,
   ChevronsUpDown,
-  CreditCard,
+  // CreditCard,
   LogOut,
-  Moon,
-  Sparkles,
+  // Moon,
+  // Sparkles,
 } from "lucide-react"
-import { useState } from "react"
+// import { useState } from "react"
 
 import {
   Avatar,
@@ -17,7 +17,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
+  // DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -33,7 +33,7 @@ import { useUser } from "@/contexts/UserContext"
 
 export function NavUser() {
   const { isMobile } = useSidebar()
-  const [isDark, setIsDark] = useState(false)
+  // const [isDark, setIsDark] = useState(false)
   const { logout, user } = useUser()
 
   if (!user) {
@@ -95,7 +95,7 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
+            {/* <DropdownMenuGroup>
               <DropdownMenuItem>
                 <Sparkles className="mr-2 h-4 w-4" />
                 Upgrade to Pro
@@ -120,8 +120,8 @@ export function NavUser() {
                 {isDark ? 'Light Mode' : 'Dark Mode'}
               </DropdownMenuItem>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout}>
+            <DropdownMenuSeparator /> */}
+            <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-700">
               <LogOut className="mr-2 h-4 w-4" />
               Log out
             </DropdownMenuItem>

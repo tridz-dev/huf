@@ -1,6 +1,7 @@
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
+import { handleFrappeError } from '@/lib/frappe-error';
 
 /**
  * Fetch all available tool types from Frappe
@@ -13,8 +14,7 @@ export async function getToolTypes(): Promise<AgentToolType[]> {
     });
     return toolTypes as AgentToolType[];
   } catch (error) {
-    console.error('Error fetching tool types:', error);
-    throw error;
+    handleFrappeError(error, 'Error fetching tool types');
   }
 }
 
@@ -37,7 +37,6 @@ export async function getToolFunctions(toolTypeFilter?: string): Promise<AgentTo
     const tools = await db.getDocList(doctype['Agent Tool Function'], options);
     return tools as AgentToolFunctionRef[];
   } catch (error) {
-    console.error('Error fetching tool functions:', error);
-    throw error;
+    handleFrappeError(error, 'Error fetching tool functions');
   }
 }
