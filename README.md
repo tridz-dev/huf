@@ -1,8 +1,8 @@
-# AgentFlo
+# Huf (formerly AgentFlo)
 
-AgentFlo is a powerful Frappe application for create, manage, and integrate AI agents directly into Frappe ecosystem. These agents can be equipped with tools to interact with your site's data, automate tasks, and provide intelligent assistance.
+Huf is a powerful Frappe application for create, manage, and integrate AI agents directly into Frappe ecosystem. These agents can be equipped with tools to interact with your site's data, automate tasks, and provide intelligent assistance.
 
->  ⚠️ AgentFlo is actively being migrated from an existing implementation into an independent app. The system may not work as expected and is not recommended for use in production environments at this stage. ⚠️ 
+>  ⚠️ Huf is actively being migrated from an existing implementation into an independent app. The system may not work as expected and is not recommended for use in production environments at this stage. ⚠️ 
 
 ## Key Features
 
@@ -39,8 +39,8 @@ You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
-bench get-app https://github.com/Tridz/agentflo.git
-bench install-app agentflo
+bench get-app https://github.com/Tridz/Huf.git
+bench install-app Huf
 bench setup requirements  # Installs dependencies including litellm
 ```
 
@@ -48,7 +48,7 @@ bench setup requirements  # Installs dependencies including litellm
 
 ## Architecture Overview
 
-AgentFlo is built around a set of interconnected DocTypes that define the components of an AI agent. The core logic is handled by Python classes that integrate with an AI provider (like OpenAI) and manage the agent's lifecycle.
+Huf is built around a set of interconnected DocTypes that define the components of an AI agent. The core logic is handled by Python classes that integrate with an AI provider (like OpenAI) and manage the agent's lifecycle.
 
 ### Core Concepts
 
@@ -62,7 +62,7 @@ AgentFlo is built around a set of interconnected DocTypes that define the compon
 
 1.  **Trigger**: An agent run is initiated either manually (via Agent Console or Agent Chat), on a schedule, or by a DocType event.
 2.  **Agent Preparation**: The `AgentManager` class loads the agent's configuration, including its instructions and tools.
-3.  **Tool Serialization**: The `sdk_tools.py` module converts the AgentFlo tools into a format that the AI provider's SDK can understand.
+3.  **Tool Serialization**: The `sdk_tools.py` module converts the Huf tools into a format that the AI provider's SDK can understand.
 4.  **Execution**: The `run_agent_sync` function sends the prompt, conversation history, and available tools to the AI model via the selected provider.
 5.  **Tool Use**: If the AI decides to use a tool, the `on_invoke_tool` handler executes the corresponding Python function (e.g., `handle_get_list`, `handle_create_document`, or a custom function).
 6.  **Response**: The result of the tool's execution is sent back to the AI, which then formulates a final response.
@@ -73,7 +73,7 @@ AgentFlo is built around a set of interconnected DocTypes that define the compon
 Stores credentials for different AI service providers.
 
 -   **Python Class**: `AIProvider(Document)`
--   **File**: `agentflo/agentflo/doctype/ai_provider/ai_provider.py`
+-   **File**: `Huf/Huf/doctype/ai_provider/ai_provider.py`
 
 **Fields:**
 
@@ -87,7 +87,7 @@ Stores credentials for different AI service providers.
 Defines a specific AI model available from a provider.
 
 -   **Python Class**: `AIModel(Document)`
--   **File**: `agentflo/agentflo/doctype/ai_model/ai_model.py`
+-   **File**: `Huf/Huf/doctype/ai_model/ai_model.py`
 
 **Fields:**
 
@@ -101,7 +101,7 @@ Defines a specific AI model available from a provider.
 Defines a function or "tool" that an agent can use. This is the core of the agent's capabilities.
 
 -   **Python Class**: `AgentToolFunction(Document)`
--   **File**: `agentflo/agentflo/doctype/agent_tool_function/agent_tool_function.py`
+-   **File**: `Huf/Huf/doctype/agent_tool_function/agent_tool_function.py`
 
 **Fields:**
 
@@ -120,7 +120,7 @@ Defines a function or "tool" that an agent can use. This is the core of the agen
 The main DocType for creating an AI agent.
 
 -   **Python Class**: `Agent(Document)`
--   **File**: `agentflo/agentflo/doctype/agent/agent.py`
+-   **File**: `Huf/Huf/doctype/agent/agent.py`
 
 **Fields:**
 
@@ -139,7 +139,7 @@ The main DocType for creating an AI agent.
 Tracks a continuous conversation with an agent.
 
 -   **Python Class**: `AgentConversation(Document)`
--   **File**: `agentflo/agentflo/doctype/agent_conversation/agent_conversation.py`
+-   **File**: `Huf/Huf/doctype/agent_conversation/agent_conversation.py`
 
 **Fields:**
 
@@ -156,7 +156,7 @@ Tracks a continuous conversation with an agent.
 Represents a single message within a conversation.
 
 -   **Python Class**: `AgentMessage(Document)`
--   **File**: `agentflo/agentflo/doctype/agent_message/agent_message.py`
+-   **File**: `Huf/Huf/doctype/agent_message/agent_message.py`
 
 **Fields:**
 
@@ -173,7 +173,7 @@ Represents a single message within a conversation.
 Logs a single, complete execution cycle of an agent in response to a user prompt.
 
 -   **Python Class**: `AgentRun(Document)`
--   **File**: `agentflo/agentflo/doctype/agent_run/agent_run.py`
+-   **File**: `Huf/Huf/doctype/agent_run/agent_run.py`
 
 **Fields:**
 
@@ -190,7 +190,7 @@ Logs a single, complete execution cycle of an agent in response to a user prompt
 
 ## Core Classes and Methods
 
-The primary logic is located in the `agentflo/ai` directory.
+The primary logic is located in the `Huf/ai` directory.
 
 ### `agent_integration.py`
 
@@ -224,7 +224,7 @@ This file handles the persistence of conversation history.
 
 ### `sdk_tools.py`
 
-This file acts as a bridge between AgentFlo's `Agent Tool Function` DocType and the `agents` SDK's `FunctionTool` class.
+This file acts as a bridge between Huf's `Agent Tool Function` DocType and the `agents` SDK's `FunctionTool` class.
 
 -   **Method: `create_agent_tools(agent)`**
     -   Iterates through the tools linked to an `Agent` and uses `create_function_tool` to build them.
