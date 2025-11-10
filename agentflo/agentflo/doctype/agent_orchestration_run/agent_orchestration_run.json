@@ -1,0 +1,110 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2025-11-10 04:54:07.414017",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "agent",
+  "agent_orchestration_config",
+  "status",
+  "halt_reason",
+  "budget_tab",
+  "used_tokens",
+  "used_time_s",
+  "cost_estimate",
+  "plan_and_scratchpad",
+  "plan_json",
+  "scratchpad_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "Agent"
+  },
+  {
+   "description": "The config applied",
+   "fieldname": "agent_orchestration_config",
+   "fieldtype": "Link",
+   "label": "Agent Orchestration Config",
+   "options": "Agent Orchestration Config"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Started\nRunning\nPaused\nHalted\nDone\nFailed"
+  },
+  {
+   "fieldname": "budget_tab",
+   "fieldtype": "Tab Break",
+   "label": "Budget"
+  },
+  {
+   "fieldname": "used_tokens",
+   "fieldtype": "Int",
+   "label": "Used Tokens"
+  },
+  {
+   "fieldname": "used_time_s",
+   "fieldtype": "Int",
+   "label": "Time Used (sec) "
+  },
+  {
+   "fieldname": "cost_estimate",
+   "fieldtype": "Float",
+   "label": "Cost Estimate ($)"
+  },
+  {
+   "fieldname": "plan_and_scratchpad",
+   "fieldtype": "Tab Break",
+   "label": "Plan & Scratchpad"
+  },
+  {
+   "fieldname": "plan_json",
+   "fieldtype": "JSON",
+   "label": "Plan"
+  },
+  {
+   "fieldname": "scratchpad_json",
+   "fieldtype": "JSON",
+   "label": "Scratchpad"
+  },
+  {
+   "fieldname": "halt_reason",
+   "fieldtype": "Data",
+   "label": "Halt Reason"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-11-10 05:15:23.004690",
+ "modified_by": "Administrator",
+ "module": "AgentFlo",
+ "name": "Agent Orchestration Run",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
