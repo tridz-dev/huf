@@ -2,6 +2,8 @@ import frappe
 from frappe.utils.background_jobs import enqueue
 from .agent_integration import run_agent_sync
 from frappe.utils.safe_exec import get_safe_globals,safe_eval
+from uuid import uuid4
+from frappe.utils import now_datetime
 
 CACHE_KEY = "agentflo:doc_event_agents"
 
@@ -55,13 +57,10 @@ def clear_doc_event_agents_cache(doc=None, method=None):
 
 
 def run_hooked_agents(doc, method=None, *args, **kwargs):
-    """Generic runner for doc-event driven agents"""
-    
     if not method:
         return
 
     agents = get_doc_event_agents(method)
-
     matching = [
         a for a in agents
         if a.get("reference_doctype") == doc.doctype and a.get("doc_event") == method
@@ -71,7 +70,13 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
         return
 
 
+    cache = frappe.cache()
     for agent in matching:
+        lock_key = f"agentflo:lock:{agent['agent']}:{doc.doctype}:{doc.name}:{method}"
+        if cache.get_value(lock_key):
+            continue
+        cache.set_value(lock_key, now_datetime().isoformat(), expires_in_sec=30)
+
         condition = agent.get("condition")
         if condition:
             try:
@@ -83,7 +88,7 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
         enqueue(
             run_agent_for_doc,
             queue="long",
-            job_id=f"Run Agent {agent['agent']} for {doc.doctype} {doc.name} on {method}",
+            job_id=f"run-agent-{agent['agent']}-{doc.doctype}-{doc.name}-{method}-{uuid4()}",
             doc=doc.as_dict(),
             agent_name=agent["agent"],
             instructions=agent.get("instructions"),
