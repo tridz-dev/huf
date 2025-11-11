@@ -15,6 +15,12 @@ The application is built on the Frappe Framework (Python) and uses the standard 
     -   `<doctype_name>/<doctype_name>.py`: Server-side controller class.
     -   `<doctype_name>/<doctype_name>.js`: Client-side script.
 -   `agentflo/ai/`: Core Python modules for AI agent integration.
+-   `frontend/`: Modern React frontend application (React 18, TypeScript, Vite).
+    -   `frontend/src/`: Source code for the frontend application.
+    -   `frontend/src/components/`: Reusable React components.
+    -   `frontend/src/pages/`: Page components (Agents, Flows, Data, etc.).
+    -   `frontend/src/services/`: API service layer for Frappe integration.
+    -   `frontend/src/hooks/`: Custom React hooks (infinite scroll, pagination, etc.).
 -   `.github/workflows/`: CI definitions for tests and linting.
 
 ## Security Considerations
@@ -31,10 +37,12 @@ This section provides a deep dive into the application's structure, including Do
 1.  **Provider & Model**: You start by defining an `AI Provider` (e.g., OpenAI, Anthropic, Google) and the `AI Model` you want to use (e.g., `gpt-4-turbo`, `claude-3-opus`). AgentFlo uses LiteLLM to provide unified access to 100+ LLM providers through a single interface.
 2.  **Unified Provider Architecture**: All LLM providers are accessed via LiteLLM, which provides automatic model name normalization, built-in retry logic, cost tracking, and error handling. Model names can be specified in user-friendly format (e.g., `gpt-4-turbo`) and are automatically normalized to LiteLLM format (e.g., `openai/gpt-4-turbo`).
 3.  **Tools**: Agents need tools to be useful. An `Agent Tool Function` defines a specific action the agent can perform, such as fetching a document, creating a new one, or calling a custom Python function.
-4.  **Agent**: An `Agent` is the central entity. You give it a name, instructions (prompt), temperature, top_p, and assign it a set of tools. Each agent has its own individual settings that are read directly from the Agent DocType. Agents can be configured for scheduling, doc events, or chat.
-5.  **Conversation**: When a user interacts with an agent, a `Agent Conversation` is created to track the entire interaction. Each message back-and-forth is stored as an `Agent Message`.
-6.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run` with token usage and cost tracking.
-7.  **Chat Interface**: `Agent Chat` provides a real-time chat UI for conversational agents with markdown rendering.
+4.  **Agent**: An `Agent` is the central entity. You give it a name, instructions (prompt), temperature, top_p, and assign it a set of tools. Each agent has its own individual settings that are read directly from the Agent DocType. Agents track execution statistics (`last_run`, `total_run`).
+5.  **Agent Trigger**: A separate DocType that defines when and how agents are triggered. Supports multiple trigger types: Schedule, Doc Event, Webhook, App Event, and Manual. This replaces the old system where triggers were embedded directly in the Agent DocType.
+6.  **Conversation**: When a user interacts with an agent, a `Agent Conversation` is created to track the entire interaction. Each message back-and-forth is stored as an `Agent Message`.
+7.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run` with token usage and cost tracking.
+8.  **Chat Interface**: `Agent Chat` provides a real-time chat UI for conversational agents with markdown rendering.
+9.  **Frontend**: A modern React-based frontend provides a complete UI for managing agents, flows, and integrations. Built with React 18, TypeScript, Vite, and shadcn/ui components.
 
 ### Doctypes
 
@@ -103,7 +111,22 @@ Defines a function or "tool" that an agent can use. This is the core of the agen
 | **Parameters**          | `parameters`              | Table   | A table of parameters (`Agent Function Params`) the function accepts.                                   |
 | **Function Definition** | `function_definition`     | JSON    | (Read Only) The final JSON schema of the function, which is passed to the AI.                           |
 
-#### 4. Agent
+#### 4. Agent Tool Type
+
+Defines categories or types for agent tool functions. Used for organizing and categorizing tools.
+
+-   **Python Class**: `AgentToolType(Document)`
+-   **File**: `agentflo/agentflo/doctype/agent_tool_type/agent_tool_type.py`
+
+**Fields:**
+
+| Label        | Fieldname    | Type | Description                               |
+| :----------- | :----------- | :--- | :---------------------------------------- |
+| **Name**     | `name1`      | Data | The name of the tool type (e.g., `CRUD`, `Custom`, `Integration`). |
+
+**Note**: This DocType provides a way to categorize agent tools for better organization in the UI.
+
+#### 5. Agent
 
 The main DocType for creating an AI agent.
 
@@ -117,14 +140,62 @@ The main DocType for creating an AI agent.
 | **Agent Name**   | `agent_name`   | Data      | A unique name for the agent.                                                                            |
 | **Provider**     | `provider`     | Link      | Link to the `AI Provider`.                                                                              |
 | **Model**        | `model`        | Link      | Link to the `AI Model`.                                                                                 |
-| **Instructions** | `instructions` | Long Text | The system prompt or instructions that define the agent's personality, goals, and constraints.          |
+| **Instructions** | `instructions` | Code      | The system prompt or instructions that define the agent's personality, goals, and constraints.          |
 | **Agent Tool**   | `agent_tool`   | Table     | A child table (`Agent Tool`) linking to the `Agent Tool Function`s that this agent is allowed to use. |
 | **Temperature**  | `temperature`  | Float     | Controls the randomness of the AI's output.                                                             |
 | **Top P**        | `top_p`        | Float     | An alternative to temperature for controlling randomness.                                               |
-| **Enable Chat**  | `enable_chat`  | Check     | Enables the Agent Chat interface for real-time conversations.                                           |
-| **Condition**    | `condition`    | Code      | Python expression for conditional triggering on document events (e.g., `doc.grand_total > 10000`).     |
+| **Allow Chat**    | `allow_chat`   | Check     | Enables the Agent Chat interface for real-time conversations.                                           |
+| **Persist Conversation** | `persist_conversation` | Check | Whether to maintain conversation history across runs. |
+| **Description**   | `description`  | Small Text | A brief description of the agent's purpose. |
+| **Last Run**      | `last_run`     | Datetime  | Timestamp of the last agent execution (read-only, auto-updated). |
+| **Total Run**     | `total_run`    | Int       | Total number of times this agent has been executed (read-only, auto-incremented). |
 
-#### 5. Agent Conversation
+**Note**: The `condition` field has been removed from Agent DocType. Conditional triggering is now handled via the `Agent Trigger` DocType.
+
+#### 6. Agent Trigger
+
+Defines when and how an agent should be triggered. This is a separate DocType that replaced the old embedded trigger system in the Agent DocType.
+
+-   **Python Class**: `AgentTrigger(Document)`
+-   **File**: `agentflo/agentflo/doctype/agent_trigger/agent_trigger.py`
+
+**Fields:**
+
+| Label                | Fieldname           | Type      | Description                                                                                             |
+| :------------------- | :------------------- | :-------- | :------------------------------------------------------------------------------------------------------ |
+| **Trigger Name**     | `trigger_name`       | Data      | A unique name for the trigger.                                                                          |
+| **Agent**            | `agent`              | Link      | Link to the `Agent` that should be triggered.                                                           |
+| **Trigger Type**     | `trigger_type`       | Select    | Type of trigger: `Schedule`, `Doc Event`, `Webhook`, `App Event`, or `Manual`.                         |
+| **Status**           | `status`             | Select    | Current status: `Draft`, `Active`, `Disabled`, `Error`.                                                |
+| **Disabled**         | `disabled`           | Check     | Whether the trigger is disabled.                                                                        |
+| **Scheduled Interval** | `scheduled_interval` | Select    | For Schedule triggers: `Hourly`, `Daily`, `Weekly`, `Monthly`, `Yearly`.                                |
+| **Interval Count**   | `interval_count`     | Int       | For Schedule triggers: Number of intervals between executions.                                         |
+| **Next Execution**   | `next_execution`     | Datetime  | For Schedule triggers: When the trigger will next execute (read-only, auto-calculated).                |
+| **Last Execution**   | `last_execution`     | Datetime  | For Schedule triggers: When the trigger last executed (read-only, auto-updated).                      |
+| **Reference DocType** | `reference_doctype`  | Link      | For Doc Event triggers: The DocType to monitor.                                                         |
+| **Doc Event**        | `doc_event`          | Select    | For Doc Event triggers: Event to listen for (e.g., `after_insert`, `on_submit`, `before_save`).       |
+| **Condition**        | `condition`          | Code      | For Doc Event triggers: Python expression to evaluate before triggering (e.g., `doc.grand_total > 10000`). |
+| **Webhook Key**      | `webhook_key`        | Data      | For Webhook triggers: Authentication key for the webhook.                                               |
+| **Webhook Slug**     | `webhook_slug`       | Data      | For Webhook triggers: URL slug for the webhook endpoint.                                               |
+| **App Name**         | `app_name`           | Data      | For App Event triggers: Name of the app emitting the event.                                            |
+| **Event Name**       | `event_name`         | Data      | For App Event triggers: Name of the event to listen for.                                               |
+| **Metadata**         | `metadata`           | JSON      | Additional metadata for the trigger.                                                                    |
+| **Disabled Reason**  | `disabled_reason`    | Small Text | Reason why the trigger was disabled (if applicable).                                                  |
+
+**Trigger Types:**
+-   **Schedule**: Executes agents on a recurring schedule (hourly, daily, weekly, monthly, yearly).
+-   **Doc Event**: Triggers agents when specific document events occur (e.g., after_insert, on_submit).
+-   **Webhook**: Triggers agents via HTTP webhook calls.
+-   **App Event**: Triggers agents when custom app events are emitted.
+-   **Manual**: Triggers agents manually via API or UI.
+
+**Architecture Notes:**
+-   Triggers are managed separately from agents, allowing multiple triggers per agent.
+-   Doc Event triggers are cached for performance (`agent_hooks.py`).
+-   Scheduled triggers are executed by a background job (`agent_scheduler.py`).
+-   The frontend provides a dedicated UI for managing triggers in the Agent form.
+
+#### 7. Agent Conversation
 
 Tracks a continuous conversation with an agent.
 
@@ -141,7 +212,7 @@ Tracks a continuous conversation with an agent.
 | **Is Active**    | `is_active`      | Check    | Indicates if the conversation is ongoing.                                |
 | **Total Messages** | `total_messages` | Int      | The total number of messages exchanged.                                  |
 
-#### 6. Agent Message
+#### 8. Agent Message
 
 Represents a single message within a conversation.
 
@@ -158,7 +229,7 @@ Represents a single message within a conversation.
 | **Kind**         | `kind`         | Select    | The type of message (`Message`, `Tool Call`, `Tool Result`, `Error`).    |
 | **Run**          | `run`          | Link      | Link to the `Agent Run` that generated this message.                     |
 
-#### 7. Agent Run
+#### 9. Agent Run
 
 Logs a single, complete execution cycle of an agent in response to a user prompt.
 
@@ -180,7 +251,7 @@ Logs a single, complete execution cycle of an agent in response to a user prompt
 | **Total Tokens** | `total_tokens`  | Int        | Total tokens used (input + output).                                      |
 | **Total Cost**   | `total_cost`    | Currency   | Total cost of the agent run based on token usage.                        |
 
-#### 8. Agent Chat
+#### 10. Agent Chat
 
 A single DocType providing a real-time chat interface for conversational agents.
 
@@ -294,3 +365,229 @@ This file provides the backend API for the Agent Chat interface.
     -   Processes user input from the chat interface.
     -   Calls the agent and returns the response.
     -   Manages chat-specific conversation persistence and message formatting.
+
+#### `agent_hooks.py`
+
+This file handles document event-based agent triggering.
+
+-   **Function: `get_doc_event_agents(event: str)`**
+    -   Fetches and caches Doc Event triggers from the `Agent Trigger` DocType.
+    -   Returns a list of agent configurations that should be triggered for a given document event.
+    -   Uses caching (`agentflo:doc_event_agents`) for performance.
+-   **Function: `clear_doc_event_agents_cache(...)`**
+    -   Clears the cache when Agent or Agent Trigger documents are modified.
+-   **Function: `trigger_agent_on_doc_event(doc, method)`**
+    -   Called by Frappe document hooks (e.g., `after_insert`, `on_submit`).
+    -   Evaluates trigger conditions and executes matching agents.
+    -   Supports conditional execution via Python expressions.
+
+#### `agent_scheduler.py`
+
+This file handles scheduled agent execution.
+
+-   **Function: `run_scheduled_agents()` (Whitelisted)**
+    -   Executes agents that are scheduled to run based on their `Agent Trigger` configurations.
+    -   Queries `Agent Trigger` DocType for triggers with `trigger_type="Schedule"` and `next_execution <= now`.
+    -   Updates `last_execution` and calculates `next_execution` after each run.
+    -   Should be called periodically (e.g., via cron job or Frappe scheduler).
+
+## Frontend Architecture
+
+AgentFlo includes a modern React-based frontend application located in the `frontend/` directory. The frontend provides a complete UI for managing agents, workflows, and integrations.
+
+### Technology Stack
+
+-   **Framework**: React 18 with TypeScript
+-   **Build Tool**: Vite
+-   **UI Library**: shadcn/ui (60+ components)
+-   **Styling**: Tailwind CSS
+-   **Routing**: React Router
+-   **State Management**: React Context API + Custom Hooks
+-   **Forms**: React Hook Form + Zod
+-   **Flow Builder**: React Flow
+-   **Icons**: Lucide React (1000+ icons)
+
+### Frontend Structure
+
+```
+frontend/src/
+├── components/
+│   ├── dashboard/         # Reusable dashboard framework components
+│   │   ├── layouts/       # PageLayout, PageSection
+│   │   ├── views/         # GridView, ListView
+│   │   ├── cards/         # BaseCard, StatCard, ItemCard
+│   │   └── filters/        # FilterBar
+│   ├── ui/                # shadcn/ui components (60+)
+│   ├── agent/             # Agent-specific components
+│   │   ├── AgentHeader.tsx
+│   │   ├── GeneralTab.tsx
+│   │   ├── BehaviorTab.tsx
+│   │   ├── ToolsTab.tsx
+│   │   ├── TriggersTab.tsx
+│   │   └── TriggerModal.tsx
+│   ├── nodes/             # Flow builder nodes
+│   ├── modals/            # Configuration modals
+│   └── ...
+├── pages/
+│   ├── HomePage.tsx       # Dashboard overview
+│   ├── AgentsPage.tsx     # Agent list with pagination
+│   ├── AgentFormPage.tsx  # Agent creation/editing
+│   ├── FlowListPage.tsx   # Flow list
+│   ├── FlowCanvasPage.tsx # Flow builder canvas
+│   ├── DataPage.tsx       # Data management
+│   └── IntegrationsPage.tsx
+├── services/              # API service layer
+│   ├── agentApi.ts        # Agent CRUD operations
+│   ├── flowService.ts     # Flow operations
+│   ├── toolApi.ts         # Tool operations
+│   └── providerApi.ts     # Provider operations
+├── hooks/
+│   ├── useInfiniteScroll.ts  # Infinite scroll pagination
+│   ├── usePageData.ts        # Dashboard data management
+│   └── ...
+├── contexts/              # React contexts
+│   ├── UserContext.tsx
+│   ├── FlowContext.tsx
+│   └── ModalContext.tsx
+├── types/                 # TypeScript type definitions
+│   ├── agent.types.ts
+│   ├── flow.types.ts
+│   └── ...
+└── lib/
+    ├── frappe-sdk.ts      # Frappe JS SDK wrapper
+    └── frappe-error.ts    # Error handling utilities
+```
+
+### Key Frontend Features
+
+#### Dashboard Framework
+
+The frontend includes a reusable dashboard framework that significantly reduces code duplication:
+
+-   **PageLayout**: Provides consistent page structure with filters and actions
+-   **GridView**: Responsive grid layout with customizable columns
+-   **ItemCard**: Standardized card component for displaying entities
+-   **FilterBar**: Search and filter controls
+-   **usePageData**: Hook for managing paginated data with search/filter
+
+**Example Usage:**
+```tsx
+import { PageLayout, GridView, ItemCard } from '@/components/dashboard';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+
+export function AgentsPage() {
+  const { items, hasMore, loadMore } = useInfiniteScroll({
+    fetchFn: getAgents,
+    pageSize: 20,
+  });
+
+  return (
+    <PageLayout subtitle="Manage your AI agents">
+      <GridView
+        items={items}
+        columns={{ sm: 1, md: 2, lg: 3 }}
+        renderItem={(agent) => <ItemCard title={agent.agent_name} />}
+      />
+    </PageLayout>
+  );
+}
+```
+
+#### Agent Management UI
+
+The frontend provides a comprehensive UI for managing agents:
+
+-   **AgentsPage**: List view with search, filters, and pagination
+-   **AgentFormPage**: Multi-tab form for creating/editing agents
+    -   General Tab: Basic agent configuration
+    -   Behavior Tab: Conversation settings
+    -   Tools Tab: Tool assignment
+    -   Triggers Tab: Trigger management (Schedule, Doc Event, Webhook, etc.)
+-   **TriggerModal**: Modal for creating/editing agent triggers
+-   **TriggerFieldsRenderer**: Dynamic form fields based on trigger type
+
+#### Flow Builder
+
+The frontend includes a visual flow builder powered by React Flow:
+
+-   **FlowCanvas**: Main canvas component
+-   **FlowNode**: Base node component
+-   **TriggerNode, ActionNode, EndNode**: Specific node types
+-   **NodeSelectionModal**: Modal for selecting node types
+-   **TriggerConfigModal**: Modal for configuring trigger nodes
+
+#### API Integration
+
+The frontend uses the Frappe JS SDK (`frappe-sdk.ts`) to interact with the backend:
+
+-   **agentApi.ts**: CRUD operations for agents and triggers
+    -   `getAgents()`: Paginated agent listing with search/filter
+    -   `getAgent()`: Fetch single agent
+    -   `createAgent()`, `updateAgent()`: Agent CRUD
+    -   `getAgentTriggers()`: List triggers for an agent
+    -   `createAgentTrigger()`, `updateAgentTrigger()`: Trigger CRUD
+    -   `getTriggerTypes()`: Fetch available trigger types
+-   **flowService.ts**: Flow operations
+-   **toolApi.ts**: Tool operations
+-   **providerApi.ts**: Provider operations
+
+### Frontend Development
+
+**Setup:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**Build:**
+```bash
+npm run build
+```
+
+**Key Scripts:**
+-   `npm run dev`: Start development server
+-   `npm run build`: Build for production
+-   `npm run preview`: Preview production build
+-   `npm run lint`: Lint code
+-   `npm run typecheck`: Type check
+
+### Frontend Documentation
+
+Additional frontend documentation is available in `frontend/docs/`:
+
+-   **CONTRIBUTE.md**: Contributing guide and UI framework usage
+-   **QUICK_START.md**: Quick reference for framework components
+-   **DASHBOARD_FRAMEWORK.md**: Detailed framework documentation
+-   **FEATURES.md**: Flow builder features
+-   **ARCHITECTURE.md**: System architecture
+
+## Recent Changes
+
+### Agent Trigger System Migration
+
+The trigger system was refactored to use a separate `Agent Trigger` DocType:
+
+-   **Removed**: Direct trigger configuration from Agent DocType (`condition` field removed)
+-   **Added**: `Agent Trigger` DocType with support for multiple trigger types
+-   **Benefits**: Multiple triggers per agent, better organization, cleaner separation of concerns
+-   **Frontend**: New TriggersTab component for managing triggers in the agent form
+
+### Frontend Addition
+
+A complete React frontend was added:
+
+-   Modern React 18 + TypeScript + Vite setup
+-   Dashboard framework for rapid page development
+-   Flow builder with React Flow
+-   Comprehensive agent management UI
+-   60+ shadcn/ui components
+-   Infinite scroll and pagination support
+
+### Agent Statistics Tracking
+
+Agent DocType now tracks execution statistics:
+
+-   `last_run`: Timestamp of last execution
+-   `total_run`: Total execution count
+-   Auto-updated by the agent execution system

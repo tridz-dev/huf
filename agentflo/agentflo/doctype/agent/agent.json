@@ -6,29 +6,44 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "general_tab",
-  "llm_configuration_section",
   "agent_name",
   "provider",
-  "temperature",
-  "description",
-  "column_break_df8m",
   "model",
   "async",
-  "top_p",
   "disabled",
-  "behaviour_tab",
-  "conversation_settings_section",
+  "column_break_df8m",
+  "temperature",
+  "top_p",
+  "section_break_tuak",
   "allow_chat",
   "column_break_vfhq",
   "persist_conversation",
+  "section_break_r94q",
+  "is_scheduled",
+  "scheduled_interval",
+  "interval_count",
+  "column_break_nrfm",
+  "last_execution",
+  "next_execution",
+  "section_break_nyhh",
+  "reference_doctype",
+  "condition",
+  "is_doc_event",
+  "column_break_2be0",
+  "doc_event",
   "section_break_yyoa",
   "instructions",
-  "tools_and_mcp_tab",
   "agent_tool",
-  "metadata_tab",
-  "last_run",
-  "total_run"
+  "orchestration_tab",
+  "enable_orchestration",
+  "orchestration_mode",
+  "max_steps",
+  "time_budget_s",
+  "token_budget",
+  "plan_and_prompt",
+  "planning_prompt",
+  "plan_template_json",
+  "step_prompt_template"
  ],
  "fields": [
   {
@@ -105,10 +120,8 @@
    "label": "Disabled"
   },
   {
-   "description": "Define system prompt, goal, and constraints",
    "fieldname": "section_break_yyoa",
-   "fieldtype": "Section Break",
-   "label": "Instruction"
+   "fieldtype": "Section Break"
   },
   {
    "default": "0",
@@ -129,60 +142,156 @@
    "fieldtype": "Column Break"
   },
   {
-   "fieldname": "general_tab",
-   "fieldtype": "Tab Break",
-   "label": "General"
+   "fieldname": "section_break_tuak",
+   "fieldtype": "Section Break"
   },
   {
-   "fieldname": "behaviour_tab",
-   "fieldtype": "Tab Break",
-   "label": "Behaviour"
+   "depends_on": "eval: doc.is_doc_event == 0",
+   "fieldname": "section_break_r94q",
+   "fieldtype": "Section Break"
   },
   {
-   "fieldname": "tools_and_mcp_tab",
-   "fieldtype": "Tab Break",
-   "label": "Tools and MCP"
+   "default": "0",
+   "description": "If checked, this agent will run automatically based on the defined schedule.",
+   "fieldname": "is_scheduled",
+   "fieldtype": "Check",
+   "label": "Is Scheduled Agent"
   },
   {
-   "description": "Configure language model settings ",
-   "fieldname": "llm_configuration_section",
-   "fieldtype": "Section Break",
-   "label": "LLM Configuration"
+   "default": "Daily",
+   "depends_on": "eval: doc.is_scheduled == 1",
+   "description": "The frequency at which the scheduled agent will run.",
+   "fieldname": "scheduled_interval",
+   "fieldtype": "Select",
+   "label": "Scheduled Interval",
+   "options": "\nHourly\nDaily\nWeekly\nMonthly\nYearly"
   },
   {
-   "description": "Configure conversation behaviour",
-   "fieldname": "conversation_settings_section",
-   "fieldtype": "Section Break",
-   "label": "Conversation Settings"
-  },
-  {
-   "description": "A short summary describing what this agent does or is designed for.",
-   "fieldname": "description",
-   "fieldtype": "Small Text",
-   "label": "Description"
-  },
-  {
-   "fieldname": "last_run",
-   "fieldtype": "Datetime",
-   "label": "Last Run",
-   "read_only": 1
-  },
-  {
-   "fieldname": "total_run",
+   "default": "1",
+   "depends_on": "eval: doc.is_scheduled == 1",
+   "description": "The number of intervals to wait before running the agent again (e.g., if interval is 'Hourly' and count is 2, it will run every 2 hours).",
+   "fieldname": "interval_count",
    "fieldtype": "Int",
-   "label": "Total Run",
+   "label": "Interval count"
+  },
+  {
+   "fieldname": "column_break_nrfm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.is_scheduled == 1",
+   "description": "The timestamp of the last time this scheduled agent was executed.",
+   "fieldname": "last_execution",
+   "fieldtype": "Datetime",
+   "label": "Last Execution",
    "read_only": 1
   },
   {
-   "fieldname": "metadata_tab",
+   "description": "The timestamp of the next scheduled execution.",
+   "fieldname": "next_execution",
+   "fieldtype": "Datetime",
+   "label": "Next Execution",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval: doc.is_scheduled == 0",
+   "fieldname": "section_break_nyhh",
+   "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "eval: doc.is_doc_event == 1",
+   "description": "The DocType to monitor for the selected event.",
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType"
+  },
+  {
+   "depends_on": "eval: doc.is_doc_event == 1",
+   "description": "A Python expression that must evaluate to true for the agent to be triggered by the DocType event. You can use `doc` to refer to the document.",
+   "fieldname": "condition",
+   "fieldtype": "Code",
+   "ignore_xss_filter": 1,
+   "label": "Condition"
+  },
+  {
+   "default": "0",
+   "description": "If checked, this agent will be triggered by a DocType event.",
+   "fieldname": "is_doc_event",
+   "fieldtype": "Check",
+   "label": "Is Doc Event Agent"
+  },
+  {
+   "fieldname": "column_break_2be0",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.is_doc_event == 1",
+   "description": "The specific DocType event that will trigger this agent (e.g., on_submit, before_save).",
+   "fieldname": "doc_event",
+   "fieldtype": "Select",
+   "label": "Doc Event",
+   "options": "before_insert\nafter_insert\nvalidate\nbefore_save\nafter_save\nbefore_submit\non_submit\nafter_submit\non_cancel\nbefore_rename\nafter_rename\non_trash\nafter_delete"
+  },
+  {
+   "fieldname": "orchestration_tab",
    "fieldtype": "Tab Break",
-   "label": "Metadata"
+   "label": "Orchestration"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_orchestration",
+   "fieldtype": "Check",
+   "label": "Enable Orchestration"
+  },
+  {
+   "default": "single_multi_run",
+   "depends_on": "eval: doc.enable_orchestration == 1",
+   "fieldname": "orchestration_mode",
+   "fieldtype": "Select",
+   "label": "Mode",
+   "options": "single_multi_run"
+  },
+  {
+   "fieldname": "max_steps",
+   "fieldtype": "Int",
+   "label": "Max Steps"
+  },
+  {
+   "fieldname": "time_budget_s",
+   "fieldtype": "Int",
+   "label": "Time Budget (sec)"
+  },
+  {
+   "fieldname": "token_budget",
+   "fieldtype": "Int",
+   "label": "Token Budget"
+  },
+  {
+   "fieldname": "plan_and_prompt",
+   "fieldtype": "Tab Break",
+   "label": "Plan & Prompt"
+  },
+  {
+   "fieldname": "planning_prompt",
+   "fieldtype": "Code",
+   "label": "Planning Prompt"
+  },
+  {
+   "fieldname": "plan_template_json",
+   "fieldtype": "JSON",
+   "label": "Plan Template"
+  },
+  {
+   "fieldname": "step_prompt_template",
+   "fieldtype": "Small Text",
+   "label": "Step Prompt Template"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-05 14:44:16.304542",
+ "modified": "2025-11-10 05:31:55.614537",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
