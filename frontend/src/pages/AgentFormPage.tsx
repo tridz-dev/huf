@@ -6,7 +6,7 @@ import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolFunctions, getToolTypes } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -28,6 +28,7 @@ export function AgentFormPage() {
   const isNew = id === 'new';
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [deletingTrigger, setDeletingTrigger] = useState(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
@@ -357,9 +358,18 @@ export function AgentFormPage() {
     }
   };
 
-  const handleDeleteTrigger = (triggerId: string) => {
-    setTriggers(triggers.filter(t => t.name !== triggerId));
-    toast.success('Trigger deleted');
+  const handleDeleteTrigger = async (triggerId: string) => {
+    setDeletingTrigger(true);
+    try {
+      await deleteAgentTrigger(triggerId);
+      setTriggers(triggers.filter(t => t.name !== triggerId));
+      toast.success('Trigger deleted');
+    } catch (error) {
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to delete trigger');
+    } finally {
+      setDeletingTrigger(false);
+    }
   };
 
   const handleSaveTrigger = async (values: {
@@ -481,6 +491,7 @@ export function AgentFormPage() {
                   onAddTrigger={handleAddTrigger}
                   onEditTrigger={handleEditTrigger}
                   onDeleteTrigger={handleDeleteTrigger}
+                  deletingTrigger={deletingTrigger}
                 />
               </TabsContent>
 

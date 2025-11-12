@@ -1,4 +1,4 @@
-import { Plus, Filter, Edit, Trash2 } from 'lucide-react';
+import { Plus, Filter, Edit, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,7 @@ interface TriggersTabProps {
   onAddTrigger: () => void;
   onEditTrigger: (trigger: AgentTriggerListItem) => void;
   onDeleteTrigger: (triggerId: string) => void;
+  deletingTrigger: boolean;
 }
 
 export function TriggersTab({
@@ -35,6 +36,7 @@ export function TriggersTab({
   onAddTrigger,
   onEditTrigger,
   onDeleteTrigger,
+  deletingTrigger,
 }: TriggersTabProps) {
   const filteredTriggers = triggers.filter(trigger => {
     if (triggerFilter !== 'all' && trigger.type !== triggerFilter) return false;
@@ -129,6 +131,7 @@ export function TriggersTab({
                           variant="ghost"
                           size="sm"
                           onClick={() => onEditTrigger(trigger)}
+                          disabled={deletingTrigger}
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -137,8 +140,9 @@ export function TriggersTab({
                           variant="ghost"
                           size="sm"
                           onClick={() => onDeleteTrigger(trigger.name)}
+                          disabled={deletingTrigger}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {deletingTrigger ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                         </Button>
                       </div>
                     </TableCell>
