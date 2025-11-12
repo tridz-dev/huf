@@ -95,11 +95,13 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
             event_name=method,
             provider=agent.get("provider"),
             model=agent.get("model"),
-            include_doc=False
+            include_doc=False,
+            initiating_user=frappe.session.user,
+            channel_id="doc_event" 
         )
 
 
-def run_agent_for_doc(doc, agent_name, instructions, event_name, provider,model,include_doc=False):
+def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model,include_doc=False, initiating_user=None, channel_id=None):
     """Background worker to run an agent when a Doc Event triggers"""
 
     #Add logic to inlude/not include full doctype data dict. If not, only name will be passed. 
@@ -127,8 +129,19 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider,model,
         #     {json_string}
         # ```
         # """
+        external_id = None
+        channel = channel_id or "doc_event"
 
-        run_agent_sync(agent_name, prompt,provider,model)
+        try:
+            agent_doc = frappe.get_doc("Agent", agent_name)
+            if getattr(agent_doc, "persist_user_history", False):
+                external_id = initiating_user or doc.get("owner") or doc.get("modified_by") or "unknown_user"
+            else:
+                external_id = f"shared:{agent_name}"
+        except Exception:
+            external_id = initiating_user or f"shared:{agent_name}"
+
+        run_agent_sync(agent_name, prompt, provider, model, channel_id=channel, external_id=external_id)
 
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Hook Triggered Agent Error")

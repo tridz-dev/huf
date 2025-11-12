@@ -19,6 +19,7 @@
   "disabled",
   "behaviour_tab",
   "conversation_settings_section",
+  "persist_user_history",
   "allow_chat",
   "column_break_vfhq",
   "persist_conversation",
@@ -177,12 +178,19 @@
    "fieldname": "metadata_tab",
    "fieldtype": "Tab Break",
    "label": "Metadata"
+  },
+  {
+   "default": "1",
+   "description": "When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.",
+   "fieldname": "persist_user_history",
+   "fieldtype": "Check",
+   "label": "Persist per User (Doc/Schedule)"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-05 14:44:16.304542",
+ "modified": "2025-11-12 11:43:42.729561",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
