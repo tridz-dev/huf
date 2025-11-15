@@ -1,0 +1,175 @@
+---
+sidebarTitle: Quick Start
+---
+
+# Quick Start
+
+This guide will help you create your first AI agent in Huf. We'll walk through setting up an AI provider, creating a model, and building a simple agent that can interact with your Frappe site.
+
+## Step 1: Set Up an AI Provider
+
+An AI Provider stores the credentials needed to connect to an AI service (like OpenAI, Anthropic, or Google).
+
+1. **Navigate to AI Provider**
+   - Open the Huf app
+   - Click on **AI Provider** in the sidebar
+
+2. **Create a New Provider**
+   - Click **New**
+   - Enter a **Provider Name** (e.g., "OpenAI", "Anthropic", "Google")
+   - Enter your **API Key** (get this from your AI service provider's dashboard)
+   - Click **Save**
+
+> **Note**: Your API key is stored securely using Frappe's password encryption. Never share your API keys publicly.
+
+### Getting API Keys
+
+- **OpenAI**: Get your key from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- **Anthropic**: Get your key from [console.anthropic.com](https://console.anthropic.com)
+- **Google**: Get your key from [makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
+- **OpenRouter**: Get your key from [openrouter.ai/keys](https://openrouter.ai/keys) (provides access to 500+ models)
+
+## Step 2: Create an AI Model
+
+An AI Model defines which specific model you want to use from your provider.
+
+1. **Navigate to AI Model**
+   - Click on **AI Model** in the Huf sidebar
+
+2. **Create a New Model**
+   - Click **New**
+   - Enter a **Model Name** (e.g., "gpt-4-turbo", "claude-3-opus", "gemini-pro")
+     - You can use user-friendly names like `gpt-4-turbo` - Huf will automatically format them correctly
+   - Select your **Provider** (the one you created in Step 1)
+   - Click **Save**
+
+> **Tip**: Huf supports 100+ AI models through LiteLLM. You can use model names like `gpt-4-turbo`, `claude-3-opus`, or even `xai/grok-4` for Grok models.
+
+## Step 3: Create Your First Agent
+
+Now let's create an agent that can help with your Frappe site.
+
+1. **Navigate to Agent**
+   - Click on **Agent** in the Huf sidebar
+
+2. **Create a New Agent**
+   - Click **New**
+   - Fill in the basic information:
+     - **Agent Name**: Give it a descriptive name (e.g., "Customer Support Assistant")
+     - **Provider**: Select the provider you created
+     - **Model**: Select the model you created
+
+3. **Write Instructions**
+   - In the **Instructions** field, write what you want your agent to do. For example:
+   
+   ```
+   You are a helpful assistant for managing customer data. 
+   You can help users find customer information, create new customers, 
+   and answer questions about customer records. Always be polite and professional.
+   ```
+
+4. **Configure Settings**
+   - **Temperature**: Controls creativity (0.0 = focused, 1.0 = creative). Start with 0.7
+   - **Top P**: Alternative to temperature. Start with 1.0
+   - **Enable Chat**: Check this if you want to use the chat interface
+
+5. **Add Tools** (Optional for now)
+   - We'll add tools in the next step, but you can save the agent first
+
+6. **Save Your Agent**
+   - Click **Save**
+
+## Step 4: Add Tools to Your Agent
+
+Tools give your agent the ability to interact with your Frappe site. Let's add a simple tool to get customer information.
+
+### Option A: Use Built-in CRUD Tools
+
+Huf comes with built-in tools for common operations. To add them:
+
+1. **Edit Your Agent**
+   - Open the agent you just created
+
+2. **Add Agent Tool**
+   - Scroll to the **Agent Tool** table
+   - Click **Add Row**
+   - You'll need to create an **Agent Tool Function** first (see Option B)
+
+### Option B: Create a Custom Tool Function
+
+1. **Navigate to Agent Tool Function**
+   - Click on **Agent Tool Function** in the sidebar
+
+2. **Create a Tool**
+   - Click **New**
+   - **Tool Name**: "get_customer_info"
+   - **Description**: "Retrieves information about a customer by name or ID"
+   - **Types**: Select "Get Document"
+   - **Reference DocType**: Select "Customer"
+   - Click **Save**
+
+3. **Add Tool to Agent**
+   - Go back to your Agent
+   - In the **Agent Tool** table, click **Add Row**
+   - Select the tool function you just created
+   - Save the agent
+
+## Step 5: Test Your Agent
+
+Now let's test your agent using the Agent Console.
+
+1. **Open Agent Console**
+   - Click on **Agent Console** in the sidebar
+   - Select your agent from the dropdown
+
+2. **Send a Test Message**
+   - Type a message like: "Show me information about customer ABC-00001"
+   - Click **Send** or press Enter
+
+3. **View the Response**
+   - Your agent will process the request
+   - If you added the customer tool, it should retrieve and display customer information
+   - You'll see the agent's response, and if tools were used, you'll see tool calls and results
+
+## Step 6: Use Agent Chat (If Enabled)
+
+If you enabled chat for your agent:
+
+1. **Navigate to Agent Chat**
+   - Click on **Agent Chat** in the sidebar
+   - Select your agent
+
+2. **Start a Conversation**
+   - Type your message in the chat input
+   - The agent will respond and maintain conversation context
+
+## What's Next?
+
+Congratulations! You've created your first AI agent. Here are some next steps:
+
+- **Learn More About Tools**: Check out the [Tools Guide](/docs/tools) to understand how to create more powerful tools
+- **Explore Agent Types**: Learn about [Event-Driven Agents](/docs/agents#event-driven-agents) and [Scheduled Agents](/docs/agents#scheduled-agents)
+- **Monitor Your Agents**: Use [Agent Run](/docs/monitoring) to track agent executions and costs
+- **Customize Further**: Read the [Agents Guide](/docs/agents) for advanced configuration options
+
+## Common Issues
+
+### Agent Not Responding
+
+- Check that your API key is correct and has credits/quota
+- Verify the model name is correct for your provider
+- Check the **Agent Run** list for error messages
+
+### Tools Not Working
+
+- Ensure the tool function is properly configured
+- Check that you have permission to access the DocType
+- Verify the tool is added to your agent's tool list
+
+### High Costs
+
+- Monitor token usage in **Agent Run** documents
+- Consider using smaller/cheaper models for testing
+- Adjust temperature and top_p to reduce token usage
+
+Need help? Check out the rest of the documentation or refer to the [Frappe documentation](https://frappeframework.com/docs) for general Frappe questions.

@@ -1,0 +1,346 @@
+---
+sidebarTitle: Tools
+---
+
+# Tools
+
+Tools are the capabilities that enable your agents to interact with your Frappe site. Without tools, agents can only respond with text. With tools, they can read data, create documents, call functions, and much more.
+
+## Understanding Tools
+
+A tool in Huf is a function that an agent can call. When an agent needs to perform an action (like getting customer information or creating an order), it uses a tool.
+
+Tools consist of:
+- **Name**: A unique identifier for the tool
+- **Description**: What the tool does (crucial - the AI uses this to decide when to use it)
+- **Type**: The kind of operation (Get Document, Create Document, Custom Function, etc.)
+- **Parameters**: The inputs the tool accepts
+
+## Tool Types
+
+Huf supports several types of tools:
+
+### 1. Get Document
+
+Retrieves a single document from a DocType.
+
+**Configuration:**
+- **Reference DocType**: The DocType to retrieve from (e.g., "Customer", "Sales Order")
+- **Parameters**: Typically includes a document name/ID
+
+**Example Use Cases:**
+- Get customer details
+- Retrieve order information
+- Fetch product specifications
+
+### 2. Create Document
+
+Creates a new document in a DocType.
+
+**Configuration:**
+- **Reference DocType**: The DocType to create (e.g., "Customer", "Quotation")
+- **Parameters**: Fields required to create the document
+
+**Example Use Cases:**
+- Create new customers
+- Generate quotations
+- Add notes or comments
+
+### 3. Update Document
+
+Modifies an existing document.
+
+**Configuration:**
+- **Reference DocType**: The DocType to update
+- **Parameters**: Document name and fields to update
+
+**Example Use Cases:**
+- Update customer information
+- Modify order status
+- Edit product details
+
+### 4. Delete Document
+
+Removes a document (use with caution).
+
+**Configuration:**
+- **Reference DocType**: The DocType to delete from
+- **Parameters**: Document name to delete
+
+**Example Use Cases:**
+- Remove test data
+- Clean up duplicate records
+
+### 5. Get List
+
+Retrieves multiple documents matching filters.
+
+**Configuration:**
+- **Reference DocType**: The DocType to query
+- **Parameters**: Filters, fields to return, pagination options
+
+**Example Use Cases:**
+- List all customers in a city
+- Find orders by date range
+- Search products by category
+
+### 6. Submit Document
+
+Submits a document (for DocTypes that support submission).
+
+**Configuration:**
+- **Reference DocType**: The DocType to submit
+- **Parameters**: Document name
+
+**Example Use Cases:**
+- Submit sales orders
+- Approve purchase orders
+- Finalize invoices
+
+### 7. Custom Function
+
+Calls your own Python function.
+
+**Configuration:**
+- **Function Path**: The dotted path to your function (e.g., `my_app.api.calculate_discount`)
+- **Parameters**: Defined by your function
+
+**Example Use Cases:**
+- Complex calculations
+- External API calls
+- Custom business logic
+
+### 8. HTTP Request
+
+Makes HTTP requests to external APIs.
+
+**Configuration:**
+- **Method**: GET or POST
+- **URL**: The endpoint to call
+- **Headers**: Custom headers (optional)
+- **Parameters**: Request body or query parameters
+
+**Example Use Cases:**
+- Integrate with external services
+- Fetch data from third-party APIs
+- Send webhooks
+
+### 9. Run Agent
+
+Allows an agent to trigger another agent.
+
+**Configuration:**
+- **Parameters**: Agent name and prompt
+
+**Example Use Cases:**
+- Agent orchestration
+- Specialized sub-agents
+- Multi-step workflows
+
+## Creating a Tool Function
+
+### Step 1: Navigate to Agent Tool Function
+
+1. Open the Huf app
+2. Click **Agent Tool Function** in the sidebar
+3. Click **New**
+
+### Step 2: Basic Information
+
+1. **Tool Name**: Enter a unique, descriptive name
+   - Use lowercase with underscores (e.g., `get_customer_info`)
+   - Be specific about what the tool does
+
+2. **Description**: Write a clear description
+   - This is critical - the AI uses this to decide when to use the tool
+   - Be specific about what the tool does and when to use it
+   - Example: "Retrieves detailed information about a customer including contact details, address, and credit limit. Use this when the user asks about a specific customer."
+
+3. **Types**: Select the tool type from the dropdown
+
+### Step 3: Configure Tool-Specific Settings
+
+#### For DocType Tools (Get, Create, Update, Delete, Get List, Submit):
+
+1. **Reference DocType**: Select the DocType this tool works with
+2. The system will automatically suggest common parameters
+
+#### For Custom Function:
+
+1. **Function Path**: Enter the dotted path to your Python function
+   - Example: `my_app.api.send_email`
+   - The function must be whitelisted in Frappe
+   - See [Development Guide](/docs/development#custom-functions) for details
+
+#### For HTTP Request:
+
+1. Configure the request method, URL, and headers
+2. Define parameters for the request body or query string
+
+### Step 4: Define Parameters
+
+Parameters define what information the tool needs:
+
+1. **Parameter Name**: The name of the parameter (e.g., `customer_name`, `order_id`)
+2. **Type**: The data type (String, Number, Boolean, etc.)
+3. **Required**: Whether this parameter is mandatory
+4. **Description**: What this parameter is for
+
+**Best Practices:**
+- Use clear, descriptive parameter names
+- Mark required parameters appropriately
+- Provide helpful descriptions
+- Use appropriate data types
+
+### Step 5: Save
+
+Click **Save**. The **Function Definition** field will automatically populate with the JSON schema that the AI will use.
+
+## Tool Descriptions: Writing for AI
+
+The description is the most important part of a tool. The AI reads this to understand:
+- What the tool does
+- When to use it
+- What parameters it needs
+
+### Good Descriptions
+
+✅ **Specific and Action-Oriented:**
+```
+Retrieves detailed customer information including name, email, phone, 
+billing address, and credit limit. Use this tool when the user asks 
+about a specific customer or needs customer details for an order.
+```
+
+✅ **Includes Context:**
+```
+Creates a new Sales Order with the specified items, quantities, and 
+customer. Automatically calculates totals and applies applicable taxes. 
+Use this when a customer wants to place an order.
+```
+
+✅ **Mentions Limitations:**
+```
+Searches for products by name or SKU. Returns up to 20 matching products 
+with name, price, and availability. Use this when the user is looking 
+for products to add to an order.
+```
+
+### Poor Descriptions
+
+❌ Too vague: "Gets customer data"  
+❌ Missing context: "Creates order"  
+❌ No guidance: "Updates document"
+
+## Adding Tools to Agents
+
+Once you've created tool functions, add them to your agents:
+
+1. **Edit Your Agent**
+   - Go to **Agent** and open the agent you want to modify
+
+2. **Add Tools**
+   - Scroll to the **Agent Tool** table
+   - Click **Add Row**
+   - Select a tool function from the dropdown
+   - Save the agent
+
+3. **Order Matters**
+   - Tools are presented to the AI in the order listed
+   - Put the most commonly used tools first
+   - Group related tools together
+
+## Testing Tools
+
+### Using Agent Console
+
+1. Open **Agent Console**
+2. Select an agent with your tool
+3. Send a message that should trigger the tool
+4. Watch the tool calls in the response
+
+### Checking Tool Calls
+
+1. Go to **Agent Run** to see execution logs
+2. Open a specific run to see:
+   - Which tools were called
+   - What parameters were passed
+   - What results were returned
+   - Any errors that occurred
+
+## Common Tool Patterns
+
+### Customer Lookup Tool
+- **Type**: Get Document
+- **DocType**: Customer
+- **Description**: "Retrieves customer information by customer ID. Use when user asks about a specific customer."
+- **Parameters**: customer_id (required, string)
+
+### Order Creation Tool
+- **Type**: Create Document
+- **DocType**: Sales Order
+- **Description**: "Creates a new sales order with items and customer. Use when customer wants to place an order."
+- **Parameters**: customer (required), items (required, array)
+
+### Product Search Tool
+- **Type**: Get List
+- **DocType**: Item
+- **Description**: "Searches for products by name or category. Returns matching products with prices."
+- **Parameters**: search_term (optional, string), category (optional, string)
+
+## Security Considerations
+
+### Permissions
+
+- Tools execute with the permissions of the user running the agent
+- Ensure users only have access to tools they should use
+- Use Frappe's permission system to control access
+
+### Input Validation
+
+- Always validate inputs in custom functions
+- Check user permissions before performing actions
+- Sanitize data before database operations
+
+### Sensitive Operations
+
+- Be careful with delete operations
+- Consider confirmation for destructive actions
+- Log important operations for audit trails
+
+## Best Practices
+
+1. **Start Simple**: Begin with basic CRUD tools, add complexity later
+2. **Clear Descriptions**: Invest time in writing good tool descriptions
+3. **Test Thoroughly**: Test tools before adding them to production agents
+4. **Monitor Usage**: Check which tools are used most and optimize them
+5. **Error Handling**: Ensure tools handle errors gracefully
+6. **Documentation**: Keep tool documentation up to date
+
+## Troubleshooting
+
+### Tool Not Being Used
+
+- Check the tool description - is it clear when to use it?
+- Review agent instructions - do they mention the tool?
+- Check if parameters are correctly defined
+- Look at Agent Run logs to see why tools weren't called
+
+### Tool Errors
+
+- Check Agent Run for error messages
+- Verify permissions for the DocType
+- Ensure parameters match expected types
+- Test the underlying function directly if it's a custom function
+
+### Performance Issues
+
+- Use Get List with filters instead of multiple Get Document calls
+- Limit the number of tools per agent (start with 5-10)
+- Optimize custom functions for speed
+
+## Next Steps
+
+- Learn about [Agents](/docs/agents) to understand how tools fit into the bigger picture
+- Explore [Custom Functions](/docs/development#custom-functions) for advanced use cases
+- Check [Monitoring](/docs/monitoring) to see how tools are being used
