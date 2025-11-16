@@ -9,6 +9,7 @@
       "dev": "cd frontend && yarn dev",
       "build": "yarn build-docs && cd frontend && yarn build",
       "build-docs": "cd docs && npm install && npm run build",
+      "build-frontend": "cd frontend && yarn install && yarn build",
       "postinstall": "cd frontend && yarn install"
     }
 }
