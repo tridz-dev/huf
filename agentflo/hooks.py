@@ -58,6 +58,14 @@ app_license = "mit"
 
 website_route_rules = [
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
+    {"from_route": "/agentflo/stream", "to_route": "agentflo/stream"},
+    {"from_route": "/docs", "to_route": "docs"},
+    {"from_route": "/docs/<path:path>", "to_route": "docs"},
+]
+
+# Register custom page renderer for SSE streaming
+page_renderer = [
+    "agentflo.ai.agent_stream_renderer.AgentStreamRenderer",
 ]
 
 # application home page (will override Website Settings)

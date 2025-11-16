@@ -7,7 +7,8 @@
     "main": "index.js",
     "scripts": {
       "dev": "cd frontend && yarn dev",
-      "build": "cd frontend && yarn build",
+      "build": "yarn build-docs && cd frontend && yarn build",
+      "build-docs": "cd agentflo/docs && npm install && npm run build",
       "postinstall": "cd frontend && yarn install"
     }
 }

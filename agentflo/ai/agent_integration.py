@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 
 import frappe
 from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
@@ -434,4 +435,197 @@ def run_agent_sync(
             "agent_run_id": run_doc.name,
             "conversation_id": conversation.name,
             "session_id": conv_manager.session_id
+        }
+
+
+async def run_agent_stream(
+    agent_name: str,
+    prompt: str,
+    provider: str,
+    model: str,
+    channel_id: str = None,
+    external_id: str = None,
+    conversation_id: str = None
+):
+    """
+    Streaming version of run_agent_sync.
+    
+    Yields chunks of the agent's response as they arrive from the LLM.
+    Uses the same conversation management and run tracking as run_agent_sync.
+    
+    Args:
+        agent_name: Name of the agent to run
+        prompt: User prompt
+        provider: Provider name
+        model: Model name
+        channel_id: Channel identifier (default: "api")
+        external_id: External identifier for conversation tracking
+        conversation_id: Optional conversation ID to continue
+        
+    Yields:
+        dict: Streaming chunks with structure:
+            - type: "delta" | "complete" | "tool_call" | "error"
+            - content: str (for delta)
+            - full_response: str (accumulated response)
+            - tool_call: dict (for tool_call type)
+            - error: str (for error type)
+    """
+    if not agent_name or not prompt:
+        yield {
+            "type": "error",
+            "error": "Both agent_name and prompt are required"
+        }
+        return
+    
+    if not channel_id:
+        channel_id = "sse_stream"
+    
+    try:
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        
+        # Validate agent allows chat (for streaming UI)
+        if not agent_doc.allow_chat:
+            yield {
+                "type": "error",
+                "error": f"Agent '{agent_name}' does not allow chat/streaming. Enable 'Allow Chat' in agent settings."
+            }
+            return
+        
+        conv_manager = ConversationManager(
+            agent_name=agent_name,
+            channel=channel_id,
+            external_id=external_id
+        )
+        
+        if agent_doc.persist_conversation:
+            conversation = conv_manager.get_or_create_conversation(
+                title=f"Streaming chat with {agent_name}",
+                conversation_id=conversation_id
+            )
+        else:
+            conversation = conv_manager.create_new_conversation(
+                title=f"Streaming chat with {agent_name}"
+            )
+        
+        history = conv_manager.get_conversation_history(conversation.name)
+        
+        # Create Agent Run document
+        run_doc = frappe.get_doc({
+            "doctype": "Agent Run",
+            "agent": agent_name,
+            "status": "Started",
+            "conversation": conversation.name,
+            "prompt": prompt,
+            "model": model,
+            "provider": provider
+        })
+        run_doc.insert()
+        conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name)
+        run_doc.db_set("start_time", now_datetime())
+        safe_commit()
+        
+        # Update agent stats
+        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
+        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
+        
+        frappe.db.set_value("Agent", agent_name, {
+            "total_run": total_runs,
+            "last_run": last_run_time
+        })
+        safe_commit()
+        
+        manager = AgentManager(agent_name)
+        agent = manager.create_agent()
+        
+        context = {
+            "channel": channel_id,
+            "external_id": external_id,
+            "conversation_history": history,
+            "agent_name": agent_name
+        }
+        
+        enhanced_prompt = f"""
+            Conversation history:
+            {json.dumps(history, indent=2)}
+            Current user message:
+            {prompt}
+        """
+        
+        # Stream from provider
+        full_response = ""
+        try:
+            stream = RunProvider.run_stream(agent, enhanced_prompt, provider, model, context)
+            
+            async for chunk in stream:
+                chunk_type = chunk.get("type")
+                
+                if chunk_type == "delta":
+                    full_response = chunk.get("full_response", full_response)
+                    yield chunk
+                
+                elif chunk_type == "tool_call":
+                    # Log tool call
+                    tool_call = chunk.get("tool_call", {})
+                    if tool_call:
+                        raw_item = SimpleNamespace(
+                            name=tool_call.get("function", {}).get("name", ""),
+                            arguments=tool_call.get("function", {}).get("arguments", "{}")
+                        )
+                        log_tool_call(run_doc, conversation, raw_item, is_output=False)
+                    yield chunk
+                
+                elif chunk_type == "complete":
+                    full_response = chunk.get("full_response", full_response)
+                    
+                    # Save final response
+                    conv_manager.add_message(conversation, "agent", full_response, provider, model, agent_name, run_doc.name)
+                    
+                    frappe.db.set_value("Agent Run", run_doc.name, {
+                        "status": "Success",
+                        "response": full_response,
+                        "prompt": prompt,
+                        "model": model,
+                        "provider": provider,
+                        "end_time": now_datetime()
+                    }, update_modified=True)
+                    safe_commit()
+                    
+                    yield chunk
+                    return
+                
+                elif chunk_type == "error":
+                    error_msg = chunk.get("error", "Unknown error")
+                    
+                    frappe.db.set_value("Agent Run", run_doc.name, {
+                        "status": "Failed",
+                        "error_message": error_msg,
+                        "end_time": now_datetime()
+                    }, update_modified=True)
+                    safe_commit()
+                    
+                    yield chunk
+                    return
+        
+        except Exception as e:
+            error_msg = str(e)
+            frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "AgentFlo Streaming")
+            
+            frappe.db.set_value("Agent Run", run_doc.name, {
+                "status": "Failed",
+                "error_message": error_msg,
+                "end_time": now_datetime()
+            }, update_modified=True)
+            safe_commit()
+            
+            yield {
+                "type": "error",
+                "error": error_msg
+            }
+    
+    except Exception as e:
+        error_msg = str(e)
+        frappe.log_error(f"Agent Stream Setup Error: {frappe.get_traceback()}", "AgentFlo Streaming")
+        yield {
+            "type": "error",
+            "error": error_msg
         }

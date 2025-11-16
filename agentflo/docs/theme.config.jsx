@@ -4,7 +4,7 @@ export default {
   project: {
     link: 'https://github.com/Tridz/agentflo'
   },
-  docsRepositoryBase: 'https://github.com/Tridz/agentflo/tree/main/agentflo/www/docs',
+  docsRepositoryBase: 'https://github.com/Tridz/agentflo/tree/main/agentflo/docs',
   search: {
     placeholder: 'Search documentation...'
   },

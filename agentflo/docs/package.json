@@ -2,9 +2,10 @@
   "name": "huf-docs",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && rm -rf ../public/docs && mkdir -p ../public/docs && cp -r out/* ../public/docs/ && cp ../public/docs/index.html ../www/docs.html",
     "start": "next start"
   },
   "dependencies": {

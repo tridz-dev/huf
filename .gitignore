@@ -7,4 +7,9 @@ node_modules
 __pycache__
 
 agentflo/public/frontend
+agentflo/public/docs
 agentflo/www/huf.html
+agentflo/www/docs.html
+agentflo/docs/.next
+agentflo/docs/out
+agentflo/docs/node_modules
