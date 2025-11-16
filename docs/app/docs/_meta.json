@@ -1,6 +1,7 @@
 {
-  "installation": "Installation",
   "quick-start": "Quick Start",
+  "installation": "Installation",
+  "concepts": "Core Concepts",
   "agents": "Agents",
   "tools": "Tools",
   "conversations": "Conversations",

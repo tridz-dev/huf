@@ -8,7 +8,7 @@
     "scripts": {
       "dev": "cd frontend && yarn dev",
       "build": "yarn build-docs && cd frontend && yarn build",
-      "build-docs": "cd agentflo/docs && npm install && npm run build",
+      "build-docs": "cd docs && npm install && npm run build",
       "postinstall": "cd frontend && yarn install"
     }
 }

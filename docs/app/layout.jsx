@@ -37,7 +37,7 @@ export default async function RootLayout({ children }) {
         <Layout
           navbar={navbar}
           pageMap={await getPageMap()}
-          docsRepositoryBase="https://github.com/Tridz/agentflo/tree/main/agentflo/docs"
+          docsRepositoryBase="https://github.com/Tridz/agentflo/tree/main/docs"
           footer={footer}
         >
           {children}

@@ -1,0 +1,105 @@
+---
+sidebarTitle: Introduction
+---
+
+# Welcome to Huf
+
+**Huf** brings AI agents into your Frappe site. Think of agents as team members who can understand natural language, use tools to work with your data, and automate tasks across your Frappe ecosystem.
+
+## What is Huf?
+
+Huf is a Frappe application that lets you create AI-powered agents that live inside your Frappe system. These agents can:
+
+- **Understand your requests** in natural language
+- **Interact with your data** through tools (create, read, update documents)
+- **Run automatically** on schedules or when documents change
+- **Chat with users** in real-time with full context awareness
+- **Learn from conversations** and maintain history
+
+### Why Huf?
+
+If you're using Frappe for your business operations, Huf lets you add AI capabilities without leaving your Frappe environment. Agents can handle repetitive tasks, assist users, validate data, generate insights, and more—all while respecting Frappe's permissions and using your existing DocTypes.
+
+## Prerequisites
+
+**This documentation assumes you have working knowledge of the [Frappe Framework](https://frappeframework.com/docs).** You should be comfortable with:
+- Frappe DocTypes and document lifecycle
+- Basic Frappe site administration
+- How to use Frappe Desk
+
+You don't need to be a developer, but understanding Frappe's structure will help you get the most out of Huf.
+
+## Two Interfaces: Frontend vs Desk
+
+Huf provides **two interfaces** for different use cases:
+
+| Interface | URL | Purpose | Status |
+|-----------|-----|---------|--------|
+| **Frontend** | `/huf` | User-focused chat and interactions | 🚧 **Actively expanding** |
+| **Desk** | `/app` | Full admin control and configuration | ✅ **Complete** |
+
+**Frontend (`/huf`)** is designed for end-users who need to chat with agents, view conversations, and interact with AI capabilities without entering the Frappe Desk. This interface is currently **under active development** with new features being added regularly.
+
+**Desk (`/app`)** is where you configure everything: create agents, set up providers, define tools, manage triggers, and monitor all agent activity. All agent administration happens here.
+
+> 💡 **Current Recommendation**: Use Desk for all configuration and management. Use the frontend for end-user interactions where available. More frontend features are coming soon!
+
+## Key Capabilities
+
+### 🤖 Flexible AI Agents
+Create agents with custom roles, instructions, and personalities. Power them with leading AI models:
+- OpenAI (GPT-4, GPT-3.5)
+- Anthropic (Claude)
+- Google (Gemini)
+- 100+ other models via LiteLLM
+
+### 🛠️ Tool System
+Give agents the ability to:
+- Get, create, update, delete Frappe documents
+- Execute custom Python functions
+- Make HTTP requests to external APIs
+- Chain to other agents
+
+### 🎯 Multiple Trigger Types
+Agents can run:
+- **Manually** - Test and execute on demand
+- **On Schedule** - Hourly, daily, weekly tasks
+- **On Document Events** - When records are created, updated, or submitted
+- **Via Chat** - Real-time conversational interactions
+- **Via API** - Programmatic execution from your apps
+
+### 📊 Complete Observability
+Track everything with detailed logs:
+- Every agent execution with full prompt/response
+- Token usage and cost per run
+- Tool calls and results
+- Conversation history
+
+## Navigation
+
+<div style={{ marginTop: '2rem' }}>
+
+**Getting Started**
+- [Quick Start](/docs/quick-start) - Your first agent in 5 minutes
+- [Installation](/docs/installation) - Set up Huf on your Frappe site
+
+**Core Concepts**
+- [Interfaces](/docs/concepts/interfaces) - Understanding `/huf` vs `/app`
+- [Agents](/docs/concepts/agents) - What agents are and how they work
+- [Providers & Models](/docs/concepts/providers-models) - Connecting to AI services
+- [Tools](/docs/concepts/tools) - Giving agents capabilities
+- [Conversations](/docs/concepts/conversations) - How agents maintain context
+- [Triggers](/docs/concepts/triggers) - Running agents automatically
+
+**Working with Tools**
+- [Built-in Tools](/docs/tools/built-in) - Document operations and more
+- [Creating Custom Tools](/docs/tools/custom) - Extend agent capabilities
+- [Publishing Tools](/docs/tools/publishing) - Share tools via your apps
+
+</div>
+
+## What's Next?
+
+New to Huf? Start with the [Quick Start](/docs/quick-start) guide to create your first agent in under 5 minutes.
+
+Already familiar? Jump to [Core Concepts](/docs/concepts/agents) to dive deeper.
