@@ -2,302 +2,463 @@
 sidebarTitle: Development
 ---
 
-# Development Guide
+# Development
 
-This section is for developers who want to understand Huf's architecture, extend its functionality, or contribute to the project.
+This guide is for developers who want to extend Huf's functionality, create custom integrations, or contribute to the project.
+
+## Prerequisites
+
+**Required knowledge:**
+- Frappe Framework development experience
+- Python programming
+- Understanding of DocTypes, hooks, and permissions
+- Basic knowledge of LLMs and AI agents
+
+**If you're new to Frappe:** Start with the [Frappe Framework Documentation](https://frappeframework.com/docs) before extending Huf.
 
 ## Project Structure
 
-Huf follows the standard Frappe application structure:
+Huf follows standard Frappe application structure:
 
 ```
 agentflo/
 ├── agentflo/                    # Main Python module
-│   ├── __init__.py
-│   └── doctype/                 # DocType definitions
-│       ├── agent/
-│       ├── ai_provider/
-│       ├── ai_model/
-│       ├── agent_tool_function/
-│       └── ...                  # Other DocTypes
-├── ai/                          # Core AI integration logic
-│   ├── agent_integration.py    # Main agent management
-│   ├── conversation_manager.py # Conversation handling
-│   ├── sdk_tools.py            # Tool serialization
-│   ├── tool_functions.py       # Low-level tool functions
-│   ├── run.py                  # Provider routing
-│   └── providers/              # Provider implementations
-│       └── litellm.py          # LiteLLM provider
-├── hooks.py                    # Frappe hooks
-├── install.py                  # Installation hooks
-└── www/                        # Web assets
-    └── docs/                   # This documentation
+│   ├── doctype/                 # DocType definitions
+│   │   ├── agent/
+│   │   ├── ai_provider/
+│   │   ├── ai_model/
+│   │   └── agent_tool_function/
+│   └── ai/                      # Core AI integration
+│       ├── agent_integration.py
+│       ├── conversation_manager.py
+│       ├── tool_discovery.py    # @agent_tool decorator
+│       └── providers/
+│           └── litellm.py
+├── hooks.py
+├── install.py
+└── www/                         # Web assets
 ```
 
-## Core Components
+## Extension Points
 
-### DocTypes
+### 1. Publishing Tools from Your App
 
-Huf uses several DocTypes to manage agents and their configuration:
+The easiest way to extend Huf is by publishing tools from your Frappe app.
 
-- **AI Provider**: Stores API credentials for AI services
-- **AI Model**: Defines models available from providers
-- **Agent Tool Function**: Defines tools agents can use
-- **Agent**: The main agent configuration
-- **Agent Conversation**: Tracks conversation sessions
-- **Agent Message**: Individual messages in conversations
-- **Agent Run**: Logs agent executions
-- **Agent Tool Call**: Records tool usage
-
-Each DocType follows Frappe conventions:
-- `<doctype_name>/<doctype_name>.json`: Schema definition
-- `<doctype_name>/<doctype_name>.py`: Server-side controller
-- `<doctype_name>/<doctype_name>.js`: Client-side script (if needed)
-
-### AI Integration (`ai/` directory)
-
-The `ai/` directory contains the core logic:
-
-- **`agent_integration.py`**: `AgentManager` class that prepares agents for execution
-- **`conversation_manager.py`**: Handles conversation persistence and history
-- **`sdk_tools.py`**: Bridges Huf tools to the agents SDK format
-- **`tool_functions.py`**: Low-level functions for Frappe operations
-- **`run.py`**: Routes provider requests to appropriate implementations
-- **`providers/litellm.py`**: Unified provider using LiteLLM
-
-## Frappe Framework Integration
-
-Huf is built on the [Frappe Framework](https://frappeframework.com/docs), which means:
-
-### Standard Frappe Features
-
-- **DocTypes**: All data models use Frappe DocTypes
-- **Permissions**: Standard Frappe permission system
-- **Hooks**: Uses Frappe hooks for extensibility
-- **API**: Standard Frappe API endpoints
-- **Client Scripts**: Standard client-side scripting
-
-### Frappe Enhancements
-
-Since Huf is a Frappe app, all Frappe enhancement mechanisms work:
-
-- **Custom Fields**: Add custom fields to any DocType
-- **Custom Scripts**: Add client/server scripts
-- **Hooks**: Extend functionality via hooks
-- **Overrides**: Override methods and templates
-- **Custom Apps**: Create apps that extend Huf
-
-For more information, see the [Frappe Documentation](https://frappeframework.com/docs).
-
-## Extending Huf
-
-### Custom Tool Functions
-
-Create custom Python functions that agents can call:
-
-1. **Create the Function**
+**Use the `@agent_tool` decorator:**
 
 ```python
-# my_app/api.py
-import frappe
+from agentflo.ai.tool_discovery import agent_tool
 
-@frappe.whitelist()
-def calculate_discount(item_code, quantity):
-    """Calculate discount for an item based on quantity"""
-    # Your custom logic here
-    if quantity > 100:
-        return 0.15  # 15% discount
-    elif quantity > 50:
-        return 0.10  # 10% discount
-    return 0.05  # 5% discount
+@agent_tool
+def my_custom_tool(param1: str, param2: int) -> dict:
+    """
+    Description of what this tool does.
+    
+    Args:
+        param1: Description of param1
+        param2: Description of param2
+        
+    Returns:
+        dict: Result data
+    """
+    # Your implementation
+    return {"result": "data"}
 ```
 
-2. **Create Tool Function DocType**
+**See:** [Publishing Tools](/docs/tools/publishing) for complete guide.
 
-- Go to **Agent Tool Function**
-- Create new tool
-- Set **Types** to "Custom Function"
-- Set **Function Path** to `my_app.api.calculate_discount`
-- Define parameters
+### 2. Custom Tool Functions
 
-3. **Add to Agent**
+Create tools manually via Agent Tool Function DocType:
 
-- Add the tool function to your agent's tool list
+1. Write Python function in your app
+2. Create Agent Tool Function record
+3. Link function via Function Path
+4. Assign to agents
 
-### Custom Providers
+**See:** [Creating Custom Tools](/docs/tools/custom) for details.
 
-While Huf uses LiteLLM for most providers, you can add custom providers:
+### 3. Frappe Hooks
 
-1. **Create Provider Module**
+Extend Huf using Frappe's hook system:
+
+**In your app's `hooks.py`:**
+
+```python
+# Before agent runs
+agent_before_run = "my_app.hooks.validate_agent_config"
+
+# After agent runs
+agent_after_run = "my_app.hooks.log_custom_metrics"
+
+# Custom tool execution
+agent_tool_call = "my_app.hooks.handle_custom_tool"
+```
+
+**Example hook implementation:**
+
+```python
+# my_app/hooks.py
+def validate_agent_config(agent, prompt, context):
+    """Validate agent configuration before run."""
+    if agent.name == "Critical Agent":
+        # Add custom validation
+        if not agent.custom_field:
+            frappe.throw("Custom field required for critical agents")
+```
+
+### 4. Custom Providers
+
+While Huf uses LiteLLM for most providers, you can add custom provider implementations:
+
+**Create provider module:**
 
 ```python
 # agentflo/ai/providers/custom.py
 async def run(agent, enhanced_prompt, provider, model, context=None):
-    # Your custom provider implementation
-    pass
+    """Custom provider implementation."""
+    # Your custom logic
+    response = await your_custom_api_call(enhanced_prompt)
+    return {
+        "response": response.text,
+        "tokens": response.tokens_used,
+        "cost": response.cost
+    }
 ```
 
-2. **Register in `run.py`**
-
-Add routing logic to direct requests to your provider.
-
-### Hooks
-
-Use Frappe hooks to extend Huf:
-
-**`hooks.py`:**
-```python
-# Add custom validations
-agent_before_save = "my_app.hooks.validate_agent"
-
-# Add custom tool handlers
-agent_tool_call = "my_app.hooks.handle_tool_call"
-```
-
-## API Endpoints
-
-Huf exposes several whitelisted API endpoints:
-
-### Run Agent
+**Register in routing:**
 
 ```python
-# agentflo/ai/agent_integration.py
-@frappe.whitelist()
-def run_agent_sync(agent_name, prompt, session_id=None, ...):
-    """Main endpoint for running agents"""
-    pass
+# agentflo/ai/run.py
+if provider.name == "Custom Provider":
+    from agentflo.ai.providers import custom
+    return await custom.run(...)
 ```
 
-### Agent Chat
+### 5. DocType Customizations
+
+Extend Huf DocTypes using Frappe's customization system:
+
+**Add custom fields:**
+- Navigate to Customize Form
+- Add fields to Agent, AI Provider, etc.
+- Use in hooks and scripts
+
+**Add custom scripts:**
+- Client scripts for UI behavior
+- Server scripts for validation
+- Print formats for reports
+
+### 6. API Extensions
+
+Create custom API endpoints that use Huf:
 
 ```python
-# agentflo/ai/agent_chat.py
-@frappe.whitelist()
-def get_agent_chat_messages(agent_name, session_id):
-    """Get chat messages for an agent"""
-    pass
+# my_app/api/agent_extensions.py
+import frappe
+from agentflo.ai.agent_integration import AgentManager
 
 @frappe.whitelist()
-def send_agent_chat_message(agent_name, message, session_id):
-    """Send a message to an agent"""
-    pass
+def custom_agent_workflow(data):
+    """Custom workflow using Huf agents."""
+    # Get agent
+    manager = AgentManager("My Agent")
+    
+    # Run agent
+    result = manager.run_sync(data["prompt"])
+    
+    # Custom processing
+    processed = your_custom_logic(result)
+    
+    return processed
 ```
-
-## Dependencies
-
-Key dependencies:
-
-- **Frappe Framework**: Base framework
-- **LiteLLM** (>=1.0.0): Unified LLM provider interface
-- **agents SDK**: For agent execution (if used)
-
-See `pyproject.toml` for complete dependency list.
 
 ## Development Setup
 
-1. **Clone the Repository**
+### 1. Clone Repository
 
 ```bash
 git clone https://github.com/Tridz/agentflo.git
+cd agentflo
 ```
 
-2. **Install in Bench**
+### 2. Install in Bench
 
 ```bash
-cd /path/to/bench
+cd /path/to/your/bench
 bench get-app agentflo /path/to/agentflo
 bench --site your-site install-app agentflo
 bench setup requirements
 ```
 
-3. **Development Mode**
+### 3. Development Mode
 
 ```bash
+# Start bench
 bench start
+
+# Run migrations after changes
+bench --site your-site migrate
+
+# Clear cache
+bench --site your-site clear-cache
 ```
 
-4. **Run Tests** (if available)
+### 4. Testing
 
 ```bash
+# Run tests (if available)
 bench --site your-site run-tests --app agentflo
+
+# Test in console
+bench --site your-site console
 ```
 
-## Code Style
+## Core Components
 
-Follow Frappe coding standards:
+### Agent Integration (`agent_integration.py`)
 
-- **Python**: PEP 8 style guide
-- **JavaScript**: Standard JavaScript conventions
-- **DocStrings**: Use docstrings for functions and classes
-- **Type Hints**: Use type hints where appropriate
+**`AgentManager` class:**
+- Prepares agents for execution
+- Manages conversation context
+- Handles tool serialization
+- Routes to providers
+
+**Key methods:**
+- `prepare_agent()`: Load agent configuration
+- `run_sync()`: Execute agent synchronously
+- `get_conversation()`: Retrieve conversation history
+
+### Conversation Manager (`conversation_manager.py`)
+
+**Handles:**
+- Conversation persistence
+- Message history
+- Session management
+- Context building
+
+**Key methods:**
+- `get_or_create_conversation()`: Get conversation session
+- `add_message()`: Add message to conversation
+- `get_history()`: Retrieve conversation history
+
+### Tool Discovery (`tool_discovery.py`)
+
+**`@agent_tool` decorator:**
+- Scans apps for decorated functions
+- Creates Agent Tool Function records
+- Syncs on app install/migrate
+
+**Key functions:**
+- `agent_tool()`: Decorator function
+- `discover_tools()`: Scan and register tools
+- `sync_tools()`: Update tool records
+
+### Provider System (`providers/litellm.py`)
+
+**LiteLLM integration:**
+- Unified interface to 100+ providers
+- Automatic retry logic
+- Cost tracking
+- Model normalization
+
+**Why LiteLLM:**
+- Supports 100+ providers
+- Built-in error handling
+- Cost calculation
+- Model name normalization
+
+## Architecture Decisions
+
+### Why Frappe DocTypes?
+
+**Benefits:**
+- Built-in CRUD operations
+- Permission system integration
+- Audit trails automatically
+- Standard UI components
+- Database abstraction
+
+### Why LiteLLM?
+
+**Benefits:**
+- Unified API for all providers
+- Automatic retry and error handling
+- Built-in cost tracking
+- Model name normalization
+- Active maintenance
+
+### Tool System Design
+
+**Principles:**
+- **Flexible:** Support multiple tool types
+- **Extensible:** Easy to add custom tools
+- **Secure:** Respects Frappe permissions
+- **Trackable:** All calls logged
+- **Discoverable:** Auto-discovery via decorator
 
 ## Contributing
 
 ### Reporting Issues
 
-- Use GitHub Issues for bug reports
+**Use GitHub Issues:**
 - Include steps to reproduce
 - Provide error messages and logs
+- Specify Huf and Frappe versions
+- Include relevant code snippets
 
 ### Pull Requests
 
-- Fork the repository
-- Create a feature branch
-- Make your changes
-- Submit a pull request with a clear description
+**Process:**
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Commit with clear messages
+5. Push to your fork
+6. Open Pull Request
 
-### Code Review
+**PR Requirements:**
+- Clear description of changes
+- Reference related issues
+- Update documentation if needed
+- Follow code style guidelines
+- Ensure tests pass (if applicable)
 
-- All contributions go through code review
-- Ensure tests pass
-- Follow coding standards
-- Update documentation as needed
+### Code Style
 
-## Architecture Decisions
+**Python:**
+- Follow PEP 8
+- Use type hints where appropriate
+- Write docstrings for functions/classes
+- Keep functions focused and small
 
-### Why LiteLLM?
+**JavaScript:**
+- Follow Frappe conventions
+- Use ES6+ features
+- Comment complex logic
+- Follow existing patterns
 
-LiteLLM provides:
-- Unified interface to 100+ LLM providers
-- Automatic retry logic
-- Cost tracking
-- Model name normalization
-- Built-in error handling
+**DocStrings:**
+```python
+def function_name(param1: str, param2: int) -> dict:
+    """
+    Brief description of function.
+    
+    Args:
+        param1: Description of param1
+        param2: Description of param2
+        
+    Returns:
+        dict: Description of return value
+        
+    Raises:
+        ValueError: When param1 is invalid
+    """
+    pass
+```
 
-### Why Frappe DocTypes?
+### Testing
 
-DocTypes provide:
-- Built-in CRUD operations
-- Permission system
-- Audit trails
-- Standard UI
-- Database abstraction
+**Before submitting:**
+- Test your changes thoroughly
+- Test edge cases
+- Verify error handling
+- Check performance impact
+- Test with different models/providers
 
-### Tool System Design
+## Common Extension Patterns
 
-Tools are designed to be:
-- **Flexible**: Support multiple tool types
-- **Extensible**: Easy to add custom tools
-- **Secure**: Respect Frappe permissions
-- **Trackable**: All tool calls are logged
+### Pattern 1: Custom Validation
+
+**Use case:** Validate agent configuration before runs
+
+```python
+# hooks.py
+agent_before_run = "my_app.hooks.validate_agent"
+
+# hooks.py implementation
+def validate_agent(agent, prompt, context):
+    if agent.custom_field == "restricted":
+        # Check permissions
+        if not frappe.has_permission("Custom DocType", "read"):
+            frappe.throw("Permission denied")
+```
+
+### Pattern 2: Custom Metrics
+
+**Use case:** Track custom metrics for agent runs
+
+```python
+# hooks.py
+agent_after_run = "my_app.hooks.track_metrics"
+
+def track_metrics(agent, run_result, context):
+    frappe.get_doc({
+        "doctype": "Custom Metric",
+        "agent": agent.name,
+        "tokens": run_result.get("tokens_used", 0),
+        "cost": run_result.get("cost", 0),
+        "success": run_result.get("status") == "success"
+    }).insert()
+```
+
+### Pattern 3: Tool Wrapper
+
+**Use case:** Add logging or validation to tool calls
+
+```python
+# hooks.py
+agent_tool_call = "my_app.hooks.wrap_tool_call"
+
+def wrap_tool_call(tool_name, params, context):
+    # Log tool call
+    frappe.logger().info(f"Tool called: {tool_name}")
+    
+    # Add custom validation
+    if tool_name == "sensitive_tool":
+        validate_sensitive_access()
+    
+    # Continue with normal execution
+    return None  # Return None to proceed normally
+```
 
 ## Resources
 
-- [Frappe Framework Documentation](https://frappeframework.com/docs)
+**Documentation:**
+- [Frappe Framework Docs](https://frappeframework.com/docs)
 - [Frappe Developer Guide](https://frappeframework.com/docs/user/en/guides)
 - [LiteLLM Documentation](https://docs.litellm.ai)
+
+**Code:**
 - [GitHub Repository](https://github.com/Tridz/agentflo)
+- [Issue Tracker](https://github.com/Tridz/agentflo/issues)
+- [Discussions](https://github.com/Tridz/agentflo/discussions)
+
+**Community:**
+- [Frappe Forum](https://discuss.frappe.io)
+- [GitHub Discussions](https://github.com/Tridz/agentflo/discussions)
 
 ## Getting Help
 
-- **Documentation**: Check this documentation first
-- **GitHub Issues**: Report bugs or ask questions
-- **Frappe Forum**: General Frappe questions
-- **Community**: Connect with other developers
+**For Huf-specific questions:**
+- Check this documentation
+- Search GitHub Issues
+- Ask in GitHub Discussions
+- Review source code
+
+**For Frappe questions:**
+- [Frappe Documentation](https://frappeframework.com/docs)
+- [Frappe Forum](https://discuss.frappe.io)
 
 ## Next Steps
 
-- Explore the codebase
-- Read Frappe documentation
-- Try creating a custom tool
-- Contribute improvements
+1. **Explore the codebase:** Understand structure and patterns
+2. **Read Frappe docs:** Ensure you understand Frappe development
+3. **Create a custom tool:** Start with `@agent_tool` decorator
+4. **Extend functionality:** Use hooks for custom behavior
+5. **Contribute:** Submit improvements and fixes
+
+---
+
+**Ready to contribute?** Check out the [GitHub repository](https://github.com/Tridz/agentflo) and open an issue or pull request!
