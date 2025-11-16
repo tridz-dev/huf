@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build && rm -rf ../public/docs && mkdir -p ../public/docs && cp -r out/* ../public/docs/ && cp ../public/docs/index.html ../www/docs.html",
+    "build": "next build && rm -rf ../public/docs && mkdir -p ../public/docs && cp -r out/* ../public/docs/ && sed 's|href=\"/_next|href=\"/assets/agentflo/docs/_next|g; s|src=\"/_next|src=\"/assets/agentflo/docs/_next|g' ../public/docs/index.html > ../www/docs.html",
     "start": "next start"
   },
   "dependencies": {
