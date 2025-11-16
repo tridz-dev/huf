@@ -61,7 +61,7 @@ The model determines the agent's intelligence and capabilities:
 | **Claude 3 Sonnet** | Balanced performance and cost | $$ | Fast |
 | **Gemini Pro** | Multimodal, Google ecosystem | $$ | Fast |
 
-> 💡 **Tip**: Start with a cheaper model (GPT-3.5, Gemini) for testing, then upgrade to more powerful models (GPT-4, Claude Opus) for production if needed.
+> **Tip**: Start with a cheaper model (GPT-3.5, Gemini) for testing, then upgrade to more powerful models (GPT-4, Claude Opus) for production if needed.
 
 ### Tools
 
@@ -101,7 +101,7 @@ Fine-tune agent behavior with these parameters:
 - Start with `1.0` for most use cases
 - Lower values make output more focused
 
-> ⚠️ **Note**: Use either temperature OR top_p, not both. Temperature is more commonly used.
+> **Note**: Use either temperature OR top_p, not both. Temperature is more commonly used.
 
 ## Agent States
 
@@ -223,14 +223,14 @@ Navigate to: **Desk → Huf → Agent**
 
 ### Writing Great Instructions
 
-✅ **Do:**
+**Do:**
 - Be specific about the agent's role and scope
 - Include step-by-step guidance for common tasks
 - Provide examples of good responses
 - Define clear boundaries (what NOT to do)
 - Use natural, conversational language
 
-❌ **Don't:**
+**Don't:**
 - Be vague ("help users")
 - Assume the AI knows your business logic
 - Forget to mention tool usage
@@ -238,12 +238,12 @@ Navigate to: **Desk → Huf → Agent**
 
 **Example Comparison:**
 
-❌ **Bad:**
+**Bad:**
 ```
 Help with sales.
 ```
 
-✅ **Good:**
+**Good:**
 ```
 You are a sales assistant. Help users:
 1. Look up customer information by name or ID
@@ -295,7 +295,7 @@ Navigate to: **Desk → Huf → Agent**
 
 Changes to agents take effect immediately for new runs. Ongoing conversations or scheduled runs may use the old configuration until they complete.
 
-> 💡 **Tip**: Test changes in a draft/duplicate agent before modifying production agents.
+> **Tip**: Test changes in a draft/duplicate agent before modifying production agents.
 
 ### Monitoring Performance
 

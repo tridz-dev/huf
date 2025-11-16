@@ -10,8 +10,8 @@ Huf provides **two distinct interfaces** for interacting with AI agents. Underst
 
 | Interface | URL | Designed For | Use Case | Status |
 |-----------|-----|--------------|----------|--------|
-| **Frontend** | `/huf` | End users | Chat, interact with agents, view conversations | 🚧 **Actively expanding** |
-| **Desk** | `/app` | Administrators | Configure agents, manage providers, monitor all activity | ✅ **Complete** |
+| **Frontend** | `/huf` | End users | Chat, interact with agents, view conversations | **Actively expanding** |
+| **Desk** | `/app` | Administrators | Configure agents, manage providers, monitor all activity | **Complete** |
 
 ## Frontend Interface (`/huf`)
 
@@ -29,12 +29,12 @@ The **frontend** is a user-focused interface optimized for chatting with agents 
 
 ### Current Capabilities
 
-✅ **Available Now:**
+**Available Now:**
 - Real-time chat with agents
 - View conversation history
 - User-specific sessions
 
-🚧 **Coming Soon:**
+**Coming Soon:**
 - Agent discovery/browsing
 - Quick tool invocation
 - Conversation management
@@ -57,7 +57,7 @@ The frontend is **under active development**. Right now:
 - No agent configuration (use Desk for this)
 - Not all agent features are exposed yet
 
-> 💡 **Roadmap**: The frontend is expanding rapidly. We're adding agent browsing, tool shortcuts, conversation management, and more. Check the GitHub repo for the latest updates.
+> **Roadmap**: The frontend is expanding rapidly. We're adding agent browsing, tool shortcuts, conversation management, and more. Check the GitHub repo for the latest updates.
 
 ## Desk Interface (`/app`)
 
@@ -76,21 +76,21 @@ The **Desk** is the full Frappe administration interface where you configure, ma
 
 ### Full Capabilities
 
-✅ **Configure:**
+**Configure:**
 - Create and edit agents
 - Set up AI providers and models
 - Define agent tools and functions
 - Configure triggers (schedule, doc events)
 - Manage permissions
 
-✅ **Monitor:**
+**Monitor:**
 - Agent Run logs (every execution)
 - Conversation history (all users)
 - Token usage and costs
 - Tool call details
 - Error tracking
 
-✅ **Manage:**
+**Manage:**
 - User permissions for agents
 - Agent settings and defaults
 - LiteLLM configuration
@@ -127,14 +127,14 @@ Key DocTypes you'll work with:
 
 | Feature | Frontend (`/huf`) | Desk (`/app`) |
 |---------|-------------------|---------------|
-| **Chat with agents** | ✅ Primary use case | ✅ Via Agent Chat |
-| **Create agents** | ❌ Not available | ✅ Full control |
-| **Configure tools** | ❌ Not available | ✅ Full control |
-| **View your conversations** | ✅ User-specific | ✅ All conversations |
-| **Monitor agent runs** | 🚧 Coming soon | ✅ Complete logs |
-| **Manage providers** | ❌ Not available | ✅ Full control |
-| **Set up triggers** | ❌ Not available | ✅ Full control |
-| **Mobile optimized** | 🚧 Coming soon | ⚠️ Desktop-first |
+| **Chat with agents** | Primary use case | Via Agent Chat |
+| **Create agents** | Not available | Full control |
+| **Configure tools** | Not available | Full control |
+| **View your conversations** | User-specific | All conversations |
+| **Monitor agent runs** | Coming soon | Complete logs |
+| **Manage providers** | Not available | Full control |
+| **Set up triggers** | Not available | Full control |
+| **Mobile optimized** | Coming soon | Desktop-first |
 | **Permissions required** | User/Guest level | System Manager/custom |
 | **User experience** | Clean, focused | Full admin power |
 
@@ -202,7 +202,7 @@ Both interfaces respect Frappe's permission system:
 - **Agents**: Inherit the permissions of the user running them
 - **Tools**: Execute with the current user's permissions
 
-> ⚠️ **Important**: Agents always run with the permissions of the user who triggered them. An agent cannot access data the user doesn't have permission to see.
+> **Important**: Agents always run with the permissions of the user who triggered them. An agent cannot access data the user doesn't have permission to see.
 
 ## What's Next?
 

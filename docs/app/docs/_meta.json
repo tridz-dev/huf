@@ -2,9 +2,6 @@
   "quick-start": "Quick Start",
   "installation": "Installation",
   "concepts": "Core Concepts",
-  "agents": "Agents",
-  "tools": "Tools",
-  "conversations": "Conversations",
-  "monitoring": "Monitoring",
+  "tools": "Working with Tools",
   "development": "Development"
 }
