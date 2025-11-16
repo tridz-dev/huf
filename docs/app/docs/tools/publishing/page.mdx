@@ -1,0 +1,658 @@
+---
+sidebarTitle: Publishing Tools
+---
+
+# Publishing Tools from Your App
+
+If you're building a Frappe app, you can publish tools that agents can automatically discover and use. This lets you share reusable agent capabilities across projects and with the community.
+
+## What Are Published Tools?
+
+**Published tools** are Python functions in your Frappe app that agents can automatically discover and use. Instead of manually creating Agent Tool Functions, you decorate your functions with `@agent_tool`, and Huf automatically syncs them when your app is installed.
+
+**Benefits:**
+- **Auto-discovery**: Tools appear automatically when app is installed
+- **No manual setup**: No need to create Agent Tool Function records
+- **Version control**: Tools are versioned with your app
+- **Reusable**: Share tools across multiple sites/projects
+- **Maintainable**: Update tools by updating your app
+
+## How It Works
+
+### The Flow
+
+1. **You write** a Python function in your app
+2. **You decorate** it with `@agent_tool`
+3. **You install** your app on a Frappe site
+4. **Huf discovers** the decorated functions
+5. **Huf creates** Agent Tool Function records automatically
+6. **Agents can use** the tools immediately
+
+### Auto-Sync Process
+
+When your app is installed or updated:
+- Huf scans your app for `@agent_tool` decorated functions
+- Creates or updates Agent Tool Function records
+- Links tools to your app for tracking
+- Makes tools available to all agents
+
+**Sync happens automatically** during:
+- App installation (`bench install-app`)
+- App migration (`bench migrate`)
+- Manual sync (via Huf hooks)
+
+## Creating a Published Tool
+
+### Step 1: Write Your Function
+
+Create a function in your app with proper structure:
+
+**File:** `my_app/api/tools.py`
+
+```python
+import frappe
+from agentflo.ai.tool_discovery import agent_tool
+
+@agent_tool
+def calculate_discount(customer_type: str, order_total: float) -> dict:
+    """
+    Calculate discount percentage and amount based on customer type and order total.
+    
+    This tool helps agents determine appropriate discounts for customers.
+    
+    Args:
+        customer_type (str): Type of customer (Wholesale, Retail, Distributor)
+        order_total (float): Total order amount before discount
+        
+    Returns:
+        dict: Discount details including percentage, amount, and final total
+        
+    Example:
+        >>> calculate_discount("Wholesale", 1000.0)
+        {"discount_pct": 15.0, "discount_amount": 150.0, "final_total": 850.0}
+    """
+    # Define discount rules
+    discount_rules = {
+        "Wholesale": 0.15,      # 15% discount
+        "Distributor": 0.20,    # 20% discount
+        "Retail": 0.05          # 5% discount
+    }
+    
+    # Get base discount from customer type
+    base_discount = discount_rules.get(customer_type, 0.0)
+    
+    # Additional discount for large orders
+    if order_total > 10000:
+        base_discount += 0.05  # Extra 5% for orders over $10k
+    
+    # Calculate discount amount
+    discount_amount = order_total * base_discount
+    final_total = order_total - discount_amount
+    
+    return {
+        "customer_type": customer_type,
+        "order_total": order_total,
+        "discount_pct": round(base_discount * 100, 2),
+        "discount_amount": round(discount_amount, 2),
+        "final_total": round(final_total, 2)
+    }
+```
+
+### Step 2: Import the Decorator
+
+Make sure to import `agent_tool` from Huf:
+
+```python
+from agentflo.ai.tool_discovery import agent_tool
+```
+
+If Huf isn't installed, handle gracefully:
+
+```python
+try:
+    from agentflo.ai.tool_discovery import agent_tool
+except ImportError:
+    # Huf not installed, define a no-op decorator
+    def agent_tool(func):
+        return func
+```
+
+### Step 3: Add Metadata (Optional)
+
+The decorator accepts optional metadata:
+
+```python
+@agent_tool(
+    category="Pricing",
+    description="Calculate discounts for customers",
+    tags=["pricing", "discount", "customer"]
+)
+def calculate_discount(customer_type: str, order_total: float) -> dict:
+    # Function implementation
+    pass
+```
+
+**Metadata Options:**
+- `category`: Group tools by category (e.g., "Pricing", "Inventory", "Sales")
+- `description`: Override auto-generated description
+- `tags`: Searchable tags for tool discovery
+
+### Step 4: Install Your App
+
+When you install your app on a site with Huf:
+
+```bash
+bench --site sitename install-app my_app
+```
+
+Huf automatically:
+1. Scans your app for `@agent_tool` functions
+2. Creates Agent Tool Function records
+3. Links them to your app
+
+**Check in Desk:**
+Navigate to **Huf → Agent Tool Function** and filter by your app name.
+
+## Tool Metadata from Docstrings
+
+Huf extracts metadata from your function docstring:
+
+### Function Description
+
+The main docstring becomes the tool description:
+
+```python
+@agent_tool
+def get_customer_orders(customer_id: str):
+    """
+    Retrieve all sales orders for a customer with order details,
+    status, and totals. Use this when users ask about customer
+    order history or purchase patterns.
+    """
+    pass
+```
+
+**Best Practices:**
+- Start with what the tool does
+- Mention when agents should use it
+- Include use case examples
+- Be specific and clear
+
+### Parameter Documentation
+
+Document parameters in the docstring:
+
+```python
+@agent_tool
+def create_quote(items: list, customer_id: str, valid_until: str = None):
+    """
+    Create a sales quote with items for a customer.
+    
+    Args:
+        items (list): List of items with 'item_code', 'qty', 'rate'
+        customer_id (str): Customer ID to quote for
+        valid_until (str, optional): Quote expiry date (YYYY-MM-DD)
+        
+    Returns:
+        dict: Created quote details with quote ID
+    """
+    pass
+```
+
+**Parameter Types:**
+- Document types clearly (`str`, `int`, `float`, `list`, `dict`)
+- Mark optional parameters
+- Provide example values
+- Explain complex structures
+
+### Return Value Documentation
+
+Document what the function returns:
+
+```python
+@agent_tool
+def analyze_sales_trends(period_days: int = 30):
+    """
+    Analyze sales trends over a period.
+    
+    Returns:
+        dict: Analysis results with:
+            - total_revenue (float): Total sales in period
+            - order_count (int): Number of orders
+            - top_customers (list): Top 5 customers by revenue
+            - growth_rate (float): Percentage growth vs previous period
+    """
+    pass
+```
+
+## Advanced Patterns
+
+### Tool Categories
+
+Group related tools with categories:
+
+```python
+# Pricing tools
+@agent_tool(category="Pricing")
+def calculate_discount(...):
+    pass
+
+@agent_tool(category="Pricing")
+def apply_promotion_code(...):
+    pass
+
+# Inventory tools
+@agent_tool(category="Inventory")
+def check_stock_levels(...):
+    pass
+
+@agent_tool(category="Inventory")
+def calculate_reorder_quantity(...):
+    pass
+```
+
+Agents can discover tools by category, making it easier to find relevant capabilities.
+
+### Conditional Tool Registration
+
+Register tools conditionally:
+
+```python
+import frappe
+
+@agent_tool
+def advanced_analytics(...):
+    """Advanced analytics (requires Analytics app)."""
+    if not frappe.db.exists("Module Def", {"name": "Analytics"}):
+        frappe.throw("Analytics module not installed")
+    # Implementation
+    pass
+```
+
+### Tool Dependencies
+
+Document dependencies in docstrings:
+
+```python
+@agent_tool
+def sync_with_external_system(...):
+    """
+    Sync data with external system.
+    
+    Requires:
+        - External API credentials configured
+        - Network access to external system
+        - Valid API key in app settings
+    """
+    pass
+```
+
+## Tool Discovery Process
+
+### How Huf Finds Your Tools
+
+1. **Scan app directory**: Huf scans your app's Python modules
+2. **Import modules**: Attempts to import modules (handles errors gracefully)
+3. **Find decorators**: Looks for `@agent_tool` decorated functions
+4. **Extract metadata**: Reads function signature, docstring, decorator args
+5. **Create records**: Creates Agent Tool Function records
+6. **Link to app**: Associates tools with your app
+
+### Module Scanning
+
+Huf scans these locations:
+- `{app_name}/api/` directory
+- `{app_name}/utils/` directory
+- Any module imported by your app's hooks
+
+**Best Practice:** Put tools in `{app_name}/api/tools.py` for clarity.
+
+### Error Handling
+
+If a tool function has errors:
+- Huf logs the error but continues scanning
+- Other tools are still registered
+- Check logs for specific tool errors
+- Fix errors and re-run migration
+
+## Updating Published Tools
+
+### Modifying Tools
+
+When you update a tool function:
+
+1. **Update your code** in the app
+2. **Run migration**: `bench --site sitename migrate`
+3. **Huf syncs**: Automatically updates Agent Tool Function records
+4. **Agents get updates**: New version available immediately
+
+**Changes that sync:**
+- Function signature (parameters)
+- Docstring (description)
+- Decorator metadata
+- Function implementation (not stored, but used)
+
+### Versioning
+
+Tools are versioned with your app:
+- **App version** tracks tool versions
+- **Update app** to update tools
+- **Rollback app** to rollback tools
+
+### Breaking Changes
+
+If you make breaking changes:
+
+**Option 1: Deprecate and Replace**
+```python
+@agent_tool
+def old_tool_name(...):
+    """DEPRECATED: Use new_tool_name instead."""
+    frappe.msgprint("This tool is deprecated. Use new_tool_name.")
+    return new_tool_name(...)
+
+@agent_tool
+def new_tool_name(...):
+    """Improved version of old tool."""
+    pass
+```
+
+**Option 2: Maintain Compatibility**
+```python
+@agent_tool
+def tool_name(param1, param2=None, **kwargs):
+    """Handle both old and new parameter formats."""
+    # Support old format
+    if param2 is None and 'old_param' in kwargs:
+        param2 = kwargs['old_param']
+    # New implementation
+    pass
+```
+
+## Best Practices
+
+### Function Design
+
+**Do:**
+- Write focused, single-purpose functions
+- Use clear, descriptive names
+- Document everything in docstrings
+- Handle errors gracefully
+- Return structured data (dicts)
+- Add type hints for parameters
+
+**Don't:**
+- Create mega-functions that do everything
+- Use vague parameter names
+- Forget error handling
+- Return raw database objects
+- Make functions depend on global state
+
+### Documentation
+
+**Comprehensive Docstrings:**
+```python
+@agent_tool
+def process_order(order_id: str, payment_method: str) -> dict:
+    """
+    Process a sales order with payment and inventory updates.
+    
+    This tool handles the complete order processing workflow including
+    payment validation, inventory deduction, and order confirmation.
+    
+    Args:
+        order_id (str): The sales order ID to process
+        payment_method (str): Payment method (Card, Bank Transfer, Cash)
+        
+    Returns:
+        dict: Processing result with:
+            - success (bool): Whether processing succeeded
+            - invoice_id (str): Generated invoice ID if successful
+            - errors (list): Any errors encountered
+            
+    Raises:
+        frappe.ValidationError: If order is invalid or cannot be processed
+        
+    Example:
+        >>> process_order("SO-2024-001", "Card")
+        {"success": True, "invoice_id": "INV-2024-001", "errors": []}
+        
+    Note:
+        This tool requires:
+        - Order must be in Draft status
+        - Sufficient inventory available
+        - Valid payment method configured
+    """
+    pass
+```
+
+### Error Handling
+
+**Always handle errors:**
+```python
+@agent_tool
+def safe_operation(param: str) -> dict:
+    """Safe operation with error handling."""
+    try:
+        # Validate input
+        if not param:
+            frappe.throw("Parameter is required")
+        
+        # Perform operation
+        result = perform_operation(param)
+        
+        return {"success": True, "result": result}
+        
+    except frappe.ValidationError as e:
+        # User errors - return to agent
+        return {"success": False, "error": str(e)}
+        
+    except Exception as e:
+        # System errors - log and return generic message
+        frappe.log_error(f"Tool error: {str(e)}")
+        return {"success": False, "error": "An error occurred processing your request"}
+```
+
+### Testing Tools
+
+**Test your tools before publishing:**
+
+```python
+# In your app's test file
+import unittest
+
+class TestTools(unittest.TestCase):
+    def test_calculate_discount(self):
+        from my_app.api.tools import calculate_discount
+        
+        result = calculate_discount("Wholesale", 1000.0)
+        
+        self.assertEqual(result["discount_pct"], 15.0)
+        self.assertEqual(result["discount_amount"], 150.0)
+        self.assertEqual(result["final_total"], 850.0)
+```
+
+## Sharing Tools
+
+### Within Your Organization
+
+**Multiple Sites:**
+- Install your app on all sites
+- Tools automatically available everywhere
+- Consistent toolset across sites
+
+**Version Control:**
+- Tools in git with your app
+- Version controlled
+- Easy to rollback
+
+### With the Community
+
+**Open Source Apps:**
+- Publish your app on GitHub
+- Others can install and use your tools
+- Contribute to the Huf ecosystem
+
+**Documentation:**
+- Document your tools in app README
+- Explain use cases
+- Provide examples
+
+## Troubleshooting
+
+**Tools not appearing:**
+- Check app is installed: `bench --site sitename list-apps`
+- Verify decorator import: `from agentflo.ai.tool_discovery import agent_tool`
+- Run migration: `bench --site sitename migrate`
+- Check logs for discovery errors
+
+**Tools not updating:**
+- Run migration after code changes
+- Clear cache: `bench --site sitename clear-cache`
+- Check Agent Tool Function records in Desk
+
+**Import errors:**
+- Ensure Huf is installed: `bench --site sitename list-apps | grep agentflo`
+- Check Python path and imports
+- Verify function is in scanned directory
+
+**Permission errors:**
+- Tools respect Frappe permissions
+- Check user has access to underlying DocTypes
+- Verify function doesn't bypass permissions
+
+## Example: Complete Tool Package
+
+Here's a complete example of a tool package:
+
+**File:** `my_app/api/tools.py`
+
+```python
+"""
+Agent tools for My App.
+
+This module provides reusable tools for Huf agents.
+"""
+
+import frappe
+from agentflo.ai.tool_discovery import agent_tool
+from typing import List, Dict, Optional
+
+@agent_tool(category="Sales")
+def get_customer_orders(customer_id: str, status: Optional[str] = None) -> Dict:
+    """
+    Retrieve sales orders for a customer.
+    
+    Args:
+        customer_id (str): Customer ID
+        status (str, optional): Filter by status (Draft, Submitted, etc.)
+        
+    Returns:
+        dict: List of orders with details
+    """
+    filters = {"customer": customer_id}
+    if status:
+        filters["status"] = status
+        
+    orders = frappe.get_all(
+        "Sales Order",
+        filters=filters,
+        fields=["name", "grand_total", "status", "delivery_date"]
+    )
+    
+    return {
+        "customer_id": customer_id,
+        "order_count": len(orders),
+        "orders": orders
+    }
+
+@agent_tool(category="Inventory")
+def check_item_availability(item_code: str, warehouse: Optional[str] = None) -> Dict:
+    """
+    Check item stock availability.
+    
+    Args:
+        item_code (str): Item code to check
+        warehouse (str, optional): Specific warehouse, or all if None
+        
+    Returns:
+        dict: Stock levels and availability
+    """
+    filters = {"item_code": item_code}
+    if warehouse:
+        filters["warehouse"] = warehouse
+        
+    bins = frappe.get_all(
+        "Bin",
+        filters=filters,
+        fields=["warehouse", "actual_qty", "reserved_qty"]
+    )
+    
+    total_qty = sum(bin.actual_qty for bin in bins)
+    total_reserved = sum(bin.reserved_qty for bin in bins)
+    available = total_qty - total_reserved
+    
+    return {
+        "item_code": item_code,
+        "total_quantity": total_qty,
+        "reserved_quantity": total_reserved,
+        "available_quantity": available,
+        "warehouses": [
+            {
+                "warehouse": bin.warehouse,
+                "quantity": bin.actual_qty,
+                "available": bin.actual_qty - bin.reserved_qty
+            }
+            for bin in bins
+        ]
+    }
+
+@agent_tool(category="Pricing")
+def calculate_order_total(items: List[Dict], customer_id: str) -> Dict:
+    """
+    Calculate total order amount with discounts and taxes.
+    
+    Args:
+        items (list): List of items with 'item_code', 'qty', 'rate'
+        customer_id (str): Customer ID for pricing rules
+        
+    Returns:
+        dict: Calculated totals with breakdown
+    """
+    # Implementation
+    subtotal = sum(item["qty"] * item["rate"] for item in items)
+    
+    # Get customer discount
+    customer = frappe.get_doc("Customer", customer_id)
+    discount_pct = customer.default_discount_percentage or 0
+    discount_amount = subtotal * (discount_pct / 100)
+    
+    # Calculate tax (simplified)
+    tax_rate = 0.10  # 10% tax
+    tax_amount = (subtotal - discount_amount) * tax_rate
+    
+    total = subtotal - discount_amount + tax_amount
+    
+    return {
+        "subtotal": round(subtotal, 2),
+        "discount_percentage": discount_pct,
+        "discount_amount": round(discount_amount, 2),
+        "tax_rate": tax_rate,
+        "tax_amount": round(tax_amount, 2),
+        "grand_total": round(total, 2)
+    }
+```
+
+## What's Next?
+
+Now that you can publish tools:
+
+- **[Custom Tools](/docs/tools/custom)** - Creating tools manually
+- **[Built-in Tools](/docs/tools/built-in)** - Using Huf's built-in tools
+- **[Creating Agents](/docs/guides/creating-agents)** - Assign published tools to agents
+- **[Development](/docs/development)** - More app development resources
+
+---
+
+**Questions?** Visit [GitHub discussions](https://github.com/Tridz/agentflo/discussions) or check the [Huf source code](https://github.com/Tridz/agentflo).
+
