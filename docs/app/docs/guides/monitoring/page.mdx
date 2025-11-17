@@ -1,0 +1,491 @@
+---
+sidebarTitle: Monitoring & Debugging
+---
+
+# Monitoring & Debugging
+
+Track agent performance, debug issues, optimize costs, and ensure your agents are working effectively.
+
+## Agent Run Dashboard
+
+### Accessing Agent Runs
+
+**Navigate to:** Desk → Huf → Agent Run
+
+**View all agent executions:**
+- Filter by agent, date, status
+- Search by prompt or response
+- Sort by creation time, cost, tokens
+- Export data for analysis
+
+### Key Information
+
+**Each Agent Run shows:**
+- **Agent:** Which agent executed
+- **Prompt:** What was sent to the agent
+- **Response:** Agent's output
+- **Status:** Success or error
+- **Tokens:** Input and output tokens used
+- **Cost:** Calculated cost for this run
+- **Tool Calls:** Tools used and results
+- **Duration:** How long execution took
+- **User:** Who triggered the agent
+- **Session:** Conversation session ID
+
+## Understanding Run Details
+
+### Prompt and Response
+
+**View full context:**
+- See exact prompt sent to agent
+- Review agent's complete response
+- Check conversation history included
+- Verify tool definitions sent
+
+**Use for:**
+- Understanding agent reasoning
+- Debugging unexpected responses
+- Optimizing prompts
+- Improving instructions
+
+### Tool Calls
+
+**See every tool call:**
+- Which tools were called
+- Parameters passed to tools
+- Results returned from tools
+- Order of tool execution
+
+**Use for:**
+- Verifying tool usage
+- Debugging tool failures
+- Optimizing tool calls
+- Understanding agent workflow
+
+### Token Usage
+
+**Track consumption:**
+- **Input Tokens:** Prompt + history + tools
+- **Output Tokens:** Agent response
+- **Total Tokens:** Sum of input and output
+- **Cost:** Calculated based on model pricing
+
+**Use for:**
+- Cost optimization
+- Identifying expensive runs
+- Planning budgets
+- Comparing models
+
+### Errors and Failures
+
+**Identify issues:**
+- Error messages
+- Stack traces
+- Failed tool calls
+- Timeout issues
+
+**Common errors:**
+- Tool not found
+- Permission denied
+- Invalid parameters
+- Model errors
+- Rate limits
+
+## Filtering and Searching
+
+### Filter Options
+
+**Filter by:**
+- **Agent:** Specific agent
+- **Status:** Success, Error, In Progress
+- **Date Range:** Creation time
+- **User:** Who triggered
+- **Cost Range:** Token cost
+- **Has Errors:** Only failed runs
+
+### Search Functionality
+
+**Search in:**
+- Prompt text
+- Response text
+- Error messages
+- Tool names
+
+**Use cases:**
+- Find specific interactions
+- Locate error patterns
+- Track user questions
+- Review tool usage
+
+## Cost Tracking
+
+### Understanding Costs
+
+**Cost factors:**
+- Model pricing (varies by provider)
+- Token usage (input + output)
+- Tool definitions (add to input tokens)
+- Conversation history (adds tokens)
+
+**Cost calculation:**
+```
+Total Cost = (Input Tokens × Input Price) + (Output Tokens × Output Price)
+```
+
+### Cost Analysis
+
+**Track over time:**
+- Daily costs per agent
+- Weekly trends
+- Monthly totals
+- Cost per run average
+
+**Identify expensive runs:**
+- High token usage
+- Long conversations
+- Many tool calls
+- Expensive models
+
+### Cost Optimization
+
+**Reduce costs:**
+1. Use cheaper models for simple tasks
+2. Limit conversation history length
+3. Minimize tool definitions
+4. Optimize prompts (shorter, clearer)
+5. Cache common results
+6. Batch similar requests
+
+**Monitor optimization:**
+- Track cost reduction
+- Verify performance maintained
+- Compare before/after
+- Adjust as needed
+
+## Performance Metrics
+
+### Key Metrics
+
+**Track regularly:**
+- **Run Count:** Total executions
+- **Success Rate:** Percentage successful
+- **Error Rate:** Percentage failed
+- **Average Response Time:** Speed
+- **Average Tokens:** Consumption
+- **Average Cost:** Per run
+
+### Trend Analysis
+
+**Monitor trends:**
+- Performance over time
+- Cost trends
+- Error rate changes
+- Usage patterns
+
+**Identify issues:**
+- Degrading performance
+- Increasing costs
+- Rising error rates
+- Unusual patterns
+
+## Debugging Issues
+
+### Common Problems
+
+**Agent not responding correctly:**
+- Review prompt in Agent Run
+- Check instructions clarity
+- Verify tool assignments
+- Test with simpler prompts
+
+**Tool not being used:**
+- Check tool description
+- Verify tool is assigned
+- Review agent instructions
+- Test tool directly
+
+**High error rates:**
+- Review error messages
+- Check permissions
+- Verify tool availability
+- Test individual components
+
+**Unexpected behavior:**
+- Review conversation history
+- Check tool results
+- Verify instructions
+- Test edge cases
+
+### Debugging Workflow
+
+**Step-by-step process:**
+
+1. **Identify the issue**
+   - Review Agent Run logs
+   - Find failed or unexpected runs
+   - Note error messages
+
+2. **Reproduce the problem**
+   - Use same prompt
+   - Test in Agent Chat
+   - Verify conditions
+
+3. **Isolate the cause**
+   - Check instructions
+   - Verify tools
+   - Review model behavior
+   - Test components individually
+
+4. **Fix the issue**
+   - Update instructions
+   - Adjust tools
+   - Change settings
+   - Fix code if needed
+
+5. **Verify the fix**
+   - Test with same scenario
+   - Monitor new runs
+   - Confirm resolution
+
+### Debugging Tools
+
+**Use these tools:**
+- **Agent Run logs:** Detailed execution data
+- **Agent Chat:** Interactive testing
+- **Console:** Direct Python access
+- **Logs:** System and application logs
+
+## Conversation Tracking
+
+### Viewing Conversations
+
+**Navigate to:** Desk → Huf → Agent Conversation
+
+**See full conversations:**
+- All messages exchanged
+- Tool calls made
+- Context maintained
+- Session information
+
+### Conversation Analysis
+
+**Analyze:**
+- Conversation length
+- Number of turns
+- Tool usage patterns
+- User satisfaction
+- Resolution success
+
+**Use for:**
+- Improving agent behavior
+- Understanding user needs
+- Optimizing workflows
+- Training improvements
+
+## Tool Call Logs
+
+### Viewing Tool Calls
+
+**In Agent Run:**
+- See all tool calls
+- Parameters passed
+- Results returned
+- Execution order
+- Errors if any
+
+### Analyzing Tool Usage
+
+**Questions to answer:**
+- Are tools being used correctly?
+- Are right tools being selected?
+- Are tool calls efficient?
+- Are there unnecessary calls?
+
+**Optimization:**
+- Improve tool descriptions
+- Refine agent instructions
+- Remove unused tools
+- Optimize tool queries
+
+## Error Handling
+
+### Understanding Errors
+
+**Error types:**
+- **Tool Errors:** Tool execution failed
+- **Model Errors:** AI model issues
+- **Permission Errors:** Access denied
+- **Validation Errors:** Invalid data
+- **Timeout Errors:** Execution too long
+
+### Error Patterns
+
+**Identify patterns:**
+- Same error recurring
+- Errors for specific users
+- Errors with certain tools
+- Errors at specific times
+
+**Address patterns:**
+- Fix root cause
+- Improve error handling
+- Add validation
+- Update instructions
+
+### Error Recovery
+
+**Handle gracefully:**
+- Provide fallback responses
+- Log errors for review
+- Notify administrators
+- Guide users to alternatives
+
+## Reporting and Analytics
+
+### Generating Reports
+
+**Export data:**
+- Agent Run data to CSV
+- Cost reports
+- Performance summaries
+- Error analysis
+
+**Use for:**
+- Stakeholder reporting
+- Budget planning
+- Performance reviews
+- Optimization planning
+
+### Key Reports
+
+**Cost Report:**
+- Total costs by agent
+- Cost trends over time
+- Cost per run average
+- Projected costs
+
+**Performance Report:**
+- Success rates
+- Response times
+- Error rates
+- Usage statistics
+
+**Usage Report:**
+- Run counts
+- User activity
+- Peak usage times
+- Popular agents
+
+## Best Practices
+
+### Regular Monitoring
+
+**Do:**
+- Review logs daily
+- Check errors weekly
+- Analyze costs monthly
+- Review performance quarterly
+
+**Don't:**
+- Ignore errors
+- Skip cost reviews
+- Forget performance tracking
+- Neglect user feedback
+
+### Proactive Debugging
+
+**Do:**
+- Monitor trends
+- Identify issues early
+- Fix before they escalate
+- Document solutions
+
+**Don't:**
+- Wait for user complaints
+- Ignore warning signs
+- Skip testing
+- Forget documentation
+
+### Cost Management
+
+**Do:**
+- Set budgets
+- Monitor spending
+- Optimize regularly
+- Use appropriate models
+
+**Don't:**
+- Ignore costs
+- Use expensive models unnecessarily
+- Forget to optimize
+- Skip cost reviews
+
+## Troubleshooting Guide
+
+### Agent Not Running
+
+**Check:**
+- Agent status (Active?)
+- Trigger enabled?
+- Permissions correct?
+- Dependencies available?
+
+**Fix:**
+- Activate agent
+- Enable trigger
+- Fix permissions
+- Install dependencies
+
+### High Error Rate
+
+**Check:**
+- Error messages
+- Tool availability
+- Permission issues
+- Model problems
+
+**Fix:**
+- Address root causes
+- Fix tools
+- Update permissions
+- Change model if needed
+
+### Unexpected Responses
+
+**Check:**
+- Instructions clarity
+- Tool assignments
+- Conversation history
+- Model behavior
+
+**Fix:**
+- Improve instructions
+- Adjust tools
+- Limit history
+- Test different models
+
+### High Costs
+
+**Check:**
+- Token usage
+- Model pricing
+- Conversation length
+- Tool definitions
+
+**Fix:**
+- Use cheaper models
+- Limit history
+- Optimize prompts
+- Reduce tool count
+
+## What's Next?
+
+- **[Running Agents](/docs/guides/running-agents)** - Execution methods
+- **[Managing Agents](/docs/guides/managing-agents)** - Lifecycle management
+- **[Creating Agents](/docs/guides/creating-agents)** - Build new agents
+- **[Tools](/docs/concepts/tools)** - Tool debugging
+
+---
+
+**Questions?** Check [GitHub discussions](https://github.com/tridz-dev/agent_flo/discussions).
+

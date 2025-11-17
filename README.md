@@ -1,14 +1,17 @@
-# AgentFlo
+# AgentFlo (Huf)
 
 AgentFlo is a powerful Frappe application for create, manage, and integrate AI agents directly into Frappe ecosystem. These agents can be equipped with tools to interact with your site's data, automate tasks, and provide intelligent assistance.
+
+**[📚 View Documentation](https://tridz-dev.github.io/agent_flo/)** | **[🐛 Report Issue](https://github.com/tridz-dev/agent_flo/issues)** | **[💬 Discussions](https://github.com/tridz-dev/agent_flo/discussions)**
+
 <br/><br/>
 <img width="1905" height="928" alt="image_2025-11-07_18-16-05 (1)" src="https://github.com/user-attachments/assets/61a8511b-80cc-4843-a90c-bfcfc4a45c97" />
 
 
-<br/> 
+<br/>
 
 
->  ⚠️ AgentFlo is actively being migrated from an existing implementation into an independent app. The system may not work as expected and is not recommended for use in production environments at this stage. ⚠️ 
+>  ⚠️ AgentFlo is actively being migrated from an existing implementation into an independent app. The system may not work as expected and is not recommended for use in production environments at this stage. ⚠️
 
 ## Key Features
 
@@ -45,7 +48,7 @@ You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
-bench get-app https://github.com/Tridz/agentflo.git
+bench get-app https://github.com/tridz-dev/agent_flo.git
 bench install-app agentflo
 bench setup requirements  # Installs dependencies including litellm
 ```

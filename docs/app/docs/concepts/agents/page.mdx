@@ -1,0 +1,429 @@
+---
+sidebarTitle: Agents
+---
+
+# Agents
+
+**Agents are AI-powered team members for your Frappe site.** Think of each agent as a specialist with a specific role, equipped with tools to work with your data, and ready to assist users or automate tasks.
+
+## What is an Agent?
+
+An agent in Huf is built from four core components:
+
+1. **Instructions** - The "personality" and role definition (system prompt)
+2. **AI Model** - The "brain" (GPT-4, Claude, Gemini, etc.)
+3. **Tools** - The "capabilities" (what it can do with your data)
+4. **Settings** - Fine-tuning parameters (temperature, top_p)
+
+When you run an agent, it:
+- Reads its instructions to understand its role
+- Uses the AI model to reason about requests
+- Calls tools to interact with Frappe data
+- Returns helpful, contextual responses
+
+## Agent Anatomy
+
+### Instructions (System Prompt)
+
+The most important part of your agent. This is where you define:
+- **Who** the agent is (role, personality)
+- **What** it can help with (scope of tasks)
+- **How** it should behave (tone, style, constraints)
+- **When** to use tools and how
+
+**Example Instructions:**
+
+```
+You are a customer support specialist for our Frappe-based business. Your job is to:
+
+1. Help users find and understand customer information
+2. Look up orders and their status
+3. Create support tickets when issues need escalation
+
+When a user asks about a customer:
+- Ask for the customer name or ID if not provided
+- Use the get_customer tool to retrieve information
+- Present information clearly and highlight key details
+
+Always be polite, professional, and concise. If you cannot help with something,
+explain why and suggest alternatives.
+```
+
+### AI Model
+
+The model determines the agent's intelligence and capabilities:
+
+| Model Type | Best For | Cost | Speed |
+|------------|----------|------|-------|
+| **GPT-4 Turbo** | Complex reasoning, detailed responses | $$$ | Medium |
+| **GPT-3.5 Turbo** | Quick tasks, simple interactions | $ | Fast |
+| **Claude 3 Opus** | Long context, nuanced understanding | $$$ | Medium |
+| **Claude 3 Sonnet** | Balanced performance and cost | $$ | Fast |
+| **Gemini Pro** | Multimodal, Google ecosystem | $$ | Fast |
+
+> **Tip**: Start with a cheaper model (GPT-3.5, Gemini) for testing, then upgrade to more powerful models (GPT-4, Claude Opus) for production if needed.
+
+### Tools
+
+Tools give agents the ability to interact with Frappe. Without tools, agents can only chat—they can't read or modify data.
+
+**Built-in Tool Types:**
+- **Get Document** - Fetch a specific document by ID
+- **Create Document** - Create new documents
+- **Update Document** - Modify existing documents
+- **Delete Document** - Remove documents
+- **Get List** - Query documents with filters and sorting
+- **Run Agent** - Chain to another agent
+- **HTTP Request** - Call external APIs
+
+**Custom Tools:**
+- Link to your own Python functions
+- Define parameters and return types
+- Automatically discovered if decorated with `@agent_tool`
+
+Learn more in [Tools](/docs/concepts/tools).
+
+### Settings
+
+Fine-tune agent behavior with these parameters:
+
+**Temperature** (`0.0` - `2.0`)
+- **Lower (0.0-0.3)**: More focused, deterministic, consistent
+  - Best for: Data retrieval, validation, structured tasks
+- **Medium (0.7)**: Balanced creativity and consistency
+  - Best for: General conversations, customer support
+- **Higher (1.0-2.0)**: More creative, varied, exploratory
+  - Best for: Content generation, brainstorming
+
+**Top P** (`0.0` - `1.0`)
+- Alternative to temperature (nucleus sampling)
+- Controls diversity of word choices
+- Start with `1.0` for most use cases
+- Lower values make output more focused
+
+> **Note**: Use either temperature OR top_p, not both. Temperature is more commonly used.
+
+## Agent States
+
+Agents have a lifecycle:
+
+```
+Draft → Active → Running → Completed
+```
+
+- **Draft**: Being configured, not ready for use
+- **Active**: Ready to run (manually, scheduled, or triggered)
+- **Running**: Currently processing a request
+- **Completed**: Finished execution (check Agent Run for results)
+
+## Types of Agents
+
+### 1. Chat Agents
+
+**Interactive, conversational agents** accessible via Agent Chat or the `/huf` frontend.
+
+**How to enable**: Check **Allow Chat** when creating the agent.
+
+**Use cases:**
+- Customer support bots
+- Internal help desks
+- Data exploration assistants
+- Interactive reporting
+
+**Features:**
+- Real-time conversations
+- Conversation history maintained automatically
+- Multi-turn interactions with full context
+- Can use tools dynamically during chat
+
+**Example**: A customer support agent that helps users look up orders, check status, and create tickets—all through natural conversation.
+
+### 2. Scheduled Agents
+
+**Agents that run automatically** at specified intervals (hourly, daily, weekly, etc.).
+
+**How to configure**: Create an **Agent Trigger** with a schedule.
+
+**Use cases:**
+- Daily reports and summaries
+- Periodic data cleanup
+- Regular health checks
+- Automated notifications
+
+**Features:**
+- Cron-like scheduling
+- Can run without user input (provide prompt in trigger)
+- Results logged in Agent Run
+- Can be chained to other agents
+
+**Example**: A daily sales summary agent that runs every morning at 9 AM, analyzes yesterday's orders, and sends a report via email.
+
+### 3. Event-Driven Agents
+
+**Agents triggered automatically** when documents are created, updated, submitted, or deleted.
+
+**How to configure**: Create an **Agent Trigger** with:
+- **DocType** - Which document type to watch
+- **Event** - Which event to trigger on (after_insert, on_submit, etc.)
+- **Condition** (optional) - Python expression to filter when to run
+
+**Use cases:**
+- Document validation before submission
+- Auto-populate fields based on AI analysis
+- Notify teams when conditions are met
+- Data enrichment on creation
+
+**Features:**
+- Runs in background automatically
+- Access to the document that triggered it
+- Can modify the document or create related documents
+- Per-user or shared conversation history
+
+**Example**: An invoice validator that runs when invoices are submitted, checks for errors or anomalies, and flags issues or auto-corrects them.
+
+Learn more in [Triggers](/docs/concepts/triggers).
+
+## Creating an Agent
+
+### Step-by-Step
+
+Navigate to: **Desk → Huf → Agent**
+
+**1. Basic Information**
+- **Agent Name**: Descriptive, unique name
+- **Description**: Brief summary of the agent's purpose
+- **Provider**: Select your AI provider
+- **Model**: Select the AI model
+
+**2. Instructions**
+- Write clear, detailed instructions
+- Define role, scope, and behavior
+- Include examples of desired responses
+- Set constraints and boundaries
+
+**3. Settings**
+- **Temperature**: Start with `0.7`
+- **Top P**: Start with `1.0`
+- **Allow Chat**: Enable if users should chat with this agent
+- **Persist Conversation**: Keep history across runs (recommended)
+- **Persist per User**: Separate history for each user (recommended for chat)
+
+**4. Tools**
+- Click **Add Row** in the **Agent Tool** table
+- Select tools this agent needs
+- Start minimal—add more as needed
+
+**5. Save and Test**
+- Save the agent
+- Test via **Agent Chat** or **Agent Console**
+- Review **Agent Run** logs
+- Iterate on instructions and settings
+
+## Best Practices
+
+### Writing Great Instructions
+
+**Do:**
+- Be specific about the agent's role and scope
+- Include step-by-step guidance for common tasks
+- Provide examples of good responses
+- Define clear boundaries (what NOT to do)
+- Use natural, conversational language
+
+**Don't:**
+- Be vague ("help users")
+- Assume the AI knows your business logic
+- Forget to mention tool usage
+- Mix multiple unrelated roles in one agent
+
+**Example Comparison:**
+
+**Bad:**
+```
+Help with sales.
+```
+
+**Good:**
+```
+You are a sales assistant. Help users:
+1. Look up customer information by name or ID
+2. Find recent orders for a customer
+3. Identify upsell opportunities based on order history
+
+Always ask clarifying questions if the request is ambiguous.
+Use the get_customer and get_list_sales_orders tools as needed.
+Present information in bullet points for clarity.
+```
+
+### Tool Selection
+
+- **Start minimal**: Add only essential tools initially
+- **Test thoroughly**: Verify each tool works correctly
+- **Tool descriptions matter**: The AI uses them to decide when to call tools
+- **Don't overload**: Too many tools confuse the model (keep to ~5-10)
+- **Group by purpose**: Create specialized agents instead of one mega-agent
+
+### Performance Tuning
+
+**For Consistent Output:**
+- Lower temperature (0.0-0.3)
+- More specific instructions
+- Provide examples in instructions
+
+**For Creative Output:**
+- Higher temperature (0.8-1.5)
+- Looser instructions
+- Encourage exploration
+
+**For Cost Optimization:**
+- Use cheaper models for simple tasks
+- Limit conversation history length
+- Be concise in instructions (fewer tokens)
+- Cache frequent queries
+
+## Managing Agents
+
+### Viewing All Agents
+
+Navigate to: **Desk → Huf → Agent**
+
+- See all agents in list view
+- Filter by status, model, or other fields
+- Click an agent to edit or view details
+
+### Editing Agents
+
+Changes to agents take effect immediately for new runs. Ongoing conversations or scheduled runs may use the old configuration until they complete.
+
+> **Tip**: Test changes in a draft/duplicate agent before modifying production agents.
+
+### Monitoring Performance
+
+Check **Agent Run** for every execution:
+- View prompts and responses
+- See tool calls and results
+- Track token usage and costs
+- Identify errors and issues
+
+Learn more in [Monitoring](/docs/monitoring).
+
+### Permissions
+
+Agents inherit the permissions of the user running them. An agent cannot:
+- Access documents the user doesn't have permission for
+- Create documents in DocTypes the user can't access
+- Bypass Frappe's security model
+
+Set up permissions via Frappe's **Role Permission Manager**.
+
+## Common Patterns
+
+### Customer Support Agent
+
+**Role**: Help users with customer inquiries
+
+**Tools**:
+- Get Customer
+- Get List (Sales Orders, Support Tickets)
+- Create Support Ticket
+
+**Instructions**: Focus on being helpful, asking clarifying questions, and escalating complex issues.
+
+### Document Validator
+
+**Role**: Validate documents before submission
+
+**Trigger**: `on_submit` event for target DocType
+
+**Tools**:
+- Get Document
+- Update Document
+- Get List (for reference data)
+
+**Instructions**: Check specific fields, validate against rules, flag or auto-correct issues.
+
+### Scheduled Reporter
+
+**Role**: Generate periodic reports
+
+**Trigger**: Daily at 9 AM
+
+**Tools**:
+- Get List (with date filters)
+- Custom function to send email/Slack
+
+**Instructions**: Summarize data, highlight insights, format for readability.
+
+### Data Entry Assistant
+
+**Role**: Help users create documents interactively
+
+**Tools**:
+- Create Document
+- Get List (for lookups)
+- Get Document (for validation)
+
+**Instructions**: Guide users through required fields, validate inputs, create documents.
+
+## Troubleshooting
+
+### Agent Not Responding
+
+**Check:**
+- API key is valid and has credits
+- Model name is correct for the provider
+- Instructions aren't empty
+- Provider and model are both saved
+
+**Debug:**
+- Look at **Agent Run** for error messages
+- Test the API key independently
+- Try a different model
+
+### Tools Not Working
+
+**Check:**
+- Tool is added to agent's tool list
+- Tool description is clear and accurate
+- User has permissions for the DocType
+- Tool parameters are correct
+
+**Debug:**
+- Test the tool independently in Python
+- Check **Agent Run** to see tool calls
+- Verify permissions via Role Permission Manager
+
+### Poor Responses
+
+**Improve:**
+- Make instructions more specific
+- Add examples of good responses
+- Lower temperature for more consistency
+- Simplify the task or split into multiple agents
+- Review Agent Run logs to see what the agent is thinking
+
+### High Costs
+
+**Optimize:**
+- Use cheaper models (GPT-3.5 vs GPT-4)
+- Shorten instructions (fewer input tokens)
+- Limit conversation history length
+- Reduce tool descriptions
+- Cache repetitive queries
+- Review **Agent Run** to identify expensive operations
+
+## What's Next?
+
+Now that you understand agents, dive deeper into specific topics:
+
+- **[Providers & Models](/docs/concepts/providers-models)** - Choose and configure AI models
+- **[Tools](/docs/concepts/tools)** - Give agents powerful capabilities
+- **[Conversations](/docs/concepts/conversations)** - Understand how context is maintained
+- **[Triggers](/docs/concepts/triggers)** - Automate agents with schedules and events
+
+Or jump to practical guides:
+
+- **[Creating Agents](/docs/guides/creating-agents)** - Step-by-step agent creation
+- **[Managing Agents](/docs/guides/managing-agents)** - Agent lifecycle management
+- **[Monitoring](/docs/guides/monitoring)** - Track performance and costs
+

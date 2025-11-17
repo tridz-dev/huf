@@ -1,0 +1,193 @@
+---
+sidebarTitle: Quick Start
+---
+
+# Quick Start
+
+**Get your first agent running in 5 minutes.** This guide walks you through creating a working AI agent that can interact with your Frappe data.
+
+> **Already installed Huf?** Great! If not, check the [Installation](/docs/installation) guide first.
+
+## What You'll Build
+
+By the end of this guide, you'll have a customer support agent that can:
+- Answer questions about customer records
+- Look up customer information on demand
+- Respond naturally in conversation
+
+## Step 1: Add an AI Provider
+
+Providers connect Huf to AI services. You'll need an API key from one:
+
+**1. Get an API Key**
+
+Pick an AI provider and get your API key:
+- [OpenAI](https://platform.openai.com/api-keys) - GPT-4, GPT-3.5
+- [Anthropic](https://console.anthropic.com) - Claude models
+- [Google](https://makersuite.google.com/app/apikey) - Gemini models
+- [OpenRouter](https://openrouter.ai/keys) - Access to 500+ models
+
+**2. Add Provider in Huf**
+
+Navigate to: **Desk → Huf → AI Provider**
+
+Click **New** and fill in:
+- **Provider Name**: `OpenAI` (or your chosen provider)
+- **API Key**: Paste your key here
+- Click **Save**
+
+> Your API key is encrypted and stored securely in Frappe.
+
+## Step 2: Add an AI Model
+
+Models are the "brains" behind your agent. Let's add one.
+
+Navigate to: **Desk → Huf → AI Model**
+
+Click **New** and fill in:
+- **Model Name**: `gpt-4-turbo` (or `claude-3-opus`, `gemini-pro`, etc.)
+- **Provider**: Select the provider you just created
+- Click **Save**
+
+> Use friendly names like `gpt-4-turbo`. Huf automatically formats them correctly for the provider.
+
+## Step 3: Create Your Agent
+
+Now for the fun part—creating your AI agent.
+
+Navigate to: **Desk → Huf → Agent**
+
+Click **New** and fill in:
+
+**Basic Info**
+- **Agent Name**: `Customer Support Assistant`
+- **Provider**: Select your provider
+- **Model**: Select your model
+
+**Instructions**
+
+Copy and paste this into the **Instructions** field:
+
+```
+You are a helpful customer support assistant. Your job is to help users find 
+and understand customer information in the system. 
+
+When asked about a customer:
+1. Ask for the customer ID or name if not provided
+2. Use the get_customer tool to retrieve their information
+3. Present the information clearly and helpfully
+
+Always be polite, professional, and concise. If you don't have a tool to do 
+something, let the user know what you CAN help with instead.
+```
+
+**Settings**
+- **Temperature**: `0.7` (balanced responses)
+- **Top P**: `1.0`
+- **Allow Chat**: Check this
+
+**Save** the agent (we'll add tools next).
+
+## Step 4: Give Your Agent a Tool
+
+Tools let agents interact with your Frappe data. Let's give your agent the ability to look up customers.
+
+**Create the Tool Function**
+
+Navigate to: **Desk → Huf → Agent Tool Function**
+
+Click **New** and fill in:
+- **Tool Name**: `get_customer`
+- **Description**: `Get detailed information about a customer by their ID or name`
+- **Types**: Select `Get Document`
+- **Reference DocType**: Select `Customer`
+- Click **Save**
+
+> The description is important—your agent uses it to decide when to use this tool.
+
+**Add Tool to Agent**
+
+Go back to your agent: **Desk → Huf → Agent → Customer Support Assistant**
+
+Scroll to the **Agent Tool** table:
+- Click **Add Row**
+- **Tool Function**: Select `get_customer`
+- **Save** the agent
+
+Your agent now has the power to look up customer information!
+
+## Step 5: Test Your Agent
+
+Time to see it in action!
+
+Navigate to: **Desk → Huf → Agent Chat**
+
+Select your `Customer Support Assistant` from the dropdown.
+
+**Try these prompts:**
+
+```
+Can you show me information about customer CUST-00001?
+```
+
+```
+Tell me about the customer named "ABC Corporation"
+```
+
+```
+What can you help me with?
+```
+
+You should see:
+- The agent asks clarifying questions if needed
+- The agent uses the `get_customer` tool to fetch data
+- The agent presents information clearly
+
+> **Behind the scenes**: Check **Agent Run** in the sidebar to see detailed logs of what happened—tokens used, tools called, costs, and more.
+
+## You Did It!
+
+You now have a working AI agent that can:
+- Understand natural language
+- Use tools to fetch Frappe data
+- Respond intelligently to user questions
+
+## What's Next?
+
+### Learn Core Concepts
+- **[Interfaces](/docs/concepts/interfaces)** - Understand `/huf` vs `/app` and when to use each
+- **[Agents](/docs/concepts/agents)** - Dive deeper into agent configuration
+- **[Tools](/docs/concepts/tools)** - Learn about all available tools
+- **[Triggers](/docs/concepts/triggers)** - Make agents run automatically
+
+### Expand Your Agent
+- **Add more tools**: Create, update, delete documents
+- **Run on schedule**: Automate daily/weekly tasks
+- **Trigger on events**: Validate documents automatically
+- **Custom functions**: Call your own Python code
+
+### Monitor & Optimize
+- **[Agent Run](/docs/monitoring)** - Track usage, costs, and performance
+- Optimize prompts for better results
+- Choose cheaper models for simple tasks
+
+## Troubleshooting
+
+**Agent not responding?**
+- Verify API key has credits
+- Check **Agent Run** for error messages
+- Ensure model name matches your provider
+
+**Tool not working?**
+- Check you have permissions for the DocType
+- Verify tool is added to agent's tool list
+- Make sure Customer records exist in your site
+
+**Responses seem off?**
+- Refine the instructions to be more specific
+- Lower temperature for more consistent responses
+- Add examples of desired behavior
+
+---
+
+**Need Help?** Check the rest of the documentation or visit the [Frappe Community](https://discuss.frappe.io/) for support.

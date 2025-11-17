@@ -1,0 +1,25 @@
+{
+  "name": "huf-docs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build && rm -rf ../agentflo/public/docs && mkdir -p ../agentflo/public/docs && cp -r out/* ../agentflo/public/docs/ && (echo '{% raw %}'; cat ../agentflo/public/docs/index.html; echo '{% endraw %}') > ../agentflo/www/docs.html",
+    "build:pages": "GITHUB_PAGES=true next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^15.0.0",
+    "nextra": "^4.0.0",
+    "nextra-theme-docs": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.0.0"
+  }
+}

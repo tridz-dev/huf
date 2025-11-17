@@ -1,0 +1,450 @@
+---
+sidebarTitle: Managing Agents
+---
+
+# Managing Agents
+
+Learn how to manage agents throughout their lifecycle: from creation to optimization to retirement.
+
+## Agent Lifecycle
+
+Agents go through distinct stages:
+
+1. **Draft** - Initial creation and testing
+2. **Active** - Production use
+3. **Monitoring** - Performance tracking
+4. **Optimization** - Improvements based on data
+5. **Retirement** - Deactivation or replacement
+
+## Draft Stage
+
+### Creating Draft Agents
+
+**Best Practice:** Always create agents in Draft state first.
+
+**Why:**
+- Test without affecting production
+- Iterate on instructions
+- Verify tool assignments
+- Refine before going live
+
+### Testing Draft Agents
+
+**Methods:**
+1. **Agent Chat:** Manual testing with sample queries
+2. **Agent Run:** Execute specific prompts programmatically
+3. **Test Scenarios:** Run through common use cases
+4. **Edge Cases:** Test error handling and boundaries
+
+**Testing Checklist:**
+- [ ] Instructions are clear and followed
+- [ ] Tools are called correctly
+- [ ] Responses are accurate
+- [ ] Error handling works
+- [ ] Tone is appropriate
+- [ ] Performance is acceptable
+
+### Iterating on Drafts
+
+**Process:**
+1. Test with real scenarios
+2. Review Agent Run logs
+3. Identify issues
+4. Refine instructions
+5. Adjust tools if needed
+6. Test again
+7. Repeat until satisfied
+
+**When to Promote:**
+- All tests pass
+- Performance meets criteria
+- Stakeholders approve
+- Documentation complete
+
+## Active Stage
+
+### Activating Agents
+
+**To activate:**
+1. Open agent in Desk
+2. Change status from Draft to Active
+3. Save
+
+**Before activating:**
+- Complete testing
+- Verify permissions
+- Check tool assignments
+- Review instructions
+- Set up monitoring
+
+### Managing Active Agents
+
+**Ongoing Tasks:**
+- Monitor performance metrics
+- Review user feedback
+- Check error rates
+- Track costs
+- Optimize based on data
+
+**Regular Reviews:**
+- Weekly: Check error logs
+- Monthly: Review costs and performance
+- Quarterly: Assess effectiveness and ROI
+
+## Safe Editing
+
+### Editing Active Agents
+
+**Changes take effect immediately:**
+- New runs use updated configuration
+- Ongoing conversations may use old config
+- Scheduled triggers pick up changes
+- No downtime required
+
+### Best Practices
+
+**Do:**
+- Test changes in draft/duplicate first
+- Make small, incremental changes
+- Document what changed and why
+- Monitor after changes
+- Have rollback plan
+
+**Don't:**
+- Make major changes without testing
+- Edit production agents during peak hours
+- Change multiple things at once
+- Forget to update documentation
+
+### Version Control Strategy
+
+**Option 1: Draft Duplicates**
+- Create draft copy of production agent
+- Make changes in draft
+- Test thoroughly
+- Replace production when ready
+
+**Option 2: Feature Flags**
+- Use agent settings to toggle features
+- Enable/disable without code changes
+- A/B test different configurations
+
+**Option 3: Gradual Rollout**
+- Create new version
+- Run both versions in parallel
+- Compare performance
+- Switch when new version proves better
+
+## Enabling and Disabling
+
+### Disabling Without Deletion
+
+**When to disable:**
+- Temporary issues
+- Seasonal agents
+- Testing new versions
+- Cost optimization
+- Maintenance windows
+
+**How to disable:**
+1. Open agent
+2. Uncheck "Is Active" or change status
+3. Save
+
+**Effects:**
+- Agent stops running
+- Triggers don't fire
+- Chat access removed
+- Configuration preserved
+- Can re-enable anytime
+
+### Re-enabling
+
+**To re-enable:**
+1. Open agent
+2. Check "Is Active" or change status to Active
+3. Save
+
+**Before re-enabling:**
+- Verify configuration is still correct
+- Check dependencies (tools, providers)
+- Test if needed
+- Notify users
+
+## Organization
+
+### Naming Conventions
+
+**Use descriptive names:**
+- Include purpose: "Customer Support Agent"
+- Include scope: "Sales Lead Qualifier"
+- Include environment: "Invoice Validator - Production"
+
+**Examples:**
+- Good: "Customer Support Agent - Production"
+- Good: "Sales Lead Qualifier - Q1 2024"
+- Bad: "Agent 1"
+- Bad: "Test"
+
+### Categorization
+
+**Group related agents:**
+- By function: Support, Sales, Operations
+- By department: Marketing, Finance, HR
+- By status: Active, Draft, Archived
+- By model: GPT-4, Claude, GPT-3.5
+
+**Benefits:**
+- Easier to find
+- Better organization
+- Clearer ownership
+- Simplified management
+
+### Documentation
+
+**Document each agent:**
+- Purpose and scope
+- Instructions summary
+- Tool assignments
+- Trigger configuration
+- Success metrics
+- Known issues
+- Contact person
+
+**Where to document:**
+- Agent description field
+- Internal notes
+- Separate documentation
+- README files
+
+## Access Control
+
+### Permissions
+
+**Frappe permissions apply:**
+- Users need permission to view agents
+- Users need permission to edit agents
+- Users need permission to run agents
+- Standard role-based access control
+
+### Best Practices
+
+**Restrict access:**
+- Only authorized users can edit
+- Separate view and edit permissions
+- Use roles for access control
+- Audit access regularly
+
+**Common Roles:**
+- **Agent Admin:** Full access to create/edit
+- **Agent User:** Can run agents, view results
+- **Agent Viewer:** Read-only access
+
+## Monitoring Performance
+
+### Key Metrics
+
+**Track regularly:**
+- **Run Count:** How many times agent executed
+- **Success Rate:** Percentage of successful runs
+- **Error Rate:** Percentage of failed runs
+- **Average Response Time:** How fast agent responds
+- **Token Usage:** Cost tracking
+- **User Satisfaction:** Feedback scores
+
+### Review Process
+
+**Weekly Review:**
+1. Check error logs
+2. Review failed runs
+3. Identify patterns
+4. Plan fixes
+
+**Monthly Review:**
+1. Analyze performance trends
+2. Review costs
+3. Assess effectiveness
+4. Plan improvements
+
+**Quarterly Review:**
+1. Evaluate ROI
+2. Compare to goals
+3. Plan major changes
+4. Consider retirement
+
+## Optimization
+
+### When to Optimize
+
+**Signs you should optimize:**
+- High error rates
+- Slow response times
+- High costs
+- User complaints
+- Low success rates
+- Changing requirements
+
+### Optimization Strategies
+
+**Improve Instructions:**
+- Add examples
+- Clarify boundaries
+- Fix ambiguities
+- Add context
+
+**Adjust Tools:**
+- Add missing tools
+- Remove unused tools
+- Improve tool descriptions
+- Optimize tool calls
+
+**Tune Settings:**
+- Adjust temperature
+- Change model if needed
+- Optimize conversation settings
+- Reduce token usage
+
+**Refine Triggers:**
+- Add conditions
+- Optimize schedules
+- Improve prompt templates
+- Fix event selection
+
+### A/B Testing
+
+**Test changes:**
+1. Create duplicate agent
+2. Make changes to duplicate
+3. Run both in parallel
+4. Compare performance
+5. Adopt winner
+
+**What to test:**
+- Different instructions
+- Different models
+- Different tools
+- Different settings
+
+## Retirement
+
+### When to Retire
+
+**Retire agents when:**
+- No longer needed
+- Replaced by better version
+- Requirements changed
+- Cost exceeds value
+- Technology outdated
+
+### Retirement Process
+
+**Steps:**
+1. **Notify stakeholders**
+   - Inform users
+   - Update documentation
+   - Plan transition
+
+2. **Disable agent**
+   - Stop triggers
+   - Disable chat access
+   - Keep configuration
+
+3. **Archive data**
+   - Export Agent Run logs
+   - Save configuration
+   - Document lessons learned
+
+4. **Clean up**
+   - Remove from active lists
+   - Update documentation
+   - Free up resources
+
+### Replacing Agents
+
+**When replacing:**
+1. Create new agent
+2. Test thoroughly
+3. Run in parallel
+4. Gradually migrate
+5. Retire old agent
+
+## Best Practices
+
+### Lifecycle Management
+
+**Do:**
+- Start with drafts
+- Test before production
+- Monitor actively
+- Optimize regularly
+- Document everything
+- Plan retirement
+
+**Don't:**
+- Skip testing
+- Ignore performance
+- Make changes blindly
+- Forget documentation
+- Keep unused agents
+
+### Change Management
+
+**Do:**
+- Test changes first
+- Make incremental changes
+- Document changes
+- Monitor after changes
+- Have rollback plan
+
+**Don't:**
+- Change without testing
+- Make multiple changes at once
+- Ignore feedback
+- Forget to communicate
+
+### Organization
+
+**Do:**
+- Use clear naming
+- Categorize agents
+- Document purpose
+- Track ownership
+- Regular cleanup
+
+**Don't:**
+- Use vague names
+- Mix unrelated agents
+- Forget documentation
+- Ignore organization
+
+## Troubleshooting
+
+**Agent not working after edit:**
+- Check for syntax errors in instructions
+- Verify tools still exist
+- Check provider/model availability
+- Review Agent Run logs for errors
+
+**Changes not taking effect:**
+- Clear cache
+- Restart bench
+- Check agent is saved
+- Verify status is Active
+
+**Performance degraded:**
+- Review recent changes
+- Check for new errors
+- Monitor token usage
+- Compare to baseline
+
+## What's Next?
+
+- **[Running Agents](/docs/guides/running-agents)** - Execution methods
+- **[Monitoring](/docs/guides/monitoring)** - Performance tracking
+- **[Creating Agents](/docs/guides/creating-agents)** - Build new agents
+- **[Examples](/docs/examples)** - Reference configurations
+
+---
+
+**Questions?** Check [GitHub discussions](https://github.com/tridz-dev/agent_flo/discussions).
+

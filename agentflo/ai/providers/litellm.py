@@ -346,3 +346,246 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 		frappe.log_error(f"LiteLLM Provider Error: {str(e)}", "LiteLLM Provider")
 		return SimpleResult(f"LiteLLM Provider Error: {str(e)}")
 
+
+async def run_stream(agent, enhanced_prompt, provider, model, context=None):
+	"""
+	Streaming version of LiteLLM provider implementation.
+	
+	Yields chunks of the response as they arrive from the LLM.
+	For tool calls, buffers the complete tool call before yielding.
+	
+	Args:
+		agent: Agent object from agents SDK with tools, instructions, model_settings
+		enhanced_prompt: User prompt with conversation history
+		provider: Provider name (e.g., "OpenAI", "Anthropic", "Google")
+		model: Model name (e.g., "gpt-4-turbo", "claude-3-opus-20240229")
+		context: Optional context dictionary (contains agent_name for accessing Agent DocType)
+	
+	Yields:
+		dict: Streaming chunks with structure:
+			- type: "delta" | "complete" | "tool_call" | "error"
+			- content: str (for delta)
+			- full_response: str (accumulated response)
+			- tool_call: dict (for tool_call type)
+			- error: str (for error type)
+	"""
+	try:
+		litellm.drop_params = True
+		
+		# Get Agent DocType for settings
+		agent_doc = None
+		if context and context.get("agent_name"):
+			try:
+				agent_doc = frappe.get_doc("Agent", context.get("agent_name"))
+			except Exception:
+				pass
+		
+		# Get API key
+		provider_doc = frappe.get_doc("AI Provider", provider)
+		api_key = provider_doc.get_password("api_key")
+		
+		if not api_key:
+			yield {
+				"type": "error",
+				"error": "API key not configured in AI Provider."
+			}
+			return
+		
+		normalized_model = _normalize_model_name(model, provider)
+		
+		# Prepare messages
+		messages = []
+		if agent.instructions:
+			messages.append({"role": "system", "content": agent.instructions})
+		messages.append({"role": "user", "content": enhanced_prompt})
+		
+		# Convert tools to OpenAI format
+		tools = None
+		if getattr(agent, "tools", None):
+			tools = serialize_tools(agent.tools)
+		
+		# Get temperature and top_p
+		temperature = None
+		top_p = None
+		
+		if agent_doc:
+			temperature = agent_doc.temperature
+			top_p = agent_doc.top_p
+		
+		if temperature is None and hasattr(agent, "model_settings") and agent.model_settings:
+			temperature = getattr(agent.model_settings, "temperature", None)
+			top_p = getattr(agent.model_settings, "top_p", None) if top_p is None else top_p
+		
+		if temperature is None:
+			temperature = 0.7
+		
+		completion_kwargs = {
+			"model": normalized_model,
+			"messages": messages,
+			"temperature": temperature,
+			"stream": True,  # Enable streaming
+		}
+		
+		if top_p:
+			completion_kwargs["top_p"] = top_p
+		
+		provider_name = normalized_model.split("/")[0]
+		_setup_api_key(provider_name, api_key, completion_kwargs)
+		
+		if tools:
+			completion_kwargs["tools"] = tools
+			completion_kwargs["tool_choice"] = "auto"
+		
+		# Stream response
+		full_response = ""
+		MAX_ROUNDS = getattr(agent, "max_turns", 10) or 10
+		
+		for round_num in range(MAX_ROUNDS):
+			try:
+				# Use LiteLLM completion with stream=True
+				# LiteLLM completion() supports streaming when stream=True
+				stream = await asyncio.to_thread(litellm.completion, **completion_kwargs)
+				
+				# Buffer for tool calls
+				current_tool_calls = {}
+				streaming_content = ""
+				
+				# Process streaming chunks
+				for chunk in stream:
+					if not chunk.choices:
+						continue
+					
+					delta = chunk.choices[0].delta
+					
+					# Handle content delta
+					if hasattr(delta, "content") and delta.content:
+						streaming_content += delta.content
+						full_response += delta.content
+						
+						yield {
+							"type": "delta",
+							"content": delta.content,
+							"full_response": full_response,
+						}
+					
+					# Handle tool call delta
+					if hasattr(delta, "tool_calls") and delta.tool_calls:
+						for tool_call_delta in delta.tool_calls:
+							idx = tool_call_delta.index
+							
+							if idx not in current_tool_calls:
+								current_tool_calls[idx] = {
+									"id": "",
+									"type": "function",
+									"function": {"name": "", "arguments": ""}
+								}
+							
+							tc = current_tool_calls[idx]
+							
+							if tool_call_delta.id:
+								tc["id"] = tool_call_delta.id
+							
+							if hasattr(tool_call_delta, "function"):
+								if tool_call_delta.function.name:
+									tc["function"]["name"] = tool_call_delta.function.name
+								if tool_call_delta.function.arguments:
+									tc["function"]["arguments"] += tool_call_delta.function.arguments
+					
+					# Check if chunk is complete
+					if chunk.choices[0].finish_reason:
+						finish_reason = chunk.choices[0].finish_reason
+						
+						# If tool calls are present, execute them
+						if finish_reason == "tool_calls" and current_tool_calls:
+							# Yield tool calls
+							tool_calls_list = list(current_tool_calls.values())
+							for tool_call in tool_calls_list:
+								yield {
+									"type": "tool_call",
+									"tool_call": tool_call,
+								}
+							
+							# Execute tool calls
+							tool_results = []
+							for tool_call in tool_calls_list:
+								function_call = tool_call["function"]
+								tool_name = function_call["name"]
+								tool_args = function_call["arguments"]
+								
+								tool_to_run = _find_tool(agent, tool_name)
+								result_content = ""
+								
+								if tool_to_run:
+									try:
+										result_content = await _execute_tool_call(tool_to_run, tool_args)
+									except Exception as e:
+										result_content = f"Error executing tool {tool_name}: {str(e)}"
+								else:
+									result_content = f"Tool '{tool_name}' not found."
+								
+								tool_results.append({
+									"role": "tool",
+									"tool_call_id": tool_call["id"],
+									"name": tool_name,
+									"content": str(result_content)
+								})
+							
+							# Add tool results to messages and continue
+							messages.append({
+								"role": "assistant",
+								"content": streaming_content,
+								"tool_calls": tool_calls_list
+							})
+							messages.extend(tool_results)
+							
+							# Reset for next round
+							streaming_content = ""
+							current_tool_calls = {}
+							break
+						
+						# Final response - no more tool calls
+						if finish_reason == "stop":
+							yield {
+								"type": "complete",
+								"full_response": full_response,
+							}
+							return
+				
+			except InternalServerError as e:
+				yield {
+					"type": "error",
+					"error": f"OpenAI API server error: {str(e)}"
+				}
+				return
+			except RateLimitError as e:
+				yield {
+					"type": "error",
+					"error": f"Rate limit exceeded: {str(e)}"
+				}
+				return
+			except APIError as e:
+				yield {
+					"type": "error",
+					"error": f"API error: {str(e)}"
+				}
+				return
+			except Exception as e:
+				yield {
+					"type": "error",
+					"error": f"LiteLLM error: {str(e)}"
+				}
+				return
+		
+		# Max rounds reached
+		yield {
+			"type": "complete",
+			"full_response": full_response or "Agent stopped after max rounds.",
+		}
+		
+	except Exception as e:
+		frappe.log_error(f"LiteLLM Streaming Error: {str(e)}", "LiteLLM Streaming")
+		yield {
+			"type": "error",
+			"error": f"LiteLLM Streaming Error: {str(e)}"
+		}
+

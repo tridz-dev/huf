@@ -1,0 +1,359 @@
+---
+sidebarTitle: Providers & Models
+---
+
+# Providers & Models
+
+AI Providers and Models are the foundation of Huf agents. Providers give you access to AI services, and Models are the specific AI "brains" your agents use.
+
+## Overview
+
+**Think of it this way:**
+- **Provider** = The AI service company (OpenAI, Anthropic, Google)
+- **Model** = The specific AI model offered by that provider (GPT-4, Claude 3, Gemini Pro)
+
+Your agent needs both: a provider for authentication, and a model for intelligence.
+
+## AI Providers
+
+### What is a Provider?
+
+An **AI Provider** stores the credentials (API key) needed to access an AI service. Huf uses LiteLLM to provide unified access to 100+ AI providers through a single interface.
+
+**Key Fields:**
+- **Provider Name**: The name of the AI service (e.g., `OpenAI`, `Anthropic`, `Google`)
+- **API Key**: Your authentication key for that service
+
+### Supported Providers
+
+Huf supports all providers via LiteLLM, including:
+
+| Provider | Models Available | Best For |
+|----------|------------------|----------|
+| **OpenAI** | GPT-4, GPT-3.5, GPT-4 Turbo | General purpose, coding, analysis |
+| **Anthropic** | Claude 3 Opus, Sonnet, Haiku | Long context, nuanced reasoning |
+| **Google** | Gemini Pro, Gemini Ultra | Multimodal, fast responses |
+| **OpenRouter** | 500+ models from various providers | Access to many models with one API key |
+| **xAI** | Grok models | Real-time information, conversational |
+| **Mistral** | Mistral Large, Medium, Small | European option, multilingual |
+| **Cohere** | Command, Embed | Enterprise, embeddings |
+| **Together AI** | Open-source models | Cost-effective, customizable |
+
+And 100+ more providers supported via LiteLLM.
+
+### Adding a Provider
+
+**Navigate to:** Desk → Huf → AI Provider
+
+**Click New** and fill in:
+
+1. **Provider Name**: Enter the provider name
+   - Use standard names: `OpenAI`, `Anthropic`, `Google`, `OpenRouter`
+   - Case-insensitive, automatically routed to LiteLLM
+   - For non-standard providers, check [LiteLLM docs](https://docs.litellm.ai/docs/providers)
+
+2. **API Key**: Paste your API key
+   - Get keys from provider websites (links below)
+   - Stored securely using Frappe's encrypted Password field
+   - Never exposed in logs or API responses
+
+3. **Save** the provider
+
+**Where to Get API Keys:**
+
+- **OpenAI**: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- **Anthropic**: [console.anthropic.com](https://console.anthropic.com)
+- **Google**: [makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
+- **OpenRouter**: [openrouter.ai/keys](https://openrouter.ai/keys)
+
+> **Security Note**: API keys are encrypted in the database and only decrypted when making API calls. They are never exposed to end users or in Agent Run logs.
+
+### Provider Configuration
+
+Providers are global—once added, they can be used by any agent on your site (subject to Frappe permissions).
+
+**Best Practices:**
+- Use separate API keys for development and production
+- Set spending limits on your provider dashboard
+- Monitor usage through provider dashboards and Huf's Agent Run logs
+- For teams, use organization/team API keys rather than personal ones
+
+## AI Models
+
+### What is a Model?
+
+An **AI Model** defines which specific LLM (large language model) your agent will use. Models vary in capability, speed, cost, and specialization.
+
+**Key Fields:**
+- **Model Name**: The name of the model (e.g., `gpt-4-turbo`, `claude-3-opus`)
+- **Provider**: Link to the AI Provider this model belongs to
+
+### Model Name Formats
+
+Huf automatically normalizes model names to LiteLLM format:
+
+**User-Friendly Format** (recommended):
+```
+gpt-4-turbo
+claude-3-opus
+gemini-pro
+```
+
+**LiteLLM Format** (also supported):
+```
+openai/gpt-4-turbo
+anthropic/claude-3-opus
+google/gemini-pro
+```
+
+Use the user-friendly format—Huf adds the provider prefix automatically based on your provider selection.
+
+**Provider Prefix Mapping:**
+- `gemini` → `google`
+- `grok` → `xai`
+- Standard providers use lowercase provider name
+
+### Adding a Model
+
+**Navigate to:** Desk → Huf → AI Model
+
+**Click New** and fill in:
+
+1. **Model Name**: Enter the model identifier
+   - Use user-friendly names: `gpt-4-turbo`, `claude-3-opus`
+   - Or LiteLLM format: `openai/gpt-4-turbo` (no normalization)
+   - Check provider docs for exact model names
+
+2. **Provider**: Select the provider you created earlier
+   - The provider determines how the model name is normalized
+   - Must match the provider that offers this model
+
+3. **Save** the model
+
+### Popular Models Comparison
+
+| Model | Provider | Strength | Speed | Cost | Context Window |
+|-------|----------|----------|-------|------|----------------|
+| **gpt-4-turbo** | OpenAI | Strong reasoning, coding | Fast | $$$ | 128K tokens |
+| **gpt-3.5-turbo** | OpenAI | Quick tasks, simple | Very Fast | $ | 16K tokens |
+| **claude-3-opus** | Anthropic | Best reasoning, long context | Medium | $$$$ | 200K tokens |
+| **claude-3-sonnet** | Anthropic | Balanced performance | Fast | $$ | 200K tokens |
+| **claude-3-haiku** | Anthropic | Fast, cost-effective | Very Fast | $ | 200K tokens |
+| **gemini-pro** | Google | Multimodal, fast | Very Fast | $$ | 32K tokens |
+| **grok-beta** | xAI | Real-time info, conversational | Fast | $$$ | 8K tokens |
+
+**Cost Legend:**
+- $ = Very affordable (< $0.001 per 1K tokens)
+- $$ = Affordable (< $0.01 per 1K tokens)
+- $$$ = Moderate (< $0.10 per 1K tokens)
+- $$$$ = Premium (> $0.10 per 1K tokens)
+
+> **Tip**: Start with cheaper models (GPT-3.5, Claude Haiku, Gemini Pro) for testing and development. Upgrade to more powerful models (GPT-4, Claude Opus) for production when needed.
+
+### Choosing the Right Model
+
+**For Simple Tasks** (FAQ, classification, summaries):
+- GPT-3.5 Turbo
+- Claude 3 Haiku
+- Gemini Pro
+
+**For Complex Reasoning** (analysis, multi-step workflows):
+- GPT-4 Turbo
+- Claude 3 Opus
+- Claude 3 Sonnet
+
+**For Long Documents** (large context):
+- Claude 3 Opus (200K)
+- Claude 3 Sonnet (200K)
+- GPT-4 Turbo (128K)
+
+**For Speed & Cost** (high volume, simple tasks):
+- Claude 3 Haiku
+- GPT-3.5 Turbo
+- Gemini Pro
+
+**For Coding** (code generation, debugging):
+- GPT-4 Turbo
+- Claude 3 Opus
+- GPT-3.5 Turbo (simple tasks)
+
+## How Providers and Models Work Together
+
+### The Flow
+
+1. **You create a Provider** with API key
+2. **You create a Model** linked to that Provider
+3. **You assign the Model to an Agent**
+4. **When the agent runs:**
+   - Huf loads the Provider credentials
+   - Calls LiteLLM with the normalized model name
+   - LiteLLM routes to the correct provider API
+   - Response is returned to the agent
+
+### LiteLLM Integration
+
+Huf uses LiteLLM as a unified interface to all providers. This means:
+
+- **Consistent API**: Same code works for all providers
+- **Automatic Retries**: Built-in error handling and retries
+- **Cost Tracking**: Automatic token counting and cost calculation
+- **Fallbacks**: Can configure backup models if primary fails
+- **100+ Providers**: Support for nearly every LLM provider
+
+### Model Settings in Agents
+
+When you assign a model to an agent, you also configure:
+
+- **Temperature** (0.0 - 2.0): Controls randomness
+  - `0.0` = Deterministic, focused
+  - `1.0` = Balanced (default)
+  - `2.0` = Creative, varied
+
+- **Top P** (0.0 - 1.0): Alternative to temperature
+  - `1.0` = Full vocabulary (default)
+  - `0.1` = Very focused
+
+> **Note**: Use temperature OR top_p, not both. Temperature is more commonly used.
+
+## Multiple Providers & Models
+
+You can (and should) add multiple providers and models:
+
+**Benefits:**
+- **Fallback options** if one provider has issues
+- **Cost optimization** by choosing cheaper models for simple tasks
+- **Specialization** using different models for different agent types
+- **Testing** comparing model performance across providers
+
+**Example Setup:**
+
+```
+Providers:
+- OpenAI (for GPT models)
+- Anthropic (for Claude models)
+- Google (for Gemini models)
+
+Models:
+- gpt-4-turbo (OpenAI) → For complex agents
+- gpt-3.5-turbo (OpenAI) → For simple agents
+- claude-3-opus (Anthropic) → For long-context agents
+- claude-3-haiku (Anthropic) → For fast, cheap agents
+- gemini-pro (Google) → For experimental agents
+```
+
+## Monitoring and Costs
+
+### Tracking Usage
+
+Every agent run logs:
+- **Input Tokens**: Prompt + conversation history + tool definitions
+- **Output Tokens**: Agent's response
+- **Total Cost**: Calculated based on model pricing
+
+**View in:** Desk → Huf → Agent Run
+
+### Cost Optimization Tips
+
+1. **Choose the right model for the task**
+   - Don't use GPT-4 for simple tasks
+   - Use Claude Haiku for high-volume, simple interactions
+
+2. **Manage conversation history**
+   - Limit history length (fewer tokens in context)
+   - Summarize old conversations instead of sending full history
+
+3. **Optimize tool definitions**
+   - Only assign necessary tools to agents
+   - Keep tool descriptions concise but clear
+
+4. **Monitor and iterate**
+   - Check Agent Run logs regularly
+   - Identify expensive runs and optimize
+
+5. **Set provider spending limits**
+   - Configure limits in your provider dashboard
+   - Set up alerts for unusual usage
+
+### Rate Limits
+
+AI providers enforce rate limits (requests per minute, tokens per minute). If you hit limits:
+
+- **Spread out requests**: Don't run many agents simultaneously
+- **Upgrade your provider tier**: Most providers offer paid tiers with higher limits
+- **Use LiteLLM retries**: Automatic exponential backoff (built-in)
+- **Batch operations**: Group similar requests
+
+## Troubleshooting
+
+**"Provider not found" or "Invalid API key"**
+- Verify API key is correct and active
+- Check provider dashboard for key status
+- Ensure provider name matches LiteLLM expectations
+
+**"Model not found"**
+- Verify model name is correct (check provider docs)
+- Ensure model is available for your provider tier
+- Try LiteLLM format explicitly: `openai/gpt-4-turbo`
+
+**High costs or unexpected usage**
+- Check Agent Run logs for token counts
+- Review conversation history length
+- Audit which agents are running frequently
+- Consider switching to cheaper models
+
+**Rate limit errors**
+- Wait and retry (automatic with LiteLLM)
+- Reduce concurrent agent executions
+- Upgrade provider tier
+- Spread requests over time
+
+**Slow responses**
+- Some models are inherently slower (Claude Opus, GPT-4)
+- Try faster alternatives (Claude Haiku, GPT-3.5)
+- Reduce conversation history length
+- Simplify tool definitions
+
+## Best Practices
+
+### Security
+
+- **Never share API keys** in code, logs, or documentation
+- **Use environment-specific keys** (dev vs production)
+- **Rotate keys periodically** for security
+- **Set spending alerts** on provider dashboards
+- **Use team/org keys** rather than personal keys
+
+### Organization
+
+- **Naming convention**: Use descriptive provider names
+- **Document model purposes**: Add notes on what each model is for
+- **Test before production**: Always test new models with draft agents
+- **Monitor costs**: Regular reviews of Agent Run costs
+
+### Performance
+
+- **Match model to task**: Don't over-engineer
+- **Cache common responses**: Consider caching for FAQ-style agents
+- **Optimize prompts**: Shorter, clearer prompts = lower costs
+- **Batch when possible**: Group similar requests
+
+## What's Next?
+
+Now that you understand Providers & Models:
+
+- **[Tools](/docs/concepts/tools)** - Give agents capabilities
+- **[Agents](/docs/concepts/agents)** - Configure agents with models
+- **[Quick Start](/docs/quick-start)** - Create your first agent
+- **[Advanced Settings](/docs/advanced/settings)** - LiteLLM configuration
+
+## Further Reading
+
+- [LiteLLM Documentation](https://docs.litellm.ai/docs/)
+- [OpenAI Models](https://platform.openai.com/docs/models)
+- [Anthropic Models](https://docs.anthropic.com/claude/docs/models-overview)
+- [Google Gemini](https://ai.google.dev/models/gemini)
+
+---
+
+**Questions?** Open an issue or discussion on [GitHub](https://github.com/tridz-dev/agent_flo).
+

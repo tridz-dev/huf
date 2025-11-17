@@ -1,0 +1,576 @@
+---
+sidebarTitle: Example Agents
+---
+
+# Example Agents
+
+Complete, production-ready agent configurations you can use as templates or starting points for your own agents.
+
+## Invoice Validator Agent
+
+**Purpose:** Automatically validate sales invoices when submitted, checking pricing, credit limits, and tax calculations.
+
+### Agent Configuration
+
+**Basic Settings:**
+- **Agent Name:** `Invoice Validator`
+- **Provider:** Your OpenAI provider
+- **Model:** `gpt-4-turbo` (or `gpt-3.5-turbo` for cost savings)
+- **Temperature:** `0.3` (focused, consistent validation)
+- **Allow Chat:** No (triggered automatically)
+
+### Instructions
+
+```
+You are an invoice validation agent. Your job is to validate sales invoices 
+when they are submitted.
+
+When an invoice is submitted:
+1. Verify pricing matches the current price list for each item
+2. Check the customer's credit limit and current outstanding balance
+3. Validate tax calculations (tax rate, tax amount, total)
+4. Ensure all required fields are filled correctly
+5. Check for duplicate invoices
+
+For each validation check:
+- If it passes: Add a comment confirming the check passed
+- If it fails: Add a comment with specific details about what's wrong
+
+Validation Results:
+- If all checks pass: Add comment "Invoice validated successfully. All checks passed."
+- If any check fails: Add comment with list of issues found and notify accounts team
+
+Be thorough but efficient. Focus on accuracy over speed.
+```
+
+### Tools
+
+1. **Get Document** (Sales Invoice)
+   - Tool Name: `get_invoice`
+   - Reference DocType: Sales Invoice
+   - Description: Retrieve invoice details for validation
+
+2. **Get Document** (Customer)
+   - Tool Name: `get_customer`
+   - Reference DocType: Customer
+   - Description: Get customer credit limit and outstanding balance
+
+3. **Get List** (Item Price)
+   - Tool Name: `get_price_list_rates`
+   - Reference DocType: Item Price
+   - Description: Check current price list rates for items
+
+4. **Get List** (Sales Invoice)
+   - Tool Name: `check_duplicate_invoices`
+   - Reference DocType: Sales Invoice
+   - Description: Check for duplicate invoices
+
+5. **Update Document** (Sales Invoice)
+   - Tool Name: `update_invoice`
+   - Reference DocType: Sales Invoice
+   - Description: Add validation comments to invoice
+
+6. **HTTP Request** (Slack Notification)
+   - Tool Name: `notify_accounts_team`
+   - Description: Send notification to accounts team Slack channel
+
+### Trigger Configuration
+
+**Agent Trigger:**
+- **Trigger Type:** Doc Event
+- **Reference DocType:** Sales Invoice
+- **Document Event:** On Submit
+- **Condition:** None (validate all submitted invoices)
+- **Prompt Template:**
+```
+A sales invoice has been submitted: {name}
+Customer: {customer}
+Total Amount: {grand_total}
+
+Please validate this invoice:
+1. Check pricing against price list
+2. Verify customer credit limit
+3. Validate tax calculations
+4. Check for duplicates
+5. Ensure all required fields are correct
+
+Add comments with validation results.
+```
+
+### Expected Behavior
+
+**When invoice is submitted:**
+1. Agent receives trigger with invoice details
+2. Retrieves invoice document
+3. Gets customer information
+4. Checks price list rates for each item
+5. Validates credit limit
+6. Verifies tax calculations
+7. Checks for duplicates
+8. Adds validation comments
+9. Notifies team if issues found
+
+**Success Output:**
+- Comment added: "Invoice validated successfully. All checks passed."
+- No notifications sent
+
+**Failure Output:**
+- Comment added with specific issues
+- Slack notification sent to accounts team
+- Issues clearly documented
+
+---
+
+## Email Auto-Responder Agent
+
+**Purpose:** Categorize incoming emails, draft responses, and create support tickets automatically.
+
+### Agent Configuration
+
+**Basic Settings:**
+- **Agent Name:** `Email Auto-Responder`
+- **Provider:** Your Anthropic provider
+- **Model:** `claude-3-sonnet` (good for email understanding)
+- **Temperature:** `0.7` (balanced, natural responses)
+- **Allow Chat:** No
+
+### Instructions
+
+```
+You are an email auto-responder agent. Your job is to process incoming 
+emails and handle them appropriately.
+
+When an email is received:
+1. Categorize the email:
+   - Support Request: Technical issues, bugs, problems
+   - Sales Inquiry: Product questions, pricing, demos
+   - General Question: FAQs, information requests
+   - Complaint: Unhappy customers, service issues
+   - Spam: Unwanted emails
+
+2. For Support Requests:
+   - Create a support ticket with email content
+   - Categorize by priority (High, Medium, Low)
+   - Assign to appropriate team
+   - Draft acknowledgment email
+
+3. For Sales Inquiries:
+   - Create a lead if new contact
+   - Update existing lead if known contact
+   - Draft response with product information
+   - Schedule follow-up task
+
+4. For General Questions:
+   - Draft helpful response
+   - Include relevant links or documentation
+   - If FAQ, use standard response
+
+5. For Complaints:
+   - Create high-priority support ticket
+   - Escalate to customer success team
+   - Draft empathetic response
+
+6. For Spam:
+   - Mark as spam
+   - Do not respond
+
+Always be professional, helpful, and empathetic. Match the tone 
+of the original email (formal vs casual).
+```
+
+### Tools
+
+1. **Get List** (Lead)
+   - Tool Name: `check_existing_lead`
+   - Reference DocType: Lead
+   - Description: Check if email sender is an existing lead
+
+2. **Create Document** (Lead)
+   - Tool Name: `create_lead`
+   - Reference DocType: Lead
+   - Description: Create new lead from email
+
+3. **Create Document** (Support Ticket)
+   - Tool Name: `create_support_ticket`
+   - Reference DocType: Support Ticket
+   - Description: Create support ticket from email
+
+4. **Create Document** (Communication)
+   - Tool Name: `save_email`
+   - Reference DocType: Communication
+   - Description: Save email to Frappe
+
+5. **HTTP Request** (Email Send)
+   - Tool Name: `send_email_response`
+   - Description: Send email response via Frappe email
+
+6. **Create Document** (Task)
+   - Tool Name: `create_followup_task`
+   - Reference DocType: Task
+   - Description: Schedule follow-up tasks
+
+### Trigger Configuration
+
+**Agent Trigger:**
+- **Trigger Type:** Doc Event
+- **Reference DocType:** Communication
+- **Document Event:** After Insert
+- **Condition:** `{"communication_type": "Communication", "sent_or_received": "Received", "email_status": "Open"}`
+- **Prompt Template:**
+```
+A new email has been received:
+From: {sender}
+Subject: {subject}
+Content: {content}
+
+Please process this email:
+1. Categorize it
+2. Take appropriate action (create ticket, lead, etc.)
+3. Draft and send response if needed
+```
+
+### Expected Behavior
+
+**When email arrives:**
+1. Agent receives email details
+2. Analyzes content and categorizes
+3. Checks if sender is existing lead/customer
+4. Takes action based on category:
+   - Support → Create ticket
+   - Sales → Create/update lead
+   - Question → Draft response
+   - Complaint → Escalate
+5. Drafts appropriate response
+6. Sends response email
+7. Creates follow-up tasks if needed
+
+**Example Output:**
+- Support ticket created: "TICKET-001: Login issue reported"
+- Email sent: "Thank you for contacting us. We've created ticket TICKET-001..."
+- Task created: "Follow up on TICKET-001 in 24 hours"
+
+---
+
+## Sales Lead Qualifier Agent
+
+**Purpose:** Score leads, extract key information, assign to sales reps, and schedule follow-ups automatically.
+
+### Agent Configuration
+
+**Basic Settings:**
+- **Agent Name:** `Sales Lead Qualifier`
+- **Provider:** Your OpenAI provider
+- **Model:** `gpt-4-turbo` (good for analysis)
+- **Temperature:** `0.5` (balanced analysis)
+- **Allow Chat:** No
+
+### Instructions
+
+```
+You are a sales lead qualification agent. Your job is to analyze new 
+leads and prepare them for the sales team.
+
+When a new lead is created:
+1. Score the lead (0-100) based on:
+   - Company size indicators (from company_name and description)
+   - Industry match with our ideal customer profile
+   - Source quality (referral = 20 points, website = 10, other = 5)
+   - Budget indicators in description (mentions of budget, pricing questions)
+   - Urgency signals (words like "urgent", "asap", "immediately")
+   - Decision maker presence (titles like CEO, CTO, Director)
+
+2. Extract key information:
+   - Industry/vertical
+   - Company size (if mentioned)
+   - Budget range (if mentioned)
+   - Use case/pain points
+   - Timeline (if mentioned)
+   - Decision maker contact info
+
+3. Assign to sales rep based on:
+   - Territory match (if lead has territory)
+   - Industry expertise (match rep's specialization)
+   - Current workload (prefer reps with fewer active leads)
+   - Lead score (high scores to top performers)
+
+4. Set follow-up priority:
+   - Score 80+: Hot lead - Follow up today
+   - Score 60-79: Warm lead - Follow up tomorrow
+   - Score 40-59: Qualified lead - Follow up this week
+   - Score <40: Cold lead - Follow up next week
+
+5. Add internal notes with:
+   - Lead score and rationale
+   - Key information extracted
+   - Assignment reasoning
+   - Recommended approach
+
+Be thorough in analysis. Better to over-qualify than miss opportunities.
+```
+
+### Tools
+
+1. **Get Document** (Lead)
+   - Tool Name: `get_lead`
+   - Reference DocType: Lead
+   - Description: Get lead details for qualification
+
+2. **Get List** (Sales Person)
+   - Tool Name: `get_sales_reps`
+   - Reference DocType: Sales Person
+   - Description: Get available sales reps with territories and workload
+
+3. **Get List** (Lead)
+   - Tool Name: `check_existing_leads`
+   - Reference DocType: Lead
+   - Description: Check for duplicate or related leads
+
+4. **Update Document** (Lead)
+   - Tool Name: `update_lead`
+   - Reference DocType: Lead
+   - Description: Update lead with score, assignment, notes
+
+5. **Create Document** (Task)
+   - Tool Name: `create_followup_task`
+   - Reference DocType: Task
+   - Description: Create follow-up task for sales rep
+
+6. **HTTP Request** (Slack Notification)
+   - Tool Name: `notify_sales_rep`
+   - Description: Notify assigned sales rep via Slack
+
+### Trigger Configuration
+
+**Agent Trigger:**
+- **Trigger Type:** Doc Event
+- **Reference DocType:** Lead
+- **Document Event:** After Insert
+- **Condition:** None (qualify all new leads)
+- **Prompt Template:**
+```
+A new lead has been created:
+Company: {company_name}
+Contact: {lead_name}
+Email: {email_id}
+Source: {source}
+Description: {description}
+Territory: {territory}
+
+Please:
+1. Score this lead (0-100)
+2. Extract key information
+3. Assign to appropriate sales rep
+4. Set follow-up priority
+5. Add qualification notes
+```
+
+### Expected Behavior
+
+**When lead is created:**
+1. Agent receives lead details
+2. Analyzes company name, description, source
+3. Calculates lead score based on criteria
+4. Extracts key information
+5. Finds best sales rep match
+6. Updates lead with:
+   - Lead score
+   - Assigned sales person
+   - Internal notes with analysis
+7. Creates follow-up task
+8. Notifies sales rep
+
+**Example Output:**
+- Lead Score: 75 (Warm)
+- Assigned: John Smith (Territory match, Industry expertise)
+- Notes: "High-value prospect in healthcare vertical. Mentions budget 
+         and timeline. Decision maker (CTO) identified. Strong fit."
+- Follow-up: Task created for tomorrow
+- Notification: Slack message to John Smith
+
+---
+
+## Inventory Alert Bot
+
+**Purpose:** Monitor inventory levels, predict stockouts, create purchase orders, and notify teams.
+
+### Agent Configuration
+
+**Basic Settings:**
+- **Agent Name:** `Inventory Alert Bot`
+- **Provider:** Your OpenAI provider
+- **Model:** `gpt-3.5-turbo` (cost-effective for monitoring)
+- **Temperature:** `0.2` (very focused, data-driven)
+- **Allow Chat:** No
+
+### Instructions
+
+```
+You are an inventory monitoring agent. Your job is to monitor stock 
+levels and prevent stockouts.
+
+Every 6 hours, check inventory:
+1. Identify items below reorder level
+2. Calculate required purchase quantity:
+   - Consider current stock
+   - Average daily consumption (last 30 days)
+   - Lead time from suppliers
+   - Safety stock requirements
+   - Minimum order quantities
+
+3. For each item needing reorder:
+   - Check if purchase requisition already exists
+   - Calculate optimal order quantity
+   - Identify preferred supplier
+   - Create purchase requisition if needed
+   - Set priority (Urgent if stockout imminent)
+
+4. Predict stockouts:
+   - Calculate days until stockout based on consumption rate
+   - Flag items with <7 days remaining
+   - Flag items with <3 days remaining as critical
+
+5. Generate summary report:
+   - Items below reorder level
+   - Purchase requisitions created
+   - Critical stockout predictions
+   - Recommended actions
+
+6. Notify procurement team:
+   - Urgent items (<3 days)
+   - New purchase requisitions
+   - Stockout predictions
+
+Be proactive. It's better to order early than run out of stock.
+```
+
+### Tools
+
+1. **Get List** (Bin)
+   - Tool Name: `get_stock_levels`
+   - Reference DocType: Bin
+   - Description: Get current stock levels for all items
+
+2. **Get Document** (Item)
+   - Tool Name: `get_item_details`
+   - Reference DocType: Item
+   - Description: Get item details including reorder level, safety stock
+
+3. **Get List** (Stock Ledger Entry)
+   - Tool Name: `get_consumption_history`
+   - Reference DocType: Stock Ledger Entry
+   - Description: Get consumption history for demand forecasting
+
+4. **Get List** (Purchase Requisition)
+   - Tool Name: `check_existing_requisitions`
+   - Reference DocType: Purchase Requisition
+   - Description: Check if requisition already exists for item
+
+5. **Create Document** (Purchase Requisition)
+   - Tool Name: `create_purchase_requisition`
+   - Reference DocType: Purchase Requisition
+   - Description: Create purchase requisition for low stock items
+
+6. **Create Document** (Communication)
+   - Tool Name: `create_alert`
+   - Reference DocType: Communication
+   - Description: Create alert notification
+
+7. **HTTP Request** (Slack/Email)
+   - Tool Name: `send_inventory_alert`
+   - Description: Send inventory alerts to procurement team
+
+### Trigger Configuration
+
+**Agent Trigger:**
+- **Trigger Type:** Schedule
+- **Schedule:** Every 6 hours (Cron: `0 */6 * * *`)
+- **Prompt Template:**
+```
+It's time to check inventory levels. Please:
+1. Identify all items below reorder level
+2. Calculate required purchase quantities
+3. Create purchase requisitions for items needing reorder
+4. Predict stockouts and flag critical items
+5. Generate summary report
+6. Notify procurement team of urgent items
+```
+
+### Expected Behavior
+
+**Every 6 hours:**
+1. Agent runs automatically
+2. Retrieves all stock levels
+3. Identifies items below reorder level
+4. Calculates consumption rates
+5. Predicts stockout dates
+6. Creates purchase requisitions
+7. Generates summary report
+8. Sends alerts for critical items
+
+**Example Output:**
+- Purchase Requisition Created: "PR-001: Order 500 units of Widget A"
+- Critical Alert: "Widget B will stockout in 2 days. Urgent reorder needed."
+- Summary Report: "5 items below reorder level. 2 purchase requisitions created. 
+                   1 critical stockout predicted."
+- Notification: Slack message to procurement team with details
+
+---
+
+## Using These Examples
+
+### Copy and Customize
+
+1. **Copy agent configuration** from example
+2. **Adjust instructions** for your specific needs
+3. **Modify tools** based on your DocTypes
+4. **Update triggers** to match your workflow
+5. **Test thoroughly** before production
+
+### Adaptation Tips
+
+**For Different Industries:**
+- Adjust DocTypes to your industry
+- Modify scoring criteria
+- Update business rules
+- Change notification channels
+
+**For Different Scales:**
+- Start with simpler versions
+- Add complexity gradually
+- Monitor performance
+- Optimize based on results
+
+**For Different Models:**
+- Use cheaper models for simple tasks
+- Use powerful models for complex analysis
+- Balance cost and capability
+- Monitor token usage
+
+### Testing
+
+**Before Production:**
+1. Test with sample data
+2. Verify tool calls work correctly
+3. Check trigger conditions
+4. Review agent responses
+5. Validate business logic
+6. Test error handling
+
+**In Production:**
+1. Monitor Agent Run logs
+2. Review tool call results
+3. Check for errors
+4. Gather user feedback
+5. Iterate and improve
+
+## What's Next?
+
+- **[Use Cases](/docs/use-cases)** - More use case ideas
+- **[Creating Agents](/docs/guides/creating-agents)** - Build your own agents
+- **[Tools](/docs/concepts/tools)** - Available tools
+- **[Monitoring](/docs/guides/monitoring)** - Track agent performance
+
+---
+
+**Have an example to share?** Contribute to [GitHub](https://github.com/tridz-dev/agent_flo)!
+

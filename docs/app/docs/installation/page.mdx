@@ -1,0 +1,134 @@
+---
+sidebarTitle: Installation
+---
+
+# Installation
+
+Huf is a Frappe application. This guide covers installing it on your Frappe site, whether you're using Frappe Bench (self-hosted/local) or Frappe Cloud (managed hosting).
+
+## Prerequisites
+
+Before installing, you need a working Frappe site. If you're new to Frappe or don't have a site yet, visit the [Frappe Framework documentation](https://frappeframework.com/docs/user/en/installation) to get started with Frappe first.
+
+You should have:
+- A Frappe site (Bench or Cloud)
+- Terminal/console access to your site
+- Python 3.8+ (usually already installed with Frappe)
+
+**New to Frappe Bench?** Bench is the command-line tool for managing Frappe apps and sites. Think of it as a package manager for Frappe—it handles installation, updates, and management of multiple apps.
+
+## Installation on Frappe Bench
+
+For self-hosted or local Frappe setups using Bench:
+
+### 1. Navigate to Bench Directory
+
+```bash
+cd /path/to/your/frappe-bench
+```
+
+Replace `/path/to/your/frappe-bench` with your actual Bench path (e.g., `~/frappe-bench`).
+
+### 2. Get the App
+
+Download Huf from GitHub:
+
+```bash
+bench get-app https://github.com/tridz-dev/agent_flo.git
+```
+
+This clones Huf into your `apps/` directory.
+
+### 3. Install on Your Site
+
+Install Huf on your site (replace `sitename` with your actual site name):
+
+```bash
+bench --site sitename install-app agentflo
+```
+
+### 4. Setup Dependencies
+
+Huf requires LiteLLM and other Python packages. Install them:
+
+```bash
+bench setup requirements
+```
+
+### 5. Restart
+
+```bash
+bench restart
+```
+
+### 6. Verify
+
+Log in to your Frappe site. Click the **App Switcher** (grid icon in the top-right) and look for **Huf** or **AgentFlo**. Click it to enter the Huf workspace.
+
+## Installation on Frappe Cloud
+
+Frappe Cloud is managed Frappe hosting. Installation is streamlined:
+
+### 1. Access Console
+
+Log in to [frappecloud.com](https://frappecloud.com), go to your site, and open the **Console** (terminal icon).
+
+### 2. Install
+
+Run these commands in the console:
+
+```bash
+bench get-app https://github.com/tridz-dev/agent_flo.git
+bench --site $CI_COMMIT_REF_NAME install-app agentflo
+bench setup requirements
+bench restart
+```
+
+> `$CI_COMMIT_REF_NAME` is auto-set to your site name on Frappe Cloud.
+
+### 3. Verify
+
+Refresh your site, open the **App Switcher**, and click **Huf**.
+
+## Verify Installation
+
+After installation, verify Huf is working:
+
+1. **App Switcher** shows "Huf" or "AgentFlo"
+2. You can open **AI Provider** from the Huf workspace
+3. No error messages in the console
+
+## Troubleshooting
+
+**"Command not found: bench"**
+- Bench is not installed or not in your PATH
+- See [Frappe installation docs](https://frappeframework.com/docs/user/en/installation)
+
+**"App not found" or installation fails**
+- Verify you're in the correct Bench directory
+- Check your site name is correct: `bench --site sitename list-apps`
+- Ensure internet connectivity (downloads from GitHub)
+- Try `bench update` first to ensure Bench is current
+
+**Dependencies not installing**
+- Verify Python 3.8+ with `python3 --version`
+- Ensure pip is available
+- For dev environments, try `bench setup requirements --dev`
+
+**LiteLLM errors**
+- Huf requires LiteLLM for AI providers
+- Run `bench setup requirements` again
+- Restart with `bench restart`
+- Check logs: `bench --site sitename console` then `import litellm`
+
+## What's Next?
+
+Installation complete! Now create your first agent:
+
+**[Quick Start Guide](/docs/quick-start)** - Build a working agent in 5 minutes
+
+Or explore the concepts:
+
+- [Interfaces](/docs/concepts/interfaces) - Understanding `/huf` vs `/app`
+- [Agents](/docs/concepts/agents) - What agents are and how they work
+- [Providers & Models](/docs/concepts/providers-models) - Connecting to AI services
