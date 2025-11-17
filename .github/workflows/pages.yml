@@ -41,6 +41,8 @@ jobs:
         run: npm run build:pages
         env:
           NODE_ENV: production
+          GITHUB_PAGES: 'true'
+          GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Prepare GitHub Pages build
         run: |
@@ -49,6 +51,14 @@ jobs:
           cp -r docs/out/* gh-pages-build/
           # Create .nojekyll to prevent Jekyll processing
           touch gh-pages-build/.nojekyll
+          # Verify index.html exists
+          if [ ! -f gh-pages-build/index.html ]; then
+            echo "ERROR: index.html not found in build output!"
+            ls -la docs/out/
+            exit 1
+          fi
+          echo "Build verification:"
+          ls -la gh-pages-build/ | head -10
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
