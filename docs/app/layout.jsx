@@ -29,14 +29,47 @@ const footer = (
   </Footer>
 )
 
+function sortPageMap(pageMap) {
+  const order = [
+    'quick-start',
+    'installation',
+    'concepts',
+    'tools',
+    'use-cases',
+    'examples',
+    'guides',
+    'development'
+  ]
+  
+  return pageMap.map(item => {
+    if (item.children) {
+      return {
+        ...item,
+        children: item.children.slice().sort((a, b) => {
+          const indexA = order.indexOf(a.name)
+          const indexB = order.indexOf(b.name)
+          if (indexA === -1 && indexB === -1) return 0
+          if (indexA === -1) return 1
+          if (indexB === -1) return -1
+          return indexA - indexB
+        }).map(child => child.children ? { ...child, children: child.children } : child)
+      }
+    }
+    return item
+  })
+}
+
 export default async function RootLayout({ children }) {
+  const pageMap = await getPageMap()
+  const sortedPageMap = sortPageMap(pageMap)
+  
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <Head />
       <body>
         <Layout
           navbar={navbar}
-          pageMap={await getPageMap()}
+          pageMap={sortedPageMap}
           docsRepositoryBase="https://github.com/Tridz/agentflo/tree/main/docs"
           footer={footer}
         >

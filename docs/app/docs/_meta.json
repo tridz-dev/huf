@@ -1,10 +1,33 @@
 {
+  "*": {
+    "type": "page",
+    "theme": {
+      "sidebar": false,
+      "typesetting": "article"
+    }
+  },
+  "index": {
+    "type": "separator",
+    "title": "Getting Started"
+  },
   "quick-start": "Quick Start",
   "installation": "Installation",
+  "index-concepts": {
+    "type": "separator",
+    "title": "Learn"
+  },
   "concepts": "Core Concepts",
   "tools": "Working with Tools",
+  "index-examples": {
+    "type": "separator",
+    "title": "Examples & Guides"
+  },
   "use-cases": "Use Cases",
   "examples": "Example Agents",
   "guides": "Guides",
+  "index-dev": {
+    "type": "separator",
+    "title": "Advanced"
+  },
   "development": "Development"
 }
