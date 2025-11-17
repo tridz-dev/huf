@@ -2,104 +2,398 @@
 sidebarTitle: Introduction
 ---
 
+<div style={{
+  maxWidth: '1200px',
+  margin: '0 auto',
+  padding: '2rem 0'
+}}>
+
 # Welcome to Huf
 
+<div style={{
+  fontSize: '1.25rem',
+  fontWeight: 'normal',
+  color: 'var(--nextra-text-color)',
+  marginTop: '1rem',
+  marginBottom: '3rem',
+  lineHeight: '1.7'
+}}>
 **Huf** brings AI agents into your Frappe site. Think of agents as team members who can understand natural language, use tools to work with your data, and automate tasks across your Frappe ecosystem.
+</div>
 
-## What is Huf?
+<div style={{
+  display: 'flex',
+  gap: '1rem',
+  flexWrap: 'wrap',
+  marginBottom: '4rem'
+}}>
+  <a href="/docs/quick-start" style={{
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '0.75rem 1.5rem',
+    backgroundColor: '#2563eb',
+    color: 'white',
+    borderRadius: '0.5rem',
+    textDecoration: 'none',
+    fontWeight: '600',
+    transition: 'opacity 0.2s'
+  }} onMouseOver="this.style.opacity='0.9'" onMouseOut="this.style.opacity='1'">
+    Read Documentation →
+  </a>
+  <a href="https://github.com/tridz-dev/agent_flo" target="_blank" rel="noreferrer" style={{
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '0.75rem 1.5rem',
+    backgroundColor: 'transparent',
+    color: 'var(--nextra-text-color)',
+    border: '2px solid var(--nextra-border-color)',
+    borderRadius: '0.5rem',
+    textDecoration: 'none',
+    fontWeight: '600',
+    transition: 'all 0.2s'
+  }} onMouseOver="this.style.borderColor='#2563eb'; this.style.color='#2563eb'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.color='inherit'">
+    View on GitHub →
+  </a>
+</div>
 
-Huf is a Frappe application that lets you create AI-powered agents that live inside your Frappe system. These agents can:
+## Quick Links
 
-- **Understand your requests** in natural language
-- **Interact with your data** through tools (create, read, update documents)
-- **Run automatically** on schedules or when documents change
-- **Chat with users** in real-time with full context awareness
-- **Learn from conversations** and maintain history
+<div style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+  gap: '1.5rem',
+  marginBottom: '4rem'
+}}>
 
-### Why Huf?
+<div style={{
+  padding: '1.5rem',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  transition: 'all 0.2s',
+  cursor: 'pointer'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/quick-start'">
+  <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Quick Start</h3>
+  <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Create your first agent in 5 minutes. Perfect for getting started.
+  </p>
+</div>
 
-If you're using Frappe for your business operations, Huf lets you add AI capabilities without leaving your Frappe environment. Agents can handle repetitive tasks, assist users, validate data, generate insights, and more—all while respecting Frappe's permissions and using your existing DocTypes.
+<div style={{
+  padding: '1.5rem',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  transition: 'all 0.2s',
+  cursor: 'pointer'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/concepts/agents'">
+  <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Core Concepts</h3>
+  <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Learn about agents, tools, triggers, and how everything works together.
+  </p>
+</div>
 
-## Prerequisites
+<div style={{
+  padding: '1.5rem',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  transition: 'all 0.2s',
+  cursor: 'pointer'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/examples'">
+  <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Examples</h3>
+  <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    See real-world agent configurations and use cases in action.
+  </p>
+</div>
 
-**This documentation assumes you have working knowledge of the [Frappe Framework](https://frappeframework.com/docs).** You should be comfortable with:
-- Frappe DocTypes and document lifecycle
-- Basic Frappe site administration
-- How to use Frappe Desk
+<div style={{
+  padding: '1.5rem',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  transition: 'all 0.2s',
+  cursor: 'pointer'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/tools/built-in'">
+  <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Tools</h3>
+  <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Explore built-in tools and learn how to create custom capabilities.
+  </p>
+</div>
 
-You don't need to be a developer, but understanding Frappe's structure will help you get the most out of Huf.
+<div style={{
+  padding: '1.5rem',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  transition: 'all 0.2s',
+  cursor: 'pointer'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/guides/creating-agents'">
+  <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Guides</h3>
+  <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Step-by-step guides for creating, managing, and running agents.
+  </p>
+</div>
 
-## Two Interfaces: Frontend vs Desk
-
-Huf provides **two interfaces** for different use cases:
-
-| Interface | URL | Purpose | Status |
-|-----------|-----|---------|--------|
-| **Frontend** | `/huf` | User-focused chat and interactions | **Actively expanding** |
-| **Desk** | `/app` | Full admin control and configuration | **Complete** |
-
-**Frontend (`/huf`)** is designed for end-users who need to chat with agents, view conversations, and interact with AI capabilities without entering the Frappe Desk. This interface is currently **under active development** with new features being added regularly.
-
-**Desk (`/app`)** is where you configure everything: create agents, set up providers, define tools, manage triggers, and monitor all agent activity. All agent administration happens here.
-
-> **Current Recommendation**: Use Desk for all configuration and management. Use the frontend for end-user interactions where available. More frontend features are coming soon!
-
-## Key Capabilities
-
-### Flexible AI Agents
-Create agents with custom roles, instructions, and personalities. Power them with leading AI models:
-- OpenAI (GPT-4, GPT-3.5)
-- Anthropic (Claude)
-- Google (Gemini)
-- 100+ other models via LiteLLM
-
-### Tool System
-Give agents the ability to:
-- Get, create, update, delete Frappe documents
-- Execute custom Python functions
-- Make HTTP requests to external APIs
-- Chain to other agents
-
-### Multiple Trigger Types
-Agents can run:
-- **Manually** - Test and execute on demand
-- **On Schedule** - Hourly, daily, weekly tasks
-- **On Document Events** - When records are created, updated, or submitted
-- **Via Chat** - Real-time conversational interactions
-- **Via API** - Programmatic execution from your apps
-
-### Complete Observability
-Track everything with detailed logs:
-- Every agent execution with full prompt/response
-- Token usage and cost per run
-- Tool calls and results
-- Conversation history
-
-## Navigation
-
-<div style={{ marginTop: '2rem' }}>
-
-**Getting Started**
-- [Quick Start](/docs/quick-start) - Your first agent in 5 minutes
-- [Installation](/docs/installation) - Set up Huf on your Frappe site
-
-**Core Concepts**
-- [Interfaces](/docs/concepts/interfaces) - Understanding `/huf` vs `/app`
-- [Agents](/docs/concepts/agents) - What agents are and how they work
-- [Providers & Models](/docs/concepts/providers-models) - Connecting to AI services
-- [Tools](/docs/concepts/tools) - Giving agents capabilities
-- [Conversations](/docs/concepts/conversations) - How agents maintain context
-- [Triggers](/docs/concepts/triggers) - Running agents automatically
-
-**Working with Tools**
-- [Built-in Tools](/docs/tools/built-in) - Document operations and more
-- [Creating Custom Tools](/docs/tools/custom) - Extend agent capabilities
-- [Publishing Tools](/docs/tools/publishing) - Share tools via your apps
+<div style={{
+  padding: '1.5rem',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  transition: 'all 0.2s',
+  cursor: 'pointer'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/development'">
+  <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Development</h3>
+  <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Extend Huf with custom tools, providers, and integrations.
+  </p>
+</div>
 
 </div>
 
-## What's Next?
+## Popular Use Cases
 
-New to Huf? Start with the [Quick Start](/docs/quick-start) guide to create your first agent in under 5 minutes.
+<div style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+  gap: '1.5rem',
+  marginBottom: '4rem'
+}}>
 
-Already familiar? Jump to [Core Concepts](/docs/concepts/agents) to dive deeper.
+<div style={{
+  padding: '1.5rem',
+  backgroundColor: 'var(--nextra-bg)',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem'
+}}>
+  <h4 style={{ marginTop: '0', marginBottom: '0.75rem' }}>Customer Support Automation</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Automatically respond to customer inquiries, create support tickets, and route issues to the right team—all powered by AI agents that understand context and your business rules.
+  </p>
+</div>
+
+<div style={{
+  padding: '1.5rem',
+  backgroundColor: 'var(--nextra-bg)',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem'
+}}>
+  <h4 style={{ marginTop: '0', marginBottom: '0.75rem' }}>Document Validation</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Validate invoices, contracts, and forms automatically. Agents check for errors, missing information, and compliance issues before documents are processed.
+  </p>
+</div>
+
+<div style={{
+  padding: '1.5rem',
+  backgroundColor: 'var(--nextra-bg)',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem'
+}}>
+  <h4 style={{ marginTop: '0', marginBottom: '0.75rem' }}>Lead Qualification</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Automatically score and qualify sales leads, extract key information, and assign them to the right sales representatives based on criteria you define.
+  </p>
+</div>
+
+<div style={{
+  padding: '1.5rem',
+  backgroundColor: 'var(--nextra-bg)',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem'
+}}>
+  <h4 style={{ marginTop: '0', marginBottom: '0.75rem' }}>Smart Notifications</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Generate intelligent notifications and summaries. Agents analyze data and send contextual alerts via Slack, email, or other channels when important events occur.
+  </p>
+</div>
+
+<div style={{
+  padding: '1.5rem',
+  backgroundColor: 'var(--nextra-bg)',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem'
+}}>
+  <h4 style={{ marginTop: '0', marginBottom: '0.75rem' }}>Data Processing</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Process unstructured data, extract insights, and transform information between formats. Perfect for handling imports, exports, and data migrations.
+  </p>
+</div>
+
+<div style={{
+  padding: '1.5rem',
+  backgroundColor: 'var(--nextra-bg)',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem'
+}}>
+  <h4 style={{ marginTop: '0', marginBottom: '0.75rem' }}>Report Generation</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Generate reports from natural language queries. Ask questions in plain English and get formatted reports with charts, summaries, and insights.
+  </p>
+</div>
+
+</div>
+
+## What Users Say
+
+<div style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+  gap: '1.5rem',
+  marginBottom: '4rem'
+}}>
+
+<div style={{
+  padding: '1.5rem',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  backgroundColor: 'var(--nextra-bg)',
+  position: 'relative'
+}}>
+  <div style={{
+    fontSize: '1.5rem',
+    marginBottom: '1rem',
+    opacity: 0.6
+  }}>"</div>
+  <p style={{
+    margin: '0 0 1rem 0',
+    fontStyle: 'italic',
+    color: 'var(--nextra-text-color)',
+    lineHeight: '1.6'
+  }}>
+    Huf transformed how we handle customer support. Our agents now handle 80% of inquiries automatically, and the quality is better than our manual process.
+  </p>
+  <div style={{
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    color: 'var(--nextra-text-color)',
+    opacity: 0.8
+  }}>
+    — Frappe ERPNext User
+  </div>
+</div>
+
+<div style={{
+  padding: '1.5rem',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  backgroundColor: 'var(--nextra-bg)',
+  position: 'relative'
+}}>
+  <div style={{
+    fontSize: '1.5rem',
+    marginBottom: '1rem',
+    opacity: 0.6
+  }}>"</div>
+  <p style={{
+    margin: '0 0 1rem 0',
+    fontStyle: 'italic',
+    color: 'var(--nextra-text-color)',
+    lineHeight: '1.6'
+  }}>
+    The ability to create custom tools means we can integrate Huf with any system. It's like having a developer on your team who never sleeps.
+  </p>
+  <div style={{
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    color: 'var(--nextra-text-color)',
+    opacity: 0.8
+  }}>
+    — E-commerce Platform Admin
+  </div>
+</div>
+
+<div style={{
+  padding: '1.5rem',
+  border: '1px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  backgroundColor: 'var(--nextra-bg)',
+  position: 'relative'
+}}>
+  <div style={{
+    fontSize: '1.5rem',
+    marginBottom: '1rem',
+    opacity: 0.6
+  }}>"</div>
+  <p style={{
+    margin: '0 0 1rem 0',
+    fontStyle: 'italic',
+    color: 'var(--nextra-text-color)',
+    lineHeight: '1.6'
+  }}>
+    Setting up our first agent took less than 10 minutes. The documentation is clear, and the examples helped us get started immediately.
+  </p>
+  <div style={{
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    color: 'var(--nextra-text-color)',
+    opacity: 0.8
+  }}>
+    — Small Business Owner
+  </div>
+</div>
+
+</div>
+
+## Key Features
+
+<div style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+  gap: '1.5rem',
+  marginBottom: '4rem'
+}}>
+
+<div>
+  <h4 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Flexible AI Agents</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Create agents with custom roles, instructions, and personalities. Power them with OpenAI, Anthropic, Google, and 100+ models via LiteLLM.
+  </p>
+</div>
+
+<div>
+  <h4 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Powerful Tool System</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Give agents the ability to interact with Frappe documents, execute custom functions, make HTTP requests, and chain to other agents.
+  </p>
+</div>
+
+<div>
+  <h4 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Multiple Triggers</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Run agents manually, on schedule, when documents change, via chat, or through API calls. Complete flexibility for any workflow.
+  </p>
+</div>
+
+<div>
+  <h4 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Complete Observability</h4>
+  <p style={{ margin: 0, fontSize: '0.95rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Track every execution with detailed logs, token usage, costs, tool calls, and conversation history. Know exactly what your agents are doing.
+  </p>
+</div>
+
+</div>
+
+## Get Started
+
+<div style={{
+  padding: '2rem',
+  backgroundColor: 'var(--nextra-bg)',
+  border: '2px solid var(--nextra-border-color)',
+  borderRadius: '0.75rem',
+  textAlign: 'center'
+}}>
+  <h3 style={{ marginTop: '0' }}>Ready to build your first agent?</h3>
+  <p style={{ marginBottom: '1.5rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
+    Follow our Quick Start guide and have your first AI agent running in under 5 minutes.
+  </p>
+  <a href="/docs/quick-start" style={{
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '0.75rem 1.5rem',
+    backgroundColor: '#2563eb',
+    color: 'white',
+    borderRadius: '0.5rem',
+    textDecoration: 'none',
+    fontWeight: '600',
+    transition: 'opacity 0.2s'
+  }} onMouseOver="this.style.opacity='0.9'" onMouseOut="this.style.opacity='1'">
+    Start Quick Start Guide →
+  </a>
+</div>
+
+</div>

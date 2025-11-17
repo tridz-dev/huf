@@ -2,9 +2,9 @@
 export default {
   logo: <span style={{ fontWeight: 800 }}>Huf</span>,
   project: {
-    link: 'https://github.com/Tridz/agentflo'
+    link: 'https://github.com/tridz-dev/agent_flo'
   },
-  docsRepositoryBase: 'https://github.com/Tridz/agentflo/tree/main/docs',
+  docsRepositoryBase: 'https://github.com/tridz-dev/agent_flo/tree/main/docs',
   search: {
     placeholder: 'Search documentation...'
   },
@@ -27,6 +27,6 @@ export default {
     next: true
   },
   footer: {
-    text: `MIT ${new Date().getFullYear()} © Huf. Built with Nextra.`
+    text: `MIT ${new Date().getFullYear()} © Tridz Technologies Ltd. Built with Nextra on Frappe.`
   }
 }
