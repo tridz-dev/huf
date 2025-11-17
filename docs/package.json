@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build && rm -rf ../agentflo/public/docs && mkdir -p ../agentflo/public/docs && cp -r out/* ../agentflo/public/docs/ && (echo '{% raw %}'; sed 's|href=\"/_next|href=\"/assets/agentflo/docs/_next|g; s|src=\"/_next|src=\"/assets/agentflo/docs/_next|g' ../agentflo/public/docs/index.html; echo '{% endraw %}') > ../agentflo/www/docs.html",
+    "build:pages": "GITHUB_PAGES=true next build",
     "start": "next start"
   },
   "dependencies": {
