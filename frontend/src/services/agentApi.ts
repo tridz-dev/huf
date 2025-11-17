@@ -229,6 +229,17 @@ export async function createAgentTrigger(data: Partial<AgentTriggerDoc>): Promis
 }
 
 /**
+ * Delete an agent trigger
+ */
+export async function deleteAgentTrigger(name: string): Promise<void> {
+  try {
+    await db.deleteDoc(doctype['Agent Trigger'], name);
+  } catch (error) {
+    handleFrappeError(error, `Error deleting trigger ${name}`);
+  }
+}
+
+/**
  * Update an agent trigger
  */
 export async function updateAgentTrigger(name: string, data: Partial<AgentTriggerDoc>): Promise<AgentTriggerDoc> {
