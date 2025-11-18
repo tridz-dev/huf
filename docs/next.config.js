@@ -4,6 +4,7 @@ const withNextra = nextra({})
 
 // For GitHub Pages, use repo name as basePath
 // For Frappe, use /huf/docs (mapped via website_route_rules in hooks.py)
+// For local serving, use no basePath/assetPrefix
 // Default to GitHub Pages if GITHUB_PAGES env var is set
 // Extract repository name from GITHUB_REPOSITORY (format: owner/repo-name)
 // const getGitHubPagesBasePath = () => {
@@ -16,15 +17,23 @@ const withNextra = nextra({})
 //   return '/agent_flo'
 // }
 
-const basePath = process.env.GITHUB_PAGES === 'true' 
+// LOCAL_SERVE=true disables basePath/assetPrefix for direct serving of out folder
+const isLocalServe = process.env.LOCAL_SERVE === 'true'
+
+const basePath = isLocalServe
   ? ''
-  : '/huf/docs'
+  : process.env.GITHUB_PAGES === 'true' 
+    ?''
+    : '/huf/docs'
 
 // For Frappe, assets are served from /assets/agentflo/docs but pages are at /huf/docs
 // So we use assetPrefix to point assets to the correct location
-const assetPrefix = process.env.GITHUB_PAGES === 'true'
+// For local serving, no assetPrefix needed
+const assetPrefix = isLocalServe
   ? undefined
-  : '/assets/agentflo/docs'
+  : process.env.GITHUB_PAGES === 'true'
+    ? undefined
+    : '/assets/agentflo/docs'
 
 export default withNextra({
   output: 'export',
