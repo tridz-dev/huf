@@ -7,6 +7,7 @@ const withNextra = nextra({})
 // Default to GitHub Pages if GITHUB_PAGES env var is set
 // Extract repository name from GITHUB_REPOSITORY (format: owner/repo-name)
 const getGitHubPagesBasePath = () => {
+  return "/"
   if (process.env.GITHUB_REPOSITORY) {
     const repoName = process.env.GITHUB_REPOSITORY.split('/')[1]
     return `/${repoName}`
