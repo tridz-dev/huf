@@ -67,13 +67,49 @@ Log in to your Frappe site. Click the **App Switcher** (grid icon in the top-rig
 
 ## Installation on Frappe Cloud
 
-Frappe Cloud is managed Frappe hosting. Installation is streamlined:
+Frappe Cloud is managed Frappe hosting. You can install Huf using the web interface or via console commands.
 
-### 1. Access Console
+### Method 1: Using the Web Interface (Recommended)
+
+Frappe Cloud provides a user-friendly interface for adding apps to your site.
+
+#### 1. Access Marketplace
+
+Log in to [frappecloud.com](https://frappecloud.com), navigate to your site, and open the **Marketplace** or **Apps** section. Click **Add Marketplace App** to open the app installation interface.
+
+![Add Marketplace App interface showing available apps](/images/add-marketplace-app.png)
+
+The marketplace shows available apps you can install. You can search for apps or add them directly from GitHub.
+
+#### 2. Add from GitHub
+
+Click the **Add from GitHub** button (highlighted in the top-right corner of the marketplace interface).
+
+![Add app from GitHub modal](/images/add-from-github.png)
+
+In the modal that appears:
+
+1. Select the **"Public GitHub App"** tab (if not already selected)
+2. Enter the GitHub URL: `https://github.com/tridz-dev/agent_flo`
+3. Select the branch you want to install
+4. The system will automatically detect the app as "AgentFlo (agentflo)"
+5. Click **Add App** to begin installation
+
+The app will be automatically installed and configured on your site.
+
+#### 3. Verify
+
+After installation completes, refresh your site, open the **App Switcher**, and click **Huf** or **AgentFlo**.
+
+### Method 2: Using Console Commands
+
+Alternatively, you can install Huf using console commands:
+
+#### 1. Access Console
 
 Log in to [frappecloud.com](https://frappecloud.com), go to your site, and open the **Console** (terminal icon).
 
-### 2. Install
+#### 2. Install
 
 Run these commands in the console:
 
@@ -86,7 +122,7 @@ bench restart
 
 > `$CI_COMMIT_REF_NAME` is auto-set to your site name on Frappe Cloud.
 
-### 3. Verify
+#### 3. Verify
 
 Refresh your site, open the **App Switcher**, and click **Huf**.
 
