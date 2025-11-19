@@ -8,14 +8,23 @@ from frappe import _, is_whitelisted
 
 from frappe.model.document import Document
 
+import re
 
 class AgentToolFunction(Document):
 	def before_validate(self):
 		self.validate_reference_doctype()
 		self.validate_fields_for_doctype()
 		self.prepare_function_params()
-
 		self.validate_json()
+		self.validate_tool_name()
+
+	def validate_tool_name(self):
+		if not re.match(r'^[a-zA-Z0-9_-]{1,128}$', self.tool_name or ""):
+			frappe.throw(
+				_("Tool name must contain only letters, numbers, underscore (_) or hyphen (-), no spaces, "
+				"and be at most 128 characters long.")
+			)
+
 
 	def validate_reference_doctype(self):
 		if not self.reference_doctype:
