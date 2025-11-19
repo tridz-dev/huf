@@ -19,6 +19,10 @@ from .tool_functions import (
     delete_documents,submit_document, cancel_document,
     get_value, set_value, get_report_result,attach_file_to_document
 )
+import re
+import hashlib
+from datetime import datetime, timedelta
+
 
 def create_agent_tools(agent) -> list[FunctionTool]:
     """
@@ -129,14 +133,14 @@ def create_agent_tools(agent) -> list[FunctionTool]:
 
 
 def create_function_tool(
-	name: str,
-	description: str,
-	tool_name: str,
-	parameters: dict[str, Any],
-	extra_args: dict[str, Any] = None,
+    name: str,
+    description: str,
+    tool_name: str,
+    parameters: dict[str, Any],
+    extra_args: dict[str, Any] = None,
 ) -> FunctionTool:
-	"""
-	Create a FunctionTool for AgentFlo Tool functions
+    """
+    Create a FunctionTool for AgentFlo Tool functions
 
 	Args:
 	    name: Tool name
@@ -147,58 +151,63 @@ def create_function_tool(
 
 	Returns:
 	    FunctionTool: Function tool
-	"""
+    """
 
-	function = get_function_from_name(tool_name)
+    function = get_function_from_name(tool_name)
 
-	if not function:
-		return None
+    if not function:
+        return None
 
-	try:
-		_extra_args = extra_args or {}
-		_function = function
+    try:
+        _extra_args = extra_args or {}
+        _function = function
 
-		import hashlib
-		from datetime import datetime, timedelta
+        async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
+            try:
+                if args_json is None and isinstance(ctx, str):
+                    args_json = ctx
+                    ctx = None
 
-		async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
-			try:
-				if args_json is None and isinstance(ctx, str):
-					args_json = ctx
-					ctx = None
+                args_dict = json.loads(args_json or "{}")
 
-				args_dict = json.loads(args_json or "{}")
+                for key, value in _extra_args.items():
+                    if key not in args_dict:
+                        args_dict[key] = value
 
-				for key, value in _extra_args.items():
-					if key not in args_dict:
-						args_dict[key] = value
+                if _function.__name__ in ["handle_get_request", "handle_post_request"]:
+                    args_dict["tool_name"] = name
 
-				if _function.__name__ in ["handle_get_request", "handle_post_request"]:
-					args_dict["tool_name"] = name
+                result = _function(**args_dict)
 
-				result = _function(**args_dict)
+                if hasattr(result, "as_dict"):
+                    result = result.as_dict()
 
-				if hasattr(result, "as_dict"):
-					result = result.as_dict()
+                return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
 
-				return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
+            except Exception as e:
+                frappe.log_error(f"Error in on_invoke_tool for tool '{name}': {str(e)}", "SDK Functions Debug")
+                return json.dumps({"error": str(e)})
 
-			except Exception as e:
-				frappe.log_error("SDK Functions Debug", f"Error in on_invoke_tool: {str(e)}")
-				return json.dumps({"error": str(e)})
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', (name or ""))
+        if len(safe_name) > 128:
+            safe_name = safe_name[:128]
 
-		tool = FunctionTool(
-			name=name,
-			description=description,
-			params_json_schema=parameters,
-			on_invoke_tool=on_invoke_tool,
-			strict_json_schema=False
-		)
+        if safe_name != name:
+            frappe.log("SDK Functions Debug", f"Tool runtime name '{safe_name}' created for friendly name '{name}'")
 
-		return tool
-	except Exception as e:
-		frappe.log_error("SDK Functions Debug", f"Error creating FunctionTool for {name}: {str(e)}")
-		return None
+        tool = FunctionTool(
+            name=safe_name,
+            description=description,
+            params_json_schema=parameters,
+            on_invoke_tool=on_invoke_tool,
+            strict_json_schema=False
+        )
+
+        return tool
+
+    except Exception as e:
+        frappe.log_error(f"Error creating FunctionTool for {name}: {str(e)}", "SDK Functions Debug")
+        return None
 
 
 def get_function_from_name(tool_name: str) -> Callable:

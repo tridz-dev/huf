@@ -1,0 +1,28 @@
+{
+  "name": "huf-docs",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "postbuild": "npx pagefind --site out --output-subdir _pagefind",
+    "build": "next build && npx pagefind --site out --output-subdir _pagefind && rm -rf ../agentflo/public/docs && mkdir -p ../agentflo/public/docs && cp -r out/* ../agentflo/public/docs/ && (echo '{% raw %}'; cat ../agentflo/public/docs/index.html; echo '{% endraw %}') > ../agentflo/www/docs.html",
+    "build:local": "LOCAL_SERVE=true next build && npx pagefind --site out --output-subdir _pagefind",
+    "build:pages": "GITHUB_PAGES=true next build && npx pagefind --site out --output-subdir _pagefind",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^15.0.0",
+    "nextra": "^4.0.0",
+    "nextra-theme-docs": "^4.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "pagefind": "^1.0.0",
+    "typescript": "^5.0.0"
+  }
+}

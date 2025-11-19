@@ -1,0 +1,448 @@
+---
+sidebarTitle: Use Cases
+---
+
+# Common Use Cases
+
+Huf agents can automate a wide variety of tasks across your Frappe system. Here are common use cases to inspire your own implementations.
+
+## Customer Support Automation
+
+**Problem:** Support team spends too much time on repetitive questions and ticket routing.
+
+**Solution:** AI agent handles common inquiries, routes complex issues, and provides instant responses.
+
+### Capabilities
+
+- **Answer FAQs**: Common questions about products, services, policies
+- **Ticket Routing**: Analyze tickets and assign to correct team
+- **Information Lookup**: Retrieve customer history, order status, account details
+- **Escalation**: Identify urgent issues and escalate appropriately
+- **Follow-up**: Schedule follow-ups and reminders
+
+### Agent Configuration
+
+**Tools Needed:**
+- Get Document (Customer, Support Ticket)
+- Get List (Support Ticket with filters)
+- Create Document (Support Ticket)
+- Update Document (Support Ticket)
+- HTTP Request (for Slack/Email notifications)
+
+**Example Instructions:**
+```
+You are a customer support assistant. Your role is to:
+1. Answer common questions about products, orders, and policies
+2. Look up customer information when requested
+3. Create support tickets for issues you cannot resolve
+4. Route tickets to appropriate teams based on issue type
+5. Escalate urgent issues immediately
+
+Always be polite, professional, and helpful. If you don't know 
+something, create a support ticket and let the user know.
+```
+
+### Benefits
+
+- **24/7 Availability**: Instant responses anytime
+- **Faster Resolution**: Common issues resolved immediately
+- **Better Routing**: Tickets go to right team first time
+- **Consistent Quality**: Same high-quality responses every time
+- **Team Focus**: Human agents handle complex cases
+
+---
+
+## Document Automation
+
+**Problem:** Manual document processing is slow, error-prone, and doesn't scale.
+
+**Solution:** Agents validate, enrich, and route documents automatically.
+
+### Capabilities
+
+- **Form Validation**: Check required fields, formats, business rules
+- **Data Enrichment**: Look up and add missing information
+- **Auto-routing**: Send documents to correct approvers/workflows
+- **Duplicate Detection**: Identify and flag duplicate entries
+- **Auto-correction**: Fix common errors automatically
+
+### Agent Configuration
+
+**Tools Needed:**
+- Get Document (various DocTypes)
+- Get List (for duplicate checking)
+- Create Document (for related records)
+- Update Document (for corrections)
+- Submit Document (for approvals)
+
+**Example: Invoice Validation Agent**
+
+**Instructions:**
+```
+You are an invoice validation agent. When invoices are submitted:
+1. Verify pricing matches current price list
+2. Check customer credit limit
+3. Validate tax calculations
+4. Ensure all required fields are filled
+5. Check for duplicate invoices
+
+If validation passes, add a comment confirming validation.
+If issues are found, add comments with specific problems and 
+notify the accounts team.
+```
+
+**Trigger:** On Submit of Sales Invoice DocType
+
+### Benefits
+
+- **Faster Processing**: Instant validation vs manual review
+- **Error Reduction**: Catch issues before submission
+- **Consistency**: Same rules applied every time
+- **Audit Trail**: All validations logged
+- **Scalability**: Handle any volume
+
+---
+
+## Data Processing Workflows
+
+**Problem:** Data needs to be transformed, calculated, or aggregated across multiple sources.
+
+**Solution:** Agents process data, perform calculations, and generate reports automatically.
+
+### Capabilities
+
+- **Data Aggregation**: Combine data from multiple sources
+- **Calculations**: Perform complex calculations and formulas
+- **Data Transformation**: Convert formats, normalize data
+- **Report Generation**: Create summaries and analytics
+- **Data Synchronization**: Keep related records in sync
+
+### Agent Configuration
+
+**Tools Needed:**
+- Get List (for data retrieval)
+- Get Document (for details)
+- Create Document (for reports)
+- Custom Tools (for calculations)
+- HTTP Request (for external data)
+
+**Example: Sales Report Generator**
+
+**Instructions:**
+```
+Generate daily sales reports by:
+1. Retrieving all sales invoices from today
+2. Calculating totals by customer, product, and region
+3. Comparing to previous day and week
+4. Identifying top performers and trends
+5. Creating a summary document
+6. Sending report via email to sales team
+
+Format the report clearly with sections for:
+- Overall summary
+- Top customers
+- Top products
+- Regional breakdown
+- Trends and insights
+```
+
+**Trigger:** Scheduled (Daily at 9 AM)
+
+### Benefits
+
+- **Time Savings**: Automated report generation
+- **Accuracy**: No manual calculation errors
+- **Consistency**: Same format every time
+- **Timeliness**: Reports ready when needed
+- **Insights**: AI can identify patterns and trends
+
+---
+
+## Smart Notifications
+
+**Problem:** Important events happen but stakeholders aren't notified promptly or appropriately.
+
+**Solution:** Agents monitor events and send intelligent, contextual notifications.
+
+### Capabilities
+
+- **Event Monitoring**: Watch for specific document changes
+- **Contextual Alerts**: Include relevant information in notifications
+- **Multi-channel**: Send via Slack, Email, SMS, etc.
+- **Smart Filtering**: Only notify when conditions are met
+- **Escalation**: Escalate if no response received
+
+### Agent Configuration
+
+**Tools Needed:**
+- Get Document (for context)
+- Get List (for related records)
+- HTTP Request (for Slack/Email/SMS)
+- Custom Tools (for notification logic)
+
+**Example: High-Priority Ticket Alert**
+
+**Instructions:**
+```
+When a high-priority support ticket is created:
+1. Retrieve ticket details
+2. Check customer information and history
+3. Determine appropriate team based on issue type
+4. Format notification with:
+   - Ticket ID and subject
+   - Customer name and tier
+   - Issue description
+   - Suggested assignee
+5. Send to relevant Slack channel
+6. Also email the team lead if customer is VIP
+
+Only send notifications for tickets marked "High" or "Critical" priority.
+```
+
+**Trigger:** After Insert on Support Ticket (with condition: priority = "High")
+
+### Benefits
+
+- **Immediate Alerts**: Instant notification of important events
+- **Context Rich**: Include relevant information automatically
+- **Right Audience**: Notify correct people based on context
+- **Reduced Noise**: Only notify when necessary
+- **Multi-channel**: Reach people where they are
+
+---
+
+## Lead Management and Qualification
+
+**Problem:** Leads come in but aren't qualified, scored, or assigned efficiently.
+
+**Solution:** Agents analyze leads, score them, and route to appropriate sales reps.
+
+### Capabilities
+
+- **Lead Scoring**: Evaluate leads based on multiple criteria
+- **Data Enrichment**: Look up company info, social profiles
+- **Assignment Logic**: Assign to best sales rep based on territory, workload, expertise
+- **Follow-up Scheduling**: Set appropriate follow-up dates
+- **Qualification**: Determine if lead meets criteria
+
+### Agent Configuration
+
+**Tools Needed:**
+- Get Document (Lead, Customer, Territory)
+- Get List (Sales Person, existing leads)
+- Create Document (Lead, Task)
+- Update Document (Lead assignment)
+- Custom Tools (for scoring algorithm)
+
+**Example: Lead Qualifier Agent**
+
+**Instructions:**
+```
+When a new lead is created:
+1. Score the lead based on:
+   - Company size (from company_name lookup)
+   - Industry match with our ideal customer profile
+   - Source quality (referral > website > cold)
+   - Budget indicators in description
+2. Assign to sales rep based on:
+   - Territory match
+   - Current workload (fewer active leads = higher priority)
+   - Industry expertise
+3. Set follow-up date:
+   - Hot leads: Same day
+   - Warm leads: Next business day
+   - Cold leads: Next week
+4. Add internal notes with scoring rationale
+5. Notify assigned sales rep
+```
+
+**Trigger:** After Insert on Lead DocType
+
+### Benefits
+
+- **Faster Response**: Hot leads get immediate attention
+- **Better Assignment**: Leads go to right rep automatically
+- **Consistent Scoring**: Same criteria applied to all leads
+- **Higher Conversion**: Better qualification = better close rates
+- **Time Savings**: Sales reps focus on qualified leads
+
+---
+
+## Report Generation from Natural Language
+
+**Problem:** Users need reports but don't know how to create them or use complex report builders.
+
+**Solution:** Agents understand natural language requests and generate reports automatically.
+
+### Capabilities
+
+- **Natural Language Understanding**: Parse user requests like "Show me sales this month"
+- **Query Building**: Convert requests to database queries
+- **Data Retrieval**: Fetch relevant data
+- **Formatting**: Present data in readable format
+- **Visualization**: Suggest charts or graphs when appropriate
+
+### Agent Configuration
+
+**Tools Needed:**
+- Get List (with dynamic filters)
+- Get Document (for details)
+- Custom Tools (for report formatting)
+- HTTP Request (for exporting to Excel/PDF)
+
+**Example: Report Generator Agent**
+
+**Instructions:**
+```
+You are a report generation assistant. Users ask for reports in 
+natural language, and you create them.
+
+When users request reports:
+1. Understand what data they want (sales, inventory, customers, etc.)
+2. Determine time period (today, this week, this month, custom range)
+3. Identify filters (by customer, product, region, etc.)
+4. Retrieve the data using appropriate tools
+5. Format results clearly:
+   - Summary statistics
+   - Detailed breakdown
+   - Comparisons if requested
+6. Offer to export to Excel or PDF if needed
+
+Be conversational and ask clarifying questions if the request 
+is ambiguous.
+```
+
+**Tools:**
+- `get_list` (for data retrieval)
+- `generate_report` (custom tool for formatting)
+- `export_to_excel` (custom tool)
+
+### Benefits
+
+- **Accessibility**: Non-technical users can get reports
+- **Speed**: Instant report generation
+- **Flexibility**: Handle varied requests
+- **Natural Interaction**: Users ask naturally, not query syntax
+- **Time Savings**: No need to build reports manually
+
+---
+
+## Additional Use Cases
+
+### Inventory Management
+- **Stock Monitoring**: Alert when items below reorder level
+- **Demand Forecasting**: Predict future demand based on history
+- **Purchase Suggestions**: Recommend what to order and when
+- **Warehouse Optimization**: Suggest optimal warehouse allocation
+
+### Financial Operations
+- **Invoice Validation**: Check invoices before payment
+- **Payment Matching**: Match payments to invoices automatically
+- **Budget Monitoring**: Track spending against budgets
+- **Expense Categorization**: Automatically categorize expenses
+
+### HR Automation
+- **Resume Screening**: Analyze resumes and score candidates
+- **Leave Balance Tracking**: Monitor and report leave balances
+- **Performance Summaries**: Generate performance review summaries
+- **Onboarding Automation**: Guide new employees through onboarding
+
+### Sales Operations
+- **Opportunity Scoring**: Score sales opportunities
+- **Quote Generation**: Create quotes from requirements
+- **Contract Review**: Review contracts for key terms
+- **Pipeline Management**: Update pipeline based on activities
+
+### Operations
+- **Quality Control**: Validate production quality
+- **Maintenance Scheduling**: Schedule equipment maintenance
+- **Compliance Checking**: Verify regulatory compliance
+- **Documentation**: Auto-generate process documentation
+
+## Choosing the Right Use Case
+
+### Start Simple
+
+**Good First Use Cases:**
+- FAQ automation
+- Simple data lookups
+- Basic validation
+- Notification sending
+
+**Why:** Low risk, high value, easy to test
+
+### Build Complexity
+
+**Intermediate Use Cases:**
+- Multi-step workflows
+- Data processing
+- Report generation
+- Conditional routing
+
+**Why:** More value, requires planning
+
+### Advanced Automation
+
+**Complex Use Cases:**
+- Multi-agent workflows
+- Complex decision trees
+- Integration-heavy
+- Real-time processing
+
+**Why:** Maximum value, requires expertise
+
+## Implementation Tips
+
+### 1. Start with One Use Case
+
+Don't try to automate everything at once:
+- Pick one high-value use case
+- Build and test thoroughly
+- Iterate based on feedback
+- Expand to other use cases
+
+### 2. Define Success Metrics
+
+Measure impact:
+- Time saved
+- Error reduction
+- Response time improvement
+- User satisfaction
+
+### 3. Involve End Users
+
+Get input from people who will use it:
+- Understand their workflow
+- Get feedback on agent behavior
+- Iterate based on real usage
+- Train users on how to interact
+
+### 4. Monitor and Improve
+
+Continuously optimize:
+- Review Agent Run logs
+- Identify failure patterns
+- Refine instructions
+- Add missing tools
+- Improve prompts
+
+### 5. Document Everything
+
+Keep records of:
+- Use case requirements
+- Agent configuration
+- Tool assignments
+- Success metrics
+- Lessons learned
+
+## What's Next?
+
+- **[Example Agents](/docs/examples)** - See complete agent configurations
+- **[Creating Agents](/docs/guides/creating-agents)** - Learn how to build agents
+- **[Tools](/docs/concepts/tools)** - Understand available tools
+- **[Triggers](/docs/concepts/triggers)** - Automate agent execution
+
+---
+
+**Have a use case idea?** Share it in [GitHub discussions](https://github.com/tridz-dev/agent_flo/discussions)!
+

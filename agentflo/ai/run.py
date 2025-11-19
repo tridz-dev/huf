@@ -69,3 +69,37 @@ class RunProvider:
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), f"Provider Run Error: {provider}")
 			frappe.throw(f"Error running provider {provider}")
+	
+	@staticmethod
+	def run_stream(agent, enhanced_prompt, provider, model, context=None):
+		"""
+		Streaming version of run() - yields chunks instead of returning final result.
+		
+		Routes streaming requests to LiteLLM for supported providers.
+		"""
+		provider_lower = provider.lower()
+		litellm_providers = ["openai", "anthropic", "google", "gemini", "openrouter"]
+		
+		if provider_lower in litellm_providers:
+			try:
+				from agentflo.ai.providers import litellm
+				return litellm.run_stream(agent, enhanced_prompt, provider, model, context=context)
+			except ImportError as e:
+				error_msg = (
+					f"LiteLLM package is required for streaming but not installed.\n\n"
+					f"To install:\n"
+					f"1. Run: bench setup requirements\n"
+					f"2. Or manually: pip install litellm>=1.0.0\n"
+					f"3. Then restart your site: bench restart"
+				)
+				frappe.log_error(f"LiteLLM Import Error: {str(e)}\n\n{error_msg}", "LiteLLM Streaming Error")
+				frappe.throw(_(error_msg))
+			except Exception as e:
+				frappe.log_error(frappe.get_traceback(), f"LiteLLM Streaming Error: {provider}")
+				frappe.throw(f"Error streaming from provider {provider} via LiteLLM: {str(e)}")
+		
+		# For other providers, streaming not yet supported
+		frappe.throw(
+			f"Streaming not yet supported for provider '{provider}'. "
+			f"Please use run() for non-streaming requests."
+		)

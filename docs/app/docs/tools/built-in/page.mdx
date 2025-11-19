@@ -1,0 +1,813 @@
+---
+sidebarTitle: Built-in Tools
+---
+
+# Built-in Tools
+
+Huf provides built-in tools for common Frappe operations. These tools enable agents to interact with DocTypes, make HTTP requests, and chain to other agents—all without writing custom code.
+
+## Overview
+
+Built-in tools are pre-configured and ready to use. Simply create an Agent Tool Function, select the tool type, and assign it to your agent.
+
+**Available Built-in Tools:**
+- Get Document
+- Create Document
+- Update Document
+- Delete Document
+- Submit Document
+- Get List
+- Run Agent
+- HTTP Request
+
+Each tool is optimized for its specific purpose and respects Frappe's permission system.
+
+## Get Document
+
+**Purpose:** Retrieve a single document by its name or ID
+
+**Use Cases:**
+- "Show me customer CUST-001"
+- "What's the status of order SO-2024-123?"
+- "Get details for employee EMP-00045"
+
+### Configuration
+
+**Tool Type:** `Get Document`
+
+**Required Fields:**
+- **Reference DocType**: The DocType to query (e.g., "Customer", "Sales Order")
+
+**Agent-Supplied Parameters:**
+- `name`: The document ID/name
+
+### Example Tool Definition
+
+```
+Tool Name: get_customer
+Description: Retrieve detailed information about a customer by their ID or name
+Types: Get Document
+Reference DocType: Customer
+```
+
+### Example Usage
+
+**User:** "Show me info for customer ABC Corporation"
+
+**Agent:** 
+1. Extracts: `name = "ABC Corporation"`
+2. Calls: `get_customer("ABC Corporation")`
+3. Receives: Full customer document with all fields
+4. Responds: "ABC Corporation is a wholesale customer based in New York..."
+
+### Return Value
+
+Full document as JSON with all standard and custom fields:
+
+```json
+{
+  "name": "CUST-001",
+  "customer_name": "ABC Corporation",
+  "customer_type": "Company",
+  "customer_group": "Wholesale",
+  "territory": "United States",
+  "email_id": "contact@abc.com",
+  ...
+}
+```
+
+### Best Practices
+
+- Use specific DocTypes per tool (not generic "get any document")
+- Name tools clearly: `get_customer`, `get_invoice`, `get_lead`
+- Include DocType name in description for clarity
+- Document expected ID format in description
+
+---
+
+## Create Document
+
+**Purpose:** Create a new document in Frappe
+
+**Use Cases:**
+- "Create a new lead for XYZ Company"
+- "Make a support ticket for this issue"
+- "Add a new employee record"
+
+### Configuration
+
+**Tool Type:** `Create Document`
+
+**Required Fields:**
+- **Reference DocType**: The DocType to create
+
+**Agent-Supplied Parameters:**
+- `fields`: Object with field name/value pairs
+
+### Example Tool Definition
+
+```
+Tool Name: create_lead
+Description: Create a new lead in the system with company name, contact info, and source
+Types: Create Document
+Reference DocType: Lead
+```
+
+### Example Usage
+
+**User:** "Create a lead for John Doe at XYZ Corp, email john@xyz.com"
+
+**Agent:**
+1. Extracts relevant fields
+2. Calls: `create_lead({ lead_name: "John Doe", company_name: "XYZ Corp", email_id: "john@xyz.com" })`
+3. Receives: Created document with name
+4. Responds: "I've created lead LEAD-2024-001 for John Doe at XYZ Corp."
+
+### Parameter Format
+
+```json
+{
+  "lead_name": "John Doe",
+  "company_name": "XYZ Corp",
+  "email_id": "john@xyz.com",
+  "source": "Website",
+  "status": "Lead"
+}
+```
+
+### Required Fields
+
+The agent must provide all mandatory fields for the DocType:
+- Check DocType definition for required fields
+- Agent will fail if required fields are missing
+- Include field requirements in tool description
+
+### Return Value
+
+The created document with auto-generated fields:
+
+```json
+{
+  "name": "LEAD-2024-001",
+  "lead_name": "John Doe",
+  "creation": "2024-01-15 10:30:00",
+  "owner": "user@example.com",
+  ...
+}
+```
+
+### Best Practices
+
+- List required fields in tool description
+- Provide example values in description
+- Use separate tools for different DocTypes
+- Consider default values for optional fields
+- Mention any validation rules in description
+
+---
+
+## Update Document
+
+**Purpose:** Modify an existing document
+
+**Use Cases:**
+- "Update the customer's email address"
+- "Change the order status to Confirmed"
+- "Add a comment to this support ticket"
+
+### Configuration
+
+**Tool Type:** `Update Document`
+
+**Required Fields:**
+- **Reference DocType**: The DocType to update
+
+**Agent-Supplied Parameters:**
+- `name`: The document ID/name
+- `fields`: Object with fields to update
+
+### Example Tool Definition
+
+```
+Tool Name: update_customer
+Description: Update customer information like email, phone, address, or custom fields
+Types: Update Document
+Reference DocType: Customer
+```
+
+### Example Usage
+
+**User:** "Update customer CUST-001's email to newemail@company.com"
+
+**Agent:**
+1. Extracts: `name = "CUST-001"`, `email_id = "newemail@company.com"`
+2. Calls: `update_customer("CUST-001", { email_id: "newemail@company.com" })`
+3. Receives: Updated document
+4. Responds: "I've updated the email for ABC Corporation to newemail@company.com."
+
+### Parameter Format
+
+```json
+{
+  "name": "CUST-001",
+  "fields": {
+    "email_id": "newemail@company.com",
+    "phone": "+1-555-0123"
+  }
+}
+```
+
+### Partial Updates
+
+Only provide fields that need to change:
+- Other fields remain unchanged
+- No need to pass entire document
+- Validations still apply
+
+### Return Value
+
+Updated document with modifications:
+
+```json
+{
+  "name": "CUST-001",
+  "customer_name": "ABC Corporation",
+  "email_id": "newemail@company.com",
+  "phone": "+1-555-0123",
+  "modified": "2024-01-15 11:00:00",
+  "modified_by": "agent@example.com",
+  ...
+}
+```
+
+### Best Practices
+
+- Clearly state which fields can be updated
+- Warn about readonly or auto-computed fields
+- Mention any update restrictions (workflow states, etc.)
+- Consider separate tools for different update types
+
+---
+
+## Delete Document
+
+**Purpose:** Remove a document from the system
+
+**Use Cases:**
+- "Delete draft order SO-2024-999"
+- "Remove the test customer"
+- "Delete cancelled invoice INV-TEST-001"
+
+### Configuration
+
+**Tool Type:** `Delete Document`
+
+**Required Fields:**
+- **Reference DocType**: The DocType to delete from
+
+**Agent-Supplied Parameters:**
+- `name`: The document ID/name to delete
+
+### Example Tool Definition
+
+```
+Tool Name: delete_draft_order
+Description: Delete a draft sales order that hasn't been submitted yet
+Types: Delete Document
+Reference DocType: Sales Order
+```
+
+### Example Usage
+
+**User:** "Delete draft order SO-2024-999"
+
+**Agent:**
+1. Verifies document status (if instructed)
+2. Calls: `delete_draft_order("SO-2024-999")`
+3. Receives: Confirmation
+4. Responds: "I've deleted draft order SO-2024-999."
+
+### Return Value
+
+Success message or error if deletion failed:
+
+```json
+{
+  "message": "Document deleted successfully"
+}
+```
+
+### Safety Considerations
+
+**Deletion is permanent.** Best practices:
+- Only allow deleting specific document states (drafts, cancelled)
+- Add clear warnings in tool description
+- Consider requiring confirmation in agent instructions
+- Log deletions for audit trail
+- Restrict to trusted agents only
+
+**Agent Instructions Example:**
+```
+Before deleting any document:
+1. Verify it's in Draft status
+2. Confirm it hasn't been submitted
+3. Warn the user that deletion is permanent
+4. Ask for explicit confirmation
+5. Only then proceed with deletion
+```
+
+### Permissions
+
+Deletion respects Frappe permissions:
+- User must have delete permission for DocType
+- Document must be deletable (not submitted, not linked, etc.)
+- Frappe may prevent deletion if linked documents exist
+
+---
+
+## Submit Document
+
+**Purpose:** Submit a submittable DocType (move from Draft to Submitted state)
+
+**Use Cases:**
+- "Submit the sales order"
+- "Submit invoice INV-2024-001"
+- "Approve and submit the purchase order"
+
+### Configuration
+
+**Tool Type:** `Submit Document`
+
+**Required Fields:**
+- **Reference DocType**: The submittable DocType
+
+**Agent-Supplied Parameters:**
+- `name`: The document ID/name to submit
+
+### Example Tool Definition
+
+```
+Tool Name: submit_sales_order
+Description: Submit a sales order to confirm it and make it official
+Types: Submit Document
+Reference DocType: Sales Order
+```
+
+### Example Usage
+
+**User:** "Submit order SO-2024-123"
+
+**Agent:**
+1. Verifies document exists and is in Draft
+2. Calls: `submit_sales_order("SO-2024-123")`
+3. Receives: Submitted document
+4. Responds: "Sales order SO-2024-123 has been submitted successfully."
+
+### Submittable DocTypes
+
+Only certain DocTypes can be submitted:
+- Sales Order, Purchase Order
+- Sales Invoice, Purchase Invoice
+- Delivery Note, Purchase Receipt
+- Payroll Entry, Journal Entry
+- Custom submittable DocTypes
+
+Check DocType definition: `is_submittable = 1`
+
+### Return Value
+
+Submitted document with updated status:
+
+```json
+{
+  "name": "SO-2024-123",
+  "docstatus": 1,
+  "status": "To Deliver and Bill",
+  ...
+}
+```
+
+**Docstatus values:**
+- `0` = Draft
+- `1` = Submitted
+- `2` = Cancelled
+
+### Best Practices
+
+- Validate document is ready before submitting
+- Check required fields are filled
+- Mention any submission validations in tool description
+- Consider pre-submission checks in agent instructions
+
+---
+
+## Get List
+
+**Purpose:** Query multiple documents with filtering, sorting, and pagination
+
+**Use Cases:**
+- "List all open support tickets"
+- "Show top 10 customers by revenue"
+- "Find leads created this week"
+
+### Configuration
+
+**Tool Type:** `Get List`
+
+**Required Fields:**
+- **Reference DocType**: The DocType to query
+
+**Agent-Supplied Parameters:**
+- `filters`: Filter conditions (optional)
+- `fields`: Fields to return (optional, default: all)
+- `order_by`: Sort order (optional, default: creation desc)
+- `limit`: Max results (optional, default: 20)
+- `limit_start`: Pagination offset (optional, default: 0)
+
+### Example Tool Definition
+
+```
+Tool Name: list_support_tickets
+Description: Search and filter support tickets by status, priority, customer, or date
+Types: Get List
+Reference DocType: Support Ticket
+```
+
+### Example Usage
+
+**User:** "Show me all high-priority open tickets"
+
+**Agent:**
+1. Constructs filter
+2. Calls: `list_support_tickets({ status: "Open", priority: "High" })`
+3. Receives: Array of matching tickets
+4. Responds: "Here are the 5 open high-priority tickets: ..."
+
+### Filter Syntax
+
+**Simple Filters:**
+```json
+{
+  "status": "Open",
+  "priority": "High"
+}
+```
+→ `status = "Open" AND priority = "High"`
+
+**Operator Filters:**
+```json
+{
+  "creation": [">", "2024-01-01"],
+  "grand_total": [">=", 10000]
+}
+```
+
+**Available Operators:**
+- `=`, `!=`: Equality
+- `>`, `<`, `>=`, `<=`: Comparison
+- `like`, `not like`: Pattern matching
+- `in`, `not in`: List membership
+- `is`, `is not`: NULL checks
+- `between`: Range
+
+**Complex Filters:**
+```json
+{
+  "status": ["in", ["Open", "Working"]],
+  "priority": ["!=", "Low"],
+  "creation": ["between", ["2024-01-01", "2024-01-31"]]
+}
+```
+
+### Selecting Fields
+
+Return only needed fields to reduce token usage:
+
+```json
+{
+  "filters": {"status": "Open"},
+  "fields": ["name", "subject", "priority", "creation"]
+}
+```
+
+**Benefits:**
+- Faster queries
+- Lower token costs
+- More focused results
+
+### Sorting
+
+**Format:** `"fieldname asc"` or `"fieldname desc"`
+
+**Examples:**
+```json
+"order_by": "creation desc"  // Newest first
+"order_by": "name asc"       // Alphabetical
+"order_by": "priority desc, creation desc"  // Multi-level sort
+```
+
+### Pagination
+
+For large result sets:
+
+```json
+{
+  "limit": 20,        // Results per page
+  "limit_start": 0    // Offset (0, 20, 40, ...)
+}
+```
+
+**Page 1:** `limit=20, limit_start=0`  
+**Page 2:** `limit=20, limit_start=20`  
+**Page 3:** `limit=20, limit_start=40`
+
+### Return Value
+
+Array of documents:
+
+```json
+[
+  {
+    "name": "TICKET-001",
+    "subject": "Login issue",
+    "priority": "High",
+    "status": "Open"
+  },
+  {
+    "name": "TICKET-002",
+    "subject": "Payment failed",
+    "priority": "High",
+    "status": "Open"
+  }
+]
+```
+
+### Best Practices
+
+- Start with limit=10 or 20 to avoid overwhelming agent
+- Use filters to narrow results
+- Select only necessary fields
+- Include meaningful sort order
+- Handle empty results gracefully in agent instructions
+
+---
+
+## Run Agent
+
+**Purpose:** Chain to another specialized agent
+
+**Use Cases:**
+- Delegate to specialized agents
+- Multi-domain workflows
+- Complex multi-step processes
+
+### Configuration
+
+**Tool Type:** `Run Agent`
+
+**Agent-Supplied Parameters:**
+- `agent_name`: Name of the agent to run
+- `prompt`: Message to send to that agent
+
+### Example Tool Definition
+
+```
+Tool Name: ask_sales_agent
+Description: Delegate sales-related questions to the specialized sales agent
+Types: Run Agent
+```
+
+### Example Usage
+
+**User (to General Agent):** "What's our sales forecast for Q2?"
+
+**General Agent:**
+1. Recognizes this is a sales question
+2. Calls: `ask_sales_agent("Sales Forecast Agent", "What's our sales forecast for Q2?")`
+3. Sales Agent processes the query
+4. General Agent receives response
+5. General Agent: "According to our sales forecast agent, Q2 is projected at $2.5M..."
+
+### Agent Chaining Strategies
+
+**Specialization:**
+```
+Main Agent (general)
+  ├─> Sales Agent (sales queries)
+  ├─> Support Agent (technical issues)
+  └─> HR Agent (employee questions)
+```
+
+**Sequential Processing:**
+```
+Intake Agent
+  └─> Validation Agent
+      └─> Processing Agent
+          └─> Notification Agent
+```
+
+**Parallel Consultation:**
+```
+Decision Agent
+  ├─> Risk Assessment Agent
+  ├─> Financial Analysis Agent
+  └─> Legal Review Agent
+→ Decision Agent synthesizes all responses
+```
+
+### Return Value
+
+The other agent's response:
+
+```json
+{
+  "response": "Based on current pipeline and historical data, Q2 forecast is $2.5M with 15% growth over Q1. Key drivers are..."
+}
+```
+
+### Best Practices
+
+- Create focused, specialized agents
+- Define clear handoff criteria
+- Avoid circular agent calling (A calls B calls A)
+- Consider conversation history management
+- Monitor costs (multiple agents = multiple runs)
+
+### Limitations
+
+- Each chained agent call adds latency
+- Costs multiply with each agent
+- Deep chains can lose context
+- Consider flattening chains if performance suffers
+
+---
+
+## HTTP Request
+
+**Purpose:** Call external APIs and webhooks
+
+**Use Cases:**
+- Send Slack notifications
+- Look up external data
+- Trigger webhooks
+- Integrate with third-party services
+
+### Configuration
+
+**Tool Type:** `HTTP Request`
+
+**Agent-Supplied Parameters:**
+- `url`: The endpoint URL
+- `method`: HTTP method (GET, POST, PUT, DELETE)
+- `headers`: Request headers (optional)
+- `body`: Request body for POST/PUT (optional)
+
+### Example Tool Definition
+
+```
+Tool Name: send_slack_notification
+Description: Send a message to a Slack channel via webhook URL
+Types: HTTP Request
+```
+
+### Example Usage
+
+**Agent Instructions:**
+```
+When you need to notify the team:
+1. Format the message clearly
+2. Use send_slack_notification tool
+3. Post to webhook URL: https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+```
+
+**Agent Call:**
+```json
+{
+  "url": "https://hooks.slack.com/services/T00/B00/XXXX",
+  "method": "POST",
+  "headers": {"Content-Type": "application/json"},
+  "body": {
+    "text": "New high-priority ticket: TICKET-123",
+    "channel": "#support"
+  }
+}
+```
+
+### Security Considerations
+
+**Webhook URLs contain secrets:**
+- Store URLs in agent instructions (not tool)
+- Use environment variables for sensitive endpoints
+- Restrict agent access appropriately
+- Audit HTTP request logs
+
+### Common Integrations
+
+**Slack:**
+```json
+{
+  "url": "https://hooks.slack.com/...",
+  "method": "POST",
+  "body": {"text": "Message"}
+}
+```
+
+**Twilio SMS:**
+```json
+{
+  "url": "https://api.twilio.com/2010-04-01/Accounts/ACCOUNT_SID/Messages.json",
+  "method": "POST",
+  "headers": {"Authorization": "Basic ..."},
+  "body": {"To": "+1555...", "Body": "Message"}
+}
+```
+
+**REST API:**
+```json
+{
+  "url": "https://api.example.com/v1/resource",
+  "method": "GET",
+  "headers": {"Authorization": "Bearer TOKEN"}
+}
+```
+
+### Return Value
+
+HTTP response:
+
+```json
+{
+  "status_code": 200,
+  "body": {
+    "success": true,
+    "message_id": "12345"
+  }
+}
+```
+
+### Best Practices
+
+- Validate URLs in agent instructions
+- Handle API errors gracefully
+- Rate-limit external calls
+- Cache responses when appropriate
+- Log all external requests
+
+---
+
+## Permissions
+
+All built-in tools respect Frappe's permission system:
+
+- **User permissions apply**: Agent runs with user's permissions
+- **Role-based access**: Standard Frappe roles control access
+- **No elevation**: Tools cannot bypass permissions
+- **Audit trail**: All operations logged
+
+**Example:**
+```
+User with "Sales User" role runs agent:
+✓ Can read Customers, Leads
+✓ Can create Leads
+✗ Cannot delete Customers
+✗ Cannot read Purchase Orders
+```
+
+## Error Handling
+
+Tools return errors when:
+- Document not found
+- Permission denied
+- Validation failures
+- Required fields missing
+- DocType doesn't exist
+
+**Agent should handle errors gracefully:**
+```
+Agent Instructions:
+If a tool fails:
+1. Explain the error to the user
+2. Suggest alternative actions
+3. Don't retry the same failed operation repeatedly
+4. Ask user to check permissions if access denied
+```
+
+## Performance Tips
+
+1. **Use Get List efficiently**: Filter and limit results
+2. **Select fields**: Don't fetch unnecessary data
+3. **Batch operations**: Group similar queries
+4. **Cache results**: In conversation memory for multi-turn interactions
+5. **Minimize tool calls**: One good query > multiple small queries
+
+## What's Next?
+
+- **[Creating Custom Tools](/docs/tools/custom)** - Build your own tools
+- **[Publishing Tools](/docs/tools/publishing)** - Share tools via apps
+- **[Tools Concept](/docs/concepts/tools)** - Tool fundamentals
+- **[Creating Agents](/docs/guides/creating-agents)** - Assign tools to agents
+
+---
+
+**Questions?** Visit [GitHub discussions](https://github.com/tridz-dev/agent_flo/discussions).
+

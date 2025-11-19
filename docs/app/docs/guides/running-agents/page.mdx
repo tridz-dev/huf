@@ -1,0 +1,485 @@
+---
+sidebarTitle: Running Agents
+---
+
+# Running Agents
+
+Learn the different ways to execute agents: manual testing, scheduled runs, event-driven triggers, chat interfaces, and API calls.
+
+## Execution Methods
+
+Agents can run in several ways:
+
+1. **Manual Execution** - You trigger them directly
+2. **Scheduled** - Run automatically on a schedule
+3. **Document Events** - Triggered by document changes
+4. **Chat Interface** - User interactions via chat
+5. **API Calls** - Programmatic execution
+
+## Manual Execution
+
+### When to Use
+
+**Manual execution is best for:**
+- Testing agents
+- One-off tasks
+- Debugging
+- Development
+- Ad-hoc requests
+
+### Methods
+
+#### Agent Chat Interface
+
+**Access:** Desk → Huf → Agent Chat
+
+**Steps:**
+1. Select agent from dropdown
+2. Type your message
+3. Send
+4. View response
+
+**Best for:** Interactive testing and debugging
+
+#### Agent DocType Run Button
+
+**Access:** Desk → Huf → Agent → [Your Agent]
+
+**Steps:**
+1. Open agent
+2. Click "Run" button
+3. Enter prompt
+4. Execute
+5. View result
+
+**Best for:** Quick testing from agent form
+
+#### Agent Run DocType
+
+**Access:** Desk → Huf → Agent Run → New
+
+**Steps:**
+1. Create new Agent Run
+2. Select agent
+3. Enter prompt
+4. Save (executes automatically)
+5. View results
+
+**Best for:** Programmatic testing and logging
+
+### Testing Workflow
+
+**Recommended process:**
+1. Start with Agent Chat for quick tests
+2. Use Agent Run for detailed logging
+3. Review results in Agent Run logs
+4. Iterate based on findings
+
+## Scheduled Execution
+
+### When to Use
+
+**Scheduled runs are best for:**
+- Regular reports
+- Periodic checks
+- Daily summaries
+- Hourly monitoring
+- Weekly tasks
+
+### Configuration
+
+**Set up via Agent Trigger:**
+
+1. Navigate to Desk → Huf → Agent Trigger
+2. Click New
+3. Select your agent
+4. Choose "Schedule" trigger type
+5. Set schedule frequency
+6. Configure prompt template
+7. Enable and save
+
+### Schedule Options
+
+**Frequencies:**
+- **Hourly:** Every hour
+- **Daily:** Once per day at specified time
+- **Weekly:** Specific day(s) of week
+- **Custom Cron:** Advanced scheduling
+
+**Examples:**
+```
+Daily at 9 AM: "0 9 * * *"
+Every 6 hours: "0 */6 * * *"
+Monday-Friday at 2 PM: "0 14 * * 1-5"
+First day of month: "0 0 1 * *"
+```
+
+### Prompt Templates
+
+**Use templates to pass context:**
+
+```
+Generate daily sales summary for {date}:
+- Total revenue
+- Order count
+- Top 5 customers
+- Trends vs yesterday
+
+Send report to sales@company.com
+```
+
+**Dynamic data:**
+- Use `{field_name}` placeholders
+- Access document fields
+- Include date/time variables
+- Reference related data
+
+### Best Practices
+
+**Do:**
+- Run during off-peak hours for heavy tasks
+- Stagger multiple agents to avoid overlap
+- Use reasonable frequencies
+- Monitor costs
+- Test schedules before production
+
+**Don't:**
+- Schedule too frequently (every minute)
+- Run multiple heavy agents simultaneously
+- Forget timezone considerations
+- Ignore failed runs
+
+## Document Event Triggers
+
+### When to Use
+
+**Document events are best for:**
+- Validation on submission
+- Auto-assignment on creation
+- Notifications on updates
+- Data enrichment on insert
+- Workflow automation
+
+### Configuration
+
+**Set up via Agent Trigger:**
+
+1. Navigate to Desk → Huf → Agent Trigger
+2. Click New
+3. Select your agent
+4. Choose "Doc Event" trigger type
+5. Select DocType
+6. Choose event (After Insert, On Submit, etc.)
+7. Add conditions if needed
+8. Configure prompt template
+9. Enable and save
+
+### Available Events
+
+| Event | When It Fires | Common Use Cases |
+|-------|---------------|------------------|
+| **After Insert** | Document created | Auto-assignment, enrichment |
+| **On Update** | Document modified | Notifications, validation |
+| **On Submit** | Document submitted | Validation, approval workflows |
+| **On Cancel** | Document cancelled | Cleanup, notifications |
+| **Before Save** | Before save | Validation, data correction |
+
+### Conditional Execution
+
+**Add filters to limit triggers:**
+
+```json
+{
+  "status": "Open",
+  "priority": "High"
+}
+```
+
+Only triggers when both conditions match.
+
+### Prompt Templates
+
+**Access document fields:**
+
+```
+A new {doctype} has been created: {name}
+Customer: {customer}
+Total: {grand_total}
+
+Please process this document:
+1. Validate the data
+2. Assign to appropriate team
+3. Send notifications
+```
+
+### Best Practices
+
+**Do:**
+- Use specific events (not every event)
+- Add conditions to limit executions
+- Handle errors gracefully
+- Test with draft documents first
+
+**Don't:**
+- Trigger on every update (can cause loops)
+- Use Before Save unless necessary
+- Forget permission checks
+- Create infinite trigger loops
+
+## Chat Interface
+
+### When to Use
+
+**Chat is best for:**
+- User-facing interactions
+- Customer support
+- Interactive assistants
+- Real-time help
+- Conversational workflows
+
+### Configuration
+
+**Enable chat:**
+
+1. Open agent in Desk
+2. Check "Allow Chat"
+3. Save
+
+**Access points:**
+- Desk: Agent Chat DocType
+- Frontend: `/huf` interface (expanding)
+
+### User Experience
+
+**For end users:**
+1. Access chat interface
+2. Select or discover agent
+3. Type message
+4. Receive response
+5. Continue conversation
+
+**Features:**
+- Conversation history
+- Context awareness
+- Multi-turn interactions
+- Tool usage transparency
+
+### Permissions
+
+**Access control:**
+- Users see only agents they have permission for
+- Respects Frappe role-based permissions
+- Can restrict by user, role, or custom rules
+
+### Best Practices
+
+**Do:**
+- Enable only for user-facing agents
+- Set clear expectations in instructions
+- Handle errors gracefully
+- Provide escalation paths
+- Monitor user satisfaction
+
+**Don't:**
+- Enable for internal automation agents
+- Forget to set permissions
+- Ignore user feedback
+- Leave errors unhandled
+
+## API Execution
+
+### When to Use
+
+**API is best for:**
+- External integrations
+- Webhook handlers
+- Custom frontends
+- Third-party services
+- Programmatic access
+
+### Configuration
+
+**Endpoint:** `run_agent_sync` (whitelisted method)
+
+**Authentication:** Standard Frappe API authentication
+
+**Request Format:**
+```python
+import requests
+
+response = requests.post(
+    "https://yoursite.com/api/method/agentflo.ai.agent_integration.run_agent_sync",
+    headers={
+        "Authorization": f"token {api_key}:{api_secret}",
+        "Content-Type": "application/json"
+    },
+    json={
+        "agent_name": "Customer Support Agent",
+        "prompt": "What is the status of order SO-001?",
+        "session_id": "api:external_system:12345"
+    }
+)
+```
+
+### Parameters
+
+**Required:**
+- `agent_name`: Name of agent to run
+- `prompt`: Message to send to agent
+
+**Optional:**
+- `session_id`: Conversation session identifier
+- `context`: Additional context data
+- `stream`: Enable streaming responses
+
+### Response Format
+
+```json
+{
+    "response": "Agent's response text",
+    "run_id": "RUN-2024-001",
+    "tokens_used": 150,
+    "cost": 0.0023,
+    "tool_calls": [...]
+}
+```
+
+### Session Management
+
+**For conversations:**
+- Use consistent `session_id`
+- Format: `{channel}:{user_id}:{identifier}`
+- Example: `api:external_system:user_12345`
+
+**Benefits:**
+- Maintains conversation context
+- Tracks user interactions
+- Enables multi-turn conversations
+
+### Error Handling
+
+**Handle errors:**
+```python
+try:
+    response = requests.post(...)
+    if response.status_code == 200:
+        data = response.json()
+        # Process response
+    else:
+        # Handle error
+        error = response.json()
+except Exception as e:
+    # Handle exception
+```
+
+### Best Practices
+
+**Do:**
+- Use proper authentication
+- Handle errors gracefully
+- Set timeouts
+- Log API calls
+- Rate limit if needed
+
+**Don't:**
+- Expose API keys
+- Ignore errors
+- Make blocking calls
+- Forget rate limits
+- Skip authentication
+
+## Choosing Execution Method
+
+### Decision Matrix
+
+| Method | Use When | Pros | Cons |
+|--------|----------|------|------|
+| **Manual** | Testing, one-offs | Full control, immediate | Requires manual action |
+| **Scheduled** | Regular tasks | Automated, reliable | Fixed timing |
+| **Doc Event** | Document workflows | Reactive, contextual | Tied to DocTypes |
+| **Chat** | User interactions | User-friendly, accessible | Requires user action |
+| **API** | Integrations | Flexible, programmatic | Requires development |
+
+### Combining Methods
+
+**You can use multiple methods:**
+- Chat for user interactions
+- Scheduled for reports
+- Doc events for automation
+- API for integrations
+
+**Example:**
+- Customer Support Agent: Chat + API
+- Report Generator: Scheduled
+- Invoice Validator: Doc Event
+- Lead Qualifier: Doc Event + API
+
+## Performance Considerations
+
+### Response Times
+
+**Factors affecting speed:**
+- Model selection (faster models = faster responses)
+- Tool complexity (more tools = more time)
+- Conversation history (longer = slower)
+- Network latency (for API calls)
+
+### Optimization
+
+**Improve performance:**
+- Use faster models when possible
+- Minimize tool calls
+- Limit conversation history
+- Cache common results
+- Optimize tool queries
+
+### Cost Management
+
+**Monitor costs:**
+- Track token usage
+- Review Agent Run logs
+- Optimize prompts
+- Use cheaper models when appropriate
+- Limit conversation history
+
+## Troubleshooting
+
+**Agent not running:**
+- Check agent is Active
+- Verify trigger is Enabled
+- Check permissions
+- Review error logs
+- Test manually first
+
+**Scheduled runs not firing:**
+- Verify schedule configuration
+- Check cron expression
+- Ensure agent is Active
+- Review scheduler logs
+- Test with manual trigger
+
+**Doc events not triggering:**
+- Verify DocType selection
+- Check event type
+- Review conditions
+- Test with manual execution
+- Check permissions
+
+**API calls failing:**
+- Verify authentication
+- Check endpoint URL
+- Review request format
+- Check agent name
+- Review error messages
+
+## What's Next?
+
+- **[Monitoring](/docs/guides/monitoring)** - Track agent performance
+- **[Managing Agents](/docs/guides/managing-agents)** - Lifecycle management
+- **[Creating Agents](/docs/guides/creating-agents)** - Build new agents
+- **[Triggers](/docs/concepts/triggers)** - Detailed trigger guide
+
+---
+
+**Questions?** Check [GitHub discussions](https://github.com/tridz-dev/agent_flo/discussions).
+

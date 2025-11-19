@@ -57,7 +57,17 @@ app_license = "mit"
 # ----------
 
 website_route_rules = [
+    # Docs routes must come before the catch-all /huf route
+    {"from_route": "/huf/docs", "to_route": "huf/docs"},
+    {"from_route": "/huf/docs/<path:path>", "to_route": "huf/docs"},
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
+    {"from_route": "/agentflo/stream", "to_route": "agentflo/stream"}
+]
+
+# Register custom page renderer for SSE streaming and docs
+page_renderer = [
+    "agentflo.ai.agent_stream_renderer.AgentStreamRenderer",
+    "agentflo.www.docs_renderer.DocsRenderer",
 ]
 
 # application home page (will override Website Settings)

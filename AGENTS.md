@@ -117,12 +117,18 @@ The main DocType for creating an AI agent.
 | **Agent Name**   | `agent_name`   | Data      | A unique name for the agent.                                                                            |
 | **Provider**     | `provider`     | Link      | Link to the `AI Provider`.                                                                              |
 | **Model**        | `model`        | Link      | Link to the `AI Model`.                                                                                 |
-| **Instructions** | `instructions` | Long Text | The system prompt or instructions that define the agent's personality, goals, and constraints.          |
+| **Instructions** | `instructions` | Code      | The system prompt or instructions that define the agent's personality, goals, and constraints.          |
 | **Agent Tool**   | `agent_tool`   | Table     | A child table (`Agent Tool`) linking to the `Agent Tool Function`s that this agent is allowed to use. |
 | **Temperature**  | `temperature`  | Float     | Controls the randomness of the AI's output.                                                             |
 | **Top P**        | `top_p`        | Float     | An alternative to temperature for controlling randomness.                                               |
-| **Enable Chat**  | `enable_chat`  | Check     | Enables the Agent Chat interface for real-time conversations.                                           |
-| **Condition**    | `condition`    | Code      | Python expression for conditional triggering on document events (e.g., `doc.grand_total > 10000`).     |
+| **Allow Chat**    | `allow_chat`   | Check     | Enables the Agent Chat interface for real-time conversations.                                           |
+| **Persist Conversation** | `persist_conversation` | Check | Whether to maintain conversation history across runs. |
+| **Persist per User (Doc/Schedule)** | `persist_user_history` | Check | When checked, Doc Event and Scheduled runs create/maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used. Default: 1 (checked). |
+| **Description**   | `description`  | Small Text | A brief description of the agent's purpose. |
+| **Last Run**      | `last_run`     | Datetime  | Timestamp of the last agent execution (read-only, auto-updated). |
+| **Total Run**     | `total_run`    | Int       | Total number of times this agent has been executed (read-only, auto-incremented). |
+
+**Note**: The `condition` field has been removed from Agent DocType. Conditional triggering is now handled via the `Agent Trigger` DocType.
 
 #### 5. Agent Conversation
 
@@ -190,7 +196,7 @@ A single DocType providing a real-time chat interface for conversational agents.
 **Features:**
 -   Real-time chat UI with markdown rendering
 -   Message history display
--   Only available for agents with `enable_chat` enabled
+-   Only available for agents with `allow_chat` enabled
 -   Server Actions: `agentflo.ai.agent_chat.get_agent_chat_messages`, `agentflo.ai.agent_chat.send_agent_chat_message`
 
 ### Core Classes and Methods
@@ -294,3 +300,29 @@ This file provides the backend API for the Agent Chat interface.
     -   Processes user input from the chat interface.
     -   Calls the agent and returns the response.
     -   Manages chat-specific conversation persistence and message formatting.
+
+#### `agent_hooks.py`
+
+This file handles document event-based agent triggering.
+
+-   **Function: `get_doc_event_agents(event: str)`**
+    -   Fetches and caches Doc Event triggers from the `Agent Trigger` DocType.
+    -   Returns a list of agent configurations that should be triggered for a given document event.
+    -   Uses caching (`agentflo:doc_event_agents`) for performance.
+    -   Loads agent settings (instructions, provider, model) from the Agent DocType.
+-   **Function: `clear_doc_event_agents_cache(...)`**
+    -   Clears the cache when Agent or Agent Trigger documents are modified.
+-   **Function: `run_hooked_agents(doc, method)`**
+    -   Called by Frappe document hooks (e.g., `after_insert`, `on_submit`).
+    -   Matches agents based on doctype and event type.
+    -   **Duplicate Prevention**: Uses cache-based locking to prevent duplicate agent runs for the same document event. Lock expires after 30 seconds.
+    -   Evaluates trigger conditions via `safe_eval` before triggering.
+    -   Enqueues agent execution as background jobs with unique job IDs (includes UUID to prevent conflicts).
+    -   Passes `initiating_user` and `channel_id` to track the source of the trigger.
+-   **Function: `run_agent_for_doc(...)`**
+    -   Background worker that executes agents triggered by document events.
+    -   **Per-User Conversation Support**: Checks the agent's `persist_user_history` field:
+        -   If `True`: Creates/maintains conversation history per initiating user (or document owner/modified_by).
+        -   If `False`: Uses a shared conversation history (`shared:{agent_name}`).
+    -   Constructs a prompt that includes the event name and document identifiers.
+    -   Calls `run_agent_sync()` with appropriate `channel_id` and `external_id` parameters for conversation management.

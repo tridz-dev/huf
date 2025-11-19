@@ -1,0 +1,604 @@
+---
+sidebarTitle: Creating Custom Tools
+---
+
+# Creating Custom Tools
+
+Custom tools let you extend agent capabilities beyond built-in Frappe operations. Link your own Python functions to agents and unlock unlimited possibilities.
+
+## What Are Custom Tools?
+
+**Custom tools** are your own Python functions that agents can call. They enable agents to:
+- Perform complex calculations
+- Integrate with external systems
+- Implement business logic
+- Process data in custom ways
+- Execute specialized workflows
+
+If built-in tools are the standard toolkit, custom tools are your custom-made specialty tools.
+
+## When to Create Custom Tools
+
+**Create custom tools when you need to:**
+- Execute business-specific logic
+- Perform calculations beyond simple queries
+- Integrate with external APIs with custom authentication
+- Process data in ways built-in tools can't
+- Implement multi-step workflows
+- Validate complex conditions
+- Format or transform data specially
+
+**Use built-in tools when:**
+- Standard CRUD operations suffice
+- Simple HTTP requests work
+- No custom logic needed
+- Built-in tools already cover the use case
+
+## How Custom Tools Work
+
+### The Flow
+
+1. **You write** a Python function in your Frappe app
+2. **You create** an Agent Tool Function pointing to that function
+3. **You assign** the tool to an agent
+4. **Agent calls** the tool when needed
+5. **Your function executes** with provided parameters
+6. **Result returns** to the agent
+7. **Agent uses** the result in its response
+
+### Function Requirements
+
+Your Python function must:
+- Be importable (in a module Frappe can access)
+- Accept defined parameters
+- Return JSON-serializable data
+- Handle errors gracefully
+- Respect Frappe permissions (if needed)
+
+## Creating a Custom Tool
+
+### Step 1: Write the Python Function
+
+Create a function in your Frappe app:
+
+**File:** `my_app/api/tools.py`
+
+```python
+import frappe
+
+def calculate_customer_lifetime_value(customer_id):
+    """
+    Calculate the total lifetime value for a customer.
+    
+    Args:
+        customer_id (str): The customer ID
+        
+    Returns:
+        dict: Customer LTV details including total value and order count
+    """
+    # Query all sales invoices for this customer
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        filters={"customer": customer_id, "docstatus": 1},
+        fields=["grand_total"]
+    )
+    
+    # Calculate totals
+    total_value = sum(inv.grand_total for inv in invoices)
+    order_count = len(invoices)
+    
+    # Calculate average order value
+    avg_order = total_value / order_count if order_count > 0 else 0
+    
+    return {
+        "customer_id": customer_id,
+        "lifetime_value": total_value,
+        "order_count": order_count,
+        "average_order_value": avg_order
+    }
+```
+
+**Key Points:**
+- **Docstring**: Becomes part of tool description (important!)
+- **Type hints**: Help document expected parameters
+- **Return dict**: Agent can easily parse the result
+- **Error handling**: Handle edge cases (division by zero, missing data)
+
+### Step 2: Create Agent Tool Function
+
+**Navigate to:** Desk → Huf → Agent Tool Function
+
+**Click New** and fill in:
+
+1. **Tool Name**: `calculate_customer_ltv`
+   - Use descriptive snake_case names
+   - Should match function name (not required but clearer)
+
+2. **Description**:
+   ```
+   Calculate the lifetime value for a customer including total revenue,
+   order count, and average order value across all paid invoices.
+   ```
+   - Be specific—agent uses this to decide when to use the tool
+   - Mention what data it returns
+   - Include any limitations
+
+3. **Types**: Select `Custom Function`
+
+4. **Function Path**: `my_app.api.tools.calculate_customer_lifetime_value`
+   - Full dotted path to the function
+   - Must be importable: `from my_app.api.tools import calculate_customer_lifetime_value`
+
+5. **Parameters**: Add rows in the table
+
+| Parameter Name | Type | Description | Required |
+|----------------|------|-------------|----------|
+| customer_id | String | The customer ID to calculate LTV for | Yes |
+
+6. **Save** the tool
+
+### Step 3: Assign to Agent
+
+1. Open your agent (Desk → Huf → Agent)
+2. Scroll to **Agent Tool** table
+3. Click **Add Row**
+4. Select **Tool Function**: `calculate_customer_ltv`
+5. **Save** the agent
+
+### Step 4: Test
+
+Use Agent Chat or run the agent:
+
+```
+User: "What's the lifetime value for customer CUST-001?"
+
+Agent:
+- Recognizes need for LTV data
+- Calls: calculate_customer_ltv("CUST-001")
+- Receives: {"lifetime_value": 45230.50, "order_count": 12, ...}
+- Responds: "Customer CUST-001 has a lifetime value of $45,230.50 
+            across 12 orders, with an average order value of $3,769.21."
+```
+
+## Parameter Types
+
+When defining parameters in Agent Tool Function:
+
+| Type | Python Type | Description | Example |
+|------|-------------|-------------|---------|
+| **String** | `str` | Text values | `"CUST-001"`, `"high"` |
+| **Int** | `int` | Integers | `42`, `100`, `-5` |
+| **Float** | `float` | Decimals | `3.14`, `99.99` |
+| **Boolean** | `bool` | True/False | `True`, `False` |
+| **Object** | `dict` | JSON objects | `{"key": "value"}` |
+| **Array** | `list` | JSON arrays | `["item1", "item2"]` |
+
+**Examples:**
+
+```python
+def search_products(category: str, min_price: float, in_stock: bool):
+    """Search products with filters."""
+    pass
+
+def batch_process_orders(order_ids: list):
+    """Process multiple orders at once."""
+    pass
+
+def create_customer_profile(data: dict):
+    """Create customer with complex nested data."""
+    pass
+```
+
+## Advanced Examples
+
+### Example 1: External API Integration
+
+```python
+import requests
+import frappe
+
+def get_weather_forecast(city: str):
+    """
+    Get weather forecast for a city from OpenWeather API.
+    
+    Args:
+        city (str): City name
+        
+    Returns:
+        dict: Weather forecast data
+    """
+    api_key = frappe.conf.get("openweather_api_key")
+    
+    response = requests.get(
+        f"https://api.openweathermap.org/data/2.5/weather",
+        params={"q": city, "appid": api_key, "units": "metric"}
+    )
+    
+    if response.status_code == 200:
+        data = response.json()
+        return {
+            "city": city,
+            "temperature": data["main"]["temp"],
+            "condition": data["weather"][0]["description"],
+            "humidity": data["main"]["humidity"]
+        }
+    else:
+        frappe.throw(f"Weather API error: {response.status_code}")
+```
+
+**Agent Instructions:**
+```
+When user asks about weather:
+1. Extract city name
+2. Use get_weather_forecast tool
+3. Present temperature, condition, and humidity in a friendly format
+```
+
+### Example 2: Complex Calculation
+
+```python
+import frappe
+from datetime import datetime, timedelta
+
+def calculate_reorder_quantity(item_code: str, days_ahead: int = 30):
+    """
+    Calculate optimal reorder quantity based on historical consumption.
+    
+    Args:
+        item_code (str): Item code
+        days_ahead (int): Days to plan ahead (default: 30)
+        
+    Returns:
+        dict: Reorder recommendations
+    """
+    # Get current stock
+    stock_qty = frappe.db.get_value("Bin", 
+        {"item_code": item_code}, 
+        "actual_qty"
+    ) or 0
+    
+    # Get item details
+    item = frappe.get_doc("Item", item_code)
+    
+    # Calculate average daily consumption (last 90 days)
+    ninety_days_ago = datetime.now() - timedelta(days=90)
+    
+    consumed = frappe.db.sql("""
+        SELECT SUM(actual_qty)
+        FROM `tabStock Ledger Entry`
+        WHERE item_code = %s
+        AND posting_date >= %s
+        AND actual_qty < 0
+    """, (item_code, ninety_days_ago))[0][0] or 0
+    
+    daily_consumption = abs(consumed) / 90
+    
+    # Calculate needed quantity
+    needed_qty = daily_consumption * days_ahead
+    reorder_qty = max(0, needed_qty - stock_qty)
+    
+    # Round up to nearest safety stock level
+    if item.safety_stock:
+        reorder_qty = max(reorder_qty, item.safety_stock)
+    
+    return {
+        "item_code": item_code,
+        "current_stock": stock_qty,
+        "daily_consumption": round(daily_consumption, 2),
+        "days_ahead": days_ahead,
+        "recommended_reorder_qty": round(reorder_qty, 2),
+        "estimated_stockout_days": round(stock_qty / daily_consumption if daily_consumption > 0 else 999, 1)
+    }
+```
+
+### Example 3: Validation Logic
+
+```python
+import frappe
+
+def validate_invoice_pricing(invoice_name: str):
+    """
+    Validate invoice pricing against price list and flag anomalies.
+    
+    Args:
+        invoice_name (str): Sales Invoice name
+        
+    Returns:
+        dict: Validation results with any issues found
+    """
+    invoice = frappe.get_doc("Sales Invoice", invoice_name)
+    issues = []
+    
+    for item in invoice.items:
+        # Get price list rate
+        price_list_rate = frappe.db.get_value(
+            "Item Price",
+            {
+                "item_code": item.item_code,
+                "price_list": invoice.selling_price_list
+            },
+            "price_list_rate"
+        )
+        
+        if not price_list_rate:
+            issues.append({
+                "item": item.item_code,
+                "issue": "No price list rate found",
+                "severity": "high"
+            })
+            continue
+        
+        # Check for significant variance
+        variance_pct = ((item.rate - price_list_rate) / price_list_rate) * 100
+        
+        if abs(variance_pct) > 10:
+            issues.append({
+                "item": item.item_code,
+                "issue": f"Price varies {variance_pct:.1f}% from price list",
+                "expected": price_list_rate,
+                "actual": item.rate,
+                "severity": "medium" if abs(variance_pct) < 20 else "high"
+            })
+    
+    return {
+        "invoice": invoice_name,
+        "is_valid": len(issues) == 0,
+        "issues_found": len(issues),
+        "issues": issues
+    }
+```
+
+## Best Practices
+
+### Function Design
+
+**Do:**
+- Write clear, focused functions (single responsibility)
+- Use descriptive function and parameter names
+- Include comprehensive docstrings
+- Return structured data (dicts with clear keys)
+- Handle errors and edge cases
+- Add type hints for parameters
+
+**Don't:**
+- Create mega-functions that do everything
+- Use vague parameter names (`data`, `info`, `x`)
+- Return raw database objects (serialize them)
+- Forget error handling
+- Make functions depend on global state
+- Use side effects without documenting them
+
+### Error Handling
+
+**Handle errors gracefully:**
+
+```python
+def get_customer_balance(customer_id: str):
+    """Get customer outstanding balance."""
+    
+    # Validate input
+    if not customer_id:
+        frappe.throw("Customer ID is required")
+    
+    # Check if customer exists
+    if not frappe.db.exists("Customer", customer_id):
+        frappe.throw(f"Customer {customer_id} not found")
+    
+    try:
+        balance = frappe.db.get_value("Customer", customer_id, "outstanding_amount")
+        return {"customer_id": customer_id, "balance": balance or 0}
+    except Exception as e:
+        frappe.log_error(f"Error getting balance for {customer_id}: {str(e)}")
+        frappe.throw(f"Failed to retrieve customer balance: {str(e)}")
+```
+
+**Benefits:**
+- Agent gets meaningful error messages
+- User sees helpful feedback
+- Errors are logged for debugging
+- System doesn't crash silently
+
+### Permissions
+
+**Respect Frappe permissions:**
+
+```python
+def delete_customer_document(doc_name: str):
+    """Delete a customer (respects permissions)."""
+    
+    # Check if user has permission
+    if not frappe.has_permission("Customer", "delete", doc_name):
+        frappe.throw("You don't have permission to delete this customer")
+    
+    # Verify document exists
+    if not frappe.db.exists("Customer", doc_name):
+        frappe.throw(f"Customer {doc_name} not found")
+    
+    # Delete
+    frappe.delete_doc("Customer", doc_name)
+    
+    return {"success": True, "message": f"Customer {doc_name} deleted"}
+```
+
+**Always:**
+- Check permissions explicitly when needed
+- Use `frappe.has_permission()`
+- Fail safely with clear error messages
+- Log permission denials for audit
+
+### Performance
+
+**Optimize for speed:**
+
+```python
+# BAD: Multiple queries in loop
+def get_customer_orders_slow(customer_id):
+    orders = frappe.get_all("Sales Order", {"customer": customer_id}, ["name"])
+    results = []
+    for order in orders:
+        doc = frappe.get_doc("Sales Order", order.name)  # Separate query each time
+        results.append(doc.as_dict())
+    return results
+
+# GOOD: Single query with all data
+def get_customer_orders_fast(customer_id):
+    orders = frappe.get_all(
+        "Sales Order",
+        filters={"customer": customer_id},
+        fields=["name", "grand_total", "status", "delivery_date"]
+    )
+    return {"customer_id": customer_id, "orders": orders}
+```
+
+**Tips:**
+- Fetch all needed data in one query when possible
+- Use `frappe.get_all()` instead of multiple `get_doc()`
+- Cache expensive calculations
+- Return only necessary data
+- Consider database indexes for frequently queried fields
+
+## Debugging Custom Tools
+
+### Test in Frappe Console
+
+Before creating the tool, test your function:
+
+```bash
+bench --site yoursite console
+```
+
+```python
+>>> from my_app.api.tools import calculate_customer_ltv
+>>> result = calculate_customer_ltv("CUST-001")
+>>> print(result)
+```
+
+### Check Agent Run Logs
+
+When the agent uses your tool:
+
+1. Navigate to **Agent Run** in Desk
+2. Find the run
+3. Check **Tool Calls** section
+4. Review:
+   - Parameters agent passed
+   - Result your function returned
+   - Any errors that occurred
+
+### Common Issues
+
+**"Function not found"**
+- Verify function path is correct
+- Check function is importable
+- Restart bench after adding new functions
+
+**"Missing parameter"**
+- Agent didn't provide required parameter
+- Improve tool description to clarify what's needed
+- Check agent instructions mention parameter
+
+**"TypeError" or "JSON serialization error"**
+- Return value isn't JSON-serializable
+- Convert objects to dicts
+- Convert dates to strings
+- Don't return Frappe DocType objects directly
+
+**Function never called**
+- Tool description may be unclear
+- Agent doesn't recognize when to use it
+- Try improving description or agent instructions
+
+## Documentation Tips
+
+### Writing Great Descriptions
+
+**Bad:**
+```
+Description: Handles customer calculations
+```
+→ Too vague, agent won't know when to use it
+
+**Good:**
+```
+Description: Calculate the total lifetime value for a customer including 
+all paid invoices, order count, and average order value. Use this when 
+users ask about customer value, spending history, or order statistics.
+```
+→ Clear purpose, context, and use cases
+
+### Include Examples in Docstrings
+
+```python
+def convert_currency(amount: float, from_currency: str, to_currency: str):
+    """
+    Convert an amount from one currency to another using current rates.
+    
+    Args:
+        amount (float): Amount to convert
+        from_currency (str): Source currency code (USD, EUR, GBP, etc.)
+        to_currency (str): Target currency code
+        
+    Returns:
+        dict: Converted amount and exchange rate used
+        
+    Example:
+        >>> convert_currency(100, "USD", "EUR")
+        {"amount": 100, "from": "USD", "to": "EUR", "converted": 85.50, "rate": 0.855}
+    """
+    # Implementation
+    pass
+```
+
+The agent can "read" this docstring to understand how to use the tool.
+
+## Security Considerations
+
+### Dangerous Operations
+
+**Be careful with:**
+- File system access
+- Shell commands
+- Database modifications
+- External API calls with sensitive data
+- Sending emails/notifications
+
+**Safety measures:**
+- Validate all inputs
+- Check permissions explicitly
+- Log all operations
+- Rate-limit expensive operations
+- Use whitelisted values when possible
+
+### Input Validation
+
+```python
+def send_email_notification(recipient: str, subject: str, message: str):
+    """Send email (with validation)."""
+    
+    # Validate email format
+    if not frappe.utils.validate_email_address(recipient):
+        frappe.throw(f"Invalid email address: {recipient}")
+    
+    # Whitelist allowed recipients (optional but safer)
+    allowed_domains = ["yourcompany.com", "partner.com"]
+    domain = recipient.split("@")[1]
+    if domain not in allowed_domains:
+        frappe.throw(f"Can only send to {', '.join(allowed_domains)} addresses")
+    
+    # Send email
+    frappe.sendmail(recipients=[recipient], subject=subject, message=message)
+    
+    return {"success": True, "recipient": recipient}
+```
+
+## What's Next?
+
+- **[Publishing Tools](/docs/tools/publishing)** - Share tools via apps
+- **[Built-in Tools](/docs/tools/built-in)** - Reference for built-in tools
+- **[Tools Concept](/docs/concepts/tools)** - Tool fundamentals
+- **[Creating Agents](/docs/guides/creating-agents)** - Assign custom tools to agents
+
+---
+
+**Questions?** Visit [GitHub discussions](https://github.com/tridz-dev/agent_flo/discussions).
+

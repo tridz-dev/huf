@@ -1,0 +1,361 @@
+---
+sidebarTitle: Creating Agents
+---
+
+# Creating Agents
+
+A step-by-step guide to planning, designing, and creating effective AI agents in Huf.
+
+## Planning Your Agent
+
+Before creating an agent, plan its purpose, scope, and capabilities.
+
+### Define the Role
+
+**Ask yourself:**
+- What task should this agent perform?
+- What is its primary responsibility?
+- What problems does it solve?
+- Who will use it?
+
+**Example:**
+- **Role:** Customer Support Assistant
+- **Purpose:** Answer customer questions and create support tickets
+- **Users:** End customers and support team
+- **Scope:** FAQ, ticket creation, basic information lookup
+
+### Define Success Criteria
+
+**What does success look like?**
+- Response time: Under 30 seconds
+- Accuracy: 95% correct answers
+- User satisfaction: Positive feedback
+- Ticket reduction: 50% fewer manual tickets
+
+### Identify Required Capabilities
+
+**What can the agent do?**
+- Answer questions about products
+- Look up customer information
+- Create support tickets
+- Check order status
+- Provide account information
+
+### Choose the Right Model
+
+**Consider:**
+- **Task complexity:** Simple tasks need cheaper models
+- **Response quality:** Complex reasoning needs powerful models
+- **Cost:** Balance capability with budget
+- **Speed:** Real-time needs faster models
+
+**Guidelines:**
+- Simple FAQ: GPT-3.5 Turbo or Claude Haiku
+- Complex analysis: GPT-4 Turbo or Claude Opus
+- High volume: Cheaper models with good instructions
+- Critical decisions: More powerful models
+
+## Writing Instructions
+
+Instructions are the most important part of your agent. They define behavior, tone, and capabilities.
+
+### Structure
+
+**Good instructions include:**
+1. **Role definition:** Who the agent is
+2. **Responsibilities:** What it does
+3. **Capabilities:** What tools it has
+4. **Guidelines:** How to behave
+5. **Examples:** Sample interactions
+
+### Example: Well-Structured Instructions
+
+```
+You are a customer support assistant for an e-commerce platform.
+
+Your responsibilities:
+1. Answer questions about products, orders, and policies
+2. Look up customer and order information
+3. Create support tickets for issues you cannot resolve
+4. Provide clear, helpful responses
+
+Available tools:
+- get_customer: Look up customer information
+- get_order: Retrieve order details
+- create_support_ticket: Create tickets for complex issues
+- check_product_availability: Check if products are in stock
+
+Guidelines:
+- Always be polite and professional
+- If you don't know something, say so and create a ticket
+- Provide specific information, not vague answers
+- Use customer names when addressing them
+- Escalate urgent issues immediately
+
+Examples:
+User: "What's the status of my order?"
+You: "I'll check that for you. What's your order number?"
+
+User: "I need to return an item"
+You: "I can help with that. Let me look up your order details..."
+```
+
+### Common Mistakes
+
+**Avoid:**
+- Vague instructions: "Help users" (too broad)
+- Missing context: No mention of available tools
+- Unclear boundaries: Doesn't know when to escalate
+- No examples: Agent doesn't understand expected behavior
+
+**Instead:**
+- Be specific: "Answer questions about orders, products, and shipping"
+- Mention tools: "Use get_order tool to retrieve order details"
+- Set boundaries: "If issue is complex, create a support ticket"
+- Include examples: Show expected interactions
+
+## Selecting Tools
+
+Choose tools that match your agent's responsibilities.
+
+### Tool Selection Process
+
+1. **List required capabilities**
+   - What data does the agent need?
+   - What actions should it take?
+   - What external systems to integrate?
+
+2. **Map to tools**
+   - Data retrieval → Get Document, Get List
+   - Data creation → Create Document
+   - Data updates → Update Document
+   - External calls → HTTP Request
+   - Complex logic → Custom Tools
+
+3. **Minimize tool count**
+   - Only assign necessary tools
+   - More tools = more tokens = higher cost
+   - Focused agents perform better
+
+### Example Tool Assignment
+
+**Customer Support Agent:**
+- get_customer (Get Document)
+- get_order (Get Document)
+- get_list_tickets (Get List)
+- create_support_ticket (Create Document)
+- send_notification (HTTP Request)
+
+**Total: 5 tools** (focused and sufficient)
+
+### Tool Descriptions Matter
+
+**Write clear tool descriptions:**
+- What the tool does
+- When to use it
+- What parameters it needs
+- What it returns
+
+**Example:**
+```
+Tool: get_customer
+Description: Retrieve detailed customer information including 
+contact details, account status, and order history. Use this 
+when users ask about their account or when you need customer 
+context for support.
+```
+
+## Configuring Settings
+
+### Temperature
+
+**Controls randomness:**
+- **0.0-0.3:** Very focused, deterministic
+  - Use for: Data retrieval, validation, structured tasks
+- **0.7:** Balanced (default)
+  - Use for: General conversations, customer support
+- **1.0-2.0:** Creative, varied
+  - Use for: Content generation, brainstorming
+
+**Recommendation:** Start with 0.7, adjust based on results.
+
+### Top P
+
+**Alternative to temperature:**
+- **1.0:** Full vocabulary (default)
+- **Lower values:** More focused word choices
+- **Use with temperature:** Not recommended (use one or the other)
+
+### Conversation Settings
+
+**Persist Conversation:**
+- Enable for multi-turn interactions
+- Disable for independent requests
+- Affects token costs
+
+**Persist per User:**
+- Enable for user-specific history
+- Disable for shared conversations
+- Important for triggers
+
+## Testing Your Agent
+
+### Before Production
+
+**Test with sample scenarios:**
+1. Common use cases
+2. Edge cases
+3. Error scenarios
+4. Tool usage
+5. Response quality
+
+### Testing Checklist
+
+- [ ] Agent understands common questions
+- [ ] Tools are called correctly
+- [ ] Responses are accurate
+- [ ] Error handling works
+- [ ] Instructions are followed
+- [ ] Tone is appropriate
+- [ ] Escalation works when needed
+
+### Iterative Improvement
+
+**Process:**
+1. Create agent with initial configuration
+2. Test with real scenarios
+3. Review Agent Run logs
+4. Refine instructions
+5. Adjust tools if needed
+6. Tune temperature
+7. Test again
+8. Deploy when satisfied
+
+## Best Practices
+
+### Instructions
+
+**Do:**
+- Be specific about role and responsibilities
+- Include step-by-step guidance
+- Provide examples of good responses
+- Define clear boundaries
+- Mention available tools
+- Set tone and style expectations
+
+**Don't:**
+- Be vague or ambiguous
+- Assume the AI knows your business logic
+- Forget to mention tool usage
+- Mix multiple unrelated roles
+- Use technical jargon users won't understand
+
+### Tool Assignment
+
+**Do:**
+- Assign only necessary tools
+- Use specific DocTypes per tool
+- Write clear tool descriptions
+- Test tool calls thoroughly
+
+**Don't:**
+- Assign too many tools
+- Use generic "get any document" tools
+- Forget to test tool permissions
+- Overlook tool parameter requirements
+
+### Model Selection
+
+**Do:**
+- Match model to task complexity
+- Consider cost vs capability
+- Test with cheaper models first
+- Upgrade if needed
+
+**Don't:**
+- Use expensive models for simple tasks
+- Underestimate model requirements
+- Ignore token costs
+- Forget to monitor performance
+
+## Common Patterns
+
+### FAQ Agent
+
+**Pattern:**
+- Simple instructions with Q&A examples
+- Get Document tools for data lookup
+- Low temperature (0.3-0.5)
+- No conversation persistence
+
+**Use Case:** Answer common questions quickly
+
+### Support Agent
+
+**Pattern:**
+- Detailed instructions with escalation rules
+- Multiple tools (lookup, create tickets)
+- Medium temperature (0.7)
+- Conversation persistence enabled
+
+**Use Case:** Handle support interactions
+
+### Analysis Agent
+
+**Pattern:**
+- Focused on data analysis
+- Get List tools with filters
+- Custom tools for calculations
+- Low temperature (0.3)
+- Scheduled triggers
+
+**Use Case:** Generate reports and insights
+
+### Automation Agent
+
+**Pattern:**
+- Task-focused instructions
+- Document manipulation tools
+- Very low temperature (0.2)
+- Document event triggers
+- No conversation persistence
+
+**Use Case:** Automate document processing
+
+## Troubleshooting
+
+**Agent doesn't follow instructions:**
+- Make instructions more specific
+- Add examples
+- Simplify language
+- Break into smaller steps
+
+**Wrong tools being used:**
+- Improve tool descriptions
+- Add tool usage guidance to instructions
+- Test tool calls individually
+- Review Agent Run logs
+
+**Responses are inconsistent:**
+- Lower temperature
+- Add more examples
+- Be more specific in instructions
+- Test with different prompts
+
+**High costs:**
+- Use cheaper models
+- Reduce tool count
+- Limit conversation history
+- Optimize instructions (shorter)
+
+## What's Next?
+
+- **[Managing Agents](/docs/guides/managing-agents)** - Lifecycle management
+- **[Running Agents](/docs/guides/running-agents)** - Execution methods
+- **[Monitoring](/docs/guides/monitoring)** - Track performance
+- **[Examples](/docs/examples)** - See complete configurations
+
+---
+
+**Questions?** Check [GitHub discussions](https://github.com/tridz-dev/agent_flo/discussions).
+
