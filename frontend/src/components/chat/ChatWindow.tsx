@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useState } from 'react';
-import { Upload, CheckIcon, GlobeIcon, MicIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { CheckIcon, MicIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import type { ToolUIPart } from 'ai';
@@ -144,7 +143,7 @@ const models = [
     name: 'GPT-4o',
     chef: 'OpenAI',
     chefSlug: 'openai',
-    providers: ['openai', 'azure'],
+    providers: [''],
   },
   {
     id: 'gpt-4o-mini',
@@ -200,12 +199,13 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   const [model, setModel] = useState<string>(models[1].id); // Default to GPT 4o-mini
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
   const [text, setText] = useState<string>('');
-  const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
+  // const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
   const [useMicrophone, setUseMicrophone] = useState<boolean>(false);
   const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
   const [messages, setMessages] = useState<MessageType[]>(initialMessages);
 
   const selectedModelData = models.find((m) => m.id === model);
+  const isNewChat = !chatId;
 
   const streamResponse = useCallback(
     async (messageId: string, content: string) => {
@@ -298,28 +298,6 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     addUserMessage(suggestion);
   };
 
-  if (!chatId) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <div className="text-center space-y-4 max-w-md px-6">
-          <h2 className="text-2xl font-semibold">Hello there!</h2>
-          <p className="text-muted-foreground">How can I help you today?</p>
-          <div className="flex gap-2 justify-center flex-wrap">
-            <Suggestions className="px-0">
-              {suggestions.slice(0, 2).map((suggestion) => (
-                <Suggestion
-                  key={suggestion}
-                  onClick={() => handleSuggestionClick(suggestion)}
-                  suggestion={suggestion}
-                />
-              ))}
-            </Suggestions>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-background">
       {/* Header */}
@@ -327,16 +305,23 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
         <div className="flex items-center gap-3 shrink-0">
           <h2 className="text-sm font-semibold">{selectedModelData?.name || 'GPT 4o-mini'}</h2>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <Upload className="w-4 h-4" />
-        </Button>
       </div>
 
       {/* Conversation - Scrollable Area */}
       {/* <div className="flex-1 min-h-0 flex"> */}
-        <Conversation className="h-full flex-1 flex overflow-y-auto">
-          <ConversationContent className="flex-1">
-            {messages.map(({ versions, ...message }) => (
+      <Conversation className="h-full flex-1 flex overflow-y-auto">
+        <ConversationContent className="flex-1 h-full">
+          {isNewChat ? (
+            <div className="flex h-full items-center justify-center px-6">
+              <div className="text-center space-y-4 max-w-md">
+                <h2 className="text-2xl font-semibold">Hello there!</h2>
+                <p className="text-muted-foreground">
+                  Start a new conversation
+                </p>
+              </div>
+            </div>
+          ) : (
+            messages.map(({ versions, ...message }) => (
               <MessageBranch defaultBranch={0} key={message.key}>
                 <MessageBranchContent>
                   {versions.map((version) => (
@@ -376,16 +361,17 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                   </MessageBranchSelector>
                 )}
               </MessageBranch>
-            ))}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
+            ))
+          )}
+        </ConversationContent>
+        {!isNewChat && <ConversationScrollButton />}
+      </Conversation>
       {/* </div> */}
 
       {/* Input Area - Fixed at Bottom */}
       <div className="shrink-0 border-t border-border bg-background">
         <div className="grid gap-4 p-4">
-          <Suggestions className="px-4">
+          {/* <Suggestions className="px-4">
             {suggestions.map((suggestion) => (
               <Suggestion
                 key={suggestion}
@@ -393,7 +379,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                 suggestion={suggestion}
               />
             ))}
-          </Suggestions>
+          </Suggestions> */}
 
           <div className="w-full px-4">
             <PromptInput globalDrop multiple onSubmit={handleSubmit}>
@@ -424,13 +410,13 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                     <span className="sr-only">Microphone</span>
                   </PromptInputButton>
 
-                  <PromptInputButton
+                  {/* <PromptInputButton
                     onClick={() => setUseWebSearch(!useWebSearch)}
                     variant={useWebSearch ? 'default' : 'ghost'}
                   >
                     <GlobeIcon size={16} />
                     <span>Search</span>
-                  </PromptInputButton>
+                  </PromptInputButton> */}
 
                   <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
                     <ModelSelectorTrigger asChild>

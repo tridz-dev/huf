@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -11,7 +10,7 @@ interface Chat {
   timestamp?: string;
 }
 
-const dummyChats: Chat[] = [
+export const mockChats: Chat[] = [
   {
     id: '1',
     title: 'User Greeting',
@@ -161,16 +160,13 @@ const dummyChats: Chat[] = [
 interface ChatListProps {
   selectedChatId: string | null;
   onSelectChat: (chatId: string) => void;
+  onNewChat?: () => void;
 }
 
-export function ChatList({ selectedChatId, onSelectChat }: ChatListProps) {
-  // Auto-select first chat if none is selected
-  useEffect(() => {
-    if (!selectedChatId && dummyChats.length > 0) {
-      onSelectChat(dummyChats[0].id);
-    }
-  }, [selectedChatId, onSelectChat]);
-
+export function ChatList({ selectedChatId, onSelectChat, onNewChat }: ChatListProps) {
+  const handleNewChat = () => {
+    onNewChat?.();
+  };
   const handleDeleteChat = (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     // TODO: Implement chat deletion
@@ -179,10 +175,21 @@ export function ChatList({ selectedChatId, onSelectChat }: ChatListProps) {
 
   return (
     <div className="flex flex-col w-64 h-full border-r border-border bg-sidebar">
+      <div className="border-b border-border p-3">
+        <Button
+          className="w-full justify-start gap-2"
+          variant="outline"
+          size="sm"
+          onClick={handleNewChat}
+        >
+          <Plus className="h-4 w-4" />
+          New Chat
+        </Button>
+      </div>
       {/* Chat List */}
       <ScrollArea className="flex-1 overflow-y-auto">
         <div className="space-y-1">
-          {dummyChats.map((chat) => {
+          {mockChats.map((chat) => {
             const isSelected = selectedChatId === chat.id;
             return (
               <div
