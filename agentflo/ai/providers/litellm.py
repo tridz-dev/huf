@@ -55,6 +55,15 @@ def _normalize_model_name(model: str, provider: str) -> str:
 	
 	This allows users to keep existing model names while supporting LiteLLM format.
 	"""
+	provider_lower = provider.lower()
+	if provider_lower == "openrouter":
+		if model.startswith("openrouter/"):
+			return model
+		elif "/" in model:
+			return f"openrouter/{model}"
+		else:
+			return f"openrouter/{model}"
+	
 	if "/" in model:
 		# Already in LiteLLM format
 		return model
@@ -236,6 +245,17 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 				frappe.log_error(error_msg, "LiteLLM Provider")
 				return SimpleResult(error_msg, total_usage, all_new_items)
 			except RateLimitError as e:
+				short_title = f"LiteLLM RateLimit: {normalized_model}"
+				if len(short_title) > 140:
+					short_title = short_title[:140]
+
+				try:
+					full_trace = frappe.get_traceback()
+				except Exception:
+					full_trace = str(e)
+
+				frappe.log_error(full_trace, short_title)
+
 				# Rate limit error
 				error_msg = (
 					f"Rate limit exceeded for model '{normalized_model}'. "
