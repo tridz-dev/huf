@@ -6,6 +6,7 @@ export const doctype = {
   "Agent Tool Function": "Agent Tool Function",
   "Agent Tool Type": "Agent Tool Type",
   "Agent Trigger": "Agent Trigger",
+  "Agent Conversation":"Agent Conversation",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];

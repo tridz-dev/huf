@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSidebar } from '@/components/ui/sidebar';
-import { ChatList, mockChats } from '@/components/chat/ChatList';
+import { ChatList } from '@/components/chat/ChatList';
 import { ChatWindow } from '@/components/chat/ChatWindow';
 
 export function ChatPage() {
@@ -20,12 +20,6 @@ export function ChatPage() {
   useEffect(() => {
     setSelectedChatId(normalizedChatId);
   }, [normalizedChatId]);
-
-  useEffect(() => {
-    if (!routeChatId && mockChats.length > 0) {
-      navigate(`/chat/${mockChats[0].id}`, { replace: true });
-    }
-  }, [routeChatId, navigate]);
 
   const handleSelectChat = (chatId: string) => {
     setSelectedChatId(chatId);

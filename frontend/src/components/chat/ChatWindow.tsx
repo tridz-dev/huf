@@ -70,7 +70,7 @@ import {
   SourcesTrigger,
 } from '@/components/ai-elements/sources';
 
-import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
+// import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 
 type MessageType = {
   key: string;
@@ -173,14 +173,6 @@ const models = [
     chefSlug: 'google',
     providers: ['google'],
   },
-];
-
-const suggestions = [
-  "What's the weather in San Francisco?",
-  'Explain React hooks like useState and useEffect',
-  'What are the latest trends in AI?',
-  'How does machine learning work?',
-  'Best practices for React development',
 ];
 
 const mockResponses = [
@@ -293,10 +285,10 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     setText('');
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setStatus('submitted');
-    addUserMessage(suggestion);
-  };
+  // const handleSuggestionClick = (suggestion: string) => {
+  //   setStatus('submitted');
+  //   addUserMessage(suggestion);
+  // };
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-background">
