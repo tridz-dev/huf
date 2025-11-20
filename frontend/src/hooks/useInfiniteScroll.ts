@@ -1,19 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDebounce } from './useDebounce';
-
-export interface PaginationParams {
-  page?: number;
-  limit?: number;
-  start?: number;
-  search?: string;
-  [key: string]: unknown;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  hasMore: boolean;
-  total?: number;
-}
+import { PaginationParams, PaginatedResponse } from '@/types/pagination';
 
 export interface UseInfiniteScrollOptions<TParams extends PaginationParams, TItem> {
   /**
@@ -44,6 +31,18 @@ export interface UseInfiniteScrollOptions<TParams extends PaginationParams, TIte
    * @default true
    */
   autoLoad?: boolean;
+
+  /**
+   * Whether to automatically observe the sentinel element and load more items
+   * @default true
+   */
+  autoLoadMore?: boolean;
+
+  /**
+   * Root margin to use for the intersection observer when auto loading more items
+   * @default '0px 0px 200px 0px'
+   */
+  rootMargin?: string;
 
 }
 
@@ -113,11 +112,20 @@ export interface UseInfiniteScrollReturn<TItem> {
    */
   reset: () => Promise<void>;
 
-
   /**
    * Total number of items (if provided by API)
    */
   total: number | undefined;
+
+  /**
+   * Ref for the scroll container. Attach to a scrollable element to scope the observer.
+   */
+  scrollRef: React.MutableRefObject<HTMLDivElement | null>;
+
+  /**
+   * Ref for the sentinel element. Place at the end of the list to trigger loading more items.
+   */
+  sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
 }
 
 /**
@@ -169,6 +177,8 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   pageSize = 20,
   debounceMs = 300,
   autoLoad = true,
+  autoLoadMore = true,
+  rootMargin = '0px 0px 200px 0px',
 }: UseInfiniteScrollOptions<TParams, TItem>): UseInfiniteScrollReturn<TItem> {
   const [items, setItems] = useState<TItem[]>([]);
   const [hasMore, setHasMore] = useState(true);
@@ -182,6 +192,8 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
 
   const currentPageRef = useRef(0);
   const isFetchingRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Debounce search and filters
   const debouncedSearch = useDebounce(search, debounceMs);
@@ -265,6 +277,37 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
     await fetchData(true);
   }, [hasMore, loading, loadingMore, fetchData]);
 
+  // Automatically observe sentinel element to load more items
+  useEffect(() => {
+    if (!autoLoadMore || !hasMore) {
+      return;
+    }
+
+    const sentinel = sentinelRef.current;
+    if (!sentinel) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting) {
+          loadMore();
+        }
+      },
+      {
+        root: scrollRef.current ?? null,
+        rootMargin,
+      }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [autoLoadMore, hasMore, loadMore, rootMargin, items.length]);
+
   // Set search query
   const setSearch = useCallback((value: string) => {
     setSearchRaw(value);
@@ -325,6 +368,7 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
     loadMore,
     reset,
     total,
+    scrollRef,
+    sentinelRef,
   };
 }
-

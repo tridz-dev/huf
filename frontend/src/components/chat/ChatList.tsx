@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
+import type { MouseEvent } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { getConversations } from '@/services/chatApi';
+import {
+  getConversations,
+  type ChatListItem,
+  type ConversationListParams,
+} from '@/services/chatApi';
 import { formatTimeAgo } from '@/utils/time';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 
-interface Chat {
-  id: string;
-  title: string;
-  agent: string;
-  timestamp?: string;
-}
+type Chat = ChatListItem;
 
 interface ChatListProps {
   selectedChatId: string | null;
@@ -20,37 +20,34 @@ interface ChatListProps {
 }
 
 export function ChatList({ selectedChatId, onSelectChat, onNewChat }: ChatListProps) {
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchConversations() {
-      try {
-        setIsLoading(true);
-        const conversations = await getConversations();
-        const mappedChats: Chat[] = conversations.map((conv) => ({
-          id: conv.id,
-          title: conv.title,
-          agent: conv.agent,
+  const {
+    items: chats,
+    initialLoading,
+    loadingMore,
+    hasMore,
+    error,
+    sentinelRef,
+    scrollRef,
+  } = useInfiniteScroll<ConversationListParams, Chat>({
+    fetchFn: async (params) => {
+      const response = await getConversations(params);
+      return {
+        data: response.data.map((conv) => ({
+          ...conv,
           timestamp: conv.timestamp ? formatTimeAgo(conv.timestamp) : undefined,
-        }));
-        setChats(mappedChats);
-      } catch (error) {
-        console.error('Error fetching conversations:', error);
-        setChats([]);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchConversations();
-  }, []);
+        })),
+        hasMore: response.hasMore,
+        total: response.total,
+      };
+    },
+    pageSize: 20,
+  });
 
   const handleNewChat = () => {
     onNewChat?.();
   };
 
-  const handleDeleteChat = (chatId: string, e: React.MouseEvent) => {
+  const handleDeleteChat = (chatId: string, e: MouseEvent) => {
     e.stopPropagation();
     // TODO: Implement chat deletion
     console.log('Delete chat', chatId);
@@ -70,10 +67,14 @@ export function ChatList({ selectedChatId, onSelectChat, onNewChat }: ChatListPr
         </Button>
       </div>
       {/* Chat List */}
-      <ScrollArea className="flex-1 overflow-y-auto">
+      <ScrollArea ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="space-y-1">
-          {isLoading ? (
+          {initialLoading ? (
             <div className="p-3 text-sm text-muted-foreground text-center">Loading...</div>
+          ) : error ? (
+            <div className="p-3 text-sm text-destructive text-center">
+              Failed to load conversations
+            </div>
           ) : chats.length === 0 ? (
             <div className="p-3 text-sm text-muted-foreground text-center">No conversations yet</div>
           ) : (
@@ -116,6 +117,12 @@ export function ChatList({ selectedChatId, onSelectChat, onNewChat }: ChatListPr
                 </div>
               );
             })
+          )}
+          {hasMore && (
+            <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
+          )}
+          {loadingMore && (
+            <div className="p-3 text-xs text-muted-foreground text-center">Loading more...</div>
           )}
         </div>
       </ScrollArea>
