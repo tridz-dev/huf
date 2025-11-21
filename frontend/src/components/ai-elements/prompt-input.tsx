@@ -62,6 +62,7 @@ import {
   type PropsWithChildren,
   type ReactNode,
   type RefObject,
+  forwardRef,
   useCallback,
   useContext,
   useEffect,
@@ -921,17 +922,16 @@ export const PromptInputTools = ({
 
 export type PromptInputButtonProps = ComponentProps<typeof InputGroupButton>;
 
-export const PromptInputButton = ({
-  variant = "ghost",
-  className,
-  size,
-  ...props
-}: PromptInputButtonProps) => {
+export const PromptInputButton = forwardRef<
+  React.ElementRef<typeof InputGroupButton>,
+  PromptInputButtonProps
+>(({ variant = "ghost", className, size, ...props }, ref) => {
   const newSize =
     size ?? (Children.count(props.children) > 1 ? "sm" : "icon-sm");
 
   return (
     <InputGroupButton
+      ref={ref}
       className={cn(className)}
       size={newSize}
       type="button"
@@ -939,7 +939,8 @@ export const PromptInputButton = ({
       {...props}
     />
   );
-};
+});
+PromptInputButton.displayName = "PromptInputButton";
 
 export type PromptInputActionMenuProps = ComponentProps<typeof DropdownMenu>;
 export const PromptInputActionMenu = (props: PromptInputActionMenuProps) => (
@@ -987,14 +988,10 @@ export type PromptInputSubmitProps = ComponentProps<typeof InputGroupButton> & {
   status?: ChatStatus;
 };
 
-export const PromptInputSubmit = ({
-  className,
-  variant = "default",
-  size = "icon-sm",
-  status,
-  children,
-  ...props
-}: PromptInputSubmitProps) => {
+export const PromptInputSubmit = forwardRef<
+  React.ElementRef<typeof InputGroupButton>,
+  PromptInputSubmitProps
+>(({ className, variant = "default", size = "icon-sm", status, children, ...props }, ref) => {
   let Icon = <CornerDownLeftIcon className="size-4" />;
 
   if (status === "submitted") {
@@ -1007,6 +1004,7 @@ export const PromptInputSubmit = ({
 
   return (
     <InputGroupButton
+      ref={ref}
       aria-label="Submit"
       className={cn(className)}
       size={size}
@@ -1017,7 +1015,8 @@ export const PromptInputSubmit = ({
       {children ?? Icon}
     </InputGroupButton>
   );
-};
+});
+PromptInputSubmit.displayName = "PromptInputSubmit";
 
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;

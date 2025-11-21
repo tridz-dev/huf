@@ -26,6 +26,24 @@ export interface ChatListItem {
 
 type ConversationFilter = [keyof AgentConversationDoc | string, 'like', string];
 
+export interface AgentMessageDoc {
+  name: string;
+  conversation: string;
+  content: string;
+  is_agent_message?: 0 | 1 | string;
+  creation?: string;
+  modified?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation: string;
+  content: string;
+  isAgent: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 /**
  * Map Agent Conversation document to chat list item
  */
@@ -38,10 +56,27 @@ function mapChatListItem(doc: AgentConversationDoc): ChatListItem {
   };
 }
 
+function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
+  const isAgent = doc.is_agent_message === 1;
+
+  return {
+    id: doc.name,
+    conversation: doc.conversation,
+    content: doc.content || '',
+    isAgent,
+    createdAt: doc.creation,
+    updatedAt: doc.modified,
+  };
+}
+
 /**
  * Parameters for fetching paginated conversations
  */
 export interface ConversationListParams extends PaginationParams {}
+
+export interface ConversationMessageListParams extends PaginationParams {
+  conversation?: string;
+}
 
 /**
  * Fetch paginated agent conversations sorted by last updated time.
@@ -71,5 +106,42 @@ export async function getConversations(
     };
   } catch (error) {
     handleFrappeError(error, 'Error fetching conversations');
+  }
+}
+
+/**
+ * Load messages for a specific conversation, ordered from newest to oldest
+ */
+export async function getConversationMessages(
+  params: ConversationMessageListParams
+): Promise<PaginatedResponse<ChatMessage>> {
+  const { conversation, limit = 30, start = 0 } = params;
+
+  if (!conversation) {
+    return {
+      data: [],
+      hasMore: false,
+      total: 0,
+    };
+  }
+
+  try {
+    const messages = await db.getDocList(doctype['Agent Message'], {
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'creation', 'modified'],
+      filters: [['conversation', '=', conversation]],
+      orderBy: { field: 'creation', order: 'desc' },
+      limit,
+      limit_start: start,
+    });
+
+    const mapped = (messages as AgentMessageDoc[]).map(mapAgentMessage);
+    const ordered = mapped.slice().reverse();
+
+    return {
+      data: ordered,
+      hasMore: mapped.length === limit,
+    };
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching conversation messages');
   }
 }

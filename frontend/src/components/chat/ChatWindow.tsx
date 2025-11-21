@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { CheckIcon, MicIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import type { ToolUIPart } from 'ai';
+import type { StickToBottomContext } from 'use-stick-to-bottom';
 
 import {
   MessageBranch,
@@ -71,6 +72,12 @@ import {
 } from '@/components/ai-elements/sources';
 
 // import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
+import {
+  getConversationMessages,
+  type ChatMessage,
+  type ConversationMessageListParams,
+} from '@/services/chatApi';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 
 type MessageType = {
   key: string;
@@ -195,9 +202,138 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   const [useMicrophone, setUseMicrophone] = useState<boolean>(false);
   const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
   const [messages, setMessages] = useState<MessageType[]>(initialMessages);
+  const stickContextRef = useRef<StickToBottomContext | null>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
+
+  const isNewChat = !chatId;
+  const messageParams = useMemo(() => {
+    if (!chatId) {
+      return {} as Omit<ConversationMessageListParams, 'page' | 'limit' | 'start'>;
+    }
+    return {
+      conversation: chatId,
+    } satisfies Omit<ConversationMessageListParams, 'page' | 'limit' | 'start'>;
+  }, [chatId]);
+
+  const {
+    items: conversationItems,
+    initialLoading: messagesLoading,
+    loadingMore: messagesLoadingMore,
+    hasMore: messagesHasMore,
+    error: messagesError,
+    sentinelRef: messagesSentinelRef,
+    scrollRef: messagesScrollRef,
+  } = useInfiniteScroll<ConversationMessageListParams, ChatMessage>({
+    fetchFn: getConversationMessages,
+    initialParams: messageParams,
+    pageSize: 30,
+    direction: 'reverse',
+    enabled: Boolean(chatId),
+    autoLoad: Boolean(chatId),
+    autoLoadMore: Boolean(chatId),
+  });
+
+  useEffect(() => {
+    if (!chatId) {
+      setMessages(initialMessages);
+      return;
+    }
+
+    const mapped: MessageType[] = conversationItems.map((item) => ({
+      key: item.id,
+      from: item.isAgent ? 'assistant' : 'user',
+      versions: [
+        {
+          id: item.id,
+          content: item.content,
+        },
+      ],
+    }));
+
+    setMessages(mapped);
+  }, [chatId, conversationItems]);
 
   const selectedModelData = models.find((m) => m.id === model);
-  const isNewChat = !chatId;
+
+  const handleConversationContext = useCallback(
+    (ctx: StickToBottomContext | null) => {
+      stickContextRef.current = ctx;
+      // Try to get scroll element from context, or find it from contentRef
+      const scrollElement = ctx?.scrollRef?.current ?? ctx?.contentRef?.current?.parentElement;
+      
+      // Verify that the element is actually scrollable
+      if (scrollElement instanceof HTMLElement) {
+        const style = window.getComputedStyle(scrollElement);
+        const isScrollable =
+          style.overflowY === 'auto' ||
+          style.overflowY === 'scroll' ||
+          style.overflow === 'auto' ||
+          style.overflow === 'scroll';
+        
+        if (isScrollable) {
+          messagesScrollRef.current = scrollElement as HTMLDivElement;
+        } else {
+          // If not scrollable, try to find scrollable parent
+          let parent = scrollElement.parentElement;
+          while (parent) {
+            const parentStyle = window.getComputedStyle(parent);
+            if (
+              parentStyle.overflowY === 'auto' ||
+              parentStyle.overflowY === 'scroll' ||
+              parentStyle.overflow === 'auto' ||
+              parentStyle.overflow === 'scroll'
+            ) {
+              messagesScrollRef.current = parent as HTMLDivElement;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+        }
+      } else {
+        messagesScrollRef.current = null;
+      }
+    },
+    [messagesScrollRef]
+  );
+
+  // Ensure scrollRef is set from sentinel's scrollable parent if not already set
+  useEffect(() => {
+    if (!messagesSentinelRef.current || messagesScrollRef.current) {
+      return;
+    }
+
+    // Find scrollable parent of sentinel
+    let parent = messagesSentinelRef.current.parentElement;
+    while (parent) {
+      const style = window.getComputedStyle(parent);
+      if (
+        style.overflowY === 'auto' ||
+        style.overflowY === 'scroll' ||
+        style.overflow === 'auto' ||
+        style.overflow === 'scroll'
+      ) {
+        messagesScrollRef.current = parent as HTMLDivElement;
+        break;
+      }
+      parent = parent.parentElement;
+    }
+  }, [messagesSentinelRef, messagesScrollRef, messages.length, chatId]);
+
+  useEffect(() => {
+    if (isNewChat || messagesLoading || messages.length === 0) {
+      const lastId = messages[messages.length - 1]?.key ?? null;
+      lastMessageIdRef.current = lastId;
+      return;
+    }
+
+    const lastId = messages[messages.length - 1]?.key ?? null;
+
+    if (lastId && lastId !== lastMessageIdRef.current) {
+      stickContextRef.current?.scrollToBottom();
+    }
+
+    lastMessageIdRef.current = lastId;
+  }, [isNewChat, messagesLoading, messages]);
 
   const streamResponse = useCallback(
     async (messageId: string, content: string) => {
@@ -301,7 +437,10 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
 
       {/* Conversation - Scrollable Area */}
       {/* <div className="flex-1 min-h-0 flex"> */}
-      <Conversation className="h-full flex-1 flex overflow-y-auto">
+      <Conversation
+        className="h-full flex-1 py-4 flex overflow-y-auto"
+        contextRef={handleConversationContext}
+      >
         <ConversationContent className="flex-1 h-full">
           {isNewChat ? (
             <div className="flex h-full items-center justify-center px-6">
@@ -312,48 +451,74 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                 </p>
               </div>
             </div>
+          ) : messagesLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">Loading messages...</p>
+            </div>
+          ) : messagesError ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-destructive">Failed to load messages</p>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">No messages yet</p>
+            </div>
           ) : (
-            messages.map(({ versions, ...message }) => (
-              <MessageBranch defaultBranch={0} key={message.key}>
-                <MessageBranchContent>
-                  {versions.map((version) => (
-                    <Message from={message.from} key={`${message.key}-${version.id}`}>
-                      <div>
-                        {message.sources?.length && (
-                          <Sources>
-                            <SourcesTrigger count={message.sources.length} />
-                            <SourcesContent>
-                              {message.sources.map((source) => (
-                                <Source href={source.href} key={source.href} title={source.title} />
-                              ))}
-                            </SourcesContent>
-                          </Sources>
-                        )}
+            <>
+              {!isNewChat && messagesHasMore && (
+                <div
+                  ref={messagesSentinelRef}
+                  className="h-4 w-full opacity-0 pointer-events-none"
+                  aria-hidden="true"
+                />
+              )}
+              {!isNewChat && messagesLoadingMore && (
+                <div className="text-xs text-muted-foreground text-center">
+                  Loading previous messages...
+                </div>
+              )}
+              {messages.map(({ versions, ...message }) => (
+                <MessageBranch defaultBranch={0} key={message.key}>
+                  <MessageBranchContent>
+                    {versions.map((version) => (
+                      <Message from={message.from} key={`${message.key}-${version.id}`}>
+                        <div>
+                          {message.sources?.length && (
+                            <Sources>
+                              <SourcesTrigger count={message.sources.length} />
+                              <SourcesContent>
+                                {message.sources.map((source) => (
+                                  <Source href={source.href} key={source.href} title={source.title} />
+                                ))}
+                              </SourcesContent>
+                            </Sources>
+                          )}
 
-                        {message.reasoning && (
-                          <Reasoning duration={message.reasoning.duration}>
-                            <ReasoningTrigger />
-                            <ReasoningContent>{message.reasoning.content}</ReasoningContent>
-                          </Reasoning>
-                        )}
+                          {message.reasoning && (
+                            <Reasoning duration={message.reasoning.duration}>
+                              <ReasoningTrigger />
+                              <ReasoningContent>{message.reasoning.content}</ReasoningContent>
+                            </Reasoning>
+                          )}
 
-                        <MessageContent>
-                          <MessageResponse>{version.content}</MessageResponse>
-                        </MessageContent>
-                      </div>
-                    </Message>
-                  ))}
-                </MessageBranchContent>
+                          <MessageContent>
+                            <MessageResponse>{version.content}</MessageResponse>
+                          </MessageContent>
+                        </div>
+                      </Message>
+                    ))}
+                  </MessageBranchContent>
 
-                {versions.length > 1 && (
-                  <MessageBranchSelector from={message.from}>
-                    <MessageBranchPrevious />
-                    <MessageBranchPage />
-                    <MessageBranchNext />
-                  </MessageBranchSelector>
-                )}
-              </MessageBranch>
-            ))
+                  {versions.length > 1 && (
+                    <MessageBranchSelector from={message.from}>
+                      <MessageBranchPrevious />
+                      <MessageBranchPage />
+                      <MessageBranchNext />
+                    </MessageBranchSelector>
+                  )}
+                </MessageBranch>
+              ))}
+            </>
           )}
         </ConversationContent>
         {!isNewChat && <ConversationScrollButton />}
