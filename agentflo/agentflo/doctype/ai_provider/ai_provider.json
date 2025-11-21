@@ -7,7 +7,9 @@
  "engine": "InnoDB",
  "field_order": [
   "provide_name",
-  "api_key"
+  "api_key",
+  "slug",
+  "chef"
  ],
  "fields": [
   {
@@ -24,12 +26,22 @@
    "label": "API Key",
    "length": 200,
    "reqd": 1
+  },
+  {
+   "fieldname": "slug",
+   "fieldtype": "Data",
+   "label": "Slug"
+  },
+  {
+   "fieldname": "chef",
+   "fieldtype": "Data",
+   "label": "Chef"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-11 18:25:10.500879",
+ "modified": "2025-11-21 17:36:01.792579",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "AI Provider",

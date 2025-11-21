@@ -10,6 +10,8 @@
   "llm_configuration_section",
   "agent_name",
   "provider",
+  "chef",
+  "slug",
   "temperature",
   "description",
   "column_break_df8m",
@@ -19,7 +21,6 @@
   "disabled",
   "behaviour_tab",
   "conversation_settings_section",
-  "persist_user_history",
   "allow_chat",
   "column_break_vfhq",
   "persist_conversation",
@@ -180,17 +181,25 @@
    "label": "Metadata"
   },
   {
-   "default": "1",
-   "description": "When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.",
-   "fieldname": "persist_user_history",
-   "fieldtype": "Check",
-   "label": "Persist per User (Doc/Schedule)"
+   "description": "This is the provider standard name",
+   "fetch_from": "provider.chef",
+   "fieldname": "chef",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Chef"
+  },
+  {
+   "fetch_from": "provider.slug",
+   "fieldname": "slug",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Slug"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-12 11:43:42.729561",
+ "modified": "2025-11-21 17:43:42.407012",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent",
