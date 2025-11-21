@@ -269,6 +269,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     }
   }, [messagesSentinelRef, messagesScrollRef, messages.length, chatId]);
 
+  // Scroll to bottom when chat changes or messages are loaded
   useEffect(() => {
     if (isNewChat || messagesLoading || messages.length === 0) {
       const lastId = messages[messages.length - 1]?.key ?? null;
@@ -278,12 +279,30 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
 
     const lastId = messages[messages.length - 1]?.key ?? null;
 
-    if (lastId && lastId !== lastMessageIdRef.current) {
-      stickContextRef.current?.scrollToBottom();
+    // Scroll if: new message added OR chat switched (lastMessageIdRef is null)
+    if (lastId && (lastId !== lastMessageIdRef.current || lastMessageIdRef.current === null)) {
+      // Use requestAnimationFrame and setTimeout to ensure DOM is ready
+      requestAnimationFrame(() => {
+        stickContextRef.current?.scrollToBottom();
+        // Fallback scroll after a short delay
+        setTimeout(() => {
+          stickContextRef.current?.scrollToBottom();
+        }, 50);
+      });
     }
 
     lastMessageIdRef.current = lastId;
   }, [isNewChat, messagesLoading, messages]);
+
+  // Reset state when switching chats
+  const previousChatIdRef = useRef<string | null>(chatId);
+  useEffect(() => {
+    if (chatId && chatId !== previousChatIdRef.current) {
+      // Reset last message ID when switching chats to force scroll to bottom
+      lastMessageIdRef.current = null;
+    }
+    previousChatIdRef.current = chatId;
+  }, [chatId]);
 
   const streamResponse = useCallback(
     async (messageId: string, content: string) => {
