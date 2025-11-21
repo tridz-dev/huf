@@ -172,3 +172,79 @@ def render_markdown(content: str = "") -> str:
         return md(content or "")
     except Exception:
         return frappe.utils.escape_html(content or "")
+
+@frappe.whitelist()
+def new_conversation(agent: str, message: str):
+    
+    if not agent:
+        frappe.throw(_("agent is required"))
+    if not message:
+        frappe.throw(_("message is required"))
+
+    try:
+        cm = ConversationManager(agent_name=agent, channel="Chat")
+        conversation = cm.create_new_conversation()
+
+        run_result = run_agent_sync(
+            agent_name=agent,
+            prompt=message,
+            provider=frappe.db.get_value("Agent", agent, "provider"),
+            model=frappe.db.get_value("Agent", agent, "model"),
+            channel_id="Chat",
+            conversation_id=conversation.name
+        )
+
+        if run_result.get("conversation_id"):
+            try:
+                frappe.db.set_value("Agent Conversation", conversation.name, "name", conversation.name)
+            except Exception:
+                pass
+
+        return {
+            "success": True,
+            "conversation_id": conversation.name,
+            "run": run_result
+        }
+
+    except Exception as e:
+        frappe.log_error(f"new_conversation error: {frappe.get_traceback()}", "AgentFlo API")
+        return {"success": False, "error": str(e)}
+
+
+@frappe.whitelist()
+def send_message_to_conversation(conversation: str, message: str):
+    if not conversation:
+        frappe.throw(_("conversation is required"))
+    if not message:
+        frappe.throw(_("message is required"))
+
+    try:
+        try:
+            conv_doc = frappe.get_doc("Agent Conversation", conversation)
+        except frappe.DoesNotExistError:
+            frappe.throw(_("Conversation not found: {0}").format(conversation))
+
+        if not conv_doc.is_active:
+            frappe.throw(_("Conversation is not active"))
+
+        agent_name = conv_doc.agent
+        if not agent_name:
+            frappe.throw(_("Conversation has no agent set"))
+
+        result = run_agent_sync(
+            agent_name=agent_name,
+            prompt=message,
+            provider=frappe.db.get_value("Agent", agent_name, "provider"),
+            model=frappe.db.get_value("Agent", agent_name, "model"),
+            channel_id=conv_doc.channel or "Chat",
+            conversation_id=conv_doc.name
+        )
+
+        if result.get("conversation_id") and not conv_doc.name:
+            conv_doc.db_set("conversation", result["conversation_id"])
+
+        return result
+
+    except Exception as e:
+        frappe.log_error(f"send_message_to_conversation error: {frappe.get_traceback()}", "AgentFlo API")
+        return {"success": False, "error": str(e)}
