@@ -171,6 +171,8 @@ export interface AgentDoc {
   agent_name: string;
   provider: string;
   model: string;
+  chef?: string | null; // Chef/provider name (e.g., OpenAI, Anthropic)
+  slug?: string | null; // Provider slug (e.g., openai, anthropic)
   disabled: number; // 0 or 1
   temperature: number;
   top_p: number;

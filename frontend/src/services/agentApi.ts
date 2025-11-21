@@ -38,6 +38,16 @@ const AGENT_LIST_FIELDS = [
 ];
 
 /**
+ * Fields needed for model selector (agents as models)
+ */
+const AGENT_MODEL_FIELDS = [
+  'name',
+  'agent_name',
+  'chef',
+  'slug',
+];
+
+/**
  * Fields needed for agent triggers listing
  */
 const AGENT_TRIGGER_FIELDS = [
@@ -308,5 +318,119 @@ export async function updateAgent(name: string, data: Partial<AgentDoc>): Promis
     return updatedAgent as AgentDoc;
   } catch (error) {
     handleFrappeError(error, `Error updating agent ${name}`);
+  }
+}
+
+/**
+ * Model selector item (agent as model)
+ */
+export interface AgentModelItem {
+  id: string;
+  name: string;
+  chef: string;
+  chefSlug: string;
+  providers: string[];
+}
+
+/**
+ * Pagination parameters for fetching agent models
+ */
+export interface GetAgentModelsParams {
+  page?: number;
+  limit?: number;
+  start?: number;
+  search?: string;
+}
+
+/**
+ * Paginated response for agent models
+ */
+export interface PaginatedAgentModelsResponse {
+  items: AgentModelItem[];
+  hasMore: boolean;
+  total?: number;
+}
+
+/**
+ * Fetch agents for model selector
+ * Supports pagination and search
+ */
+export async function getAgentModels(
+  params?: GetAgentModelsParams
+): Promise<PaginatedAgentModelsResponse> {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      start: providedStart,
+      search,
+    } = params || {};
+    
+    const start = providedStart ?? (page - 1) * limit;
+
+    // Build filters
+    const filters: Array<[string, string, unknown]> = [];
+
+    // Only show agents that allow chat
+    filters.push(['allow_chat', '=', 1]);
+    filters.push(['disabled', '=', 0]);
+
+    // Build search filters if provided
+    if (search && search.trim()) {
+      filters.push(['agent_name', 'like', `%${search.trim()}%`]);
+    }
+
+    // Fetch data
+    const agents = await db.getDocList(doctype.Agent, {
+      fields: AGENT_MODEL_FIELDS,
+      filters: filters.length > 0 ? (filters as any) : undefined,
+      limit: limit + 1, // Fetch one extra to check if there's more
+      ...(start > 0 && { limit_start: start }), // Only include if start > 0
+      orderBy: { field: 'modified', order: 'desc' },
+    });
+
+    // Map agents to model format
+    const mappedModels: AgentModelItem[] = (agents as any[]).map((agent) => ({
+      id: agent.name,
+      name: agent.agent_name || agent.name,
+      chef: agent.chef || '',
+      chefSlug: agent.slug || '',
+      providers: agent.slug ? [agent.slug] : [],
+    }));
+
+    const hasMore = mappedModels.length > limit;
+    const items = hasMore ? mappedModels.slice(0, limit) : mappedModels;
+
+    // Get total count efficiently using Frappe's count(name) field
+    // Only fetch count on first page to avoid unnecessary API calls
+    let total: number | undefined;
+    if (page === 1) {
+      try {
+        const countFilters = [...filters];
+        const countResult = await db.getDocList(doctype.Agent, {
+          fields: ['count(name) as count'],
+          filters: countFilters.length > 0 ? (countFilters as any) : undefined,
+          limit: 1,
+        });
+        if (countResult && countResult.length > 0) {
+          total = (countResult[0] as any).count || undefined;
+        }
+      } catch {
+        // Ignore count errors - total is optional
+      }
+    }
+
+    return {
+      items,
+      hasMore,
+      total,
+    };
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching agent models');
+    return {
+      items: [],
+      hasMore: false,
+      total: 0,
+    };
   }
 }

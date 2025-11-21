@@ -32,21 +32,40 @@ export const ModelSelectorTrigger = (props: ModelSelectorTriggerProps) => (
 
 export type ModelSelectorContentProps = ComponentProps<typeof DialogContent> & {
   title?: ReactNode;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  shouldFilter?: boolean;
 };
 
 export const ModelSelectorContent = ({
   className,
   children,
   title = "Model Selector",
+  searchValue,
+  onSearchChange,
+  shouldFilter = true,
   ...props
-}: ModelSelectorContentProps) => (
-  <DialogContent className={cn("p-0", className)} {...props}>
-    <DialogTitle className="sr-only">{title}</DialogTitle>
-    <Command className="**:data-[slot=command-input-wrapper]:h-auto">
-      {children}
-    </Command>
-  </DialogContent>
-);
+}: ModelSelectorContentProps) => {
+  const commandProps = shouldFilter
+    ? { value: searchValue, onValueChange: onSearchChange, shouldFilter: true }
+    : { 
+        shouldFilter: false,
+        // Custom filter that always returns true to show all items
+        filter: () => 1,
+      };
+    
+  return (
+    <DialogContent className={cn("p-0", className)} {...props}>
+      <DialogTitle className="sr-only">{title}</DialogTitle>
+      <Command
+        className="**:data-[slot=command-input-wrapper]:h-auto"
+        {...commandProps}
+      >
+        {children}
+      </Command>
+    </DialogContent>
+  );
+};
 
 export type ModelSelectorDialogProps = ComponentProps<typeof CommandDialog>;
 
@@ -54,13 +73,23 @@ export const ModelSelectorDialog = (props: ModelSelectorDialogProps) => (
   <CommandDialog {...props} />
 );
 
-export type ModelSelectorInputProps = ComponentProps<typeof CommandInput>;
+export type ModelSelectorInputProps = ComponentProps<typeof CommandInput> & {
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+};
 
 export const ModelSelectorInput = ({
   className,
+  searchValue,
+  onSearchChange,
   ...props
 }: ModelSelectorInputProps) => (
-  <CommandInput className={cn("h-auto py-3.5", className)} {...props} />
+  <CommandInput
+    className={cn("h-auto py-3.5", className)}
+    value={searchValue}
+    onValueChange={onSearchChange}
+    {...props}
+  />
 );
 
 export type ModelSelectorListProps = ComponentProps<typeof CommandList>;

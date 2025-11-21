@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
-import { CheckIcon, MicIcon } from 'lucide-react';
+import { MicIcon } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import type { ToolUIPart } from 'ai';
@@ -42,19 +42,7 @@ import {
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
 
-import {
-  ModelSelector,
-  ModelSelectorContent,
-  ModelSelectorEmpty,
-  ModelSelectorGroup,
-  ModelSelectorInput,
-  ModelSelectorItem,
-  ModelSelectorList,
-  ModelSelectorLogo,
-  ModelSelectorLogoGroup,
-  ModelSelectorName,
-  ModelSelectorTrigger,
-} from '@/components/ai-elements/model-selector';
+import { AgentModelSelector } from '@/components/chat/AgentModelSelector';
 
 import {
   Reasoning,
@@ -144,43 +132,6 @@ const initialMessages: MessageType[] = [
   },
 ];
 
-const models = [
-  {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    chef: 'OpenAI',
-    chefSlug: 'openai',
-    providers: [''],
-  },
-  {
-    id: 'gpt-4o-mini',
-    name: 'GPT 4o-mini',
-    chef: 'OpenAI',
-    chefSlug: 'openai',
-    providers: ['openai', 'azure'],
-  },
-  {
-    id: 'claude-opus-4-20250514',
-    name: 'Claude 4 Opus',
-    chef: 'Anthropic',
-    chefSlug: 'anthropic',
-    providers: ['anthropic', 'azure', 'google', 'amazon-bedrock'],
-  },
-  {
-    id: 'claude-sonnet-4-20250514',
-    name: 'Claude 4 Sonnet',
-    chef: 'Anthropic',
-    chefSlug: 'anthropic',
-    providers: ['anthropic', 'azure', 'google', 'amazon-bedrock'],
-  },
-  {
-    id: 'gemini-2.0-flash-exp',
-    name: 'Gemini 2.0 Flash',
-    chef: 'Google',
-    chefSlug: 'google',
-    providers: ['google'],
-  },
-];
 
 const mockResponses = [
   "That's a great question! Let me help you understand this concept better.",
@@ -195,8 +146,8 @@ interface ChatWindowProps {
 }
 
 export function ChatWindow({ chatId }: ChatWindowProps) {
-  const [model, setModel] = useState<string>(models[1].id); // Default to GPT 4o-mini
-  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
+  const [model, setModel] = useState<string>('');
+  const [modelName, setModelName] = useState<string>('');
   const [text, setText] = useState<string>('');
   // const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
   const [useMicrophone, setUseMicrophone] = useState<boolean>(false);
@@ -253,7 +204,6 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     setMessages(mapped);
   }, [chatId, conversationItems]);
 
-  const selectedModelData = models.find((m) => m.id === model);
 
   const handleConversationContext = useCallback(
     (ctx: StickToBottomContext | null) => {
@@ -431,7 +381,9 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       {/* Header */}
       <div className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 shrink-0">
-          <h2 className="text-sm font-semibold">{selectedModelData?.name || 'GPT 4o-mini'}</h2>
+          <h2 className="text-sm font-semibold">
+            {modelName ?? 'No model selected'}
+          </h2>
         </div>
       </div>
 
@@ -575,54 +527,11 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                     <span>Search</span>
                   </PromptInputButton> */}
 
-                  <ModelSelector onOpenChange={setModelSelectorOpen} open={modelSelectorOpen}>
-                    <ModelSelectorTrigger asChild>
-                      <PromptInputButton>
-                        {selectedModelData?.chefSlug && (
-                          <ModelSelectorLogo provider={selectedModelData.chefSlug} />
-                        )}
-                        {selectedModelData?.name && (
-                          <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>
-                        )}
-                      </PromptInputButton>
-                    </ModelSelectorTrigger>
-
-                    <ModelSelectorContent>
-                      <ModelSelectorInput placeholder="Search models..." />
-                      <ModelSelectorList>
-                        <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-                        {['OpenAI', 'Anthropic', 'Google'].map((chef) => (
-                          <ModelSelectorGroup key={chef} heading={chef}>
-                            {models
-                              .filter((m) => m.chef === chef)
-                              .map((m) => (
-                                <ModelSelectorItem
-                                  key={m.id}
-                                  onSelect={() => {
-                                    setModel(m.id);
-                                    setModelSelectorOpen(false);
-                                  }}
-                                  value={m.id}
-                                >
-                                  <ModelSelectorLogo provider={m.chefSlug} />
-                                  <ModelSelectorName>{m.name}</ModelSelectorName>
-                                  <ModelSelectorLogoGroup>
-                                    {m.providers.map((provider) => (
-                                      <ModelSelectorLogo key={provider} provider={provider} />
-                                    ))}
-                                  </ModelSelectorLogoGroup>
-                                  {model === m.id ? (
-                                    <CheckIcon className="ml-auto size-4" />
-                                  ) : (
-                                    <div className="ml-auto size-4" />
-                                  )}
-                                </ModelSelectorItem>
-                              ))}
-                          </ModelSelectorGroup>
-                        ))}
-                      </ModelSelectorList>
-                    </ModelSelectorContent>
-                  </ModelSelector>
+                  <AgentModelSelector
+                    value={model}
+                    onValueChange={setModel}
+                    onModelNameChange={setModelName}
+                  />
                 </PromptInputTools>
 
                 <PromptInputSubmit
