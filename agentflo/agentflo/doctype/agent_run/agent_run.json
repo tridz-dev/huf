@@ -128,7 +128,7 @@
   {
    "description": "Cost of generating this response. Might not be accurate.",
    "fieldname": "cost",
-   "fieldtype": "Currency",
+   "fieldtype": "Float",
    "label": "Cost",
    "read_only": 1
   },
@@ -154,7 +154,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-04 14:03:57.722517",
+ "modified": "2025-11-24 15:45:34.811852",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Run",

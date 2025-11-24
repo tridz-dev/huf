@@ -374,6 +374,7 @@ def run_agent_sync(
         
         final_output = getattr(result, "final_output", str(result))
         usage = getattr(result, "usage", None)
+        cost = getattr(result, "cost", 0)  
         if usage:
             input_tokens = 0
             output_tokens = 0
@@ -384,9 +385,6 @@ def run_agent_sync(
             else: 
                 input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
                 output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
-
-            cost = 0
-
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
