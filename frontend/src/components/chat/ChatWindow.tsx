@@ -2,7 +2,6 @@
 
 import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { MicIcon } from 'lucide-react';
-import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import type { ToolUIPart } from 'ai';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
@@ -62,6 +61,7 @@ import {
 // import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import {
   getConversationMessages,
+  sendMessageToConversation,
   type ChatMessage,
   type ConversationMessageListParams,
 } from '@/services/chatApi';
@@ -89,58 +89,6 @@ type MessageType = {
   }[];
 };
 
-const initialMessages: MessageType[] = [
-  {
-    key: nanoid(),
-    from: 'user',
-    versions: [
-      {
-        id: nanoid(),
-        content: 'hi',
-      },
-    ],
-  },
-  {
-    key: nanoid(),
-    from: 'assistant',
-    versions: [
-      {
-        id: nanoid(),
-        content: 'Hello! How can I assist you today?',
-      },
-    ],
-  },
-  {
-    key: nanoid(),
-    from: 'user',
-    versions: [
-      {
-        id: nanoid(),
-        content: 'how are yo?',
-      },
-    ],
-  },
-  {
-    key: nanoid(),
-    from: 'assistant',
-    versions: [
-      {
-        id: nanoid(),
-        content: "I'm doing well, thank you! How about you?",
-      },
-    ],
-  },
-];
-
-
-const mockResponses = [
-  "That's a great question! Let me help you understand this concept better.",
-  "I'd be happy to explain this topic in detail. There are several important factors to consider.",
-  'This is an interesting topic that comes up frequently. The solution typically involves understanding the core concepts.',
-  'Great choice of topic! This is something that many developers encounter.',
-  "That's definitely worth exploring. The best way to handle this is to consider both theoretical and practical aspects.",
-];
-
 interface ChatWindowProps {
   chatId: string | null;
 }
@@ -152,7 +100,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   // const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
   const [useMicrophone, setUseMicrophone] = useState<boolean>(false);
   const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
-  const [messages, setMessages] = useState<MessageType[]>(initialMessages);
+  const [messages, setMessages] = useState<MessageType[]>([]);
   const stickContextRef = useRef<StickToBottomContext | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
 
@@ -186,7 +134,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
 
   useEffect(() => {
     if (!chatId) {
-      setMessages(initialMessages);
+      setMessages([]);
       return;
     }
 
@@ -307,6 +255,12 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   const streamResponse = useCallback(
     async (messageId: string, content: string) => {
       setStatus('streaming');
+      
+      // Scroll to bottom when streaming starts
+      requestAnimationFrame(() => {
+        stickContextRef.current?.scrollToBottom();
+      });
+      
       const words = content.split(' ');
       let currentContent = '';
 
@@ -325,59 +279,33 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
             return msg;
           })
         );
+        
+        // Scroll after each word update to keep up with growing content
+        requestAnimationFrame(() => {
+          stickContextRef.current?.scrollToBottom();
+        });
+        
         await new Promise((resolve) => setTimeout(resolve, Math.random() * 100 + 50));
       }
 
       setStatus('ready');
+      
+      // Scroll to bottom again when streaming completes
+      requestAnimationFrame(() => {
+        stickContextRef.current?.scrollToBottom();
+      });
     },
     []
   );
 
-  const addUserMessage = useCallback(
-    (content: string) => {
-      const userMessage: MessageType = {
-        key: `user-${Date.now()}`,
-        from: 'user',
-        versions: [
-          {
-            id: `user-${Date.now()}`,
-            content,
-          },
-        ],
-      };
-
-      setMessages((prev) => [...prev, userMessage]);
-
-      setTimeout(() => {
-        const assistantMessageId = `assistant-${Date.now()}`;
-        const randomResponse = mockResponses[Math.floor(Math.random() * mockResponses.length)];
-
-        const assistantMessage: MessageType = {
-          key: `assistant-${Date.now()}`,
-          from: 'assistant',
-          versions: [
-            {
-              id: assistantMessageId,
-              content: '',
-            },
-          ],
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
-        streamResponse(assistantMessageId, randomResponse);
-      }, 500);
-    },
-    [streamResponse]
-  );
-
-  const handleSubmit = (message: PromptInputMessage) => {
+  const handleSubmit = async (message: PromptInputMessage) => {
     const hasText = Boolean(message.text);
     const hasAttachments = Boolean(message.files?.length);
 
     if (!(hasText || hasAttachments)) {
       return;
     }
-
+    setText('');
     setStatus('submitted');
 
     if (message.files?.length) {
@@ -386,8 +314,69 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       });
     }
 
-    addUserMessage(message.text || 'Sent with attachments');
-    setText('');
+    const messageText = message.text || 'Sent with attachments';
+
+    // For existing conversations, use the API
+    if (chatId) {
+      let assistantMessageId: string | null = null;
+      
+      try {
+        // Add user message immediately
+        const userMessage: MessageType = {
+          key: `user-${Date.now()}`,
+          from: 'user',
+          versions: [
+            {
+              id: `user-${Date.now()}`,
+              content: messageText,
+            },
+          ],
+        };
+        setMessages((prev) => [...prev, userMessage]);
+
+        // Add placeholder assistant message
+        assistantMessageId = `assistant-${Date.now()}`;
+        const assistantMessage: MessageType = {
+          key: assistantMessageId,
+          from: 'assistant',
+          versions: [
+            {
+              id: assistantMessageId,
+              content: '',
+            },
+          ],
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+
+        // Call the API
+        const response = await sendMessageToConversation({
+          conversation: chatId,
+          message: messageText,
+        });
+
+        // Stream the response using streamResponse function
+        if (response.message?.response && assistantMessageId) {
+          await streamResponse(assistantMessageId, response.message.response);
+        } else {
+          setStatus('ready');
+        }
+
+        // Scroll to bottom after response
+        requestAnimationFrame(() => {
+          stickContextRef.current?.scrollToBottom();
+        });
+      } catch (error) {
+        setStatus('error');
+        toast.error('Failed to send message', {
+          description: error instanceof Error ? error.message : 'An error occurred',
+        });
+        setText(message.text || '');
+        // Remove the placeholder assistant message on error
+        if (assistantMessageId) {
+          setMessages((prev) => prev.filter((msg) => msg.key !== assistantMessageId));
+        }
+      }
+    }
   };
 
   // const handleSuggestionClick = (suggestion: string) => {

@@ -1,4 +1,4 @@
-import { db } from '@/lib/frappe-sdk';
+import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { PaginationParams, PaginatedResponse } from '@/types/pagination';
@@ -143,5 +143,42 @@ export async function getConversationMessages(
     };
   } catch (error) {
     handleFrappeError(error, 'Error fetching conversation messages');
+  }
+}
+
+/**
+ * Send message to an existing conversation
+ */
+export interface SendMessageParams {
+  conversation: string;
+  message: string;
+}
+
+export interface SendMessageResponse {
+  message: {
+    success: boolean;
+    response: string;
+    structured: unknown;
+    provider: string;
+    agent_run_id: string;
+    conversation_id: string;
+    session_id: string;
+  };
+}
+
+/**
+ * Send a message to an existing conversation
+ */
+export async function sendMessageToConversation(
+  params: SendMessageParams
+): Promise<SendMessageResponse> {
+  try {
+    const result = await call.post('agentflo.ai.agent_chat.send_message_to_conversation', {
+      conversation: params.conversation,
+      message: params.message,
+    });
+    return result as SendMessageResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error sending message to conversation');
   }
 }
