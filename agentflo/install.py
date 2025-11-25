@@ -9,15 +9,18 @@ import frappe
 
 
 def after_install():
-	"""
+    create_demo_ai_providers()
+    create_demo_ai_models()
+    frappe.db.commit()
+    """
 	Called after app installation.
 	Checks if litellm is installed and provides helpful message if not.
 	"""
-	try:
-		import litellm
-		frappe.msgprint("✅ LiteLLM is installed and ready to use.")
-	except ImportError:
-		frappe.msgprint(
+    try:
+        import litellm
+        frappe.msgprint("✅ LiteLLM is installed and ready to use.")
+    except ImportError:
+    	frappe.msgprint(
 			"⚠️ LiteLLM package not found. "
 			"Please run 'bench setup requirements' to install dependencies, "
 			"then restart your site with 'bench restart'.",
@@ -43,4 +46,120 @@ def after_migrate():
 			f"Failed to sync tools after migrate: {str(e)}",
 			"Tool Sync Error"
 		)
+
+def create_demo_ai_providers():
+    providers = [
+        {"doctype": "AI Provider", "provide_name": "OpenAI", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "OpenRouter","api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "Anthropic", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "Google", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "xai", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "grok", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "mistral", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "alibaba", "api_keuy": ""},
+        {"doctype": "AI Provider", "provide_name": "dashscope", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "cohere", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "perplexity", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "meta", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "TogetherAI", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "DeepSeek", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "Azure OpenAI", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "AWS Bedrock", "api_key": ""},
+        {"doctype": "AI Provider", "provide_name": "Ollama", "api_key": "ollama"}, 
+        {"doctype": "AI Provider", "provide_name": "Cohere", "api_key": ""}
+    ]
+
+    for p in providers:
+        if not frappe.db.exists("AI Provider", p["provide_name"]):
+            doc = frappe.get_doc(p)
+            doc.flags.ignore_mandatory = True
+            doc.flags.ignore_validate = True
+            doc.insert(ignore_permissions=True)
+
+def create_demo_ai_models():
+    models = [
+        {"doctype": "AI Model", "model_name": "gpt-5.1", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-5-mini", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-5-nano", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-5", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-4.1", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-4.1-mini", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-4.1-nano", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-4o", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-4o-mini", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-4-turbo", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-3.5-turbo", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "o1-preview", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "o1-mini", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "whisper-1", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "text-embedding-3-small", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "text-embedding-3-large", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "text-embedding-ada-002", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "gpt-image-1", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "Alternate", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "dall-e-3", "provider": "OpenAI"},
+        {"doctype": "AI Model", "model_name": "openai/gpt-5", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "openai/gpt-5-mini", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "openai/gpt-5-nano", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "openai/gpt-4.1-mini", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "openai/gpt-4.1-nano", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "openai/gpt-4o-mini", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash-lite-preview-06-17", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "google/gemini-2.0-flash-exp:free", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "google/gemma-3-27b-it:free", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "anthropic/claude-4.5-sonnet-20250929", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3.1", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "qwen/qwen3-vl-235b-a22b-instruct", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "qwen/qwen3-coder:free", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "minimax/minimax-m2", "provider": "OpenRouter"},
+        {"doctype": "AI Model", "model_name": "claude-sonnet-4-20250514", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "claude-sonnet-4.5", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "claude-opus-4", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "claude-opus-4.1", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "claude-haiku-4.5", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "claude-3.7-sonnet", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "claude-3.5-sonnet", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "claude-3.5-haiku", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "claude-opus-4.5", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "claude-2", "provider": "Anthropic"},
+        {"doctype": "AI Model", "model_name": "gemini-3 pro", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "gemini-2.5 pro", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "gemini-2.5 flash", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "gemini-2.5 flash-lite", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "gemma-3", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "gemma-3n", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "nano banana pro", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "embeddinggemma", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "gemini-2.0 flash", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "gemini-2.0 flash-lite", "provider": "Google"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-0528", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-v2.5-1210", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl2", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-coder-v5.7b-mqa-base", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3.1-terminus", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-zero", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-lite", "provider": "DeepSeek"},
+        {"doctype": "AI Model", "model_name": "perplexity/sonar-pro", "provider": "Perplexity"},
+        {"doctype": "AI Model", "model_name": "perplexity/gpt-5", "provider": "Perplexity"},
+        {"doctype": "AI Model", "model_name": "perplexity/claude-sonnet-4.0", "provider": "Perplexity"},
+        {"doctype": "AI Model", "model_name": "perplexity/gemini-2.5-pro", "provider": "Perplexity"},
+        {"doctype": "AI Model", "model_name": "perplexity/claude-sonnet-4.0-thinking", "provider": "Perplexity"},
+        {"doctype": "AI Model", "model_name": "perplexity/o3", "provider": "Perplexity"},
+        {"doctype": "AI Model", "model_name": "perplexity/grok-4", "provider": "Perplexity"},
+        {"doctype": "AI Model", "model_name": "perplexity/sonar-lite", "provider": "Perplexity"},
+        {"doctype": "AI Model", "model_name": "perplexity/claude-opus-4", "provider": "Perplexity"},
+        {"doctype": "AI Model", "model_name": "perplexity/gpt-4o-mini", "provider": "Perplexity"},
+    ]
+
+    for m in models:
+        if not frappe.db.exists("AI Model", m["model_name"]):
+            doc = frappe.get_doc(m)
+            doc.flags.ignore_mandatory = True
+            doc.flags.ignore_validate = True
+            doc.insert(ignore_permissions=True)
 
