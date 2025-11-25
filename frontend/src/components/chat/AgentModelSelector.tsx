@@ -23,9 +23,10 @@ interface AgentModelSelectorProps {
   value: string;
   onValueChange: (value: string) => void;
   onModelNameChange?: (name: string) => void;
+  disabled?: boolean;
 }
 
-export function AgentModelSelector({ value, onValueChange, onModelNameChange }: AgentModelSelectorProps) {
+export function AgentModelSelector({ value, onValueChange, onModelNameChange, disabled }: AgentModelSelectorProps) {
   const [open, setOpen] = useState(false);
 
   // Fetch agent models for selector
@@ -103,7 +104,7 @@ export function AgentModelSelector({ value, onValueChange, onModelNameChange }: 
   return (
     <ModelSelector onOpenChange={setOpen} open={open}>
       <ModelSelectorTrigger asChild>
-        <PromptInputButton>
+        <PromptInputButton disabled={disabled}>
           {selectedModelData?.chefSlug && (
             <ModelSelectorLogo provider={selectedModelData.chefSlug} />
           )}

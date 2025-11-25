@@ -655,6 +655,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                   </PromptInputButton> */}
 
                   <AgentModelSelector
+                    disabled={!isNewChat}
                     value={model}
                     onValueChange={setModel}
                     onModelNameChange={setModelName}
