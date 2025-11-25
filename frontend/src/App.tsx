@@ -111,6 +111,16 @@ function App() {
             }
           />
           <Route
+            path="/chat/:chatId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <ChatPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/settings"
             element={
               <ProtectedRoute>

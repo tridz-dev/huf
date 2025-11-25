@@ -1,0 +1,225 @@
+import { db, call } from '@/lib/frappe-sdk';
+import { doctype } from '@/data/doctypes';
+import { handleFrappeError } from '@/lib/frappe-error';
+import { PaginationParams, PaginatedResponse } from '@/types/pagination';
+
+/**
+ * Agent Conversation document from Frappe
+ */
+export interface AgentConversationDoc {
+  name: string;
+  title: string;
+  agent: string;
+  last_activity?: string;
+  modified?: string;
+}
+
+/**
+ * Chat list item (mapped from Agent Conversation)
+ */
+export interface ChatListItem {
+  id: string;
+  title: string;
+  agent: string;
+  timestamp?: string;
+}
+
+type ConversationFilter = [keyof AgentConversationDoc | string, 'like', string];
+
+export interface AgentMessageDoc {
+  name: string;
+  conversation: string;
+  content: string;
+  is_agent_message?: 0 | 1 | string;
+  creation?: string;
+  modified?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation: string;
+  content: string;
+  isAgent: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Map Agent Conversation document to chat list item
+ */
+function mapChatListItem(doc: AgentConversationDoc): ChatListItem {
+  return {
+    id: doc.name,
+    title: doc.title || 'Untitled Chat',
+    agent: doc.agent || '',
+    timestamp: doc.last_activity || doc.modified || undefined,
+  };
+}
+
+function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
+  const isAgent = doc.is_agent_message === 1;
+
+  return {
+    id: doc.name,
+    conversation: doc.conversation,
+    content: doc.content || '',
+    isAgent,
+    createdAt: doc.creation,
+    updatedAt: doc.modified,
+  };
+}
+
+/**
+ * Parameters for fetching paginated conversations
+ */
+export interface ConversationListParams extends PaginationParams {}
+
+export interface ConversationMessageListParams extends PaginationParams {
+  conversation?: string;
+}
+
+/**
+ * Fetch paginated agent conversations sorted by last updated time.
+ */
+export async function getConversations(
+  params: ConversationListParams = {}
+): Promise<PaginatedResponse<ChatListItem>> {
+  const { limit = 20, start = 0, search } = params;
+
+  try {
+    const filters: ConversationFilter[] | undefined = search
+      ? [['title', 'like', `%${search}%`]]
+      : undefined;
+
+    const conversations = await db.getDocList(doctype['Agent Conversation'], {
+      fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
+      orderBy: { field: 'modified', order: 'desc' },
+      limit,
+      limit_start: start,
+      filters,
+    });
+
+    const mapped = (conversations as AgentConversationDoc[]).map(mapChatListItem);
+    return {
+      data: mapped,
+      hasMore: mapped.length === limit,
+    };
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching conversations');
+  }
+}
+
+/**
+ * Load messages for a specific conversation, ordered from newest to oldest
+ */
+export async function getConversationMessages(
+  params: ConversationMessageListParams
+): Promise<PaginatedResponse<ChatMessage>> {
+  const { conversation, limit = 30, start = 0 } = params;
+
+  if (!conversation) {
+    return {
+      data: [],
+      hasMore: false,
+      total: 0,
+    };
+  }
+
+  try {
+    const messages = await db.getDocList(doctype['Agent Message'], {
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'creation', 'modified'],
+      filters: [['conversation', '=', conversation]],
+      orderBy: { field: 'creation', order: 'desc' },
+      limit,
+      limit_start: start,
+    });
+
+    const mapped = (messages as AgentMessageDoc[]).map(mapAgentMessage);
+    const ordered = mapped.slice().reverse();
+
+    return {
+      data: ordered,
+      hasMore: mapped.length === limit,
+    };
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching conversation messages');
+  }
+}
+
+/**
+ * Start a new conversation
+ */
+export interface NewConversationParams {
+  agent: string;
+  message: string;
+}
+
+export interface NewConversationResponse {
+  message: {
+    success: boolean;
+    conversation_id: string;
+    run: {
+      success: boolean;
+      response: string;
+      structured: unknown;
+      provider: string;
+      agent_run_id: string;
+      conversation_id: string;
+      session_id: string;
+    };
+  };
+}
+
+/**
+ * Send message to an existing conversation
+ */
+export interface SendMessageParams {
+  conversation: string;
+  message: string;
+}
+
+export interface SendMessageResponse {
+  message: {
+    success: boolean;
+    response: string;
+    structured: unknown;
+    provider: string;
+    agent_run_id: string;
+    conversation_id: string;
+    session_id: string;
+  };
+}
+
+/**
+ * Start a new conversation
+ */
+export async function newConversation(
+  params: NewConversationParams
+): Promise<NewConversationResponse> {
+  try {
+    const result = await call.post('agentflo.ai.agent_chat.new_conversation', {
+      agent: params.agent,
+      message: params.message,
+    });
+    return result as NewConversationResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error creating new conversation');
+  }
+}
+
+/**
+ * Send a message to an existing conversation
+ */
+export async function sendMessageToConversation(
+  params: SendMessageParams
+): Promise<SendMessageResponse> {
+  try {
+    const result = await call.post('agentflo.ai.agent_chat.send_message_to_conversation', {
+      conversation: params.conversation,
+      message: params.message,
+    });
+    return result as SendMessageResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error sending message to conversation');
+  }
+}

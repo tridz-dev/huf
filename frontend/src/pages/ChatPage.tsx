@@ -1,31 +1,50 @@
-import { MessageSquare } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Button } from '../components/ui/button';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useSidebar } from '@/components/ui/sidebar';
+import { ChatList } from '@/components/chat/ChatList';
+import { ChatWindow } from '@/components/chat/ChatWindow';
 
 export function ChatPage() {
-  return (
-    <div className="h-full overflow-auto">
-      <div className="p-6 space-y-6">
-        <div>
-          <p className="text-muted-foreground">
-            Chat with your AI agents
-          </p>
-        </div>
+  const navigate = useNavigate();
+  const { chatId: routeChatId } = useParams<{ chatId?: string }>();
+  const { setOpen } = useSidebar();
+  const normalizedChatId = routeChatId && routeChatId !== 'new' ? routeChatId : null;
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(normalizedChatId);
 
-        <Card className="border-dashed">
-          <CardHeader className="text-center pb-4">
-            <div className="flex justify-center mb-4">
-              <MessageSquare className="w-12 h-12 text-muted-foreground" />
-            </div>
-            <CardTitle className="text-lg">Coming Soon</CardTitle>
-            <CardDescription>
-              Chat interface will be available here
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <Button variant="outline">Learn More</Button>
-          </CardContent>
-        </Card>
+  // Collapse the main sidebar when chat page loads
+  useEffect(() => {
+    // console.log('ChatPage loaded');
+    setOpen(false);
+  }, []);
+
+  useEffect(() => {
+    setSelectedChatId(normalizedChatId);
+  }, [normalizedChatId]);
+
+  const handleSelectChat = (chatId: string) => {
+    setSelectedChatId(chatId);
+    navigate(`/chat/${chatId}`);
+  };
+
+  const handleNewChat = () => {
+    setSelectedChatId(null);
+    navigate('/chat/new');
+  };
+
+  return (
+    <div className="flex h-screen min-h-0 w-full overflow-hidden">
+      <ChatList
+        selectedChatId={selectedChatId}
+        onSelectChat={handleSelectChat}
+        onNewChat={handleNewChat}
+      />
+      <div className="flex-1 min-h-0">
+        <ChatWindow
+          chatId={selectedChatId}
+          onConversationCreated={(conversationId) => {
+            handleSelectChat(conversationId);
+          }}
+        />
       </div>
     </div>
   );
