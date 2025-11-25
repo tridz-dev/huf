@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { MicIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -39,6 +37,7 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
+  usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input';
 
 import { AgentModelSelector } from '@/components/chat/AgentModelSelector';
@@ -61,6 +60,7 @@ import {
 // import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import {
   getConversationMessages,
+  newConversation,
   sendMessageToConversation,
   type ChatMessage,
   type ConversationMessageListParams,
@@ -91,9 +91,27 @@ type MessageType = {
 
 interface ChatWindowProps {
   chatId: string | null;
+  onConversationCreated?: (conversationId: string) => void;
 }
 
-export function ChatWindow({ chatId }: ChatWindowProps) {
+// Component to conditionally render header only when there are attachments
+function ConditionalPromptInputHeader() {
+  const attachments = usePromptInputAttachments();
+  
+  if (attachments.files.length === 0) {
+    return null;
+  }
+  
+  return (
+    <PromptInputHeader>
+      <PromptInputAttachments>
+        {(attachment) => <PromptInputAttachment data={attachment} />}
+      </PromptInputAttachments>
+    </PromptInputHeader>
+  );
+}
+
+export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const [model, setModel] = useState<string>('');
   const [modelName, setModelName] = useState<string>('');
   const [text, setText] = useState<string>('');
@@ -104,7 +122,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   const stickContextRef = useRef<StickToBottomContext | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
 
-  const isNewChat = !chatId;
+  let isNewChat = !chatId;
   const messageParams = useMemo(() => {
     if (!chatId) {
       return {} as Omit<ConversationMessageListParams, 'page' | 'limit' | 'start'>;
@@ -132,9 +150,20 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     autoLoadMore: Boolean(chatId),
   });
 
+  // Track if we're in the middle of creating a new conversation
+  const isCreatingConversationRef = useRef(false);
+
   useEffect(() => {
     if (!chatId) {
-      setMessages([]);
+      // Only clear messages if we're not creating a conversation
+      if (!isCreatingConversationRef.current) {
+        setMessages([]);
+      }
+      return;
+    }
+
+    // If we're creating a conversation, don't overwrite local messages yet
+    if (isCreatingConversationRef.current) {
       return;
     }
 
@@ -316,8 +345,102 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
 
     const messageText = message.text || 'Sent with attachments';
 
-    // For existing conversations, use the API
-    if (chatId) {
+    // Check if we have an agent selected
+    if (!model) {
+      toast.error('Please select an agent first');
+      setText(messageText);
+      setStatus('ready');
+      return;
+    }
+
+    // For new conversations, create conversation first
+    if (!chatId) {
+      let assistantMessageId: string | null = null;
+      
+      try {
+        // Mark that we're creating a conversation to prevent message overwrite
+        isCreatingConversationRef.current = true;
+        isNewChat = false;
+        // Add user message immediately - use a stable key
+        const userMessageKey = `user-${Date.now()}`;
+        const userMessage: MessageType = {
+          key: userMessageKey,
+          from: 'user',
+          versions: [
+            {
+              id: userMessageKey,
+              content: messageText,
+            },
+          ],
+        };
+        setMessages((prev) => [...prev, userMessage]);
+
+        // Scroll to show user message immediately
+        requestAnimationFrame(() => {
+          stickContextRef.current?.scrollToBottom();
+        });
+
+        // Add placeholder assistant message
+        assistantMessageId = `assistant-${Date.now()}`;
+        const assistantMessage: MessageType = {
+          key: assistantMessageId,
+          from: 'assistant',
+          versions: [
+            {
+              id: assistantMessageId,
+              content: '',
+            },
+          ],
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+
+        // Call the new conversation API
+        const response = await newConversation({
+          agent: model,
+          message: messageText,
+        });
+
+        // Get conversation ID and response
+        const conversationId = response.message?.conversation_id;
+        const responseText = response.message?.run?.response;
+
+        // Stream the response BEFORE navigating to preserve messages
+        if (responseText && assistantMessageId) {
+          await streamResponse(assistantMessageId, responseText);
+        } else {
+          setStatus('ready');
+        }
+
+        // Navigate to the new conversation AFTER streaming completes
+        if (conversationId && onConversationCreated) {
+          // Reset the flag after a short delay to allow navigation to complete
+          setTimeout(() => {
+            isCreatingConversationRef.current = false;
+          }, 100);
+          onConversationCreated(conversationId);
+        } else {
+          isCreatingConversationRef.current = false;
+        }
+
+        // Scroll to bottom after response
+        requestAnimationFrame(() => {
+          stickContextRef.current?.scrollToBottom();
+        });
+      } catch (error) {
+        isCreatingConversationRef.current = false;
+        setStatus('error');
+        toast.error('Failed to create conversation', {
+          description: error instanceof Error ? error.message : 'An error occurred',
+        });
+        setText(messageText);
+        // Remove the placeholder assistant message on error
+        if (assistantMessageId) {
+          setMessages((prev) => prev.filter((msg) => msg.key !== assistantMessageId));
+        }
+      }
+    } 
+    // For existing conversations, use the send message API
+    else {
       let assistantMessageId: string | null = null;
       
       try {
@@ -402,7 +525,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
         contextRef={handleConversationContext}
       >
         <ConversationContent className="flex-1 h-full">
-          {isNewChat ? (
+          {(isNewChat && !isCreatingConversationRef.current) ? (
             <div className="flex h-full items-center justify-center px-6">
               <div className="text-center space-y-4 max-w-md">
                 <h2 className="text-2xl font-semibold">Hello there!</h2>
@@ -500,11 +623,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
 
           <div className="w-full px-4">
             <PromptInput globalDrop multiple onSubmit={handleSubmit}>
-              <PromptInputHeader>
-                <PromptInputAttachments>
-                  {(attachment) => <PromptInputAttachment data={attachment} />}
-                </PromptInputAttachments>
-              </PromptInputHeader>
+              <ConditionalPromptInputHeader />
 
               <PromptInputBody>
                 <PromptInputTextarea onChange={(event) => setText(event.target.value)} value={text} />

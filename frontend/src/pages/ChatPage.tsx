@@ -39,7 +39,12 @@ export function ChatPage() {
         onNewChat={handleNewChat}
       />
       <div className="flex-1 min-h-0">
-        <ChatWindow chatId={selectedChatId} />
+        <ChatWindow
+          chatId={selectedChatId}
+          onConversationCreated={(conversationId) => {
+            handleSelectChat(conversationId);
+          }}
+        />
       </div>
     </div>
   );

@@ -147,6 +147,30 @@ export async function getConversationMessages(
 }
 
 /**
+ * Start a new conversation
+ */
+export interface NewConversationParams {
+  agent: string;
+  message: string;
+}
+
+export interface NewConversationResponse {
+  message: {
+    success: boolean;
+    conversation_id: string;
+    run: {
+      success: boolean;
+      response: string;
+      structured: unknown;
+      provider: string;
+      agent_run_id: string;
+      conversation_id: string;
+      session_id: string;
+    };
+  };
+}
+
+/**
  * Send message to an existing conversation
  */
 export interface SendMessageParams {
@@ -164,6 +188,23 @@ export interface SendMessageResponse {
     conversation_id: string;
     session_id: string;
   };
+}
+
+/**
+ * Start a new conversation
+ */
+export async function newConversation(
+  params: NewConversationParams
+): Promise<NewConversationResponse> {
+  try {
+    const result = await call.post('agentflo.ai.agent_chat.new_conversation', {
+      agent: params.agent,
+      message: params.message,
+    });
+    return result as NewConversationResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error creating new conversation');
+  }
 }
 
 /**

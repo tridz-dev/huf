@@ -113,7 +113,7 @@ export function AgentModelSelector({ value, onValueChange, onModelNameChange }: 
         </PromptInputButton>
       </ModelSelectorTrigger>
 
-      <ModelSelectorContent shouldFilter={false}>
+      <ModelSelectorContent shouldFilter={false} className="min-h-[40%]">
         <ModelSelectorInput
           placeholder="Search models..."
           searchValue={modelSearch}
