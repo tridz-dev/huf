@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react';
+import { useEffect, type MouseEvent } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,9 +17,10 @@ interface ChatListProps {
   selectedChatId: string | null;
   onSelectChat: (chatId: string) => void;
   onNewChat?: () => void;
+  refreshKey?: number;
 }
 
-export function ChatList({ selectedChatId, onSelectChat, onNewChat }: ChatListProps) {
+export function ChatList({ selectedChatId, onSelectChat, onNewChat, refreshKey }: ChatListProps) {
   const {
     items: chats,
     initialLoading,
@@ -28,6 +29,7 @@ export function ChatList({ selectedChatId, onSelectChat, onNewChat }: ChatListPr
     error,
     sentinelRef,
     scrollRef,
+    reset,
   } = useInfiniteScroll<ConversationListParams, Chat>({
     fetchFn: async (params) => {
       const response = await getConversations(params);
@@ -42,6 +44,13 @@ export function ChatList({ selectedChatId, onSelectChat, onNewChat }: ChatListPr
     },
     pageSize: 20,
   });
+
+  useEffect(() => {
+    if (typeof refreshKey === 'undefined') {
+      return;
+    }
+    reset();
+  }, [refreshKey, reset]);
 
   const handleNewChat = () => {
     onNewChat?.();

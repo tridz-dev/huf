@@ -85,6 +85,33 @@ function mapAgentTriggerListItem(doc: {
 }
 
 /**
+ * Fetch count for a given DocType using frappe.client.get_count
+ */
+async function fetchDocCount(
+  targetDoctype: string,
+  filters?: Array<[string, string, unknown]>
+): Promise<number | undefined> {
+  const params: Record<string, unknown> = { doctype: targetDoctype };
+  if (filters && filters.length > 0) {
+    params.filters = JSON.stringify(filters);
+  }
+
+  const response = await call.get('frappe.client.get_count', params);
+  const { message } = response || {};
+
+  if (typeof message === 'number') {
+    return message;
+  }
+
+  if (typeof message === 'string') {
+    const parsed = Number(message);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
+  return undefined;
+}
+
+/**
  * Pagination parameters for fetching agents
  */
 export interface GetAgentsParams {
@@ -154,22 +181,12 @@ export async function getAgents(
     const hasMore = mappedAgents.length > limit;
     const items = hasMore ? mappedAgents.slice(0, limit) : mappedAgents;
 
-    // Get total count efficiently using Frappe's count(name) field
     // Only fetch count on first page to avoid unnecessary API calls
     let total: number | undefined;
     if (page === 1) {
       try {
-        // Build filters matching the main query (including search for accuracy)
         const countFilters = [...filters];
-        const countResult = await db.getDocList(doctype.Agent, {
-          fields: ['count(name) as count'],
-          filters: countFilters.length > 0 ? (countFilters as any) : undefined,
-          limit: 1,
-        });
-        // Extract count from response
-        if (countResult && countResult.length > 0) {
-          total = (countResult[0] as any).count || undefined;
-        }
+        total = await fetchDocCount(doctype.Agent, countFilters);
       } catch {
         // Ignore count errors - total is optional
       }
@@ -401,20 +418,12 @@ export async function getAgentModels(
     const hasMore = mappedModels.length > limit;
     const items = hasMore ? mappedModels.slice(0, limit) : mappedModels;
 
-    // Get total count efficiently using Frappe's count(name) field
     // Only fetch count on first page to avoid unnecessary API calls
     let total: number | undefined;
     if (page === 1) {
       try {
         const countFilters = [...filters];
-        const countResult = await db.getDocList(doctype.Agent, {
-          fields: ['count(name) as count'],
-          filters: countFilters.length > 0 ? (countFilters as any) : undefined,
-          limit: 1,
-        });
-        if (countResult && countResult.length > 0) {
-          total = (countResult[0] as any).count || undefined;
-        }
+        total = await fetchDocCount(doctype.Agent, countFilters);
       } catch {
         // Ignore count errors - total is optional
       }

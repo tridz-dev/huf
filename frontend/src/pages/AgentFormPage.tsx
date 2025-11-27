@@ -58,6 +58,7 @@ export function AgentFormPage() {
         disabled: false,
         allow_chat: true,
         persist_conversation: true,
+        persist_user_history: true,
         description: '',
         instructions: '',
       },
@@ -179,6 +180,7 @@ export function AgentFormPage() {
           disabled: data.disabled === 1,
           allow_chat: data.allow_chat === 1,
           persist_conversation: data.persist_conversation === 1,
+          persist_user_history: data.persist_user_history === 1,
           description: data.description || '',
           instructions: data.instructions || '',
         });
@@ -246,6 +248,7 @@ export function AgentFormPage() {
         disabled: values.disabled ? 1 : 0,
         allow_chat: values.allow_chat ? 1 : 0,
         persist_conversation: values.persist_conversation ? 1 : 0,
+        persist_user_history: values.persist_user_history ? 1 : 0,
         description: values.description || '',
         instructions: values.instructions,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
@@ -268,6 +271,7 @@ export function AgentFormPage() {
           disabled: newAgent.disabled === 1,
           allow_chat: newAgent.allow_chat === 1,
           persist_conversation: newAgent.persist_conversation === 1,
+          persist_user_history: newAgent.persist_user_history === 1,
           description: newAgent.description || '',
           instructions: newAgent.instructions || '',
         });
@@ -288,6 +292,7 @@ export function AgentFormPage() {
           disabled: values.disabled,
           allow_chat: values.allow_chat,
           persist_conversation: values.persist_conversation,
+          persist_user_history: values.persist_user_history,
           description: values.description,
           instructions: values.instructions,
         });
@@ -305,22 +310,24 @@ export function AgentFormPage() {
   };
 
   const handleOptimizePrompt = () => {
-    setOptimizingPrompt(true);
-    setTimeout(() => {
-      const currentInstructions = form.getValues('instructions');
-      const optimized = `${currentInstructions}\n\n[Optimized by AI]\n- Enhanced clarity and structure\n- Added specific examples\n- Improved constraint definition`;
-      form.setValue('instructions', optimized);
-      setOptimizingPrompt(false);
-      toast.success('Prompt optimized successfully!');
-    }, 2000);
+    setOptimizingPrompt((value) => value);
+    toast.info('Coming Soon!');
+    // setOptimizingPrompt(true);
+    // setTimeout(() => {
+    //   const currentInstructions = form.getValues('instructions');
+    //   const optimized = `${currentInstructions}\n\n[Optimized by AI]\n- Enhanced clarity and structure\n- Added specific examples\n- Improved constraint definition`;
+    //   form.setValue('instructions', optimized);
+    //   setOptimizingPrompt(false);
+    //   toast.success('Prompt optimized successfully!');
+    // }, 2000);
   };
 
   const handleRunTest = () => {
-    toast.info('Running test...');
+    toast.info('Coming Soon!');
   };
 
   const handleDuplicate = () => {
-    toast.info('Duplicating agent...');
+    toast.info('Coming Soon!');
   };
 
   const handleDelete = () => {
@@ -329,7 +336,7 @@ export function AgentFormPage() {
   };
 
   const handleViewLogs = () => {
-    toast.info('Opening logs...');
+    toast.info('Coming Soon!');
   };
 
   const handleAddTools = (tools: AgentToolFunctionRef[]) => {
@@ -460,6 +467,7 @@ export function AgentFormPage() {
           onDuplicate={handleDuplicate}
           onViewLogs={handleViewLogs}
           onDelete={handleDelete}
+          agentId={!isNew && id ? id : undefined}
         />
 
         <Form {...form}>

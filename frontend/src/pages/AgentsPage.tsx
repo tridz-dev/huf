@@ -72,7 +72,7 @@ export function AgentsPage() {
       };
     },
     initialParams: {},
-    pageSize: 5,
+    pageSize: 20,
     debounceMs: 300,
     autoLoad: true,
   });

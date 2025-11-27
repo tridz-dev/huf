@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { UseFormReturn } from 'react-hook-form';
 import type { AgentFormValues } from './types';
+import { toast } from 'sonner';
 
 interface BehaviorTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -14,6 +15,8 @@ interface BehaviorTabProps {
 }
 
 export function BehaviorTab({ form, optimizingPrompt, onOptimizePrompt }: BehaviorTabProps) {
+  const persistConversationEnabled = form.watch('persist_conversation');
+
   return (
     <>
       <Card>
@@ -30,11 +33,20 @@ export function BehaviorTab({ form, optimizingPrompt, onOptimizePrompt }: Behavi
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Allow Chat</FormLabel>
                   <FormDescription>
-                    Enable in Chat window
+                    If checked, this agent can be interacted with in the Agent Chat window.
                   </FormDescription>
                 </div>
                 <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      if (checked && !persistConversationEnabled) {
+                        toast.warning('Turn on Persist History before enabling chat.');
+                        return;
+                      }
+                      field.onChange(checked);
+                    }}
+                  />
                 </FormControl>
               </FormItem>
             )}
@@ -48,7 +60,34 @@ export function BehaviorTab({ form, optimizingPrompt, onOptimizePrompt }: Behavi
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Persist History</FormLabel>
                   <FormDescription>
-                    Save conversation logs
+                    If checked, the conversation history with this agent will be saved and loaded for future sessions.
+                  </FormDescription>
+                </div>
+                <FormControl className="ml-1">
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      field.onChange(checked);
+                      if (!checked) {
+                        form.setValue('allow_chat', false, { shouldDirty: true });
+                      }
+                    }}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="persist_user_history"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Persist per User (Doc/Schedule)</FormLabel>
+                  <FormDescription>
+                    When checked, Doc Event and Scheduled runs create / maintain conversation history per
+                    initiating user (or trigger owner). If unchecked, a single shared history is used.
                   </FormDescription>
                 </div>
                 <FormControl>

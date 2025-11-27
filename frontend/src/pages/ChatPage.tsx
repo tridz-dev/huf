@@ -10,6 +10,7 @@ export function ChatPage() {
   const { setOpen } = useSidebar();
   const normalizedChatId = routeChatId && routeChatId !== 'new' ? routeChatId : null;
   const [selectedChatId, setSelectedChatId] = useState<string | null>(normalizedChatId);
+  const [chatListRefreshKey, setChatListRefreshKey] = useState(0);
 
   // Collapse the main sidebar when chat page loads
   useEffect(() => {
@@ -37,11 +38,13 @@ export function ChatPage() {
         selectedChatId={selectedChatId}
         onSelectChat={handleSelectChat}
         onNewChat={handleNewChat}
+        refreshKey={chatListRefreshKey}
       />
       <div className="flex-1 min-h-0">
         <ChatWindow
           chatId={selectedChatId}
           onConversationCreated={(conversationId) => {
+            setChatListRefreshKey((prev) => prev + 1);
             handleSelectChat(conversationId);
           }}
         />

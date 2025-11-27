@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +29,7 @@ interface AgentHeaderProps {
   onDuplicate: () => void;
   onViewLogs: () => void;
   onDelete: () => void;
+  agentId?: string;
 }
 
 export function AgentHeader({
@@ -44,9 +46,20 @@ export function AgentHeader({
   onDuplicate,
   onViewLogs,
   onDelete,
+  agentId,
 }: AgentHeaderProps) {
   const watchProvider = form.watch('provider');
   const watchModel = form.watch('model');
+  const navigate = useNavigate();
+
+  const handleOpenChat = () => {
+    if (agentId) {
+      const params = new URLSearchParams({ agent: agentId });
+      navigate(`/chat?${params.toString()}`);
+      return;
+    }
+    navigate('/chat');
+  };
 
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -79,7 +92,7 @@ export function AgentHeader({
         <Button variant="outline" size="icon" onClick={onRunTest} type="button">
           <Play className="w-4 h-4" />
         </Button>
-        <Button variant="outline" size="sm" type="button">
+        <Button variant="outline" size="sm" type="button" onClick={handleOpenChat}>
           <MessageSquare className="w-4 h-4 mr-2" />
           Chat
         </Button>

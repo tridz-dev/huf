@@ -3,6 +3,7 @@ import { MicIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ToolUIPart } from 'ai';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
+import { useSearchParams } from 'react-router-dom';
 
 import {
   MessageBranch,
@@ -112,7 +113,8 @@ function ConditionalPromptInputHeader() {
 }
 
 export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
-  const [model, setModel] = useState<string>('');
+  const [searchParams] = useSearchParams();
+  const [model, setModel] = useState<string>(() => searchParams.get('agent') ?? '');
   const [modelName, setModelName] = useState<string>('');
   const [text, setText] = useState<string>('');
   // const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
@@ -280,6 +282,16 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
     }
     previousChatIdRef.current = chatId;
   }, [chatId]);
+
+  useEffect(() => {
+    if (chatId) {
+      return;
+    }
+    const agentFromQuery = searchParams.get('agent') ?? '';
+    if (agentFromQuery && agentFromQuery !== model) {
+      setModel(agentFromQuery);
+    }
+  }, [chatId, searchParams, model]);
 
   const streamResponse = useCallback(
     async (messageId: string, content: string) => {

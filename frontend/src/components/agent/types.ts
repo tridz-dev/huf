@@ -9,6 +9,7 @@ export const agentFormSchema = z.object({
   disabled: z.boolean(),
   allow_chat: z.boolean(),
   persist_conversation: z.boolean(),
+  persist_user_history: z.boolean(),
   description: z.string().optional(),
   instructions: z.string(),
 });
