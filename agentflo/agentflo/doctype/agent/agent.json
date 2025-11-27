@@ -21,6 +21,7 @@
   "disabled",
   "behaviour_tab",
   "conversation_settings_section",
+  "persist_user_history",
   "allow_chat",
   "column_break_vfhq",
   "persist_conversation",
@@ -180,6 +181,13 @@
    "fieldtype": "Tab Break",
    "label": "Metadata"
   },
+  {
+    "default": "1",
+    "description": "When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.",
+    "fieldname": "persist_user_history",
+    "fieldtype": "Check",
+    "label": "Persist per User (Doc/Schedule)"
+   },
   {
    "description": "This is the provider standard name",
    "fetch_from": "provider.chef",
