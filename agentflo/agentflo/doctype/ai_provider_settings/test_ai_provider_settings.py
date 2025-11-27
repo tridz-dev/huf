@@ -5,5 +5,5 @@
 from frappe.tests.utils import FrappeTestCase
 
 
-class TestProviderSettings(FrappeTestCase):
+class TestAIProviderSettings(FrappeTestCase):
 	pass

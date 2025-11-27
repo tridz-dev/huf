@@ -5,5 +5,5 @@
 from frappe.model.document import Document
 
 
-class ProviderSettings(Document):
+class AIProviderSettings(Document):
 	pass
