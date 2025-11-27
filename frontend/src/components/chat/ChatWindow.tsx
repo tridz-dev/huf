@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import type { ToolUIPart } from 'ai';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
 import { useSearchParams } from 'react-router-dom';
-
 import {
   MessageBranch,
   MessageBranchContent,
@@ -42,6 +41,7 @@ import {
 } from '@/components/ai-elements/prompt-input';
 
 import { AgentModelSelector } from '@/components/chat/AgentModelSelector';
+import { MessageActions } from '@/components/chat/MessageActions';
 
 import {
   Reasoning,
@@ -61,8 +61,10 @@ import {
 // import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import {
   getConversationMessages,
+  getConversation,
   newConversation,
   sendMessageToConversation,
+  createAgentRunFeedback,
   type ChatMessage,
   type ConversationMessageListParams,
 } from '@/services/chatApi';
@@ -285,6 +287,16 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
 
   useEffect(() => {
     if (chatId) {
+      getConversation(chatId)
+        .then((conversation) => {
+          if (conversation?.agent) {
+            setModel((prev) => prev || conversation.agent);
+            setModelName((prev) => prev || conversation.agent);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to load conversation agent', error);
+        });
       return;
     }
     const agentFromQuery = searchParams.get('agent') ?? '';
@@ -292,6 +304,32 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       setModel(agentFromQuery);
     }
   }, [chatId, searchParams, model]);
+
+  const handleFeedback = useCallback(
+    async (
+      feedbackType: 'Thumbs Up' | 'Thumbs Down',
+      options?: { agentMessageId?: string; comments?: string }
+    ) => {
+      if (!model) {
+        toast.error('Select an agent before submitting feedback');
+        return;
+      }
+
+      try {
+        await createAgentRunFeedback({
+          agent: model,
+          feedback: feedbackType,
+          comments: options?.comments,
+          conversation: chatId ?? undefined,
+          agent_message: options?.agentMessageId,
+        });
+        toast.success('Thanks for the feedback!');
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [model, chatId]
+  );
 
   const streamResponse = useCallback(
     async (messageId: string, content: string) => {
@@ -598,6 +636,13 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
 
                           <MessageContent>
                             <MessageResponse>{version.content}</MessageResponse>
+                            {message.from === 'assistant' && version.content && (
+                              <MessageActions
+                                content={version.content}
+                                onFeedback={handleFeedback}
+                                agentMessageId={version.id}
+                              />
+                            )}
                           </MessageContent>
                         </div>
                       </Message>

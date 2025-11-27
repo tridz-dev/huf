@@ -110,6 +110,18 @@ export async function getConversations(
 }
 
 /**
+ * Fetch a single conversation
+ */
+export async function getConversation(conversationId: string): Promise<AgentConversationDoc | undefined> {
+  try {
+    const conversation = await db.getDoc(doctype['Agent Conversation'], conversationId);
+    return conversation as AgentConversationDoc;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching conversation');
+  }
+}
+
+/**
  * Load messages for a specific conversation, ordered from newest to oldest
  */
 export async function getConversationMessages(
@@ -221,5 +233,30 @@ export async function sendMessageToConversation(
     return result as SendMessageResponse;
   } catch (error) {
     handleFrappeError(error, 'Error sending message to conversation');
+  }
+}
+
+/**
+ * Submit agent run feedback
+ */
+export interface AgentRunFeedbackParams {
+  agent: string;
+  feedback: 'Thumbs Up' | 'Thumbs Down';
+  comments?: string;
+  conversation?: string;
+  agent_message?: string;
+}
+
+export async function createAgentRunFeedback(params: AgentRunFeedbackParams): Promise<void> {
+  try {
+    await db.createDoc('Agent Run Feedback', {
+      agent: params.agent,
+      feedback: params.feedback,
+      comments: params.comments,
+      conversation: params.conversation,
+      agent_message: params.agent_message,
+    });
+  } catch (error) {
+    handleFrappeError(error, 'Error submitting feedback');
   }
 }
