@@ -15,6 +15,7 @@ Agents can run in several ways:
 3. **Document Events** - Triggered by document changes
 4. **Chat Interface** - User interactions via chat
 5. **API Calls** - Programmatic execution
+6. **Multi-Run Orchestration** - Complex tasks broken into sequential steps
 
 ## Manual Execution
 
@@ -388,6 +389,150 @@ except Exception as e:
 - Forget rate limits
 - Skip authentication
 
+## Multi-Run Orchestration
+
+### When to Use
+
+**Orchestration is best for:**
+- Complex tasks requiring multiple steps
+- Long-running processes
+- Tasks that need planning before execution
+- Workflows with sequential dependencies
+- Research and analysis tasks
+
+### How It Works
+
+When you enable **Multi Run** on an agent:
+
+1. **Trigger**: API call creates an orchestration document
+2. **Planning**: Agent breaks the task into numbered steps
+3. **Scheduling**: Steps execute one-by-one (every minute via cron)
+4. **Context**: Scratchpad maintains information between steps
+5. **Completion**: Marked complete when all steps finish
+
+### Configuration
+
+**Enable Multi-Run:**
+
+1. Open agent in Desk
+2. Check **Enable Multi Run**
+3. Save
+
+That's it! The next time you call this agent, it will:
+- Create an `Agent Orchestration` document
+- Generate a plan
+- Execute steps via scheduler
+
+### Execution Flow
+
+```
+User Request → Create Orchestration → Planning Phase
+                                           ↓
+                                    Generate Steps
+                                           ↓
+                              Save to agent_orchestration_plan
+                                           ↓
+                              Scheduler picks up (every 1 min)
+                                           ↓
+                              Execute Step 1 → Save output
+                                           ↓
+                              Execute Step 2 → Save output
+                                           ↓
+                                         ...
+                                           ↓
+                              All steps done → Completed
+```
+
+### Monitoring Orchestrations
+
+**View orchestrations:**
+
+Navigate to Desk → Huf → Agent Orchestration
+
+**See:**
+- Status (Planned, Running, Completed, Failed)
+- Current step number
+- Plan steps and their status
+- Scratchpad with accumulated context
+- Error logs if any
+
+### Manual Testing
+
+**Run scheduler immediately** (don't wait for cron):
+
+```bash
+bench --site <site_name> execute agentflo.ai.orchestration.scheduler.process_orchestrations
+```
+
+**Check orchestration status:**
+
+```bash
+bench --site <site_name> mariadb -e "SELECT name, status, current_step FROM \`tabAgent Orchestration\` ORDER BY creation DESC LIMIT 5;"
+```
+
+**View step progress:**
+
+```bash
+bench --site <site_name> mariadb -e "SELECT step_index, status, LEFT(output_ref, 80) FROM \`tabAgent Orchestration Plan\` WHERE parent='<orch_name>' ORDER BY step_index;"
+```
+
+### Example Use Case
+
+**Content Research Agent:**
+
+**Prompt**: "Research and write a blog post about AI in healthcare"
+
+**Generated Plan:**
+1. Identify key topics in AI healthcare
+2. Gather recent developments and statistics
+3. Find relevant case studies
+4. Create outline
+5. Write introduction
+6. Write main sections
+7. Write conclusion
+8. Review and refine
+
+Each step executes with context from previous steps, building up the final output incrementally.
+
+### Best Practices
+
+**Do:**
+- Use for genuinely complex tasks (5+ logical steps)
+- Write clear, comprehensive prompts
+- Monitor orchestration progress
+- Review step outputs for quality
+
+**Don't:**
+- Enable for simple single-step tasks
+- Expect real-time responses (steps execute async)
+- Forget that each step costs tokens
+- Use for user-facing chat interactions
+
+### Limitations (Phase-1)
+
+Current implementation:
+- Steps execute sequentially (no parallelism)
+- One step per minute via scheduler
+- No manual step intervention
+- Basic error handling (fail stops orchestration)
+- No retry mechanism
+
+### Troubleshooting
+
+**Orchestration stuck:**
+- Check scheduler is running
+- Run scheduler manually
+- Review Error Log in Agent Orchestration
+
+**Steps failing:**
+- Check agent has valid provider/model
+- Review step outputs for context issues
+- Check Error Log field
+
+**Output truncated:**
+- `output_ref` is Long Text (unlimited)
+- If still issues, check scratchpad for full context
+
 ## Choosing Execution Method
 
 ### Decision Matrix
@@ -399,6 +544,7 @@ except Exception as e:
 | **Doc Event** | Document workflows | Reactive, contextual | Tied to DocTypes |
 | **Chat** | User interactions | User-friendly, accessible | Requires user action |
 | **API** | Integrations | Flexible, programmatic | Requires development |
+| **Orchestration** | Complex multi-step tasks | Handles complexity, maintains context | Async, slower execution |
 
 ### Combining Methods
 
