@@ -7,30 +7,38 @@
  "engine": "InnoDB",
  "field_order": [
   "step_index",
-  "instruction",
   "status",
+  "instruction",
   "output_ref"
  ],
  "fields": [
   {
+   "columns": 1,
    "fieldname": "step_index",
    "fieldtype": "Int",
+   "in_list_view": 1,
    "label": "Step Index"
   },
   {
-   "fieldname": "instruction",
-   "fieldtype": "Long Text",
-   "label": "Instruction"
-  },
-  {
+   "columns": 1,
    "fieldname": "status",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Status",
    "options": "pending\nin_progress\ndone\nfailed"
   },
   {
+   "columns": 3,
+   "fieldname": "instruction",
+   "fieldtype": "Long Text",
+   "in_list_view": 1,
+   "label": "Instruction"
+  },
+  {
+   "columns": 3,
    "fieldname": "output_ref",
    "fieldtype": "Long Text",
+   "in_list_view": 1,
    "label": "Output"
   }
  ],
