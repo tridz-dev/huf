@@ -10,22 +10,37 @@ CACHE_KEY = "agentflo:doc_event_agents"
 
 def get_doc_event_agents(event: str):
     """Fetch & cache Doc Event triggers (Agent Trigger doctype)."""
+    # Skip during migration - tables may not exist yet
+    if getattr(frappe.flags, "in_migrate", False):
+        return []
+    
+    # Check if DocType exists and table is created
     if not frappe.db.exists("DocType", "Agent Trigger"):
+        return []
+    
+    # Check if table actually exists (not just DocType record)
+    try:
+        frappe.db.sql("SELECT 1 FROM `tabAgent Trigger` LIMIT 1")
+    except Exception:
         return []
 
     cached = frappe.cache().hget(CACHE_KEY, f"doc_event:{event}")
     if cached:
         return frappe.parse_json(cached)
 
-    triggers = frappe.get_list(
-        "Agent Trigger",
-        filters={
-            "trigger_type": "Doc Event",
-            "disabled": 0,
-            "doc_event": event
-        },
-        fields=["name", "agent", "reference_doctype", "doc_event", "condition"]
-    )
+    try:
+        triggers = frappe.get_list(
+            "Agent Trigger",
+            filters={
+                "trigger_type": "Doc Event",
+                "disabled": 0,
+                "doc_event": event
+            },
+            fields=["name", "agent", "reference_doctype", "doc_event", "condition"]
+        )
+    except Exception:
+        # Table might not be ready yet
+        return []
 
     result = []
     for t in triggers:
@@ -57,6 +72,10 @@ def clear_doc_event_agents_cache(doc=None, method=None):
 
 
 def run_hooked_agents(doc, method=None, *args, **kwargs):
+    # Skip hook execution during migration to avoid circular dependencies
+    if getattr(frappe.flags, "in_migrate", False):
+        return
+    
     if not method:
         return
 
