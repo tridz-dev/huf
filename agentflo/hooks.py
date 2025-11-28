@@ -181,7 +181,12 @@ doc_events = {
 scheduler_events = {
     "all": [
         "agentflo.ai.agent_scheduler.run_scheduled_agents"
-    ]
+    ],
+    "cron": {
+        "*/1 * * * *": [
+            "agentflo.ai.orchestration.scheduler.process_orchestrations"
+        ]
+    }
 }
 
 # Testing

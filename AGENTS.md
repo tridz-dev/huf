@@ -53,6 +53,8 @@ Stores credentials for different AI service providers. AgentFlo uses LiteLLM to 
 | :------------- | :------------- | :--------- | :---------------------------------------- |
 | **Provide Name** | `provide_name` | Data       | The unique name of the provider (e.g., OpenAI, Anthropic, Google, OpenRouter). Provider names are case-insensitive and automatically routed to LiteLLM. |
 | **API Key**    | `api_key`      | Password   | The API key for the provider. Stored securely using Frappe's Password field type.             |
+| **Slug**       | `slug`         | Data       | A URL-friendly identifier for the provider (e.g., `openai`, `anthropic`). Used for frontend listing and routing. |
+| **Chef**       | `chef`         | Data       | The provider's standard display name (e.g., `OpenAI`, `Anthropic`). Used for frontend display and agent listing. |
 
 **Supported Providers via LiteLLM:**
 - OpenAI (OpenAI, OpenRouter with OpenAI models)
@@ -127,6 +129,9 @@ The main DocType for creating an AI agent.
 | **Description**   | `description`  | Small Text | A brief description of the agent's purpose. |
 | **Last Run**      | `last_run`     | Datetime  | Timestamp of the last agent execution (read-only, auto-updated). |
 | **Total Run**     | `total_run`    | Int       | Total number of times this agent has been executed (read-only, auto-incremented). |
+| **Slug**          | `slug`         | Data      | Provider slug (fetched from provider, hidden field). Used for frontend listing. |
+| **Chef**          | `chef`         | Data      | Provider standard name (fetched from provider, hidden field). Used for frontend display. |
+| **Enable Multi Run** | `enable_multi_run` | Check | Enables multi-step orchestration mode. When checked, agent runs create an orchestration workflow instead of direct execution. |
 
 **Note**: The `condition` field has been removed from Agent DocType. Conditional triggering is now handled via the `Agent Trigger` DocType.
 
@@ -177,16 +182,61 @@ Logs a single, complete execution cycle of an agent in response to a user prompt
 | :------------- | :-------------- | :--------- | :----------------------------------------------------------------------- |
 | **Conversation** | `conversation`  | Link       | Link to the `Agent Conversation`.                                        |
 | **Agent**        | `agent`         | Link       | Link to the `Agent` that was run.                                        |
-| **Prompt**       | `prompt`        | Small Text | The user prompt that initiated the run.                                  |
-| **Response**     | `response`      | Small Text | The final response from the agent.                                       |
+| **Run Group**    | `run_group`     | Link       | Link to the `Agent Run Group` (Job ID) that groups related runs. Hidden field. |
+| **Prompt**       | `prompt`        | Code       | The user prompt that initiated the run (stored as Code field for better formatting). |
+| **Response**     | `response`      | Code       | The final response from the agent (stored as Code field for better formatting). |
 | **Status**       | `status`        | Select     | The status of the run (`Started`, `Queued`, `Success`, `Failed`).        |
-| **Error Message**| `error_message` | Small Text | Any error message if the run failed.                                     |
-| **Input Tokens** | `input_tokens`  | Int        | Number of tokens in the input (prompt + context).                        |
-| **Output Tokens**| `output_tokens` | Int        | Number of tokens in the output (response).                               |
-| **Total Tokens** | `total_tokens`  | Int        | Total tokens used (input + output).                                      |
-| **Total Cost**   | `total_cost`    | Currency   | Total cost of the agent run based on token usage.                        |
+| **Error Code**   | `error_code`    | Data       | Error code if the run failed (read-only).                                |
+| **Error Message**| `error_message` | Long Text  | Any error message if the run failed (read-only).                         |
+| **Provider**      | `provider`      | Link       | Link to the `AI Provider` used for this run (read-only).                 |
+| **Model**        | `model`         | Link       | Link to the `AI Model` used for this run (read-only).                     |
+| **Start Time**   | `start_time`    | Datetime   | Timestamp before requesting provider API (read-only).                    |
+| **End Time**     | `end_time`      | Datetime   | Timestamp after provider response is completely generated (read-only).  |
+| **Input Tokens** | `input_tokens`  | Int        | Number of tokens in the input (prompt + context) (read-only).            |
+| **Output Tokens**| `output_tokens` | Int        | Number of tokens in the output (response) (read-only).                   |
+| **Cost**         | `cost`          | Float      | Cost of generating this response based on token usage. Might not be accurate (read-only). |
 
-#### 8. Agent Chat
+#### 8. Agent Run Group
+
+Groups related agent runs together, typically used for scheduled or batch executions.
+
+-   **Python Class**: `AgentRunGroup(Document)`
+-   **File**: `agentflo/agentflo/doctype/agent_run_group/agent_run_group.py`
+
+**Fields:**
+
+| Label       | Fieldname   | Type   | Description                                                              |
+| :---------- | :---------- | :----- | :----------------------------------------------------------------------- |
+| **Job Name** | `job_name`  | Data   | Unique identifier for the job/group (typically a UUID or job ID).       |
+
+**Purpose:**
+- Links multiple `Agent Run` documents that are part of the same execution batch or scheduled job.
+- Used internally for tracking and grouping related agent executions.
+
+#### 9. Agent Run Feedback
+
+Allows users to provide feedback on agent responses, enabling quality monitoring and improvement.
+
+-   **Python Class**: `AgentRunFeedback(Document)`
+-   **File**: `agentflo/agentflo/doctype/agent_run_feedback/agent_run_feedback.py`
+
+**Fields:**
+
+| Label            | Fieldname      | Type      | Description                                                              |
+| :--------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
+| **Feedback**     | `feedback`     | Select    | User feedback rating (`Thumbs Up` or `Thumbs Down`).                    |
+| **Comments**     | `comments`     | Small Text | Optional comments explaining the feedback.                                |
+| **Agent Message** | `agent_message` | Link    | Link to the specific `Agent Message` that received feedback.           |
+| **Agent**        | `agent`        | Link      | Link to the `Agent` that generated the response.                          |
+| **Provider**     | `provider`     | Link      | Link to the `AI Provider` used (fetched from agent).                    |
+| **Model**        | `model`        | Link      | Link to the `AI Model` used (fetched from agent).                        |
+
+**Purpose:**
+- Enables users to rate agent responses directly from the chat interface.
+- Provides data for monitoring agent performance and improving instructions.
+- Links feedback to specific messages for detailed analysis.
+
+#### 10. Agent Chat
 
 A single DocType providing a real-time chat interface for conversational agents.
 
@@ -196,8 +246,55 @@ A single DocType providing a real-time chat interface for conversational agents.
 **Features:**
 -   Real-time chat UI with markdown rendering
 -   Message history display
+-   Message actions: copy to clipboard, provide feedback (thumbs up/down)
 -   Only available for agents with `allow_chat` enabled
 -   Server Actions: `agentflo.ai.agent_chat.get_agent_chat_messages`, `agentflo.ai.agent_chat.send_agent_chat_message`
+
+#### 11. Agent Orchestration
+
+Manages multi-step agent workflows when `enable_multi_run` is enabled on an agent.
+
+-   **Python Class**: `AgentOrchestration(Document)`
+-   **File**: `agentflo/agentflo/doctype/agent_orchestration/agent_orchestration.py`
+
+**Fields:**
+
+| Label            | Fieldname                 | Type      | Description                                                              |
+| :--------------- | :------------------------ | :-------- | :----------------------------------------------------------------------- |
+| **Agent**        | `agent`                   | Link      | Link to the `Agent` that owns this orchestration.                       |
+| **Status**       | `status`                  | Select    | Current status (`Planned`, `Running`, `Paused`, `Completed`, `Failed`). |
+| **Current Step** | `current_step`            | Int       | Index of the step currently being executed.                             |
+| **Last Run**     | `last_run_at`             | Datetime  | Timestamp of the last step execution.                                   |
+| **Error Log**    | `error_log`               | Small Text | Error messages from failed steps.                                       |
+| **Plan**         | `agent_orchestration_plan`| Table     | Child table containing the execution plan steps.                        |
+| **Scratchpad**   | `scratchpad`              | Code      | Intermediate data and outputs from completed steps.                     |
+
+**Purpose:**
+- Enables complex multi-step agent workflows
+- Stores execution plan generated by planning phase
+- Maintains scratchpad for step-to-step context
+- Tracks progress and errors across steps
+
+#### 12. Agent Orchestration Plan (Child Table)
+
+Stores individual steps in an orchestration plan.
+
+-   **Python Class**: `AgentOrchestrationPlan(Document)`
+-   **File**: `agentflo/agentflo/doctype/agent_orchestration_plan/agent_orchestration_plan.py`
+
+**Fields:**
+
+| Label            | Fieldname    | Type      | Description                                                              |
+| :--------------- | :----------- | :-------- | :----------------------------------------------------------------------- |
+| **Step Index**   | `step_index` | Int       | Order of the step in the plan (1, 2, 3...).                             |
+| **Instruction**  | `instruction`| Long Text | The specific instruction for this step.                                 |
+| **Status**       | `status`     | Select    | Step status (`pending`, `in_progress`, `done`, `failed`).               |
+| **Output**       | `output_ref` | Long Text | Full output from the step execution.                                    |
+
+**Purpose:**
+- Stores atomic steps generated by the planning phase
+- Tracks individual step execution status
+- Stores full step outputs for context and debugging
 
 ### Core Classes and Methods
 
@@ -214,16 +311,18 @@ This file contains the main logic for creating and running agents.
     -   `create_agent(self)`: Constructs an `Agent` object from the `agents` SDK, passing the instructions, model, tools, and model_settings (temperature, top_p) from the Agent DocType.
 -   **Method: `run_agent_sync(...)`**
     -   This is the main whitelisted Frappe API endpoint for running an agent.
+    -   **Multi-Run Detection**: If agent has `enable_multi_run` enabled and channel is not `orchestration` or `orchestration_planning`, creates orchestration instead of direct execution.
     -   It orchestrates the entire process:
-        1.  Initializes `ConversationManager` to handle the conversation history.
-        2.  Creates or retrieves the `Agent Conversation` document.
-        3.  Adds the user's new message to the conversation.
-        4.  Creates an `Agent Run` document to log the execution.
-        5.  Initializes `AgentManager` to prepare the agent.
-        6.  Creates context dictionary with `agent_name` (required for LiteLLM provider to access Agent DocType settings).
-        7.  Calls `RunProvider.run()` which routes to the appropriate provider (LiteLLM for most providers).
-        8.  Adds the agent's final response to the conversation.
-        9.  Updates the `Agent Run` status to `Success` or `Failed`.
+        1.  Checks for `enable_multi_run` flag → creates orchestration if enabled.
+        2.  Initializes `ConversationManager` to handle the conversation history.
+        3.  Creates or retrieves the `Agent Conversation` document.
+        4.  Adds the user's new message to the conversation.
+        5.  Creates an `Agent Run` document to log the execution.
+        6.  Initializes `AgentManager` to prepare the agent.
+        7.  Creates context dictionary with `agent_name` (required for LiteLLM provider to access Agent DocType settings).
+        8.  Calls `RunProvider.run()` which routes to the appropriate provider (LiteLLM for most providers).
+        9.  Adds the agent's final response to the conversation.
+        10. Updates the `Agent Run` status to `Success` or `Failed`.
 
 #### `conversation_manager.py`
 
@@ -314,6 +413,7 @@ This file handles document event-based agent triggering.
     -   Clears the cache when Agent or Agent Trigger documents are modified.
 -   **Function: `run_hooked_agents(doc, method)`**
     -   Called by Frappe document hooks (e.g., `after_insert`, `on_submit`).
+    -   **Migration Safety**: Skips agent hooks during migration to prevent circular dependencies when Agent Trigger DocType is being created.
     -   Matches agents based on doctype and event type.
     -   **Duplicate Prevention**: Uses cache-based locking to prevent duplicate agent runs for the same document event. Lock expires after 30 seconds.
     -   Evaluates trigger conditions via `safe_eval` before triggering.
@@ -326,3 +426,99 @@ This file handles document event-based agent triggering.
         -   If `False`: Uses a shared conversation history (`shared:{agent_name}`).
     -   Constructs a prompt that includes the event name and document identifiers.
     -   Calls `run_agent_sync()` with appropriate `channel_id` and `external_id` parameters for conversation management.
+
+#### `orchestration/orchestrator.py`
+
+This file handles multi-step agent orchestration for complex tasks that require planning and sequential execution.
+
+-   **Function: `create_orchestration(agent_name, user_prompt)`**
+    -   Creates a new `Agent Orchestration` document when `enable_multi_run` is enabled.
+    -   Loads agent doc to get provider and model settings.
+    -   Calls `run_planning()` to break down the user's objective into atomic steps.
+    -   Creates `agent_orchestration_plan` child table entries for each step.
+    -   Returns the orchestration document name.
+-   **Function: `parse_plan_steps(text)`**
+    -   Parses numbered list output from planning agent into a Python list of step instructions.
+    -   Handles multiple formats: `1. Step`, `1) Step`, `1: Step`.
+-   **Function: `execute_next_step(orch)`**
+    -   Executes the next pending step in the orchestration plan.
+    -   Updates step status to `in_progress`, then `done` after completion.
+    -   Calls `run_agent_sync()` with step-specific prompt, provider, model, and scratchpad context.
+    -   Uses `channel_id="orchestration"` to prevent infinite loop with multi-run detection.
+    -   Updates orchestration scratchpad with step outputs.
+    -   Marks orchestration as `Completed` when all steps are done.
+    -   Handles errors gracefully and logs to `error_log` field.
+
+#### `orchestration/scheduler.py`
+
+This file processes orchestration steps via scheduled tasks.
+
+-   **Function: `process_orchestrations()`**
+    -   Called every minute via cron scheduler (`*/1 * * * *`).
+    -   Checks if `Agent Orchestration` DocType exists (migration safety).
+    -   Finds all orchestrations with status `Planned` or `Running`.
+    -   Executes the next pending step for each orchestration.
+    -   Logs errors for failed steps.
+
+#### `orchestration/planning.py`
+
+This file handles the planning phase of orchestration.
+
+-   **Function: `run_planning(agent_name, user_prompt, provider, model)`**
+    -   Calls the agent with a planning prompt to break down objectives into steps.
+    -   Uses `channel_id="orchestration_planning"` to prevent infinite loop.
+    -   Returns a numbered list of atomic steps, or empty string on failure.
+    -   Uses a specialized planning prompt with clear formatting rules.
+
+---
+
+## Manual Testing Commands
+
+### Run Orchestration Scheduler Manually
+
+The orchestration scheduler runs every minute via cron. To process orchestrations immediately without waiting:
+
+```bash
+bench --site <site_name> execute agentflo.ai.orchestration.scheduler.process_orchestrations
+```
+
+### Check Orchestration Status
+
+```bash
+bench --site <site_name> mariadb -e "SELECT name, status, current_step FROM \`tabAgent Orchestration\` ORDER BY creation DESC LIMIT 5;"
+```
+
+### Check Step Progress
+
+```bash
+bench --site <site_name> mariadb -e "SELECT step_index, status, LEFT(output_ref, 80) FROM \`tabAgent Orchestration Plan\` WHERE parent='<orch_name>' ORDER BY step_index;"
+```
+
+### View Scratchpad Content
+
+```bash
+bench --site <site_name> mariadb -e "SELECT scratchpad FROM \`tabAgent Orchestration\` WHERE name='<orch_name>';"
+```
+
+---
+
+## Multi-Run Orchestration Behavior
+
+When an agent has `enable_multi_run` checked:
+
+1. **First API call** → Creates `Agent Orchestration` document
+2. **Planning phase** → Agent generates numbered list of steps
+3. **Steps stored** → Each step saved to `agent_orchestration_plan` child table
+4. **Scheduler runs** → Every minute, processes one step per orchestration
+5. **Step execution** → Agent called with step instruction + scratchpad context
+6. **Output stored** → Full response saved to `output_ref` (Long Text)
+7. **Scratchpad updated** → Step output appended for context in future steps
+8. **Completion** → When all steps done, status set to `Completed`
+
+### Loop Prevention
+
+The system uses `channel_id` to prevent infinite orchestration loops:
+- `channel_id="orchestration"` — Used for step execution
+- `channel_id="orchestration_planning"` — Used for planning phase
+
+When `run_agent_sync()` receives these channels, it bypasses the multi-run check.
