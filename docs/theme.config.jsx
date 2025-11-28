@@ -27,6 +27,6 @@ export default {
     next: true
   },
   footer: {
-    text: `MIT ${new Date().getFullYear()} © Tridz Technologies Ltd. Built with Nextra on Frappe.`
+    text: `AGPL ${new Date().getFullYear()} © Tridz Technologies Ltd.`
   }
 }

@@ -309,7 +309,7 @@ npm run dev
 
 ## 📝 License
 
-MIT License - feel free to use this in your own projects!
+AGPL License - feel free to use this in your own projects!
 
 ## 💬 Support
 

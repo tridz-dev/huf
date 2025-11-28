@@ -21,7 +21,7 @@ const navbar = (
 
 const footer = (
   <Footer>
-    MIT {new Date().getFullYear()} ©{' '}
+    AGPL {new Date().getFullYear()} ©{' '}
     <a href="https://tridz.com" target="_blank" rel="noreferrer">
       Tridz Technologies Ltd
     </a>
