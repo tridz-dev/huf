@@ -3,7 +3,7 @@ app_title = "Huf"
 app_publisher = "Huf"
 app_description = "Build and run smart AI agents with tools, chat, and automation directly in the Frappe ecosystem."
 app_email = "info@tridz.com"
-app_license = "mit"
+app_license = "agpl"
 
 # Apps
 # ------------------
