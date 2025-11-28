@@ -25,15 +25,6 @@ const footer = (
     <a href="https://tridz.com" target="_blank" rel="noreferrer">
       Tridz Technologies Ltd
     </a>
-    . Built with{' '}
-    <a href="https://nextra.site" target="_blank" rel="noreferrer">
-      Nextra
-    </a>
-    {' '}on{' '}
-    <a href="https://frappe.io" target="_blank" rel="noreferrer">
-      Frappe
-    </a>
-    .
   </Footer>
 )
 
