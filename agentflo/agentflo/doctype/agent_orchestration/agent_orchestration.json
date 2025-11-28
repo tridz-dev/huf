@@ -1,6 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
+ "autoname": "hash",
  "creation": "2025-11-28 04:59:40.208114",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -11,6 +12,7 @@
   "last_run_at",
   "error_log",
   "orchestration_data_tab",
+  "agent_orchestration_plan",
   "scratchpad"
  ],
  "fields": [
@@ -47,6 +49,12 @@
    "label": "Orchestration Data"
   },
   {
+   "fieldname": "agent_orchestration_plan",
+   "fieldtype": "Table",
+   "label": "Plan",
+   "options": "Agent Orchestration Plan"
+  },
+  {
    "fieldname": "scratchpad",
    "fieldtype": "Code",
    "label": "Scratchpad"
@@ -55,10 +63,11 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-28 05:03:44.561975",
+ "modified": "2025-11-28 05:36:45.330138",
  "modified_by": "Administrator",
  "module": "AgentFlo",
  "name": "Agent Orchestration",
+ "naming_rule": "Random",
  "owner": "Administrator",
  "permissions": [
   {
