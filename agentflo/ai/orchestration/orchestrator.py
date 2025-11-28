@@ -1,7 +1,7 @@
-# agentflo/agentflo/orchestration/orchestrator.py
+# agentflo/ai/orchestration/orchestrator.py
 
 import frappe
-from agentflo.agentflo.orchestration.planning import run_planning
+from agentflo.ai.orchestration.planning import run_planning
 from agentflo.ai.agent_integration import run_agent_sync
 
 

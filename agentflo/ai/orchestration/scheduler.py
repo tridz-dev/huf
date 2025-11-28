@@ -1,7 +1,7 @@
-# agentflo/agentflo/orchestration/scheduler.py
+# agentflo/ai/orchestration/scheduler.py
 
 import frappe
-from agentflo.agentflo.orchestration.orchestrator import execute_next_step
+from agentflo.ai.orchestration.orchestrator import execute_next_step
 
 def process_orchestrations():
     """Called every minute via scheduler."""
