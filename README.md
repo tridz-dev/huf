@@ -2,6 +2,16 @@
 
 Huf is a powerful Frappe application for create, manage, and integrate AI agents directly into Frappe ecosystem. These agents can be equipped with tools to interact with your site's data, automate tasks, and provide intelligent assistance.
 
+**[📚 View Documentation](https://tridz-dev.github.io/agent_flo/)** | **[🐛 Report Issue](https://github.com/tridz-dev/huf/issues)** | **[💬 Discussions](https://github.com/tridz-dev/huf/discussions)**
+
+<br/><br/>
+<img width="1905" height="928" alt="image_2025-11-07_18-16-05 (1)" src="https://github.com/user-attachments/assets/61a8511b-80cc-4843-a90c-bfcfc4a45c97" />
+
+
+<br/>
+
+
+
 >  ⚠️ Huf is actively being migrated from an existing implementation into an independent app. The system may not work as expected and is not recommended for use in production environments at this stage. ⚠️ 
 
 ## Key Features
@@ -39,8 +49,8 @@ You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
-bench get-app https://github.com/Tridz/Huf.git
-bench install-app Huf
+bench get-app git@github.com:tridz-dev/huf.git
+bench install-app huf
 bench setup requirements  # Installs dependencies including litellm
 ```
 
@@ -73,7 +83,7 @@ Huf is built around a set of interconnected DocTypes that define the components 
 Stores credentials for different AI service providers.
 
 -   **Python Class**: `AIProvider(Document)`
--   **File**: `Huf/Huf/doctype/ai_provider/ai_provider.py`
+-   **File**: `huf/huf/doctype/ai_provider/ai_provider.py`
 
 **Fields:**
 
@@ -87,7 +97,7 @@ Stores credentials for different AI service providers.
 Defines a specific AI model available from a provider.
 
 -   **Python Class**: `AIModel(Document)`
--   **File**: `Huf/Huf/doctype/ai_model/ai_model.py`
+-   **File**: `huf/huf/doctype/ai_model/ai_model.py`
 
 **Fields:**
 
@@ -101,7 +111,7 @@ Defines a specific AI model available from a provider.
 Defines a function or "tool" that an agent can use. This is the core of the agent's capabilities.
 
 -   **Python Class**: `AgentToolFunction(Document)`
--   **File**: `Huf/Huf/doctype/agent_tool_function/agent_tool_function.py`
+-   **File**: `huf/huf/doctype/agent_tool_function/agent_tool_function.py`
 
 **Fields:**
 
@@ -120,7 +130,7 @@ Defines a function or "tool" that an agent can use. This is the core of the agen
 The main DocType for creating an AI agent.
 
 -   **Python Class**: `Agent(Document)`
--   **File**: `Huf/Huf/doctype/agent/agent.py`
+-   **File**: `huf/huf/doctype/agent/agent.py`
 
 **Fields:**
 
@@ -139,7 +149,7 @@ The main DocType for creating an AI agent.
 Tracks a continuous conversation with an agent.
 
 -   **Python Class**: `AgentConversation(Document)`
--   **File**: `Huf/Huf/doctype/agent_conversation/agent_conversation.py`
+-   **File**: `huf/huf/doctype/agent_conversation/agent_conversation.py`
 
 **Fields:**
 
@@ -156,7 +166,7 @@ Tracks a continuous conversation with an agent.
 Represents a single message within a conversation.
 
 -   **Python Class**: `AgentMessage(Document)`
--   **File**: `Huf/Huf/doctype/agent_message/agent_message.py`
+-   **File**: `huf/huf/doctype/agent_message/agent_message.py`
 
 **Fields:**
 
@@ -173,7 +183,7 @@ Represents a single message within a conversation.
 Logs a single, complete execution cycle of an agent in response to a user prompt.
 
 -   **Python Class**: `AgentRun(Document)`
--   **File**: `Huf/Huf/doctype/agent_run/agent_run.py`
+-   **File**: `huf/huf/doctype/agent_run/agent_run.py`
 
 **Fields:**
 
@@ -190,7 +200,7 @@ Logs a single, complete execution cycle of an agent in response to a user prompt
 
 ## Core Classes and Methods
 
-The primary logic is located in the `Huf/ai` directory.
+The primary logic is located in the `huf/ai` directory.
 
 ### `agent_integration.py`
 
