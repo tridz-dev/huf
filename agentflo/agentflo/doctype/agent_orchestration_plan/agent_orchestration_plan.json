@@ -30,8 +30,8 @@
   },
   {
    "fieldname": "output_ref",
-   "fieldtype": "Data",
-   "label": "Output Reference"
+   "fieldtype": "Long Text",
+   "label": "Output"
   }
  ],
  "grid_page_length": 50,

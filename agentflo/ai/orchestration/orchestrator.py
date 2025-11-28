@@ -122,7 +122,7 @@ Complete this step and provide a clear response."""
 
         if result.get("success"):
             response = result.get("response", "")
-            next_step.output_ref = response[:500] if len(response) > 500 else response
+            next_step.output_ref = response
             next_step.status = "done"
             
             # Update scratchpad with step output
