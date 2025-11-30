@@ -6,7 +6,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { Button } from '../components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { ActiveAgentsTab, ActiveFlowsTab, RecentExecutionsTab } from '../components/dashboard';
-import { getAgentRunsCountLast7Days, getAgentRunsForMetrics, type AgentRunMetricsDoc } from '../services/dashboardApi';
+import { getAgentRunsCountLast7Days, getAgentRunsForMetrics, getRecentAgentRuns, type AgentRunMetricsDoc, type AgentRunDoc } from '../services/dashboardApi';
+import { getAgents } from '../services/agentApi';
+import type { AgentDoc } from '../types/agent.types';
 
 interface DashboardMetrics {
   totalRuns: number;
@@ -122,18 +124,29 @@ export function HomePage() {
     totalCost: 0,
   });
   const [metricsLoading, setMetricsLoading] = useState(true);
+  
+  // Data for tabs - loaded once on mount
+  const [agents, setAgents] = useState<AgentDoc[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(true);
+  const [agentRuns, setAgentRuns] = useState<AgentRunDoc[]>([]);
+  const [agentRunsLoading, setAgentRunsLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchMetrics() {
+    async function fetchAllData() {
       try {
-        setMetricsLoading(true);
-        
-        // Fetch count and runs data in parallel
-        const [totalRuns, runsData] = await Promise.all([
+        // Fetch all data in parallel
+        const [totalRuns, runsData, agentsData, recentRuns] = await Promise.all([
           getAgentRunsCountLast7Days(),
           getAgentRunsForMetrics(),
+          getAgents({
+            status: 'active',
+            limit: 10,
+            page: 1,
+          }),
+          getRecentAgentRuns(),
         ]);
 
+        // Process metrics
         const successRate = calculateSuccessRate(runsData);
         const avgRuntime = calculateAvgRuntime(runsData);
         const totalCost = calculateTotalCost(runsData);
@@ -144,14 +157,24 @@ export function HomePage() {
           avgRuntime,
           totalCost,
         });
+
+        // Process agents
+        const agentList = Array.isArray(agentsData) ? agentsData : agentsData.items;
+        const activeAgents = agentList.filter((agent) => agent.disabled === 0);
+        setAgents(activeAgents.slice(0, 10));
+
+        // Set agent runs
+        setAgentRuns(recentRuns);
       } catch (error) {
-        console.error('Error fetching dashboard metrics:', error);
+        console.error('Error fetching dashboard data:', error);
       } finally {
         setMetricsLoading(false);
+        setAgentsLoading(false);
+        setAgentRunsLoading(false);
       }
     }
 
-    fetchMetrics();
+    fetchAllData();
   }, []);
 
   const metricsData = [
@@ -251,7 +274,7 @@ export function HomePage() {
 
           {/* Agents Tab */}
           <TabsContent value="agents" className="space-y-4">
-            <ActiveAgentsTab />
+            <ActiveAgentsTab agents={agents} loading={agentsLoading} />
           </TabsContent>
 
           {/* Flows Tab */}
@@ -261,7 +284,7 @@ export function HomePage() {
 
           {/* Executions Tab */}
           <TabsContent value="executions" className="space-y-4">
-            <RecentExecutionsTab />
+            <RecentExecutionsTab runs={agentRuns} loading={agentRunsLoading} />
           </TabsContent>
         </Tabs>
       </div>

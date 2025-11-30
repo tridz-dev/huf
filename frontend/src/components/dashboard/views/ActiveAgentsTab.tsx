@@ -5,13 +5,26 @@ import { getAgents } from '@/services/agentApi';
 import type { AgentDoc } from '@/types/agent.types';
 import { Loader2, Zap } from 'lucide-react';
 
-export function ActiveAgentsTab() {
+interface ActiveAgentsTabProps {
+  agents?: AgentDoc[];
+  loading?: boolean;
+}
+
+export function ActiveAgentsTab({ agents: providedAgents, loading: providedLoading }: ActiveAgentsTabProps) {
   const navigate = useNavigate();
-  const [agents, setAgents] = useState<AgentDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [agents, setAgents] = useState<AgentDoc[]>(providedAgents || []);
+  const [loading, setLoading] = useState(providedLoading ?? true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    // If agents are provided, use them and skip fetching
+    if (providedAgents !== undefined) {
+      setAgents(providedAgents);
+      setLoading(providedLoading ?? false);
+      return;
+    }
+
+    // Otherwise, fetch agents
     async function fetchActiveAgents() {
       try {
         setLoading(true);
@@ -38,7 +51,7 @@ export function ActiveAgentsTab() {
     }
 
     fetchActiveAgents();
-  }, []);
+  }, [providedAgents, providedLoading]);
 
   const handleAgentClick = (agentName: string) => {
     navigate(`/agents/${agentName}`);

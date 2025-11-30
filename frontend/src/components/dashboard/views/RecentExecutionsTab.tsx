@@ -6,6 +6,11 @@ import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { getRecentAgentRuns, type AgentRunDoc } from '@/services/dashboardApi';
 import { formatTimeAgo } from '@/utils/time';
 
+interface RecentExecutionsTabProps {
+  runs?: AgentRunDoc[];
+  loading?: boolean;
+}
+
 /**
  * Calculate duration between start_time and end_time
  * Returns duration in seconds or minutes, or "Not available" if invalid
@@ -76,13 +81,21 @@ function getStatusIcon(status?: string) {
   return CheckCircle;
 }
 
-export function RecentExecutionsTab() {
+export function RecentExecutionsTab({ runs: providedRuns, loading: providedLoading }: RecentExecutionsTabProps) {
   const navigate = useNavigate();
-  const [runs, setRuns] = useState<AgentRunDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [runs, setRuns] = useState<AgentRunDoc[]>(providedRuns || []);
+  const [loading, setLoading] = useState(providedLoading ?? true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    // If runs are provided, use them and skip fetching
+    if (providedRuns !== undefined) {
+      setRuns(providedRuns);
+      setLoading(providedLoading ?? false);
+      return;
+    }
+
+    // Otherwise, fetch runs
     async function fetchRecentRuns() {
       try {
         setLoading(true);
@@ -97,7 +110,7 @@ export function RecentExecutionsTab() {
     }
 
     fetchRecentRuns();
-  }, []);
+  }, [providedRuns, providedLoading]);
 
   const handleExecutionClick = (run: AgentRunDoc) => {
     if (run.conversation) {
