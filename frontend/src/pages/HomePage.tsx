@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { Info, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import { Button } from '../components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { ActiveAgentsTab } from '../components/dashboard';
 
 const metrics = [
   {
@@ -36,7 +39,6 @@ const metrics = [
   },
 ];
 
-const activeAgents: unknown[] = [];
 
 const activeFlows = [
   { id: '1', name: 'Webform Handler', status: 'active', runs: 523, last_run: '2 minutes ago' },
@@ -66,6 +68,7 @@ const alerts = [
 
 export function HomePage() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('agents');
 
   return (
     <div className="h-full overflow-auto">
@@ -107,46 +110,28 @@ export function HomePage() {
         </div>
 
         {/* Tabbed Interface */}
-        <Tabs defaultValue="agents" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="agents">Agents</TabsTrigger>
-            <TabsTrigger value="flows">Flows</TabsTrigger>
-            <TabsTrigger value="executions">Executions</TabsTrigger>
-            <TabsTrigger value="alerts">Alerts</TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <div className="flex items-center justify-between">
+            <TabsList>
+              <TabsTrigger value="agents">Agents</TabsTrigger>
+              <TabsTrigger value="flows">Flows</TabsTrigger>
+              <TabsTrigger value="executions">Executions</TabsTrigger>
+              <TabsTrigger value="alerts">Alerts</TabsTrigger>
+            </TabsList>
+            {activeTab === 'agents' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/agents')}
+              >
+                Show More
+              </Button>
+            )}
+          </div>
 
           {/* Agents Tab */}
           <TabsContent value="agents" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Active Agents</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {activeAgents.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      No active agents
-                    </div>
-                  ) : (
-                    activeAgents.map((agent: any) => (
-                      <div
-                        key={agent.id}
-                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-                        onClick={() => navigate(`/agents/${agent.id}`)}
-                      >
-                        <div className="flex-1">
-                          <div className="font-medium">{agent.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {agent.runs} runs • {agent.success_rate}% success rate
-                          </div>
-                        </div>
-                        <Badge variant="default">Active</Badge>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <ActiveAgentsTab />
           </TabsContent>
 
           {/* Flows Tab */}

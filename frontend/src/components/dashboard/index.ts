@@ -2,6 +2,7 @@ export { PageLayout } from './layouts/PageLayout';
 export { PageSection } from './layouts/PageSection';
 
 export { GridView } from './views/GridView';
+export { ActiveAgentsTab } from './views/ActiveAgentsTab';
 
 export { FilterBar } from './filters/FilterBar';
 
