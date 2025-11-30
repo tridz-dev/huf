@@ -2,6 +2,7 @@ import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AgentDoc } from '@/types/agent.types';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { fetchDocCount } from './utilsApi';
 
 /**
  * Trigger type from API
@@ -84,32 +85,6 @@ function mapAgentTriggerListItem(doc: {
   };
 }
 
-/**
- * Fetch count for a given DocType using frappe.client.get_count
- */
-async function fetchDocCount(
-  targetDoctype: string,
-  filters?: Array<[string, string, unknown]>
-): Promise<number | undefined> {
-  const params: Record<string, unknown> = { doctype: targetDoctype };
-  if (filters && filters.length > 0) {
-    params.filters = JSON.stringify(filters);
-  }
-
-  const response = await call.get('frappe.client.get_count', params);
-  const { message } = response || {};
-
-  if (typeof message === 'number') {
-    return message;
-  }
-
-  if (typeof message === 'string') {
-    const parsed = Number(message);
-    return Number.isNaN(parsed) ? undefined : parsed;
-  }
-
-  return undefined;
-}
 
 /**
  * Pagination parameters for fetching agents
