@@ -4,6 +4,8 @@ export { PageSection } from './layouts/PageSection';
 export { GridView } from './views/GridView';
 export { ActiveAgentsTab } from './views/ActiveAgentsTab';
 export { ActiveFlowsTab } from './views/ActiveFlowsTab';
+export { RecentExecutionsTab } from './views/RecentExecutionsTab';
+export { SystemAlertsTab } from './views/SystemAlertsTab';
 
 export { FilterBar } from './filters/FilterBar';
 
