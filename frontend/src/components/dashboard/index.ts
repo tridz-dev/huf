@@ -3,6 +3,7 @@ export { PageSection } from './layouts/PageSection';
 
 export { GridView } from './views/GridView';
 export { ActiveAgentsTab } from './views/ActiveAgentsTab';
+export { ActiveFlowsTab } from './views/ActiveFlowsTab';
 
 export { FilterBar } from './filters/FilterBar';
 

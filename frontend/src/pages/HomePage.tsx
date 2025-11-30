@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { ActiveAgentsTab } from '../components/dashboard';
+import { ActiveAgentsTab, ActiveFlowsTab } from '../components/dashboard';
 
 const metrics = [
   {
@@ -39,14 +39,6 @@ const metrics = [
   },
 ];
 
-
-const activeFlows = [
-  { id: '1', name: 'Webform Handler', status: 'active', runs: 523, last_run: '2 minutes ago' },
-  { id: '2', name: 'Email Automation', status: 'active', runs: 389, last_run: '5 minutes ago' },
-  { id: '3', name: 'Slack Notification', status: 'active', runs: 234, last_run: '12 minutes ago' },
-  { id: '4', name: 'Data Processing', status: 'active', runs: 156, last_run: '1 hour ago' },
-  { id: '5', name: 'Customer Onboarding', status: 'active', runs: 98, last_run: '3 hours ago' },
-];
 
 const recentExecutions = [
   { id: '1', agent: 'Customer Support Agent', status: 'success', duration: '1.8s', timestamp: '2 minutes ago' },
@@ -136,30 +128,7 @@ export function HomePage() {
 
           {/* Flows Tab */}
           <TabsContent value="flows" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Active Flows</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {activeFlows.map((flow) => (
-                    <div
-                      key={flow.id}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/flows/${flow.id}`)}
-                    >
-                      <div className="flex-1">
-                        <div className="font-medium">{flow.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {flow.runs} runs • Last run {flow.last_run}
-                        </div>
-                      </div>
-                      <Badge variant="default">Active</Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <ActiveFlowsTab />
           </TabsContent>
 
           {/* Executions Tab */}
