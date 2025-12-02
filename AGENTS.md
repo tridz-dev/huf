@@ -113,7 +113,11 @@ Defines a function or "tool" that an agent can use. This is the core of the agen
 | **Agent**             | `agent`                  | Link    | Target agent to run (for `Run Agent` type).                                                         |
 | **Provider App**       | `provider_app`             | Data    | App that provides this tool (for `App Provided` type).                                                |
 | **Pass Parameters as JSON** | `pass_parameters_as_json` | Check | Whether to pass parameters as JSON string (for `Custom Function` type).                              |
+<<<<<<< HEAD
 | **Tool Type**         | `tool_type`              | Link    | Link to `Agent Tool Type` for categorization. **Required field.**                                   |
+=======
+| **Tool Type**         | `tool_type`              | Link    | Link to `Agent Tool Type` for categorization.                                                        |
+>>>>>>> c26b627 (docs: Update Agent Tool Function documentation with new tool types (GET/POST, Run Agent, Speech to Text, App Provided, Attach File, Get Report, Get/Set Value))
 
 #### 4. Agent
 
