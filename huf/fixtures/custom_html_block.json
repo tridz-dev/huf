@@ -2,7 +2,7 @@
  {
   "docstatus": 0,
   "doctype": "Custom HTML Block",
-  "html": "<a href=\"/huf/agents\">\n    <img class=\"huflogo\" src=\"/assets/huf/Images/Huf.jpg\">\n</a>\n",
+  "html": "<a href=\"/huf\">\n    <img class=\"huflogo\" src=\"/assets/huf/Images/Huf.jpg\">\n</a>\n",
   "modified": "2025-11-27 15:45:27.685150",
   "name": "Huf",
   "private": 0,
