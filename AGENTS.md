@@ -57,7 +57,7 @@ Stores credentials for different AI service providers. Huf uses LiteLLM to provi
 
 | Label          | Fieldname      | Type       | Description                               |
 | :------------- | :------------- | :--------- | :---------------------------------------- |
-| **Provide Name** | `provide_name` | Data       | The unique name of the provider (e.g., OpenAI, Anthropic, Google, OpenRouter). Provider names are case-insensitive and automatically routed to LiteLLM. |
+| **Provide Name** | `provide_name` | Data       | The unique name of the provider (e.g., OpenAI, Anthropic, Google, OpenRouter). Provider names are case-insensitive and automatically routed to LiteLLM. **Note**: The field name uses "provide_name" (with "provide" instead of "provider") due to existing database schema; this is intentional for backward compatibility. |
 | **API Key**    | `api_key`      | Password   | The API key for the provider. Stored securely using Frappe's Password field type.             |
 
 **Supported Providers via LiteLLM:**
@@ -113,7 +113,7 @@ Defines a function or "tool" that an agent can use. This is the core of the agen
 | **Agent**             | `agent`                  | Link    | Target agent to run (for `Run Agent` type).                                                         |
 | **Provider App**       | `provider_app`             | Data    | App that provides this tool (for `App Provided` type).                                                |
 | **Pass Parameters as JSON** | `pass_parameters_as_json` | Check | Whether to pass parameters as JSON string (for `Custom Function` type).                              |
-| **Tool Type**         | `tool_type`              | Link    | Link to `Agent Tool Type` for categorization.                                                        |
+| **Tool Type**         | `tool_type`              | Link    | Link to `Agent Tool Type` for categorization. **Required field.**                                   |
 
 #### 4. Agent
 
@@ -215,7 +215,32 @@ A single DocType providing a real-time chat interface for conversational agents.
 -   Only available for agents with `allow_chat` enabled
 -   Server Actions: `huf.ai.agent_chat.get_agent_chat_messages`, `huf.ai.agent_chat.send_agent_chat_message`
 
-#### 9. Agent Trigger
+#### 9. Agent Console
+
+A singleton DocType providing a simple interface for testing and debugging agents without requiring the full chat interface.
+
+-   **Python Class**: `AgentConsole(Document)`
+-   **File**: `huf/huf/doctype/agent_console/agent_console.py`
+
+**Fields:**
+
+| Label          | Fieldname      | Type      | Description                                                              |
+| :------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
+| **Agent**      | `agent_name`   | Link      | Link to the `Agent` to test.                                             |
+| **Prompt**     | `prompt`       | Code      | The prompt/input to send to the agent for testing.                       |
+| **Response**   | `response`     | Code      | The agent's response (read-only, auto-populated).                        |
+| **Provider**   | `provider`     | Data      | Provider name (read-only, fetched from agent).                           |
+| **Model**      | `model`        | Data      | Model name (read-only, fetched from agent).                              |
+
+**Features:**
+-   Simple form-based interface for quick agent testing
+-   Direct execution of agent prompts
+-   Display of agent responses in code format
+-   Server Action: `huf.ai.agent_integration.run_agent_sync` (whitelisted)
+
+**Note**: This is a singleton DocType (`issingle: 1`), meaning there is only one instance in the system used as a testing console.
+
+#### 10. Agent Trigger
 
 Defines how and when agents are triggered for execution. This DocType replaces the old `condition` field in the Agent DocType with a comprehensive trigger management system.
 
@@ -253,7 +278,7 @@ Defines how and when agents are triggered for execution. This DocType replaces t
 - **App Event**: Application-level event triggers
 - **Manual**: Manually executed triggers
 
-#### 10. Agent Run Feedback
+#### 11. Agent Run Feedback
 
 Captures user feedback on agent responses for quality control and improvement.
 
@@ -271,7 +296,7 @@ Captures user feedback on agent responses for quality control and improvement.
 | **Provider**   | `provider`     | Link      | Link to the `AI Provider` (fetched from agent).                        |
 | **Model**      | `model`        | Link      | Link to the `AI Model` (fetched from agent).                            |
 
-#### 11. Agent Run Group
+#### 12. Agent Run Group
 
 Groups related agent executions together for batch processing and organization.
 
@@ -284,7 +309,7 @@ Groups related agent executions together for batch processing and organization.
 | :----------- | :----------- | :--- | :---------------------------------------- |
 | **Job Name** | `job_name`   | Data | Unique name for the batch job.            |
 
-#### 12. Agent Settings
+#### 13. Agent Settings
 
 Global application settings for the Huf system (singleton DocType).
 
@@ -298,7 +323,7 @@ Global application settings for the Huf system (singleton DocType).
 | **Default Provider**| `default_provider`  | Link | Default `AI Provider` for new agents.    |
 | **Default Model**   | `default_model`     | Link | Default `AI Model` for new agents.       |
 
-#### 13. AI Provider Settings
+#### 14. AI Provider Settings
 
 Provider-specific configuration settings (singleton DocType).
 
@@ -311,7 +336,7 @@ Provider-specific configuration settings (singleton DocType).
 | :----------- | :----------- | :--- | :---------------------------------------- |
 | **Provider** | `provider`   | Link | Link to the `AI Provider` to configure.  |
 
-#### 14. Agent Tool HTTP Header
+#### 15. Agent Tool HTTP Header
 
 Child table for defining custom HTTP headers for tool requests (table DocType).
 
@@ -326,6 +351,23 @@ Child table for defining custom HTTP headers for tool requests (table DocType).
 | **Value**| `value`   | Data | HTTP header value.                        |
 
 **Usage**: Used as a child table in `Agent Tool Function` to provide custom HTTP authentication headers for API-based tools.
+
+#### 16. Agent Tool Type
+
+Categorization DocType for organizing and grouping agent tools by type or purpose.
+
+-   **Python Class**: `AgentToolType(Document)`
+-   **File**: `huf/huf/doctype/agent_tool_type/agent_tool_type.py`
+
+**Fields:**
+
+| Label    | Fieldname | Type | Description                               |
+| :------- | :-------- | :--- | :---------------------------------------- |
+| **Name** | `name1`   | Data | Unique name for the tool type category (e.g., "Database", "HTTP", "Custom", "Built-in"). Required field. |
+
+**Usage**: Used by `Agent Tool Function` DocType via the `tool_type` link field for categorization and organization. This allows users to group tools by functionality, making it easier to manage large tool libraries.
+
+**Examples**: Tool types might include categories like "Document Operations", "HTTP Requests", "Custom Functions", "App Provided", "Built-in Tools", etc.
 
 ### Core Classes and Methods
 
@@ -407,11 +449,15 @@ This file implements the OpenRouter provider with custom retry logic and enhance
 -   **Function: `_post_with_retry(url, headers, payload, max_retries=5)`**
     -   Handles HTTP POST requests with automatic retry for rate limiting.
     -   Implements exponential backoff with random jitter to avoid thundering herd problems.
+    -   Retry logic: Starts with 1 second delay, doubles on each retry, adds random jitter (0-0.5s).
+    -   Retries up to 5 times on HTTP 429 (rate limit) errors.
     -   Provides clear error messages when all retries are exhausted.
 -   **Function: `_execute_tool_call(tool, args_json)`**
-    -   Executes a tool call and returns the result.
+    -   Executes a tool call asynchronously by calling `tool.on_invoke_tool(None, args_json)`.
+    -   Returns the result from tool execution.
 -   **Function: `_find_tool(agent, tool_name)`**
-    -   Finds a tool by name in the agent's tools list.
+    -   Finds a tool by name in the agent's tools list using generator expression with `next()`.
+    -   Returns the first matching tool or `None` if not found.
 -   **Error Handling**: Comprehensive error handling for API errors, tool execution failures, and malformed responses.
 -   **Response Format**: Returns `SimpleResult` object with final output, usage statistics, and new items.
 
@@ -431,13 +477,18 @@ This file implements the unified LiteLLM provider that handles all LLM interacti
     -   Normalizes model names to LiteLLM format by adding provider prefix.
     -   Handles provider aliases (e.g., `gemini` → `google`, `grok` → `xai`).
     -   Supports both user-friendly names and LiteLLM format names.
+    -   If model already includes provider prefix (e.g., `openai/gpt-4-turbo`), uses as-is.
+    -   Provider prefix mapping includes: `openai`, `anthropic`, `google`, `gemini` (alias), `openrouter`, `xai`, `grok` (alias), `mistral`, `alibaba`/`dashscope`, `cohere`, `perplexity`, `meta`/`meta-llama`.
 -   **Function: `_setup_api_key(provider_name, api_key, completion_kwargs)`**
     -   Sets up API key for LiteLLM completion call.
-    -   Handles special cases like OpenRouter (requires `OPENROUTER_API_KEY` environment variable).
+    -   Handles special cases where providers require environment variables: OpenRouter (`OPENROUTER_API_KEY`), xAI/Grok (`XAI_API_KEY`), Mistral (`MISTRAL_API_KEY`), Dashscope/Alibaba (`DASHSCOPE_API_KEY`), Google (`GEMINI_API_KEY`), Cohere (`COHERE_API_KEY`), Perplexity (`PERPLEXITY_API_KEY`).
+    -   For other providers, sets `api_key` parameter directly in completion kwargs.
 -   **Function: `_execute_tool_call(tool, args_json)`**
-    -   Executes a tool call and returns the result.
+    -   Executes a tool call asynchronously by calling `tool.on_invoke_tool(None, args_json)`.
+    -   Returns the result from tool execution.
 -   **Function: `_find_tool(agent, tool_name)`**
-    -   Finds a tool by name in the agent's tools list.
+    -   Finds a tool by name in the agent's tools list using generator expression.
+    -   Returns the first matching tool or `None` if not found.
 
 #### `agent_chat.py`
 
@@ -602,7 +653,9 @@ This file provides secure HTTP request handling with SSRF protection for agent t
 
 ## Frontend Flow Builder System
 
-The Huf frontend includes a comprehensive visual flow builder that allows users to create, manage, and execute complex workflows using a drag-and-drop interface. This system provides a professional UI for designing automated workflows with various node types and configurations.
+The Huf frontend includes a visual flow builder that allows users to create, manage, and execute complex workflows using a drag-and-drop interface. This system provides a professional UI for designing automated workflows with various node types and configurations.
+
+**Note**: The flow builder is currently in active development. Core infrastructure (FlowCanvas, FlowContext, flowService) is implemented, but some advanced features may be in progress or planned.
 
 ### Architecture Overview
 
@@ -610,8 +663,8 @@ The flow builder is built on React Flow and provides:
 - **Visual Canvas**: Drag-and-drop interface for creating workflows
 - **Node System**: Extensible node types for different workflow components
 - **Real-time Updates**: Live flow editing and validation
-- **Flow Management**: Organization and versioning of workflows
-- **Context-based State**: Centralized state management for flow operations
+- **Flow Management**: Organization and versioning of workflows (in-memory storage via FlowService)
+- **Context-based State**: Centralized state management for flow operations via FlowContext
 
 ### Core Components
 
@@ -620,17 +673,20 @@ The flow builder is built on React Flow and provides:
 In-memory flow management service that handles all flow operations.
 
 -   **Class: `FlowService`**
-    -   Manages flow storage in memory with Map-based structure
-    -   Provides subscription-based updates for reactive UI
+    -   Manages flow storage in memory with Map-based structure (`private flows: Map<string, Flow>`)
+    -   Provides subscription-based updates for reactive UI via listener pattern
     -   Handles flow CRUD operations (Create, Read, Update, Delete)
     -   Maintains flow metadata and full flow objects
+    -   Initializes with default example flows (webform, untitled, email automation)
 -   **Key Methods**:
-    -   `getAllFlows()`: Returns list of flow metadata
-    -   `getFlow(id)`: Retrieves complete flow by ID
-    -   `createFlow(name, category)`: Creates new flow with default structure
-    -   `updateFlow(id, updates)`: Updates flow properties
+    -   `getAllFlows()`: Returns list of flow metadata as array
+    -   `getFlow(id)`: Retrieves complete flow by ID from Map
+    -   `createFlow(name, category)`: Creates new flow with default structure and unique ID
+    -   `updateFlow(id, updates)`: Updates flow properties and notifies subscribers
+    -   `updateFlowName(id, name)`: Updates flow name specifically
     -   `deleteFlow(id)`: Removes flow from storage
-    -   `subscribe(callback)`: Subscription system for state changes
+    -   `subscribe(callback)`: Subscription system for state changes, returns unsubscribe function
+    -   `notify()`: Internal method to notify all subscribers of changes
 
 #### Flow Context (`frontend/src/contexts/FlowContext.tsx`)
 
