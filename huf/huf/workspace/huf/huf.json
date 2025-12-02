@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"OsSj2RjLVu\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Huf</span>\",\"col\":12}},{\"id\":\"bQg_Z1kSdV\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Huf\",\"col\":2}},{\"id\":\"RqxcQixz9w\",\"type\":\"card\",\"data\":{\"card_name\":\"Setup\",\"col\":4}}]",
+ "content": "[{\"id\":\"OsSj2RjLVu\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Huf</span>\",\"col\":12}},{\"id\":\"WBFIAvEfIX\",\"type\":\"card\",\"data\":{\"card_name\":\"Get Started\",\"col\":3}},{\"id\":\"bQg_Z1kSdV\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Huf\",\"col\":2}},{\"id\":\"hxcJFCOMcV\",\"type\":\"card\",\"data\":{\"card_name\":\"Interaction\",\"col\":3}},{\"id\":\"RqxcQixz9w\",\"type\":\"card\",\"data\":{\"card_name\":\"Observability & Logs\",\"col\":3}}]",
  "creation": "2025-11-04 17:24:07.034098",
  "custom_blocks": [
   {
@@ -21,8 +21,8 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Setup",
-   "link_count": 6,
+   "label": "Get Started",
+   "link_count": 5,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -70,6 +70,25 @@
   {
    "hidden": 0,
    "is_query_report": 0,
+   "label": "Agent Trigger",
+   "link_count": 0,
+   "link_to": "Agent Trigger",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Interaction",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
    "label": "Agent Console",
    "link_count": 0,
    "link_to": "Agent Console",
@@ -86,9 +105,58 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Observability & Logs",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agent Run",
+   "link_count": 0,
+   "link_to": "Agent Run",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agent Conversation",
+   "link_count": 0,
+   "link_to": "Agent Conversation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agent Message",
+   "link_count": 0,
+   "link_to": "Agent Message",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agent Tool Call",
+   "link_count": 0,
+   "link_to": "Agent Tool Call",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
- "modified": "2025-11-27 15:45:58.482158",
+ "modified": "2025-12-02 12:04:05.391318",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Huf",
