@@ -3,9 +3,9 @@
 This file provides context and instructions for AI coding agents to effectively work on the Huf Frappe application.
 
 ## Project Overview
-Huf is a Frappe application for creating and managing conversational AI agents. It allows developers to define agents, equip them with tools to interact with the Frappe framework (e.g., CRUD operations on DocTypes), and manage conversation histories.
+Huf is a comprehensive Frappe application for creating and managing conversational AI agents with advanced workflow automation capabilities. It allows developers to define agents, equip them with tools to interact with the Frappe framework (e.g., CRUD operations on DocTypes), manage conversation histories, and build complex visual workflows.
 
-The application is built on the Frappe Framework (Python) and uses the standard Frappe directory structure. The core logic for agent integration is located in `huf/ai/`.
+The application is built on the Frappe Framework (Python) and uses the standard Frappe directory structure. The core logic for agent integration is located in `huf/ai/`, with a modern React-based frontend providing visual flow building and real-time streaming capabilities.
 
 ## Repo Layout
 -   `huf/`: The root of the Frappe app.
@@ -15,6 +15,12 @@ The application is built on the Frappe Framework (Python) and uses the standard 
     -   `<doctype_name>/<doctype_name>.py`: Server-side controller class.
     -   `<doctype_name>/<doctype_name>.js`: Client-side script.
 -   `huf/ai/`: Core Python modules for AI agent integration.
+-   `frontend/`: Modern React-based frontend application.
+    -   `frontend/src/components/`: React components for UI, flow builder, and agent interactions.
+    -   `frontend/src/contexts/`: React context providers for state management.
+    -   `frontend/src/services/`: Frontend services for API communication and flow management.
+    -   `frontend/src/types/`: TypeScript type definitions.
+    -   `frontend/src/pages/`: Page components for different application views.
 -   `.github/workflows/`: CI definitions for tests and linting.
 
 ## Security Considerations
@@ -97,11 +103,17 @@ Defines a function or "tool" that an agent can use. This is the core of the agen
 | :---------------------- | :------------------------ | :------ | :------------------------------------------------------------------------------------------------------ |
 | **Tool Name**           | `tool_name`               | Data    | A unique name for the tool.                                                                             |
 | **Description**         | `description`             | Small Text | A clear description of what the tool does. This is crucial as the AI uses it to decide when to use the tool. |
-| **Types**               | `types`                   | Select  | The type of function (e.g., `Get Document`, `Create Document`, `Custom Function`). This determines the underlying logic. |
+| **Types**               | `types`                   | Select  | The type of function. This determines the underlying logic. Available types: `Get Document`, `Get Multiple Documents`, `Get List`, `Create Document`, `Create Multiple Documents`, `Update Document`, `Update Multiple Documents`, `Delete Document`, `Delete Multiple Documents`, `Submit Document`, `Cancel Document`, `Get Amended Document`, `Custom Function`, `App Provided`, `Attach File to Document`, `Get Report Result`, `Get Value`, `Set Value`, `GET`, `POST`, `Run Agent`, `Speech to Text`. |
 | **Reference DocType**   | `reference_doctype`       | Link    | For DocType-related functions, this specifies the target DocType (e.g., `Sales Order`).                 |
 | **Function Path**       | `function_path`           | Data    | The dotted path to the Python function for `Custom Function` types (e.g., `my_app.api.my_function`).    |
 | **Parameters**          | `parameters`              | Table   | A table of parameters (`Agent Function Params`) the function accepts.                                   |
 | **Function Definition** | `function_definition`     | JSON    | (Read Only) The final JSON schema of the function, which is passed to the AI.                           |
+| **Base URL**           | `base_url`               | Data    | Optional base URL that will be prefixed to URL provided by agent (for GET/POST types).              |
+| **HTTP Headers**       | `http_headers`            | Table   | Custom HTTP headers for API requests (child table of `Agent Tool HTTP Header`).                        |
+| **Agent**             | `agent`                  | Link    | Target agent to run (for `Run Agent` type).                                                         |
+| **Provider App**       | `provider_app`             | Data    | App that provides this tool (for `App Provided` type).                                                |
+| **Pass Parameters as JSON** | `pass_parameters_as_json` | Check | Whether to pass parameters as JSON string (for `Custom Function` type).                              |
+| **Tool Type**         | `tool_type`              | Link    | Link to `Agent Tool Type` for categorization.                                                        |
 
 #### 4. Agent
 
@@ -127,6 +139,10 @@ The main DocType for creating an AI agent.
 | **Description**   | `description`  | Small Text | A brief description of the agent's purpose. |
 | **Last Run**      | `last_run`     | Datetime  | Timestamp of the last agent execution (read-only, auto-updated). |
 | **Total Run**     | `total_run`    | Int       | Total number of times this agent has been executed (read-only, auto-incremented). |
+| **Async**        | `async`        | Check     | Hidden field for async execution (internal use).                                                        |
+| **Disabled**      | `disabled`      | Check     | If checked, this agent will be disabled and will not run.                                               |
+| **Chef**          | `chef`         | Data      | Provider standard name (fetched from provider, hidden).                                                   |
+| **Slug**          | `slug`         | Data      | Provider slug (fetched from provider, hidden).                                                          |
 
 **Note**: The `condition` field has been removed from Agent DocType. Conditional triggering is now handled via the `Agent Trigger` DocType.
 
@@ -199,6 +215,118 @@ A single DocType providing a real-time chat interface for conversational agents.
 -   Only available for agents with `allow_chat` enabled
 -   Server Actions: `huf.ai.agent_chat.get_agent_chat_messages`, `huf.ai.agent_chat.send_agent_chat_message`
 
+#### 9. Agent Trigger
+
+Defines how and when agents are triggered for execution. This DocType replaces the old `condition` field in the Agent DocType with a comprehensive trigger management system.
+
+-   **Python Class**: `AgentTrigger(Document)`
+-   **File**: `huf/huf/doctype/agent_trigger/agent_trigger.py`
+
+**Fields:**
+
+| Label                | Fieldname            | Type      | Description                                                                                             |
+| :------------------- | :------------------- | :-------- | :------------------------------------------------------------------------------------------------------ |
+| **Trigger Name**     | `trigger_name`       | Data      | Unique name for the trigger (auto-generated).                                                           |
+| **Agent**            | `agent`              | Link      | Link to the `Agent` to be executed.                                                                    |
+| **Trigger Type**     | `trigger_type`       | Select    | Type of trigger: `Schedule`, `Doc Event`, `Webhook`, `App Event`, `Manual`.                             |
+| **Disabled**         | `disabled`           | Check     | Whether the trigger is disabled.                                                                       |
+| **Reference Doctype**| `reference_doctype`  | Link      | For Doc Event triggers, the target DocType.                                                            |
+| **Doc Event**        | `doc_event`          | Select    | Document lifecycle event (e.g., `after_insert`, `on_submit`, `on_cancel`).                             |
+| **Condition**        | `condition`          | Code      | Conditional expression evaluated before triggering (Doc Event only).                                  |
+| **Scheduled Interval**| `scheduled_interval` | Select    | For Schedule triggers: `Hourly`, `Daily`, `Weekly`, `Monthly`, `Yearly`.                              |
+| **Interval Count**   | `interval_count`     | Int       | Number of intervals between executions (Schedule only).                                               |
+| **Last Execution**   | `last_execution`     | Datetime  | Timestamp of last execution (read-only, Schedule only).                                                |
+| **Next Execution**   | `next_execution`     | Datetime  | Timestamp of next scheduled execution (read-only, Schedule only).                                       |
+| **Webhook Key**      | `webhook_key`        | Data      | Authentication key for webhook triggers.                                                              |
+| **Webhook Slug**     | `webhook_slug`       | Data      | URL slug for webhook endpoints.                                                                        |
+| **App Name**         | `app_name`           | Data      | For App Event triggers, the name of the app.                                                           |
+| **Event Name**       | `event_name`         | Data      | Name of the event to trigger on.                                                                       |
+| **Metadata**         | `metadata`           | JSON      | Additional metadata for the trigger.                                                                   |
+| **Disabled Reason**  | `disabled_reason`    | Small Text| Reason why the trigger was disabled.                                                                   |
+| **Is Virtual**       | `is_virtual`         | Check     | Whether this is a virtual trigger (system-generated).                                                  |
+| **Source System**    | `source_system`      | Data      | Source system that created this trigger.                                                               |
+
+**Trigger Types:**
+- **Schedule**: Time-based execution with configurable intervals
+- **Doc Event**: Triggered by document lifecycle events with optional conditions
+- **Webhook**: HTTP endpoint triggers with authentication
+- **App Event**: Application-level event triggers
+- **Manual**: Manually executed triggers
+
+#### 10. Agent Run Feedback
+
+Captures user feedback on agent responses for quality control and improvement.
+
+-   **Python Class**: `AgentRunFeedback(Document)`
+-   **File**: `huf/huf/doctype/agent_run_feedback/agent_run_feedback.py`
+
+**Fields:**
+
+| Label          | Fieldname      | Type      | Description                                                              |
+| :------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
+| **Feedback**   | `feedback`     | Select    | User feedback: `Thumbs Up` or `Thumbs Down`.                             |
+| **Comments**   | `comments`     | Small Text| Optional comments explaining the feedback.                              |
+| **Agent Message**| `agent_message`| Link     | Link to the `Agent Message` being rated.                                |
+| **Agent**      | `agent`        | Link      | Link to the `Agent` (fetched from agent message).                      |
+| **Provider**   | `provider`     | Link      | Link to the `AI Provider` (fetched from agent).                        |
+| **Model**      | `model`        | Link      | Link to the `AI Model` (fetched from agent).                            |
+
+#### 11. Agent Run Group
+
+Groups related agent executions together for batch processing and organization.
+
+-   **Python Class**: `AgentRunGroup(Document)`
+-   **File**: `huf/huf/doctype/agent_run_group/agent_run_group.py`
+
+**Fields:**
+
+| Label        | Fieldname    | Type | Description                               |
+| :----------- | :----------- | :--- | :---------------------------------------- |
+| **Job Name** | `job_name`   | Data | Unique name for the batch job.            |
+
+#### 12. Agent Settings
+
+Global application settings for the Huf system (singleton DocType).
+
+-   **Python Class**: `AgentSettings(Document)`
+-   **File**: `huf/huf/doctype/agent_settings/agent_settings.py`
+
+**Fields:**
+
+| Label               | Fieldname          | Type | Description                               |
+| :------------------ | :----------------- | :--- | :---------------------------------------- |
+| **Default Provider**| `default_provider`  | Link | Default `AI Provider` for new agents.    |
+| **Default Model**   | `default_model`     | Link | Default `AI Model` for new agents.       |
+
+#### 13. AI Provider Settings
+
+Provider-specific configuration settings (singleton DocType).
+
+-   **Python Class**: `AIProviderSettings(Document)`
+-   **File**: `huf/huf/doctype/ai_provider_settings/ai_provider_settings.py`
+
+**Fields:**
+
+| Label        | Fieldname    | Type | Description                               |
+| :----------- | :----------- | :--- | :---------------------------------------- |
+| **Provider** | `provider`   | Link | Link to the `AI Provider` to configure.  |
+
+#### 14. Agent Tool HTTP Header
+
+Child table for defining custom HTTP headers for tool requests (table DocType).
+
+-   **Python Class**: `AgentToolHttpHeader(Document)`
+-   **File**: `huf/huf/doctype/agent_tool_http_header/agent_tool_http_header.py`
+
+**Fields:**
+
+| Label    | Fieldname | Type | Description                               |
+| :------- | :-------- | :--- | :---------------------------------------- |
+| **Key**  | `key`     | Data | HTTP header name.                         |
+| **Value**| `value`   | Data | HTTP header value.                        |
+
+**Usage**: Used as a child table in `Agent Tool Function` to provide custom HTTP authentication headers for API-based tools.
+
 ### Core Classes and Methods
 
 The primary logic is located in the `huf/ai` directory.
@@ -265,6 +393,28 @@ This file provides the central routing layer for AI providers.
     -   **Fallback Mechanism**: For unsupported providers, attempts to load custom provider modules.
     -   **Error Handling**: Provides helpful error messages if LiteLLM is not installed or if provider is not found.
 
+#### `providers/openrouter.py`
+
+This file implements the OpenRouter provider with custom retry logic and enhanced error handling.
+
+-   **Function: `run(agent, enhanced_prompt, provider, model, context=None)`**
+    -   Main async function that handles OpenRouter API interactions.
+    -   **API Key Management**: Retrieves API key from `AI Provider` DocType using secure password field.
+    -   **Multi-turn Tool Calling**: Supports multiple rounds of tool calling in a single agent run (up to 10 rounds).
+    -   **Retry Logic**: Implements exponential backoff for rate limit (429) errors with up to 5 retries.
+    -   **Tool Serialization**: Uses `tool_serializer.serialize_tools()` for provider-agnostic tool format.
+    -   **Usage Tracking**: Accumulates token usage across multiple rounds of tool calling.
+-   **Function: `_post_with_retry(url, headers, payload, max_retries=5)`**
+    -   Handles HTTP POST requests with automatic retry for rate limiting.
+    -   Implements exponential backoff with random jitter to avoid thundering herd problems.
+    -   Provides clear error messages when all retries are exhausted.
+-   **Function: `_execute_tool_call(tool, args_json)`**
+    -   Executes a tool call and returns the result.
+-   **Function: `_find_tool(agent, tool_name)`**
+    -   Finds a tool by name in the agent's tools list.
+-   **Error Handling**: Comprehensive error handling for API errors, tool execution failures, and malformed responses.
+-   **Response Format**: Returns `SimpleResult` object with final output, usage statistics, and new items.
+
 #### `providers/litellm.py`
 
 This file implements the unified LiteLLM provider that handles all LLM interactions.
@@ -326,3 +476,503 @@ This file handles document event-based agent triggering.
         -   If `False`: Uses a shared conversation history (`shared:{agent_name}`).
     -   Constructs a prompt that includes the event name and document identifiers.
     -   Calls `run_agent_sync()` with appropriate `channel_id` and `external_id` parameters for conversation management.
+
+#### `agent_scheduler.py`
+
+This file handles scheduled agent execution based on `Agent Trigger` configurations.
+
+-   **Function: `run_scheduled_agents()` (Whitelisted)**
+    -   Main scheduler function that finds and executes scheduled agents.
+    -   Queries `Agent Trigger` DocType for active schedule triggers with `next_execution` <= current time.
+    -   For each trigger:
+        -   Loads the associated Agent and executes it with instructions as prompt.
+        -   Updates `last_execution` and calculates `next_execution` based on interval.
+        -   Supports `Hourly`, `Daily`, `Weekly`, `Monthly`, `Yearly` intervals with configurable `interval_count`.
+    -   Error handling with logging for failed executions.
+    -   Commits database changes after each successful execution.
+
+#### `agent_stream_renderer.py`
+
+This file provides Server-Sent Events (SSE) streaming for real-time agent responses.
+
+-   **Class: `AgentStreamRenderer(BaseRenderer)`**
+    -   Custom page renderer for SSE streaming endpoints.
+    -   **Routes**:
+        -   `/huf/stream/<agent_name>` - SSE endpoint for streaming agent responses
+        -   `/huf/stream` - HTML demo page with EventSource client for testing
+-   **Method: `render()`**
+    -   Routes requests to appropriate handler based on path.
+    -   Handles both HTML demo page and SSE stream generation.
+-   **Method: `_render_agent_stream(agent_name: str)`**
+    -   Generates SSE stream for agent responses.
+    -   Extracts prompt from query parameters or POST body.
+    -   Loads agent configuration (provider, model) from Agent DocType.
+    -   Creates async generator wrapper for Werkzeug Response compatibility.
+    -   Streams real-time deltas, tool calls, and completion events.
+    -   Error handling with proper SSE error messages.
+-   **Method: `_render_html_page()`**
+    -   Renders comprehensive HTML demo page for testing SSE streaming.
+    -   Includes EventSource client, real-time status updates, and UI controls.
+    -   Professional styling with responsive design.
+
+#### `speech_to_text.py`
+
+This file provides OpenAI Whisper integration for audio transcription.
+
+-   **Function: `transcribe_audio(audio_file_url: str, language: str = "en")` (Whitelisted)**
+    -   Transcribes audio files using OpenAI's Whisper model.
+    -   Supports both local Frappe files (`/files/...`) and remote URLs.
+    -   Downloads remote audio files to temporary storage for processing.
+    -   **Parameters**:
+        -   `audio_file_url`: Path or URL to audio file
+        -   `language`: Language code (default: "en")
+    -   **Returns**: Dictionary with `success`, `text`, `language`, and `audio_file_url` fields.
+    -   **Error Handling**: Returns structured error messages for API key issues, download failures, or transcription errors.
+    -   **Security**: Validates OpenAI API key configuration before processing.
+    -   **Cleanup**: Automatically removes temporary files after transcription.
+
+#### `tool_registry.py`
+
+This file provides automatic tool discovery and synchronization from app hooks.
+
+-   **Function: `_iter_declared_tools()`**
+    -   Iterates through tools registered via `huf_tools` hook in apps.
+    -   Supports both single tool and list of tools per hook entry.
+-   **Function: `validate_tool_def(d)`**
+    -   Validates tool definition structure and function availability.
+    -   Checks required fields: `tool_name`, `description`, `function_path`, `parameters`.
+    -   Dynamically imports and validates function callability.
+-   **Function: `upsert_tool_doc(d)`**
+    -   Creates or updates `Agent Tool Function` documents from hook definitions.
+    -   Sets tool type to "App Provided" for auto-discovered tools.
+    -   Converts parameter definitions to Frappe table format.
+-   **Function: `_get_app_modified_time(app_name)`**
+    -   Gets modification time of app's `hooks.py` file as proxy for app changes.
+    -   Used for cache invalidation decisions.
+-   **Caching System**: Uses `Agent Settings` singleton to store last sync timestamps.
+-   **Sync Logic**: Only syncs when apps have been modified since last sync.
+
+#### `tool_serializer.py`
+
+This file provides provider-agnostic tool serialization for multi-provider AI agents.
+
+-   **Function: `serialize_tools(tools: list)`**
+    -   Converts custom `FunctionTool` objects into standard JSON schema format.
+    -   **Purpose**: Ensures compatibility with OpenAI, OpenRouter, Anthropic, and other providers.
+    -   **Input**: List of `FunctionTool` objects created by `sdk_tools.create_agent_tools`.
+    -   **Output**: List of dictionaries in OpenAI/OpenRouter-compatible schema.
+    -   **Schema Structure**:
+        ```json
+        {
+            "type": "function",
+            "function": {
+                "name": "tool_name",
+                "description": "Tool description",
+                "parameters": {...}
+            }
+        }
+        ```
+    -   **Error Handling**: Gracefully handles missing attributes with empty defaults.
+    -   **Provider Compatibility**: Standardizes tool format across all LLM providers.
+
+#### `http_handler.py`
+
+This file provides secure HTTP request handling with SSRF protection for agent tools.
+
+-   **Function: `validate_url(url, tool_name=None)`**
+    -   Validates URLs to prevent SSRF (Server-Side Request Forgery) attacks.
+    -   **Security Features**:
+        -   Blocks private IP ranges (127.*, 10.*, 172.16-31.*, 192.168.*)
+        -   Blocks localhost and IPv6 localhost
+        -   Only allows HTTP/HTTPS protocols
+        -   Validates against tool's base URL if specified
+-   **Function: `handle_http_request(method, url, ...)` (Whitelisted)**
+    -   Generic HTTP request handler with tool-defined header support.
+    -   **Features**:
+        -   Merges tool-defined headers with request headers
+        -   Supports base URL configuration from `Agent Tool Function`
+        -   Handles both form data and JSON payloads
+        -   30-second timeout for all requests
+    -   **Response Format**: Standardized response with `success`, `status_code`, `headers`, `data`, and `final_url`.
+    -   **Error Handling**: Provides AI-friendly suggestions for common errors.
+-   **Function: `handle_get_request(...)` and `handle_post_request(...)` (Whitelisted)**
+    -   Convenience wrappers for GET and POST requests.
+    -   POST handler includes JSON parsing and validation logic.
+    -   Automatic conversion between form data and JSON based on content type.
+
+## Frontend Flow Builder System
+
+The Huf frontend includes a comprehensive visual flow builder that allows users to create, manage, and execute complex workflows using a drag-and-drop interface. This system provides a professional UI for designing automated workflows with various node types and configurations.
+
+### Architecture Overview
+
+The flow builder is built on React Flow and provides:
+- **Visual Canvas**: Drag-and-drop interface for creating workflows
+- **Node System**: Extensible node types for different workflow components
+- **Real-time Updates**: Live flow editing and validation
+- **Flow Management**: Organization and versioning of workflows
+- **Context-based State**: Centralized state management for flow operations
+
+### Core Components
+
+#### Flow Service (`frontend/src/services/flowService.ts`)
+
+In-memory flow management service that handles all flow operations.
+
+-   **Class: `FlowService`**
+    -   Manages flow storage in memory with Map-based structure
+    -   Provides subscription-based updates for reactive UI
+    -   Handles flow CRUD operations (Create, Read, Update, Delete)
+    -   Maintains flow metadata and full flow objects
+-   **Key Methods**:
+    -   `getAllFlows()`: Returns list of flow metadata
+    -   `getFlow(id)`: Retrieves complete flow by ID
+    -   `createFlow(name, category)`: Creates new flow with default structure
+    -   `updateFlow(id, updates)`: Updates flow properties
+    -   `deleteFlow(id)`: Removes flow from storage
+    -   `subscribe(callback)`: Subscription system for state changes
+
+#### Flow Context (`frontend/src/contexts/FlowContext.tsx`)
+
+React context provider for centralized flow state management.
+
+-   **Interface: `FlowContextType`**
+    -   Provides access to flows, active flow, and selected node
+    -   Offers methods for flow manipulation (create, update, delete)
+    -   Handles node and edge operations (add, update, delete)
+    -   Manages flow selection and navigation
+-   **State Management**:
+    -   `flows`: Array of flow metadata
+    -   `activeFlowId`: Currently selected flow ID
+    -   `activeFlow`: Complete flow object for active flow
+    -   `selectedNodeId`: Currently selected node for configuration
+
+#### Flow Canvas (`frontend/src/components/FlowCanvas.tsx`)
+
+Main visual editor component built on React Flow.
+
+-   **Features**:
+    -   Drag-and-drop node placement
+    -   Visual connection creation between nodes
+    -   Real-time canvas updates
+    -   Mini-map and controls for navigation
+    -   Responsive design with collapsible sidebars
+-   **Node Types Supported**:
+    -   **Trigger Nodes**: Workflow entry points (webhook, schedule, doc-event, app-trigger)
+    -   **Action Nodes**: Processing steps (transform, router, human-in-loop, loop, code)
+    -   **Utility Nodes**: Helper functions (email, file, date, webhook, http)
+    -   **End Nodes**: Workflow termination points
+
+### Node Types and Configurations
+
+#### Trigger Nodes
+
+-   **Webhook Trigger**: HTTP endpoint triggers with configurable URLs and authentication
+-   **Schedule Trigger**: Time-based triggers with cron expressions and intervals
+-   **Document Event Trigger**: Frappe document lifecycle events (save, update, delete)
+-   **App Trigger**: Integration with external applications (Gmail, Calendar, Slack, Notion, HubSpot, Sheets)
+
+#### Action Nodes
+
+-   **Transform Action**: Data transformation operations (copy, map, concat, split)
+-   **Router Action**: Conditional branching with multiple paths
+-   **Human-in-Loop Action**: Approval workflows with timeout and approver lists
+-   **Loop Action**: Iterative processing with configurable iteration limits
+-   **Code Action**: Custom JavaScript/Python/TypeScript code execution
+
+#### Utility Nodes
+
+-   **Email Utility**: Send emails with templates and dynamic content
+-   **File Utility**: File operations (read, write, delete)
+-   **Date Utility**: Date formatting and arithmetic operations
+-   **Webhook Utility**: HTTP requests to external services
+-   **HTTP Utility**: Advanced HTTP operations with custom headers
+
+### Flow Data Structure
+
+#### Flow Object
+
+```typescript
+interface Flow {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'draft' | 'active' | 'paused' | 'error';
+  category?: string;
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  createdAt: Date;
+  updatedAt: Date;
+  version: number;
+}
+```
+
+#### Node Configuration
+
+Each node supports type-specific configuration:
+
+-   **Trigger Config**: Webhook URLs, schedule intervals, document events
+-   **Action Config**: Transformation rules, routing conditions, code snippets
+-   **Utility Config**: Email templates, file paths, HTTP endpoints
+
+### UI Components
+
+#### Flow Management
+
+-   **Flows Sidebar**: List of all flows with search and filtering
+-   **Flow Header Actions**: Create, duplicate, delete, export operations
+-   **Flow Categories**: Organization by custom categories
+
+#### Canvas Controls
+
+-   **Mini-map**: Overview of large flows for navigation
+-   **Zoom Controls**: Zoom in/out and fit-to-screen
+-   **Grid Layout**: Aligned node placement with snap-to-grid
+-   **Background Patterns**: Visual distinction between different areas
+
+#### Node Configuration
+
+-   **Node Selection Modal**: Add new nodes with type selection
+-   **Configuration Panels**: Side panels for node-specific settings
+-   **Validation**: Real-time validation of node configurations
+-   **Connection Rules**: Enforced connection rules between node types
+
+### Integration with Backend
+
+The flow builder integrates with the Huf backend through:
+
+-   **Flow Execution**: Flows can be executed and monitored
+-   **Agent Integration**: Flow nodes can trigger and interact with Huf agents
+-   **Document Events**: Flows respond to Frappe document changes
+-   **API Endpoints**: RESTful API for flow management
+
+### Usage Patterns
+
+1. **Create Flow**: Start with a trigger node to define entry point
+2. **Add Actions**: Connect action nodes to process data
+3. **Configure Nodes**: Set up parameters and conditions for each node
+4. **Test Flow**: Validate flow logic and connections
+5. **Deploy Flow**: Activate flow for production execution
+6. **Monitor**: Track flow execution and performance
+
+### File Structure
+
+```
+frontend/src/
+├── components/
+│   ├── FlowCanvas.tsx          # Main canvas component
+│   ├── nodes/                 # Node type components
+│   │   ├── TriggerNode.tsx
+│   │   ├── ActionNode.tsx
+│   │   └── EndNode.tsx
+│   └── modals/               # Configuration modals
+├── contexts/
+│   └── FlowContext.tsx         # State management
+├── services/
+│   └── flowService.ts         # Flow operations
+└── types/
+    └── flow.types.ts           # TypeScript definitions
+```
+
+## Streaming Architecture
+
+The Huf system includes Server-Sent Events (SSE) streaming capabilities for real-time agent responses, enabling live interaction with AI agents without traditional request-response cycles.
+
+### SSE Implementation
+
+#### Agent Stream Renderer (`huf/ai/agent_stream_renderer.py`)
+
+-   **Class: `AgentStreamRenderer(BaseRenderer)`**
+    -   Custom page renderer that handles SSE streaming for agents
+    -   Integrates with Frappe's website routing system
+    -   Provides both streaming endpoints and demo interface
+
+#### Streaming Endpoints
+
+-   **`/huf/stream/<agent_name>`** - SSE endpoint for streaming agent responses
+    -   Accepts `prompt` parameter via query string or POST body
+    -   Supports optional parameters: `channel_id`, `external_id`, `conversation_id`
+    -   Returns real-time deltas, tool calls, and completion events
+    -   Handles error conditions with proper SSE error messages
+
+-   **`/huf/stream`** - HTML demo page with EventSource client for testing
+    -   Professional UI for testing streaming capabilities
+    -   Real-time status updates and response display
+    -   Supports both GET and POST request methods
+    -   Includes error handling and connection management
+
+#### Streaming Data Format
+
+The SSE stream emits JSON events with the following structure:
+
+```json
+{
+  "type": "delta",
+  "content": "Partial response text",
+  "full_response": "Accumulated response so far"
+}
+```
+
+**Event Types**:
+-   `delta`: Partial response content during generation
+-   `tool_call`: Information about tool being executed
+-   `complete`: Final response when generation is finished
+-   `error`: Error information if streaming fails
+
+#### Client Integration
+
+**JavaScript EventSource Example**:
+```javascript
+const eventSource = new EventSource('/huf/stream/my-agent?prompt=Hello');
+
+eventSource.onmessage = function(event) {
+  const data = JSON.parse(event.data);
+  if (data.type === 'delta') {
+    // Update UI with partial response
+    updateResponse(data.full_response);
+  }
+};
+
+eventSource.addEventListener('complete', function(event) {
+  const data = JSON.parse(event.data);
+  // Handle final response
+  finalizeResponse(data.full_response);
+});
+```
+
+#### Features
+
+-   **Real-time Streaming**: Live response updates as they're generated
+-   **Tool Call Visibility**: Shows when agents are using tools
+-   **Error Handling**: Graceful error reporting and recovery
+-   **Connection Management**: Automatic cleanup and timeout handling
+-   **Cross-browser Compatibility**: Works with modern browsers supporting EventSource
+-   **Security**: Inherits agent permissions and authentication
+
+#### Usage Patterns
+
+1. **Direct Integration**: Use EventSource directly in web applications
+2. **React Components**: Build custom React components for streaming UI
+3. **Testing**: Use demo page at `/huf/stream` for development
+4. **Monitoring**: Track streaming performance and error rates
+
+#### Technical Details
+
+-   **Async Generator**: Uses Python async generators for efficient streaming
+-   **Werkzeug Integration**: Compatible with Frappe's web framework
+-   **Memory Management**: Automatic cleanup of temporary resources
+-   **Error Recovery**: Handles network interruptions and timeouts
+-   **Response Accumulation**: Maintains full response context throughout stream
+
+## Security Enhancements
+
+The Huf system includes several security enhancements to protect against common vulnerabilities and ensure safe agent operations.
+
+### SSRF Protection
+
+#### URL Validation (`http_handler.py`)
+
+-   **Function: `validate_url(url, tool_name=None)`**
+    -   Validates URLs to prevent SSRF (Server-Side Request Forgery) attacks
+    -   **Security Features**:
+        -   Blocks private IP ranges (127.*, 10.*, 172.16-31.*, 192.168.*)
+        -   Blocks localhost and IPv6 localhost
+        -   Only allows HTTP/HTTPS protocols
+        -   Validates against tool's base URL if specified
+    -   **Private IP Pattern**: Uses regex to match and block private network ranges
+    -   **Protocol Validation**: Ensures only allowed protocols are used
+
+#### HTTP Request Security
+
+-   **Base URL Validation**: Tools can specify allowed base URLs for additional security
+-   **Header Management**: Secure handling of custom HTTP headers
+-   **Timeout Protection**: 30-second timeout prevents hanging requests
+-   **Error Sanitization**: Clean error messages that don't expose system information
+
+### API Key Management
+
+-   **Password Field Type**: API keys stored using Frappe's encrypted Password field
+-   **Environment Variables**: Sensitive keys (like OpenRouter) use environment variables
+-   **Provider Isolation**: Each provider's keys are stored separately
+-   **Access Control**: Proper permissions for accessing API key configurations
+
+## Tool Discovery System
+
+The Huf system provides automatic tool discovery and synchronization from app hooks, enabling apps to register tools that become available to agents automatically.
+
+### Hook-Based Registration
+
+#### Tool Registration Hook
+
+-   **Hook Name**: `huf_tools`
+-   **Registration Format**: Apps can register single tools or lists of tools
+-   **Hook Definition**: In app's `hooks.py` file:
+    ```python
+    huf_tools = [
+        "my_app.tools.custom_tool",
+        ["my_app.tools.tool1", "my_app.tools.tool2"]
+    ]
+    ```
+
+#### Tool Definition Structure
+
+Each registered tool must include:
+
+-   **tool_name**: Unique identifier for the tool
+-   **description**: Clear description of what the tool does
+-   **function_path**: Dotted path to the Python function
+-   **parameters**: Array of parameter definitions with types and requirements
+
+#### Validation and Import
+
+-   **Function Validation**: Dynamically imports and validates function callability
+-   **Structure Validation**: Ensures all required fields are present
+-   **Type Checking**: Validates parameter types and requirements
+-   **Error Handling**: Clear error messages for invalid tool definitions
+
+### Synchronization Process
+
+#### Automatic Sync (`tool_registry.py`)
+
+-   **Trigger**: Sync occurs when apps are modified or on system startup
+-   **Cache Management**: Uses `Agent Settings` singleton to track last sync times
+-   **App Modification Detection**: Checks `hooks.py` file modification times
+-   **Incremental Updates**: Only processes apps that have changed since last sync
+
+#### Tool Document Creation
+
+-   **Upsert Logic**: Creates new or updates existing `Agent Tool Function` documents
+-   **Tool Type**: Automatically set to "App Provided" for discovered tools
+-   **Parameter Conversion**: Converts hook parameter definitions to Frappe table format
+-   **Metadata Preservation**: Maintains tool metadata and relationships
+
+### Caching System
+
+#### Performance Optimization
+
+-   **Tool Discovery Cache**: Caches discovered tools to avoid repeated processing
+-   **App Modification Cache**: Tracks modification times of app hook files
+-   **Cache Invalidation**: Automatically clears cache when apps are updated
+-   **Memory Efficiency**: Uses efficient data structures for caching
+
+#### Cache Keys
+
+-   **huf:discovered_tools**: Cache for discovered tool definitions
+-   **huf:app_modification_times**: Cache for app file modification times
+-   **Agent Settings**: Singleton document used for persistent cache storage
+
+### Integration with Agent System
+
+#### Tool Availability
+
+-   **Automatic Inclusion**: Discovered tools automatically available in agent tool selection
+-   **Type Classification**: Properly categorized as "App Provided" tools
+-   **Parameter Handling**: Full parameter support with type validation
+-   **Execution**: Uses same execution pipeline as manually defined tools
+
+#### Multi-App Support
+
+-   **App Isolation**: Tools from different apps are properly namespaced
+-   **Conflict Resolution**: Handles tool name conflicts across apps
+-   **Dependency Management**: Ensures app dependencies are properly loaded
+-   **Version Compatibility**: Supports tool versioning and compatibility checks
