@@ -23,6 +23,7 @@
   "conversation_settings_section",
   "persist_user_history",
   "allow_chat",
+  "enable_multi_run",
   "column_break_vfhq",
   "persist_conversation",
   "section_break_yyoa",
@@ -182,12 +183,12 @@
    "label": "Metadata"
   },
   {
-    "default": "1",
-    "description": "When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.",
-    "fieldname": "persist_user_history",
-    "fieldtype": "Check",
-    "label": "Persist per User (Doc/Schedule)"
-   },
+   "default": "1",
+   "description": "When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.",
+   "fieldname": "persist_user_history",
+   "fieldtype": "Check",
+   "label": "Persist per User (Doc/Schedule)"
+  },
   {
    "description": "This is the provider standard name",
    "fetch_from": "provider.chef",
@@ -202,12 +203,18 @@
    "fieldtype": "Data",
    "hidden": 1,
    "label": "Slug"
+  },
+  {
+   "default": "0",
+   "fieldname": "enable_multi_run",
+   "fieldtype": "Check",
+   "label": "Enable Multi Run"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-21 17:43:42.407012",
+ "modified": "2025-11-28 05:34:23.919261",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",
