@@ -2,17 +2,19 @@ import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 
-export function AgentsHeaderActions() {
+export function ChatHeaderActions() {
   const navigate = useNavigate();
 
-  const handleNewAgent = () => {
-    navigate('/agents/new');
+  const handleNewChat = () => {
+    navigate('/chat/new');
   };
 
   return (
-    <Button onClick={handleNewAgent} size="sm">
+    <Button onClick={handleNewChat} size="sm">
       <Plus className="w-4 h-4 mr-2" />
-      New Agent
+      New Chat
     </Button>
   );
 }
+
+

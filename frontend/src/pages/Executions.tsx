@@ -1,21 +1,14 @@
 import { Zap, Calendar, Loader2 } from 'lucide-react';
 import { FilterBar, GridView, PageLayout, ItemCard } from '@/components/dashboard';
+import { useNavigate } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgentRuns, type AgentRunDoc } from '@/services/agentRunApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
 import { Button } from '@/components/ui/button';
-
-function getStatusVariant(
-  status?: 'Started' | 'Queued' | 'Success' | 'Failed' | string
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (status === 'Success') return 'default';
-  if (status === 'Failed') return 'destructive';
-  if (status === 'Queued') return 'secondary';
-  if (status === 'Started') return 'outline';
-  return 'secondary';
-}
+import { getAgentRunStatusVariant } from '@/utils/status';
 
 export default function Executions() {
+  const navigate = useNavigate();
   const {
     items: runs,
     hasMore,
@@ -88,12 +81,13 @@ export default function Executions() {
               description={`Run ID: ${run.name}`}
               status={{
                 label: status,
-                variant: getStatusVariant(run.status),
+                variant: getAgentRunStatusVariant(run.status),
               }}
               metadata={[
                 { label: 'Duration', value: duration, icon: Zap },
                 { label: 'Started', value: timeAgo, icon: Calendar },
               ]}
+              onClick={() => navigate(`/executions/${run.name}`)}
             />
           );
         }}
