@@ -2,7 +2,7 @@
 
 Huf is a powerful Frappe application for create, manage, and integrate AI agents directly into Frappe ecosystem. These agents can be equipped with tools to interact with your site's data, automate tasks, and provide intelligent assistance.
 
-**[📚 View Documentation](https://tridz-dev.github.io/agent_flo/)** | **[🐛 Report Issue](https://github.com/tridz-dev/huf/issues)** | **[💬 Discussions](https://github.com/tridz-dev/huf/discussions)**
+**[📚 View Documentation](https://docs.huf.ai/)** | **[🐛 Report Issue](https://github.com/tridz-dev/huf/issues)** | **[💬 Discussions](https://github.com/tridz-dev/huf/discussions)**
 
 <br/><br/>
 <img width="1905" height="928" alt="image_2025-11-07_18-16-05 (1)" src="https://github.com/user-attachments/assets/61a8511b-80cc-4843-a90c-bfcfc4a45c97" />
