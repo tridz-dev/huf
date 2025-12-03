@@ -2,8 +2,8 @@
  {
   "docstatus": 0,
   "doctype": "Custom HTML Block",
-  "html": "<a href=\"/huf\">\n    <img class=\"huflogo\" src=\"/assets/huf/Images/Huf.jpg\">\n</a>\n",
-  "modified": "2025-11-27 15:45:27.685150",
+  "html": "<a href=\"/huf\" style=\"display:inline-block\">\n    <img class=\"huflogo\" src=\"/assets/huf/Images/Huf.jpg\">\n    <h5>Huf UI</h5>\n</a>\n",
+  "modified": "2025-12-03 18:37:34.945328",
   "name": "Huf",
   "private": 0,
   "roles": [],

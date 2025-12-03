@@ -240,7 +240,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 doc = frappe.get_doc("Agent Tool Call", doc_id)
                 
                 update_data = {}
-                
+
                 if result is not None:
                     update_data["tool_result"] = result if isinstance(result, str) else json.dumps(result)
                 
@@ -252,8 +252,10 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 
                 doc.update(update_data)
                 doc.save()
+                return doc.name 
             else:
-                 frappe.log_error(f"Received tool output for run {agent_run} but no Queued tool call was found to update.", "Agent Tool Call Warning")
+                 frappe.log_error(f"Received tool output for run {agent_run} but no Queued tool call found.", "Agent Tool Call Warning")
+                 return None
 
         else:
             doc = frappe.get_doc({
@@ -266,14 +268,16 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "error_message": error,
                 "status": "Queued"
             })
-            doc.insert(ignore_permissions=True)
+            doc.insert()
+            return doc.name
 
         frappe.db.commit()
     except Exception as e:
-        frappe.log_error(f"Error processing tool call: {str(e)}\nName: {name}, Is Output: {is_output}", "Agent Tool Call Error")
+        frappe.log_error(f"Error processing tool call: {str(e)}", "Agent Tool Call Error")
+        return None
 
 def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None, is_output=False):
-    frappe.enqueue(process_tool_call, queue='long', job_name='tool_call',
+    return process_tool_call(
         agent_run=run_doc.name,
         conversation=conversation.name,
         name=getattr(raw_call, "name", None),
@@ -365,7 +369,7 @@ def run_agent_sync(
             "channel": channel_id,
             "external_id": external_id,
             "conversation_history": history,
-            "agent_name": agent_name  # Required for LiteLLM provider to access Agent DocType settings
+            "agent_name": agent_name
         }
 
         enhanced_prompt = f"""
@@ -387,7 +391,23 @@ def run_agent_sync(
         for item in getattr(result, "new_items", []):
             if item.type == "tool_call_item":
                 raw = item.raw_item  
-                log_tool_call(run_doc, conversation, raw, is_output=False)
+                tool_call_id = log_tool_call(run_doc, conversation, raw, is_output=False)
+
+                tool_name = getattr(raw, "name", "Unknown Tool")
+                tool_args = getattr(raw, "arguments", "{}")
+                msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
+                
+                conv_manager.add_message(
+                    conversation, 
+                    role="agent", 
+                    content=msg_content, 
+                    provider=provider, 
+                    model=model, 
+                    agent=agent_name, 
+                    run_name=run_doc.name,
+                    kind="Tool Call",
+                    tool_call_id=tool_call_id 
+                )
 
             elif item.type == "tool_call_output_item":
                 raw = item.raw_item
@@ -396,7 +416,22 @@ def run_agent_sync(
                 except Exception:
                     tool_result = raw.get("output")
 
-                log_tool_call(run_doc, conversation, raw, tool_result=tool_result, is_output=True)
+                updated_tool_call_id = log_tool_call(run_doc, conversation, raw, tool_result=tool_result, is_output=True)
+
+                if updated_tool_call_id:
+
+                    message_name = frappe.db.get_value("Agent Message", {"tool_calll": updated_tool_call_id}, "name")
+
+                    if message_name:
+                        msg_doc = frappe.get_doc("Agent Message", message_name)
+                        
+                        
+                        result_str = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
+                        new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
+                        
+                        msg_doc.content = new_content
+                        msg_doc.kind = "Tool Result"
+                        msg_doc.save(ignore_permissions=True)
         
         final_output = getattr(result, "final_output", str(result))
         usage = getattr(result, "usage", None)
@@ -449,8 +484,6 @@ def run_agent_sync(
         error_msg = str(e)
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
-        # conv_manager.add_message(conversation, role="system", content=error_msg, provider=provider, model=model, agent_name=agent_name, run_name=run_doc.name)
-
         frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "Huf")
 
         return {
