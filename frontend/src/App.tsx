@@ -21,6 +21,7 @@ import { IntegrationsPage } from './pages/IntegrationsPage';
 import { ChatPage } from './pages/ChatPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { Toaster } from './components/ui/sonner';
+import Executions from './pages/Executions';
 
 function App() {
   return (
@@ -116,6 +117,16 @@ function App() {
               <ProtectedRoute>
                 <UnifiedLayout>
                   <ChatPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/executions"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Executions />
                 </UnifiedLayout>
               </ProtectedRoute>
             }

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -27,6 +27,11 @@ const navItems = [
     title: "Chat",
     url: "/chat",
     icon: MessageSquare,
+  },
+  {
+    title: "Executions",
+    url: "/executions",
+    icon: Zap,
   },
   {
     title: "Flows",
