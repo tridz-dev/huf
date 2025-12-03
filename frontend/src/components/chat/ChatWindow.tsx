@@ -1,5 +1,5 @@
 import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
-import { MicIcon } from 'lucide-react';
+// import { MicIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ToolUIPart } from 'ai';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
@@ -23,14 +23,14 @@ import { Message, MessageContent } from '@/components/ai-elements/message';
 
 import {
   PromptInput,
-  PromptInputActionAddAttachments,
-  PromptInputActionMenu,
-  PromptInputActionMenuContent,
-  PromptInputActionMenuTrigger,
+  // PromptInputActionAddAttachments,
+  // PromptInputActionMenu,
+  // PromptInputActionMenuContent,
+  // PromptInputActionMenuTrigger,
   PromptInputAttachment,
   PromptInputAttachments,
   PromptInputBody,
-  PromptInputButton,
+  // PromptInputButton,
   PromptInputFooter,
   PromptInputHeader,
   type PromptInputMessage,
@@ -140,7 +140,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const [modelName, setModelName] = useState<string>('');
   const [text, setText] = useState<string>('');
   // const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
-  const [useMicrophone, setUseMicrophone] = useState<boolean>(false);
+  // const [useMicrophone, setUseMicrophone] = useState<boolean>(false);
   const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
   const [messages, setMessages] = useState<MessageType[]>([]);
   const stickContextRef = useRef<StickToBottomContext | null>(null);
@@ -179,6 +179,11 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
 
   // Handle tool updates from socket
   const handleToolUpdate = useCallback((event: ToolCallEvent) => {
+    // Only process events for the current conversation
+    if (event.conversation_id !== chatId) {
+      return;
+    }
+
     setMessages((prev) => {
       // Parse tool data
       let parsedArgs: Record<string, unknown> = {};
@@ -255,7 +260,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
         return [...prev, newMessage];
       }
     });
-  }, []);
+  }, [chatId]);
 
   useChatSocket({
     conversationId: chatId,
@@ -444,6 +449,11 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const previousChatIdRef = useRef<string | null>(chatId);
   useEffect(() => {
     if (chatId && chatId !== previousChatIdRef.current) {
+      // Clear messages when conversation changes to prevent showing messages from previous conversation
+      setMessages([]);
+      // Reset agent selection when conversation changes
+      setModel('');
+      setModelName('');
       // Reset last message ID when switching chats to force scroll to bottom
       lastMessageIdRef.current = null;
     }
@@ -455,8 +465,9 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       getConversation(chatId)
         .then((conversation) => {
           if (conversation?.agent) {
-            setModel((prev) => prev || conversation.agent);
-            setModelName((prev) => prev || conversation.agent);
+            // Always update when conversation changes
+            setModel(conversation.agent);
+            setModelName(conversation.agent);
           }
         })
         .catch((error) => {
@@ -464,11 +475,16 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
         });
       return;
     }
+    // For new chats, use agent from query params
     const agentFromQuery = searchParams.get('agent') ?? '';
-    if (agentFromQuery && agentFromQuery !== model) {
+    if (agentFromQuery) {
       setModel(agentFromQuery);
+    } else {
+      // Clear if no agent in query and no chatId
+      setModel('');
+      setModelName('');
     }
-  }, [chatId, searchParams, model]);
+  }, [chatId, searchParams]);
 
   const handleFeedback = useCallback(
     async (
@@ -873,20 +889,20 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
 
               <PromptInputFooter>
                 <PromptInputTools>
-                  <PromptInputActionMenu>
+                  {/* <PromptInputActionMenu>
                     <PromptInputActionMenuTrigger />
                     <PromptInputActionMenuContent>
                       <PromptInputActionAddAttachments />
                     </PromptInputActionMenuContent>
-                  </PromptInputActionMenu>
+                  </PromptInputActionMenu> */}
 
-                  <PromptInputButton
+                  {/* <PromptInputButton
                     onClick={() => setUseMicrophone(!useMicrophone)}
                     variant={useMicrophone ? 'default' : 'ghost'}
                   >
                     <MicIcon size={16} />
                     <span className="sr-only">Microphone</span>
-                  </PromptInputButton>
+                  </PromptInputButton> */}
 
                   {/* <PromptInputButton
                     onClick={() => setUseWebSearch(!useWebSearch)}
