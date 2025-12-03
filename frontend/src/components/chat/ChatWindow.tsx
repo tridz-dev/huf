@@ -137,7 +137,6 @@ function ConditionalPromptInputHeader() {
 export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const [searchParams] = useSearchParams();
   const [model, setModel] = useState<string>(() => searchParams.get('agent') ?? '');
-  const [modelName, setModelName] = useState<string>('');
   const [text, setText] = useState<string>('');
   // const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
   // const [useMicrophone, setUseMicrophone] = useState<boolean>(false);
@@ -453,7 +452,6 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       setMessages([]);
       // Reset agent selection when conversation changes
       setModel('');
-      setModelName('');
       // Reset last message ID when switching chats to force scroll to bottom
       lastMessageIdRef.current = null;
     }
@@ -467,7 +465,6 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
           if (conversation?.agent) {
             // Always update when conversation changes
             setModel(conversation.agent);
-            setModelName(conversation.agent);
           }
         })
         .catch((error) => {
@@ -482,7 +479,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
     } else {
       // Clear if no agent in query and no chatId
       setModel('');
-      setModelName('');
+      // setModelName('');
     }
   }, [chatId, searchParams]);
 
@@ -748,7 +745,6 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
             disabled={!isNewChat}
             value={model}
             onValueChange={setModel}
-            onModelNameChange={setModelName}
           />
         </div>
       </div>
@@ -920,7 +916,6 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                     disabled={!isNewChat}
                     value={model}
                     onValueChange={setModel}
-                    onModelNameChange={setModelName}
                   />
                 </PromptInputTools>
 

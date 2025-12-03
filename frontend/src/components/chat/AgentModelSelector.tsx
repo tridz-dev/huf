@@ -24,12 +24,11 @@ import { getAgentModels, type AgentModelItem } from '@/services/agentApi';
 interface AgentModelSelectorProps {
   value: string;
   onValueChange: (value: string) => void;
-  onModelNameChange?: (name: string) => void;
   disabled?: boolean;
   variant?: 'default' | 'header';
 }
 
-export function AgentModelSelector({ value, onValueChange, onModelNameChange, disabled, variant = 'default' }: AgentModelSelectorProps) {
+export function AgentModelSelector({ value, onValueChange, disabled, variant = 'default' }: AgentModelSelectorProps) {
   const [open, setOpen] = useState(false);
 
   // Fetch agent models for selector
@@ -77,19 +76,6 @@ export function AgentModelSelector({ value, onValueChange, onModelNameChange, di
   }, [open, setModelSearch]);
 
   const selectedModelData = agentModels.find((m) => m.id === value);
-
-  // Notify parent of model name change
-  useEffect(() => {
-    if (onModelNameChange) {
-      if (selectedModelData) {
-        onModelNameChange(selectedModelData.name);
-      } else if (modelsLoading) {
-        onModelNameChange('Loading...');
-      } else {
-        onModelNameChange('');
-      }
-    }
-  }, [selectedModelData, onModelNameChange, modelsLoading]);
 
   // Group models by chef
   const groupedModels = agentModels.reduce(
