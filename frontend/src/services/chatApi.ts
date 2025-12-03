@@ -24,7 +24,7 @@ export interface ChatListItem {
   timestamp?: string;
 }
 
-type ConversationFilter = [keyof AgentConversationDoc | string, 'like', string];
+type ConversationFilter = [keyof AgentConversationDoc | string, string, unknown];
 
 export interface AgentMessageDoc {
   name: string;
@@ -72,7 +72,9 @@ function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
 /**
  * Parameters for fetching paginated conversations
  */
-export interface ConversationListParams extends PaginationParams {}
+export interface ConversationListParams extends PaginationParams {
+  filters?: ConversationFilter[];
+}
 
 export interface ConversationMessageListParams extends PaginationParams {
   conversation?: string;
@@ -84,19 +86,19 @@ export interface ConversationMessageListParams extends PaginationParams {
 export async function getConversations(
   params: ConversationListParams = {}
 ): Promise<PaginatedResponse<ChatListItem>> {
-  const { limit = 20, start = 0, search } = params;
+  const { limit = 20, start = 0, search, filters } = params;
 
   try {
-    const filters: ConversationFilter[] | undefined = search
-      ? [['title', 'like', `%${search}%`]]
-      : undefined;
+    const effectiveFilters =
+      (filters as any[] | undefined) ??
+      (search ? ([['title', 'like', `%${search}%`]] as any[]) : undefined);
 
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
       fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
       orderBy: { field: 'modified', order: 'desc' },
       limit,
       limit_start: start,
-      filters,
+      filters: effectiveFilters,
     });
 
     const mapped = (conversations as AgentConversationDoc[]).map(mapChatListItem);
