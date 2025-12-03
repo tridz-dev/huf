@@ -199,7 +199,12 @@ doc_events = {
 scheduler_events = {
     "all": [
         "huf.ai.agent_scheduler.run_scheduled_agents"
-    ]
+    ],
+    "cron": {
+        "*/1 * * * *": [
+            "huf.ai.orchestration.scheduler.process_orchestrations"
+        ]
+    }
 }
 
 
