@@ -43,6 +43,9 @@ export function ChatList({ selectedChatId, onSelectChat, onNewChat, refreshKey }
       };
     },
     pageSize: 20,
+    initialParams:{
+      filters:[["channel", "=", "Chat"]]
+    }
   });
 
   useEffect(() => {
