@@ -50,7 +50,7 @@
    "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent\nSpeech to Text"
   },
   {
-   "depends_on": "eval:doc.types != 'Run Agent' && doc.types != 'App Provided' && doc.types != 'Speech to Text'",
+   "depends_on": "eval:doc.types != 'Run Agent' && doc.types != 'App Provided' && doc.types != 'Custom Function' && doc.types != 'Speech to Text'",
    "fieldname": "reference_doctype",
    "fieldtype": "Link",
    "label": "Reference DocType",
@@ -135,7 +135,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-04 12:32:41.637905",
+ "modified": "2025-12-03 15:11:10.107074",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Function",
@@ -156,7 +156,6 @@
   }
  ],
  "row_format": "Dynamic",
- "rows_threshold_for_grid_search": 20,
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": []

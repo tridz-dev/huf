@@ -1,0 +1,91 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2025-11-28 04:59:40.208114",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "agent",
+  "status",
+  "current_step",
+  "last_run_at",
+  "error_log",
+  "orchestration_data_tab",
+  "agent_orchestration_plan",
+  "scratchpad"
+ ],
+ "fields": [
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "Agent"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Planned\nRunning\nPaused\nCompleted\nFailed"
+  },
+  {
+   "fieldname": "current_step",
+   "fieldtype": "Int",
+   "label": "Current Step"
+  },
+  {
+   "fieldname": "last_run_at",
+   "fieldtype": "Datetime",
+   "label": "Last Run"
+  },
+  {
+   "fieldname": "error_log",
+   "fieldtype": "Small Text",
+   "label": "Error Log"
+  },
+  {
+   "fieldname": "orchestration_data_tab",
+   "fieldtype": "Tab Break",
+   "label": "Orchestration Data"
+  },
+  {
+   "fieldname": "agent_orchestration_plan",
+   "fieldtype": "Table",
+   "label": "Plan",
+   "options": "Agent Orchestration Plan"
+  },
+  {
+   "fieldname": "scratchpad",
+   "fieldtype": "Code",
+   "label": "Scratchpad"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-11-28 05:36:45.330138",
+ "modified_by": "Administrator",
+"module": "Huf",
+ "name": "Agent Orchestration",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

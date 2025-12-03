@@ -287,6 +287,18 @@ def run_agent_sync(
 
     agent_doc = frappe.get_doc("Agent", agent_name)
 
+    # Check for multi-run orchestration mode
+    # Skip if already called from orchestration to prevent infinite loop
+    if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
+        from huf.ai.orchestration.orchestrator import create_orchestration
+        orch_name = create_orchestration(agent_name, prompt)
+        return {
+            "success": True,
+            "response": f"Orchestration started: {orch_name}",
+            "orchestration_id": orch_name,
+            "mode": "multi_run"
+        }
+
     conv_manager = ConversationManager(
         agent_name=agent_name,
         channel=channel_id,

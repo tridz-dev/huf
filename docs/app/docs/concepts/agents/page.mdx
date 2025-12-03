@@ -183,6 +183,42 @@ Draft → Active → Running → Completed
 
 Learn more in [Triggers](/docs/concepts/triggers).
 
+### 4. Multi-Run Orchestration Agents
+
+**Agents that break complex tasks into steps** and execute them sequentially over multiple runs.
+
+**How to enable**: Check **Enable Multi Run** when creating the agent.
+
+**Use cases:**
+- Complex multi-step workflows
+- Tasks requiring planning and execution phases
+- Long-running processes that need incremental progress
+- Research or analysis tasks with multiple stages
+
+**Features:**
+- Automatic planning phase that breaks objectives into steps
+- Sequential step execution via scheduler
+- Scratchpad for maintaining context between steps
+- Full output storage for each step
+- Progress tracking and error handling
+
+**How it works:**
+1. **First API call** → Creates orchestration document
+2. **Planning phase** → Agent generates numbered list of steps
+3. **Scheduler processes** → Executes one step per minute
+4. **Context maintained** → Scratchpad carries information between steps
+5. **Completion** → Marked complete when all steps are done
+
+**Example**: A content research agent that:
+1. Identifies target topics
+2. Gathers relevant information
+3. Analyzes findings
+4. Creates an outline
+5. Writes draft content
+6. Reviews and refines
+
+Learn more in [Running Agents - Multi-Run Orchestration](/docs/guides/running-agents#multi-run-orchestration).
+
 ## Creating an Agent
 
 ### Step-by-Step
@@ -205,6 +241,7 @@ Navigate to: **Desk → Huf → Agent**
 - **Temperature**: Start with `0.7`
 - **Top P**: Start with `1.0`
 - **Allow Chat**: Enable if users should chat with this agent
+- **Enable Multi Run**: Enable for multi-step orchestration workflows
 - **Persist Conversation**: Keep history across runs (recommended)
 - **Persist per User**: Separate history for each user (recommended for chat)
 
