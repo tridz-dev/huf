@@ -69,6 +69,8 @@ import {
   type ConversationMessageListParams,
 } from '@/services/chatApi';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
+import type { ExtendedToolState } from '@/components/ai-elements/types';
 
 type MessageType = {
   key: string;
@@ -126,6 +128,22 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const stickContextRef = useRef<StickToBottomContext | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
 
+  // Map tool_status to ExtendedToolState
+  const mapToolStatusToState = (status?: string): ExtendedToolState => {
+    switch (status) {
+      case 'Started':
+        return 'input-available';
+      case 'Queued':
+        return 'input-streaming';
+      case 'Completed':
+        return 'output-available';
+      case 'Failed':
+        return 'output-error';
+      default:
+        return 'input-streaming';
+    }
+  };
+
   let isNewChat = !chatId;
   const messageParams = useMemo(() => {
     if (!chatId) {
@@ -171,16 +189,45 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       return;
     }
 
-    const mapped: MessageType[] = conversationItems.map((item) => ({
-      key: item.id,
-      from: item.isAgent ? 'assistant' : 'user',
-      versions: [
-        {
-          id: item.id,
-          content: item.content,
-        },
-      ],
-    }));
+    const mapped: MessageType[] = conversationItems.map((item) => {
+      const baseMessage: MessageType = {
+        key: item.id,
+        from: item.isAgent ? 'assistant' : 'user',
+        versions: [
+          {
+            id: item.id,
+            content: item.content,
+          },
+        ],
+      };
+
+      // Add tool information if this is a Tool Result message
+      if (item.kind === 'Tool Result' && item.toolName) {
+        let parsedArgs: Record<string, unknown> = {};
+        if (item.toolArgs) {
+          try {
+            parsedArgs = typeof item.toolArgs === 'string' 
+              ? JSON.parse(item.toolArgs) 
+              : (item.toolArgs as Record<string, unknown>);
+          } catch {
+            parsedArgs = {};
+          }
+        }
+
+        baseMessage.tools = [
+          {
+            name: item.toolName,
+            description: item.toolName,
+            status: mapToolStatusToState(item.toolStatus) as any,
+            parameters: parsedArgs,
+            result: item.toolStatus === 'Completed' ? item.content : undefined,
+            error: item.toolStatus === 'Failed' ? item.content : undefined,
+          },
+        ];
+      }
+
+      return baseMessage;
+    });
 
     setMessages(mapped);
   }, [chatId, conversationItems]);
@@ -634,16 +681,36 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                             </Reasoning>
                           )}
 
-                          <MessageContent>
-                            <MessageResponse>{version.content}</MessageResponse>
-                            {message.from === 'assistant' && version.content && (
-                              <MessageActions
-                                content={version.content}
-                                onFeedback={handleFeedback}
-                                agentMessageId={version.id}
-                              />
-                            )}
-                          </MessageContent>
+                          {/* Render tool component if this is a tool result message */}
+                          {message.tools && message.tools.length > 0 ? (
+                            message.tools.map((tool, toolIndex) => (
+                              <Tool key={`${message.key}-tool-${toolIndex}`} defaultOpen>
+                                <ToolHeader
+                                  title={tool.name}
+                                  type={`tool-${tool.name}` as any}
+                                  state={tool.status}
+                                />
+                                <ToolContent>
+                                  <ToolInput input={tool.parameters} />
+                                  <ToolOutput
+                                    output={tool.result}
+                                    errorText={tool.error}
+                                  />
+                                </ToolContent>
+                              </Tool>
+                            ))
+                          ) : (
+                            <MessageContent>
+                              <MessageResponse>{version.content}</MessageResponse>
+                              {message.from === 'assistant' && version.content && !message.tools && (
+                                <MessageActions
+                                  content={version.content}
+                                  onFeedback={handleFeedback}
+                                  agentMessageId={version.id}
+                                />
+                              )}
+                            </MessageContent>
+                          )}
                         </div>
                       </Message>
                     ))}
