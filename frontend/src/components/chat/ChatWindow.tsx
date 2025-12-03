@@ -743,9 +743,13 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       {/* Header */}
       <div className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 shrink-0">
-          <h2 className="text-sm font-semibold">
-            {modelName ?? 'No model selected'}
-          </h2>
+          <AgentModelSelector
+            variant="header"
+            disabled={!isNewChat}
+            value={model}
+            onValueChange={setModel}
+            onModelNameChange={setModelName}
+          />
         </div>
       </div>
 

@@ -16,6 +16,8 @@ import {
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
 import { PromptInputButton } from '@/components/ai-elements/prompt-input';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { getAgentModels, type AgentModelItem } from '@/services/agentApi';
 
@@ -24,9 +26,10 @@ interface AgentModelSelectorProps {
   onValueChange: (value: string) => void;
   onModelNameChange?: (name: string) => void;
   disabled?: boolean;
+  variant?: 'default' | 'header';
 }
 
-export function AgentModelSelector({ value, onValueChange, onModelNameChange, disabled }: AgentModelSelectorProps) {
+export function AgentModelSelector({ value, onValueChange, onModelNameChange, disabled, variant = 'default' }: AgentModelSelectorProps) {
   const [open, setOpen] = useState(false);
 
   // Fetch agent models for selector
@@ -101,17 +104,32 @@ export function AgentModelSelector({ value, onValueChange, onModelNameChange, di
     {} as Record<string, AgentModelItem[]>
   );
 
+  const TriggerButton = variant === 'header' ? Button : PromptInputButton;
+
   return (
     <ModelSelector onOpenChange={setOpen} open={open}>
       <ModelSelectorTrigger asChild>
-        <PromptInputButton disabled={disabled}>
+        <TriggerButton 
+          disabled={disabled}
+          variant={variant === 'header' ? 'ghost' : undefined}
+          className={cn(
+            variant === 'header' && 'h-auto p-0 gap-x-1 items-center text-sm font-semibold hover:bg-transparent',
+            variant === 'header' && disabled && 'disabled:opacity-100'
+          )}
+        >
           {selectedModelData?.chefSlug && (
             <ModelSelectorLogo provider={selectedModelData.chefSlug} />
           )}
-          {selectedModelData?.name && (
+          {selectedModelData?.name ? (
             <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>
+          ) : (
+            variant === 'header' && (
+              <span className={cn(disabled && 'text-muted-foreground')}>
+                {modelsLoading ? 'Loading...' : 'No model selected'}
+              </span>
+            )
           )}
-        </PromptInputButton>
+        </TriggerButton>
       </ModelSelectorTrigger>
 
       <ModelSelectorContent shouldFilter={false} className="min-h-[40%]">
