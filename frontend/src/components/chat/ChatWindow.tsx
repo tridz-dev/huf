@@ -146,6 +146,12 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const lastMessageIdRef = useRef<string | null>(null);
 
   let isNewChat = !chatId;
+  
+  // Track if we're in the middle of creating a new conversation
+  const isCreatingConversationRef = useRef(false);
+  // Track the conversation ID that was just created to preserve messages during transition
+  const newlyCreatedConversationIdRef = useRef<string | null>(null);
+
   const messageParams = useMemo(() => {
     if (!chatId) {
       return {} as Omit<ConversationMessageListParams, 'page' | 'limit' | 'start'>;
@@ -153,6 +159,12 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
     return {
       conversation: chatId,
     } satisfies Omit<ConversationMessageListParams, 'page' | 'limit' | 'start'>;
+  }, [chatId]);
+
+  // Don't fetch messages if we're transitioning to a newly created conversation
+  // Use useMemo to make it reactive - it will recalculate when chatId changes
+  const shouldFetchMessages = useMemo(() => {
+    return Boolean(chatId) && chatId !== newlyCreatedConversationIdRef.current;
   }, [chatId]);
 
   const {
@@ -168,13 +180,10 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
     initialParams: messageParams,
     pageSize: 30,
     direction: 'reverse',
-    enabled: Boolean(chatId),
-    autoLoad: Boolean(chatId),
-    autoLoadMore: Boolean(chatId),
+    enabled: shouldFetchMessages,
+    autoLoad: shouldFetchMessages,
+    autoLoadMore: shouldFetchMessages,
   });
-
-  // Track if we're in the middle of creating a new conversation
-  const isCreatingConversationRef = useRef(false);
 
   // Handle tool updates from socket
   const handleToolUpdate = useCallback((event: ToolCallEvent) => {
@@ -277,6 +286,11 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
 
     // If we're creating a conversation, don't overwrite local messages yet
     if (isCreatingConversationRef.current) {
+      return;
+    }
+
+    // If we're transitioning to a newly created conversation, preserve existing messages
+    if (chatId === newlyCreatedConversationIdRef.current) {
       return;
     }
 
@@ -448,12 +462,22 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const previousChatIdRef = useRef<string | null>(chatId);
   useEffect(() => {
     if (chatId && chatId !== previousChatIdRef.current) {
-      // Clear messages when conversation changes to prevent showing messages from previous conversation
-      setMessages([]);
-      // Reset agent selection when conversation changes
-      setModel('');
+      // Don't clear messages if we're transitioning to a newly created conversation
+      const isTransitioningToNewConversation = chatId === newlyCreatedConversationIdRef.current;
+      
+      if (!isTransitioningToNewConversation) {
+        // Clear messages when conversation changes to prevent showing messages from previous conversation
+        setMessages([]);
+        // Reset agent selection when conversation changes
+        setModel('');
+      }
       // Reset last message ID when switching chats to force scroll to bottom
       lastMessageIdRef.current = null;
+      
+      // Clear the newly created conversation ref after transition
+      if (isTransitioningToNewConversation) {
+        newlyCreatedConversationIdRef.current = null;
+      }
     }
     previousChatIdRef.current = chatId;
   }, [chatId]);
@@ -641,6 +665,8 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
 
         // Navigate to the new conversation AFTER streaming completes
         if (conversationId && onConversationCreated) {
+          // Track this conversation ID to preserve messages during transition
+          newlyCreatedConversationIdRef.current = conversationId;
           // Reset the flag after a short delay to allow navigation to complete
           setTimeout(() => {
             isCreatingConversationRef.current = false;

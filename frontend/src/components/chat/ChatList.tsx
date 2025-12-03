@@ -2,6 +2,7 @@ import { useEffect, type MouseEvent } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import {
   getConversations,
@@ -81,60 +82,95 @@ export function ChatList({ selectedChatId, onSelectChat, onNewChat, refreshKey }
       {/* Chat List */}
       <ScrollArea ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="space-y-1">
-          {initialLoading ? (
-            <div className="p-3 text-sm text-muted-foreground text-center">Loading...</div>
-          ) : error ? (
+          {error ? (
             <div className="p-3 text-sm text-destructive text-center">
               Failed to load conversations
             </div>
-          ) : chats.length === 0 ? (
-            <div className="p-3 text-sm text-muted-foreground text-center">No conversations yet</div>
           ) : (
-            chats.map((chat) => {
-              const isSelected = selectedChatId === chat.id;
-              return (
-                <div
-                  key={chat.id}
-                  onClick={() => onSelectChat(chat.id)}
-                  className={cn(
-                    'group relative flex items-center gap-3 p-3 cursor-pointer transition-colors',
-                    isSelected
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'hover:bg-sidebar-accent/50 text-sidebar-foreground'
-                  )}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className="text-sm font-medium truncate">{chat.title}</p>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => handleDeleteChat(chat.id, e)}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
+            <>
+              {/* Show skeleton loaders only on initial load when there are no chats */}
+              {initialLoading && chats.length === 0 ? (
+                <>
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div
+                      key={`skeleton-${i}`}
+                      className="group relative flex items-center gap-3 p-3"
+                    >
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
                     </div>
-                    {chat.agent && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {chat.agent}
-                      </p>
-                    )}
-                    {chat.timestamp && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {chat.timestamp}
-                      </p>
-                    )}
-                  </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {chats.map((chat) => {
+                    const isSelected = selectedChatId === chat.id;
+                    return (
+                      <div
+                        key={chat.id}
+                        onClick={() => onSelectChat(chat.id)}
+                        className={cn(
+                          'group relative flex items-center gap-3 p-3 cursor-pointer',
+                          'transition-all duration-200 ease-in-out',
+                          isSelected
+                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                            : 'hover:bg-sidebar-accent/50 text-sidebar-foreground'
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-sm font-medium truncate">{chat.title}</p>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => handleDeleteChat(chat.id, e)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                          {chat.agent && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {chat.agent}
+                            </p>
+                          )}
+                          {chat.timestamp && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {chat.timestamp}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {chats.length === 0 && !initialLoading && (
+                    <div className="p-3 text-sm text-muted-foreground text-center">
+                      No conversations yet
+                    </div>
+                  )}
+                </>
+              )}
+              {hasMore && (
+                <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
+              )}
+              {loadingMore && (
+                <div className="p-3 space-y-2">
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <div
+                      key={`loading-more-${i}`}
+                      className="group relative flex items-center gap-3 p-3"
+                    >
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              );
-            })
-          )}
-          {hasMore && (
-            <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
-          )}
-          {loadingMore && (
-            <div className="p-3 text-xs text-muted-foreground text-center">Loading more...</div>
+              )}
+            </>
           )}
         </div>
       </ScrollArea>
