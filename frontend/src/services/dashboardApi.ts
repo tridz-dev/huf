@@ -2,18 +2,7 @@ import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { fetchDocCount } from './utilsApi';
-
-/**
- * Agent Run document from Frappe for dashboard
- */
-export interface AgentRunDoc {
-  name: string;
-  agent: string;
-  conversation?: string | null;
-  start_time?: string | null;
-  end_time?: string | null;
-  status?: string;
-}
+import { AgentRunDoc } from './agentRunApi';
 
 /**
  * Agent Run document for metrics calculation
@@ -84,7 +73,6 @@ export async function getAgentRunsForMetrics(): Promise<AgentRunMetricsDoc[]> {
     return runs as AgentRunMetricsDoc[];
   } catch (error) {
     handleFrappeError(error, 'Error fetching agent runs for metrics');
-    return [];
   }
 }
 
@@ -93,7 +81,7 @@ export async function getAgentRunsForMetrics(): Promise<AgentRunMetricsDoc[]> {
  */
 export async function getRecentAgentRuns(): Promise<AgentRunDoc[]> {
   try {
-    const runs = await db.getDocList(doctype["Agent Run"], {
+    const runs = await db.getDocList(doctype['Agent Run'], {
       fields: ['name', 'agent', 'conversation', 'start_time', 'end_time', 'status'],
       limit: 10,
       orderBy: { field: 'creation', order: 'desc' },
@@ -102,7 +90,5 @@ export async function getRecentAgentRuns(): Promise<AgentRunDoc[]> {
     return runs as AgentRunDoc[];
   } catch (error) {
     handleFrappeError(error, 'Error fetching recent agent runs');
-    return [];
   }
 }
-
