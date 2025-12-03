@@ -25,6 +25,7 @@
   "status",
   "tool_calll",
   "tool_name",
+  "tool_status",
   "tool_args"
  ],
  "fields": [
@@ -160,12 +161,18 @@
    "fieldtype": "JSON",
    "label": "Tool Args",
    "read_only": 1
+  },
+  {
+   "fetch_from": "tool_calll.status",
+   "fieldname": "tool_status",
+   "fieldtype": "Data",
+   "label": "Tool Status"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-03 19:21:41.425198",
+ "modified": "2025-12-03 20:11:47.242654",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",

@@ -1,5 +1,5 @@
 import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
-import { MicIcon } from 'lucide-react';
+// import { MicIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ToolUIPart } from 'ai';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
@@ -23,14 +23,14 @@ import { Message, MessageContent } from '@/components/ai-elements/message';
 
 import {
   PromptInput,
-  PromptInputActionAddAttachments,
-  PromptInputActionMenu,
-  PromptInputActionMenuContent,
-  PromptInputActionMenuTrigger,
+  // PromptInputActionAddAttachments,
+  // PromptInputActionMenu,
+  // PromptInputActionMenuContent,
+  // PromptInputActionMenuTrigger,
   PromptInputAttachment,
   PromptInputAttachments,
   PromptInputBody,
-  PromptInputButton,
+  // PromptInputButton,
   PromptInputFooter,
   PromptInputHeader,
   type PromptInputMessage,
@@ -69,6 +69,25 @@ import {
   type ConversationMessageListParams,
 } from '@/services/chatApi';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
+import type { ExtendedToolState } from '@/components/ai-elements/types';
+import { useChatSocket, type ToolCallEvent } from '@/hooks/useChatSocket';
+
+// Map tool_status to ExtendedToolState
+const mapToolStatusToState = (status?: string): ExtendedToolState => {
+  switch (status) {
+    case 'Started':
+      return 'input-available';
+    case 'Queued':
+      return 'input-streaming';
+    case 'Completed':
+      return 'output-available';
+    case 'Failed':
+      return 'output-error';
+    default:
+      return 'input-streaming';
+  }
+};
 
 type MessageType = {
   key: string;
@@ -83,6 +102,7 @@ type MessageType = {
     duration: number;
   };
   tools?: {
+    tool_call_id: string;
     name: string;
     description: string;
     status: ToolUIPart['state'];
@@ -117,16 +137,21 @@ function ConditionalPromptInputHeader() {
 export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const [searchParams] = useSearchParams();
   const [model, setModel] = useState<string>(() => searchParams.get('agent') ?? '');
-  const [modelName, setModelName] = useState<string>('');
   const [text, setText] = useState<string>('');
   // const [useWebSearch, setUseWebSearch] = useState<boolean>(false);
-  const [useMicrophone, setUseMicrophone] = useState<boolean>(false);
+  // const [useMicrophone, setUseMicrophone] = useState<boolean>(false);
   const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
   const [messages, setMessages] = useState<MessageType[]>([]);
   const stickContextRef = useRef<StickToBottomContext | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
 
   let isNewChat = !chatId;
+  
+  // Track if we're in the middle of creating a new conversation
+  const isCreatingConversationRef = useRef(false);
+  // Track the conversation ID that was just created to preserve messages during transition
+  const newlyCreatedConversationIdRef = useRef<string | null>(null);
+
   const messageParams = useMemo(() => {
     if (!chatId) {
       return {} as Omit<ConversationMessageListParams, 'page' | 'limit' | 'start'>;
@@ -134,6 +159,12 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
     return {
       conversation: chatId,
     } satisfies Omit<ConversationMessageListParams, 'page' | 'limit' | 'start'>;
+  }, [chatId]);
+
+  // Don't fetch messages if we're transitioning to a newly created conversation
+  // Use useMemo to make it reactive - it will recalculate when chatId changes
+  const shouldFetchMessages = useMemo(() => {
+    return Boolean(chatId) && chatId !== newlyCreatedConversationIdRef.current;
   }, [chatId]);
 
   const {
@@ -149,13 +180,100 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
     initialParams: messageParams,
     pageSize: 30,
     direction: 'reverse',
-    enabled: Boolean(chatId),
-    autoLoad: Boolean(chatId),
-    autoLoadMore: Boolean(chatId),
+    enabled: shouldFetchMessages,
+    autoLoad: shouldFetchMessages,
+    autoLoadMore: shouldFetchMessages,
   });
 
-  // Track if we're in the middle of creating a new conversation
-  const isCreatingConversationRef = useRef(false);
+  // Handle tool updates from socket
+  const handleToolUpdate = useCallback((event: ToolCallEvent) => {
+    // Only process events for the current conversation
+    if (event.conversation_id !== chatId) {
+      return;
+    }
+
+    setMessages((prev) => {
+      // Parse tool data
+      let parsedArgs: Record<string, unknown> = {};
+      if (event.tool_args) {
+        try {
+          parsedArgs = typeof event.tool_args === 'string' 
+            ? JSON.parse(event.tool_args) 
+            : (event.tool_args as Record<string, unknown>);
+        } catch {
+          parsedArgs = {};
+        }
+      }
+
+      let parsedResult: string | undefined = undefined;
+      if (event.tool_result) {
+        try {
+          parsedResult = typeof event.tool_result === 'string'
+            ? event.tool_result
+            : JSON.stringify(event.tool_result, null, 2);
+        } catch {
+          parsedResult = String(event.tool_result);
+        }
+      }
+
+      const updatedTool = {
+        tool_call_id: event.tool_call_id,
+        name: event.tool_name,
+        description: event.tool_name,
+        status: mapToolStatusToState(event.tool_status) as any,
+        parameters: parsedArgs,
+        result: event.tool_status === 'Completed' ? parsedResult : undefined,
+        error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
+      };
+
+      // Find message by message_id
+      const messageIndex = prev.findIndex((msg) => 
+        msg.versions.some((v) => v.id === event.message_id)
+      );
+
+      if (messageIndex >= 0) {
+        // Message exists - update or add tool by tool_call_id
+        const message = prev[messageIndex];
+        const existingTools = message.tools || [];
+        const toolIndex = existingTools.findIndex(
+          (tool) => tool.tool_call_id === event.tool_call_id
+        );
+
+        const updatedTools = [...existingTools];
+        if (toolIndex >= 0) {
+          updatedTools[toolIndex] = updatedTool;
+        } else {
+          updatedTools.push(updatedTool);
+        }
+
+        const updated = [...prev];
+        updated[messageIndex] = {
+          ...message,
+          tools: updatedTools,
+        };
+        return updated;
+      } else {
+        // Message doesn't exist - create new message with tool
+        const newMessage: MessageType = {
+          key: event.message_id,
+          from: 'assistant',
+          versions: [
+            {
+              id: event.message_id,
+              content: '',
+            },
+          ],
+          tools: [updatedTool],
+        };
+        return [...prev, newMessage];
+      }
+    });
+  }, [chatId]);
+
+  useChatSocket({
+    conversationId: chatId,
+    onToolUpdate: handleToolUpdate,
+  });
 
   useEffect(() => {
     if (!chatId) {
@@ -171,18 +289,83 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       return;
     }
 
-    const mapped: MessageType[] = conversationItems.map((item) => ({
-      key: item.id,
-      from: item.isAgent ? 'assistant' : 'user',
-      versions: [
-        {
-          id: item.id,
-          content: item.content,
-        },
-      ],
-    }));
+    // If we're transitioning to a newly created conversation, preserve existing messages
+    if (chatId === newlyCreatedConversationIdRef.current) {
+      return;
+    }
 
-    setMessages(mapped);
+    setMessages((prev) => {
+      const mapped: MessageType[] = conversationItems.map((item) => {
+        // Check if we have a temporary message for this item (created from socket events)
+        const tempMessage = prev.find((msg) => msg.key === item.id);
+        const tempTools = tempMessage?.tools || [];
+
+        const baseMessage: MessageType = {
+          key: item.id,
+          from: item.isAgent ? 'assistant' : 'user',
+          versions: [
+            {
+              id: item.id,
+              content: item.content,
+            },
+          ],
+        };
+
+        // Add tool information if this is a Tool Result message
+        if (item.kind === 'Tool Result' && item.toolName) {
+          let parsedArgs: Record<string, unknown> = {};
+          if (item.toolArgs) {
+            try {
+              parsedArgs = typeof item.toolArgs === 'string' 
+                ? JSON.parse(item.toolArgs) 
+                : (item.toolArgs as Record<string, unknown>);
+            } catch {
+              parsedArgs = {};
+            }
+          }
+
+          // Use tool_call_id from temp tools if available, otherwise generate one
+          const tempTool = tempTools.find((tool) => tool.name === item.toolName);
+          const tool_call_id = tempTool?.tool_call_id || `temp-${item.id}-${item.toolName}`;
+
+          const apiTool = {
+            tool_call_id,
+            name: item.toolName,
+            description: item.toolName,
+            status: mapToolStatusToState(item.toolStatus) as any,
+            parameters: parsedArgs,
+            result: item.toolStatus === 'Completed' ? item.content : undefined,
+            error: item.toolStatus === 'Failed' ? item.content : undefined,
+          };
+
+          // Merge: prefer temp tools (from socket) as they're more up-to-date
+          const toolMap = new Map<string, typeof apiTool>();
+          tempTools.forEach((tool) => {
+            toolMap.set(tool.tool_call_id, tool as any);
+          });
+          
+          // Add API tool if no temp tool with same tool_call_id exists
+          if (!toolMap.has(tool_call_id)) {
+            toolMap.set(tool_call_id, apiTool);
+          }
+          
+          baseMessage.tools = Array.from(toolMap.values());
+        } else if (tempTools.length > 0) {
+          // Message doesn't have tools from API, but we have temporary tools from socket
+          baseMessage.tools = tempTools;
+        }
+
+        return baseMessage;
+      });
+
+      // Add any temporary messages that aren't in the API response yet
+      const apiMessageIds = new Set(conversationItems.map((item) => item.id));
+      const remainingTempMessages = prev.filter(
+        (msg) => !apiMessageIds.has(msg.key) && msg.tools && msg.tools.length > 0
+      );
+
+      return [...mapped, ...remainingTempMessages];
+    });
   }, [chatId, conversationItems]);
 
 
@@ -279,8 +462,22 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const previousChatIdRef = useRef<string | null>(chatId);
   useEffect(() => {
     if (chatId && chatId !== previousChatIdRef.current) {
+      // Don't clear messages if we're transitioning to a newly created conversation
+      const isTransitioningToNewConversation = chatId === newlyCreatedConversationIdRef.current;
+      
+      if (!isTransitioningToNewConversation) {
+        // Clear messages when conversation changes to prevent showing messages from previous conversation
+        setMessages([]);
+        // Reset agent selection when conversation changes
+        setModel('');
+      }
       // Reset last message ID when switching chats to force scroll to bottom
       lastMessageIdRef.current = null;
+      
+      // Clear the newly created conversation ref after transition
+      if (isTransitioningToNewConversation) {
+        newlyCreatedConversationIdRef.current = null;
+      }
     }
     previousChatIdRef.current = chatId;
   }, [chatId]);
@@ -290,8 +487,8 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       getConversation(chatId)
         .then((conversation) => {
           if (conversation?.agent) {
-            setModel((prev) => prev || conversation.agent);
-            setModelName((prev) => prev || conversation.agent);
+            // Always update when conversation changes
+            setModel(conversation.agent);
           }
         })
         .catch((error) => {
@@ -299,11 +496,16 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
         });
       return;
     }
+    // For new chats, use agent from query params
     const agentFromQuery = searchParams.get('agent') ?? '';
-    if (agentFromQuery && agentFromQuery !== model) {
+    if (agentFromQuery) {
       setModel(agentFromQuery);
+    } else {
+      // Clear if no agent in query and no chatId
+      setModel('');
+      // setModelName('');
     }
-  }, [chatId, searchParams, model]);
+  }, [chatId, searchParams]);
 
   const handleFeedback = useCallback(
     async (
@@ -463,6 +665,8 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
 
         // Navigate to the new conversation AFTER streaming completes
         if (conversationId && onConversationCreated) {
+          // Track this conversation ID to preserve messages during transition
+          newlyCreatedConversationIdRef.current = conversationId;
           // Reset the flag after a short delay to allow navigation to complete
           setTimeout(() => {
             isCreatingConversationRef.current = false;
@@ -562,9 +766,12 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       {/* Header */}
       <div className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 shrink-0">
-          <h2 className="text-sm font-semibold">
-            {modelName ?? 'No model selected'}
-          </h2>
+          <AgentModelSelector
+            variant="header"
+            disabled={!isNewChat}
+            value={model}
+            onValueChange={setModel}
+          />
         </div>
       </div>
 
@@ -634,16 +841,36 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                             </Reasoning>
                           )}
 
-                          <MessageContent>
-                            <MessageResponse>{version.content}</MessageResponse>
-                            {message.from === 'assistant' && version.content && (
-                              <MessageActions
-                                content={version.content}
-                                onFeedback={handleFeedback}
-                                agentMessageId={version.id}
-                              />
-                            )}
-                          </MessageContent>
+                          {/* Render tool component if this is a tool result message */}
+                          {message.tools && message.tools.length > 0 ? (
+                            message.tools.map((tool, toolIndex) => (
+                              <Tool key={`${message.key}-tool-${toolIndex}`}>
+                                <ToolHeader
+                                  title={tool.name}
+                                  type={`tool-${tool.name}` as any}
+                                  state={tool.status}
+                                />
+                                <ToolContent>
+                                  <ToolInput input={tool.parameters} />
+                                  <ToolOutput
+                                    output={tool.result}
+                                    errorText={tool.error}
+                                  />
+                                </ToolContent>
+                              </Tool>
+                            ))
+                          ) : (
+                            <MessageContent>
+                              <MessageResponse>{version.content}</MessageResponse>
+                              {message.from === 'assistant' && version.content && !message.tools && (
+                                <MessageActions
+                                  content={version.content}
+                                  onFeedback={handleFeedback}
+                                  agentMessageId={version.id}
+                                />
+                              )}
+                            </MessageContent>
+                          )}
                         </div>
                       </Message>
                     ))}
@@ -688,20 +915,20 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
 
               <PromptInputFooter>
                 <PromptInputTools>
-                  <PromptInputActionMenu>
+                  {/* <PromptInputActionMenu>
                     <PromptInputActionMenuTrigger />
                     <PromptInputActionMenuContent>
                       <PromptInputActionAddAttachments />
                     </PromptInputActionMenuContent>
-                  </PromptInputActionMenu>
+                  </PromptInputActionMenu> */}
 
-                  <PromptInputButton
+                  {/* <PromptInputButton
                     onClick={() => setUseMicrophone(!useMicrophone)}
                     variant={useMicrophone ? 'default' : 'ghost'}
                   >
                     <MicIcon size={16} />
                     <span className="sr-only">Microphone</span>
-                  </PromptInputButton>
+                  </PromptInputButton> */}
 
                   {/* <PromptInputButton
                     onClick={() => setUseWebSearch(!useWebSearch)}
@@ -715,7 +942,6 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                     disabled={!isNewChat}
                     value={model}
                     onValueChange={setModel}
-                    onModelNameChange={setModelName}
                   />
                 </PromptInputTools>
 

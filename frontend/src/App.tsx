@@ -21,8 +21,46 @@ import { NotFoundPage } from './pages/NotFoundPage';
 import { Toaster } from './components/ui/sonner';
 import Executions from './pages/Executions';
 import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
+import { useEffect } from 'react';
+import { createFrappeSocket } from './utils/socket';
 
 function App() {
+  useEffect(() => {
+    // Wait for frappe.boot to be available
+    const siteName = (window as any).frappe?.boot?.sitename;
+    const port = (window as any).frappe?.boot?.socketio_port;
+    
+    if (!siteName) {
+      console.warn("Site name not available yet, socket connection will be skipped");
+      return;
+    }
+
+    console.log("Creating socket connection for site:", siteName);
+    const socket = createFrappeSocket({ siteName, port });
+    
+    socket.on("connect", () => {
+      console.log("✅ Connected to Frappe websocket!");
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("❌ Socket connection error:", error);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.warn("⚠️ Socket disconnected:", reason);
+    });
+
+    socket.on("tool_call_started", (data) => {
+      console.log("📡 Realtime event - tool_call_started:", data);
+    });
+
+    return () => {
+      console.log("Cleaning up socket connection");
+      socket.disconnect();
+    };
+  }, []);
+
+
   return (
     <BrowserRouter basename="/huf">
       <UserProvider>

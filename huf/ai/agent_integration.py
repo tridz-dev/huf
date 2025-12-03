@@ -397,7 +397,7 @@ def run_agent_sync(
                 tool_args = getattr(raw, "arguments", "{}")
                 msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
                 
-                conv_manager.add_message(
+                message_doc = conv_manager.add_message(
                     conversation, 
                     role="agent", 
                     content=msg_content, 
@@ -407,6 +407,22 @@ def run_agent_sync(
                     run_name=run_doc.name,
                     kind="Tool Call",
                     tool_call_id=tool_call_id 
+                )
+
+                # Emit socket event for tool call started
+                frappe.publish_realtime(
+                    event=f'conversation:{conversation.name}',
+                    message={
+                        "type": "tool_call_started",
+                        "conversation_id": conversation.name,
+                        "agent_run_id": run_doc.name,
+                        "tool_call_id": tool_call_id,
+                        "message_id": message_doc.name,
+                        "tool_name": tool_name,
+                        "tool_status": "Queued",
+                        "tool_args": tool_args if isinstance(tool_args, dict) else json.loads(tool_args) if isinstance(tool_args, str) else {},
+                    },
+                    user=frappe.session.user
                 )
 
             elif item.type == "tool_call_output_item":
@@ -419,12 +435,15 @@ def run_agent_sync(
                 updated_tool_call_id = log_tool_call(run_doc, conversation, raw, tool_result=tool_result, is_output=True)
 
                 if updated_tool_call_id:
+                    # Get tool call doc to check status
+                    tool_call_doc = frappe.get_doc("Agent Tool Call", updated_tool_call_id)
+                    tool_status = tool_call_doc.status or "Completed"
+                    tool_name = tool_call_doc.tool or "Unknown Tool"
 
                     message_name = frappe.db.get_value("Agent Message", {"tool_calll": updated_tool_call_id}, "name")
 
                     if message_name:
                         msg_doc = frappe.get_doc("Agent Message", message_name)
-                        
                         
                         result_str = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
                         new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
@@ -432,6 +451,24 @@ def run_agent_sync(
                         msg_doc.content = new_content
                         msg_doc.kind = "Tool Result"
                         msg_doc.save(ignore_permissions=True)
+
+                        # Emit socket event for tool call completed/failed
+                        event_type = "tool_call_completed" if tool_status == "Completed" else "tool_call_failed"
+                        frappe.publish_realtime(
+                            event=f'conversation:{conversation.name}',
+                            message={
+                                "type": event_type,
+                                "conversation_id": conversation.name,
+                                "agent_run_id": run_doc.name,
+                                "tool_call_id": updated_tool_call_id,
+                                "message_id": message_name,
+                                "tool_name": tool_name,
+                                "tool_status": tool_status,
+                                "tool_result": tool_result if tool_status == "Completed" else None,
+                                "error": tool_call_doc.error_message if tool_status == "Failed" else None,
+                            },
+                            user=frappe.session.user,
+                        )
         
         final_output = getattr(result, "final_output", str(result))
         usage = getattr(result, "usage", None)
