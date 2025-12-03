@@ -22,7 +22,10 @@
   "is_agent_message",
   "role",
   "conversation_index",
-  "status"
+  "status",
+  "tool_calll",
+  "tool_name",
+  "tool_args"
  ],
  "fields": [
   {
@@ -136,12 +139,33 @@
    "hidden": 1,
    "label": "Status",
    "options": "\nStarted\nQueues\nCompleted\nFailed"
+  },
+  {
+   "fieldname": "tool_calll",
+   "fieldtype": "Link",
+   "label": "Tool Calll",
+   "options": "Agent Tool Call",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "tool_calll.tool",
+   "fieldname": "tool_name",
+   "fieldtype": "Data",
+   "label": "Tool Name",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "tool_calll.tool_args",
+   "fieldname": "tool_args",
+   "fieldtype": "JSON",
+   "label": "Tool Args",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-24 12:47:12.375071",
+ "modified": "2025-12-03 19:21:41.425198",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",

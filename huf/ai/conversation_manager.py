@@ -72,9 +72,8 @@ class ConversationManager:
         conv.insert()
         return conv
 
-    def add_message(self, conversation, role, content, provider, model, agent,run_name=None):
+    def add_message(self, conversation, role, content, provider, model, agent, run_name=None, kind="Message", tool_call_id=None):
         """Add message to conversation"""
-        # Get next index
         try:
             last_index = frappe.db.sql("""
                 SELECT MAX(conversation_index) as last_index
@@ -90,17 +89,17 @@ class ConversationManager:
                 "content": content if isinstance(content, str) else json.dumps(content),
                 "user": self.external_id or frappe.session.user if role == "user" else "Agent",
                 "session_id": self.session_id,
-                "kind": "Message",
+                "kind": kind,
                 "agent_run": run_name,
-                "agent":agent,
-                "provider":provider,
-                "model":model,
+                "agent": agent,
+                "provider": provider,
+                "model": model,
                 "conversation_index": last_index + 1,
-                "is_agent_message": 1 if role == "agent" else 0
+                "is_agent_message": 1 if role == "agent" else 0,
+                "tool_calll": tool_call_id 
             })
             message.insert()
 
-            # Update conversation stats
             frappe.db.set_value("Agent Conversation", conversation.name, {
                 "total_messages": last_index + 1,
                 "last_activity": now()
