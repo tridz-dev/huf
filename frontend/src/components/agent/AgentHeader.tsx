@@ -1,4 +1,4 @@
-import { Clock, Play, Save, MessageSquare, MoreVertical, Copy, FileText, Trash2 } from 'lucide-react';
+import { Clock, Play, Save, MessageSquare, MoreVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
