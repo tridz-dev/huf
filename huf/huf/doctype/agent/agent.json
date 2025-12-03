@@ -37,6 +37,7 @@
  "fields": [
   {
    "description": "A unique name for this agent.",
+   "documentation_url": "https://docs.huf.ai/docs/concepts/agents/",
    "fieldname": "agent_name",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -46,6 +47,7 @@
   },
   {
    "description": "The AI provider that will power this agent (e.g., OpenAI, OpenRouter).",
+   "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
    "fieldname": "provider",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -59,6 +61,7 @@
   },
   {
    "description": "The specific AI model to use from the selected provider (e.g., gpt-4-turbo).",
+   "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
    "fieldname": "model",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -82,6 +85,7 @@
   },
   {
    "description": "The set of tools this agent is allowed to use to interact with the system.",
+   "documentation_url": "https://docs.huf.ai/docs/concepts/tools/",
    "fieldname": "agent_tool",
    "fieldtype": "Table",
    "label": "Agent Tool",
@@ -214,7 +218,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-28 05:34:23.919261",
+ "modified": "2025-12-03 20:07:00.545719",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",
