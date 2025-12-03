@@ -221,26 +221,40 @@ def safe_commit():
     frappe.db.commit()
 
 def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False):
-    """Process tool call - update existing record or create new one"""
+    """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
-        existing = frappe.get_all(
-            "Agent Tool Call",
-            filters={"agent_run": agent_run},
-            pluck="name"
-        )
-        if existing:
-            doc = frappe.get_doc("Agent Tool Call", existing[0])
-            update_data = {}
-            if result is not None:
-                update_data["tool_result"] = json.dumps(result)
-            if error:
-                update_data["status"] = "Failed"
-                update_data["error_message"] = error
+        if is_output:
+            existing_queued = frappe.get_all(
+                "Agent Tool Call",
+                filters={
+                    "agent_run": agent_run,
+                    "status": "Queued"
+                },
+                pluck="name",
+                limit=1,
+                order_by="creation asc"
+            )
+
+            if existing_queued:
+                doc_id = existing_queued[0]
+                doc = frappe.get_doc("Agent Tool Call", doc_id)
+                
+                update_data = {}
+                
+                if result is not None:
+                    update_data["tool_result"] = result if isinstance(result, str) else json.dumps(result)
+                
+                if error:
+                    update_data["status"] = "Failed"
+                    update_data["error_message"] = error
+                else:
+                    update_data["status"] = "Completed"
+                
+                doc.update(update_data)
+                doc.save()
             else:
-                update_data["status"] = "Completed"
-            
-            doc.update(update_data)
-            doc.save(ignore_permissions=True)
+                 frappe.log_error(f"Received tool output for run {agent_run} but no Queued tool call was found to update.", "Agent Tool Call Warning")
+
         else:
             doc = frappe.get_doc({
                 "doctype": "Agent Tool Call",
@@ -250,13 +264,13 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "tool_args": json.dumps(args) if args else None,
                 "tool_result": json.dumps(result) if result else None,
                 "error_message": error,
-                "status": "Queued" if not is_output else "Completed"
+                "status": "Queued"
             })
             doc.insert(ignore_permissions=True)
 
         frappe.db.commit()
     except Exception as e:
-        frappe.log_error(f"Error processing tool call: {str(e)}", "Agent Tool Call")
+        frappe.log_error(f"Error processing tool call: {str(e)}\nName: {name}, Is Output: {is_output}", "Agent Tool Call Error")
 
 def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None, is_output=False):
     frappe.enqueue(process_tool_call, queue='long', job_name='tool_call',
