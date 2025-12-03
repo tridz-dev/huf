@@ -336,7 +336,11 @@ export function AgentFormPage() {
   };
 
   const handleViewLogs = () => {
-    toast.info('Coming Soon!');
+    if (!id || isNew) {
+      toast.error('Please save the agent first before viewing logs');
+      return;
+    }
+    navigate(`/executions?agents=${encodeURIComponent(id)}`);
   };
 
   const handleAddTools = (tools: AgentToolFunctionRef[]) => {
