@@ -1,5 +1,5 @@
-import { useEffect, type MouseEvent } from 'react';
-import { Trash2, Plus } from 'lucide-react';
+import { useEffect, } from 'react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -60,11 +60,11 @@ export function ChatList({ selectedChatId, onSelectChat, onNewChat, refreshKey }
     onNewChat?.();
   };
 
-  const handleDeleteChat = (chatId: string, e: MouseEvent) => {
-    e.stopPropagation();
-    // TODO: Implement chat deletion
-    console.log('Delete chat', chatId);
-  };
+  // const handleDeleteChat = (chatId: string, e: MouseEvent) => {
+  //   e.stopPropagation();
+  //   // TODO: Implement chat deletion
+  //   console.log('Delete chat', chatId);
+  // };
 
   return (
     <div className="flex flex-col w-64 h-full border-r border-border bg-sidebar">
@@ -122,14 +122,14 @@ export function ChatList({ selectedChatId, onSelectChat, onNewChat, refreshKey }
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <p className="text-sm font-medium truncate">{chat.title}</p>
-                            <Button
+                            {/* <Button
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={(e) => handleDeleteChat(chat.id, e)}
                             >
                               <Trash2 className="w-3 h-3" />
-                            </Button>
+                            </Button> */}
                           </div>
                           {chat.agent && (
                             <p className="text-xs text-muted-foreground truncate">
