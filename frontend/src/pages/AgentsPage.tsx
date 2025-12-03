@@ -129,7 +129,7 @@ export function AgentsPage() {
                 {
                   icon: Activity,
                   label: 'View Logs',
-                  onClick: () => console.log('View Logs', agent.name),
+                  onClick: () => navigate(`/executions?agents=${encodeURIComponent(agent.name)}`),
                 },
               ]}
               onClick={() => navigate(`/agents/${agent.name}`)}

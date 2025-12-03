@@ -3,56 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { getRecentAgentRuns, type AgentRunDoc } from '@/services/dashboardApi';
-import { formatTimeAgo } from '@/utils/time';
+import { getRecentAgentRuns } from '@/services/dashboardApi';
+import { formatTimeAgo, calculateDuration } from '@/utils/time';
+import { AgentRunDoc } from '@/services/agentRunApi';
 
 interface RecentExecutionsTabProps {
   runs?: AgentRunDoc[];
   loading?: boolean;
-}
-
-/**
- * Calculate duration between start_time and end_time
- * Returns duration in seconds or minutes, or "Not available" if invalid
- */
-function calculateDuration(startTime: string | null | undefined, endTime: string | null | undefined): string {
-  if (!startTime || !endTime) {
-    return 'Not available';
-  }
-
-  try {
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-
-    // Check if dates are valid
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      return 'Not available';
-    }
-
-    const diffInMs = end.getTime() - start.getTime();
-    
-    // Handle negative duration (end before start)
-    if (diffInMs < 0) {
-      return 'Not available';
-    }
-
-    const diffInSeconds = Math.floor(diffInMs / 1000);
-    const diffInMinutes = Math.floor(diffInSeconds / 60);
-
-    // If less than 60 seconds, show in seconds
-    if (diffInSeconds < 60) {
-      return `${diffInSeconds}s`;
-    }
-
-    // Otherwise show in minutes with seconds
-    const remainingSeconds = diffInSeconds % 60;
-    if (remainingSeconds === 0) {
-      return `${diffInMinutes}m`;
-    }
-    return `${diffInMinutes}m ${remainingSeconds}s`;
-  } catch {
-    return 'Not available';
-  }
 }
 
 /**

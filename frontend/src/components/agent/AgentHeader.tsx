@@ -1,4 +1,4 @@
-import { Clock, Play, Save, MessageSquare, MoreVertical, Copy, FileText, Trash2 } from 'lucide-react';
+import { Clock, Play, Save, MessageSquare, MoreVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ interface AgentHeaderProps {
   isNew: boolean;
   showSaveButton: boolean;
   saving: boolean;
+  runningTest?: boolean;
   onSave: () => void;
   onRunTest: () => void;
   onDuplicate: () => void;
@@ -41,11 +42,12 @@ export function AgentHeader({
   isNew,
   showSaveButton,
   saving,
+  runningTest = false,
   onSave,
   onRunTest,
-  onDuplicate,
+  // onDuplicate,
   onViewLogs,
-  onDelete,
+  // onDelete,
   agentId,
 }: AgentHeaderProps) {
   const watchProvider = form.watch('provider');
@@ -89,7 +91,14 @@ export function AgentHeader({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" onClick={onRunTest} type="button">
+        <Button 
+          variant="outline" 
+          size="icon-sm" 
+          onClick={onRunTest} 
+          type="button"
+          disabled={runningTest || isNew}
+          title={isNew ? 'Save agent first to run test' : runningTest ? 'Running...' : 'Run test'}
+        >
           <Play className="w-4 h-4" />
         </Button>
         <Button variant="outline" size="sm" type="button" onClick={handleOpenChat}>
@@ -122,18 +131,18 @@ export function AgentHeader({
             {!isNew && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onDuplicate}>
+                {/* <DropdownMenuItem onClick={onDuplicate}>
                   <Copy className="w-4 h-4 mr-2" />
                   Duplicate
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
                 <DropdownMenuItem onClick={onViewLogs}>
                   <FileText className="w-4 h-4 mr-2" />
                   View Logs
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                {/* <DropdownMenuItem onClick={onDelete} className="text-destructive">
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
               </>
             )}
           </DropdownMenuContent>

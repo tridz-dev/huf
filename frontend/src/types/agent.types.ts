@@ -179,6 +179,7 @@ export interface AgentDoc {
   allow_chat: number; // 0 or 1
   persist_conversation: number; // 0 or 1
   persist_user_history: number; // 0 or 1
+  enable_multi_run: number; // 0 or 1
   is_scheduled: number; // 0 or 1
   scheduled_interval: ScheduledInterval | null;
   interval_count: number | null;

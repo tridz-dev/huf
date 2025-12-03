@@ -6,7 +6,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { Button } from '../components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { ActiveAgentsTab, ActiveFlowsTab, RecentExecutionsTab } from '../components/dashboard';
-import { getAgentRunsCountLast7Days, getAgentRunsForMetrics, getRecentAgentRuns, type AgentRunMetricsDoc, type AgentRunDoc } from '../services/dashboardApi';
+import { getAgentRunsCountLast7Days, getAgentRunsForMetrics, getRecentAgentRuns, type AgentRunMetricsDoc } from '../services/dashboardApi';
+import type { AgentRunDoc } from '../services/agentRunApi';
 import { getAgents } from '../services/agentApi';
 import type { AgentDoc } from '../types/agent.types';
 

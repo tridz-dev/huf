@@ -1,5 +1,3 @@
-import { Search } from 'lucide-react';
-import { Input } from '../components/ui/input';
 import { Link, useLocation } from 'react-router-dom';
 import { ReactNode } from 'react';
 import {
@@ -62,7 +60,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
         )}
       </div>
 
-      <div className="flex items-center gap-2 flex-1 justify-center max-w-md mx-auto">
+      {/* <div className="flex items-center gap-2 flex-1 justify-center max-w-md mx-auto">
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -70,7 +68,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
             className="w-full pl-9"
           />
         </div>
-      </div>
+      </div> */}
 
       <div className="flex items-center gap-2">
         {actions}

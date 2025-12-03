@@ -6,7 +6,7 @@ import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolFunctions, getToolTypes } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -59,6 +59,7 @@ export function AgentFormPage() {
         allow_chat: true,
         persist_conversation: true,
         persist_user_history: true,
+        enable_multi_run: false,
         description: '',
         instructions: '',
       },
@@ -181,6 +182,7 @@ export function AgentFormPage() {
           allow_chat: data.allow_chat === 1,
           persist_conversation: data.persist_conversation === 1,
           persist_user_history: data.persist_user_history === 1,
+          enable_multi_run: data.enable_multi_run === 1,
           description: data.description || '',
           instructions: data.instructions || '',
         });
@@ -249,6 +251,7 @@ export function AgentFormPage() {
         allow_chat: values.allow_chat ? 1 : 0,
         persist_conversation: values.persist_conversation ? 1 : 0,
         persist_user_history: values.persist_user_history ? 1 : 0,
+        enable_multi_run: values.enable_multi_run ? 1 : 0,
         description: values.description || '',
         instructions: values.instructions,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
@@ -272,6 +275,7 @@ export function AgentFormPage() {
           allow_chat: newAgent.allow_chat === 1,
           persist_conversation: newAgent.persist_conversation === 1,
           persist_user_history: newAgent.persist_user_history === 1,
+          enable_multi_run: newAgent.enable_multi_run === 1,
           description: newAgent.description || '',
           instructions: newAgent.instructions || '',
         });
@@ -293,6 +297,7 @@ export function AgentFormPage() {
           allow_chat: values.allow_chat,
           persist_conversation: values.persist_conversation,
           persist_user_history: values.persist_user_history,
+          enable_multi_run: values.enable_multi_run,
           description: values.description,
           instructions: values.instructions,
         });
@@ -322,8 +327,45 @@ export function AgentFormPage() {
     // }, 2000);
   };
 
-  const handleRunTest = () => {
-    toast.info('Coming Soon!');
+  const [runningTest, setRunningTest] = useState(false);
+
+  const handleRunTest = async () => {
+    if (!id || isNew) {
+      toast.error('Please save the agent first before running a test');
+      return;
+    }
+
+    const values = form.getValues();
+    
+    // Validate required fields
+    if (!values.agent_name || !values.provider || !values.model) {
+      toast.error('Please fill in agent name, provider, and model before running a test');
+      return;
+    }
+
+    setRunningTest(true);
+    toast.info('Running...');
+
+    try {
+      const response = await runAgentTest({
+        agent_name: values.agent_name,
+        prompt: values.instructions || '',
+        provider: values.provider,
+        model: values.model,
+      });
+
+      if (response.message?.success && response.message?.agent_run_id) {
+        navigate(`/executions/${response.message.agent_run_id}`);
+      } else {
+        toast.error('Test run completed but no run ID was returned');
+      }
+    } catch (error) {
+      console.error('Error running agent test:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to run agent test');
+    } finally {
+      setRunningTest(false);
+    }
   };
 
   const handleDuplicate = () => {
@@ -336,7 +378,11 @@ export function AgentFormPage() {
   };
 
   const handleViewLogs = () => {
-    toast.info('Coming Soon!');
+    if (!id || isNew) {
+      toast.error('Please save the agent first before viewing logs');
+      return;
+    }
+    navigate(`/executions?agents=${encodeURIComponent(id)}`);
   };
 
   const handleAddTools = (tools: AgentToolFunctionRef[]) => {
@@ -462,6 +508,7 @@ export function AgentFormPage() {
           isNew={isNew}
           showSaveButton={showSaveButton}
           saving={saving}
+          runningTest={runningTest}
           onSave={form.handleSubmit(onSubmit)}
           onRunTest={handleRunTest}
           onDuplicate={handleDuplicate}

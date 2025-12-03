@@ -7,10 +7,8 @@ import { FlowProvider } from './contexts/FlowContext';
 import { ModalProvider } from './contexts/ModalContext';
 import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
-import { FlowsHeaderActions } from './components/FlowsHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
-import { DataHeaderActions } from './components/DataHeaderActions';
-import { IntegrationsHeaderActions } from './components/IntegrationsHeaderActions';
+import { ChatHeaderActions } from './components/ChatHeaderActions';
 import { HomePage } from './pages/HomePage';
 import { AgentsPage } from './pages/AgentsPage';
 import { AgentFormPageWrapper } from './pages/AgentFormPageWrapper';
@@ -21,6 +19,8 @@ import { IntegrationsPage } from './pages/IntegrationsPage';
 import { ChatPage } from './pages/ChatPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { Toaster } from './components/ui/sonner';
+import Executions from './pages/Executions';
+import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
 
 function App() {
   return (
@@ -60,7 +60,7 @@ function App() {
             path="/data"
             element={
               <ProtectedRoute>
-                <UnifiedLayout headerActions={<DataHeaderActions />}>
+                <UnifiedLayout>
                   <DataPage />
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -70,7 +70,7 @@ function App() {
             path="/integrations"
             element={
               <ProtectedRoute>
-                <UnifiedLayout headerActions={<IntegrationsHeaderActions />}>
+                <UnifiedLayout>
                   <IntegrationsPage />
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -81,7 +81,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlowProvider>
-                  <UnifiedLayout headerActions={<FlowsHeaderActions />}>
+                  <UnifiedLayout>
                     <FlowListPage />
                   </UnifiedLayout>
                 </FlowProvider>
@@ -104,7 +104,7 @@ function App() {
             path="/chat"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout headerActions={<ChatHeaderActions />}>
                   <ChatPage />
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -114,8 +114,28 @@ function App() {
             path="/chat/:chatId"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout headerActions={<ChatHeaderActions />}>
                   <ChatPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/executions"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Executions />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/executions/:runId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <AgentRunDetailPage />
                 </UnifiedLayout>
               </ProtectedRoute>
             }
