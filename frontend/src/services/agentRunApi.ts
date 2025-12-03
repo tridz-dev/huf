@@ -23,6 +23,8 @@ export interface GetAgentRunsParams {
   limit?: number;
   start?: number;
   search?: string;
+  status?: 'Started' | 'Queued' | 'Success' | 'Failed' | 'all';
+  agents?: string[];
 }
 
 /**
@@ -57,6 +59,8 @@ export async function getAgentRuns(
       limit = 20,
       start = (page - 1) * limit,
       search,
+      status,
+      agents,
     } = params;
 
     // Build filters
@@ -64,6 +68,14 @@ export async function getAgentRuns(
 
     if (search && search.trim()) {
       filters.push(['agent', 'like', `%${search.trim()}%`]);
+    }
+
+    if (status && status !== 'all') {
+      filters.push(['status', '=', status]);
+    }
+
+    if (agents && agents.length > 0) {
+      filters.push(['agent', 'in', agents]);
     }
 
     // Fetch data

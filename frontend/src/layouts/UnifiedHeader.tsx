@@ -1,5 +1,3 @@
-import { Search } from 'lucide-react';
-import { Input } from '../components/ui/input';
 import { Link, useLocation } from 'react-router-dom';
 import { ReactNode } from 'react';
 import {

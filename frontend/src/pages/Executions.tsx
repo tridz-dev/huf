@@ -1,14 +1,22 @@
+import { useState, useEffect, useMemo } from 'react';
 import { Zap, Calendar, Loader2 } from 'lucide-react';
 import { FilterBar, GridView, PageLayout, ItemCard } from '@/components/dashboard';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgentRuns, type AgentRunDoc } from '@/services/agentRunApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
 import { Button } from '@/components/ui/button';
 import { getAgentRunStatusVariant } from '@/utils/status';
+import { Combobox } from '@/components/ui/combobox';
+import { db } from '@/lib/frappe-sdk';
+import { doctype } from '@/data/doctypes';
+import { handleFrappeError } from '@/lib/frappe-error';
 
 export default function Executions() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [agents, setAgents] = useState<Array<{ name: string }>>([]);
+
   const {
     items: runs,
     hasMore,
@@ -18,8 +26,10 @@ export default function Executions() {
     setSearch,
     loadMore,
     total,
+    filters,
+    setFilter,
   } = useInfiniteScroll<
-    { page?: number; limit?: number; start?: number; search?: string },
+    { page?: number; limit?: number; start?: number; search?: string; status?: string; agents?: string },
     AgentRunDoc
   >({
     fetchFn: async (params) => {
@@ -28,6 +38,8 @@ export default function Executions() {
         limit: params.limit,
         start: params.start,
         search: params.search,
+        status: params.status as any,
+        agents: params.agents ? params.agents.split(',').filter(Boolean) : undefined,
       });
 
       if (Array.isArray(response)) {
@@ -50,6 +62,83 @@ export default function Executions() {
     autoLoad: true,
   });
 
+  // Initialize filters from URL on mount
+  useEffect(() => {
+    const initialSearch = searchParams.get('q') ?? '';
+    const initialStatus = searchParams.get('status') ?? 'all';
+    const initialAgents = searchParams.get('agents') ?? 'all';
+
+    if (initialSearch) {
+      setSearch(initialSearch);
+    }
+    if (initialStatus && initialStatus !== (filters.status || 'all')) {
+      setFilter('status', initialStatus);
+    }
+    if (initialAgents && initialAgents !== (filters.agents || 'all')) {
+      setFilter('agents', initialAgents);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const updateSearchParams = (next: { q?: string; status?: string; agents?: string }) => {
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev);
+
+      if (next.q !== undefined) {
+        if (next.q) sp.set('q', next.q);
+        else sp.delete('q');
+      }
+
+      if (next.status !== undefined) {
+        if (next.status && next.status !== 'all') sp.set('status', next.status);
+        else sp.delete('status');
+      }
+
+      if (next.agents !== undefined) {
+        if (next.agents && next.agents !== 'all') sp.set('agents', next.agents);
+        else sp.delete('agents');
+      }
+
+      return sp;
+    });
+  };
+
+  // Fetch agents on mount
+  useEffect(() => {
+    async function fetchAgents() {
+      try {
+        const agentList = await db.getDocList(doctype.Agent, {
+          fields: ['name'],
+          limit: 10000, // Fetch all agents
+          orderBy: { field: 'name', order: 'asc' },
+        });
+        setAgents(agentList as Array<{ name: string }>);
+      } catch (error) {
+        handleFrappeError(error, 'Error fetching agents');
+        setAgents([]);
+      }
+    }
+    fetchAgents();
+  }, []);
+
+  const statusOptions = [
+    { label: 'All Status', value: 'all' },
+    { label: 'Started', value: 'Started' },
+    { label: 'Queued', value: 'Queued' },
+    { label: 'Success', value: 'Success' },
+    { label: 'Failed', value: 'Failed' },
+  ];
+
+  const agentOptions = useMemo(() => {
+    const items = agents.map((agent) => ({
+      value: agent.name,
+      label: agent.name,
+    }));
+    return [{ label: 'All Agents', value: 'all' }, ...items];
+  }, [agents]);
+
+  const selectedAgentValue = filters.agents || 'all';
+
   return (
     <PageLayout
       subtitle="View all executions of your Agents"
@@ -57,7 +146,41 @@ export default function Executions() {
         <FilterBar
           searchPlaceholder="Search executions using Agent Name"
           searchValue={search}
-          onSearchChange={setSearch}
+          onSearchChange={(value) => {
+            setSearch(value);
+            updateSearchParams({ q: value });
+          }}
+          filters={[
+            {
+              label: 'Status',
+              value: filters.status || 'all',
+              options: statusOptions,
+              onChange: (value) => {
+                setFilter('status', value);
+                updateSearchParams({ status: value });
+              },
+            },
+          ]}
+          actions={
+            <div className="w-48">
+              <Combobox
+                options={agentOptions}
+                value={selectedAgentValue}
+                onValueChange={(value) => {
+                  if (!value || value === 'all') {
+                    setFilter('agents', 'all');
+                    updateSearchParams({ agents: 'all' });
+                  } else {
+                    setFilter('agents', value);
+                    updateSearchParams({ agents: value });
+                  }
+                }}
+                placeholder="Filter by agent..."
+                emptyText="No agents found."
+                searchPlaceholder="Search agents..."
+              />
+            </div>
+          }
         />
       }
     >

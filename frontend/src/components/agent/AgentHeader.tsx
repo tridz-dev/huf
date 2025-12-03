@@ -43,9 +43,9 @@ export function AgentHeader({
   saving,
   onSave,
   onRunTest,
-  onDuplicate,
+  // onDuplicate,
   onViewLogs,
-  onDelete,
+  // onDelete,
   agentId,
 }: AgentHeaderProps) {
   const watchProvider = form.watch('provider');
@@ -122,18 +122,18 @@ export function AgentHeader({
             {!isNew && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onDuplicate}>
+                {/* <DropdownMenuItem onClick={onDuplicate}>
                   <Copy className="w-4 h-4 mr-2" />
                   Duplicate
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
                 <DropdownMenuItem onClick={onViewLogs}>
                   <FileText className="w-4 h-4 mr-2" />
                   View Logs
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                {/* <DropdownMenuItem onClick={onDelete} className="text-destructive">
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
               </>
             )}
           </DropdownMenuContent>
