@@ -6,7 +6,7 @@ import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolFunctions, getToolTypes } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -327,8 +327,45 @@ export function AgentFormPage() {
     // }, 2000);
   };
 
-  const handleRunTest = () => {
-    toast.info('Coming Soon!');
+  const [runningTest, setRunningTest] = useState(false);
+
+  const handleRunTest = async () => {
+    if (!id || isNew) {
+      toast.error('Please save the agent first before running a test');
+      return;
+    }
+
+    const values = form.getValues();
+    
+    // Validate required fields
+    if (!values.agent_name || !values.provider || !values.model) {
+      toast.error('Please fill in agent name, provider, and model before running a test');
+      return;
+    }
+
+    setRunningTest(true);
+    toast.info('Running...');
+
+    try {
+      const response = await runAgentTest({
+        agent_name: values.agent_name,
+        prompt: values.instructions || '',
+        provider: values.provider,
+        model: values.model,
+      });
+
+      if (response.message?.success && response.message?.agent_run_id) {
+        navigate(`/executions/${response.message.agent_run_id}`);
+      } else {
+        toast.error('Test run completed but no run ID was returned');
+      }
+    } catch (error) {
+      console.error('Error running agent test:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to run agent test');
+    } finally {
+      setRunningTest(false);
+    }
   };
 
   const handleDuplicate = () => {
@@ -471,6 +508,7 @@ export function AgentFormPage() {
           isNew={isNew}
           showSaveButton={showSaveButton}
           saving={saving}
+          runningTest={runningTest}
           onSave={form.handleSubmit(onSubmit)}
           onRunTest={handleRunTest}
           onDuplicate={handleDuplicate}

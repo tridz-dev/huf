@@ -24,6 +24,7 @@ interface AgentHeaderProps {
   isNew: boolean;
   showSaveButton: boolean;
   saving: boolean;
+  runningTest?: boolean;
   onSave: () => void;
   onRunTest: () => void;
   onDuplicate: () => void;
@@ -41,6 +42,7 @@ export function AgentHeader({
   isNew,
   showSaveButton,
   saving,
+  runningTest = false,
   onSave,
   onRunTest,
   // onDuplicate,
@@ -89,7 +91,14 @@ export function AgentHeader({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" onClick={onRunTest} type="button">
+        <Button 
+          variant="outline" 
+          size="icon-sm" 
+          onClick={onRunTest} 
+          type="button"
+          disabled={runningTest || isNew}
+          title={isNew ? 'Save agent first to run test' : runningTest ? 'Running...' : 'Run test'}
+        >
           <Play className="w-4 h-4" />
         </Button>
         <Button variant="outline" size="sm" type="button" onClick={handleOpenChat}>

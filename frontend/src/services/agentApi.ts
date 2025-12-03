@@ -344,6 +344,48 @@ export interface PaginatedAgentModelsResponse {
 }
 
 /**
+ * Parameters for running an agent test
+ */
+export interface RunAgentTestParams {
+  agent_name: string;
+  prompt: string;
+  provider: string;
+  model: string;
+}
+
+/**
+ * Response from running an agent test
+ */
+export interface RunAgentTestResponse {
+  message?: {
+    success?: boolean;
+    response?: string;
+    structured?: unknown;
+    provider?: string;
+    agent_run_id?: string;
+    conversation_id?: string;
+    session_id?: string;
+  };
+}
+
+/**
+ * Run an agent test
+ */
+export async function runAgentTest(params: RunAgentTestParams): Promise<RunAgentTestResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_integration.run_agent_sync', {
+      agent_name: params.agent_name,
+      prompt: params.prompt,
+      provider: params.provider,
+      model: params.model,
+    });
+    return result as RunAgentTestResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error running agent test');
+  }
+}
+
+/**
  * Fetch agents for model selector
  * Supports pagination and search
  */
