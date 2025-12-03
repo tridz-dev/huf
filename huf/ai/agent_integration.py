@@ -290,7 +290,7 @@ def run_agent_sync(
     # Check for multi-run orchestration mode
     # Skip if already called from orchestration to prevent infinite loop
     if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
-        from agentflo.ai.orchestration.orchestrator import create_orchestration
+        from huf.ai.orchestration.orchestrator import create_orchestration
         orch_name = create_orchestration(agent_name, prompt)
         return {
             "success": True,
