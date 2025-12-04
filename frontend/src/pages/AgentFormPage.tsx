@@ -141,7 +141,7 @@ export function AgentFormPage() {
       getModels(),
       getToolTypes(),
     ]).then(([providersData, modelsData, toolTypesData]) => {
-      setProviders(providersData);
+      setProviders(providersData as AIProvider[]);
       setModels(modelsData);
       setToolTypes(toolTypesData);
     }).catch((error) => {
