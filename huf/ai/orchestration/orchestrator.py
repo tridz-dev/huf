@@ -6,7 +6,7 @@ from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent_integration import run_agent_sync
 
 
-def create_orchestration(agent_name, user_prompt):
+def create_orchestration(agent_name, user_prompt, parent_run_id = None,conversation_id=None):
     """
     Called when enable_multi_run is true.
     Creates orchestration document and generates plan steps.
@@ -17,6 +17,12 @@ def create_orchestration(agent_name, user_prompt):
     orch.agent = agent_name
     orch.status = "Planned"
     orch.current_step = 0
+    if parent_run_id:
+        orch.parent_run = parent_run_id
+    
+    if conversation_id:
+        orch.conversation = conversation_id
+
     orch.save(ignore_permissions=True)
     frappe.db.commit()
 
@@ -25,7 +31,8 @@ def create_orchestration(agent_name, user_prompt):
         agent_name=agent_name,
         user_prompt=user_prompt,
         provider=agent_doc.provider,
-        model=agent_doc.model
+        model=agent_doc.model,
+        conversation_id=conversation_id # <--- Pass this to planning logic
     )
     
     steps = parse_plan_steps(plan_output)
@@ -89,6 +96,12 @@ def execute_next_step(orch):
         orch.status = "Completed"
         orch.last_run_at = now_datetime()
         orch.save(ignore_permissions=True)
+        if orch.parent_run:
+            frappe.db.set_value("Agent Run", orch.parent_run, {
+                "status": "Success",
+                "end_time": now_datetime(),
+                "response": f"Orchestration completed successfully. Scratchpad summary:\n{orch.scratchpad or 'No output.'}"
+            })
         frappe.db.commit()
         return "completed"
 
@@ -104,20 +117,20 @@ def execute_next_step(orch):
     try:
         # Build step execution prompt with scratchpad context
         step_prompt = f"""Execute the following step:
-
-Step {next_step.step_index}: {next_step.instruction}
-
-Previous context (scratchpad):
-{orch.scratchpad or 'No previous context.'}
-
-Complete this step and provide a clear response."""
+        Step {next_step.step_index}: {next_step.instruction}
+        Previous context (scratchpad):
+        {orch.scratchpad or 'No previous context.'}
+        Complete this step and provide a clear response."""
 
         result = run_agent_sync(
             agent_name=orch.agent,
             prompt=step_prompt,
             provider=agent_doc.provider,
             model=agent_doc.model,
-            channel_id="orchestration"
+            channel_id="orchestration",
+            parent_run_id=orch.parent_run,
+            orchestration_id=orch.name,
+            conversation_id=orch.conversation
         )
 
         if result.get("success"):
@@ -133,6 +146,9 @@ Complete this step and provide a clear response."""
             error_msg = result.get("error", "Unknown error")
             orch.error_log = (orch.error_log or "") + f"\nStep {next_step.step_index} failed: {error_msg}"
             orch.status = "Failed"
+            if orch.parent_run:
+                frappe.db.set_value("Agent Run", orch.parent_run, "status", "Failed")
+            pass
 
     except Exception as e:
         next_step.status = "failed"

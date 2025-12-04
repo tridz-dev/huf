@@ -23,7 +23,10 @@
   "column_break_qy3x",
   "model",
   "end_time",
-  "output_tokens"
+  "output_tokens",
+  "parent_run",
+  "is_child",
+  "agent_orchestration"
  ],
  "fields": [
   {
@@ -149,12 +152,33 @@
    "label": "Model",
    "options": "AI Model",
    "read_only": 1
+  },
+  {
+   "fieldname": "parent_run",
+   "fieldtype": "Link",
+   "label": "Parent Run",
+   "options": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_child",
+   "fieldtype": "Check",
+   "label": "Is child",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent_orchestration",
+   "fieldtype": "Link",
+   "label": "Agent Orchestration",
+   "options": "Agent Orchestration",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-24 15:45:34.811852",
+ "modified": "2025-12-04 19:58:13.346966",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",

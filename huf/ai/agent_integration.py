@@ -295,7 +295,9 @@ def run_agent_sync(
     model : str,
     channel_id: str = None,
     external_id: str = None,
-    conversation_id: str = None
+    conversation_id: str = None,
+    parent_run_id: str = None,
+    orchestration_id: str = None
 ):
 
     if not agent_name or not prompt:
@@ -304,18 +306,6 @@ def run_agent_sync(
         channel_id = "api"
 
     agent_doc = frappe.get_doc("Agent", agent_name)
-
-    # Check for multi-run orchestration mode
-    # Skip if already called from orchestration to prevent infinite loop
-    if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
-        from huf.ai.orchestration.orchestrator import create_orchestration
-        orch_name = create_orchestration(agent_name, prompt)
-        return {
-            "success": True,
-            "response": f"Orchestration started: {orch_name}",
-            "orchestration_id": orch_name,
-            "mode": "multi_run"
-        }
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -342,12 +332,41 @@ def run_agent_sync(
         "conversation": conversation.name,
         "prompt": prompt,
         "model": model,
-        "provider": provider
+        "provider": provider,
+        "parent_run": parent_run_id,
+        "is_child": 1 if parent_run_id else 0,
+        "agent_orchestration": orchestration_id
     })
     run_doc.insert()  
     conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
+
+    # Check for multi-run orchestration mode
+    # Skip if already called from orchestration to prevent infinite loop
+    if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
+        from huf.ai.orchestration.orchestrator import create_orchestration
+        orch_name = create_orchestration(
+            agent_name, 
+            prompt, 
+            parent_run_id=run_doc.name,
+            conversation_id=run_doc.conversation
+        )        
+        
+        run_doc.db_set({
+            "agent_orchestration": orch_name,
+            "status": "Started", # Mark as started, but not "Success" yet
+            "response": f"Orchestration started. Job ID: {orch_name}"
+        })
+        safe_commit()
+        return {
+            "success": True,
+            "response": f"Orchestration started: {orch_name}",
+            "orchestration_id": orch_name,
+            "mode": "multi_run",
+            "agent_run_id": run_doc.name
+        }
+
     
     try:
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
@@ -382,6 +401,12 @@ def run_agent_sync(
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+            context = {
+                "channel": channel_id,
+                "external_id": external_id,
+                "conversation_history": history,
+                "agent_name": agent_name
+            }
             run = RunProvider.run(agent, enhanced_prompt, provider, model,context)
 
             result = loop.run_until_complete(run)
