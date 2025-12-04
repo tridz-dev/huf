@@ -18,7 +18,7 @@ Example format:
 Now break down this objective:"""
 
 
-def run_planning(agent_name, user_prompt, provider, model):
+def run_planning(agent_name, user_prompt, provider, model, conversation_id=None):
     """
     Runs the planning phase to break down user objective into steps.
     
@@ -41,7 +41,8 @@ def run_planning(agent_name, user_prompt, provider, model):
             prompt=planning_message,
             provider=provider,
             model=model,
-            channel_id="orchestration_planning"
+            channel_id="orchestration_planning",
+            conversation_id=conversation_id
         )
 
         if result.get("success"):

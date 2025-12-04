@@ -9,6 +9,8 @@
   "agent",
   "status",
   "current_step",
+  "conversation",
+  "parent_run",
   "last_run_at",
   "error_log",
   "orchestration_data_tab",
@@ -58,14 +60,28 @@
    "fieldname": "scratchpad",
    "fieldtype": "Code",
    "label": "Scratchpad"
+  },
+  {
+   "fieldname": "parent_run",
+   "fieldtype": "Link",
+   "label": "Parent Run",
+   "options": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "conversation",
+   "options": "Agent Conversation",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-28 05:36:45.330138",
+ "modified": "2025-12-04 19:57:53.267070",
  "modified_by": "Administrator",
-"module": "Huf",
+ "module": "Huf",
  "name": "Agent Orchestration",
  "naming_rule": "Random",
  "owner": "Administrator",
@@ -84,7 +100,6 @@
   }
  ],
  "row_format": "Dynamic",
- "rows_threshold_for_grid_search": 20,
  "sort_field": "creation",
  "sort_order": "DESC",
  "states": []
