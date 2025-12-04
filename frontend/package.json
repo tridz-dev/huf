@@ -43,6 +43,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@supabase/supabase-js": "^2.58.0",
+    "@tanstack/react-table": "^8.21.3",
     "@xyflow/react": "^12.9.3",
     "ai": "^5.0.106",
     "class-variance-authority": "^0.7.1",
