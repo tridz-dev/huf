@@ -1,16 +1,33 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Zap, Calendar, Loader2 } from 'lucide-react';
-import { FilterBar, GridView, PageLayout, ItemCard } from '@/components/dashboard';
+import { ArrowUpDown, Loader2 } from 'lucide-react';
+import { FilterBar, PageLayout } from '@/components/dashboard';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgentRuns, type AgentRunDoc } from '@/services/agentRunApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { getAgentRunStatusVariant } from '@/utils/status';
 import { Combobox } from '@/components/ui/combobox';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+} from '@tanstack/react-table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 export default function Executions() {
   const navigate = useNavigate();
@@ -139,6 +156,106 @@ export default function Executions() {
 
   const selectedAgentValue = filters.agents || 'all';
 
+  // Define table columns
+  const columns = useMemo<ColumnDef<AgentRunDoc>[]>(
+    () => [
+      {
+        accessorKey: 'agent',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2"
+            >
+              Agent
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          );
+        },
+        cell: ({ row }) => (
+          <div className="font-medium">{row.getValue('agent') || 'Unknown Agent'}</div>
+        ),
+      },
+      {
+        accessorKey: 'name',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2"
+            >
+              Run ID
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          );
+        },
+        cell: ({ row }) => (
+          <div className="font-mono text-sm text-muted-foreground">{row.getValue('name')}</div>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => {
+          const status = row.getValue('status') as string;
+          return (
+            <Badge variant={getAgentRunStatusVariant(status)}>
+              {status || 'Unknown'}
+            </Badge>
+          );
+        },
+      },
+      {
+        id: 'duration',
+        header: 'Duration',
+        cell: ({ row }) => {
+          const duration = calculateDuration(row.original.start_time ?? null, row.original.end_time ?? null);
+          return <div className="text-sm">{duration}</div>;
+        },
+      },
+      {
+        id: 'started',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2"
+            >
+              Started
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          );
+        },
+        cell: ({ row }) => {
+          const timeAgo = formatTimeAgo(row.original.start_time ?? null);
+          return <div className="text-sm text-muted-foreground">{timeAgo}</div>;
+        },
+        sortingFn: (rowA, rowB) => {
+          const timeA = rowA.original.start_time ? new Date(rowA.original.start_time).getTime() : 0;
+          const timeB = rowB.original.start_time ? new Date(rowB.original.start_time).getTime() : 0;
+          return timeA - timeB;
+        },
+      },
+    ],
+    []
+  );
+
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  const table = useReactTable({
+    data: runs,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSorting,
+    state: {
+      sorting,
+    },
+  });
+
   return (
     <PageLayout
       subtitle="View all executions of your Agents"
@@ -184,38 +301,56 @@ export default function Executions() {
         />
       }
     >
-      <GridView
-        items={runs}
-        columns={{ sm: 1, md: 2, lg: 3 }}
-        loading={initialLoading}
-        emptyState={
-          <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No executions found.</p>
+      <div className="w-full">
+        {initialLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        }
-        renderItem={(run) => {
-          const duration = calculateDuration(run.start_time ?? null, run.end_time ?? null);
-          const timeAgo = formatTimeAgo(run.start_time ?? null);
-          const status = run.status || 'Unknown';
-
-          return (
-            <ItemCard
-              title={run.agent || 'Unknown Agent'}
-              description={`Run ID: ${run.name}`}
-              status={{
-                label: status,
-                variant: getAgentRunStatusVariant(run.status),
-              }}
-              metadata={[
-                { label: 'Duration', value: duration, icon: Zap },
-                { label: 'Started', value: timeAgo, icon: Calendar },
-              ]}
-              onClick={() => navigate(`/executions/${run.name}`)}
-            />
-          );
-        }}
-        keyExtractor={(run) => run.name}
-      />
+        ) : (
+          <div className="overflow-hidden rounded-md border">
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => {
+                      return (
+                        <TableHead key={header.id}>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                        </TableHead>
+                      );
+                    })}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows?.length ? (
+                  table.getRowModel().rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => navigate(`/executions/${row.original.name}`)}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} className="h-24 text-center">
+                      <div className="text-muted-foreground">No executions found.</div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
 
       {hasMore && (
         <div className="flex justify-center py-8">
