@@ -1,5 +1,4 @@
 import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
-// import { MicIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ToolUIPart } from 'ai';
 import type { StickToBottomContext } from 'use-stick-to-bottom';
@@ -72,6 +71,7 @@ import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import type { ExtendedToolState } from '@/components/ai-elements/types';
 import { useChatSocket, type ToolCallEvent } from '@/hooks/useChatSocket';
+import { CopyButton } from './CopyButton';
 
 // Map tool_status to ExtendedToolState
 const mapToolStatusToState = (status?: string): ExtendedToolState => {
@@ -818,7 +818,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                 </div>
               )}
               {messages.map(({ versions, ...message }) => (
-                <MessageBranch defaultBranch={0} key={message.key}>
+                <MessageBranch defaultBranch={0} key={message.key} className="relative group">
                   <MessageBranchContent>
                     {versions.map((version) => (
                       <Message from={message.from} key={`${message.key}-${version.id}`}>
@@ -860,6 +860,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                               </Tool>
                             ))
                           ) : (
+                            <>
                             <MessageContent>
                               <MessageResponse>{version.content}</MessageResponse>
                               {message.from === 'assistant' && version.content && !message.tools && (
@@ -870,6 +871,12 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                                 />
                               )}
                             </MessageContent>
+                            {message.from === 'user' && version.content && (
+                                <div className="absolute -bottom-8 right-0 w-fit flex items-center gap-2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                                  <CopyButton content={version.content} />
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       </Message>

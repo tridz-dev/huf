@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { useState } from 'react';
+import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { CopyButton } from './CopyButton';
 
 interface MessageActionsProps {
   content: string;
@@ -21,35 +22,9 @@ interface MessageActionsProps {
 }
 
 export function MessageActions({ content, agentMessageId, onFeedback }: MessageActionsProps) {
-  const [copied, setCopied] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
 
-  useEffect(() => {
-    if (!copied) {
-      return;
-    }
-    const timer = setTimeout(() => setCopied(false), 4000);
-    return () => clearTimeout(timer);
-  }, [copied]);
-
-  const handleCopy = async () => {
-    if (!content) {
-      return;
-    }
-
-    try {
-      if (!navigator?.clipboard) {
-        throw new Error('Clipboard API not available');
-      }
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      toast.success('Response copied');
-    } catch (error) {
-      console.error(error);
-      toast.error('Unable to copy response');
-    }
-  };
 
   const handleSubmitComment = () => {
     const trimmed = commentText.trim();
@@ -65,16 +40,7 @@ export function MessageActions({ content, agentMessageId, onFeedback }: MessageA
   return (
     <>
       <div className="mt-3 flex items-center gap-2 text-muted-foreground">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={handleCopy}
-          aria-label={copied ? 'Copied' : 'Copy response'}
-        >
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-        </Button>
+        <CopyButton content={content} />
         <Button
           type="button"
           variant="ghost"
