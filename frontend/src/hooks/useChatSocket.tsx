@@ -26,7 +26,8 @@ export function useChatSocket({ conversationId, onToolUpdate }: ChatSocketProps)
         }
 
         const siteName = (window as any).frappe?.boot?.sitename;
-        const port = (window as any).frappe?.boot?.socketio_port;
+        // If port is available in the url, use socketio port from the url, otherwise empty
+        const port = window.location.port ?  (window as any).frappe?.boot?.socketio_port : ''
         
         if (!siteName) {
             console.warn("Site name not available yet, socket connection will be skipped");

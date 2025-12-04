@@ -13,7 +13,7 @@ export function createFrappeSocket({ siteName, port = "9000", protocol, host }: 
   host = host || window.location.hostname;
 
   // Frappe socket.io URL format: protocol://host:port/siteName
-  const url = `${protocol}://${host}:${port}/${siteName}`;
+  const url = `${protocol}://${host}${port ? `:${port}` : ''}/${siteName}`;
 
   console.log(`Connecting to socket.io at: ${url}`);
 
