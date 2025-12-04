@@ -2,15 +2,35 @@ import { Plug, Settings, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { PageLayout, FilterBar, GridView } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getProviders } from '../services/providerApi';
+import { getProviders, getProvider, updateProvider } from '../services/providerApi';
 import { getModels } from '../services/providerApi';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import type { AIProvider, AIModel } from '../types/agent.types';
 
 export function IntegrationsPage() {
   const [models, setModels] = useState<AIModel[]>([]);
+  const [configureModalOpen, setConfigureModalOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
+  const [loadingProvider, setLoadingProvider] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    api_key: '',
+    slug: '',
+    chef: '',
+  });
 
   const {
     items: providers,
@@ -66,6 +86,47 @@ export function IntegrationsPage() {
     return models.filter(m => m.provider === providerName).length;
   };
 
+  const handleConfigure = async (provider: AIProvider) => {
+    setSelectedProvider(provider);
+    setConfigureModalOpen(true);
+    setLoadingProvider(true);
+    
+    try {
+      const details = await getProvider(provider.name);
+      setFormData({
+        api_key: details.api_key || '',
+        slug: details.slug || '',
+        chef: details.chef || '',
+      });
+    } catch (error) {
+      toast.error('Failed to load provider details');
+      console.error(error);
+    } finally {
+      setLoadingProvider(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!selectedProvider) return;
+
+    setSaving(true);
+    try {
+      await updateProvider(selectedProvider.name, {
+        api_key: formData.api_key,
+        slug: formData.slug,
+        chef: formData.chef,
+      });
+      toast.success('Provider updated successfully');
+      setConfigureModalOpen(false);
+      // Optionally refresh the list
+    } catch (error) {
+      toast.error('Failed to update provider');
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <PageLayout
       subtitle="Connect AI providers and external services"
@@ -119,7 +180,12 @@ export function IntegrationsPage() {
                 )}
               </CardContent>
               <CardFooter>
-                <Button variant="outline" size="sm" className="flex-1 gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1 gap-2"
+                  onClick={() => handleConfigure(provider)}
+                >
                   <Settings className="w-4 h-4" />
                   Configure
                 </Button>
@@ -152,6 +218,84 @@ export function IntegrationsPage() {
           {total !== undefined ? `Showing all ${total} providers` : 'No more providers to load'}
         </div>
       )}
+
+      {/* Configure Provider Modal */}
+      <Dialog open={configureModalOpen} onOpenChange={setConfigureModalOpen}>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto min-h-[500px]">
+          <DialogHeader>
+            <DialogTitle>
+              Configure {selectedProvider?.provider_name || 'Provider'}
+            </DialogTitle>
+            <DialogDescription>
+              Update provider configuration settings
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingProvider ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="api_key">API Key</Label>
+                <Input
+                  id="api_key"
+                  type="password"
+                  placeholder="Enter API key"
+                  value={formData.api_key}
+                  onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="slug">Slug</Label>
+                <Input
+                  id="slug"
+                  type="text"
+                  placeholder="Enter slug"
+                  value={formData.slug}
+                  onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="chef">Chef</Label>
+                <Input
+                  id="chef"
+                  type="text"
+                  placeholder="Enter chef"
+                  value={formData.chef}
+                  onChange={(e) => setFormData({ ...formData, chef: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfigureModalOpen(false)}
+              disabled={saving || loadingProvider}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={saving || loadingProvider}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   );
 }

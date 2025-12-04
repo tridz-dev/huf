@@ -102,6 +102,42 @@ export async function getProviders(
 }
 
 /**
+ * AI Provider document from Frappe
+ */
+export interface AIProviderDoc {
+  name: string;
+  provide_name: string;
+  api_key?: string;
+  slug?: string;
+  chef?: string;
+}
+
+/**
+ * Fetch a single AI Provider by name
+ */
+export async function getProvider(name: string): Promise<AIProviderDoc> {
+  try {
+    const provider = await db.getDoc(doctype['AI Provider'], name);
+    return provider as AIProviderDoc;
+  } catch (error) {
+    handleFrappeError(error, `Error fetching provider ${name}`);
+  }
+}
+
+/**
+ * Update an AI Provider document
+ */
+export async function updateProvider(name: string, data: Partial<AIProviderDoc>): Promise<AIProviderDoc> {
+  try {
+    await db.updateDoc(doctype['AI Provider'], name, data);
+    const updatedProvider = await db.getDoc(doctype['AI Provider'], name);
+    return updatedProvider as AIProviderDoc;
+  } catch (error) {
+    handleFrappeError(error, `Error updating provider ${name}`);
+  }
+}
+
+/**
  * Fetch all AI Models from Frappe
  */
 export async function getModels(providerId?: string): Promise<AIModel[]> {
