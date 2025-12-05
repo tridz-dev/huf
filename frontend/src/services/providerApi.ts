@@ -34,12 +34,12 @@ export async function getProviders(
     // Backward compatibility: if no params, return array (old API)
     if (!params) {
       const providers = await db.getDocList(doctype['AI Provider'], {
-        fields: ['name', 'provide_name'],
+        fields: ['name', 'provider_name'],
         limit: 1000,
       });
       return providers.map((p: any) => ({
         name: p.name,
-        provider_name: p.provide_name || p.name,
+        provider_name: p.provider_name || p.name,
       })) as AIProvider[];
     }
 
@@ -55,12 +55,12 @@ export async function getProviders(
 
     // Build search filters if provided
     if (search && search.trim()) {
-      filters.push(['provide_name', 'like', `%${search.trim()}%`]);
+      filters.push(['provider_name', 'like', `%${search.trim()}%`]);
     }
 
     // Fetch data
     const providers = await db.getDocList(doctype['AI Provider'], {
-      fields: ['name', 'provide_name'],
+      fields: ['name', 'provider_name'],
       filters: filters.length > 0 ? (filters as any) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }), // Only include if start > 0
@@ -69,7 +69,7 @@ export async function getProviders(
 
     const mappedProviders = providers.map((p: any) => ({
       name: p.name,
-      provider_name: p.provide_name || p.name,
+      provider_name: p.provider_name || p.name,
     })) as AIProvider[];
 
     const hasMore = mappedProviders.length > limit;
@@ -106,7 +106,7 @@ export async function getProviders(
  */
 export interface AIProviderDoc {
   name: string;
-  provide_name: string;
+  provider_name: string;
   api_key?: string;
   slug?: string;
   chef?: string;

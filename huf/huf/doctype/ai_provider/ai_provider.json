@@ -1,19 +1,19 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "field:provide_name",
+ "autoname": "field:provider_name",
  "creation": "2025-08-11 18:12:10.742145",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "provide_name",
+  "provider_name",
   "api_key",
   "slug",
   "chef"
  ],
  "fields": [
   {
-   "fieldname": "provide_name",
+   "fieldname": "provider_name",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Provide Name",
