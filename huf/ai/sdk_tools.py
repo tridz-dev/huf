@@ -1036,3 +1036,66 @@ def handle_speech_to_text(
     except Exception as e:
         frappe.log_error(f"Speech to Text error: {frappe.get_traceback()}", "SpeechToText")
         return {"success": False, "error": str(e)}
+
+
+
+#UNVERIFIED
+def create_canvas_tools():
+    """Create canvas-specific tools"""
+    from huf.ai.canvas_tools import read_canvas_file, write_canvas_files, validate_canvas
+    
+    tools = []
+    
+    # Read Canvas File Tool
+    read_tool = FunctionTool(
+        name="read_canvas_file",
+        description="Read a file from the canvas directory. Use this to view current content before editing.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "File path relative to canvas directory (index.html, index.css, index.js, index.py, or agents.md)",
+                    "enum": ["index.html", "index.css", "index.js", "index.py", "agents.md"]
+                }
+            },
+            "required": ["path"]
+        },
+        on_invoke_tool=lambda ctx, args: read_canvas_file(ctx.get("canvas_slug"), args["path"])
+    )
+    tools.append(read_tool)
+    
+    # Write Canvas Files Tool
+    write_tool = FunctionTool(
+        name="write_canvas_files",
+        description="Write multiple files to the canvas directory. Use this to update HTML, CSS, JS, Python, or markdown files.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "files": {
+                    "type": "object",
+                    "description": "Dictionary of file paths and their content",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": ["files"]
+        },
+        on_invoke_tool=lambda ctx, args: write_canvas_files(ctx.get("canvas_slug"), args["files"])
+    )
+    tools.append(write_tool)
+    
+    # Validate Canvas Tool
+    validate_tool = FunctionTool(
+        name="validate_canvas",
+        description="Validate canvas HTML, CSS, and JavaScript for common errors. Use before writing major changes.",
+        parameters={
+            "type": "object",
+            "properties": {}
+        },
+        on_invoke_tool=lambda ctx, args: validate_canvas(ctx.get("canvas_slug"))
+    )
+    tools.append(validate_tool)
+    
+    return tools
