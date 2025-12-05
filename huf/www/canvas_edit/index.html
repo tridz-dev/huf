@@ -1,3 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Editor</title>
+    <!-- Include Frappe Web Bundle for API calls -->
+    <script src="/assets/frappe/dist/js/frappe-web.bundle.js"></script>
+    <script>
+        // Initialize frappe if not already initialized
+        if (!window.frappe) {
+            window.frappe = {};
+        }
+        // Set CSRF token from cookie
+        frappe.csrf_token = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
+    </script>
+</head>
+<body>
    <div class="canvas-editor">
     
         <!-- Header -->
@@ -512,3 +530,5 @@ body {
     }
 })();
 </script>
+</body>
+</html>
