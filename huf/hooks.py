@@ -135,6 +135,9 @@ after_uninstall = "huf.ai.tool_registry.sync_app_tools"
 # permission_query_conditions = {
 # 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
 # }
+permission_query_conditions = {
+    "Agent": "huf.huf.doctype.agent.agent.get_permission_query_conditions",
+}
 #
 # has_permission = {
 # 	"Event": "frappe.desk.doctype.event.event.has_permission",
