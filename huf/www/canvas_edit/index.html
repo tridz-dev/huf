@@ -4,32 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canvas Editor</title>
-    <!-- Include Frappe Web Bundle for API calls -->
-    <script src="/assets/frappe/dist/js/frappe-web.bundle.js" defer></script>
-    <script>
-        // Initialize frappe if not already initialized
-        if (!window.frappe) {
-            window.frappe = {};
-        }
-        
-        // Helper to get CSRF token from cookie
-        function getCSRFToken() {
-            return document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
-        }
-        
-        // Set CSRF token
-        frappe.csrf_token = getCSRFToken();
-        
-        // Wait for frappe-web bundle to load
-        window.addEventListener('load', function() {
-            // Ensure frappe.call is available
-            if (window.frappe && typeof window.frappe.call === 'function') {
-                console.log('Frappe JS loaded successfully');
-            } else {
-                console.warn('Frappe.call not available, falling back to fetch API');
-            }
-        });
-    </script>
 </head>
 <body>
    <div class="canvas-editor">
@@ -378,15 +352,15 @@ body {
         addSystemMessage('Canvas editor ready. Type a message to start editing.');
     }
 
-    // Helper function to make API calls (works with or without frappe.call)
+    // Helper to get CSRF token from cookie
+    function getCSRFToken() {
+        return document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
+    }
+
+    // Helper function to make API calls using fetch
     async function callFrappeMethod(method, args = {}) {
-        // Try using frappe.call if available
-        if (window.frappe && typeof window.frappe.call === 'function') {
-            return await frappe.call({ method, args });
-        }
+        const csrfToken = getCSRFToken();
         
-        // Fallback to fetch API
-        const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
         const response = await fetch('/api/method/' + method, {
             method: 'POST',
             headers: {
@@ -398,7 +372,15 @@ body {
         });
         
         if (!response.ok) {
-            throw new Error(`API call failed: ${response.statusText}`);
+            const errorText = await response.text();
+            let errorMessage = `API call failed: ${response.status} ${response.statusText}`;
+            try {
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.message || errorData.exc || errorMessage;
+            } catch (e) {
+                errorMessage += ` - ${errorText.substring(0, 100)}`;
+            }
+            throw new Error(errorMessage);
         }
         
         const data = await response.json();
