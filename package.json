@@ -5,11 +5,11 @@
     "version": "0.0.1",
     "description": "Messaging Application",
     "main": "index.js",
-    "scripts": {
-      "dev": "cd frontend && yarn dev",
-      "build": "yarn build-docs && yarn build-frontend",
-      "build-docs": "cd docs && yarn install && yarn run build",
-      "build-frontend": "cd frontend && yarn install && yarn build",
-      "postinstall": "cd frontend && yarn install && yarn build"
-    }
+  "scripts": {
+    "dev": "cd frontend && yarn dev",
+    "build": "yarn build-frontend",
+    "build-docs": "cd docs && yarn install && yarn run build",
+    "build-frontend": "cd frontend && yarn install && yarn build",
+    "postinstall": "cd frontend && yarn install && yarn build"
+  }
 }

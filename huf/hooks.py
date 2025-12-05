@@ -61,11 +61,10 @@ website_route_rules = [
     {"from_route": "/huf/docs/<path:path>", "to_route": "huf/docs"},
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
     {"from_route": "/huf/stream", "to_route": "huf/stream"}, 
-    { "from_route": "/canvas/edit/<slug>" , "to_route": "canvas_edit"}
-    }
+    { "from_route": "/canvas/edit/<slug>" , "to_route": "canvas_edit"}    
 ]
 
-]
+
 
 # Register custom page renderer for SSE streaming and docs
 page_renderer = [

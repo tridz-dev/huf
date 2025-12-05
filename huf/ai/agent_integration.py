@@ -23,10 +23,11 @@ from .run import RunProvider
 
 class AgentManager:
     """Manages the creation and execution of agents."""
-    def __init__(self, agent_name, file_handler=None):
+    def __init__(self, agent_name, file_handler=None, context=None):
         self.agent_doc = frappe.get_doc("Agent", agent_name)
         self.settings = frappe.get_doc("AI Provider", self.agent_doc.provider)
         # self.file_handler = file_handler
+        self.context = context or {}
         self.tools = []
         self._setup_client()
         self._setup_tools()
@@ -46,6 +47,19 @@ class AgentManager:
                 f"Error loading Agent Tool Function: {str(e)}",
                 "Agent Tool Function Error",
             )
+        
+        # Inject canvas tools if canvas_slug is in context
+        if self.context.get("canvas_slug"):
+            try:
+                from huf.ai.sdk_tools import create_canvas_tools
+                canvas_tools = create_canvas_tools(canvas_slug=self.context.get("canvas_slug"))
+                if canvas_tools:
+                    self.tools.extend(canvas_tools)
+            except Exception as e:
+                frappe.log_error(
+                    f"Error loading Canvas Tools: {str(e)}",
+                    "Canvas Tools Error",
+                )
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
@@ -297,7 +311,9 @@ def run_agent_sync(
     external_id: str = None,
     conversation_id: str = None,
     parent_run_id: str = None,
-    orchestration_id: str = None
+    orchestration_id: str = None,
+    context: dict = None,
+    persist_conversation: bool = False
 ):
 
     if not agent_name or not prompt:
@@ -312,7 +328,7 @@ def run_agent_sync(
         channel=channel_id,
         external_id=external_id
     )
-    if agent_doc.persist_conversation:
+    if persist_conversation or agent_doc.persist_conversation:
         conversation = conv_manager.get_or_create_conversation(
             title=f"Chat with {agent_name}",
             conversation_id=conversation_id
@@ -381,15 +397,19 @@ def run_agent_sync(
         })
         safe_commit()
 
-        manager = AgentManager(agent_name)
-        agent = manager.create_agent()
-
-        context = {
+        # Merge provided context with default context
+        default_context = {
             "channel": channel_id,
             "external_id": external_id,
             "conversation_history": history,
             "agent_name": agent_name
         }
+        if context:
+            default_context.update(context)
+        context = default_context
+
+        manager = AgentManager(agent_name, context=context)
+        agent = manager.create_agent()
 
         enhanced_prompt = f"""
             Conversation history:
@@ -401,13 +421,7 @@ def run_agent_sync(
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            context = {
-                "channel": channel_id,
-                "external_id": external_id,
-                "conversation_history": history,
-                "agent_name": agent_name
-            }
-            run = RunProvider.run(agent, enhanced_prompt, provider, model,context)
+            run = RunProvider.run(agent, enhanced_prompt, provider, model, context)
 
             result = loop.run_until_complete(run)
         finally:

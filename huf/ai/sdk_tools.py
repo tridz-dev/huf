@@ -1040,13 +1040,26 @@ def handle_speech_to_text(
 
 
 #UNVERIFIED
-def create_canvas_tools():
-    """Create canvas-specific tools"""
+def create_canvas_tools(canvas_slug=None):
+    """Create canvas-specific tools
+    
+    Args:
+        canvas_slug: Canvas slug to use for tool operations. If None, tools will require slug parameter.
+    """
     from huf.ai.canvas_tools import read_canvas_file, write_canvas_files, validate_canvas
     
     tools = []
     
     # Read Canvas File Tool
+    if canvas_slug:
+        # If slug is provided, create closure to capture it
+        def make_read_invoke(slug):
+            return lambda ctx, args: read_canvas_file(slug, args["path"])
+        read_invoke = make_read_invoke(canvas_slug)
+    else:
+        # If no slug, require it as parameter
+        read_invoke = lambda ctx, args: read_canvas_file(args["slug"], args["path"])
+    
     read_tool = FunctionTool(
         name="read_canvas_file",
         description="Read a file from the canvas directory. Use this to view current content before editing.",
@@ -1061,11 +1074,18 @@ def create_canvas_tools():
             },
             "required": ["path"]
         },
-        on_invoke_tool=lambda ctx, args: read_canvas_file(ctx.get("canvas_slug"), args["path"])
+        on_invoke_tool=read_invoke
     )
     tools.append(read_tool)
     
     # Write Canvas Files Tool
+    if canvas_slug:
+        def make_write_invoke(slug):
+            return lambda ctx, args: write_canvas_files(slug, args["files"])
+        write_invoke = make_write_invoke(canvas_slug)
+    else:
+        write_invoke = lambda ctx, args: write_canvas_files(args["slug"], args["files"])
+    
     write_tool = FunctionTool(
         name="write_canvas_files",
         description="Write multiple files to the canvas directory. Use this to update HTML, CSS, JS, Python, or markdown files.",
@@ -1082,11 +1102,18 @@ def create_canvas_tools():
             },
             "required": ["files"]
         },
-        on_invoke_tool=lambda ctx, args: write_canvas_files(ctx.get("canvas_slug"), args["files"])
+        on_invoke_tool=write_invoke
     )
     tools.append(write_tool)
     
     # Validate Canvas Tool
+    if canvas_slug:
+        def make_validate_invoke(slug):
+            return lambda ctx, args: validate_canvas(slug)
+        validate_invoke = make_validate_invoke(canvas_slug)
+    else:
+        validate_invoke = lambda ctx, args: validate_canvas(args["slug"])
+    
     validate_tool = FunctionTool(
         name="validate_canvas",
         description="Validate canvas HTML, CSS, and JavaScript for common errors. Use before writing major changes.",
@@ -1094,7 +1121,7 @@ def create_canvas_tools():
             "type": "object",
             "properties": {}
         },
-        on_invoke_tool=lambda ctx, args: validate_canvas(ctx.get("canvas_slug"))
+        on_invoke_tool=validate_invoke
     )
     tools.append(validate_tool)
     
