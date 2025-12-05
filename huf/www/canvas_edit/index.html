@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canvas Editor</title>
     <script>
-        // Set CSRF token from context
-        window.csrf_token = '{{ csrf_token }}';
+        // Debug: Log cookies on page load
+        console.log('Cookies:', document.cookie);
     </script>
 </head>
 <body>
@@ -356,22 +356,22 @@ body {
         addSystemMessage('Canvas editor ready. Type a message to start editing.');
     }
 
-    // Helper to get CSRF token (from window or cookie fallback)
+    // Helper to get CSRF token from cookies
     function getCSRFToken() {
-        // Try window.csrf_token first (from template)
-        if (window.csrf_token) {
-            return window.csrf_token;
-        }
-        // Fallback to cookie
-        return document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
+        // Get from cookie - Frappe stores it as 'csrf_token'
+        const cookies = document.cookie.split('; ');
+        const csrfCookie = cookies.find(row => row.startsWith('csrf_token='));
+        return csrfCookie ? csrfCookie.split('=')[1] : '';
     }
 
     // Helper function to make API calls using fetch
     async function callFrappeMethod(method, args = {}) {
         const csrfToken = getCSRFToken();
         
+        console.log('CSRF Token:', csrfToken ? 'Found' : 'NOT FOUND');
+        
         if (!csrfToken) {
-            console.warn('No CSRF token found');
+            throw new Error('CSRF token not found. Please ensure you are logged in.');
         }
         
         const response = await fetch('/api/method/' + method, {
@@ -380,7 +380,7 @@ body {
                 'Content-Type': 'application/json',
                 'X-Frappe-CSRF-Token': csrfToken
             },
-            credentials: 'same-origin',
+            credentials: 'include',
             body: JSON.stringify(args)
         });
         
