@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canvas Editor</title>
+    <script>
+        // Set CSRF token from context
+        window.csrf_token = '{{ csrf_token }}';
+    </script>
 </head>
 <body>
    <div class="canvas-editor">
@@ -352,14 +356,23 @@ body {
         addSystemMessage('Canvas editor ready. Type a message to start editing.');
     }
 
-    // Helper to get CSRF token from cookie
+    // Helper to get CSRF token (from window or cookie fallback)
     function getCSRFToken() {
+        // Try window.csrf_token first (from template)
+        if (window.csrf_token) {
+            return window.csrf_token;
+        }
+        // Fallback to cookie
         return document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
     }
 
     // Helper function to make API calls using fetch
     async function callFrappeMethod(method, args = {}) {
         const csrfToken = getCSRFToken();
+        
+        if (!csrfToken) {
+            console.warn('No CSRF token found');
+        }
         
         const response = await fetch('/api/method/' + method, {
             method: 'POST',

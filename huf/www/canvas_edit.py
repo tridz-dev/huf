@@ -33,15 +33,12 @@ def get_context(context):
 		except frappe.DoesNotExistError:
 			pass
 	
-	# Include Frappe web bundle for API calls
-	context.include_frappe_js = True
-	
 	# Add canvas and agent info to context
 	context.canvas_slug = slug
 	context.canvas_title = canvas.title
 	context.agent_name = agent_info.get("name") if agent_info else None
 	
-	# CSRF token for API calls
+	# CSRF token for API calls - must be in context for template
 	context.csrf_token = frappe.sessions.get_csrf_token()
 	
 	return context
