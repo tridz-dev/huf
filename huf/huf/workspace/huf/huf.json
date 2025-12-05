@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"OsSj2RjLVu\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Huf</span>\",\"col\":12}},{\"id\":\"WBFIAvEfIX\",\"type\":\"card\",\"data\":{\"card_name\":\"Get Started\",\"col\":3}},{\"id\":\"bQg_Z1kSdV\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Huf\",\"col\":2}},{\"id\":\"hxcJFCOMcV\",\"type\":\"card\",\"data\":{\"card_name\":\"Interaction\",\"col\":3}},{\"id\":\"RqxcQixz9w\",\"type\":\"card\",\"data\":{\"card_name\":\"Observability & Logs\",\"col\":3}}]",
+ "content": "[{\"id\":\"OsSj2RjLVu\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Huf</span>\",\"col\":12}},{\"id\":\"WBFIAvEfIX\",\"type\":\"card\",\"data\":{\"card_name\":\"Get Started\",\"col\":3}},{\"id\":\"bQg_Z1kSdV\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Huf\",\"col\":2}},{\"id\":\"hxcJFCOMcV\",\"type\":\"card\",\"data\":{\"card_name\":\"Interaction\",\"col\":3}},{\"id\":\"RqxcQixz9w\",\"type\":\"card\",\"data\":{\"card_name\":\"Observability & Logs\",\"col\":3}},{\"id\":\"O8D0p7DZyY\",\"type\":\"card\",\"data\":{\"card_name\":\"Agent Insights\",\"col\":4}}]",
  "creation": "2025-11-04 17:24:07.034098",
  "custom_blocks": [
   {
@@ -80,35 +80,6 @@
   {
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Interaction",
-   "link_count": 2,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Agent Console",
-   "link_count": 0,
-   "link_to": "Agent Console",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Agent Chat",
-   "link_count": 0,
-   "link_to": "Agent Chat",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
    "label": "Observability & Logs",
    "link_count": 4,
    "link_type": "DocType",
@@ -154,9 +125,57 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Interaction",
+   "link_count": 1,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agent Console",
+   "link_count": 0,
+   "link_to": "Agent Console",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Agent Insights",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Agent Run Feedback",
+   "link_count": 0,
+   "link_to": "Agent Run Feedback",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "AI Model Efficiency Analysis",
+   "link_count": 0,
+   "link_to": "AI Model Efficiency Analysis",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
   }
  ],
- "modified": "2025-12-02 12:04:05.391318",
+ "modified": "2025-12-05 11:26:55.771009",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Huf",
