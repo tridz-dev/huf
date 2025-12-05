@@ -38,7 +38,6 @@ def get_context(context):
 	context.canvas_title = canvas.title
 	context.agent_name = agent_info.get("name") if agent_info else None
 	
-	# CSRF token for API calls - must be in context for template
-	context.csrf_token = frappe.sessions.get_csrf_token()
+	# Note: CSRF token is available via {{ frappe.session.csrf_token }} in template
 	
 	return context
