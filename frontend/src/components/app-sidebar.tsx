@@ -44,8 +44,8 @@ const navItems = [
     icon: Database,
   },
   {
-    title: "Integrations",
-    url: "/integrations",
+    title: "AI Providers",
+    url: "/providers",
     icon: Plug,
   },
 ]

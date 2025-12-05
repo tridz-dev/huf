@@ -125,6 +125,18 @@ export async function getProvider(name: string): Promise<AIProviderDoc> {
 }
 
 /**
+ * Create a new AI Provider document
+ */
+export async function createProvider(data: Partial<AIProviderDoc>): Promise<AIProviderDoc> {
+  try {
+    const newProvider = await db.createDoc(doctype['AI Provider'], data);
+    return newProvider as AIProviderDoc;
+  } catch (error) {
+    handleFrappeError(error, 'Error creating provider');
+  }
+}
+
+/**
  * Update an AI Provider document
  */
 export async function updateProvider(name: string, data: Partial<AIProviderDoc>): Promise<AIProviderDoc> {
