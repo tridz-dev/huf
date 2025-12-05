@@ -5,6 +5,7 @@
 tags
 node_modules
 __pycache__
+**/yarn.lock
 
 huf/public/frontend
 huf/public/docs
