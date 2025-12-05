@@ -14,19 +14,25 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PageLayout, FilterBar, GridView } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getProviders, getProvider, updateProvider } from '../services/providerApi';
+import { getProviders, getProvider, updateProvider, createProvider } from '../services/providerApi';
 import { getModels } from '../services/providerApi';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import type { AIProvider, AIModel } from '../types/agent.types';
 
-export function IntegrationsPage() {
+interface IntegrationsPageProps {
+  addProviderKey?: number;
+}
+
+export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
   const [models, setModels] = useState<AIModel[]>([]);
   const [configureModalOpen, setConfigureModalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
+    provider_name: '',
     api_key: '',
     slug: '',
     chef: '',
@@ -41,6 +47,7 @@ export function IntegrationsPage() {
     setSearch,
     loadMore,
     total,
+    reset,
   } = useInfiniteScroll<
     { page?: number; limit?: number; start?: number; search?: string },
     AIProvider
@@ -86,14 +93,36 @@ export function IntegrationsPage() {
     return models.filter(m => m.provider === providerName).length;
   };
 
+  const handleAddProvider = () => {
+    setSelectedProvider(null);
+    setIsEditing(false);
+    setFormData({
+      provider_name: '',
+      api_key: '',
+      slug: '',
+      chef: '',
+    });
+    setConfigureModalOpen(true);
+  };
+
+  // Listen for add provider trigger from header
+  useEffect(() => {
+    if (addProviderKey && addProviderKey > 0) {
+      handleAddProvider();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addProviderKey]);
+
   const handleConfigure = async (provider: AIProvider) => {
     setSelectedProvider(provider);
+    setIsEditing(true);
     setConfigureModalOpen(true);
     setLoadingProvider(true);
     
     try {
       const details = await getProvider(provider.name);
       setFormData({
+        provider_name: details.provider_name || '',
         api_key: details.api_key || '',
         slug: details.slug || '',
         chef: details.chef || '',
@@ -107,20 +136,44 @@ export function IntegrationsPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedProvider) return;
+    // Validate provider name is required
+    if (!isEditing && !formData.provider_name.trim()) {
+      toast.error('Provider name is required');
+      return;
+    }
 
     setSaving(true);
     try {
-      await updateProvider(selectedProvider.name, {
-        api_key: formData.api_key,
-        slug: formData.slug,
-        chef: formData.chef,
-      });
-      toast.success('Provider updated successfully');
+      if (isEditing && selectedProvider) {
+        // Update existing provider
+        await updateProvider(selectedProvider.name, {
+          api_key: formData.api_key,
+          slug: formData.slug,
+          chef: formData.chef,
+        });
+        toast.success('Provider updated successfully');
+      } else {
+        // Create new provider
+        await createProvider({
+          provider_name: formData.provider_name.trim(),
+          api_key: formData.api_key,
+          slug: formData.slug,
+          chef: formData.chef,
+        });
+        toast.success('Provider created successfully');
+      }
       setConfigureModalOpen(false);
-      // Optionally refresh the list
+      // Reset form
+      setFormData({
+        provider_name: '',
+        api_key: '',
+        slug: '',
+        chef: '',
+      });
+      // Refresh the list
+      reset();
     } catch (error) {
-      toast.error('Failed to update provider');
+      toast.error(`Failed to ${isEditing ? 'update' : 'create'} provider`);
       console.error(error);
     } finally {
       setSaving(false);
@@ -129,8 +182,8 @@ export function IntegrationsPage() {
 
   return (
     <PageLayout
-      subtitle="Connect AI providers and external services"
-      filters={
+        subtitle="Connect AI providers and external services"
+        filters={
         <FilterBar
           searchPlaceholder="Search providers..."
           searchValue={search}
@@ -224,10 +277,10 @@ export function IntegrationsPage() {
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto min-h-[500px]">
           <DialogHeader>
             <DialogTitle>
-              Configure {selectedProvider?.provider_name || 'Provider'}
+              {isEditing ? `Configure ${selectedProvider?.provider_name || 'Provider'}` : 'Add Provider'}
             </DialogTitle>
             <DialogDescription>
-              Update provider configuration settings
+              {isEditing ? 'Update provider configuration settings' : 'Create a new AI provider'}
             </DialogDescription>
           </DialogHeader>
 
@@ -237,6 +290,22 @@ export function IntegrationsPage() {
             </div>
           ) : (
             <div className="space-y-4 py-4">
+              {!isEditing && (
+                <div className="space-y-2">
+                  <Label htmlFor="provider_name">
+                    Provider Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="provider_name"
+                    type="text"
+                    placeholder="Enter provider name (e.g., OpenAI, Anthropic)"
+                    value={formData.provider_name}
+                    onChange={(e) => setFormData({ ...formData, provider_name: e.target.value })}
+                    required
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="api_key">API Key</Label>
                 <Input
@@ -287,10 +356,10 @@ export function IntegrationsPage() {
               {saving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
+                  {isEditing ? 'Saving...' : 'Creating...'}
                 </>
               ) : (
-                'Save'
+                isEditing ? 'Save' : 'Create'
               )}
             </Button>
           </DialogFooter>

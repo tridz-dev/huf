@@ -15,7 +15,7 @@ import { AgentFormPageWrapper } from './pages/AgentFormPageWrapper';
 import { FlowListPage } from './pages/FlowListPage';
 import { FlowCanvasPageWrapper } from './pages/FlowCanvasPageWrapper';
 import { DataPage } from './pages/DataPage';
-import { IntegrationsPage } from './pages/IntegrationsPage';
+import { IntegrationsPageWrapper } from './pages/IntegrationsPageWrapper';
 import { ChatPage } from './pages/ChatPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { Toaster } from './components/ui/sonner';
@@ -105,12 +105,10 @@ function App() {
             }
           />
           <Route
-            path="/integrations"
+            path="/providers"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
-                  <IntegrationsPage />
-                </UnifiedLayout>
+                <IntegrationsPageWrapper />
               </ProtectedRoute>
             }
           />
