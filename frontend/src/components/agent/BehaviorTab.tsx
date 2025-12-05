@@ -16,6 +16,7 @@ interface BehaviorTabProps {
 
 export function BehaviorTab({ form, optimizingPrompt, onOptimizePrompt }: BehaviorTabProps) {
   const persistConversationEnabled = form.watch('persist_conversation');
+  const enableMultiRun = form.watch('enable_multi_run');
 
   return (
     <>
@@ -39,7 +40,12 @@ export function BehaviorTab({ form, optimizingPrompt, onOptimizePrompt }: Behavi
                 <FormControl>
                   <Switch
                     checked={field.value}
+                    disabled={enableMultiRun}
                     onCheckedChange={(checked) => {
+                      if (enableMultiRun) {
+                        toast.warning('Chat is not available for multi run agents right now.');
+                        return;
+                      }
                       if (checked && !persistConversationEnabled) {
                         toast.warning('Turn on Persist History before enabling chat.');
                         return;
@@ -109,7 +115,19 @@ export function BehaviorTab({ form, optimizingPrompt, onOptimizePrompt }: Behavi
                   </FormDescription>
                 </div>
                 <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={(checked) => {
+                      field.onChange(checked);
+                      if (checked) {
+                        // Disable chat when multi run is enabled
+                        const currentChatValue = form.getValues('allow_chat');
+                        if (currentChatValue) {
+                          form.setValue('allow_chat', false, { shouldDirty: true });
+                        }
+                      }
+                    }}
+                  />
                 </FormControl>
               </FormItem>
             )}
