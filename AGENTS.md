@@ -368,7 +368,6 @@ Categorization DocType for organizing and grouping agent tools by type or purpos
 **Usage**: Used by `Agent Tool Function` DocType via the `tool_type` link field for categorization and organization. This allows users to group tools by functionality, making it easier to manage large tool libraries.
 
 **Examples**: Tool types might include categories like "Document Operations", "HTTP Requests", "Custom Functions", "App Provided", "Built-in Tools", etc.
-
 ### Core Classes and Methods
 
 The primary logic is located in the `huf/ai` directory.
