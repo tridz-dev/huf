@@ -48,7 +48,7 @@
                 <iframe 
                     id="preview-frame" 
                     title="Canvas Preview"
-                    sandbox="allow-scripts allow-same-origin"
+                    sandbox="allow-scripts"
                 ></iframe>
             </main>
         </div>
@@ -346,51 +346,30 @@ body {
 
     // Load canvas metadata from backend
     async function loadCanvasMetadata() {
-    try {
-        const response = await frappe.call({
-            method: 'huf.ai.canvas_api.get_canvas_metadata',
-            args: { slug: canvasSlug }
-        });
-
-        if (!response.message.success) {
-            throw new Error(response.message.error);
-        }
-
-        canvasData = response.message.canvas;
-        agentData = response.message.agent;
-
-        elements.canvasTitle.textContent = canvasData.title;
-        elements.agentName.textContent = agentData?.name || 'No agent assigned';
-
-        if (!agentData) {
-            addSystemMessage('⚠️ No agent assigned to this canvas. Assign an agent to enable editing.');
-            elements.btnSend.disabled = true;
-        }
-
-    } catch (error) {
-        console.error('Failed to load canvas metadata:', error);
-        showError('Failed to load canvas metadata: ' + error.message);
-    }
-}
         try {
-            // TODO: Implement actual API call
-            // For now, mock data
-            canvasData = {
-                title: 'My Canvas',
-                slug: canvasSlug,
-                agent: 'Canvas Editor Agent'
-            };
+            const response = await frappe.call({
+                method: 'huf.ai.canvas_api.get_canvas_metadata',
+                args: { slug: canvasSlug }
+            });
 
-            agentData = {
-                name: canvasData.agent
-            };
+            if (!response.message.success) {
+                throw new Error(response.message.error);
+            }
+
+            canvasData = response.message.canvas;
+            agentData = response.message.agent;
 
             elements.canvasTitle.textContent = canvasData.title;
-            elements.agentName.textContent = agentData.name || 'No agent assigned';
+            elements.agentName.textContent = agentData?.name || 'No agent assigned';
+
+            if (!agentData) {
+                addSystemMessage('⚠️ No agent assigned to this canvas. Assign an agent to enable editing.');
+                elements.btnSend.disabled = true;
+            }
 
         } catch (error) {
             console.error('Failed to load canvas metadata:', error);
-            showError('Failed to load canvas metadata');
+            showError('Failed to load canvas metadata: ' + error.message);
         }
     }
 
@@ -419,67 +398,56 @@ body {
 
     // Send message to agent
     async function sendMessage() {
-    const prompt = elements.promptInput.value.trim();
-    if (!prompt) return;
-
-    // Add user message to chat
-    addUserMessage(prompt);
-    elements.promptInput.value = '';
-    elements.btnSend.disabled = true;
-
-    try {
-        const response = await frappe.call({
-            method: 'huf.ai.canvas_api.send_canvas_message',
-            args: {
-                slug: canvasSlug,
-                message: prompt
-            }
-        });
-
-        if (!response.message.success) {
-            throw new Error(response.message.error);
-        }
-
-        // Add agent response
-        addAgentMessage(response.message.response);
-
-        // Refresh preview after agent response
-        setTimeout(() => {
-            loadPreview();
-        }, 500);
-
-    } catch (error) {
-        console.error('Failed to send message:', error);
-        addErrorMessage('Failed to communicate with agent: ' + error.message);
-    } finally {
-        elements.btnSend.disabled = false;
-        elements.promptInput.focus();
-    }
-}
         const prompt = elements.promptInput.value.trim();
         if (!prompt) return;
+
+        // Check if agent is assigned
+        if (!agentData) {
+            addErrorMessage('No agent assigned to this canvas. Please assign an agent first.');
+            return;
+        }
 
         // Add user message to chat
         addUserMessage(prompt);
         elements.promptInput.value = '';
         elements.btnSend.disabled = true;
 
-        try {
-            // TODO: Implement actual API call to agent
-            // For now, mock response
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            addAgentMessage('I understand. I will help you edit the canvas.');
+        // Show loading indicator
+        const loadingMessageElement = addSystemMessage('Sending message to agent...');
 
-            // Simulate refresh
+        try {
+            const response = await frappe.call({
+                method: 'huf.ai.canvas_api.send_canvas_message',
+                args: {
+                    slug: canvasSlug,
+                    message: prompt
+                }
+            });
+
+            // Remove loading message
+            if (loadingMessageElement) {
+                loadingMessageElement.remove();
+            }
+
+            if (!response.message.success) {
+                throw new Error(response.message.error || 'Unknown error');
+            }
+
+            // Add agent response
+            const agentResponse = response.message.response || 'Task completed';
+            addAgentMessage(agentResponse);
+
+            // Refresh preview after agent response
             setTimeout(() => {
                 loadPreview();
             }, 500);
 
         } catch (error) {
             console.error('Failed to send message:', error);
-            addErrorMessage('Failed to communicate with agent');
+            addErrorMessage('Failed to communicate with agent: ' + (error.message || error));
         } finally {
             elements.btnSend.disabled = false;
+            elements.promptInput.focus();
         }
     }
 
@@ -522,6 +490,7 @@ body {
         messageDiv.innerHTML = `<p>${escapeHtml(text)}</p>`;
         elements.chatMessages.appendChild(messageDiv);
         elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+        return messageDiv; // Return element for potential removal
     }
 
     // Utility functions

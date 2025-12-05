@@ -85,10 +85,17 @@ Remember to:
 4. Write all changed files in one call if possible
 """
         
+        # Get provider and model from agent
+        agent_doc = frappe.get_doc("Agent", canvas.agent)
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        model_doc = frappe.get_doc("AI Model", agent_doc.model)
+        
         # Call agent
         result = run_agent_sync(
             agent_name=canvas.agent,
             prompt=enhanced_prompt,
+            provider=provider_doc.provide_name,
+            model=model_doc.model_name,
             channel_id=f"canvas:{slug}",
             external_id=frappe.session.user,
             context=context,
