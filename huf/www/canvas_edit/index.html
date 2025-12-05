@@ -5,14 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canvas Editor</title>
     <!-- Include Frappe Web Bundle for API calls -->
-    <script src="/assets/frappe/dist/js/frappe-web.bundle.js"></script>
+    <script src="/assets/frappe/dist/js/frappe-web.bundle.js" defer></script>
     <script>
         // Initialize frappe if not already initialized
         if (!window.frappe) {
             window.frappe = {};
         }
-        // Set CSRF token from cookie
-        frappe.csrf_token = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
+        
+        // Helper to get CSRF token from cookie
+        function getCSRFToken() {
+            return document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
+        }
+        
+        // Set CSRF token
+        frappe.csrf_token = getCSRFToken();
+        
+        // Wait for frappe-web bundle to load
+        window.addEventListener('load', function() {
+            // Ensure frappe.call is available
+            if (window.frappe && typeof window.frappe.call === 'function') {
+                console.log('Frappe JS loaded successfully');
+            } else {
+                console.warn('Frappe.call not available, falling back to fetch API');
+            }
+        });
     </script>
 </head>
 <body>
@@ -362,13 +378,37 @@ body {
         addSystemMessage('Canvas editor ready. Type a message to start editing.');
     }
 
+    // Helper function to make API calls (works with or without frappe.call)
+    async function callFrappeMethod(method, args = {}) {
+        // Try using frappe.call if available
+        if (window.frappe && typeof window.frappe.call === 'function') {
+            return await frappe.call({ method, args });
+        }
+        
+        // Fallback to fetch API
+        const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1] || '';
+        const response = await fetch('/api/method/' + method, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Frappe-CSRF-Token': csrfToken
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(args)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`API call failed: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        return { message: data };
+    }
+
     // Load canvas metadata from backend
     async function loadCanvasMetadata() {
         try {
-            const response = await frappe.call({
-                method: 'huf.ai.canvas_api.get_canvas_metadata',
-                args: { slug: canvasSlug }
-            });
+            const response = await callFrappeMethod('huf.ai.canvas_api.get_canvas_metadata', { slug: canvasSlug });
 
             if (!response.message.success) {
                 throw new Error(response.message.error);
@@ -434,12 +474,9 @@ body {
         const loadingMessageElement = addSystemMessage('Sending message to agent...');
 
         try {
-            const response = await frappe.call({
-                method: 'huf.ai.canvas_api.send_canvas_message',
-                args: {
-                    slug: canvasSlug,
-                    message: prompt
-                }
+            const response = await callFrappeMethod('huf.ai.canvas_api.send_canvas_message', {
+                slug: canvasSlug,
+                message: prompt
             });
 
             // Remove loading message
