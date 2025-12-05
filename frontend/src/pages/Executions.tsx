@@ -57,6 +57,7 @@ export default function Executions() {
         search: params.search,
         status: params.status as any,
         agents: params.agents ? params.agents.split(',').filter(Boolean) : undefined,
+        filters: [["is_child","=","0"]]
       });
 
       if (Array.isArray(response)) {

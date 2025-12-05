@@ -25,6 +25,7 @@ export interface GetAgentRunsParams {
   search?: string;
   status?: 'Started' | 'Queued' | 'Success' | 'Failed' | 'all';
   agents?: string[];
+  filters?: Array<[string, string, unknown]>
 }
 
 /**
@@ -47,7 +48,7 @@ export async function getAgentRuns(
     // Backward compatibility: if no params, return simple array
     if (!params) {
       const runs = await db.getDocList(doctype['Agent Run'], {
-        fields: ['name', 'agent', 'start_time', 'end_time', 'status'],
+        fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child'],
         limit: 1000,
         orderBy: { field: 'creation', order: 'desc' },
       });
@@ -61,6 +62,7 @@ export async function getAgentRuns(
       search,
       status,
       agents,
+      filters:passedFilters
     } = params;
 
     // Build filters
@@ -78,9 +80,13 @@ export async function getAgentRuns(
       filters.push(['agent', 'in', agents]);
     }
 
+    if (passedFilters && passedFilters?.length>0){
+      passedFilters.forEach((fil)=>filters.push(fil))
+    }
+
     // Fetch data
     const runs = await db.getDocList(doctype['Agent Run'], {
-      fields: ['name', 'agent', 'start_time', 'end_time', 'status'],
+      fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child'],
       filters: filters.length > 0 ? (filters as any) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }),

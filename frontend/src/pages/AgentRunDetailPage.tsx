@@ -1,15 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { AgentRunDoc } from '@/services/agentRunApi';
+import { getAgentRuns } from '@/services/agentRunApi';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { getAgentRunStatusVariant } from '@/utils/status';
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+} from '@tanstack/react-table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface AgentRunDetail extends AgentRunDoc {
   prompt?: string;
@@ -36,6 +53,9 @@ export function AgentRunDetailPage() {
   const navigate = useNavigate();
   const [run, setRun] = useState<AgentRunDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [childRuns, setChildRuns] = useState<AgentRunDoc[]>([]);
+  const [loadingChildRuns, setLoadingChildRuns] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   useEffect(() => {
     if (!runId) {
@@ -50,6 +70,135 @@ export function AgentRunDetailPage() {
       setLoading(false);
     })();
   }, [runId]);
+
+  // Fetch child runs when run is loaded
+  useEffect(() => {
+    if (!runId || !run) {
+      return;
+    }
+
+    (async () => {
+      setLoadingChildRuns(true);
+      try {
+        const response = await getAgentRuns({
+          page: 1,
+          limit: 1000,
+          start: 0,
+          filters: [['parent_run', '=', runId]],
+        });
+
+        if (Array.isArray(response)) {
+          setChildRuns(response);
+        } else {
+          setChildRuns(response.items);
+        }
+      } catch (error) {
+        console.error('Error fetching child runs:', error);
+        setChildRuns([]);
+      } finally {
+        setLoadingChildRuns(false);
+      }
+    })();
+  }, [runId, run]);
+
+  // Define table columns for child runs (similar to Executions page)
+  // MUST be called before any early returns to follow Rules of Hooks
+  const columns = useMemo<ColumnDef<AgentRunDoc>[]>(
+    () => [
+      {
+        accessorKey: 'agent',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2"
+            >
+              Agent
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          );
+        },
+        cell: ({ row }) => (
+          <div className="font-medium">{row.getValue('agent') || 'Unknown Agent'}</div>
+        ),
+      },
+      {
+        accessorKey: 'name',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2"
+            >
+              Run ID
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          );
+        },
+        cell: ({ row }) => (
+          <div className="font-mono text-sm text-muted-foreground">{row.getValue('name')}</div>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Status',
+        cell: ({ row }) => {
+          const status = row.getValue('status') as string;
+          return (
+            <Badge variant={getAgentRunStatusVariant(status)}>
+              {status || 'Unknown'}
+            </Badge>
+          );
+        },
+      },
+      {
+        id: 'duration',
+        header: 'Duration',
+        cell: ({ row }) => {
+          const duration = calculateDuration(row.original.start_time ?? null, row.original.end_time ?? null);
+          return <div className="text-sm">{duration}</div>;
+        },
+      },
+      {
+        id: 'started',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2"
+            >
+              Started
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          );
+        },
+        cell: ({ row }) => {
+          const timeAgo = formatTimeAgo(row.original.start_time ?? null);
+          return <div className="text-sm text-muted-foreground">{timeAgo}</div>;
+        },
+        sortingFn: (rowA, rowB) => {
+          const timeA = rowA.original.start_time ? new Date(rowA.original.start_time).getTime() : 0;
+          const timeB = rowB.original.start_time ? new Date(rowB.original.start_time).getTime() : 0;
+          return timeA - timeB;
+        },
+      },
+    ],
+    []
+  );
+
+  const table = useReactTable({
+    data: childRuns,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    onSortingChange: setSorting,
+    state: {
+      sorting,
+    },
+  });
 
   if (loading) {
     return (
@@ -212,6 +361,68 @@ export function AgentRunDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Agent Orchestration Table */}
+        {childRuns.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Agent Orchestration</CardTitle>
+              <CardDescription>
+                Child agent runs executed as part of this orchestration.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingChildRuns ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      {table.getHeaderGroups().map((headerGroup) => (
+                        <TableRow key={headerGroup.id}>
+                          {headerGroup.headers.map((header) => {
+                            return (
+                              <TableHead key={header.id}>
+                                {header.isPlaceholder
+                                  ? null
+                                  : flexRender(header.column.columnDef.header, header.getContext())}
+                              </TableHead>
+                            );
+                          })}
+                        </TableRow>
+                      ))}
+                    </TableHeader>
+                    <TableBody>
+                      {table.getRowModel().rows?.length ? (
+                        table.getRowModel().rows.map((row) => (
+                          <TableRow
+                            key={row.id}
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => navigate(`/executions/${row.original.name}`)}
+                          >
+                            {row.getVisibleCells().map((cell) => (
+                              <TableCell key={cell.id}>
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={columns.length} className="h-24 text-center">
+                            <div className="text-muted-foreground">No child runs found.</div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
