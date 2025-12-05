@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"id\":\"OsSj2RjLVu\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Huf</span>\",\"col\":12}},{\"id\":\"WBFIAvEfIX\",\"type\":\"card\",\"data\":{\"card_name\":\"Get Started\",\"col\":3}},{\"id\":\"bQg_Z1kSdV\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Huf\",\"col\":2}},{\"id\":\"hxcJFCOMcV\",\"type\":\"card\",\"data\":{\"card_name\":\"Interaction\",\"col\":3}},{\"id\":\"RqxcQixz9w\",\"type\":\"card\",\"data\":{\"card_name\":\"Observability & Logs\",\"col\":3}},{\"id\":\"O8D0p7DZyY\",\"type\":\"card\",\"data\":{\"card_name\":\"Agent Insights\",\"col\":4}}]",
+ "content": "[{\"id\":\"OsSj2RjLVu\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">Huf</span>\",\"col\":12}},{\"id\":\"WBFIAvEfIX\",\"type\":\"card\",\"data\":{\"card_name\":\"Get Started\",\"col\":3}},{\"id\":\"bQg_Z1kSdV\",\"type\":\"custom_block\",\"data\":{\"custom_block_name\":\"Huf\",\"col\":2}},{\"id\":\"hxcJFCOMcV\",\"type\":\"card\",\"data\":{\"card_name\":\"Interaction\",\"col\":3}},{\"id\":\"RqxcQixz9w\",\"type\":\"card\",\"data\":{\"card_name\":\"Observability & Logs\",\"col\":3}},{\"id\":\"O8D0p7DZyY\",\"type\":\"card\",\"data\":{\"card_name\":\"Agent Insights\",\"col\":4}},{\"id\":\"ZAUsZPDRrx\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"zh-OV2O1d5\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total Agent Runs\",\"col\":4}},{\"id\":\"CYiCJMdU9j\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Success Rate\",\"col\":4}},{\"id\":\"mKxGF_NPDz\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Total Cost\",\"col\":4}},{\"id\":\"9T5qPu72tF\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Average Runtime(Minutes)\",\"col\":4}}]",
  "creation": "2025-11-04 17:24:07.034098",
  "custom_blocks": [
   {
@@ -175,11 +175,28 @@
    "type": "Link"
   }
  ],
- "modified": "2025-12-05 11:26:55.771009",
+ "modified": "2025-12-05 18:33:24.033003",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Huf",
- "number_cards": [],
+ "number_cards": [
+  {
+   "label": "Total Agent Runs",
+   "number_card_name": "Total Agent Runs"
+  },
+  {
+   "label": "Average Runtime(Minutes)",
+   "number_card_name": "Average Time"
+  },
+  {
+   "label": "Success Rate",
+   "number_card_name": "Success Rate"
+  },
+  {
+   "label": "Total Cost",
+   "number_card_name": "Total Cost"
+  }
+ ],
  "owner": "Administrator",
  "parent_page": "",
  "public": 1,
