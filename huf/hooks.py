@@ -60,7 +60,11 @@ website_route_rules = [
     {"from_route": "/huf/docs", "to_route": "huf/docs"},
     {"from_route": "/huf/docs/<path:path>", "to_route": "huf/docs"},
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
-    {"from_route": "/huf/stream", "to_route": "huf/stream"}
+    {"from_route": "/huf/stream", "to_route": "huf/stream"}, 
+    { "from_route": "/canvas/edit/<slug>" , "to_route": "canvas_edit"}
+    }
+]
+
 ]
 
 # Register custom page renderer for SSE streaming and docs
@@ -174,6 +178,10 @@ doc_events = {
         "on_update": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
         "on_trash": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
     },
+    "Canvas": {
+        "after_insert": "huf.huf.doctype.canvas.canvas.after_insert",
+        "on_update": "huf.huf.doctype.canvas.canvas.on_update"
+    }
 }
 
 # Scheduled Tasks
