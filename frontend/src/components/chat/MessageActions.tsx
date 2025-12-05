@@ -12,7 +12,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
 import { CopyButton } from './CopyButton';
 
 interface MessageActionsProps {
@@ -28,11 +27,7 @@ export function MessageActions({ content, agentMessageId, onFeedback }: MessageA
 
   const handleSubmitComment = () => {
     const trimmed = commentText.trim();
-    if (!trimmed) {
-      toast.warning('Please add a comment to submit thumbs down feedback.');
-      return;
-    }
-    onFeedback('Thumbs Down', { agentMessageId, comments: trimmed });
+    onFeedback('Thumbs Down', { agentMessageId, comments: trimmed || ""});
     setCommentText('');
     setCommentDialogOpen(false);
   };
