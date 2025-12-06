@@ -341,7 +341,8 @@ body {
         }
 
         canvasSlug = matches[1];
-        elements.canvasSlug.textContent = `(${canvasSlug})`;
+        // Don't show slug in UI - keep title clean
+        // elements.canvasSlug.textContent = `(${canvasSlug})`;
 
         // Load canvas metadata
         await loadCanvasMetadata();
@@ -412,7 +413,8 @@ body {
             canvasData = data.canvas;
             agentData = data.agent;
 
-            elements.canvasTitle.textContent = canvasData.title;
+            // Keep static "Huf CoPilot (beta)" title
+            // elements.canvasTitle.textContent = canvasData.title;
             
             // Check if agent is assigned in canvas data
             if (canvasData.agent) {
