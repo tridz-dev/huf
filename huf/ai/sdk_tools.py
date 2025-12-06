@@ -1056,9 +1056,18 @@ def handle_read_canvas_file(slug: str, path: str, **kwargs):
     frappe.logger().info(f"[Canvas Tool] handle_read_canvas_file result: {result.get('success')}")
     return result
 
-def handle_write_canvas_files(slug: str, files: list, **kwargs):
+def handle_write_canvas_files(slug: str, files, **kwargs):
     """Write multiple files to canvas directory"""
     from huf.ai.canvas_tools import write_canvas_files
+    import json
+    
+    # Parse files if it's a JSON string
+    if isinstance(files, str):
+        try:
+            files = json.loads(files)
+        except:
+            pass
+    
     frappe.logger().info(f"[Canvas Tool] handle_write_canvas_files called: slug={slug}, files={files}")
     result = write_canvas_files(slug, files)
     frappe.logger().info(f"[Canvas Tool] handle_write_canvas_files result: {result.get('success')}")
