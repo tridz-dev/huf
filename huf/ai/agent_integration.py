@@ -55,6 +55,8 @@ class AgentManager:
                 canvas_tools = create_canvas_tools(canvas_slug=self.context.get("canvas_slug"))
                 if canvas_tools:
                     self.tools.extend(canvas_tools)
+                    frappe.logger().info(f"Canvas tools loaded: {len(canvas_tools)} tools for slug '{self.context.get('canvas_slug')}'")
+                    frappe.logger().info(f"Tool names: {[t.name for t in canvas_tools]}")
             except Exception as e:
                 frappe.log_error(
                     f"Error loading Canvas Tools: {str(e)}",

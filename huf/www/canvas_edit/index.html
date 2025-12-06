@@ -399,18 +399,28 @@ body {
     async function loadCanvasMetadata() {
         try {
             const response = await callFrappeMethod('huf.ai.canvas_api.get_canvas_metadata', { slug: canvasSlug });
+            
+            console.log('Canvas metadata response:', response);
 
-            if (!response.message.success) {
-                throw new Error(response.message.error);
+            // Frappe wraps response in .message
+            const data = response.message.message || response.message;
+            
+            if (!data || !data.success) {
+                throw new Error(data?.error || 'Unknown error loading canvas metadata');
             }
 
-            canvasData = response.message.canvas;
-            agentData = response.message.agent;
+            canvasData = data.canvas;
+            agentData = data.agent;
 
             elements.canvasTitle.textContent = canvasData.title;
-            elements.agentName.textContent = agentData?.name || 'No agent assigned';
-
-            if (!agentData) {
+            
+            // Check if agent is assigned in canvas data
+            if (canvasData.agent) {
+                elements.agentName.textContent = agentData?.name || canvasData.agent;
+                // Enable send button even if agent details not found, as long as agent name exists
+                elements.btnSend.disabled = false;
+            } else {
+                elements.agentName.textContent = 'No agent assigned';
                 addSystemMessage('⚠️ No agent assigned to this canvas. Assign an agent to enable editing.');
                 elements.btnSend.disabled = true;
             }
@@ -474,12 +484,15 @@ body {
                 loadingMessageElement.remove();
             }
 
-            if (!response.message.success) {
-                throw new Error(response.message.error || 'Unknown error');
+            // Frappe wraps response in .message
+            const data = response.message.message || response.message;
+            
+            if (!data || !data.success) {
+                throw new Error(data?.error || 'Unknown error sending message');
             }
 
             // Add agent response
-            const agentResponse = response.message.response || 'Task completed';
+            const agentResponse = data.response || 'Task completed';
             addAgentMessage(agentResponse);
 
             // Refresh preview after agent response

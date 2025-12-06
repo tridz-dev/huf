@@ -78,6 +78,12 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_run_agent"
                     elif function_doc.types == "Attach File to Document":
                         function_path = "huf.ai.sdk_tools.handle_attach_file_to_document"
+                    elif function_doc.types == "Read Canvas File":
+                        function_path = "huf.ai.sdk_tools.handle_read_canvas_file"
+                    elif function_doc.types == "Write Canvas Files":
+                        function_path = "huf.ai.sdk_tools.handle_write_canvas_files"
+                    elif function_doc.types == "Validate Canvas":
+                        function_path = "huf.ai.sdk_tools.handle_validate_canvas"
                     elif function_doc.types == "Speech to Text":
                         function_path = "huf.ai.sdk_tools.handle_speech_to_text"
 
@@ -1037,6 +1043,34 @@ def handle_speech_to_text(
         frappe.log_error(f"Speech to Text error: {frappe.get_traceback()}", "SpeechToText")
         return {"success": False, "error": str(e)}
 
+
+# ============================================================================
+# Canvas Tool Handlers (Built-in)
+# ============================================================================
+
+def handle_read_canvas_file(slug: str, path: str, **kwargs):
+    """Read a file from canvas directory"""
+    from huf.ai.canvas_tools import read_canvas_file
+    frappe.logger().info(f"[Canvas Tool] handle_read_canvas_file called: slug={slug}, path={path}")
+    result = read_canvas_file(slug, path)
+    frappe.logger().info(f"[Canvas Tool] handle_read_canvas_file result: {result.get('success')}")
+    return result
+
+def handle_write_canvas_files(slug: str, files: list, **kwargs):
+    """Write multiple files to canvas directory"""
+    from huf.ai.canvas_tools import write_canvas_files
+    frappe.logger().info(f"[Canvas Tool] handle_write_canvas_files called: slug={slug}, files={files}")
+    result = write_canvas_files(slug, files)
+    frappe.logger().info(f"[Canvas Tool] handle_write_canvas_files result: {result.get('success')}")
+    return result
+
+def handle_validate_canvas(slug: str, **kwargs):
+    """Validate canvas files"""
+    from huf.ai.canvas_tools import validate_canvas
+    frappe.logger().info(f"[Canvas Tool] handle_validate_canvas called: slug={slug}")
+    result = validate_canvas(slug)
+    frappe.logger().info(f"[Canvas Tool] handle_validate_canvas result: {result.get('success')}")
+    return result
 
 
 #UNVERIFIED
