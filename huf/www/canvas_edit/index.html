@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canvas Editor</title>
+    <title>Huf CoPilot (beta)</title>
     <script>
         // Set CSRF token from Frappe session
         window.csrf_token = '{{ frappe.session.csrf_token }}';
@@ -15,7 +15,7 @@
         <!-- Header -->
         <header class="canvas-header">
             <div class="canvas-title">
-                <h1 id="canvas-title">Canvas Editor</h1>
+                <h1 id="canvas-title">Huf CoPilot (beta)</h1>
                 <span id="canvas-slug" class="canvas-slug"></span>
             </div>
             <div class="canvas-actions">
@@ -443,6 +443,7 @@ body {
         elements.btnSend.addEventListener('click', sendMessage);
         elements.promptInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault(); // Prevent newline
                 sendMessage();
             }
         });
