@@ -34,7 +34,10 @@ class AgentToolFunction(Document):
 				"Get Report Result",
 				"Attach File to Document",
 				"App Provided",
-				"Speech to Text"
+				"Speech to Text",
+				"Read Canvas File",
+				"Write Canvas Files",
+				"Validate Canvas"
 			]:
 				frappe.throw(_("Please select a DocType for this function."))
 

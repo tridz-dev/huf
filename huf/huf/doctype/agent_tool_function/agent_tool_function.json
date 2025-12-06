@@ -50,7 +50,7 @@
    "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent\nSpeech to Text\nRead Canvas File\nWrite Canvas Files\nValidate Canvas"
   },
   {
-   "depends_on": "eval:doc.types != 'Run Agent' && doc.types != 'App Provided' && doc.types != 'Custom Function' && doc.types != 'Speech to Text'",
+   "depends_on": "eval:doc.types != 'Run Agent' && doc.types != 'App Provided' && doc.types != 'Custom Function' && doc.types != 'Speech to Text' && doc.types != 'Read Canvas File' && doc.types != 'Write Canvas Files' && doc.types != 'Validate Canvas'",
    "fieldname": "reference_doctype",
    "fieldtype": "Link",
    "label": "Reference DocType",
