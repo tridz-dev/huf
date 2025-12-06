@@ -16,7 +16,7 @@
         <header class="canvas-header">
             <div class="canvas-title">
                 <h1 id="canvas-title">Huf CoPilot (beta)</h1>
-                <span id="canvas-slug" class="canvas-slug"></span>
+                <span id="canvas-subtitle" class="canvas-subtitle"></span>
             </div>
             <div class="canvas-actions">
                 <button id="btn-save" class="btn btn-primary" style="display:none;">Save</button>
@@ -105,10 +105,12 @@ body {
     margin: 0;
 }
 
-.canvas-slug {
-    font-size: 0.875rem;
-    color: #6c757d;
-    margin-left: 0.5rem;
+.canvas-subtitle {
+    display: block;
+    font-size: 0.75rem;
+    color: #95a5a6;
+    font-weight: 400;
+    margin-top: 0.25rem;
 }
 
 .canvas-actions {
@@ -319,7 +321,7 @@ body {
     // DOM Elements
     const elements = {
         canvasTitle: document.getElementById('canvas-title'),
-        canvasSlug: document.getElementById('canvas-slug'),
+        canvasSubtitle: document.getElementById('canvas-subtitle'),
         agentName: document.getElementById('agent-name'),
         chatMessages: document.getElementById('chat-messages'),
         promptInput: document.getElementById('prompt-input'),
@@ -341,8 +343,6 @@ body {
         }
 
         canvasSlug = matches[1];
-        // Don't show slug in UI - keep title clean
-        // elements.canvasSlug.textContent = `(${canvasSlug})`;
 
         // Load canvas metadata
         await loadCanvasMetadata();
@@ -413,8 +413,8 @@ body {
             canvasData = data.canvas;
             agentData = data.agent;
 
-            // Keep static "Huf CoPilot (beta)" title
-            // elements.canvasTitle.textContent = canvasData.title;
+            // Show canvas name as subtitle
+            elements.canvasSubtitle.textContent = `Editing: ${canvasData.title || canvasSlug}`;
             
             // Check if agent is assigned in canvas data
             if (canvasData.agent) {
