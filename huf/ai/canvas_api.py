@@ -115,8 +115,8 @@ IMPORTANT: Use your tools immediately. Do not explain what you will do - just do
         frappe.logger().info(f"Canvas API - Agent: {agent_name}, Provider: {provider_doc.provide_name}, Model: {model_doc.model_name}")
         
         # DEBUG: Check what tools the agent has
-        agent_tools = frappe.get_all("Agent Tool", filters={"parent": agent_name}, fields=["tool_function"])
-        frappe.logger().info(f"Canvas API - Agent tools from DB: {[t.tool_function for t in agent_tools]}")
+        agent_tools = frappe.get_all("Agent Tool", filters={"parent": agent_name}, fields=["tool"])
+        frappe.logger().info(f"Canvas API - Agent tools from DB: {[t.tool for t in agent_tools]}")
         
         # Call agent
         result = run_agent_sync(
