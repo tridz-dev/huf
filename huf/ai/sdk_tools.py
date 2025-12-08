@@ -558,7 +558,7 @@ def handle_delete_document(document_id=None, reference_doctype=None):
 
 
 def handle_get_list(
-	filters=None, fields=None, limit=20, order_by="modified desc", reference_doctype=None
+	filters=None, fields=None, limit=0, order_by="modified desc", reference_doctype=None
 ):
 	"""
 	Get a list of documents from a doctype
@@ -640,12 +640,13 @@ def handle_get_list(
 				filter_warning = f"Filter fields {', '.join(invalid_filter_fields)} do not exist in DocType '{reference_doctype}' and were ignored."
 				warning = f"{warning}\n{filter_warning}" if warning else filter_warning
 
+		page_length = limit if limit and int(limit) > 0 else None
 
 		result = frappe.get_all(
 			reference_doctype,
 			filters=filters,
 			fields=filtered_fields,
-			limit_page_length=limit,
+			limit_page_length=page_length,
 			order_by=order_by,
 		)
 
