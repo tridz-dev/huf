@@ -221,27 +221,37 @@ class AgentToolFunction(Document):
 			else:
 				params = self.get_params_as_dict()
 		elif self.types == "Get List":
+			
+			filter_properties = {}
+			for param in self.parameters:
+				filter_properties[param.fieldname] = {
+					"type": param.type,
+					"description": param.label or f"Filter by {param.fieldname}"
+				}
+
 			params = {
 				"type": "object",
 				"properties": {
 					"filters": {
 						"type": "object",
-						"description": "Filters to apply when retrieving the list",
+						"description": "Dictionary of filters. Example: {'status': 'New', 'first_name': 'John Doe'}.",
+						"properties": filter_properties, 
+						"additionalProperties": True 
 					},
 					"fields": {
 						"type": "array",
 						"items": {"type": "string"},
-						"description": "Fields to retrieve for each document",
+						"description": "List of fields to retrieve.",
 					},
 					"limit": {
 						"type": "integer",
-						"description": "Maximum number of documents to retrieve",
-						"default": 20,
+						"description": "Max records to return. Set to 0 to fetch ALL records.",
+						"default": 0,
 					},
 				},
 				"additionalProperties": False,
 			}
-			params["required"] = list(params["properties"].keys())
+			params["required"] = []
 
 		elif self.types == "Get Value":
 			params = {
