@@ -6,6 +6,21 @@ frappe.ui.form.on('Agent Tool Function', {
 		if (frm.doc.reference_doctype) {
 			_update_field_options(frm);
 		}
+		if (frm.doc.types === "Custom Function" && frm.doc.function_path) {
+            frm.add_custom_button(__('Fetch Params from Code'), function() {
+                frappe.call({
+                    doc: frm.doc,
+                    method: 'fetch_parameters_from_code',
+                    freeze: true,
+                    callback: function(r) {
+                        if (!r.exc) {
+                            frm.reload_doc();
+                            frappe.msgprint(__("Parameters updated from function signature."));
+                        }
+                    }
+                });
+            });
+        }
 	},
 
 	reference_doctype(frm) {

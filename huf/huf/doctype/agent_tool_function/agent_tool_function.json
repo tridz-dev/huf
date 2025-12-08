@@ -62,6 +62,7 @@
    "label": "Parameters"
   },
   {
+   "allow_bulk_edit": 1,
    "fieldname": "parameters",
    "fieldtype": "Table",
    "label": "Parameters",
@@ -135,7 +136,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-03 15:11:10.107074",
+ "modified": "2025-12-08 11:00:31.833795",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Function",
