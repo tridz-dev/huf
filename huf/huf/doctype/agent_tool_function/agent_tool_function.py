@@ -8,6 +8,10 @@ from frappe import _, is_whitelisted
 
 from frappe.model.document import Document
 
+import inspect 
+
+import typing
+
 import re
 
 class AgentToolFunction(Document):
@@ -32,6 +36,7 @@ class AgentToolFunction(Document):
 				"Custom Function",
 				"Send Message",
 				"Get Report Result",
+				"Run Agent",
 				"Attach File to Document",
 				"App Provided",
 				"Speech to Text"
@@ -211,7 +216,10 @@ class AgentToolFunction(Document):
 			}
 
 		elif self.types == "Custom Function":
-			params = self.get_params_as_dict()
+			if self.pass_parameters_as_json:
+				params = self.build_params_json_from_table()
+			else:
+				params = self.get_params_as_dict()
 		elif self.types == "Get List":
 			params = {
 				"type": "object",
@@ -466,8 +474,13 @@ class AgentToolFunction(Document):
 					child_tables[param.child_table_name]["items"]["required"].append(param.fieldname)
 
 		for child_table_name, child_table in child_tables.items():
-			doctype_meta = frappe.get_meta(self.reference_doctype)
-			table_field = doctype_meta.get_field(child_table_name)
+		
+			if self.reference_doctype:
+				try:
+					doctype_meta = frappe.get_meta(self.reference_doctype)
+					table_field = doctype_meta.get_field(child_table_name)
+				except Exception:
+					pass 
 			
 			properties[child_table_name] = child_table
 
@@ -573,3 +586,50 @@ class AgentToolFunction(Document):
 		if isinstance(self.params, str):
 			return json.loads(self.params)
 		return {}
+
+	@frappe.whitelist()
+	def fetch_parameters_from_code(self):
+		"""
+		Inspects the function at function_path and populates the parameters table.
+		"""
+		if not self.function_path:
+			frappe.throw(_("Please provide a Function Path first."))
+
+		try:
+			func = frappe.get_attr(self.function_path)
+		except Exception as e:
+			frappe.throw(_("Could not find function at {0}: {1}").format(self.function_path, str(e)))
+
+		sig = inspect.signature(func)
+		self.set("parameters", [])
+
+		for name, param in sig.parameters.items():
+			if name in ["self", "cls"]:
+				continue
+			
+			param_type = "string"
+			if param.annotation != inspect.Parameter.empty:
+				if param.annotation == int:
+					param_type = "integer"
+				elif param.annotation == bool:
+					param_type = "boolean"
+				elif param.annotation == float:
+					param_type = "number"
+				elif param.annotation == dict or param.annotation == typing.Dict:
+					param_type = "object"
+				elif param.annotation == list or param.annotation == typing.List:
+					param_type = "array"
+			
+			reqd = 1
+			if param.default != inspect.Parameter.empty:
+				reqd = 0
+
+			self.append("parameters", {
+				"fieldname": name,
+				"label": name.replace("_", " ").title(),
+				"type": param_type,
+				"required": reqd,
+			})
+		self.pass_parameters_as_json = 1
+		self.save()
+		return _("Parameters fetched successfully.")
