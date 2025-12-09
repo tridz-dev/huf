@@ -458,6 +458,13 @@ class AgentToolFunction(Document):
 				"description": param.label,
 			}
 
+			# Explicitly allow any keys/values for object types
+			if param.type == "object":
+				obj["additionalProperties"] = True
+
+			if param.type == "array":
+				obj["items"] = {"type": "string"}
+
 			if param.type == "string" and param.options:
 				obj["enum"] = param.options.split("\n")
 
@@ -491,7 +498,7 @@ class AgentToolFunction(Document):
 					table_field = doctype_meta.get_field(child_table_name)
 				except Exception:
 					pass 
-			
+
 			properties[child_table_name] = child_table
 
 		if self.types == "Create Multiple Documents" or self.types == "Update Multiple Documents":
