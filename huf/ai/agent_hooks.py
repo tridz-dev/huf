@@ -1,9 +1,10 @@
 import frappe
 from frappe.utils.background_jobs import enqueue
 from .agent_integration import run_agent_sync
-from frappe.utils.safe_exec import get_safe_globals,safe_eval
+from frappe.utils.safe_exec import get_safe_globals, safe_eval
 from uuid import uuid4
 from frappe.utils import now_datetime
+import json
 
 CACHE_KEY = "huf:doc_event_agents"
 
@@ -24,7 +25,7 @@ def get_doc_event_agents(event: str):
             "disabled": 0,
             "doc_event": event
         },
-        fields=["name", "agent", "reference_doctype", "doc_event", "condition"]
+        fields=["name", "agent", "reference_doctype", "doc_event", "condition", "prompt_field"] 
     )
 
     result = []
@@ -37,6 +38,7 @@ def get_doc_event_agents(event: str):
                 "reference_doctype": t.get("reference_doctype"),
                 "doc_event": t.get("doc_event"),
                 "condition": t.get("condition"),
+                "prompt_field": t.get("prompt_field"), 
                 "instructions": getattr(agent_doc, "instructions", None),
                 "provider": getattr(agent_doc, "provider", None),
                 "model": getattr(agent_doc, "model", None),
@@ -97,14 +99,17 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
             model=agent.get("model"),
             include_doc=False,
             initiating_user=frappe.session.user,
-            channel_id="doc_event" 
+            channel_id="doc_event",
+            prompt_field=agent.get("prompt_field") 
         )
 
 
-def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model,include_doc=False, initiating_user=None, channel_id=None):
+def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model, include_doc=False, initiating_user=None, channel_id=None, prompt_field=None):
     """Background worker to run an agent when a Doc Event triggers"""
 
-    #Add logic to inlude/not include full doctype data dict. If not, only name will be passed. 
+    custom_instruction = None
+    if prompt_field:
+        custom_instruction = doc.get(prompt_field)
 
     try:
         prompt = f"""
@@ -115,20 +120,41 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
             Use the available tools with these exact identifiers:
             reference_doctype = "{doc.get('doctype')}"
             reference_name   = "{doc.get('name')}"
+        """
 
+        # Logic: If the mapped field has text, use it as the PRIMARY instruction.
+        if custom_instruction:
+            prompt += f"""
+            
+            USER REQUEST:
+            The user has provided the following specific request for this document:
+            "{custom_instruction}"
+            
+            Please prioritize this request over your general instructions.
+            """
+        else:
+            prompt += f"""
+            
             Instructions:
             {instructions or "Perform the required action for this event."}
         """
-        # if include_doc:
-        #     doc_data = doc.as_dict()
-        #     json_string = json.dumps(doc_data, indent=2, default=str)
-        #     prompt += f"""
+
+        try:
+            clean_doc = doc.copy() if isinstance(doc, dict) else doc.as_dict()
+            for key in ["_user_tags", "_comments", "_assign", "_liked_by", "docstatus", "password"]:
+                clean_doc.pop(key, None)
             
-        # Document Data (JSON):
-        # ```json
-        #     {json_string}
-        # ```
-        # """
+            json_string = json.dumps(clean_doc, indent=2, default=str)
+            prompt += f"""
+            
+            Document Data (Context):
+            ```json
+            {json_string}
+            ```
+            """
+        except Exception:
+            pass
+
         external_id = None
         channel = channel_id or "doc_event"
 
