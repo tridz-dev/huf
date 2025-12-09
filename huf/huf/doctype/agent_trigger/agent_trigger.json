@@ -16,13 +16,14 @@
   "doc_event",
   "scheduled_interval",
   "next_execution",
+  "condition",
   "event_name",
   "webhook_slug",
   "column_break_hz7t",
   "reference_doctype",
+  "prompt_field",
   "interval_count",
   "last_execution",
-  "condition",
   "webhook_key",
   "app_name",
   "section_break_qam6",
@@ -173,12 +174,19 @@
   {
    "fieldname": "section_break_qam6",
    "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "description": "Enter the fieldname from the Reference DocType that contains the user's instructions.",
+   "fieldname": "prompt_field",
+   "fieldtype": "Select",
+   "label": "Prompt Field"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-11-05 16:55:00.008101",
+ "modified": "2025-12-09 19:09:53.068722",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Trigger",
