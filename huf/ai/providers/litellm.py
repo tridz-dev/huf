@@ -73,8 +73,9 @@ def _normalize_model_name(model: str, provider: str) -> str:
     provider_prefix_map = {
         "openai": "openai",
         "anthropic": "anthropic",
-        "google": "google",
-        "gemini": "google",  # Alias
+        "google": "gemini",
+        "gemini": "gemini",
+        "deepSeek": "deepSeek",
         "openrouter": "openrouter",
         "xai": "xai",  # Grok
         "grok": "xai",  # Alias
@@ -100,6 +101,7 @@ def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
     env_var_providers = {
         "openrouter": "OPENROUTER_API_KEY",
         "xai": "XAI_API_KEY",  # Grok
+        "deepseek": "DEEPSEEK_API_KEY",
         "mistral": "MISTRAL_API_KEY",
         "dashscope": "DASHSCOPE_API_KEY",  # Alibaba
         "google": "GEMINI_API_KEY",  # Alternative to api_key param
