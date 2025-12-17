@@ -23,6 +23,7 @@ import re
 import hashlib
 from datetime import datetime, timedelta
 
+from huf.ai.provider_tool_handler import execute_provider_tool
 
 def create_agent_tools(agent) -> list[FunctionTool]:
     """
@@ -78,8 +79,6 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_run_agent"
                     elif function_doc.types == "Attach File to Document":
                         function_path = "huf.ai.sdk_tools.handle_attach_file_to_document"
-                    elif function_doc.types == "Speech to Text":
-                        function_path = "huf.ai.sdk_tools.handle_speech_to_text"
 
                     else:
                         continue
@@ -127,10 +126,49 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     "SDK Functions Debug",
                     f"Error processing function {func.tool}: {str(e)}"
                 )
+    if agent.provider:
+        # Fetch tools for this provider, excluding STT (since STT is UI driven)
+        provider_tools = frappe.get_all("AI Provider Tool", 
+            filters={
+                "provider": agent.provider, 
+                "enabled": 1,
+                "provider_tool_type": ["!=", "Speech to Text"]
+            },
+            fields=["name", "provider_tool_name", "provider_tool_type", "static_params"]
+        )
+
+        for pt in provider_tools:
+            tools.append(_create_dynamic_tool(pt))
 
     return tools
 
 
+def _create_dynamic_tool(tool_doc):
+    """Internal helper to wrap a Provider Tool as a FunctionTool"""
+    async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
+        try:
+            args = json.loads(args_json or "{}")
+            res = execute_provider_tool(tool_name=tool_doc.name, kwargs=args)
+            return json.dumps(res.get("result", res))
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    # Simple prompt schema
+    schema = {
+        "type": "object", 
+        "properties": {
+            "prompt": {"type": "string", "description": "The input/prompt for the tool"}
+        }
+    }
+    
+    from agents import FunctionTool 
+    safe_name = tool_doc.provider_tool_name.lower().replace(" ", "_")
+    return FunctionTool(
+        name=safe_name,
+        description=f"Tool for {tool_doc.provider_tool_type}",
+        params_json_schema=schema,
+        on_invoke_tool=on_invoke_tool
+    )
 
 def create_function_tool(
     name: str,
@@ -948,92 +986,58 @@ def handle_speech_to_text(
     the audio is fetched directly (and can be saved back to a File doc if you want).
     """
     try:
+        if not file_id:
+             return {"success": False, "error": "File ID is required."}
 
-        if not api_key and provider:
-            try:
-                prov_doc = frappe.get_doc("AI Provider", provider)
-                api_key = prov_doc.get_password("api_key")
-            except Exception:
-                pass
-        if not api_key:
-            return {"success": False, "error": "No API key provided or configured for provider."}
+        if not provider and conversation:
+            conv_doc = frappe.get_doc("Agent Conversation", conversation)
+            if conv_doc.agent:
+                provider = frappe.db.get_value("Agent", conv_doc.agent, "provider")
 
+        if not provider:
+            return {"success": False, "error": "Provider could not be determined."}
 
-        audio_bytes, file_name = None, None
-        file_doc = None
+        file_doc = frappe.get_doc("File", file_id)
 
-        if file_id:
-            file_doc = frappe.get_doc("File", file_id)
-            audio_bytes, file_name = _read_file_bytes_from_file_doc(file_doc)
-        elif file_url:
-            r = requests.get(file_url, timeout=120)
-            r.raise_for_status()
-            audio_bytes = r.content
-            file_name = file_url.rsplit("/", 1)[-1] or "audio.wav"
-        else:
-            return {"success": False, "error": "file_id or file_url is required."}
+        response = execute_provider_tool(
+            provider=provider,
+            tool_type="Speech to Text",
+            file_doc=file_doc,
+            kwargs=kwargs
+        )
 
-        if not audio_bytes:
-            return {"success": False, "error": "Could not read audio bytes."}
+        if not response:
+            return {"success": False, "error": f"No 'Speech to Text' tool configured for provider {provider}."}
+        
+        if not response.get("success"):
+            return response
 
+        text = response.get("result") or "(empty transcript)"
+        
+        if not isinstance(text, str): 
+            text = json.dumps(text)
 
-        transcribe_url = "https://api.openai.com/v1/audio/transcriptions"
-        files = {"file": (file_name or "audio.wav", io.BytesIO(audio_bytes))}
-        data = {"model": model}
-        if language:
-            data["language"] = language
-        if translate:
-            data["task"] = "translate"
-
-        headers = {"Authorization": f"Bearer {api_key}"}
-        http_resp = requests.post(transcribe_url, headers=headers, files=files, data=data, timeout=180)
-        http_resp.raise_for_status()
-
-        result_json = http_resp.json()  
-        text = (result_json.get("text") or result_json.get("transcript") or "").strip()
-
-
-        saved_file_id = file_id
-        if not file_doc and reference_doctype and document_id:
-            saved_file = save_file(
-                file_name or "audio.wav",
-                audio_bytes,
-                reference_doctype,   
-                document_id,         
-                is_private=False
-            )
-            saved_file_id = getattr(saved_file, "name", None) or (saved_file.get("name") if isinstance(saved_file, dict) else None)
-
-        final_message_id = message_id
         if message_id:
-            frappe.db.set_value("Agent Message", message_id, "content", text or "(empty transcript)", update_modified=True)
+            frappe.db.set_value("Agent Message", message_id, "content", text, update_modified=True)
         elif conversation:
-            msg = frappe.get_doc({
+            # Create new message if one wasn't passed
+            new_msg = frappe.get_doc({
                 "doctype": "Agent Message",
                 "conversation": conversation,
                 "role": "user",
-                "content": text or "(empty transcript)",
-                "user": frappe.session.user if hasattr(frappe, "session") else None
+                "content": text,
+                "user": frappe.session.user
             })
-            msg.insert(ignore_permissions=True)
-            final_message_id = msg.name
+            new_msg.insert(ignore_permissions=True)
+            message_id = new_msg.name
 
         return {
             "success": True,
             "text": text,
-            "file_id": saved_file_id or file_id,
-            "message_id": final_message_id,
-            "raw_result": result_json,
+            "file_id": file_id,
+            "message_id": message_id
         }
 
-    except requests.HTTPError as e:
-        detail = ""
-        try:
-            detail = e.response.text
-        except Exception:
-            pass
-        frappe.log_error(f"Speech to Text HTTPError: {str(e)} | {detail}", "SpeechToText")
-        return {"success": False, "error": f"Transcriptions API failed: {str(e)}"}
     except Exception as e:
-        frappe.log_error(f"Speech to Text error: {frappe.get_traceback()}", "SpeechToText")
+        frappe.log_error(f"STT Error: {frappe.get_traceback()}", "STT Debug")
         return {"success": False, "error": str(e)}
