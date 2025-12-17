@@ -1,0 +1,129 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:provider_tool_name",
+ "creation": "2025-12-15 12:58:42.295299",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "provider_tool_name",
+  "provider",
+  "api_url",
+  "method",
+  "auth_type",
+  "file_param",
+  "static_params",
+  "column_break_husm",
+  "model",
+  "provider_tool_type",
+  "enabled",
+  "api_key",
+  "response_path",
+  "param_schema"
+ ],
+ "fields": [
+  {
+   "fieldname": "provider_tool_name",
+   "fieldtype": "Data",
+   "label": "Provider Tool Name",
+   "unique": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "label": "Provider",
+   "options": "AI Provider"
+  },
+  {
+   "fieldname": "provider_tool_type",
+   "fieldtype": "Select",
+   "label": "Provider Tool Type",
+   "options": "\nSpeech to Text\nText to Speech\nImage Generation\nImage Analysis (Vision)\nText Embedding\nContent Moderation\nVideo Generation\nDocument OCR\nTranslation\nObject Detection"
+  },
+  {
+   "default": "0",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "api_url",
+   "fieldtype": "Data",
+   "label": "API URL"
+  },
+  {
+   "fieldname": "method",
+   "fieldtype": "Select",
+   "label": "Method",
+   "options": "POST\nGET"
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key",
+   "length": 200
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "fieldname": "file_param",
+   "fieldtype": "Data",
+   "label": "File Param"
+  },
+  {
+   "fieldname": "response_path",
+   "fieldtype": "Data",
+   "label": "Response Path"
+  },
+  {
+   "fieldname": "static_params",
+   "fieldtype": "Code",
+   "label": "Static Params"
+  },
+  {
+   "fieldname": "param_schema",
+   "fieldtype": "Code",
+   "label": "Param Schema"
+  },
+  {
+   "fieldname": "auth_type",
+   "fieldtype": "Select",
+   "label": "Auth Type",
+   "options": "Bearer Token\nAPI Key Header\nNone"
+  },
+  {
+   "fieldname": "column_break_husm",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-12-17 11:54:09.458966",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "AI Provider Tool",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
