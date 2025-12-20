@@ -23,7 +23,6 @@ import re
 import hashlib
 from datetime import datetime, timedelta
 
-from huf.ai.provider_tool_handler import execute_provider_tool
 
 def create_agent_tools(agent) -> list[FunctionTool]:
     """
@@ -126,49 +125,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     "SDK Functions Debug",
                     f"Error processing function {func.tool}: {str(e)}"
                 )
-    if agent.provider:
-        # Fetch tools for this provider, excluding STT (since STT is UI driven)
-        provider_tools = frappe.get_all("AI Provider Tool", 
-            filters={
-                "provider": agent.provider, 
-                "enabled": 1,
-                "provider_tool_type": ["!=", "Speech to Text"]
-            },
-            fields=["name", "provider_tool_name", "provider_tool_type", "static_params"]
-        )
-
-        for pt in provider_tools:
-            tools.append(_create_dynamic_tool(pt))
 
     return tools
-
-
-def _create_dynamic_tool(tool_doc):
-    """Internal helper to wrap a Provider Tool as a FunctionTool"""
-    async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
-        try:
-            args = json.loads(args_json or "{}")
-            res = execute_provider_tool(tool_name=tool_doc.name, kwargs=args)
-            return json.dumps(res.get("result", res))
-        except Exception as e:
-            return json.dumps({"error": str(e)})
-
-    # Simple prompt schema
-    schema = {
-        "type": "object", 
-        "properties": {
-            "prompt": {"type": "string", "description": "The input/prompt for the tool"}
-        }
-    }
-    
-    from agents import FunctionTool 
-    safe_name = tool_doc.provider_tool_name.lower().replace(" ", "_")
-    return FunctionTool(
-        name=safe_name,
-        description=f"Tool for {tool_doc.provider_tool_type}",
-        params_json_schema=schema,
-        on_invoke_tool=on_invoke_tool
-    )
 
 def create_function_tool(
     name: str,
@@ -963,81 +921,3 @@ def _read_file_bytes_from_file_doc(file_doc):
         return resp.content, file_doc.file_name
     except Exception:
         return None, None
-
-def handle_speech_to_text(
-    file_id: str = None,
-    file_url: str = None,
-    language: str = None,
-    translate: bool = False,
-    model: str = "whisper-1",
-    provider: str = None,
-    api_key: str = None,
-    conversation: str = None,
-    reference_doctype: str = None,
-    document_id: str = None,
-    message_id: str = None,
-    **kwargs
-):
-    """
-    Transcribe audio via OpenAI Whisper API and store result as Agent Message + File.
-
-    If `message_id` is provided, update that Agent Message's `content`; else create a new
-    user message in `conversation`. If `file_id` is missing but `file_url` is provided,
-    the audio is fetched directly (and can be saved back to a File doc if you want).
-    """
-    try:
-        if not file_id:
-             return {"success": False, "error": "File ID is required."}
-
-        if not provider and conversation:
-            conv_doc = frappe.get_doc("Agent Conversation", conversation)
-            if conv_doc.agent:
-                provider = frappe.db.get_value("Agent", conv_doc.agent, "provider")
-
-        if not provider:
-            return {"success": False, "error": "Provider could not be determined."}
-
-        file_doc = frappe.get_doc("File", file_id)
-
-        response = execute_provider_tool(
-            provider=provider,
-            tool_type="Speech to Text",
-            file_doc=file_doc,
-            kwargs=kwargs
-        )
-
-        if not response:
-            return {"success": False, "error": f"No 'Speech to Text' tool configured for provider {provider}."}
-        
-        if not response.get("success"):
-            return response
-
-        text = response.get("result") or "(empty transcript)"
-        
-        if not isinstance(text, str): 
-            text = json.dumps(text)
-
-        if message_id:
-            frappe.db.set_value("Agent Message", message_id, "content", text, update_modified=True)
-        elif conversation:
-            # Create new message if one wasn't passed
-            new_msg = frappe.get_doc({
-                "doctype": "Agent Message",
-                "conversation": conversation,
-                "role": "user",
-                "content": text,
-                "user": frappe.session.user
-            })
-            new_msg.insert(ignore_permissions=True)
-            message_id = new_msg.name
-
-        return {
-            "success": True,
-            "text": text,
-            "file_id": file_id,
-            "message_id": message_id
-        }
-
-    except Exception as e:
-        frappe.log_error(f"STT Error: {frappe.get_traceback()}", "STT Debug")
-        return {"success": False, "error": str(e)}
