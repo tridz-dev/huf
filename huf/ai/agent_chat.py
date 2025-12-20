@@ -6,6 +6,8 @@ from huf.ai.conversation_manager import ConversationManager
 import base64
 from frappe.utils.file_manager import save_file
 from huf.ai import sdk_tools
+from huf.ai import transcription_handler
+
 
 @frappe.whitelist()
 def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
@@ -67,7 +69,7 @@ def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
 
     provider = frappe.db.get_value("Agent", chat.agent, "provider")
     
-    res = sdk_tools.handle_speech_to_text(
+    res = transcription_handler.handle_speech_to_text(
         file_id=file_id,
         provider=provider,
         conversation=conversation or chat.conversation,
