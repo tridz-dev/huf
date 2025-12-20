@@ -1,0 +1,106 @@
+{
+ "actions": [],
+ "creation": "2025-12-19 12:01:34.206725",
+ "default_view": "List",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "transcription_settings_tab",
+  "provider",
+  "api_url",
+  "auth_type",
+  "file_param",
+  "enabled",
+  "column_break_husm",
+  "model",
+  "method",
+  "api_key",
+  "response_path"
+ ],
+ "fields": [
+  {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "label": "Provider",
+   "options": "AI Provider"
+  },
+  {
+   "fieldname": "api_url",
+   "fieldtype": "Data",
+   "label": "API URL"
+  },
+  {
+   "fieldname": "method",
+   "fieldtype": "Select",
+   "label": "Method",
+   "options": "POST\nGET"
+  },
+  {
+   "fieldname": "auth_type",
+   "fieldtype": "Select",
+   "label": "Auth Type",
+   "options": "Bearer Token\nAPI Key Header\nNone"
+  },
+  {
+   "fieldname": "file_param",
+   "fieldtype": "Data",
+   "label": "File Param"
+  },
+  {
+   "fieldname": "column_break_husm",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key",
+   "length": 200
+  },
+  {
+   "fieldname": "response_path",
+   "fieldtype": "Data",
+   "label": "Response Path"
+  },
+  {
+   "fieldname": "transcription_settings_tab",
+   "fieldtype": "Tab Break",
+   "label": "Transcription Settings"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2025-12-19 19:36:21.901588",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "OpenAI Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
