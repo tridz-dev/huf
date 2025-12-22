@@ -61,6 +61,7 @@
    "label": "Enabled"
   },
   {
+   "fetch_from": "provider.api_key",
    "fieldname": "api_key",
    "fieldtype": "Password",
    "label": "API Key",
@@ -81,7 +82,7 @@
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-12-19 19:36:00.395199",
+ "modified": "2025-12-22 11:16:45.497691",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Groq Settings",
