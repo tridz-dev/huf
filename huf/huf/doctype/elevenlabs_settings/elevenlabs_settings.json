@@ -6,7 +6,9 @@
  "field_order": [
   "provider",
   "agent_id",
-  "api_key"
+  "api_key",
+  "webhook_settings_tab",
+  "webhook_secret"
  ],
  "fields": [
   {
@@ -15,6 +17,7 @@
    "label": "Agent ID"
   },
   {
+   "fetch_from": "provider.api_key",
    "fieldname": "api_key",
    "fieldtype": "Password",
    "label": "API Key",
@@ -25,13 +28,24 @@
    "fieldtype": "Link",
    "label": "Provider",
    "options": "AI Provider"
+  },
+  {
+   "fieldname": "webhook_settings_tab",
+   "fieldtype": "Tab Break",
+   "label": "Webhook settings"
+  },
+  {
+   "fieldname": "webhook_secret",
+   "fieldtype": "Password",
+   "label": "webhook_secret",
+   "length": 200
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-12-19 18:56:59.837182",
+ "modified": "2025-12-22 13:02:53.723806",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Elevenlabs Settings",
