@@ -20,6 +20,7 @@
   "start_time",
   "input_tokens",
   "cost",
+  "call_recording",
   "column_break_qy3x",
   "model",
   "end_time",
@@ -173,12 +174,18 @@
    "label": "Agent Orchestration",
    "options": "Agent Orchestration",
    "read_only": 1
+  },
+  {
+   "fieldname": "call_recording",
+   "fieldtype": "Attach",
+   "label": "Call Recording",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-04 19:58:13.346966",
+ "modified": "2025-12-22 17:05:43.046424",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",
