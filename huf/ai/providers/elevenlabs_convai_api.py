@@ -19,9 +19,9 @@ def _get_settings():
         frappe.throw(f"{SETTINGS_DOCTYPE} DocType not found", frappe.ValidationError)
 
     settings = frappe.get_single(SETTINGS_DOCTYPE)
-
+    provider = frappe.get_doc("AI Provider", settings.provider)
+    api_key = provider.get_password("api_key")
     agent_id = settings.agent_id
-    api_key = settings.get_password("api_key")
 
     return agent_id, api_key
 
@@ -95,7 +95,8 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
     el_settings = frappe.get_single("Elevenlabs Settings")
 
     secret = el_settings.get_password("webhook_secret")
-    api_key = el_settings.get_password("api_key")
+    provider = frappe.get_doc("AI Provider", el_settings.provider)
+    api_key = provider.get_password("api_key")
     stored_agent_id = el_settings.agent_id
 
     if not secret:
