@@ -139,8 +139,7 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
             "Huf Webhook",
         )
         return {"status": "error", "message": "Agent ID mismatch"}
-
-    agent_name = frappe.db.get_value("Agent", {"provider": "ElevenLabs"}, "name")
+    agent_name = frappe.db.get_value("Agent", {"provider": provider.name}, "name")
     model = frappe.db.get_value("Agent", agent_name, "model")
 
     if not agent_name:
@@ -180,7 +179,7 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
             "start_time": start_time,
             "prompt": "Voice Call Initiated",
             "response": analysis.get("transcript_summary", "Voice call completed."),
-            "provider": "ElevenLabs",
+            "provider": provider.name,
             "model": model,
             "total_cost": metadata.get("cost", 0),
         }
@@ -220,7 +219,7 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
                 conversation=conversation,
                 role=role,
                 content=msg_content,
-                provider="ElevenLabs",
+                provider=provider.name,
                 model=model,
                 agent=agent_name,
                 run_name=run_doc.name,
