@@ -2,6 +2,8 @@
 sidebarTitle: Introduction
 ---
 
+import Link from 'next/link'
+
 <div style={{
   maxWidth: '1200px',
   margin: '0 auto',
@@ -27,7 +29,7 @@ sidebarTitle: Introduction
   flexWrap: 'wrap',
   marginBottom: '4rem'
 }}>
-  <a href="/docs/quick-start" style={{
+  <Link href="/docs/quick-start" style={{
     display: 'inline-flex',
     alignItems: 'center',
     padding: '0.75rem 1.5rem',
@@ -39,7 +41,7 @@ sidebarTitle: Introduction
     transition: 'opacity 0.2s'
   }} onMouseOver="this.style.opacity='0.9'" onMouseOut="this.style.opacity='1'">
     Read Documentation →
-  </a>
+  </Link>
   <a href="https://github.com/tridz-dev/agent_flo" target="_blank" rel="noreferrer" style={{
     display: 'inline-flex',
     alignItems: 'center',
@@ -65,83 +67,101 @@ sidebarTitle: Introduction
   marginBottom: '4rem'
 }}>
 
-<div style={{
+<Link href="/docs/quick-start" style={{
+  display: 'block',
   padding: '1.5rem',
   border: '1px solid var(--nextra-border-color)',
   borderRadius: '0.75rem',
   transition: 'all 0.2s',
-  cursor: 'pointer'
-}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/quick-start'">
+  cursor: 'pointer',
+  textDecoration: 'none',
+  color: 'inherit'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
   <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Quick Start</h3>
   <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
     Create your first agent in 5 minutes. Perfect for getting started.
   </p>
-</div>
+</Link>
 
-<div style={{
+<Link href="/docs/concepts/agents" style={{
+  display: 'block',
   padding: '1.5rem',
   border: '1px solid var(--nextra-border-color)',
   borderRadius: '0.75rem',
   transition: 'all 0.2s',
-  cursor: 'pointer'
-}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/concepts/agents'">
+  cursor: 'pointer',
+  textDecoration: 'none',
+  color: 'inherit'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
   <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Core Concepts</h3>
   <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
     Learn about agents, tools, triggers, and how everything works together.
   </p>
-</div>
+</Link>
 
-<div style={{
+<Link href="/docs/examples" style={{
+  display: 'block',
   padding: '1.5rem',
   border: '1px solid var(--nextra-border-color)',
   borderRadius: '0.75rem',
   transition: 'all 0.2s',
-  cursor: 'pointer'
-}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/examples'">
+  cursor: 'pointer',
+  textDecoration: 'none',
+  color: 'inherit'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
   <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Examples</h3>
   <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
     See real-world agent configurations and use cases in action.
   </p>
-</div>
+</Link>
 
-<div style={{
+<Link href="/docs/tools/built-in" style={{
+  display: 'block',
   padding: '1.5rem',
   border: '1px solid var(--nextra-border-color)',
   borderRadius: '0.75rem',
   transition: 'all 0.2s',
-  cursor: 'pointer'
-}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/tools/built-in'">
+  cursor: 'pointer',
+  textDecoration: 'none',
+  color: 'inherit'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
   <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Tools</h3>
   <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
     Explore built-in tools and learn how to create custom capabilities.
   </p>
-</div>
+</Link>
 
-<div style={{
+<Link href="/docs/guides/creating-agents" style={{
+  display: 'block',
   padding: '1.5rem',
   border: '1px solid var(--nextra-border-color)',
   borderRadius: '0.75rem',
   transition: 'all 0.2s',
-  cursor: 'pointer'
-}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/guides/creating-agents'">
+  cursor: 'pointer',
+  textDecoration: 'none',
+  color: 'inherit'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
   <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Guides</h3>
   <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
     Step-by-step guides for creating, managing, and running agents.
   </p>
-</div>
+</Link>
 
-<div style={{
+<Link href="/docs/development" style={{
+  display: 'block',
   padding: '1.5rem',
   border: '1px solid var(--nextra-border-color)',
   borderRadius: '0.75rem',
   transition: 'all 0.2s',
-  cursor: 'pointer'
-}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'" onClick="window.location.href='/docs/development'">
+  cursor: 'pointer',
+  textDecoration: 'none',
+  color: 'inherit'
+}} onMouseOver="this.style.borderColor='#2563eb'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onMouseOut="this.style.borderColor='#e5e7eb'; this.style.boxShadow='none'">
   <h3 style={{ marginTop: '0', marginBottom: '0.5rem' }}>Development</h3>
   <p style={{ margin: 0, color: 'var(--nextra-text-color)', opacity: 0.8 }}>
     Extend Huf with custom tools, providers, and integrations.
   </p>
-</div>
+</Link>
 
 </div>
 
@@ -381,7 +401,7 @@ sidebarTitle: Introduction
   <p style={{ marginBottom: '1.5rem', color: 'var(--nextra-text-color)', opacity: 0.8 }}>
     Follow our Quick Start guide and have your first AI agent running in under 5 minutes.
   </p>
-  <a href="/docs/quick-start" style={{
+  <Link href="/docs/quick-start" style={{
     display: 'inline-flex',
     alignItems: 'center',
     padding: '0.75rem 1.5rem',
@@ -393,7 +413,7 @@ sidebarTitle: Introduction
     transition: 'opacity 0.2s'
   }} onMouseOver="this.style.opacity='0.9'" onMouseOut="this.style.opacity='1'">
     Start Quick Start Guide →
-  </a>
+  </Link>
 </div>
 
 </div>

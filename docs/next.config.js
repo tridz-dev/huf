@@ -18,7 +18,7 @@ const withNextra = nextra({})
 // }
 
 // LOCAL_SERVE=true disables basePath/assetPrefix for direct serving of out folder
-const isLocalServe = process.env.LOCAL_SERVE === 'true'
+const isLocalServe = process.env.LOCAL_SERVE === 'true' || process.env.NODE_ENV === 'development'
 
 const basePath = isLocalServe
   ? ''
