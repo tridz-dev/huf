@@ -23,7 +23,7 @@ const isLocalServe = process.env.LOCAL_SERVE === 'true'
 const basePath = isLocalServe
   ? ''
   : process.env.GITHUB_PAGES === 'true' 
-    ?''
+    ? ''
     : '/huf/docs'
 
 // For Frappe, assets are served from /assets/huf/docs but pages are at /huf/docs
@@ -33,7 +33,7 @@ const assetPrefix = isLocalServe
   ? undefined
   : process.env.GITHUB_PAGES === 'true'
     ? undefined
-    : '/assets/huf/docs'
+    : '/assets/huf/'
 
 export default withNextra({
   output: 'export',
