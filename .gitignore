@@ -15,3 +15,6 @@ docs/.next
 docs/out
 docs/node_modules
 docs/yarn.lock
+
+huf/public/_next
+huf/www/huf/docs

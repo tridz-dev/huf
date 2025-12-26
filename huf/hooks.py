@@ -58,7 +58,10 @@ app_license = "agpl"
 website_route_rules = [
     # Docs routes must come before the catch-all /huf route
     {"from_route": "/huf/docs", "to_route": "huf/docs"},
-    {"from_route": "/huf/docs/<path:path>", "to_route": "huf/docs"},
+    {
+        "from_route": "/huf/docs/<path:app_path>", 
+        "to_route": "huf/docs/<path:app_path>"
+    },
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
     {"from_route": "/huf/stream", "to_route": "huf/stream"}
 ]

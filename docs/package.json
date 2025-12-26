@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "postbuild": "npx pagefind --site out --output-subdir _pagefind",
-    "build": "next build && npx pagefind --site out --output-subdir _pagefind && rm -rf ../huf/public/docs && mkdir -p ../huf/public/docs && cp -r out/* ../huf/public/docs/ && (echo '{% raw %}'; cat ../huf/public/docs/index.html; echo '{% endraw %}') > ../huf/www/docs.html",
+    "build": "next build && npx pagefind --site out --output-subdir _pagefind && rm -rf ../huf/public/_next && mkdir -p ../huf/public/_next && cp -r out/_next/* ../huf/public/_next/ && rm -rf ../huf/www/huf/docs && mkdir -p ../huf/www/huf/docs && cp -r out/* ../huf/www/huf/docs/ && (echo '{% raw %}'; cat ../huf/www/huf/docs/index.html; echo '{% endraw %}') > ../huf/www/docs.html",
     "build:local": "LOCAL_SERVE=true next build && npx pagefind --site out --output-subdir _pagefind",
     "build:pages": "GITHUB_PAGES=true next build && npx pagefind --site out --output-subdir _pagefind",
     "start": "next start"
