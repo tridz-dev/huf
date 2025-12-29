@@ -100,9 +100,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     if function_doc.types == "Attach File to Document":
                         if function_doc.reference_doctype:
                             extra_args["reference_doctype"] = function_doc.reference_doctype
-                        
-                        for param in function_doc.parameters:
-                            extra_args[param.fieldname] = True
+
                     elif (
                         function_doc.types
                         in [
@@ -888,44 +886,29 @@ def handle_run_agent(agent_name: str, prompt: str):
         frappe.log_error("Run Agent Tool Error", str(e))
         return {"success": False, "error": str(e)}
 
-def handle_attach_file_to_document(reference_doctype, document_id,file_path=None, file_url=None, **kwargs):
+def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
     """
     SDK handler that wraps attach_file_to_document.
-    Accepts dynamic kwargs and forwards them to core function.
     """
-    final_path = file_url or file_path
-
-    if not reference_doctype or not document_id or not final_path:
+    if not reference_doctype or not document_id:
         return {
             "success": False,
-            "error": "reference_doctype, document_id and file_url/file_path are required"
+            "error": "reference_doctype and document_id are required"
         }
 
     normalized_kwargs = {}
     for k, v in (kwargs or {}).items():
+        if k in ["file_path", "file_url"]:
+            normalized_kwargs[k] = v
+            continue
+            
         if isinstance(v, str):
-            low = v.lower().strip()
-            if low in ("true", "1", "yes"):
-                normalized_kwargs[k] = True
-                continue
-            if low in ("false", "0", "no"):
-                normalized_kwargs[k] = False
-                continue
-            try:
-                parsed = json.loads(v)
-                normalized_kwargs[k] = parsed
-                continue
-            except Exception:
-                normalized_kwargs[k] = v
-                continue
-        else:
             normalized_kwargs[k] = v
 
     try:
         result = attach_file_to_document(
             reference_doctype,
             document_id,
-            final_path,
             **normalized_kwargs,
         )
         return {"success": True, "result": result}

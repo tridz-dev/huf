@@ -195,16 +195,23 @@ class AgentToolFunction(Document):
                 "document_id": {
                     "type": "string",
                     "description": "The ID of the document."
-                },
-                "file_url": {
-                    "type": "string",
-                    "description": "The URL/path of the existing file."
                 }
             }
+			if self.parameters:
+				for param in self.parameters:
+					properties[param.fieldname] = {
+						"type": "string",
+						"description": f"File URL/Path for field '{param.label or param.fieldname}'"
+					}
+			else:
+				properties["file_url"] = {
+					"type": "string",
+					"description": "The URL/path of the file to attach."
+				}
 			params = {
                 "type": "object",
                 "properties": properties,
-                "required": ["document_id", "file_url"],
+                "required": ["document_id"],
                 "additionalProperties": False,
             }
 
