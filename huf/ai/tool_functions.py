@@ -1,5 +1,10 @@
 import frappe
 from frappe import _, client
+from frappe.utils.file_manager import save_file
+import os
+from urllib.parse import urlparse
+import requests
+
 
 
 def get_document(doctype: str, document_id: str):
@@ -216,39 +221,6 @@ def get_amended_document(doctype: str, document_id: str):
         return client.get(doctype, name=amended_name)
     return {"message": f"{doctype} {document_id} is not amended", "doctype": doctype}
 
-
-def attach_file_to_document(doctype: str, document_id: str, file_path: str):
-	"""
-	Attach a file to a document in the database
-	"""
-	if not frappe.db.exists(doctype, document_id):
-		return {
-			"document_id": document_id,
-			"message": f"{doctype} with ID {document_id} not found",
-			"doctype": doctype,
-		}
-
-	file = frappe.get_doc("File", {"file_url": file_path})
-
-	if not file:
-		frappe.throw(_("File not found"))
-
-	newFile = frappe.get_doc(
-		{
-			"doctype": "File",
-			"file_url": file_path,
-			"attached_to_doctype": doctype,
-			"attached_to_name": document_id,
-			"folder": file.folder,
-			"file_name": file.file_name,
-			"is_private": file.is_private,
-		}
-	)
-	newFile.insert()
-
-	return {"document_id": document_id, "message": "File attached", "file_id": newFile.name}
-
-
 def get_list(doctype: str, filters: dict = None, fields: list = None, limit: int = 20):
 	"""
 	Get a list of documents from the database
@@ -374,3 +346,137 @@ def attach_file_to_document(doctype: str, document_id: str, file_path: str):
     newFile.insert()
 
     return {"document_id": document_id, "message": "File attached", "file_id": newFile.name}
+
+def _download_content(url: str, timeout: int = 30) -> bytes:
+    """Download bytes from an http/https url."""
+
+    resp = requests.get(url, timeout=timeout)
+    resp.raise_for_status()
+    return resp.content
+
+
+def _create_file_doc_for_local_path(file_url: str, file_name: str):
+    """Create a File doc referencing an existing /files/ path."""
+    file_doc = frappe.get_doc(
+        {
+            "doctype": "File",
+            "file_name": file_name,
+            "file_url": file_url,
+            "is_private": 0,
+        }
+    )
+    file_doc.insert()
+    return file_doc
+
+
+def _get_existing_file_by_url(file_url: str):
+    """Return File doc if a File with file_url exists."""
+    name = frappe.db.get_value("File", {"file_url": file_url}, "name")
+    if name:
+        return frappe.get_doc("File", name)
+    return None
+
+
+def attach_file_to_document(doctype: str, document_id: str, file_path: str, **kwargs):
+    if not frappe.db.exists(doctype, document_id):
+        return {"success": False, "error": f"{doctype} {document_id} not found", "document_id": document_id}
+
+    try:
+        doc = frappe.get_doc(doctype, document_id)
+        if not frappe.has_permission(doctype, ptype="write", doc=doc):
+            return {"success": False, "error": "No write permission on target document", "document_id": document_id}
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "attach_file_to_document: permission/doc fetch failed")
+        return {"success": False, "error": str(e)}
+
+    try:
+        file_doc = _get_existing_file_by_url(file_path)
+        if file_doc is None:
+            if file_path.startswith("http://") or file_path.startswith("https://"):
+                content = _download_content(file_path)
+                filename = os.path.basename(urlparse(file_path).path) or "downloaded_file"
+                saved = save_file(filename, content, doctype=None, docname=None, is_private=False)
+                if isinstance(saved, frappe._dict) or isinstance(saved, dict):
+                    file_doc = frappe.get_doc("File", saved.get("name"))
+                else:
+                    file_doc = saved
+            else:
+                filename = os.path.basename(file_path)
+                file_doc = _create_file_doc_for_local_path(file_path, filename)
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "attach_file_to_document: resolve/create file failed")
+        return {"success": False, "error": str(e), "document_id": document_id}
+
+    file_url = getattr(file_doc, "file_url", None)
+    if not file_url:
+        file_url = getattr(file_doc, "file_name", file_path)
+
+    try:
+        attached_name = frappe.db.get_value(
+            "File",
+            {
+                "attached_to_doctype": doctype,
+                "attached_to_name": document_id,
+                "file_url": file_url,
+            },
+            "name",
+        )
+        if attached_name:
+            attached_file = frappe.get_doc("File", attached_name)
+        else:
+            attached_file = frappe.get_doc(
+                {
+                    "doctype": "File",
+                    "file_url": file_url,
+                    "attached_to_doctype": doctype,
+                    "attached_to_name": document_id,
+                    "file_name": getattr(file_doc, "file_name", os.path.basename(file_url)),
+                    "is_private": getattr(file_doc, "is_private", 0),
+                }
+            )
+            attached_file.insert(ignore_permissions=True)
+            
+        clean_file_url = attached_file.file_url
+        if not clean_file_url and attached_file.file_name:
+             clean_file_url = f"/files/{attached_file.file_name}"
+            
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "attach_file_to_document: attach file failed")
+        return {"success": False, "error": str(e), "document_id": document_id}
+
+    try:
+        meta = frappe.get_meta(doctype)
+        updates = {}
+        for fieldname, value in kwargs.items():
+            if meta.has_field(fieldname):
+                if value is True:
+                    updates[fieldname] = clean_file_url
+                else:
+                    updates[fieldname] = value
+
+        if not updates and meta.has_field("image"):
+            updates["image"] = clean_file_url
+
+        if updates:
+            frappe.db.set_value(doctype, document_id, updates)
+            frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "attach_file_to_document: updating fields failed")
+        return {
+            "success": True,
+            "document_id": document_id,
+            "message": "File attached (field update failed)",
+            "file_id": attached_file.name,
+            "file_url": file_url,
+            "updated_fields": [],
+            "error": str(e),
+        }
+
+    return {
+        "success": True,
+        "document_id": document_id,
+        "message": "File attached",
+        "file_id": attached_file.name,
+        "file_url": file_url,
+        "updated_fields": list(updates.keys()) if "updates" in locals() else [],
+    }

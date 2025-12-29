@@ -191,29 +191,22 @@ class AgentToolFunction(Document):
 			}
 
 		elif self.types == "Attach File to Document":
+			properties = {
+                "document_id": {
+                    "type": "string",
+                    "description": "The ID of the document."
+                },
+                "file_url": {
+                    "type": "string",
+                    "description": "The URL/path of the existing file."
+                }
+            }
 			params = {
-				"type": "object",
-				"properties": {
-					"reference_doctype": {
-						"type": "string",
-						"description": "The DocType of the document to attach the file to (e.g. Lead, Customer).",
-					},
-					"document_id": {
-						"type": "string",
-						"description": "The ID (name) of the document to attach the file to (e.g. CRM-LEAD-2025-00016).",
-					},
-					"file_url": {
-						"type": "string",
-						"description": "The URL/path of an existing file (e.g. /files/Sanju.jpg)."
-					},
-					"file_id": {
-						"type": "string",
-						"description": "The File document name if already uploaded (optional)."
-					}
-				},
-				"required": ["reference_doctype", "document_id"],
-				"additionalProperties": False,
-			}
+                "type": "object",
+                "properties": properties,
+                "required": ["document_id", "file_url"],
+                "additionalProperties": False,
+            }
 
 		elif self.types == "Custom Function":
 			if self.pass_parameters_as_json:

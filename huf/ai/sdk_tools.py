@@ -97,7 +97,13 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         del params["additionalProperties"]
 
                     extra_args = {}
-                    if (
+                    if function_doc.types == "Attach File to Document":
+                        if function_doc.reference_doctype:
+                            extra_args["reference_doctype"] = function_doc.reference_doctype
+                        
+                        for param in function_doc.parameters:
+                            extra_args[param.fieldname] = True
+                    elif (
                         function_doc.types
                         in [
                             "Get Document", "Get Multiple Documents", "Get List",
@@ -882,42 +888,48 @@ def handle_run_agent(agent_name: str, prompt: str):
         frappe.log_error("Run Agent Tool Error", str(e))
         return {"success": False, "error": str(e)}
 
-def handle_attach_file_to_document(reference_doctype=None, document_id=None, file_path=None, **kwargs):
+def handle_attach_file_to_document(reference_doctype, document_id,file_path=None, file_url=None, **kwargs):
     """
-    Attach a file to a document.
-
-    Args:
-        reference_doctype (str): DocType name
-        document_id (str): Target document ID
-        file_path (str): File URL or path to attach
-
-    Returns:
-        dict: Result message with file_id if success
+    SDK handler that wraps attach_file_to_document.
+    Accepts dynamic kwargs and forwards them to core function.
     """
-    if not reference_doctype or not document_id or not file_path:
-        return {"success": False, "error": "doctype, document_id, and file_path are required"}
+    final_path = file_url or file_path
+
+    if not reference_doctype or not document_id or not final_path:
+        return {
+            "success": False,
+            "error": "reference_doctype, document_id and file_url/file_path are required"
+        }
+
+    normalized_kwargs = {}
+    for k, v in (kwargs or {}).items():
+        if isinstance(v, str):
+            low = v.lower().strip()
+            if low in ("true", "1", "yes"):
+                normalized_kwargs[k] = True
+                continue
+            if low in ("false", "0", "no"):
+                normalized_kwargs[k] = False
+                continue
+            try:
+                parsed = json.loads(v)
+                normalized_kwargs[k] = parsed
+                continue
+            except Exception:
+                normalized_kwargs[k] = v
+                continue
+        else:
+            normalized_kwargs[k] = v
+
     try:
-        result = attach_file_to_document(reference_doctype, document_id, file_path)
+        result = attach_file_to_document(
+            reference_doctype,
+            document_id,
+            final_path,
+            **normalized_kwargs,
+        )
         return {"success": True, "result": result}
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_attach_file_to_document: {str(e)}")
+        frappe.log_error(frappe.get_traceback(), "handle_attach_file_to_document: failed")
         return {"success": False, "error": str(e)}
 
-
-def _read_file_bytes_from_file_doc(file_doc):
-
-    url = file_doc.file_url
-
-    if url.startswith("/files/") or url.startswith("files/"):
-
-        path = frappe.get_site_path("public", url.lstrip("/"))
-        with open(path, "rb") as f:
-            return f.read(), file_doc.file_name
-
-    try:
-        site_url = frappe.utils.get_url()
-        resp = requests.get(site_url.rstrip("/") + url)
-        resp.raise_for_status()
-        return resp.content, file_doc.file_name
-    except Exception:
-        return None, None
