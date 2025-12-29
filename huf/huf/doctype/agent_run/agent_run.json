@@ -8,7 +8,6 @@
   "request_tab",
   "conversation",
   "agent",
-  "run_group",
   "prompt",
   "response_tab",
   "response",
@@ -87,14 +86,6 @@
    "fieldname": "response_tab",
    "fieldtype": "Tab Break",
    "label": "Response"
-  },
-  {
-   "fieldname": "run_group",
-   "fieldtype": "Link",
-   "hidden": 1,
-   "label": "Job ID",
-   "options": "Agent Run Group",
-   "read_only": 1
   },
   {
    "fieldname": "metadata",
@@ -185,7 +176,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-22 17:05:43.046424",
+ "modified": "2025-12-29 15:02:15.973547",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",
