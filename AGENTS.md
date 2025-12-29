@@ -323,20 +323,8 @@ Global application settings for the Huf system (singleton DocType).
 | **Default Provider**| `default_provider`  | Link | Default `AI Provider` for new agents.    |
 | **Default Model**   | `default_model`     | Link | Default `AI Model` for new agents.       |
 
-#### 14. AI Provider Settings
 
-Provider-specific configuration settings (singleton DocType).
-
--   **Python Class**: `AIProviderSettings(Document)`
--   **File**: `huf/huf/doctype/ai_provider_settings/ai_provider_settings.py`
-
-**Fields:**
-
-| Label        | Fieldname    | Type | Description                               |
-| :----------- | :----------- | :--- | :---------------------------------------- |
-| **Provider** | `provider`   | Link | Link to the `AI Provider` to configure.  |
-
-#### 15. Agent Tool HTTP Header
+#### 14. Agent Tool HTTP Header
 
 Child table for defining custom HTTP headers for tool requests (table DocType).
 
@@ -352,7 +340,7 @@ Child table for defining custom HTTP headers for tool requests (table DocType).
 
 **Usage**: Used as a child table in `Agent Tool Function` to provide custom HTTP authentication headers for API-based tools.
 
-#### 16. Agent Tool Type
+#### 15. Agent Tool Type
 
 Categorization DocType for organizing and grouping agent tools by type or purpose.
 
