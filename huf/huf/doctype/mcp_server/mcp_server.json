@@ -1,0 +1,181 @@
+{
+    "actions": [],
+    "autoname": "field:server_name",
+    "creation": "2025-12-31 18:59:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "server_name",
+        "description",
+        "enabled",
+        "column_break_basic",
+        "tool_namespace",
+        "timeout_seconds",
+        "connection_section",
+        "transport_type",
+        "server_url",
+        "auth_section",
+        "auth_type",
+        "auth_header_name",
+        "auth_header_value",
+        "custom_headers_section",
+        "custom_headers",
+        "tools_section",
+        "sync_tools_button",
+        "last_sync",
+        "available_tools"
+    ],
+    "fields": [
+        {
+            "fieldname": "server_name",
+            "fieldtype": "Data",
+            "label": "Server Name",
+            "reqd": 1,
+            "unique": 1,
+            "in_list_view": 1,
+            "description": "Unique identifier for this MCP server (e.g., 'gmail', 'github', 'frappe-erp')"
+        },
+        {
+            "fieldname": "description",
+            "fieldtype": "Small Text",
+            "label": "Description",
+            "description": "What capabilities this MCP server provides"
+        },
+        {
+            "fieldname": "enabled",
+            "fieldtype": "Check",
+            "label": "Enabled",
+            "default": "1",
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "column_break_basic",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "tool_namespace",
+            "fieldtype": "Data",
+            "label": "Tool Namespace",
+            "description": "Optional prefix for tool names (e.g., 'gmail' results in 'gmail.send_email')"
+        },
+        {
+            "fieldname": "timeout_seconds",
+            "fieldtype": "Int",
+            "label": "Timeout (seconds)",
+            "default": "30",
+            "description": "Request timeout for MCP server calls"
+        },
+        {
+            "fieldname": "connection_section",
+            "fieldtype": "Section Break",
+            "label": "Connection"
+        },
+        {
+            "fieldname": "transport_type",
+            "fieldtype": "Select",
+            "label": "Transport Type",
+            "options": "http\nsse",
+            "default": "http",
+            "reqd": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "server_url",
+            "fieldtype": "Data",
+            "label": "Server URL",
+            "reqd": 1,
+            "description": "MCP server endpoint URL (e.g., 'https://mcp.example.com/mcp')"
+        },
+        {
+            "fieldname": "auth_section",
+            "fieldtype": "Section Break",
+            "label": "Authentication"
+        },
+        {
+            "fieldname": "auth_type",
+            "fieldtype": "Select",
+            "label": "Auth Type",
+            "options": "none\napi_key\nbearer_token\ncustom_header",
+            "default": "none"
+        },
+        {
+            "fieldname": "auth_header_name",
+            "fieldtype": "Data",
+            "label": "Auth Header Name",
+            "depends_on": "eval:doc.auth_type && doc.auth_type !== 'none'",
+            "default": "Authorization",
+            "description": "Header name for authentication (e.g., 'Authorization', 'X-API-Key')"
+        },
+        {
+            "fieldname": "auth_header_value",
+            "fieldtype": "Password",
+            "label": "Auth Header Value",
+            "depends_on": "eval:doc.auth_type && doc.auth_type !== 'none'",
+            "description": "The API key, bearer token, or header value (stored encrypted)"
+        },
+        {
+            "fieldname": "custom_headers_section",
+            "fieldtype": "Section Break",
+            "label": "Custom Headers",
+            "collapsible": 1
+        },
+        {
+            "fieldname": "custom_headers",
+            "fieldtype": "Table",
+            "label": "Custom Headers",
+            "options": "MCP Server Header",
+            "description": "Additional HTTP headers to send with MCP requests"
+        },
+        {
+            "fieldname": "tools_section",
+            "fieldtype": "Section Break",
+            "label": "Available Tools"
+        },
+        {
+            "fieldname": "sync_tools_button",
+            "fieldtype": "Button",
+            "label": "Sync Tools",
+            "description": "Fetch available tools from the MCP server"
+        },
+        {
+            "fieldname": "last_sync",
+            "fieldtype": "Datetime",
+            "label": "Last Synced",
+            "read_only": 1
+        },
+        {
+            "fieldname": "available_tools",
+            "fieldtype": "Code",
+            "label": "Available Tools",
+            "read_only": 1,
+            "options": "JSON",
+            "description": "Cached list of tools available from this MCP server"
+        }
+    ],
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2025-12-31 18:59:00.000000",
+    "modified_by": "Administrator",
+    "module": "Huf",
+    "name": "MCP Server",
+    "naming_rule": "By fieldname",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": [],
+    "track_changes": 1
+}

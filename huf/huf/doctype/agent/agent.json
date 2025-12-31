@@ -1,270 +1,285 @@
 {
- "actions": [],
- "allow_rename": 1,
- "autoname": "field:agent_name",
- "creation": "2025-08-11 18:33:44.565632",
- "doctype": "DocType",
- "engine": "InnoDB",
- "field_order": [
-  "general_tab",
-  "llm_configuration_section",
-  "agent_name",
-  "provider",
-  "chef",
-  "slug",
-  "temperature",
-  "description",
-  "column_break_df8m",
-  "model",
-  "async",
-  "top_p",
-  "disabled",
-  "behaviour_tab",
-  "conversation_settings_section",
-  "persist_user_history",
-  "allow_chat",
-  "enable_multi_run",
-  "column_break_vfhq",
-  "persist_conversation",
-  "section_break_yyoa",
-  "instructions",
-  "tools_and_mcp_tab",
-  "agent_tool",
-  "permissions_tab",
-  "allowed_users",
-  "column_break_dq1z",
-  "allowed_roles",
-  "metadata_tab",
-  "last_run",
-  "total_run"
- ],
- "fields": [
-  {
-   "description": "A unique name for this agent.",
-   "documentation_url": "https://docs.huf.ai/docs/concepts/agents/",
-   "fieldname": "agent_name",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Agent Name",
-   "reqd": 1,
-   "unique": 1
-  },
-  {
-   "description": "The AI provider that will power this agent (e.g., OpenAI, OpenRouter).",
-   "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
-   "fieldname": "provider",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Provider",
-   "options": "AI Provider",
-   "reqd": 1
-  },
-  {
-   "fieldname": "column_break_df8m",
-   "fieldtype": "Column Break"
-  },
-  {
-   "description": "The specific AI model to use from the selected provider (e.g., gpt-4-turbo).",
-   "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
-   "fieldname": "model",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Model",
-   "options": "AI Model",
-   "reqd": 1
-  },
-  {
-   "description": "The system prompt or instructions that define the agent's personality, goals, and constraints. This is the core logic of the agent.",
-   "fieldname": "instructions",
-   "fieldtype": "Code",
-   "label": "Instructions"
-  },
-  {
-   "default": "1",
-   "description": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.",
-   "fieldname": "temperature",
-   "fieldtype": "Float",
-   "label": "Temperature",
-   "non_negative": 1
-  },
-  {
-   "description": "The set of tools this agent is allowed to use to interact with the system.",
-   "documentation_url": "https://docs.huf.ai/docs/concepts/tools/",
-   "fieldname": "agent_tool",
-   "fieldtype": "Table",
-   "label": "Agent Tool",
-   "options": "Agent Tool"
-  },
-  {
-   "default": "1",
-   "description": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or temperature but not both.",
-   "fieldname": "top_p",
-   "fieldtype": "Float",
-   "label": "Top P"
-  },
-  {
-   "default": "0",
-   "fieldname": "async",
-   "fieldtype": "Check",
-   "hidden": 1,
-   "label": "Async"
-  },
-  {
-   "default": "0",
-   "description": "If checked, this agent will be disabled and will not run.",
-   "fieldname": "disabled",
-   "fieldtype": "Check",
-   "label": "Disabled"
-  },
-  {
-   "description": "Define system prompt, goal, and constraints",
-   "fieldname": "section_break_yyoa",
-   "fieldtype": "Section Break",
-   "label": "Instruction"
-  },
-  {
-   "default": "0",
-   "description": "If checked, this agent can be interacted with in the Agent Chat window.",
-   "fieldname": "allow_chat",
-   "fieldtype": "Check",
-   "label": "Allow Chat"
-  },
-  {
-   "default": "1",
-   "description": "If checked, the conversation history with this agent will be saved and loaded for future sessions.",
-   "fieldname": "persist_conversation",
-   "fieldtype": "Check",
-   "label": "Persist Conversation"
-  },
-  {
-   "fieldname": "column_break_vfhq",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "general_tab",
-   "fieldtype": "Tab Break",
-   "label": "General"
-  },
-  {
-   "fieldname": "behaviour_tab",
-   "fieldtype": "Tab Break",
-   "label": "Behaviour"
-  },
-  {
-   "fieldname": "tools_and_mcp_tab",
-   "fieldtype": "Tab Break",
-   "label": "Tools and MCP"
-  },
-  {
-   "description": "Configure language model settings ",
-   "fieldname": "llm_configuration_section",
-   "fieldtype": "Section Break",
-   "label": "LLM Configuration"
-  },
-  {
-   "description": "Configure conversation behaviour",
-   "fieldname": "conversation_settings_section",
-   "fieldtype": "Section Break",
-   "label": "Conversation Settings"
-  },
-  {
-   "description": "A short summary describing what this agent does or is designed for.",
-   "fieldname": "description",
-   "fieldtype": "Small Text",
-   "label": "Description"
-  },
-  {
-   "fieldname": "last_run",
-   "fieldtype": "Datetime",
-   "label": "Last Run",
-   "read_only": 1
-  },
-  {
-   "fieldname": "total_run",
-   "fieldtype": "Int",
-   "label": "Total Run",
-   "read_only": 1
-  },
-  {
-   "fieldname": "metadata_tab",
-   "fieldtype": "Tab Break",
-   "label": "Metadata"
-  },
-  {
-   "default": "1",
-   "description": "When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.",
-   "fieldname": "persist_user_history",
-   "fieldtype": "Check",
-   "label": "Persist per User (Doc/Schedule)"
-  },
-  {
-   "description": "This is the provider standard name",
-   "fetch_from": "provider.chef",
-   "fieldname": "chef",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Chef"
-  },
-  {
-   "fetch_from": "provider.slug",
-   "fieldname": "slug",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Slug"
-  },
-  {
-   "default": "0",
-   "fieldname": "enable_multi_run",
-   "fieldtype": "Check",
-   "label": "Enable Multi Run"
-  },
-  {
-   "fieldname": "permissions_tab",
-   "fieldtype": "Tab Break",
-   "label": "Permissions"
-  },
-  {
-   "fieldname": "allowed_users",
-   "fieldtype": "Table MultiSelect",
-   "label": "Allowed Users",
-   "options": "Agent User"
-  },
-  {
-   "fieldname": "column_break_dq1z",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "allowed_roles",
-   "fieldtype": "Table MultiSelect",
-   "label": "Allowed Roles",
-   "options": "Agent Role"
-  }
- ],
- "grid_page_length": 50,
- "index_web_pages_for_search": 1,
- "links": [],
- "modified": "2025-12-05 12:57:58.416884",
- "modified_by": "Administrator",
- "module": "Huf",
- "name": "Agent",
- "naming_rule": "By fieldname",
- "owner": "Administrator",
- "permissions": [
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "System Manager",
-   "share": 1,
-   "write": 1
-  }
- ],
- "row_format": "Dynamic",
- "sort_field": "modified",
- "sort_order": "DESC",
- "states": []
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "field:agent_name",
+    "creation": "2025-08-11 18:33:44.565632",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "general_tab",
+        "llm_configuration_section",
+        "agent_name",
+        "provider",
+        "chef",
+        "slug",
+        "temperature",
+        "description",
+        "column_break_df8m",
+        "model",
+        "async",
+        "top_p",
+        "disabled",
+        "behaviour_tab",
+        "conversation_settings_section",
+        "persist_user_history",
+        "allow_chat",
+        "enable_multi_run",
+        "column_break_vfhq",
+        "persist_conversation",
+        "section_break_yyoa",
+        "instructions",
+        "tools_and_mcp_tab",
+        "agent_tool",
+        "mcp_servers_section",
+        "agent_mcp_server",
+        "permissions_tab",
+        "allowed_users",
+        "column_break_dq1z",
+        "allowed_roles",
+        "metadata_tab",
+        "last_run",
+        "total_run"
+    ],
+    "fields": [
+        {
+            "description": "A unique name for this agent.",
+            "documentation_url": "https://docs.huf.ai/docs/concepts/agents/",
+            "fieldname": "agent_name",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Agent Name",
+            "reqd": 1,
+            "unique": 1
+        },
+        {
+            "description": "The AI provider that will power this agent (e.g., OpenAI, OpenRouter).",
+            "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
+            "fieldname": "provider",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Provider",
+            "options": "AI Provider",
+            "reqd": 1
+        },
+        {
+            "fieldname": "column_break_df8m",
+            "fieldtype": "Column Break"
+        },
+        {
+            "description": "The specific AI model to use from the selected provider (e.g., gpt-4-turbo).",
+            "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
+            "fieldname": "model",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Model",
+            "options": "AI Model",
+            "reqd": 1
+        },
+        {
+            "description": "The system prompt or instructions that define the agent's personality, goals, and constraints. This is the core logic of the agent.",
+            "fieldname": "instructions",
+            "fieldtype": "Code",
+            "label": "Instructions"
+        },
+        {
+            "default": "1",
+            "description": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.",
+            "fieldname": "temperature",
+            "fieldtype": "Float",
+            "label": "Temperature",
+            "non_negative": 1
+        },
+        {
+            "description": "The set of tools this agent is allowed to use to interact with the system.",
+            "documentation_url": "https://docs.huf.ai/docs/concepts/tools/",
+            "fieldname": "agent_tool",
+            "fieldtype": "Table",
+            "label": "Agent Tool",
+            "options": "Agent Tool"
+        },
+        {
+            "fieldname": "mcp_servers_section",
+            "fieldtype": "Section Break",
+            "label": "MCP Servers",
+            "description": "Connect to external MCP servers for additional tool capabilities"
+        },
+        {
+            "description": "External MCP servers this agent can use for additional tools",
+            "fieldname": "agent_mcp_server",
+            "fieldtype": "Table",
+            "label": "MCP Servers",
+            "options": "Agent MCP Server"
+        },
+        {
+            "default": "1",
+            "description": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or temperature but not both.",
+            "fieldname": "top_p",
+            "fieldtype": "Float",
+            "label": "Top P"
+        },
+        {
+            "default": "0",
+            "fieldname": "async",
+            "fieldtype": "Check",
+            "hidden": 1,
+            "label": "Async"
+        },
+        {
+            "default": "0",
+            "description": "If checked, this agent will be disabled and will not run.",
+            "fieldname": "disabled",
+            "fieldtype": "Check",
+            "label": "Disabled"
+        },
+        {
+            "description": "Define system prompt, goal, and constraints",
+            "fieldname": "section_break_yyoa",
+            "fieldtype": "Section Break",
+            "label": "Instruction"
+        },
+        {
+            "default": "0",
+            "description": "If checked, this agent can be interacted with in the Agent Chat window.",
+            "fieldname": "allow_chat",
+            "fieldtype": "Check",
+            "label": "Allow Chat"
+        },
+        {
+            "default": "1",
+            "description": "If checked, the conversation history with this agent will be saved and loaded for future sessions.",
+            "fieldname": "persist_conversation",
+            "fieldtype": "Check",
+            "label": "Persist Conversation"
+        },
+        {
+            "fieldname": "column_break_vfhq",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "general_tab",
+            "fieldtype": "Tab Break",
+            "label": "General"
+        },
+        {
+            "fieldname": "behaviour_tab",
+            "fieldtype": "Tab Break",
+            "label": "Behaviour"
+        },
+        {
+            "fieldname": "tools_and_mcp_tab",
+            "fieldtype": "Tab Break",
+            "label": "Tools and MCP"
+        },
+        {
+            "description": "Configure language model settings ",
+            "fieldname": "llm_configuration_section",
+            "fieldtype": "Section Break",
+            "label": "LLM Configuration"
+        },
+        {
+            "description": "Configure conversation behaviour",
+            "fieldname": "conversation_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Conversation Settings"
+        },
+        {
+            "description": "A short summary describing what this agent does or is designed for.",
+            "fieldname": "description",
+            "fieldtype": "Small Text",
+            "label": "Description"
+        },
+        {
+            "fieldname": "last_run",
+            "fieldtype": "Datetime",
+            "label": "Last Run",
+            "read_only": 1
+        },
+        {
+            "fieldname": "total_run",
+            "fieldtype": "Int",
+            "label": "Total Run",
+            "read_only": 1
+        },
+        {
+            "fieldname": "metadata_tab",
+            "fieldtype": "Tab Break",
+            "label": "Metadata"
+        },
+        {
+            "default": "1",
+            "description": "When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.",
+            "fieldname": "persist_user_history",
+            "fieldtype": "Check",
+            "label": "Persist per User (Doc/Schedule)"
+        },
+        {
+            "description": "This is the provider standard name",
+            "fetch_from": "provider.chef",
+            "fieldname": "chef",
+            "fieldtype": "Data",
+            "hidden": 1,
+            "label": "Chef"
+        },
+        {
+            "fetch_from": "provider.slug",
+            "fieldname": "slug",
+            "fieldtype": "Data",
+            "hidden": 1,
+            "label": "Slug"
+        },
+        {
+            "default": "0",
+            "fieldname": "enable_multi_run",
+            "fieldtype": "Check",
+            "label": "Enable Multi Run"
+        },
+        {
+            "fieldname": "permissions_tab",
+            "fieldtype": "Tab Break",
+            "label": "Permissions"
+        },
+        {
+            "fieldname": "allowed_users",
+            "fieldtype": "Table MultiSelect",
+            "label": "Allowed Users",
+            "options": "Agent User"
+        },
+        {
+            "fieldname": "column_break_dq1z",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "allowed_roles",
+            "fieldtype": "Table MultiSelect",
+            "label": "Allowed Roles",
+            "options": "Agent Role"
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2025-12-05 12:57:58.416884",
+    "modified_by": "Administrator",
+    "module": "Huf",
+    "name": "Agent",
+    "naming_rule": "By fieldname",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
 }
