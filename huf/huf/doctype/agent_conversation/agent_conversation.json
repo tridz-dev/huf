@@ -1,7 +1,5 @@
 {
  "actions": [],
- "allow_rename": 1,
- "autoname": "naming_series:naming_series",
  "creation": "2025-08-11 19:20:54.822241",
  "doctype": "DocType",
  "engine": "InnoDB",
@@ -15,8 +13,7 @@
   "is_active",
   "created_at",
   "last_activity",
-  "total_messages",
-  "naming_series"
+  "total_messages"
  ],
  "fields": [
   {
@@ -46,14 +43,6 @@
   {
    "fieldname": "column_break_9v4t",
    "fieldtype": "Column Break"
-  },
-  {
-   "default": "CONV-.YYYY.-",
-   "fieldname": "naming_series",
-   "fieldtype": "Select",
-   "hidden": 1,
-   "label": "Naming Series",
-   "options": "CONV-.YYYY.-"
   },
   {
    "default": "1",
@@ -88,11 +77,10 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-27 12:37:24.920412",
+ "modified": "2025-12-31 17:11:49.915579",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Conversation",
- "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [
   {

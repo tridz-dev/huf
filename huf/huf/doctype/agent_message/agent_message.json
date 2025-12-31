@@ -1,13 +1,10 @@
 {
  "actions": [],
- "allow_rename": 1,
- "autoname": "naming_series:naming_series",
  "creation": "2025-08-11 19:48:02.779437",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
   "content_tab",
-  "naming_series",
   "content",
   "metadata_tab",
   "agent_run",
@@ -42,14 +39,6 @@
    "fieldtype": "Data",
    "label": "User",
    "read_only": 1
-  },
-  {
-   "default": "MSG-.YYYY.-",
-   "fieldname": "naming_series",
-   "fieldtype": "Select",
-   "hidden": 1,
-   "label": "Naming Series",
-   "options": "MSG-.YYYY.-"
   },
   {
    "fieldname": "conversation_index",
@@ -172,11 +161,10 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-03 20:11:47.242654",
+ "modified": "2025-12-31 17:15:37.749149",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",
- "naming_rule": "By \"Naming Series\" field",
  "owner": "Administrator",
  "permissions": [
   {
