@@ -6,6 +6,11 @@ from frappe import _
 from frappe.model.document import Document
 from huf.ai.agent_hooks import clear_doc_event_agents_cache
 
+try:
+    from litellm.utils import supports_prompt_caching
+except ImportError:
+    supports_prompt_caching = None
+
 def get_permission_query_conditions(user):
     if not user:
         user = frappe.session.user
@@ -52,6 +57,44 @@ class Agent(Document):
 
         if self.allow_chat == 1 and self.persist_conversation == 0:
             frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
+        
+        # Validate prompt caching configuration
+        if self.enable_prompt_caching:
+            if not self.model:
+                frappe.throw(_("Model must be selected to enable prompt caching."))
+            
+            # Check if model supports prompt caching
+            if supports_prompt_caching:
+                try:
+                    model_doc = frappe.get_doc("AI Model", self.model)
+                    model_name = model_doc.model_name
+                    provider_doc = frappe.get_doc("AI Provider", self.provider)
+                    provider_name = provider_doc.provide_name or provider_doc.name
+                    
+                    # Normalize model name (add provider prefix if needed)
+                    normalized_model = model_name
+                    if "/" not in model_name:
+                        provider_prefix_map = {
+                            "openai": "openai",
+                            "anthropic": "anthropic",
+                            "google": "gemini",
+                            "gemini": "gemini",
+                            "deepseek": "deepseek",
+                        }
+                        prefix = provider_prefix_map.get(provider_name.lower(), provider_name.lower())
+                        normalized_model = f"{prefix}/{model_name}"
+                    
+                    if not supports_prompt_caching(model=normalized_model):
+                        frappe.msgprint(
+                            _("Warning: The selected model may not support prompt caching. "
+                              "Caching will be disabled for this model."),
+                            indicator="orange"
+                        )
+                except Exception as e:
+                    frappe.log_error(
+                        f"Error validating prompt caching support: {str(e)}",
+                        "Agent Prompt Caching Validation"
+                    )
 
 
 

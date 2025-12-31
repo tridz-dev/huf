@@ -24,6 +24,7 @@ import frappe
 import litellm
 from litellm import InternalServerError, RateLimitError, APIError
 from litellm import InternalServerError, RateLimitError, APIError, completion_cost
+from litellm.utils import supports_prompt_caching
 from huf.ai.tool_serializer import serialize_tools
 
 
@@ -170,18 +171,91 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
         normalized_model = _normalize_model_name(model, provider)
 
-        # Prepare messages
+        # Check prompt caching configuration
+        enable_prompt_caching = False
+        cache_control_type = "ephemeral"
+        cache_system_message = False
+        cache_conversation_history = False
+        
+        if agent_doc:
+            enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
+            cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
+            cache_system_message = bool(agent_doc.get("cache_system_message", 0))
+            cache_conversation_history = bool(agent_doc.get("cache_conversation_history", 0))
+        
+        # Check if model supports prompt caching
+        model_supports_caching = False
+        if enable_prompt_caching:
+            try:
+                model_supports_caching = supports_prompt_caching(model=normalized_model)
+            except Exception:
+                # If check fails, assume not supported
+                model_supports_caching = False
+                frappe.log_error(
+                    f"Failed to check prompt caching support for model {normalized_model}",
+                    "LiteLLM Prompt Caching"
+                )
+
+        # Prepare messages with cache_control if enabled
         messages = []
+        provider_name = normalized_model.split("/")[0]
+        
         if agent.instructions:
-            messages.append({"role": "system", "content": agent.instructions})
-        messages.append({"role": "user", "content": enhanced_prompt})
+            system_content = agent.instructions
+            
+            # Add cache_control to system message if enabled
+            if enable_prompt_caching and model_supports_caching and cache_system_message:
+                if provider_name == "anthropic":
+                    # Anthropic: content array with cache_control
+                    system_content = [
+                        {
+                            "type": "text",
+                            "text": agent.instructions,
+                            "cache_control": {"type": cache_control_type}
+                        }
+                    ]
+                elif provider_name in ("openai", "deepseek"):
+                    # OpenAI/Deepseek: content array format (LiteLLM handles cache_control)
+                    system_content = [
+                        {
+                            "type": "text",
+                            "text": agent.instructions
+                        }
+                    ]
+                    # Note: OpenAI requires messages to be marked for caching
+                    # LiteLLM handles this automatically when content is an array
+            
+            messages.append({"role": "system", "content": system_content})
+        
+        # Add user message with cache_control if conversation history caching is enabled
+        user_content = enhanced_prompt
+        if enable_prompt_caching and model_supports_caching and cache_conversation_history:
+            if provider_name == "anthropic":
+                # Anthropic: content array with cache_control
+                user_content = [
+                    {
+                        "type": "text",
+                        "text": enhanced_prompt,
+                        "cache_control": {"type": cache_control_type}
+                    }
+                ]
+            elif provider_name in ("openai", "deepseek"):
+                # OpenAI/Deepseek: content array format
+                user_content = [
+                    {
+                        "type": "text",
+                        "text": enhanced_prompt
+                    }
+                ]
+        
+        messages.append({"role": "user", "content": user_content})
 
         # Convert tools
         tools = None
         if getattr(agent, "tools", None):
             tools = serialize_tools(agent.tools)
 
-        total_usage = {"input_tokens": 0, "output_tokens": 0}
+        total_usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0}
         total_cost = 0.0
         all_new_items = []
 
@@ -280,6 +354,12 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             usage = response.usage
             total_usage["input_tokens"] += usage.prompt_tokens
             total_usage["output_tokens"] += usage.completion_tokens
+            
+            # Track cached tokens if available
+            if hasattr(usage, "prompt_tokens_details") and usage.prompt_tokens_details:
+                cached_tokens = getattr(usage.prompt_tokens_details, "cached_tokens", 0)
+                if cached_tokens:
+                    total_usage["cached_tokens"] += cached_tokens
 
             assistant_message = {
                 "role": "assistant",
@@ -398,11 +478,75 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
         normalized_model = _normalize_model_name(model, provider)
 
-        # Prepare messages
+        # Check prompt caching configuration
+        enable_prompt_caching = False
+        cache_control_type = "ephemeral"
+        cache_system_message = False
+        cache_conversation_history = False
+        
+        if agent_doc:
+            enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
+            cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
+            cache_system_message = bool(agent_doc.get("cache_system_message", 0))
+            cache_conversation_history = bool(agent_doc.get("cache_conversation_history", 0))
+        
+        # Check if model supports prompt caching
+        model_supports_caching = False
+        if enable_prompt_caching:
+            try:
+                model_supports_caching = supports_prompt_caching(model=normalized_model)
+            except Exception:
+                model_supports_caching = False
+                frappe.log_error(
+                    f"Failed to check prompt caching support for model {normalized_model}",
+                    "LiteLLM Prompt Caching"
+                )
+
+        # Prepare messages with cache_control if enabled
         messages = []
+        provider_name = normalized_model.split("/")[0]
+        
         if agent.instructions:
-            messages.append({"role": "system", "content": agent.instructions})
-        messages.append({"role": "user", "content": enhanced_prompt})
+            system_content = agent.instructions
+            
+            if enable_prompt_caching and model_supports_caching and cache_system_message:
+                if provider_name == "anthropic":
+                    system_content = [
+                        {
+                            "type": "text",
+                            "text": agent.instructions,
+                            "cache_control": {"type": cache_control_type}
+                        }
+                    ]
+                elif provider_name in ("openai", "deepseek"):
+                    system_content = [
+                        {
+                            "type": "text",
+                            "text": agent.instructions
+                        }
+                    ]
+            
+            messages.append({"role": "system", "content": system_content})
+        
+        user_content = enhanced_prompt
+        if enable_prompt_caching and model_supports_caching and cache_conversation_history:
+            if provider_name == "anthropic":
+                user_content = [
+                    {
+                        "type": "text",
+                        "text": enhanced_prompt,
+                        "cache_control": {"type": cache_control_type}
+                    }
+                ]
+            elif provider_name in ("openai", "deepseek"):
+                user_content = [
+                    {
+                        "type": "text",
+                        "text": enhanced_prompt
+                    }
+                ]
+        
+        messages.append({"role": "user", "content": user_content})
 
         # Convert tools to OpenAI format
         tools = None
