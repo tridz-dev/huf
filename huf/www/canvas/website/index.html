@@ -3,21 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Empty State</title>
+    <title>Vintage Pacman Home</title>
     <style>
         body {
-            margin: 0;
+            background-color: black;
+            color: yellow;
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
             height: 100vh;
+            margin: 0;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
-            background-color: #fff;
+            justify-content: center;
+        }
+        .music-control {
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-    <div id="canvas-root">
-        <!-- This is an empty state of the page -->
+    <div style="width: 80%; max-width: 600px;">
+        <h1>Welcome to Pacman World</h1>
+        <div style="font-size: 100px;">&#9786;</div>
+        <p>Get ready to experience the nostalgia of classic arcade games!</p>
+        <!-- Removed midi player -->
+        
+        <button style="padding: 10px 20px; margin-top: 20px; background-color: yellow; color: black; border: none; cursor: pointer;">Enter Game</button>
     </div>
 </body>
 </html>
