@@ -5,7 +5,7 @@
  "creation": "2025-08-11 18:33:44.565632",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": [
+  "field_order": [
   "general_tab",
   "llm_configuration_section",
   "agent_name",
@@ -19,6 +19,12 @@
   "async",
   "top_p",
   "disabled",
+  "prompt_caching_section",
+  "enable_prompt_caching",
+  "cache_control_type",
+  "cache_system_message",
+  "column_break_cache",
+  "cache_conversation_history",
   "behaviour_tab",
   "conversation_settings_section",
   "persist_user_history",
@@ -217,6 +223,50 @@
    "fieldname": "enable_multi_run",
    "fieldtype": "Check",
    "label": "Enable Multi Run"
+  },
+  {
+   "description": "Configure prompt caching to reduce costs by caching repeated prompt content",
+   "fieldname": "prompt_caching_section",
+   "fieldtype": "Section Break",
+   "label": "Prompt Caching",
+   "depends_on": "eval:!doc.disabled"
+  },
+  {
+   "default": "0",
+   "description": "Enable prompt caching to cache repeated prompt content and reduce token costs. Only works with supported providers (OpenAI, Anthropic, Bedrock, Deepseek).",
+   "fieldname": "enable_prompt_caching",
+   "fieldtype": "Check",
+   "label": "Enable Prompt Caching"
+  },
+  {
+   "default": "ephemeral",
+   "depends_on": "eval:doc.enable_prompt_caching==1",
+   "description": "Cache control type: 'ephemeral' for Anthropic (charges for cache writes), 'auto' for OpenAI/Deepseek (automatic caching).",
+   "fieldname": "cache_control_type",
+   "fieldtype": "Select",
+   "label": "Cache Control Type",
+   "options": "ephemeral\nauto"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_prompt_caching==1",
+   "description": "Cache the system message/instructions to avoid re-sending them on every request.",
+   "fieldname": "cache_system_message",
+   "fieldtype": "Check",
+   "label": "Cache System Message"
+  },
+  {
+   "fieldname": "column_break_cache",
+   "fieldtype": "Column Break",
+   "depends_on": "eval:doc.enable_prompt_caching==1"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_prompt_caching==1",
+   "description": "Cache conversation history messages to reduce token usage in multi-turn conversations.",
+   "fieldname": "cache_conversation_history",
+   "fieldtype": "Check",
+   "label": "Cache Conversation History"
   },
   {
    "fieldname": "permissions_tab",
