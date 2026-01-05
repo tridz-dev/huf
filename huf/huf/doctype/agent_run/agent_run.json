@@ -4,7 +4,7 @@
  "creation": "2025-08-11 19:27:48.765866",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": [
+  "field_order": [
   "request_tab",
   "conversation",
   "agent",
@@ -24,6 +24,7 @@
   "model",
   "end_time",
   "output_tokens",
+  "cached_tokens",
   "parent_run",
   "is_child",
   "agent_orchestration"
@@ -118,6 +119,13 @@
    "fieldname": "output_tokens",
    "fieldtype": "Int",
    "label": "Output Tokens",
+   "read_only": 1
+  },
+  {
+   "description": "Number of cached tokens that were reused from prompt cache (reduces cost).",
+   "fieldname": "cached_tokens",
+   "fieldtype": "Int",
+   "label": "Cached Tokens",
    "read_only": 1
   },
   {

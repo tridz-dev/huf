@@ -498,19 +498,30 @@ def run_agent_sync(
         final_output = getattr(result, "final_output", str(result))
         usage = getattr(result, "usage", None)
         cost = getattr(result, "cost", 0)  
-        if usage:
-            input_tokens = 0
-            output_tokens = 0
+        input_tokens = 0
+        output_tokens = 0
+        cached_tokens = 0
 
+        if usage:
+            
             if isinstance(usage, dict):
-                input_tokens = usage.get("input_tokens", 0) or usage.get("prompt_tokens", 0)
-                output_tokens = usage.get("output_tokens", 0) or usage.get("completion_tokens", 0)
+                input_tokens = getattr(usage, "prompt_tokens", usage.get("input_tokens", 0) if isinstance(usage, dict) else 0)
+                output_tokens = getattr(usage, "completion_tokens", usage.get("output_tokens", 0) if isinstance(usage, dict) else 0)
+                
+                details = getattr(usage, "prompt_tokens_details", None)
+                if details:
+                    cached_tokens = getattr(details, "cached_tokens", 0)
+                elif isinstance(usage, dict):
+                    cached_tokens = usage.get("cached_tokens", 0)
+                
             else: 
                 input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
                 output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
+                cached_tokens = getattr(usage, "cached_tokens", 0)
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
+                "cached_tokens": cached_tokens,
                 "cost": cost
             })
 
