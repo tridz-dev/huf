@@ -201,10 +201,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         provider_name = normalized_model.split("/")[0]
         
         if agent.instructions:
-            system_content = agent.instructions
-            
-            # Add cache_control to system message if enabled
-            if enable_prompt_caching and model_supports_caching and cache_system_message:
+            if not (enable_prompt_caching and model_supports_caching and cache_system_message):
+                system_content = agent.instructions
+            else:
                 if provider_name == "anthropic":
                     # Anthropic: content array with cache_control
                     system_content = [
@@ -224,12 +223,15 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     ]
                     # Note: OpenAI requires messages to be marked for caching
                     # LiteLLM handles this automatically when content is an array
+                else:
+                    system_content = [{"type": "text", "text": agent.instructions}]
             
             messages.append({"role": "system", "content": system_content})
         
         # Add user message with cache_control if conversation history caching is enabled
-        user_content = enhanced_prompt
-        if enable_prompt_caching and model_supports_caching and cache_conversation_history:
+        if not (enable_prompt_caching and model_supports_caching and cache_conversation_history):
+            user_content = enhanced_prompt
+        else:
             if provider_name == "anthropic":
                 # Anthropic: content array with cache_control
                 user_content = [
@@ -352,14 +354,14 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             choice = response.choices[0].message
 
             usage = response.usage
-            total_usage["input_tokens"] += usage.prompt_tokens
-            total_usage["output_tokens"] += usage.completion_tokens
-            
+            total_usage["input_tokens"] += getattr(usage, "prompt_tokens", 0)
+            total_usage["output_tokens"] += getattr(usage, "completion_tokens", 0)
+
             # Track cached tokens if available
-            if hasattr(usage, "prompt_tokens_details") and usage.prompt_tokens_details:
-                cached_tokens = getattr(usage.prompt_tokens_details, "cached_tokens", 0)
-                if cached_tokens:
-                    total_usage["cached_tokens"] += cached_tokens
+            if enable_prompt_caching and hasattr(usage, "prompt_tokens_details"):
+                details = usage.prompt_tokens_details
+                if details:
+                    total_usage["cached_tokens"] += getattr(details, "cached_tokens", 0)
 
             assistant_message = {
                 "role": "assistant",
