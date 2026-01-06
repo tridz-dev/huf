@@ -62,17 +62,16 @@
   },
   {
    "fieldname": "tool",
-   "fieldtype": "Link",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Tool Name",
-   "options": "Agent Tool Function",
    "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-09-24 19:42:43.241277",
+ "modified": "2026-01-06 17:58:52.558076",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Call",
