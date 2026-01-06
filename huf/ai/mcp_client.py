@@ -206,35 +206,38 @@ async def execute_mcp_tool(
         
         # Build headers
         headers = _build_mcp_headers(mcp_server)
+        return await _execute_mcp_tool_http(
+            mcp_server, tool_name, arguments, headers
+        )
         
         # Use LiteLLM's experimental MCP client if available
-        try:
-            from litellm.experimental_mcp_client import call_openai_tool
+        # try:
+        #     from litellm.experimental_mcp_client import call_openai_tool
             
-            # Prepare the tool call in OpenAI format
-            tool_call = {
-                "type": "function",
-                "function": {
-                    "name": tool_name,
-                    "arguments": json.dumps(arguments)
-                }
-            }
+        #     # Prepare the tool call in OpenAI format
+        #     tool_call = {
+        #         "type": "function",
+        #         "function": {
+        #             "name": tool_name,
+        #             "arguments": json.dumps(arguments)
+        #         }
+        #     }
             
-            # Call the MCP tool
-            result = await call_openai_tool(
-                mcp_url=mcp_server.server_url,
-                tool_call=tool_call,
-                headers=headers,
-                timeout=mcp_server.timeout_seconds or 30
-            )
+        #     # Call the MCP tool
+        #     result = await call_openai_tool(
+        #         mcp_url=mcp_server.server_url,
+        #         tool_call=tool_call,
+        #         headers=headers,
+        #         timeout=mcp_server.timeout_seconds or 30
+        #     )
             
-            return result
+        #     return result
             
-        except ImportError:
-            # Fallback to direct HTTP call if LiteLLM MCP client not available
-            return await _execute_mcp_tool_http(
-                mcp_server, tool_name, arguments, headers
-            )
+        # except ImportError:
+        #     # Fallback to direct HTTP call if LiteLLM MCP client not available
+        #     return await _execute_mcp_tool_http(
+        #         mcp_server, tool_name, arguments, headers
+        #     )
             
     except Exception as e:
         frappe.log_error(
@@ -350,11 +353,11 @@ def sync_mcp_server_tools(server_name: str) -> dict:
         headers = _build_mcp_headers(mcp_server)
         
         # Try to use LiteLLM's MCP client
-        try:
-            tools = _sync_tools_via_litellm(mcp_server, headers)
-        except ImportError:
+        # try:
+        #     tools = _sync_tools_via_litellm(mcp_server, headers)
+        # except ImportError:
             # Fallback to direct HTTP
-            tools = _sync_tools_via_http(mcp_server, headers)
+        tools = _sync_tools_via_http(mcp_server, headers)
         
         # Cache tools in the document
         mcp_server.available_tools = json.dumps(tools, indent=2)
