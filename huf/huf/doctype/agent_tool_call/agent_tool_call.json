@@ -8,6 +8,8 @@
   "agent_run",
   "conversation",
   "tool",
+  "is_mcp_tool",
+  "mcp_server",
   "tool_args",
   "tool_result",
   "status",
@@ -65,6 +67,20 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Tool Name",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_mcp_tool",
+   "fieldtype": "Check",
+   "label": "Is MCP Tool",
+   "read_only": 1
+  },
+  {
+   "fieldname": "mcp_server",
+   "fieldtype": "Link",
+   "label": "MCP Server",
+   "options": "MCP Server",
    "read_only": 1
   }
  ],
