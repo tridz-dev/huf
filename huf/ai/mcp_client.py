@@ -59,10 +59,23 @@ def create_mcp_tools(agent_doc) -> list[FunctionTool]:
             if not mcp_server.enabled:
                 continue
             
-            # Get cached tools from the MCP server
-            server_tools = _get_cached_mcp_tools(mcp_server)
-            
-            for tool_def in server_tools:
+            # Iterate through enabled tools in child table
+            for tool_row in mcp_server.tools:
+                if not tool_row.enabled:
+                    continue
+                    
+                # Reconstruct tool definition from child table
+                try:
+                    parameters = json.loads(tool_row.parameters) if tool_row.parameters else {}
+                except Exception:
+                    parameters = {}
+                    
+                tool_def = {
+                    "name": tool_row.tool_name,
+                    "description": tool_row.description,
+                    "parameters": parameters
+                }
+                
                 tool = _create_mcp_function_tool(mcp_server, tool_def)
                 if tool:
                     tools.append(tool)
@@ -362,6 +375,40 @@ def sync_mcp_server_tools(server_name: str) -> dict:
         # Cache tools in the document
         mcp_server.available_tools = json.dumps(tools, indent=2)
         mcp_server.last_sync = now_datetime()
+        
+        # Sync tools to child table
+        current_tools = {t.tool_name: t for t in mcp_server.tools}
+        synced_tool_names = set()
+        
+        for tool_def in tools:
+            # Handle both OpenAI format and direct format
+            if isinstance(tool_def, dict) and "function" in tool_def:
+                func_def = tool_def["function"]
+            else:
+                func_def = tool_def
+                
+            tool_name = func_def.get("name")
+            if not tool_name:
+                continue
+                
+            synced_tool_names.add(tool_name)
+            description = func_def.get("description", "")
+            parameters = json.dumps(func_def.get("parameters", {}), indent=2)
+            
+            if tool_name in current_tools:
+                # Update existing tool
+                row = current_tools[tool_name]
+                row.description = description
+                row.parameters = parameters
+            else:
+                # Add new tool
+                mcp_server.append("tools", {
+                    "tool_name": tool_name,
+                    "description": description,
+                    "parameters": parameters,
+                    "enabled": 1
+                })
+        
         mcp_server.save(ignore_permissions=True)
         frappe.db.commit()
         
