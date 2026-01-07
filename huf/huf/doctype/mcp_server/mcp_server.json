@@ -22,6 +22,8 @@
   "custom_headers",
   "tools_section",
   "sync_tools_button",
+  "enable_auto_sync",
+  "auto_sync_interval",
   "last_sync",
   "tools",
   "available_tools"
@@ -160,11 +162,27 @@
    "read_only": 1,
    "options": "JSON",
    "description": "Cached list of tools available from this MCP server"
+  },
+  {
+   "default": "0",
+   "description": "Automatically sync tools periodically",
+   "fieldname": "enable_auto_sync",
+   "fieldtype": "Check",
+   "label": "Enable Auto Sync"
+  },
+  {
+   "default": 1,
+   "depends_on": "eval:doc.enable_auto_sync",
+   "description": "Interval in hours to auto-sync tools",
+   "fieldname": "auto_sync_interval",
+   "fieldtype": "Int",
+   "label": "Sync Interval (Hours)",
+   "mandatory_depends_on": "eval:doc.enable_auto_sync"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-07 14:37:54.791104",
+ "modified": "2026-01-07 15:39:23.569156",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "MCP Server",

@@ -631,3 +631,26 @@ def get_available_mcp_servers() -> list:
     except Exception as e:
         frappe.log_error(f"Error getting available MCP servers: {str(e)}", "MCP API Error")
         return []
+
+@frappe.whitelist()
+def auto_sync_mcp_server_tools():
+    """
+    Scheduled job to auto-sync MCP server Tools.
+    Runs hourly and checks if sync is due based on the interval.
+    """
+    from frappe.utils import time_diff_in_hours
+
+    servers = frappe.get_all(
+        "MCP Server",
+        filters={"enabled": 1, "enable_auto_sync": 1},
+        fields=["name", "auto_sync_interval", "last_sync"]
+    )
+    
+    for server in servers:
+        try:
+            # Check if sync is due
+            if not server.last_sync or time_diff_in_hours(now_datetime(), server.last_sync) >= server.auto_sync_interval:
+                frappe.log_error(f"Auto-syncing MCP Tools: {server.name}", "MCP Tools Auto Synced")
+                sync_mcp_server_tools(server.name)
+        except Exception as e:
+            frappe.log_error(f"Error auto-syncing {server.name}: {str(e)}", "MCP Tools Auto Sync Error")
