@@ -9,6 +9,7 @@ import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { ChatHeaderActions } from './components/ChatHeaderActions';
+import { McpHeaderActions } from './components/McpHeaderActions';
 import { HomePage } from './pages/HomePage';
 import { AgentsPage } from './pages/AgentsPage';
 import { AgentFormPageWrapper } from './pages/AgentFormPageWrapper';
@@ -202,7 +203,7 @@ function App() {
             path="/mcp"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout headerActions={<McpHeaderActions />}>
                   <McpListingPage />
                 </UnifiedLayout>
               </ProtectedRoute>
