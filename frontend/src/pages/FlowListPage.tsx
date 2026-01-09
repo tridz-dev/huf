@@ -37,7 +37,7 @@ export function FlowListPage() {
   const { flows } = useFlowContext();
   const navigate = useNavigate();
 
-  const { data, search, setSearch, filters, setFilters } = usePageData<FlowMetadata>({
+  const { data, loading, search, setSearch, filters, setFilters } = usePageData<FlowMetadata>({
     initialData: flows,
     searchFields: ['name', 'description'],
     filterFn: (flow, filters) => {
@@ -83,6 +83,7 @@ export function FlowListPage() {
       <GridView
         items={data}
         columns={{ sm: 1, md: 2, lg: 3 }}
+        loading={loading}
         renderItem={(flow) => (
           <ItemCard
             title={flow.name}

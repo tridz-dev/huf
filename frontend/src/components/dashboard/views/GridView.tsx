@@ -1,7 +1,8 @@
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { SkeletonGridView } from './SkeletonGridView';
 
-interface GridViewColumns {
+export interface GridViewColumns {
   sm?: number;
   md?: number;
   lg?: number;
@@ -72,7 +73,7 @@ const gapMap: Record<number, string> = {
   8: 'gap-8',
 };
 
-function getGridClasses(columns: GridViewColumns, gap: number = 4): string {
+export function getGridClasses(columns: GridViewColumns, gap: number = 4): string {
   const classes = ['grid'];
 
   if (columns.sm && columnMap[columns.sm]) {
@@ -106,11 +107,7 @@ export function GridView<T>({
   className,
 }: GridViewProps<T>) {
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
+    return <SkeletonGridView columns={columns} gap={gap} className={className} />;
   }
 
   if (items.length === 0) {
