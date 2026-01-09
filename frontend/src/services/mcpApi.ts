@@ -34,8 +34,8 @@ export interface MCPServerRef {
     server_name?: string;   // Display name from MCP Server
     description?: string;   // Description from MCP Server
     server_url?: string;    // URL from MCP Server
-    enabled: boolean;       // Whether enabled for this agent
-    mcp_enabled?: boolean;  // Whether the MCP Server itself is enabled
+    enabled: boolean | number;       // Whether enabled for this agent (0/1 from Frappe, boolean from frontend)
+    mcp_enabled?: boolean | number;  // Whether the MCP Server itself is enabled (0/1 from Frappe, boolean from frontend)
     tool_count?: number;    // Number of tools available
     last_sync?: string;     // Last sync timestamp
 }

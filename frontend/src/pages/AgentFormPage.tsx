@@ -11,7 +11,7 @@ import { getProviders, getModels } from '../services/providerApi';
 import { getToolFunctions, getToolTypes } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
 import type { AgentToolType } from '../types/agent.types';
-import { SelectToolsModal } from '../components/tools';
+import { SelectToolsModal, SelectMCPServersModal } from '../components/tools';
 import { TriggerModal } from '../components/agent/TriggerModal';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { AgentHeader } from '../components/agent/AgentHeader';
@@ -20,6 +20,8 @@ import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
+import { syncMCPTools, type MCPServerRef } from '../services/mcpApi';
+import type { MCPServerDoc } from '../services/mcpApi';
 
 
 export function AgentFormPage() {
@@ -46,6 +48,10 @@ export function AgentFormPage() {
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
   const [triggerTypes, setTriggerTypes] = useState<TriggerTypeOption[]>([]);
   const [loadingTriggerTypes, setLoadingTriggerTypes] = useState(false);
+  const [showMCPServersModal, setShowMCPServersModal] = useState(false);
+  const [mcpServers, setMcpServers] = useState<MCPServerRef[]>([]);
+  const [initialMcpServers, setInitialMcpServers] = useState<MCPServerRef[]>([]); // Track initial MCP servers state
+  const [mcpLoading, setMcpLoading] = useState(false);
 
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
@@ -90,8 +96,34 @@ export function AgentFormPage() {
     return watchDisabled !== initialDisabled;
   }, [watchDisabled, initialDisabled, isNew]);
   
-  // Show save button for new agents, when form is dirty, when tools have changed, or when disabled changed
-  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged;
+  // Check if MCP servers have changed by comparing server names and enabled states
+  const mcpServersChanged = useMemo(() => {
+    if (isNew) return mcpServers.length > 0; // New agent with MCP servers selected
+    
+    // Normalize enabled state to number for comparison
+    const normalizeEnabled = (enabled: boolean | number | undefined): number => {
+      return enabled === true || enabled === 1 ? 1 : 0;
+    };
+    
+    // Compare by mcp_server link field (the actual server name) and enabled state
+    const initialServerMap = new Map(
+      initialMcpServers.map((s) => [`${s.mcp_server}:${normalizeEnabled(s.enabled)}`, s])
+    );
+    const currentServerMap = new Map(
+      mcpServers.map((s) => [`${s.mcp_server}:${normalizeEnabled(s.enabled)}`, s])
+    );
+    
+    if (initialServerMap.size !== currentServerMap.size) return true;
+    
+    for (const [key] of currentServerMap) {
+      if (!initialServerMap.has(key)) return true;
+    }
+    
+    return false;
+  }, [mcpServers, initialMcpServers, isNew]);
+  
+  // Show save button for new agents, when form is dirty, when tools have changed, when disabled changed, or when MCP servers changed
+  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged;
 
   // Load trigger types on mount
   useEffect(() => {
@@ -221,6 +253,28 @@ export function AgentFormPage() {
           // Don't show error toast for triggers, just log it
           setTriggers([]);
         });
+        // Load MCP servers from agent_mcp_server child table (already in agent document)
+        if (data.agent_mcp_server && Array.isArray(data.agent_mcp_server) && data.agent_mcp_server.length > 0) {
+          // Transform child table data to MCPServerRef format
+          // The child table includes: name, mcp_server (link), enabled, server_url (fetched), tool_count
+          const servers: MCPServerRef[] = data.agent_mcp_server.map((item: any) => ({
+            name: item.name || '', // Child table row name
+            mcp_server: item.mcp_server, // Link to MCP Server DocType
+            server_url: item.server_url || '',
+            enabled: item.enabled === 1 || item.enabled === true ? 1 : 0,
+            tool_count: item.tool_count || 0,
+            // Note: server_name, description, and mcp_enabled come from the linked MCP Server DocType
+            // These may or may not be included depending on Frappe's serialization
+            server_name: item.server_name,
+            description: item.description,
+            mcp_enabled: item.mcp_enabled !== undefined ? (item.mcp_enabled === 1 || item.mcp_enabled === true ? 1 : 0) : undefined,
+          }));
+          setMcpServers(servers);
+          setInitialMcpServers(servers); // Store initial state for change detection
+        } else {
+          setMcpServers([]);
+          setInitialMcpServers([]);
+        }
         setLoading(false);
       }).catch((error) => {
         console.error('Error loading agent:', error);
@@ -233,6 +287,8 @@ export function AgentFormPage() {
       setSelectedTools([]);
       setInitialTools([]);
       setInitialDisabled(false);
+      setMcpServers([]);
+      setInitialMcpServers([]);
       setLoading(false);
     }
   }, [id, isNew, form]);
@@ -258,6 +314,11 @@ export function AgentFormPage() {
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
         })) as any,
+        // Include MCP servers - Frappe child table format: array of objects with 'mcp_server' field and 'enabled' field
+        agent_mcp_server: mcpServers.map((server) => ({
+          mcp_server: server.mcp_server, // This is the link field to MCP Server DocType
+          enabled: (server.enabled === true || server.enabled === 1) ? 1 : (0 as 0 | 1),
+        })),
       };
 
       if (isNew) {
@@ -301,9 +362,34 @@ export function AgentFormPage() {
           description: values.description,
           instructions: values.instructions,
         });
-        // Reset tools and disabled state after successful update to mark as unchanged
+        // Reset tools, disabled state, and MCP servers after successful update to mark as unchanged
         setInitialTools([...selectedTools]);
         setInitialDisabled(values.disabled);
+        // Reload agent to get updated MCP servers from the agent document
+        if (id) {
+          getAgent(id).then((updatedData: AgentDoc) => {
+            // Reload MCP servers from updated agent document
+            if (updatedData.agent_mcp_server && Array.isArray(updatedData.agent_mcp_server) && updatedData.agent_mcp_server.length > 0) {
+              const servers: MCPServerRef[] = updatedData.agent_mcp_server.map((item: any) => ({
+                name: item.name || '',
+                mcp_server: item.mcp_server,
+                server_url: item.server_url || '',
+                enabled: item.enabled === 1 || item.enabled === true ? 1 : 0,
+                tool_count: item.tool_count || 0,
+                server_name: item.server_name,
+                description: item.description,
+                mcp_enabled: item.mcp_enabled !== undefined ? (item.mcp_enabled === 1 || item.mcp_enabled === true ? 1 : 0) : undefined,
+              }));
+              setMcpServers(servers);
+              setInitialMcpServers(servers);
+            } else {
+              setMcpServers([]);
+              setInitialMcpServers([]);
+            }
+          }).catch((error) => {
+            console.error('Error reloading agent:', error);
+          });
+        }
       }
     } catch (error) {
       console.error(`Error ${isNew ? 'creating' : 'updating'} agent:`, error);
@@ -392,6 +478,73 @@ export function AgentFormPage() {
   const handleRemoveTool = (toolId: string) => {
     setSelectedTools(selectedTools.filter((t) => t.name !== toolId));
     toast.success('Tool removed');
+  };
+
+  const handleAddMCPServers = (servers: MCPServerDoc[]) => {
+    // Convert MCPServerDoc to MCPServerRef format for child table
+    const newServers: MCPServerRef[] = servers.map((server) => ({
+      name: '', // Will be set by Frappe when saved
+      mcp_server: server.name,
+      server_name: server.server_name,
+      description: server.description,
+      server_url: server.server_url,
+      enabled: true, // Default to enabled when adding
+      mcp_enabled: server.enabled === 1,
+      tool_count: 0, // Will be updated when synced
+    }));
+    setMcpServers([...mcpServers, ...newServers]);
+  };
+
+  const handleRemoveMCPServer = (serverId: string) => {
+    setMcpServers(mcpServers.filter((s) => s.name !== serverId));
+    toast.success('MCP server removed');
+  };
+
+  const handleToggleMCPServer = async (serverId: string, enabled: boolean) => {
+    setMcpServers(
+      mcpServers.map((s) =>
+        s.name === serverId ? { ...s, enabled } : s
+      )
+    );
+    toast.success(`MCP server ${enabled ? 'enabled' : 'disabled'}`);
+  };
+
+  const handleSyncMCPServer = async (serverId: string) => {
+    const server = mcpServers.find((s) => s.name === serverId);
+    if (!server) {
+      toast.error('MCP server not found');
+      return;
+    }
+
+    setMcpLoading(true);
+    try {
+      const result = await syncMCPTools(server.mcp_server);
+      if (result.success) {
+        // Update the server with new tool count
+        setMcpServers(
+          mcpServers.map((s) =>
+            s.name === serverId
+              ? {
+                  ...s,
+                  tool_count: result.tool_count ?? s.tool_count,
+                  last_sync: new Date().toISOString(),
+                }
+              : s
+          )
+        );
+        toast.success(
+          `Synced ${result.tool_count ?? 0} tool${(result.tool_count ?? 0) !== 1 ? 's' : ''} from MCP server`
+        );
+      } else {
+        toast.error(result.error || 'Failed to sync MCP server tools');
+      }
+    } catch (error) {
+      console.error('Error syncing MCP server:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to sync MCP server tools');
+    } finally {
+      setMcpLoading(false);
+    }
   };
 
   const handleAddTrigger = () => {
@@ -556,6 +709,12 @@ export function AgentFormPage() {
                   toolTypes={toolTypes}
                   onAddTools={() => setShowToolsModal(true)}
                   onRemoveTool={handleRemoveTool}
+                  mcpServers={mcpServers}
+                  onAddMCP={() => setShowMCPServersModal(true)}
+                  onRemoveMCP={handleRemoveMCPServer}
+                  onToggleMCP={handleToggleMCPServer}
+                  onSyncMCP={handleSyncMCPServer}
+                  mcpLoading={mcpLoading}
                 />
               </TabsContent>
             </Tabs>
@@ -581,6 +740,21 @@ export function AgentFormPage() {
         onOpenChange={setShowToolsModal}
         selectedTools={selectedTools}
         onAddTools={handleAddTools}
+      />
+
+      {/* Select MCP Servers Modal */}
+      <SelectMCPServersModal
+        open={showMCPServersModal}
+        onOpenChange={setShowMCPServersModal}
+        selectedServers={mcpServers.map((s) => ({
+          name: s.mcp_server,
+          server_name: s.server_name || '',
+          description: s.description,
+          enabled: ((s.mcp_enabled === true || s.mcp_enabled === 1) ? 1 : 0) as 0 | 1,
+          server_url: s.server_url || '',
+          transport_type: 'http' as const,
+        })) as MCPServerDoc[]}
+        onAddServers={handleAddMCPServers}
       />
     </div>
   );

@@ -192,6 +192,10 @@ export interface AgentDoc {
   description?: string | null;
   instructions: string;
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
+  agent_mcp_server?: Array<{
+    mcp_server: string;
+    enabled: 0 | 1;
+  }>; // Array of MCP server references
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
 }
