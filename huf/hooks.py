@@ -1,9 +1,10 @@
 app_name = "huf"
 app_title = "Huf"
-app_publisher = "Huf"
+app_publisher = "Tridz Technologies Pvt Ltd"
 app_description = "Build and run smart AI agents with tools, chat, and automation directly in the Frappe ecosystem."
 app_email = "info@tridz.com"
 app_license = "agpl"
+source_link = "https://github.com/tridz-dev/huf.git"
 
 # Apps
 # ------------------
@@ -11,15 +12,15 @@ app_license = "agpl"
 # required_apps = []
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "huf",
-# 		"logo": "/assets/huf/logo.png",
-# 		"title": "Huf",
-# 		"route": "/huf",
-# 		"has_permission": "huf.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "huf",
+        "logo": "/assets/huf/Images/Huf.jpg",
+		"title": "Huf",
+		"route": "huf",
+		"has_permission": "huf.permission.check_app_permission"
+	}
+]
 
 # Includes in <head>
 # ------------------
