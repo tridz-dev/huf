@@ -1,9 +1,8 @@
-import { Plus, Server, Plug, Trash2 } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { MCPServerRef } from '@/services/mcpApi';
 
@@ -37,17 +36,11 @@ export function ToolsTab({
   const handleMCPAction = (action: string, serverId?: string) => {
     switch (action) {
       case 'add':
-        if (onAddMCP) {
-          onAddMCP();
-        } else {
-          toast.info('MCP server management coming soon');
-        }
+        onAddMCP?.();
         break;
       case 'remove':
-        if (serverId && onRemoveMCP) {
-          onRemoveMCP(serverId);
-        } else {
-          toast.info('MCP server management coming soon');
+        if (serverId) {
+          onRemoveMCP?.(serverId);
         }
         break;
       case 'toggle':
@@ -58,15 +51,11 @@ export function ToolsTab({
             const currentEnabled = isEnabled(server.enabled);
             onToggleMCP(serverId, !currentEnabled);
           }
-        } else {
-          toast.info('MCP server management coming soon');
         }
         break;
       case 'sync':
-        if (serverId && onSyncMCP) {
-          onSyncMCP(serverId);
-        } else {
-          toast.info('MCP server sync coming soon');
+        if (serverId) {
+          onSyncMCP?.(serverId);
         }
         break;
     }
@@ -233,6 +222,16 @@ export function ToolsTab({
                       )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleMCPAction('sync', mcp.name)}
+                      disabled={mcpLoading || (mcp.mcp_enabled !== undefined && !isEnabled(mcp.mcp_enabled))}
+                      title="Sync tools from MCP server"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${mcpLoading ? 'animate-spin' : ''}`} />
+                    </Button>
                     <Switch
                       checked={isEnabled(mcp.enabled)}
                       disabled={mcpLoading || (mcp.mcp_enabled !== undefined && !isEnabled(mcp.mcp_enabled))}
