@@ -28,6 +28,43 @@ export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isNew = id === 'new';
+  
+  // Get active tab from URL hash, default to "general"
+  // Validate tab value to ensure it's one of the valid tabs
+  const validTabs = ['general', 'behavior', 'triggers', 'tools'];
+  
+  // State to track active tab from URL hash
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const hashFromUrl = window.location.hash.slice(1); // Remove the # symbol
+    return (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : 'general';
+  });
+  
+  // Set initial hash if not present
+  useEffect(() => {
+    const hashFromUrl = window.location.hash.slice(1);
+    if (!hashFromUrl || !validTabs.includes(hashFromUrl)) {
+      window.location.hash = activeTab;
+    }
+  }, []); // Only run on mount
+  
+  // Listen for hash changes (back/forward navigation)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hashFromUrl = window.location.hash.slice(1);
+      const tab = (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : 'general';
+      setActiveTab(tab);
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+  
+  // Handler to update tab in URL hash
+  const handleTabChange = (value: string) => {
+    // Update the URL hash with the tab ID
+    window.location.hash = value;
+    setActiveTab(value);
+  };
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [deletingTrigger, setDeletingTrigger] = useState(false);
@@ -714,7 +751,7 @@ export function AgentFormPage() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <Tabs defaultValue="general" className="w-full">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="general">General</TabsTrigger>
                 <TabsTrigger value="behavior">Behavior</TabsTrigger>
