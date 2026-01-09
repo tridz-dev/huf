@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { getMCPServer, createMCPServer, updateMCPServer, syncMCPTools, updateMCPTool, type MCPServerDoc } from '../services/mcpApi';
+import { getMCPServer, createMCPServer, updateMCPServer, syncMCPTools, updateMCPTool, testMCPConnection, type MCPServerDoc } from '../services/mcpApi';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { MCPHeader } from '../components/mcp/MCPHeader';
 import { DetailsTab } from '../components/mcp/DetailsTab';
@@ -95,6 +95,7 @@ export function McpDetailsPage() {
   const [saving, setSaving] = useState(false);
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
 
   const form = useForm<MCPFormValues>({
     resolver: zodResolver(mcpFormSchema),
@@ -251,7 +252,7 @@ export function McpDetailsPage() {
   // Show save button for new servers or when form is dirty
   const showSaveButton = isNew || isDirty;
 
-  // Handle tool sync
+  // Handle tool sync (used by header button)
   const handleSyncTools = async () => {
     if (!mcpId || isNew) {
       toast.error('Please save the MCP server first before syncing tools');
@@ -281,6 +282,30 @@ export function McpDetailsPage() {
       toast.error(errorMessage || 'Failed to sync tools');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // Handle test connection
+  const handleTestConnection = async () => {
+    if (!mcpId || isNew) {
+      toast.error('Please save the MCP server first before testing connection');
+      return;
+    }
+
+    setTestingConnection(true);
+    try {
+      const result = await testMCPConnection(mcpId);
+      if (result.success) {
+        toast.success('Connection successful!');
+      } else {
+        toast.error(result.error || 'Connection test failed');
+      }
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to test connection');
+    } finally {
+      setTestingConnection(false);
     }
   };
 
@@ -335,7 +360,11 @@ export function McpDetailsPage() {
           isNew={isNew}
           showSaveButton={showSaveButton}
           saving={saving}
+          syncing={syncing}
+          testingConnection={testingConnection}
           onSave={handleFormSubmit}
+          onSync={handleSyncTools}
+          onTestConnection={handleTestConnection}
         />
 
         <Form {...form}>
