@@ -5,12 +5,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { getMCPServer, createMCPServer, updateMCPServer, type MCPServerDoc } from '../services/mcpApi';
+import { getMCPServer, createMCPServer, updateMCPServer, syncMCPTools, updateMCPTool, type MCPServerDoc } from '../services/mcpApi';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { MCPHeader } from '../components/mcp/MCPHeader';
 import { DetailsTab } from '../components/mcp/DetailsTab';
 import { ConnectionTab } from '../components/mcp/ConnectionTab';
-import { mcpFormSchema, type MCPFormValues } from '../components/mcp/types';
+import { ToolsTab } from '../components/mcp/ToolsTab';
+import { mcpFormSchema, type MCPFormValues, type MCPTool } from '../components/mcp/types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 
 export function McpDetailsPage() {
@@ -34,9 +35,9 @@ export function McpDetailsPage() {
     },
     tools: {
       label: 'Tools',
-      fields: [], // Tools tab doesn't have form fields
+      fields: ['enable_auto_sync'], // Tools tab has enable_auto_sync field
       default: false,
-      disabled: true, // Coming soon
+      disabled: isNew, // Disabled for new MCP creation
     },
   } as const;
 
@@ -92,6 +93,8 @@ export function McpDetailsPage() {
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [tools, setTools] = useState<MCPTool[]>([]);
+  const [syncing, setSyncing] = useState(false);
 
   const form = useForm<MCPFormValues>({
     resolver: zodResolver(mcpFormSchema),
@@ -106,11 +109,13 @@ export function McpDetailsPage() {
       auth_type: 'none',
       auth_header_name: '',
       auth_header_value: '',
+      enable_auto_sync: false,
     },
   });
 
   const watchEnabled = form.watch('enabled');
   const isDirty = form.formState.isDirty;
+  const [lastSync, setLastSync] = useState<string | undefined>();
 
   // Load MCP server data when id is available (only for edit mode)
   useEffect(() => {
@@ -127,7 +132,19 @@ export function McpDetailsPage() {
           auth_type: data.auth_type || 'none',
           auth_header_name: data.auth_header_name || '',
           auth_header_value: '', // Don't load the encrypted value
+          enable_auto_sync: data.enable_auto_sync === 1,
         });
+        
+        // Load last_sync
+        setLastSync(data.last_sync);
+        
+        // Load tools from child table
+        if (data.tools && Array.isArray(data.tools)) {
+          setTools(data.tools as MCPTool[]);
+        } else {
+          setTools([]);
+        }
+        
         setLoading(false);
       }).catch((error) => {
         console.error('Error loading MCP server:', error);
@@ -138,6 +155,7 @@ export function McpDetailsPage() {
     } else if (isNew) {
       // New MCP server mode - form already has default values
       setLoading(false);
+      setTools([]);
     }
   }, [mcpId, isNew, form]);
 
@@ -156,6 +174,7 @@ export function McpDetailsPage() {
         auth_type: values.auth_type || 'none',
         auth_header_name: values.auth_header_name || '',
         auth_header_value: values.auth_header_value || '',
+        enable_auto_sync: values.enable_auto_sync ? 1 : 0,
       };
 
       if (isNew) {
@@ -174,7 +193,14 @@ export function McpDetailsPage() {
           auth_type: newMCP.auth_type || 'none',
           auth_header_name: newMCP.auth_header_name || '',
           auth_header_value: '', // Don't reset the encrypted value
+          enable_auto_sync: newMCP.enable_auto_sync === 1,
         });
+        
+        // Load tools if available
+        if (newMCP.tools && Array.isArray(newMCP.tools)) {
+          setTools(newMCP.tools as MCPTool[]);
+        }
+        
         // Navigate to the edit page with the new server's ID
         navigate(`/mcp/${newMCP.name}`);
       } else if (mcpId) {
@@ -193,7 +219,19 @@ export function McpDetailsPage() {
           auth_type: values.auth_type,
           auth_header_name: values.auth_header_name,
           auth_header_value: '', // Don't reset the encrypted value
+          enable_auto_sync: values.enable_auto_sync,
         });
+        
+        // Reload tools after update
+        if (mcpId) {
+          getMCPServer(mcpId).then((updatedData: MCPServerDoc) => {
+            if (updatedData.tools && Array.isArray(updatedData.tools)) {
+              setTools(updatedData.tools as MCPTool[]);
+            }
+          }).catch((error) => {
+            console.error('Error reloading tools:', error);
+          });
+        }
       }
     } catch (error) {
       console.error(`Error ${isNew ? 'creating' : 'updating'} MCP server:`, error);
@@ -212,6 +250,73 @@ export function McpDetailsPage() {
 
   // Show save button for new servers or when form is dirty
   const showSaveButton = isNew || isDirty;
+
+  // Handle tool sync
+  const handleSyncTools = async () => {
+    if (!mcpId || isNew) {
+      toast.error('Please save the MCP server first before syncing tools');
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      const result = await syncMCPTools(mcpId);
+      if (result.success) {
+        toast.success(`Successfully synced ${result.tool_count || 0} tools`);
+        // Reload MCP server to get updated tools
+        const updatedData = await getMCPServer(mcpId);
+        if (updatedData.tools && Array.isArray(updatedData.tools)) {
+          setTools(updatedData.tools as MCPTool[]);
+        }
+        // Update last_sync state
+        if (updatedData.last_sync) {
+          setLastSync(updatedData.last_sync);
+        }
+      } else {
+        toast.error(result.error || 'Failed to sync tools');
+      }
+    } catch (error) {
+      console.error('Error syncing tools:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to sync tools');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Handle tool toggle
+  const handleToolToggle = async (toolName: string, enabled: boolean) => {
+    if (!mcpId || isNew) {
+      return;
+    }
+
+    try {
+      // Update tool optimistically
+      const updatedTools: MCPTool[] = tools.map((tool) =>
+        tool.name === toolName ? { ...tool, enabled: (enabled ? 1 : 0) as 0 | 1 } : tool
+      );
+      setTools(updatedTools);
+
+      // Update via API
+      await updateMCPTool(mcpId, toolName, enabled);
+      toast.success(`Tool ${enabled ? 'enabled' : 'disabled'} successfully`);
+      
+      // Reload to ensure sync
+      const updatedData = await getMCPServer(mcpId);
+      if (updatedData.tools && Array.isArray(updatedData.tools)) {
+        setTools(updatedData.tools as MCPTool[]);
+      }
+    } catch (error) {
+      console.error('Error toggling tool:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to update tool');
+      // Revert on error
+      const updatedData = await getMCPServer(mcpId);
+      if (updatedData.tools && Array.isArray(updatedData.tools)) {
+        setTools(updatedData.tools as MCPTool[]);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -253,9 +358,14 @@ export function McpDetailsPage() {
               </TabsContent>
 
               <TabsContent value="tools" className="space-y-4">
-                <div className="text-center py-12 text-muted-foreground">
-                  Tools tab coming soon
-                </div>
+                <ToolsTab
+                  form={form}
+                  tools={tools}
+                  lastSync={lastSync}
+                  onToolToggle={handleToolToggle}
+                  onSync={handleSyncTools}
+                  syncing={syncing}
+                />
               </TabsContent>
             </Tabs>
           </form>

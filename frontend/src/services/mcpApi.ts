@@ -25,6 +25,14 @@ export interface MCPServerDoc {
     timeout_seconds?: number;
     last_sync?: string;
     available_tools?: string;
+    enable_auto_sync?: 0 | 1;
+    tools?: Array<{
+        name: string;
+        tool_name: string;
+        description?: string;
+        parameters?: string;
+        enabled: 0 | 1;
+    }>;
 }
 
 /**
@@ -155,6 +163,8 @@ export async function getMCPServers(
 export async function getMCPServer(name: string): Promise<MCPServerDoc> {
     try {
         const response = await db.getDoc(doctype['MCP Server'], name);
+        // Note: Frappe automatically includes child tables when fetching a doc
+        // Tools child table will be included if it exists
         return response as MCPServerDoc;
     } catch (error) {
         handleFrappeError(error);
@@ -257,6 +267,35 @@ export async function syncMCPTools(serverName: string): Promise<{
             server_name: serverName,
         });
         return response.message as { success: boolean; tool_count?: number; tools?: string[]; error?: string };
+    } catch (error) {
+        handleFrappeError(error);
+        throw error;
+    }
+}
+
+/**
+ * Update MCP tool enabled status
+ * Note: In Frappe, child table updates require updating the entire array
+ * We need to get the current tools, update the specific one, and save all
+ */
+export async function updateMCPTool(serverName: string, toolName: string, enabled: boolean): Promise<void> {
+    try {
+        // First, get the current document to get all tools
+        const currentDoc = await db.getDoc(doctype['MCP Server'], serverName);
+        const currentTools = (currentDoc as MCPServerDoc).tools || [];
+        
+        // Update the specific tool in the array
+        const updatedTools = currentTools.map((tool: any) => {
+            if (tool.name === toolName) {
+                return { ...tool, enabled: enabled ? 1 : 0 };
+            }
+            return tool;
+        });
+        
+        // Update the document with the modified tools array
+        await db.updateDoc(doctype['MCP Server'], serverName, {
+            tools: updatedTools,
+        });
     } catch (error) {
         handleFrappeError(error);
         throw error;
