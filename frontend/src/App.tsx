@@ -23,6 +23,8 @@ import Executions from './pages/Executions';
 import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
+import McpDetailsPage from './pages/McpDetailsPage';
+import McpListingPage from './pages/McpListingPage';
 
 function App() {
   useEffect(() => {
@@ -192,6 +194,26 @@ function App() {
               <ProtectedRoute>
                 <UnifiedLayout>
                   <NotFoundPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mcp"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <McpListingPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mcp/:mcpId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <McpDetailsPage />
                 </UnifiedLayout>
               </ProtectedRoute>
             }

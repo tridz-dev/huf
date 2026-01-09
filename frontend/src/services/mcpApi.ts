@@ -6,6 +6,7 @@
 
 import { db, call } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { doctype } from '@/data/doctypes';
 
 /**
  * MCP Server document from Frappe
@@ -34,8 +35,8 @@ export interface MCPServerRef {
     server_name?: string;   // Display name from MCP Server
     description?: string;   // Description from MCP Server
     server_url?: string;    // URL from MCP Server
-    enabled: boolean;       // Whether enabled for this agent
-    mcp_enabled?: boolean;  // Whether the MCP Server itself is enabled
+    enabled: boolean | number;       // Whether enabled for this agent (0/1 from Frappe, boolean from frontend)
+    mcp_enabled?: boolean | number;  // Whether the MCP Server itself is enabled (0/1 from Frappe, boolean from frontend)
     tool_count?: number;    // Number of tools available
     last_sync?: string;     // Last sync timestamp
 }
@@ -45,7 +46,7 @@ export interface MCPServerRef {
  */
 export async function getMCPServers(): Promise<MCPServerDoc[]> {
     try {
-        const response = await db.getDocList('MCP Server', {
+        const response = await db.getDocList(doctype['MCP Server'], {
             fields: [
                 'name',
                 'server_name',
@@ -72,7 +73,7 @@ export async function getMCPServers(): Promise<MCPServerDoc[]> {
  */
 export async function getMCPServer(name: string): Promise<MCPServerDoc> {
     try {
-        const response = await db.getDoc('MCP Server', name);
+        const response = await db.getDoc(doctype['MCP Server'], name);
         return response as MCPServerDoc;
     } catch (error) {
         handleFrappeError(error);
@@ -85,7 +86,7 @@ export async function getMCPServer(name: string): Promise<MCPServerDoc> {
  */
 export async function createMCPServer(data: Partial<MCPServerDoc>): Promise<MCPServerDoc> {
     try {
-        const response = await db.createDoc('MCP Server', data);
+        const response = await db.createDoc(doctype['MCP Server'], data);
         return response as MCPServerDoc;
     } catch (error) {
         handleFrappeError(error);
@@ -98,7 +99,7 @@ export async function createMCPServer(data: Partial<MCPServerDoc>): Promise<MCPS
  */
 export async function updateMCPServer(name: string, data: Partial<MCPServerDoc>): Promise<MCPServerDoc> {
     try {
-        const response = await db.updateDoc('MCP Server', name, data);
+        const response = await db.updateDoc(doctype['MCP Server'], name, data);
         return response as MCPServerDoc;
     } catch (error) {
         handleFrappeError(error);
@@ -111,7 +112,7 @@ export async function updateMCPServer(name: string, data: Partial<MCPServerDoc>)
  */
 export async function deleteMCPServer(name: string): Promise<void> {
     try {
-        await db.deleteDoc('MCP Server', name);
+        await db.deleteDoc(doctype['MCP Server'], name);
     } catch (error) {
         handleFrappeError(error);
         throw error;

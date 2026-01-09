@@ -1,32 +1,17 @@
-import { Plus, Server, Plug, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
-
-/**
- * MCP Server reference as stored in agent_mcp_server child table
- */
-export interface MCPServerRef {
-  name: string;           // Child table row name
-  mcp_server: string;     // Link to MCP Server DocType
-  server_name?: string;   // Display name from MCP Server
-  description?: string;   // Description from MCP Server
-  server_url?: string;    // URL from MCP Server
-  enabled: boolean;       // Whether enabled for this agent
-  mcp_enabled?: boolean;  // Whether the MCP Server itself is enabled
-  tool_count?: number;    // Number of tools available
-  last_sync?: string;     // Last sync timestamp
-}
+import type { MCPServerRef } from '@/services/mcpApi';
 
 interface ToolsTabProps {
   selectedTools: AgentToolFunctionRef[];
   toolTypes: AgentToolType[];
   onAddTools: () => void;
   onRemoveTool: (toolId: string) => void;
-  // MCP Server props - optional for backward compatibility
+  // MCP Server props
   mcpServers?: MCPServerRef[];
   onAddMCP?: () => void;
   onRemoveMCP?: (serverId: string) => void;
@@ -49,49 +34,52 @@ export function ToolsTab({
 }: ToolsTabProps) {
 
   const handleMCPAction = (action: string, serverId?: string) => {
-    // If no handler provided, show "coming soon"
     switch (action) {
       case 'add':
-        if (onAddMCP) {
-          onAddMCP();
-        } else {
-          toast.info('MCP server management coming soon');
-        }
+        onAddMCP?.();
         break;
       case 'remove':
-        if (serverId && onRemoveMCP) {
-          onRemoveMCP(serverId);
-        } else {
-          toast.info('MCP server management coming soon');
+        if (serverId) {
+          onRemoveMCP?.(serverId);
         }
         break;
       case 'toggle':
         if (serverId && onToggleMCP) {
           const server = mcpServers.find(s => s.name === serverId);
           if (server) {
-            onToggleMCP(serverId, !server.enabled);
+            // Toggle the enabled state - normalize current value first
+            const currentEnabled = isEnabled(server.enabled);
+            onToggleMCP(serverId, !currentEnabled);
           }
-        } else {
-          toast.info('MCP server management coming soon');
         }
         break;
       case 'sync':
-        if (serverId && onSyncMCP) {
-          onSyncMCP(serverId);
-        } else {
-          toast.info('MCP server sync coming soon');
+        if (serverId) {
+          onSyncMCP?.(serverId);
         }
         break;
     }
   };
 
+  // Helper to normalize enabled state (handles both boolean and number 0/1)
+  // If undefined, defaults to true (assume enabled if not specified)
+  const isEnabled = (value: boolean | number | undefined): boolean => {
+    if (value === undefined) return true; // Default to enabled if not specified
+    return value === true || value === 1;
+  };
+
   const getStatusBadge = (server: MCPServerRef) => {
-    if (!server.mcp_enabled) {
-      return <Badge variant="destructive" className="text-xs shrink-0">server disabled</Badge>;
+    const agentEnabled = isEnabled(server.enabled);
+    
+    // If MCP server itself is explicitly disabled (not undefined), show "server disabled"
+    if (server.mcp_enabled !== undefined && !isEnabled(server.mcp_enabled)) {
+      return <Badge variant="secondary" className="text-xs shrink-0">server disabled</Badge>;
     }
-    if (!server.enabled) {
-      return <Badge variant="secondary" className="text-xs shrink-0">inactive</Badge>;
+    // If MCP server is enabled (or unknown) but agent has it disabled, show "disabled"
+    if (!agentEnabled) {
+      return <Badge variant="secondary" className="text-xs shrink-0">disabled</Badge>;
     }
+    // Both enabled - show "connected"
     return <Badge variant="default" className="text-xs shrink-0">connected</Badge>;
   };
 
@@ -208,61 +196,52 @@ export function ToolsTab({
               </Button>
             </div>
           ) : (
-            <div className="grid gap-3">
+            <div className="">
               {mcpServers.map((mcp) => (
                 <div
                   key={mcp.name}
                   className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                 >
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 overflow-hidden">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h4 className="font-medium text-sm">{mcp.server_name || mcp.mcp_server}</h4>
-                      {getStatusBadge(mcp)}
-                      {mcp.tool_count !== undefined && mcp.tool_count > 0 && (
-                        <Badge variant="outline" className="text-xs shrink-0">
-                          {mcp.tool_count} tools
-                        </Badge>
-                      )}
-                    </div>
-                    {mcp.description && (
-                      <p className="text-xs text-muted-foreground">{mcp.description}</p>
-                    )}
-                    {mcp.server_url && (
-                      <p className="text-xs text-muted-foreground/70 mt-1 truncate">
-                        {mcp.server_url}
-                      </p>
-                    )}
-                    {!mcp.mcp_enabled && (
-                      <div className="flex items-center gap-1 mt-2 text-xs text-amber-600">
-                        <AlertCircle className="w-3 h-3" />
-                        <span>MCP server is disabled globally</span>
+                        <h4 className="font-medium text-sm">{mcp.server_name || mcp.mcp_server}</h4>
+                        {getStatusBadge(mcp)}
+                        {mcp.tool_count !== undefined && mcp.tool_count > 0 && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            {mcp.tool_count} tools
+                          </Badge>
+                        )}
                       </div>
-                    )}
+                      {mcp.description && (
+                        <p className="text-xs text-muted-foreground">{mcp.description}</p>
+                      )}
+                      {mcp.server_url && (
+                        <p className="text-xs text-muted-foreground mt-1" title={mcp.server_url}>
+                          {mcp.server_url}
+                        </p>
+                      )}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => handleMCPAction('sync', mcp.name)}
-                      disabled={mcpLoading || !mcp.mcp_enabled}
+                      disabled={mcpLoading || (mcp.mcp_enabled !== undefined && !isEnabled(mcp.mcp_enabled))}
                       title="Sync tools from MCP server"
                     >
                       <RefreshCw className={`w-4 h-4 ${mcpLoading ? 'animate-spin' : ''}`} />
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleMCPAction('toggle', mcp.name)}
-                      disabled={mcpLoading || !mcp.mcp_enabled}
-                      title={mcp.enabled ? 'Disable for this agent' : 'Enable for this agent'}
-                    >
-                      <Switch
-                        checked={mcp.enabled && mcp.mcp_enabled !== false}
-                        className="pointer-events-none"
-                      />
-                    </Button>
+                    <Switch
+                      checked={isEnabled(mcp.enabled)}
+                      disabled={mcpLoading || (mcp.mcp_enabled !== undefined && !isEnabled(mcp.mcp_enabled))}
+                      onCheckedChange={() => {
+                        // Only allow toggle if MCP server is enabled (or unknown/undefined)
+                        if (!mcpLoading && (mcp.mcp_enabled === undefined || isEnabled(mcp.mcp_enabled))) {
+                          handleMCPAction('toggle', mcp.name);
+                        }
+                      }}
+                    />
                     <Button
                       type="button"
                       variant="ghost"
