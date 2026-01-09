@@ -1,4 +1,5 @@
 import { Plus, Server, Plug, Trash2, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -202,7 +203,10 @@ export function ToolsTab({
                   key={mcp.name}
                   className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                 >
-                  <div className="flex-1 min-w-0 overflow-hidden">
+                  <Link 
+                    to={`/mcp/${mcp.mcp_server}`}
+                    className="flex-1 min-w-0 overflow-hidden cursor-pointer"
+                  >
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h4 className="font-medium text-sm">{mcp.server_name || mcp.mcp_server}</h4>
                         {getStatusBadge(mcp)}
@@ -220,8 +224,8 @@ export function ToolsTab({
                           {mcp.server_url}
                         </p>
                       )}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  </Link>
+                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Button
                       type="button"
                       variant="ghost"
