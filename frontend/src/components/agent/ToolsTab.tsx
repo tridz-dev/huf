@@ -208,22 +208,22 @@ export function ToolsTab({
                     className="flex-1 min-w-0 overflow-hidden cursor-pointer"
                   >
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h4 className="font-medium text-sm">{mcp.server_name || mcp.mcp_server}</h4>
-                        {getStatusBadge(mcp)}
-                        {mcp.tool_count !== undefined && mcp.tool_count > 0 && (
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            {mcp.tool_count} tools
-                          </Badge>
-                        )}
-                      </div>
-                      {mcp.description && (
-                        <p className="text-xs text-muted-foreground">{mcp.description}</p>
+                      <h4 className="font-medium text-sm">{mcp.server_name || mcp.mcp_server}</h4>
+                      {getStatusBadge(mcp)}
+                      {mcp.tool_count !== undefined && mcp.tool_count > 0 && (
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          {mcp.tool_count} tools
+                        </Badge>
                       )}
-                      {mcp.server_url && (
+                    </div>
+                    {mcp.description && (
+                      <p className="text-xs text-muted-foreground">{mcp.description}</p>
+                    )}
+                    {mcp.server_url && (
                         <p className="text-xs text-muted-foreground mt-1" title={mcp.server_url}>
-                          {mcp.server_url}
-                        </p>
-                      )}
+                        {mcp.server_url}
+                      </p>
+                    )}
                   </Link>
                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Button
@@ -236,7 +236,7 @@ export function ToolsTab({
                     >
                       <RefreshCw className={`w-4 h-4 ${mcpLoading ? 'animate-spin' : ''}`} />
                     </Button>
-                    <Switch
+                      <Switch
                       checked={isEnabled(mcp.enabled)}
                       disabled={mcpLoading || (mcp.mcp_enabled !== undefined && !isEnabled(mcp.mcp_enabled))}
                       onCheckedChange={() => {

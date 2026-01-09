@@ -72,21 +72,21 @@ export async function getMCPServers(
         // Backward compatibility: if no params, return array (old API)
         if (!params) {
             const response = await db.getDocList(doctype['MCP Server'], {
-                fields: [
-                    'name',
-                    'server_name',
-                    'description',
-                    'enabled',
-                    'transport_type',
-                    'server_url',
-                    'tool_namespace',
-                    'timeout_seconds',
-                    'last_sync',
-                ],
-                orderBy: { field: 'server_name', order: 'asc' },
-                limit: 100,
-            });
-            return response as MCPServerDoc[];
+            fields: [
+                'name',
+                'server_name',
+                'description',
+                'enabled',
+                'transport_type',
+                'server_url',
+                'tool_namespace',
+                'timeout_seconds',
+                'last_sync',
+            ],
+            orderBy: { field: 'server_name', order: 'asc' },
+            limit: 100,
+        });
+        return response as MCPServerDoc[];
         }
 
         const {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,15 +11,53 @@ import { MCPHeader } from '../components/mcp/MCPHeader';
 import { DetailsTab } from '../components/mcp/DetailsTab';
 import { ConnectionTab } from '../components/mcp/ConnectionTab';
 import { mcpFormSchema, type MCPFormValues } from '../components/mcp/types';
+import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 
 export function McpDetailsPage() {
   const { mcpId } = useParams<{ mcpId: string }>();
   const navigate = useNavigate();
   const isNew = mcpId === 'new';
 
-  // Get active tab from URL hash, default to "details"
-  const validTabs = ['details', 'connection', 'tools'];
-  const defaultTab = 'details';
+  // Tab configuration - single source of truth
+  const tabConfig = {
+    details: {
+      label: 'Details',
+      fields: ['server_name', 'enabled', 'description', 'tool_namespace', 'timeout_seconds'], // server_name only shown/required for new servers
+      default: true,
+      disabled: false,
+    },
+    connection: {
+      label: 'Connection',
+      fields: ['transport_type', 'server_url', 'auth_type', 'auth_header_name', 'auth_header_value'],
+      default: false,
+      disabled: false,
+    },
+    tools: {
+      label: 'Tools',
+      fields: [], // Tools tab doesn't have form fields
+      default: false,
+      disabled: true, // Coming soon
+    },
+  } as const;
+
+  // Extract derived values from tab config (memoized to avoid recreating on every render)
+  const validTabs = useMemo(() => Object.keys(tabConfig), []);
+  const defaultTab = useMemo(
+    () => Object.entries(tabConfig).find(([_, config]) => config.default)?.[0] || validTabs[0],
+    [validTabs]
+  );
+  const tabFieldMapping: TabFieldMapping = useMemo(
+    () => Object.fromEntries(
+      Object.entries(tabConfig).map(([key, config]) => [key, [...config.fields]])
+    ),
+    []
+  );
+  const tabLabels = useMemo(
+    () => Object.fromEntries(
+      Object.entries(tabConfig).map(([key, config]) => [key, config.label])
+    ),
+    []
+  );
   
   // State to track active tab from URL hash
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -37,8 +75,8 @@ export function McpDetailsPage() {
     
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-  
+  }, [defaultTab, validTabs]);
+
   // Handler to update tab in URL hash
   const handleTabChange = (value: string) => {
     setActiveTab(value);
@@ -166,6 +204,12 @@ export function McpDetailsPage() {
     }
   };
 
+  // Memoize the form submit handler to avoid recreating it on every render
+  const handleFormSubmit = useMemo(
+    () => createFormSubmitHandler(form, activeTab, tabFieldMapping, tabLabels, onSubmit),
+    [form, activeTab, tabFieldMapping, tabLabels, onSubmit]
+  );
+
   // Show save button for new servers or when form is dirty
   const showSaveButton = isNew || isDirty;
 
@@ -186,16 +230,18 @@ export function McpDetailsPage() {
           isNew={isNew}
           showSaveButton={showSaveButton}
           saving={saving}
-          onSave={form.handleSubmit(onSubmit)}
+          onSave={handleFormSubmit}
         />
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="details">Details</TabsTrigger>
-                <TabsTrigger value="connection">Connection</TabsTrigger>
-                <TabsTrigger value="tools" disabled>Tools</TabsTrigger>
+                {Object.entries(tabConfig).map(([tabKey, config]) => (
+                  <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
+                    {config.label}
+                  </TabsTrigger>
+                ))}
               </TabsList>
 
               <TabsContent value="details" className="space-y-4">
