@@ -32,26 +32,19 @@ export function AgentFormPage() {
   // Get active tab from URL hash, default to "general"
   // Validate tab value to ensure it's one of the valid tabs
   const validTabs = ['general', 'behavior', 'triggers', 'tools'];
+  const defaultTab = 'general';
   
   // State to track active tab from URL hash
   const [activeTab, setActiveTab] = useState<string>(() => {
     const hashFromUrl = window.location.hash.slice(1); // Remove the # symbol
-    return (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : 'general';
+    return (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : defaultTab;
   });
-  
-  // Set initial hash if not present
-  useEffect(() => {
-    const hashFromUrl = window.location.hash.slice(1);
-    if (!hashFromUrl || !validTabs.includes(hashFromUrl)) {
-      window.location.hash = activeTab;
-    }
-  }, []); // Only run on mount
   
   // Listen for hash changes (back/forward navigation)
   useEffect(() => {
     const handleHashChange = () => {
       const hashFromUrl = window.location.hash.slice(1);
-      const tab = (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : 'general';
+      const tab = (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : defaultTab;
       setActiveTab(tab);
     };
     
@@ -61,9 +54,15 @@ export function AgentFormPage() {
   
   // Handler to update tab in URL hash
   const handleTabChange = (value: string) => {
-    // Update the URL hash with the tab ID
-    window.location.hash = value;
     setActiveTab(value);
+    // Only set hash if it's not the default tab, or clear hash if switching back to default
+    if (value === defaultTab) {
+      // Clear hash when switching to default tab
+      window.history.replaceState(null, '', window.location.pathname);
+    } else {
+      // Set hash for non-default tabs
+      window.location.hash = value;
+    }
   };
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);

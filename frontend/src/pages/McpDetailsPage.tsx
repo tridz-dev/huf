@@ -19,26 +19,19 @@ export function McpDetailsPage() {
 
   // Get active tab from URL hash, default to "details"
   const validTabs = ['details', 'connection', 'tools'];
+  const defaultTab = 'details';
   
   // State to track active tab from URL hash
   const [activeTab, setActiveTab] = useState<string>(() => {
     const hashFromUrl = window.location.hash.slice(1);
-    return (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : 'details';
+    return (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : defaultTab;
   });
-  
-  // Set initial hash if not present
-  useEffect(() => {
-    const hashFromUrl = window.location.hash.slice(1);
-    if (!hashFromUrl || !validTabs.includes(hashFromUrl)) {
-      window.location.hash = activeTab;
-    }
-  }, []); // Only run on mount
   
   // Listen for hash changes (back/forward navigation)
   useEffect(() => {
     const handleHashChange = () => {
       const hashFromUrl = window.location.hash.slice(1);
-      const tab = (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : 'details';
+      const tab = (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : defaultTab;
       setActiveTab(tab);
     };
     
@@ -48,8 +41,15 @@ export function McpDetailsPage() {
   
   // Handler to update tab in URL hash
   const handleTabChange = (value: string) => {
-    window.location.hash = value;
     setActiveTab(value);
+    // Only set hash if it's not the default tab, or clear hash if switching back to default
+    if (value === defaultTab) {
+      // Clear hash when switching to default tab
+      window.history.replaceState(null, '', window.location.pathname);
+    } else {
+      // Set hash for non-default tabs
+      window.location.hash = value;
+    }
   };
 
   const [loading, setLoading] = useState(!isNew);
