@@ -1,4 +1,4 @@
-import { Plus, Server, Plug, Trash2 } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -6,26 +6,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 
-interface MCPItem {
-  id: string;
-  name: string;
-  description: string;
-  provider: string;
-  status: 'connected' | 'inactive';
+/**
+ * MCP Server reference as stored in agent_mcp_server child table
+ */
+export interface MCPServerRef {
+  name: string;           // Child table row name
+  mcp_server: string;     // Link to MCP Server DocType
+  server_name?: string;   // Display name from MCP Server
+  description?: string;   // Description from MCP Server
+  server_url?: string;    // URL from MCP Server
+  enabled: boolean;       // Whether enabled for this agent
+  mcp_enabled?: boolean;  // Whether the MCP Server itself is enabled
+  tool_count?: number;    // Number of tools available
+  last_sync?: string;     // Last sync timestamp
 }
-
-const mockMCPs: MCPItem[] = [
-  { id: 'm1', name: 'Zendesk MCP', description: 'Query and manage Zendesk tickets', provider: 'Zendesk', status: 'connected' },
-  { id: 'm2', name: 'Slack MCP', description: 'Send messages and read channels', provider: 'Slack', status: 'connected' },
-  { id: 'm3', name: 'PostgreSQL MCP', description: 'Query customer database', provider: 'PostgreSQL', status: 'connected' },
-  { id: 'm4', name: 'Stripe MCP', description: 'Access payment and subscription data', provider: 'Stripe', status: 'inactive' },
-];
 
 interface ToolsTabProps {
   selectedTools: AgentToolFunctionRef[];
   toolTypes: AgentToolType[];
   onAddTools: () => void;
   onRemoveTool: (toolId: string) => void;
+  // MCP Server props - optional for backward compatibility
+  mcpServers?: MCPServerRef[];
+  onAddMCP?: () => void;
+  onRemoveMCP?: (serverId: string) => void;
+  onToggleMCP?: (serverId: string, enabled: boolean) => void;
+  onSyncMCP?: (serverId: string) => void;
+  mcpLoading?: boolean;
 }
 
 export function ToolsTab({
@@ -33,9 +40,64 @@ export function ToolsTab({
   toolTypes,
   onAddTools,
   onRemoveTool,
+  mcpServers = [],
+  onAddMCP,
+  onRemoveMCP,
+  onToggleMCP,
+  onSyncMCP,
+  mcpLoading = false,
 }: ToolsTabProps) {
+
+  const handleMCPAction = (action: string, serverId?: string) => {
+    // If no handler provided, show "coming soon"
+    switch (action) {
+      case 'add':
+        if (onAddMCP) {
+          onAddMCP();
+        } else {
+          toast.info('MCP server management coming soon');
+        }
+        break;
+      case 'remove':
+        if (serverId && onRemoveMCP) {
+          onRemoveMCP(serverId);
+        } else {
+          toast.info('MCP server management coming soon');
+        }
+        break;
+      case 'toggle':
+        if (serverId && onToggleMCP) {
+          const server = mcpServers.find(s => s.name === serverId);
+          if (server) {
+            onToggleMCP(serverId, !server.enabled);
+          }
+        } else {
+          toast.info('MCP server management coming soon');
+        }
+        break;
+      case 'sync':
+        if (serverId && onSyncMCP) {
+          onSyncMCP(serverId);
+        } else {
+          toast.info('MCP server sync coming soon');
+        }
+        break;
+    }
+  };
+
+  const getStatusBadge = (server: MCPServerRef) => {
+    if (!server.mcp_enabled) {
+      return <Badge variant="destructive" className="text-xs shrink-0">server disabled</Badge>;
+    }
+    if (!server.enabled) {
+      return <Badge variant="secondary" className="text-xs shrink-0">inactive</Badge>;
+    }
+    return <Badge variant="default" className="text-xs shrink-0">connected</Badge>;
+  };
+
   return (
     <>
+      {/* Native Tools Section */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -101,6 +163,7 @@ export function ToolsTab({
         </CardContent>
       </Card>
 
+      {/* MCP Servers Section */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -111,11 +174,12 @@ export function ToolsTab({
               </CardTitle>
               <CardDescription>Connected MCP servers for extended capabilities</CardDescription>
             </div>
-            <Button 
+            <Button
               type="button"
-              size="sm" 
+              size="sm"
               variant="outline"
-              onClick={() => toast.info('Coming soon')}
+              onClick={() => handleMCPAction('add')}
+              disabled={mcpLoading}
             >
               <Plus className="w-4 h-4 mr-2" />
               Connect MCP
@@ -123,51 +187,98 @@ export function ToolsTab({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3">
-            {mockMCPs.map((mcp) => (
-              <div
-                key={mcp.id}
-                className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-medium text-sm">{mcp.name}</h4>
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {mcp.provider}
-                    </Badge>
-                    <Badge
-                      variant={mcp.status === 'connected' ? 'default' : 'secondary'}
-                      className="text-xs shrink-0"
-                    >
-                      {mcp.status}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{mcp.description}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toast.info('Coming soon')}
-                  >
-                    <Switch checked={mcp.status === 'connected'} className="pointer-events-none" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toast.info('Coming soon')}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+          {mcpServers.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="flex justify-center mb-4">
+                <div className="rounded-full bg-muted p-3">
+                  <Plug className="w-6 h-6 text-muted-foreground" />
                 </div>
               </div>
-            ))}
-          </div>
+              <p className="text-muted-foreground mb-2">No MCP servers connected</p>
+              <p className="text-xs text-muted-foreground mb-4">
+                Connect external MCP servers to extend agent capabilities with tools like Gmail, GitHub, Slack, and more.
+              </p>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => handleMCPAction('add')}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Connect MCP Server
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {mcpServers.map((mcp) => (
+                <div
+                  key={mcp.name}
+                  className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h4 className="font-medium text-sm">{mcp.server_name || mcp.mcp_server}</h4>
+                      {getStatusBadge(mcp)}
+                      {mcp.tool_count !== undefined && mcp.tool_count > 0 && (
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          {mcp.tool_count} tools
+                        </Badge>
+                      )}
+                    </div>
+                    {mcp.description && (
+                      <p className="text-xs text-muted-foreground">{mcp.description}</p>
+                    )}
+                    {mcp.server_url && (
+                      <p className="text-xs text-muted-foreground/70 mt-1 truncate">
+                        {mcp.server_url}
+                      </p>
+                    )}
+                    {!mcp.mcp_enabled && (
+                      <div className="flex items-center gap-1 mt-2 text-xs text-amber-600">
+                        <AlertCircle className="w-3 h-3" />
+                        <span>MCP server is disabled globally</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleMCPAction('sync', mcp.name)}
+                      disabled={mcpLoading || !mcp.mcp_enabled}
+                      title="Sync tools from MCP server"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${mcpLoading ? 'animate-spin' : ''}`} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleMCPAction('toggle', mcp.name)}
+                      disabled={mcpLoading || !mcp.mcp_enabled}
+                      title={mcp.enabled ? 'Disable for this agent' : 'Enable for this agent'}
+                    >
+                      <Switch
+                        checked={mcp.enabled && mcp.mcp_enabled !== false}
+                        className="pointer-events-none"
+                      />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleMCPAction('remove', mcp.name)}
+                      disabled={mcpLoading}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </>
   );
 }
-

@@ -1,0 +1,38 @@
+{
+    "actions": [],
+    "creation": "2025-12-31 18:59:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "header_name",
+        "header_value"
+    ],
+    "fields": [
+        {
+            "fieldname": "header_name",
+            "fieldtype": "Data",
+            "label": "Header Name",
+            "reqd": 1,
+            "in_list_view": 1
+        },
+        {
+            "fieldname": "header_value",
+            "fieldtype": "Data",
+            "label": "Header Value",
+            "reqd": 1,
+            "in_list_view": 1
+        }
+    ],
+    "index_web_pages_for_search": 1,
+    "istable": 1,
+    "links": [],
+    "modified": "2025-12-31 18:59:00.000000",
+    "modified_by": "Administrator",
+    "module": "Huf",
+    "name": "MCP Server Header",
+    "owner": "Administrator",
+    "permissions": [],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
+}
