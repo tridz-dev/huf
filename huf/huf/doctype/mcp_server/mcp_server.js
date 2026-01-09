@@ -5,22 +5,12 @@ frappe.ui.form.on("MCP Server", {
     refresh(frm) {
         // Add sync tools button handler
         if (!frm.is_new()) {
-            frm.add_custom_button(__("Sync Tools"), function() {
-                frm.call({
-                    method: "sync_tools",
-                    doc: frm.doc,
-                    freeze: true,
-                    freeze_message: __("Syncing tools from MCP server..."),
-                    callback: function(r) {
-                        if (r.message && r.message.success) {
-                            frm.reload_doc();
-                        }
-                    }
-                });
+            frm.add_custom_button(__("Sync Tools"), function () {
+                frm.events.sync_tools(frm);
             }, __("Actions"));
-            
+
             // Add test connection button
-            frm.add_custom_button(__("Test Connection"), function() {
+            frm.add_custom_button(__("Test Connection"), function () {
                 frappe.call({
                     method: "huf.ai.mcp_client.test_mcp_connection",
                     args: {
@@ -28,7 +18,7 @@ frappe.ui.form.on("MCP Server", {
                     },
                     freeze: true,
                     freeze_message: __("Testing connection..."),
-                    callback: function(r) {
+                    callback: function (r) {
                         if (r.message && r.message.success) {
                             frappe.msgprint({
                                 title: __("Connection Successful"),
@@ -47,7 +37,27 @@ frappe.ui.form.on("MCP Server", {
             }, __("Actions"));
         }
     },
-    
+
+    sync_tools_button(frm) {
+        frm.events.sync_tools(frm);
+    },
+
+    sync_tools(frm) {
+        frm.call({
+            method: "sync_tools",
+            doc: frm.doc,
+            freeze: true,
+            freeze_message: __("Syncing tools from MCP server..."),
+            callback: function (r) {
+                if (r.message && r.message.success) {
+                    frm.reload_doc();
+                }
+            }
+        });
+    },
+
+
+
     auth_type(frm) {
         // Set default header name based on auth type
         if (frm.doc.auth_type === "bearer_token") {
