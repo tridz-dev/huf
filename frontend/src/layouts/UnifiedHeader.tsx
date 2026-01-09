@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ReactNode } from 'react';
+import { Fragment, ReactNode } from 'react';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -38,8 +38,8 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
           <Breadcrumb>
             <BreadcrumbList>
               {breadcrumbs.map((crumb, index) => (
-                <div key={index} className="flex items-center">
-                  {index > 0 && <BreadcrumbSeparator className="hidden md:block" />}
+                <Fragment key={index}>
+                <div className="flex items-center">
                   <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
                     {index === breadcrumbs.length - 1 ? (
                       <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
@@ -52,6 +52,8 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
                     )}
                   </BreadcrumbItem>
                 </div>
+                {index < breadcrumbs.length - 1 && <BreadcrumbSeparator className="hidden md:block mt-0.5" />}
+                </Fragment>
               ))}
             </BreadcrumbList>
           </Breadcrumb>
