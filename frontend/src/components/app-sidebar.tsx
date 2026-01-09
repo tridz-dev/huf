@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -47,6 +47,11 @@ const navItems = [
     title: "AI Providers",
     url: "/providers",
     icon: Plug,
+  },
+  {
+    title: "MCP Servers",
+    url: "/mcp",
+    icon: Server,
   },
 ]
 

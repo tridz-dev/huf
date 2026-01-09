@@ -42,11 +42,69 @@ export interface MCPServerRef {
 }
 
 /**
- * Fetch all available MCP servers
+ * Pagination parameters for MCP servers
  */
-export async function getMCPServers(): Promise<MCPServerDoc[]> {
+export interface GetMCPServersParams {
+    page?: number;
+    limit?: number;
+    start?: number;
+    search?: string;
+}
+
+/**
+ * Paginated response for MCP servers
+ */
+export interface PaginatedMCPServersResponse {
+    items: MCPServerDoc[];
+    hasMore: boolean;
+    total?: number;
+}
+
+/**
+ * Fetch all available MCP servers
+ * Supports pagination and search
+ */
+export async function getMCPServers(
+    params?: GetMCPServersParams
+): Promise<PaginatedMCPServersResponse | MCPServerDoc[]> {
     try {
-        const response = await db.getDocList(doctype['MCP Server'], {
+        // Backward compatibility: if no params, return array (old API)
+        if (!params) {
+            const response = await db.getDocList(doctype['MCP Server'], {
+                fields: [
+                    'name',
+                    'server_name',
+                    'description',
+                    'enabled',
+                    'transport_type',
+                    'server_url',
+                    'tool_namespace',
+                    'timeout_seconds',
+                    'last_sync',
+                ],
+                orderBy: { field: 'server_name', order: 'asc' },
+                limit: 100,
+            });
+            return response as MCPServerDoc[];
+        }
+
+        const {
+            page = 1,
+            limit = 20,
+            start = (page - 1) * limit,
+            search,
+        } = params;
+
+        // Build filters
+        const filters: Array<[string, string, unknown]> = [];
+
+        // Build search filters if provided (search in server_name)
+        if (search && search.trim()) {
+            filters.push(['server_name', 'like', `%${search.trim()}%`]);
+        }
+
+        // Fetch data
+        const servers = await db.getDocList(doctype['MCP Server'], {
             fields: [
                 'name',
                 'server_name',
@@ -58,13 +116,35 @@ export async function getMCPServers(): Promise<MCPServerDoc[]> {
                 'timeout_seconds',
                 'last_sync',
             ],
-            orderBy: { field: 'server_name', order: 'asc' },
-            limit: 100,
+            filters: filters.length > 0 ? (filters as any) : undefined,
+            limit: limit + 1, // Fetch one extra to check if there's more
+            ...(start > 0 && { limit_start: start }), // Only include if start > 0
+            orderBy: { field: 'modified', order: 'desc' },
         });
-        return response as MCPServerDoc[];
+
+        const mappedServers = servers as MCPServerDoc[];
+        const hasMore = mappedServers.length > limit;
+        const items = hasMore ? mappedServers.slice(0, limit) : mappedServers;
+
+        // Only fetch count on first page to avoid unnecessary API calls
+        let total: number | undefined;
+        if (page === 1) {
+            try {
+                const { fetchDocCount } = await import('./utilsApi');
+                const countFilters = [...filters];
+                total = await fetchDocCount(doctype['MCP Server'], countFilters);
+            } catch {
+                // Ignore count errors - total is optional
+            }
+        }
+
+        return {
+            items,
+            hasMore,
+            total,
+        };
     } catch (error) {
-        handleFrappeError(error);
-        throw error;
+        handleFrappeError(error, 'Error fetching MCP servers');
     }
 }
 

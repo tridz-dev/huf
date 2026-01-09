@@ -40,8 +40,11 @@ export function SelectMCPServersModal({
   useEffect(() => {
     if (open) {
       setLoading(true);
+      // Call without params to get all servers as array (backward compatible)
       getMCPServers()
-        .then((servers) => {
+        .then((response) => {
+          // Handle both array and paginated response formats
+          const servers = Array.isArray(response) ? response : response.items;
           setAllServers(servers);
           setLoading(false);
         })
