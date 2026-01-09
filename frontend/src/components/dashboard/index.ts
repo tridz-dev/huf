@@ -14,3 +14,5 @@ export { BaseCard } from './cards/BaseCard';
 export { StatCard } from './cards/StatCard';
 export { ItemCard } from './cards/ItemCard';
 export { SkeletonCard } from './cards/SkeletonCard';
+
+export { LoadMoreButton } from './LoadMoreButton';

@@ -1,11 +1,10 @@
-import { Calendar, Settings, Loader2, Tag } from 'lucide-react';
+import { Calendar, Settings, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { PageLayout, FilterBar, GridView, ItemCard } from '../components/dashboard';
+import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getMCPServers } from '../services/mcpApi';
 import { formatTimeAgo } from '../utils/time';
 import type { MCPServerDoc } from '../services/mcpApi';
-import { Button } from '../components/ui/button';
 
 function getStatusVariant(enabled: 0 | 1): 'default' | 'secondary' {
   return enabled === 1 ? 'default' : 'secondary';
@@ -108,24 +107,12 @@ export default function McpListingPage() {
         }}
         keyExtractor={(server) => server.name}
       />
-      {hasMore && (
-        <div className="flex justify-center py-8">
-          <Button
-            onClick={() => loadMore()}
-            disabled={loadingMore}
-            variant="outline"
-          >
-            {loadingMore ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Load More'
-            )}
-          </Button>
-        </div>
-      )}
+      <LoadMoreButton
+        hasMore={hasMore}
+        loading={loadingMore}
+        onLoadMore={loadMore}
+        disabled={!!search || initialLoading}
+      />
       {!hasMore && servers.length > 0 && (
         <div className="text-center py-4 text-sm text-muted-foreground">
           {total !== undefined ? `Showing all ${total} MCP servers` : 'No more MCP servers to load'}
