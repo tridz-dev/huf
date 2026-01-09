@@ -23,7 +23,7 @@ import Executions from './pages/Executions';
 import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
-import McpDetailsPage from './pages/McpDetailsPage';
+import { McpDetailsPageWrapper } from './pages/McpDetailsPageWrapper';
 import McpListingPage from './pages/McpListingPage';
 
 function App() {
@@ -212,9 +212,7 @@ function App() {
             path="/mcp/:mcpId"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
-                  <McpDetailsPage />
-                </UnifiedLayout>
+                <McpDetailsPageWrapper />
               </ProtectedRoute>
             }
           />

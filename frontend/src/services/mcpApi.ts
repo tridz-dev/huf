@@ -20,6 +20,7 @@ export interface MCPServerDoc {
     server_url: string;
     auth_type?: 'none' | 'api_key' | 'bearer_token' | 'custom_header';
     auth_header_name?: string;
+    auth_header_value?: string;
     tool_namespace?: string;
     timeout_seconds?: number;
     last_sync?: string;
