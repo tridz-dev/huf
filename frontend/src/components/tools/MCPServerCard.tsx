@@ -61,7 +61,7 @@ export function MCPServerCard({
         )}
         {server.server_url && (
           <p className={cn(
-            'text-muted-foreground/70 mt-1',
+            'text-muted-foreground mt-1',
             compact ? 'text-xs line-clamp-1' : 'text-xs truncate'
           )}>
             {server.server_url}

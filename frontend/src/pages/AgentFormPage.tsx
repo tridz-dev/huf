@@ -20,7 +20,7 @@ import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
-import { syncMCPTools, type MCPServerRef } from '../services/mcpApi';
+import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
 
 
@@ -255,22 +255,42 @@ export function AgentFormPage() {
         });
         // Load MCP servers from agent_mcp_server child table (already in agent document)
         if (data.agent_mcp_server && Array.isArray(data.agent_mcp_server) && data.agent_mcp_server.length > 0) {
-          // Transform child table data to MCPServerRef format
-          // The child table includes: name, mcp_server (link), enabled, server_url (fetched), tool_count
-          const servers: MCPServerRef[] = data.agent_mcp_server.map((item: any) => ({
+          // First, map child table data to MCPServerRef format
+          const childTableServers: MCPServerRef[] = data.agent_mcp_server.map((item: any) => ({
             name: item.name || '', // Child table row name
             mcp_server: item.mcp_server, // Link to MCP Server DocType
             server_url: item.server_url || '',
             enabled: item.enabled === 1 || item.enabled === true ? 1 : 0,
             tool_count: item.tool_count || 0,
-            // Note: server_name, description, and mcp_enabled come from the linked MCP Server DocType
-            // These may or may not be included depending on Frappe's serialization
-            server_name: item.server_name,
-            description: item.description,
-            mcp_enabled: item.mcp_enabled !== undefined ? (item.mcp_enabled === 1 || item.mcp_enabled === true ? 1 : 0) : undefined,
+            server_name: item.server_name, // May be included from Frappe's serialization
+            description: item.description, // May be included from Frappe's serialization
           }));
-          setMcpServers(servers);
-          setInitialMcpServers(servers); // Store initial state for change detection
+
+          // Fetch MCP Server documents to get the enabled status and other details
+          Promise.all(
+            childTableServers.map(async (server) => {
+              try {
+                const mcpServerDoc = await getMCPServer(server.mcp_server);
+                return {
+                  ...server,
+                  server_name: mcpServerDoc.server_name || server.server_name || server.mcp_server,
+                  description: mcpServerDoc.description || server.description,
+                  mcp_enabled: mcpServerDoc.enabled === 1 ? 1 : 0, // Enabled status from MCP Server DocType
+                  server_url: mcpServerDoc.server_url || server.server_url,
+                };
+              } catch (error) {
+                console.error(`Error fetching MCP Server ${server.mcp_server}:`, error);
+                // If fetch fails, keep the server data but mark mcp_enabled as undefined
+                return {
+                  ...server,
+                  mcp_enabled: undefined,
+                };
+              }
+            })
+          ).then((enrichedServers) => {
+            setMcpServers(enrichedServers);
+            setInitialMcpServers(enrichedServers);
+          });
         } else {
           setMcpServers([]);
           setInitialMcpServers([]);
@@ -370,7 +390,7 @@ export function AgentFormPage() {
           getAgent(id).then((updatedData: AgentDoc) => {
             // Reload MCP servers from updated agent document
             if (updatedData.agent_mcp_server && Array.isArray(updatedData.agent_mcp_server) && updatedData.agent_mcp_server.length > 0) {
-              const servers: MCPServerRef[] = updatedData.agent_mcp_server.map((item: any) => ({
+              const childTableServers: MCPServerRef[] = updatedData.agent_mcp_server.map((item: any) => ({
                 name: item.name || '',
                 mcp_server: item.mcp_server,
                 server_url: item.server_url || '',
@@ -378,10 +398,32 @@ export function AgentFormPage() {
                 tool_count: item.tool_count || 0,
                 server_name: item.server_name,
                 description: item.description,
-                mcp_enabled: item.mcp_enabled !== undefined ? (item.mcp_enabled === 1 || item.mcp_enabled === true ? 1 : 0) : undefined,
               }));
-              setMcpServers(servers);
-              setInitialMcpServers(servers);
+
+              // Fetch MCP Server documents to get the enabled status
+              Promise.all(
+                childTableServers.map(async (server) => {
+                  try {
+                    const mcpServerDoc = await getMCPServer(server.mcp_server);
+                    return {
+                      ...server,
+                      server_name: mcpServerDoc.server_name || server.server_name || server.mcp_server,
+                      description: mcpServerDoc.description || server.description,
+                      mcp_enabled: mcpServerDoc.enabled === 1 ? 1 : 0,
+                      server_url: mcpServerDoc.server_url || server.server_url,
+                    };
+                  } catch (error) {
+                    console.error(`Error fetching MCP Server ${server.mcp_server}:`, error);
+                    return {
+                      ...server,
+                      mcp_enabled: undefined,
+                    };
+                  }
+                })
+              ).then((enrichedServers) => {
+                setMcpServers(enrichedServers);
+                setInitialMcpServers(enrichedServers);
+              });
             } else {
               setMcpServers([]);
               setInitialMcpServers([]);
