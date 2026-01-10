@@ -11,6 +11,7 @@ dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
     "openai-agents",
     "litellm>=1.0.0",
+    "llama-index-core>=0.10.0",
 ]
 
 [build-system]
