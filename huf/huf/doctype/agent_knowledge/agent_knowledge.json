@@ -1,0 +1,72 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-01-10 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "knowledge_source",
+  "mode",
+  "priority",
+  "max_chunks",
+  "token_budget",
+  "description"
+ ],
+ "fields": [
+  {
+   "fieldname": "knowledge_source",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Knowledge Source",
+   "options": "Knowledge Source",
+   "reqd": 1
+  },
+  {
+   "default": "Optional",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Mode",
+   "options": "Mandatory\nOptional",
+   "reqd": 1
+  },
+  {
+   "default": 0,
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Priority",
+   "non_negative": 1
+  },
+  {
+   "default": 5,
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Max Chunks",
+   "non_negative": 1
+  },
+  {
+   "default": 2000,
+   "fieldtype": "Int",
+   "label": "Token Budget",
+   "non_negative": 1
+  },
+  {
+   "fieldtype": "Small Text",
+   "label": "Description"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-01-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Knowledge",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
