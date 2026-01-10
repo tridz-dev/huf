@@ -36,6 +36,9 @@
   "instructions",
   "tools_and_mcp_tab",
   "agent_tool",
+  "knowledge_tab",
+  "knowledge_section",
+  "agent_knowledge",
   "permissions_tab",
   "allowed_users",
   "column_break_dq1z",
@@ -160,6 +163,24 @@
    "fieldname": "tools_and_mcp_tab",
    "fieldtype": "Tab Break",
    "label": "Tools and MCP"
+  },
+  {
+   "fieldname": "knowledge_tab",
+   "fieldtype": "Tab Break",
+   "label": "Knowledge"
+  },
+  {
+   "description": "Knowledge sources this agent can access",
+   "fieldname": "knowledge_section",
+   "fieldtype": "Section Break",
+   "label": "Knowledge Sources"
+  },
+  {
+   "description": "Knowledge sources this agent can access",
+   "fieldname": "agent_knowledge",
+   "fieldtype": "Table",
+   "label": "Knowledge Sources",
+   "options": "Agent Knowledge"
   },
   {
    "description": "Configure language model settings ",
