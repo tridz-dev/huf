@@ -181,6 +181,14 @@ doc_events = {
         "on_update": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
         "on_trash": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
     },
+    "Knowledge Source": {
+        "after_insert": "huf.ai.knowledge.hooks.on_knowledge_source_created",
+        "on_update": "huf.ai.knowledge.hooks.on_knowledge_source_updated",
+        "on_trash": "huf.ai.knowledge.hooks.on_knowledge_source_deleted",
+    },
+    "Knowledge Input": {
+        "on_trash": "huf.ai.knowledge.hooks.on_knowledge_input_deleted",
+    },
 }
 
 # Scheduled Tasks
@@ -206,6 +214,10 @@ doc_events = {
 scheduler_events = {
     "all": [
         "huf.ai.agent_scheduler.run_scheduled_agents"
+    ],
+    "daily": [
+        "huf.ai.knowledge.maintenance.cleanup_orphaned_files",
+        "huf.ai.knowledge.maintenance.optimize_indexes",
     ],
     "cron": {
         "*/1 * * * *": [
