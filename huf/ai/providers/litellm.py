@@ -320,7 +320,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     f"OpenAI API server error with model '{normalized_model}'. "
                     f"This may be temporary. Details: {str(e)}"
                 )
-                frappe.log_error(msg, "LiteLLM Provider")
+                frappe.log_error(message=msg, title="LiteLLM Provider")
                 return SimpleResult(msg, total_usage, all_new_items)
 
             except RateLimitError as e:
@@ -331,23 +331,23 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 except Exception:
                     full_trace = str(e)
 
-                frappe.log_error(full_trace, title)
+                frappe.log_error(message=full_trace, title=title)
 
                 msg = (
                     f"Rate limit exceeded for model '{normalized_model}'. "
                     f"Please try again later. Details: {str(e)}"
                 )
-                frappe.log_error(msg, "LiteLLM Provider")
+                frappe.log_error(message=msg, title="LiteLLM Provider")
                 return SimpleResult(msg, total_usage, all_new_items)
 
             except APIError as e:
                 msg = f"API error for model '{normalized_model}': {str(e)}"
-                frappe.log_error(msg, "LiteLLM Provider")
+                frappe.log_error(message=msg, title="LiteLLM Provider")
                 return SimpleResult(msg, total_usage, all_new_items)
 
             except Exception as e:
                 msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                frappe.log_error(msg, "LiteLLM Provider")
+                frappe.log_error(message=msg, title="LiteLLM Provider")
                 return SimpleResult(msg, total_usage, all_new_items)
 
             # Extract response
@@ -433,7 +433,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         )
 
     except Exception as e:
-        frappe.log_error(f"LiteLLM Provider Error: {str(e)}", "LiteLLM Provider")
+        frappe.log_error(message=f"LiteLLM Provider Error: {str(e)}", title="LiteLLM Provider")
         return SimpleResult(f"LiteLLM Provider Error: {str(e)}")
 
 
@@ -500,8 +500,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             except Exception:
                 model_supports_caching = False
                 frappe.log_error(
-                    f"Failed to check prompt caching support for model {normalized_model}",
-                    "LiteLLM Prompt Caching"
+                    message=f"Failed to check prompt caching support for model {normalized_model}",
+                    title="LiteLLM Prompt Caching"
                 )
 
         # Prepare messages with cache_control if enabled
@@ -740,5 +740,5 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         }
 
     except Exception as e:
-        frappe.log_error(f"LiteLLM Streaming Error: {str(e)}", "LiteLLM Streaming")
+        frappe.log_error(message=f"LiteLLM Streaming Error: {str(e)}", title="LiteLLM Streaming")
         yield {"type": "error", "error": f"LiteLLM Streaming Error: {str(e)}"}
