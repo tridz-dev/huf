@@ -9,6 +9,7 @@ import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { ChatHeaderActions } from './components/ChatHeaderActions';
+import { McpHeaderActions } from './components/McpHeaderActions';
 import { HomePage } from './pages/HomePage';
 import { AgentsPage } from './pages/AgentsPage';
 import { AgentFormPageWrapper } from './pages/AgentFormPageWrapper';
@@ -23,6 +24,8 @@ import Executions from './pages/Executions';
 import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
+import { McpDetailsPageWrapper } from './pages/McpDetailsPageWrapper';
+import McpListingPage from './pages/McpListingPage';
 
 function App() {
   useEffect(() => {
@@ -193,6 +196,24 @@ function App() {
                 <UnifiedLayout>
                   <NotFoundPage />
                 </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mcp"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<McpHeaderActions />}>
+                  <McpListingPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/mcp/:mcpId"
+            element={
+              <ProtectedRoute>
+                <McpDetailsPageWrapper />
               </ProtectedRoute>
             }
           />

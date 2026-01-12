@@ -49,7 +49,7 @@ def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
             is_private=False
         )
     except Exception as e:
-        frappe.log_error(f"Save File Failed: {e}")
+        frappe.log_error(message=f"Save File Failed: {e}", title="Save File Failed")
         return {"success": False, "error": "Could not save audio file to database."}
 
     file_id = None
@@ -215,7 +215,7 @@ def new_conversation(agent: str, message: str):
         }
 
     except Exception as e:
-        frappe.log_error(f"new_conversation error: {frappe.get_traceback()}", "Huf API")
+        frappe.log_error(message=f"new_conversation error: {frappe.get_traceback()}", title="Huf API")
         return {"success": False, "error": str(e)}
 
 
@@ -254,5 +254,5 @@ def send_message_to_conversation(conversation: str, message: str):
         return result
 
     except Exception as e:
-        frappe.log_error(f"send_message_to_conversation error: {frappe.get_traceback()}", "Huf API")
+        frappe.log_error(message=f"send_message_to_conversation error: {frappe.get_traceback()}", title="Huf API")
         return {"success": False, "error": str(e)}

@@ -4,6 +4,7 @@ import { CardHeader, CardTitle, CardDescription, CardContent, CardAction } from 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { BaseCard } from './BaseCard';
+import { cn } from '@/lib/utils';
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 
@@ -45,7 +46,8 @@ export function ItemCard({
   className,
 }: ItemCardProps) {
   return (
-    <BaseCard onClick={onClick} className={className}>
+    <BaseCard onClick={onClick} className={cn('flex flex-col', className)}>
+      <div className="flex flex-col flex-1">
       <CardHeader className="pb-3">
         <CardTitle className="text-xl font-semibold line-clamp-1">{title}</CardTitle>
         {description && (
@@ -61,7 +63,9 @@ export function ItemCard({
       </CardHeader>
 
       {(metadata.length > 0 || actions.length > 0 || footer) && (
-        <CardContent className="space-y-1 pb-3">
+          <CardContent className="flex flex-col flex-1 min-h-0 pb-3">
+            {metadata.length > 0 && (
+              <div className="space-y-1">
           {metadata.map((item, index) => (
             <div
               key={index}
@@ -74,9 +78,13 @@ export function ItemCard({
               <span className="font-medium">{item.value}</span>
             </div>
           ))}
+              </div>
+            )}
 
+            {(actions.length > 0 || footer) && (
+              <div className="mt-auto pt-1">
           {actions.length > 0 && (
-            <div className="flex gap-2 pt-1">
+                  <div className="flex gap-2">
               {actions.map((action, index) => (
                 <Button
                   key={index}
@@ -96,8 +104,11 @@ export function ItemCard({
           )}
 
           {footer && <div className="pt-2">{footer}</div>}
+              </div>
+            )}
         </CardContent>
       )}
+      </div>
     </BaseCard>
   );
 }

@@ -12,7 +12,7 @@ import {
 } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { PageLayout, FilterBar, GridView } from '../components/dashboard';
+import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getProviders, getProvider, updateProvider, createProvider } from '../services/providerApi';
 import { getModels } from '../services/providerApi';
@@ -248,24 +248,12 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
         }}
         keyExtractor={(provider) => provider.name}
       />
-      {hasMore && (
-        <div className="flex justify-center py-8">
-          <Button
-            onClick={() => loadMore()}
-            disabled={loadingMore}
-            variant="outline"
-          >
-            {loadingMore ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Load More'
-            )}
-          </Button>
-        </div>
-      )}
+      <LoadMoreButton
+        hasMore={hasMore}
+        loading={loadingMore}
+        onLoadMore={loadMore}
+        disabled={!!search || initialLoading}
+      />
       {!hasMore && providers.length > 0 && (
         <div className="text-center py-4 text-sm text-muted-foreground">
           {total !== undefined ? `Showing all ${total} providers` : 'No more providers to load'}

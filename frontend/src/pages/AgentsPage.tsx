@@ -1,11 +1,10 @@
-import { Calendar, Activity, Settings, Zap, Loader2 } from 'lucide-react';
+import { Calendar, Activity, Settings, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { PageLayout, FilterBar, GridView, ItemCard } from '../components/dashboard';
+import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgents } from '../services/agentApi';
 import { formatTimeAgo } from '../utils/time';
 import type { AgentDoc } from '../types/agent.types';
-import { Button } from '../components/ui/button';
 
 const statusOptions = [
   { label: 'All Status', value: 'all' },
@@ -138,24 +137,12 @@ export function AgentsPage() {
         }}
         keyExtractor={(agent) => agent.name}
       />
-      {hasMore && (
-        <div className="flex justify-center py-8">
-          <Button
-            onClick={() => loadMore()}
-            disabled={loadingMore}
-            variant="outline"
-          >
-            {loadingMore ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Load More'
-            )}
-          </Button>
-        </div>
-      )}
+      <LoadMoreButton
+        hasMore={hasMore}
+        loading={loadingMore}
+        onLoadMore={loadMore}
+        disabled={!!search || initialLoading}
+      />
       {!hasMore && agents.length > 0 && (
         <div className="text-center py-4 text-sm text-muted-foreground">
           {total !== undefined ? `Showing all ${total} agents` : 'No more agents to load'}

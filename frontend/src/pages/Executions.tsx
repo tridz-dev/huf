@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowUpDown, Loader2 } from 'lucide-react';
-import { FilterBar, PageLayout } from '@/components/dashboard';
+import { FilterBar, PageLayout, LoadMoreButton } from '@/components/dashboard';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgentRuns, type AgentRunDoc } from '@/services/agentRunApi';
@@ -353,24 +353,12 @@ export default function Executions() {
         )}
       </div>
 
-      {hasMore && (
-        <div className="flex justify-center py-8">
-          <Button
-            onClick={() => loadMore()}
-            disabled={loadingMore}
-            variant="outline"
-          >
-            {loadingMore ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Load More'
-            )}
-          </Button>
-        </div>
-      )}
+      <LoadMoreButton
+        hasMore={hasMore}
+        loading={loadingMore}
+        onLoadMore={loadMore}
+        disabled={!!search || initialLoading}
+      />
 
       {!hasMore && runs.length > 0 && (
         <div className="text-center py-4 text-sm text-muted-foreground">

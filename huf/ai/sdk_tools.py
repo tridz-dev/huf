@@ -27,8 +27,26 @@ from datetime import datetime, timedelta
 def create_agent_tools(agent) -> list[FunctionTool]:
     """
     Create function tools for Huf Agent
+    
+    This combines:
+    1. MCP tools from linked MCP servers
+    2. Native tools from Agent Tool Function documents
     """
     tools = []
+    
+    # Load MCP tools from linked MCP servers
+    if hasattr(agent, "agent_mcp_server") and agent.agent_mcp_server:
+        try:
+            from huf.ai.mcp_client import create_mcp_tools
+            mcp_tools = create_mcp_tools(agent)
+            tools.extend(mcp_tools)
+        except Exception as e:
+            frappe.log_error(
+                f"Error loading MCP tools for agent: {str(e)}",
+                "MCP Tool Loading Error"
+            )
+    
+    # Load native tools from Agent Tool Function documents
 
     if hasattr(agent, "agent_tool") and agent.agent_tool:
         for func in agent.agent_tool:
