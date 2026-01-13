@@ -27,7 +27,7 @@ def process_knowledge_input(knowledge_input: str) -> dict:
 		
 		# Acquire lock for this knowledge source
 		lock_key = f"knowledge_index_{source.name}"
-		if not frappe.cache.add(lock_key, 1, expires_in_sec=300):
+		if not frappe.cache().set(lock_key, 1, ex=300, nx=True):
 			raise Exception(_("Another indexing operation is in progress"))
 		
 		try:
@@ -101,7 +101,7 @@ def process_knowledge_input(knowledge_input: str) -> dict:
 			}
 			
 		finally:
-			frappe.cache.delete(lock_key)
+			frappe.cache().delete(lock_key)
 			
 	except Exception as e:
 		frappe.db.rollback()
@@ -140,7 +140,7 @@ def rebuild_knowledge_index(knowledge_source: str) -> dict:
 	try:
 		# Acquire exclusive lock
 		lock_key = f"knowledge_index_{source.name}"
-		if not frappe.cache.add(lock_key, 1, expires_in_sec=600):
+		if not frappe.cache().set(lock_key, 1, ex=600, nx=True):
 			raise Exception(_("Another indexing operation is in progress"))
 		
 		try:
@@ -193,7 +193,7 @@ def rebuild_knowledge_index(knowledge_source: str) -> dict:
 			}
 			
 		finally:
-			frappe.cache.delete(lock_key)
+			frappe.cache().delete(lock_key)
 			
 	except Exception as e:
 		frappe.db.rollback()

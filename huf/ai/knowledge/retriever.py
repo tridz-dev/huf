@@ -75,6 +75,10 @@ def knowledge_search(
 					"metadata": result.metadata,
 				})
 				
+		except (frappe.DoesNotExistError, frappe.ValidationError):
+			# Source doesn't exist or is invalid, just skip
+			continue
+			
 		except Exception as e:
 			frappe.log_error(
 				f"Knowledge search error for {source_name}",
