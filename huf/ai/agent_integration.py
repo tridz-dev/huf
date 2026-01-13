@@ -47,11 +47,17 @@ class AgentManager:
                 "Agent Tool Function Error",
             )
         
-        # Add knowledge_search tool if agent has optional knowledge sources
+        # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
         try:
-            from huf.ai.knowledge.tool import create_knowledge_search_tool, handle_knowledge_search
+            from huf.ai.knowledge.tool import (
+                create_knowledge_search_tool, 
+                handle_knowledge_search,
+                create_get_knowledge_sources_tool,
+                handle_get_knowledge_sources
+            )
             from agents import function_tool
             
+            # 1. Knowledge Search Tool
             knowledge_tool_def = create_knowledge_search_tool(self.agent_doc.agent_name)
             if knowledge_tool_def:
                 @function_tool
@@ -63,11 +69,20 @@ class AgentManager:
                         knowledge_source=knowledge_source,
                         top_k=top_k,
                     )
-                
                 self.tools.append(knowledge_search_tool)
+
+            # 2. Get Knowledge Sources Tool
+            sources_tool_def = create_get_knowledge_sources_tool(self.agent_doc.agent_name)
+            if sources_tool_def:
+                @function_tool
+                def get_knowledge_sources_tool() -> str:
+                    """List all knowledge sources available to this agent."""
+                    return handle_get_knowledge_sources(agent_name=self.agent_doc.agent_name)
+                self.tools.append(get_knowledge_sources_tool)
+
         except Exception as e:
             frappe.log_error(
-                f"Error loading knowledge search tool: {str(e)}",
+                f"Error loading knowledge tools: {str(e)}",
                 "Knowledge Tool Error",
             )
 
