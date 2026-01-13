@@ -53,18 +53,12 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "sqlite_fts",
-   "fieldtype": "Select",
-   "label": "Knowledge Type",
-   "options": "sqlite_fts",
-   "reqd": 1
-  },
-  {
    "default": "Site",
    "fieldtype": "Select",
    "label": "Scope",
    "options": "Site\nWorkspace\nAgent\nGlobal",
-   "reqd": 1
+   "reqd": 1,
+   "fieldname": "scope"
   },
   {
    "fieldname": "storage_settings_section",
@@ -76,7 +70,8 @@
    "fieldtype": "Select",
    "label": "Storage Mode",
    "options": "Frappe File",
-   "reqd": 1
+   "reqd": 1,
+   "fieldname": "storage_mode"
   },
   {
    "fieldname": "sqlite_file",
@@ -99,13 +94,15 @@
    "default": 512,
    "fieldtype": "Int",
    "label": "Chunk Size",
-   "non_negative": 1
+   "non_negative": 1,
+   "fieldname": "chunk_size"
   },
   {
    "default": 50,
    "fieldtype": "Int",
    "label": "Chunk Overlap",
-   "non_negative": 1
+   "non_negative": 1,
+   "fieldname": "chunk_overlap"
   },
   {
    "fieldname": "status_section",
@@ -117,7 +114,8 @@
    "fieldtype": "Select",
    "label": "Status",
    "options": "Pending\nIndexing\nReady\nError\nRebuilding",
-   "read_only": 1
+   "read_only": 1,
+   "fieldname": "status"
   },
   {
    "fieldname": "last_indexed_at",

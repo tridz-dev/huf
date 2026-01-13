@@ -74,13 +74,6 @@
    "label": "Status"
   },
   {
-   "default": "Pending",
-   "fieldtype": "Select",
-   "label": "Status",
-   "options": "Pending\nProcessing\nIndexed\nError",
-   "read_only": 1
-  },
-  {
    "fieldname": "source_hash",
    "fieldtype": "Data",
    "label": "Source Hash",
