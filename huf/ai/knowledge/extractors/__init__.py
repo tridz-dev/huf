@@ -29,13 +29,42 @@ class TextExtractor(ABC):
 	@staticmethod
 	def get_extractor(file_type: str) -> "TextExtractor":
 		"""Get appropriate extractor for file type."""
+		if not file_type:
+			file_type = "text/plain"
+			
+		file_type = file_type.lower().strip()
+		
 		extractors = {
+			# PDF
 			"application/pdf": "huf.ai.knowledge.extractors.pdf.PDFExtractor",
+			"pdf": "huf.ai.knowledge.extractors.pdf.PDFExtractor",
+			".pdf": "huf.ai.knowledge.extractors.pdf.PDFExtractor",
+			
+			# Word
 			"application/vnd.openxmlformats-officedocument.wordprocessingml.document": 
 				"huf.ai.knowledge.extractors.docx.DocxExtractor",
+			"docx": "huf.ai.knowledge.extractors.docx.DocxExtractor",
+			".docx": "huf.ai.knowledge.extractors.docx.DocxExtractor",
+			
+			# Text
 			"text/plain": "huf.ai.knowledge.extractors.text.TextExtractor",
+			"txt": "huf.ai.knowledge.extractors.text.TextExtractor",
+			".txt": "huf.ai.knowledge.extractors.text.TextExtractor",
+			
+			# Markdown
 			"text/markdown": "huf.ai.knowledge.extractors.text.TextExtractor",
+			"md": "huf.ai.knowledge.extractors.text.TextExtractor",
+			".md": "huf.ai.knowledge.extractors.text.TextExtractor",
+			"markdown": "huf.ai.knowledge.extractors.text.TextExtractor",
+			
+			# HTML
 			"text/html": "huf.ai.knowledge.extractors.html.HTMLExtractor",
+			"html": "huf.ai.knowledge.extractors.html.HTMLExtractor",
+			".html": "huf.ai.knowledge.extractors.html.HTMLExtractor",
+			"htm": "huf.ai.knowledge.extractors.html.HTMLExtractor",
+			".htm": "huf.ai.knowledge.extractors.html.HTMLExtractor",
+			
+			# URL
 			"url": "huf.ai.knowledge.extractors.url.URLExtractor",
 		}
 		
