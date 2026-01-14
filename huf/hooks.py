@@ -223,7 +223,10 @@ scheduler_events = {
         "*/1 * * * *": [
             "huf.ai.orchestration.scheduler.process_orchestrations"
         ]
-    }
+    },
+    "hourly": [
+        "huf.ai.mcp_client.auto_sync_mcp_server_tools"
+    ]
 }
 
 

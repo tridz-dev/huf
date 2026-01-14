@@ -23,17 +23,32 @@ frappe.ui.form.on("Agent", {
 			}
 		}
 	},
-		provider(frm) {
-			frm.set_value("model", "");
-	
-			if (frm.doc.provider) {
-				frm.set_query("model", () => ({
-					filters: { provider: frm.doc.provider }
-				}));
-			} else {
-				frm.set_query("model", () => ({}));
-			}
-		},
-	
-	
+	provider(frm) {
+		frm.set_value("model", "");
+
+		if (frm.doc.provider) {
+			frm.set_query("model", () => ({
+				filters: { provider: frm.doc.provider }
+			}));
+		} else {
+			frm.set_query("model", () => ({}));
+		}
+	}
+});
+
+frappe.ui.form.on("Agent MCP Server", {
+	mcp_server(frm, cdt, cdn) {
+		let row = locals[cdt][cdn];
+		if (row.mcp_server) {
+			frappe.db.get_doc("MCP Server", row.mcp_server).then(doc => {
+				let count = 0;
+				if (doc.tools) {
+					count = doc.tools.length;
+				}
+				frappe.model.set_value(cdt, cdn, "tool_count", count);
+			});
+		} else {
+			frappe.model.set_value(cdt, cdn, "tool_count", 0);
+		}
+	}
 });

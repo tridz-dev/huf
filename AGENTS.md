@@ -1007,3 +1007,198 @@ Each registered tool must include:
 -   **Conflict Resolution**: Handles tool name conflicts across apps
 -   **Dependency Management**: Ensures app dependencies are properly loaded
 -   **Version Compatibility**: Supports tool versioning and compatibility checks
+
+## MCP Client Integration
+
+HUF supports the Model Context Protocol (MCP) for connecting to external tool providers. This allows agents to use tools from external MCP servers like Gmail, GitHub, Slack, databases, and more.
+
+### Overview
+
+HUF acts as an **MCP client only** - it connects to external MCP servers to consume their tools, but does not expose itself as an MCP server or gateway.
+
+```
+HUF Agent
+  └── Tool Registry
+        ├── Native Tools (Frappe CRUD, Custom Functions, App Provided)
+        └── MCP Tools (External)
+              ├── Gmail MCP
+              ├── GitHub MCP
+              ├── Frappe MCP
+              └── Any MCP-compatible server
+```
+
+### MCP DocTypes
+
+#### MCP Server
+
+Stores connection configuration for external MCP servers.
+
+-   **Python Class**: `MCPServer(Document)`
+-   **File**: `huf/huf/doctype/mcp_server/mcp_server.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Server Name** | `server_name` | Data | Unique identifier (e.g., "gmail", "github") |
+| **Description** | `description` | Small Text | What this MCP server provides |
+| **Enabled** | `enabled` | Check | Whether this server is active |
+| **Transport Type** | `transport_type` | Select | `http` or `sse` |
+| **Server URL** | `server_url` | Data | MCP server endpoint URL |
+| **Auth Type** | `auth_type` | Select | `none`, `api_key`, `bearer_token`, `custom_header` |
+| **Auth Header Name** | `auth_header_name` | Data | Header name for authentication |
+| **Auth Header Value** | `auth_header_value` | Password | Encrypted auth token/key |
+| **Tool Namespace** | `tool_namespace` | Data | Optional prefix for tool names |
+| **Timeout** | `timeout_seconds` | Int | Request timeout (default: 30s) |
+| **Custom Headers** | `custom_headers` | Table | Additional HTTP headers |
+| **Available Tools** | `available_tools` | JSON | Cached tools from server (read-only) |
+| **Last Sync** | `last_sync` | Datetime | Last tool sync timestamp |
+
+**Server Actions:**
+- `sync_tools()`: Fetch and cache available tools from the MCP server
+
+#### Agent MCP Server
+
+Child table linking agents to MCP servers.
+
+-   **File**: `huf/huf/doctype/agent_mcp_server/agent_mcp_server.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **MCP Server** | `mcp_server` | Link | Link to `MCP Server` DocType |
+| **Enabled** | `enabled` | Check | Whether enabled for this agent |
+| **Tool Count** | `tool_count` | Int | Number of tools available (read-only) |
+
+### MCP Client Module
+
+#### `mcp_client.py`
+
+Core MCP client adapter located at `huf/ai/mcp_client.py`.
+
+**Key Functions:**
+
+-   **`create_mcp_tools(agent_doc)`**
+    -   Creates FunctionTool objects for all MCP tools available to an agent
+    -   Called from `sdk_tools.create_agent_tools()`
+    -   Returns list of `FunctionTool` objects
+
+-   **`execute_mcp_tool(server_name, tool_name, arguments)`**
+    -   Executes a tool call on an MCP server
+    -   Uses LiteLLM's experimental MCP client when available
+    -   Falls back to direct HTTP/JSON-RPC if needed
+
+-   **`sync_mcp_server_tools(server_name)` (Whitelisted)**
+    -   Fetches and caches available tools from an MCP server
+    -   Uses LiteLLM `load_mcp_tools()` with OpenAI format conversion
+
+-   **`test_mcp_connection(server_name)` (Whitelisted)**
+    -   Tests connectivity to an MCP server
+
+-   **`get_agent_mcp_servers(agent_name)` (Whitelisted)**
+    -   Gets MCP servers linked to an agent with full details
+
+-   **`get_available_mcp_servers()` (Whitelisted)**
+    -   Gets all enabled MCP servers
+
+### Tool Loading Flow
+
+When an agent runs, tools are loaded in this order:
+
+1. **MCP Tools**: From linked MCP servers via `agent_mcp_server` child table
+2. **Native Tools**: From `Agent Tool Function` documents via `agent_tool` child table
+
+```python
+# In sdk_tools.py
+def create_agent_tools(agent) -> list[FunctionTool]:
+    tools = []
+    
+    # 1. Load MCP tools from linked MCP servers
+    if hasattr(agent, "agent_mcp_server") and agent.agent_mcp_server:
+        from huf.ai.mcp_client import create_mcp_tools
+        mcp_tools = create_mcp_tools(agent)
+        tools.extend(mcp_tools)
+    
+    # 2. Load native tools from Agent Tool Function documents
+    if hasattr(agent, "agent_tool") and agent.agent_tool:
+        # ... existing native tool loading ...
+    
+    return tools
+```
+
+### MCP Tool Execution Flow
+
+When the LLM calls an MCP tool during agent execution:
+
+1. LLM returns tool call with tool name and arguments
+2. `litellm.py` finds the tool by name in the agent's tools list
+3. Tool's `on_invoke_tool()` is called (same as native tools)
+4. For MCP tools, this triggers `execute_mcp_tool()` which:
+   - Builds authentication headers from MCP Server config
+   - Calls the MCP server via HTTP/JSON-RPC or LiteLLM MCP client
+   - Returns the result in HUF tool-result format
+5. Result is fed back to LLM for next iteration
+
+### Authentication
+
+MCP servers support multiple authentication methods:
+
+-   **None**: No authentication required
+-   **API Key**: Custom header with API key value
+-   **Bearer Token**: Standard `Authorization: Bearer <token>` header
+-   **Custom Header**: Any custom header name/value pair
+
+Auth credentials are stored encrypted using Frappe's Password field type.
+
+### Tool Namespacing
+
+MCP tools can be namespaced to avoid conflicts:
+
+-   If `tool_namespace` is set on MCP Server (e.g., "gmail")
+-   Tool names are prefixed: `send_email` → `gmail.send_email`
+-   Tool descriptions include source: `[MCP:gmail] Send an email...`
+
+### Dependencies
+
+The MCP client uses:
+
+-   **LiteLLM's experimental MCP client** (`litellm.experimental_mcp_client`)
+    -   `load_mcp_tools()`: Fetch tools in OpenAI format
+    -   `call_openai_tool()`: Execute tool calls
+-   **Direct HTTP fallback**: If LiteLLM MCP client unavailable
+    -   Uses JSON-RPC 2.0 format for MCP protocol
+
+### Frontend Integration
+
+The React frontend supports MCP server management:
+
+-   **ToolsTab Component** (`frontend/src/components/agent/ToolsTab.tsx`)
+    -   Displays linked MCP servers with status badges
+    -   Supports add/remove/toggle/sync actions
+    -   Shows tool count and last sync time
+
+-   **MCP API Service** (`frontend/src/services/mcpApi.ts`)
+    -   `getMCPServers()`: List all MCP servers
+    -   `getAgentMCPServers()`: Get MCP servers for an agent
+    -   `testMCPConnection()`: Test server connectivity
+    -   `syncMCPTools()`: Sync tools from server
+
+### Example Usage
+
+1. **Create MCP Server** in Frappe:
+   - Name: "github"
+   - URL: "https://mcp.github.example.com/mcp"
+   - Auth: Bearer Token with GitHub PAT
+
+2. **Sync Tools** to discover available tools
+
+3. **Link to Agent** via the "Tools and MCP" tab
+
+4. **Agent can now use** GitHub tools like `list_prs`, `create_issue`, etc.
+
+### What HUF Is NOT
+
+-   ❌ An MCP Server (does not expose tools via MCP)
+-   ❌ An MCP Gateway/Proxy
+-   ❌ An OAuth broker (simple header-based auth only)

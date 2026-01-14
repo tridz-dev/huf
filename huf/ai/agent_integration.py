@@ -297,11 +297,22 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                  return None
 
         else:
+            is_mcp_tool = 0
+            mcp_server = None
+
+            if name:
+                mcp_tool_entry = frappe.db.get_value("MCP Server Tool", {"tool_name": name, "enabled": 1}, "parent")
+                if mcp_tool_entry:
+                    is_mcp_tool = 1
+                    mcp_server = mcp_tool_entry
+
             doc = frappe.get_doc({
                 "doctype": "Agent Tool Call",
                 "agent_run": agent_run,
                 "conversation": conversation,
                 "tool": name,
+                "is_mcp_tool": is_mcp_tool,
+                "mcp_server": mcp_server,
                 "tool_args": json.dumps(args) if args else None,
                 "tool_result": json.dumps(result) if result else None,
                 "error_message": error,

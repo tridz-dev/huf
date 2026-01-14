@@ -39,6 +39,8 @@
   "knowledge_tab",
   "knowledge_section",
   "agent_knowledge",
+  "mcp_servers_section",
+  "agent_mcp_server",      
   "permissions_tab",
   "allowed_users",
   "column_break_dq1z",
@@ -103,6 +105,19 @@
    "fieldtype": "Table",
    "label": "Agent Tool",
    "options": "Agent Tool"
+  },
+  {
+   "fieldname": "mcp_servers_section",
+   "fieldtype": "Section Break",
+   "label": "MCP Servers",
+   "description": "Connect to external MCP servers for additional tool capabilities"
+  },
+  {
+   "description": "External MCP servers this agent can use for additional tools",
+   "fieldname": "agent_mcp_server",
+   "fieldtype": "Table",
+   "label": "MCP Servers",
+   "options": "Agent MCP Server"
   },
   {
    "default": "1",
