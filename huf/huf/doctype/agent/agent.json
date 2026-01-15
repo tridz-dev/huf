@@ -32,6 +32,8 @@
   "enable_multi_run",
   "column_break_vfhq",
   "persist_conversation",
+  "multi_run_setting_section",
+  "default_plan",
   "section_break_yyoa",
   "instructions",
   "tools_and_mcp_tab",
@@ -323,6 +325,17 @@
    "fieldtype": "Table MultiSelect",
    "label": "Allowed Roles",
    "options": "Agent Role"
+  },
+  {
+   "fieldname": "multi_run_setting_section",
+   "fieldtype": "Section Break",
+   "label": "Multi Run Setting"
+  },
+  {
+   "fieldname": "default_plan",
+   "fieldtype": "Table",
+   "label": "Default Plan",
+   "options": "Agent Orchestration Plan"
   }
  ],
  "grid_page_length": 50,
