@@ -131,6 +131,7 @@ The main DocType for creating an AI agent.
 | **Model**        | `model`        | Link      | Link to the `AI Model`.                                                                                 |
 | **Instructions** | `instructions` | Code      | The system prompt or instructions that define the agent's personality, goals, and constraints.          |
 | **Agent Tool**   | `agent_tool`   | Table     | A child table (`Agent Tool`) linking to the `Agent Tool Function`s that this agent is allowed to use. |
+| **Agent Knowledge** | `agent_knowledge` | Table | A child table (`Agent Knowledge`) linking to `Knowledge Source`s. Allows "Mandatory" (auto-injected) or "Optional" (tool-based) access. |
 | **Temperature**  | `temperature`  | Float     | Controls the randomness of the AI's output.                                                             |
 | **Top P**        | `top_p`        | Float     | An alternative to temperature for controlling randomness.                                               |
 | **Allow Chat**    | `allow_chat`   | Check     | Enables the Agent Chat interface for real-time conversations.                                           |
@@ -344,6 +345,67 @@ Categorization DocType for organizing and grouping agent tools by type or purpos
 **Usage**: Used by `Agent Tool Function` DocType via the `tool_type` link field for categorization and organization. This allows users to group tools by functionality, making it easier to manage large tool libraries.
 
 **Examples**: Tool types might include categories like "Document Operations", "HTTP Requests", "Custom Functions", "App Provided", "Built-in Tools", etc.
+
+#### 15. Knowledge Source
+
+A portable, indexed container for knowledge that agents can access. It uses SQLite FTS5 for keyword-based search.
+
+-   **Python Class**: `KnowledgeSource(Document)`
+-   **File**: `huf/huf/doctype/knowledge_source/knowledge_source.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Source Name** | `source_name` | Data | Unique identifier for the knowledge source. |
+| **Description** | `description` | Small Text | Human-readable description. |
+| **Knowledge Type** | `knowledge_type` | Select | Backend type (currently `sqlite_fts` only). |
+| **Chunk Size** | `chunk_size` | Int | Number of characters per chunk for indexing (default: 512). |
+| **Status** | `status` | Select | Current state (`Pending`, `Indexing`, `Ready`, `Error`). |
+| **Storage Mode** | `storage_mode` | Select | How source files are stored (default: `Frappe File`). |
+
+**Features:**
+-   **Rebuild Index**: Clears and rebuilds the SQLite FTS artifact from inputs.
+-   **Test Search**: Allows testing search queries directly from the Desk UI.
+-   **Modes**:
+    -   **Mandatory**: Context is automatically injected into the agent's system prompt (best for rules, guidelines).
+    -   **Optional**: Agents use the `knowledge_search` tool to query the source on demand (best for large reference/docs).
+
+#### 16. Knowledge Input
+
+Tracks individual content items (files, text, URLs) ingested into a Knowledge Source.
+
+-   **Python Class**: `KnowledgeInput(Document)`
+-   **File**: `huf/huf/doctype/knowledge_input/knowledge_input.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Knowledge Source** | `knowledge_source` | Link | Parent knowledge source. |
+| **Input Type** | `input_type` | Select | Type of input (`File`, `Text`, `URL`). |
+| **File** | `file` | Attach | Uploaded file reference (for `File` type). |
+| **Text** | `text` | Long Text | Pasted text content (for `Text` type). |
+| **URL** | `url` | Data | URL to fetch content from (for `URL` type). |
+| **Status** | `status` | Select | Processing status (`Pending`, `Indexed`, `Error`). |
+| **Source Hash** | `source_hash` | Data | Hash of content for deduplication. |
+
+#### 17. Agent Knowledge
+
+Child table used in the `Agent` DocType to bind Knowledge Sources.
+
+-   **Python Class**: `AgentKnowledge(Document)`
+-   **File**: `huf/huf/doctype/agent_knowledge/agent_knowledge.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Knowledge Source** | `knowledge_source` | Link | Link to the `Knowledge Source`. |
+| **Mode** | `mode` | Select | `Mandatory` (auto-injected into prompt) or `Optional` (accessible via `knowledge_search` tool). |
+| **Priority** | `priority` | Int | Retrieval priority (higher = first). |
+| **Token Budget** | `token_budget` | Int | Max tokens to inject from this source (for `Mandatory` mode). |
+
 ### Core Classes and Methods
 
 The primary logic is located in the `huf/ai` directory.
@@ -625,6 +687,76 @@ This file provides secure HTTP request handling with SSRF protection for agent t
     -   Convenience wrappers for GET and POST requests.
     -   POST handler includes JSON parsing and validation logic.
     -   Automatic conversion between form data and JSON based on content type.
+
+### Knowledge System Architecture
+
+The Knowledge System (`huf.ai.knowledge`) provides a portable, low-ops RAG (Retrieval-Augmented Generation) implementation using SQLite FTS5.
+
+#### Directory Structure (`huf/ai/knowledge/`)
+
+-   `backends/`: Storage implementations (Abstract Base Class + SQLite FTS5).
+-   `extractors/`: Text extraction logic for various file types (PDF, DOCX, HTML, URL).
+-   `chunkers/`: Text chunking strategies (SentenceSplitter via LlamaIndex).
+-   `indexer.py`: Ingestion pipeline and index management.
+-   `retriever.py`: Search and retrieval logic.
+-   `context_builder.py`: Context assembly for agent prompts.
+-   `tool.py`: Definitions for `knowledge_search` and other tools.
+
+#### 1. Ingestion Pipeline (`indexer.py`)
+
+Ingestion is a background process that converts raw inputs into indexed SQLite chunks.
+
+-   **Process**:
+    1.  **Locking**: Uses Redis locks (`knowledge_index_{source_name}`) to ensure single-writer access per source.
+    2.  **Extraction**: `_extract_text` determines extractor based on `input_type` (Text, File, URL).
+        -   **Files**: Uses specialized extractors (`TextExtractor.get_extractor`).
+        -   **URLs**: Uses `URLExtractor` to fetch and parse web content.
+    3.  **Chunking**: Uses `chunk_text` (wrapping LlamaIndex `SentenceSplitter`) with configurable `chunk_size` (default 512) and `overlap` (default 50).
+    4.  **Storage**: Transactions are committed to the SQLite FTS artifact via `SQLiteFTSBackend.add_chunks`.
+-   **Rebuilding**: `rebuild_knowledge_index` atomically rebuilds the entire index by clearing the backend and reprocessing all inputs.
+
+#### 2. Storage Backend (`backends/sqlite_fts.py`)
+
+-   **Technology**: SQLite using FTS5 virtual table extension.
+-   **Schema**:
+    -   `chunks`: Master table storing text, metadata, and chunk indices.
+    -   `chunks_fts`: FTS5 virtual table for full-text search.
+    -   **Triggers**: Automatically keep `chunks` and `chunks_fts` in sync during INSERT/UPDATE/DELETE.
+-   **File Location**: Stored as private Frappe Files in `/private/files/knowledge/{source_name}.sqlite3`.
+-   **Performance**: Configured with WAL mode, memory-mapped I/O (`mmap_size`), and optimized page grouping.
+
+#### 3. Retrieval & Ranking (`retriever.py`)
+
+-   **Search Algorithm**: BM25 (Best Matching 25) via FTS5's built-in ranking function.
+-   **Query Processing**: Sanitizes input queries to prevent SQL injection and FTS syntax errors.
+-   **Multi-Source Search**: Aggregates results from multiple Knowledge Sources, sorting globally by score.
+
+#### 4. Agent Integration (`agent_integration.py` & `context_builder.py`)
+
+Knowledge is injected into the agent execution loop in `run_agent_sync`:
+
+1.  **Mandatory Knowledge**:
+    -   Calls `build_knowledge_context` before provider execution.
+    -   Retrieves top-k chunks from all `Mandatory` sources defined in `agent.agent_knowledge`.
+    -   Injects context into the system prompt formatted as:
+        ```markdown
+        ## Relevant Knowledge
+        ### Source Title
+        [Chunk Text]
+        ...
+        ---
+        [User Prompt]
+        ```
+    -   Logs usage in `Agent Run` (`knowledge_sources_used`, `chunks_injected`).
+
+2.  **Optional Knowledge**:
+    -   Agents with `Optional` sources automatically get the `knowledge_search` tool.
+    -   Allows the agent to actively query for information when needed.
+
+#### 5. Tools (`tool.py`)
+
+-   `knowledge_search`: Performs semantic/keyword search across allowed sources.
+-   `get_knowledge_sources`: Lists available sources and their descriptions to help the agent choose.
 
 ## Frontend Flow Builder System
 
