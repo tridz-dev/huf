@@ -6,10 +6,10 @@ from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent_integration import run_agent_sync
 
 
-def create_orchestration(agent_name, user_prompt, parent_run_id = None,conversation_id=None):
+def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversation_id=None, override_plan=None):
     """
-    Called when enable_multi_run is true.
-    Creates orchestration document and generates plan steps.
+    Creates orchestration document.
+    Requirement 3: Reuses existing 'default_plan' from Agent if available.
     """
     agent_doc = frappe.get_doc("Agent", agent_name)
     
@@ -23,40 +23,74 @@ def create_orchestration(agent_name, user_prompt, parent_run_id = None,conversat
     if conversation_id:
         orch.conversation = conversation_id
 
-    orch.save(ignore_permissions=True)
-    frappe.db.commit()
+    if override_plan:
+        for idx, step in enumerate(override_plan, start=1):
+            orch.append("agent_orchestration_plan", {
+                "step_index": idx,
+                "instruction": step,
+                "status": "pending"
+            })
 
-    # Planning step: generate plan using the agent
-    plan_output = run_planning(
-        agent_name=agent_name,
-        user_prompt=user_prompt,
-        provider=agent_doc.provider,
-        model=agent_doc.model,
-        conversation_id=conversation_id # <--- Pass this to planning logic
-    )
-    
-    steps = parse_plan_steps(plan_output)
-
-    if not steps:
+    elif agent_doc.default_plan:
+        for step in agent_doc.default_plan:
+            orch.append("agent_orchestration_plan", {
+                "step_index": step.step_index,
+                "instruction": step.instruction,
+                "status": "pending"
+            })
+    else:
+        plan_output = run_planning(
+            agent_name=agent_name,
+            user_prompt=user_prompt,
+            provider=agent_doc.provider,
+            model=agent_doc.model,
+            conversation_id=conversation_id
+        )
+        steps = parse_plan_steps(plan_output)
+        for idx, step in enumerate(steps, start=1):
+            orch.append("agent_orchestration_plan", {
+                "step_index": idx,
+                "instruction": step,
+                "status": "pending"
+            })
+            
+    if not orch.agent_orchestration_plan:
         orch.status = "Failed"
-        orch.error_log = "Planning failed: No steps generated"
-        orch.save(ignore_permissions=True)
+        orch.error_log = "Planning failed: No steps available from Agent or Generator"
+        orch.save()
         frappe.db.commit()
         return orch.name
 
-    for idx, step in enumerate(steps, start=1):
-        orch.append("agent_orchestration_plan", {
-            "step_index": idx,
-            "instruction": step,
-            "status": "pending"
-        })
-
     orch.status = "Running"
-    orch.save(ignore_permissions=True)
+    orch.save()
     frappe.db.commit()
 
     return orch.name
 
+@frappe.whitelist()
+def recreate_orchestration_plan(orch_name):
+    """
+    Requirement 3 (Button): Recreates the plan based on current Agent instructions.
+    """
+    orch = frappe.get_doc("Agent Orchestration", orch_name)
+    agent_doc = frappe.get_doc("Agent", orch.agent)
+    
+    plan_output = run_planning(orch.agent, agent_doc.instructions, agent_doc.provider, agent_doc.model)
+    steps = parse_plan_steps(plan_output)
+    
+    if steps:
+        orch.set("agent_orchestration_plan", [])
+        for idx, step in enumerate(steps, start=1):
+            orch.append("agent_orchestration_plan", {
+                "step_index": idx,
+                "instruction": step,
+                "status": "pending"
+            })
+        orch.status = "Running"
+        orch.current_step = 0
+        orch.save()
+        return True
+    return False
 
 def parse_plan_steps(text):
     """Convert numbered list to python list."""
@@ -68,7 +102,6 @@ def parse_plan_steps(text):
     for line in lines:
         line = line.strip()
         if line and line[0].isdigit():
-            # Handle formats like "1. Step" or "1) Step"
             for sep in [".", ")", ":"]:
                 if sep in line:
                     parts = line.split(sep, 1)
@@ -79,12 +112,35 @@ def parse_plan_steps(text):
                         break
     return steps
 
+@frappe.whitelist()
+def stop_orchestration(orch_name):
+    """
+    Stops the orchestration by setting status to 'Cancelled'.
+    The scheduler will ignore 'Cancelled' orchestrations.
+    """
+    if not frappe.has_permission("Agent Orchestration", "write"):
+        frappe.throw("Not allowed to stop orchestration")
 
-def execute_next_step(orch):
-    """
-    Executes the next pending step in the orchestration plan.
-    Returns: "ok", "completed", or "failed"
-    """
+    orch = frappe.get_doc("Agent Orchestration", orch_name)
+    if orch.status in ["Completed", "Failed", "Cancelled"]:
+        return 
+
+    orch.status = "Cancelled"
+    orch.save()
+    orch.add_comment("Comment", "Orchestration manually stopped by user.")
+    return True
+
+def execute_next_step(orch=None, orch_name=None):
+    if orch_name and not orch:
+        orch = frappe.get_doc("Agent Orchestration", orch_name)
+    
+    if not orch:
+        frappe.log_error("No orchestration provided to execute_next_step", "Orchestrator Error")
+        return "failed"
+        
+    if orch.status == "Cancelled":
+        return "cancelled"
+    
     next_step = None
 
     for step in orch.agent_orchestration_plan:

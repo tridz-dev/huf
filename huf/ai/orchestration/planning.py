@@ -10,6 +10,12 @@ Rules:
 - Return ONLY a numbered list, nothing else
 - Keep steps concise but clear
 
+CRITICAL RULES:
+- NO UI STEPS: Do not say "Click", "Open", "Navigate". The system is a backend API.
+- ONE STEP = ONE DOCUMENT: Group all fields for a record into a single "Create" step.
+- LOGICAL FLOW: Step 1 (Create Parent) -> Step 2 (Create Child).
+
+
 Example format:
 1. First action to take
 2. Second action to take
