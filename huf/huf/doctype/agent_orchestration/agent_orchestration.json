@@ -28,7 +28,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Planned\nRunning\nPaused\nCompleted\nFailed"
+   "options": "Planned\nRunning\nPaused\nCompleted\nFailed\nCancelled"
   },
   {
    "fieldname": "current_step",
