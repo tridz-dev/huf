@@ -46,6 +46,45 @@ class AgentManager:
                 f"Error loading Agent Tool Function: {str(e)}",
                 "Agent Tool Function Error",
             )
+        
+        # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
+        try:
+            from huf.ai.knowledge.tool import (
+                create_knowledge_search_tool, 
+                handle_knowledge_search,
+                create_get_knowledge_sources_tool,
+                handle_get_knowledge_sources
+            )
+            from agents import function_tool
+            
+            # 1. Knowledge Search Tool
+            knowledge_tool_def = create_knowledge_search_tool(self.agent_doc.agent_name)
+            if knowledge_tool_def:
+                @function_tool
+                def knowledge_search_tool(query: str, knowledge_source: str = None, top_k: int = 5) -> str:
+                    """Search the agent's knowledge base for relevant information."""
+                    return handle_knowledge_search(
+                        agent_name=self.agent_doc.agent_name,
+                        query=query,
+                        knowledge_source=knowledge_source,
+                        top_k=top_k,
+                    )
+                self.tools.append(knowledge_search_tool)
+
+            # 2. Get Knowledge Sources Tool
+            sources_tool_def = create_get_knowledge_sources_tool(self.agent_doc.agent_name)
+            if sources_tool_def:
+                @function_tool
+                def get_knowledge_sources_tool() -> str:
+                    """List all knowledge sources available to this agent."""
+                    return handle_get_knowledge_sources(agent_name=self.agent_doc.agent_name)
+                self.tools.append(get_knowledge_sources_tool)
+
+        except Exception as e:
+            frappe.log_error(
+                f"Error loading knowledge tools: {str(e)}",
+                "Knowledge Tool Error",
+            )
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
@@ -395,6 +434,21 @@ def run_agent_sync(
         manager = AgentManager(agent_name)
         agent = manager.create_agent()
 
+        # Build knowledge context for mandatory sources
+        knowledge_context = None
+        try:
+            from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
+            
+            knowledge_context = build_knowledge_context(
+                agent_name=agent_name,
+                user_query=prompt,
+            )
+        except Exception as e:
+            frappe.log_error(
+                f"Error building knowledge context: {str(e)}",
+                "Knowledge Context Error"
+            )
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
@@ -402,12 +456,25 @@ def run_agent_sync(
             "agent_name": agent_name
         }
 
-        enhanced_prompt = f"""
+        base_prompt = f"""
             Conversation history:
             {json.dumps(history, indent=2)}
             Current user message:
             {prompt}
         """
+        
+        # Inject knowledge context if available
+        if knowledge_context and knowledge_context.get("context_text"):
+            enhanced_prompt = inject_knowledge_context(base_prompt, knowledge_context)
+            
+            # Store knowledge usage in run document
+            if knowledge_context.get("sources_used"):
+                run_doc.db_set({
+                    "knowledge_sources_used": json.dumps(knowledge_context["sources_used"]),
+                    "chunks_injected": len(knowledge_context.get("chunks_used", []))
+                })
+        else:
+            enhanced_prompt = base_prompt
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

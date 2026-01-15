@@ -5,7 +5,7 @@
  "creation": "2025-08-11 18:33:44.565632",
  "doctype": "DocType",
  "engine": "InnoDB",
-  "field_order": [
+ "field_order": [
   "general_tab",
   "llm_configuration_section",
   "agent_name",
@@ -37,7 +37,10 @@
   "tools_and_mcp_tab",
   "agent_tool",
   "mcp_servers_section",
-  "agent_mcp_server",      
+  "agent_mcp_server",
+  "knowledge_tab",
+  "knowledge_section",
+  "agent_knowledge",
   "permissions_tab",
   "allowed_users",
   "column_break_dq1z",
@@ -177,6 +180,23 @@
    "label": "Tools and MCP"
   },
   {
+   "fieldname": "knowledge_tab",
+   "fieldtype": "Tab Break",
+   "label": "Knowledge"
+  },
+  {
+   "description": "Knowledge sources this agent can access",
+   "fieldname": "knowledge_section",
+   "fieldtype": "Section Break",
+   "label": "Knowledge Sources"
+  },
+  {
+   "fieldname": "agent_knowledge",
+   "fieldtype": "Table",
+   "label": "Knowledge Sources",
+   "options": "Agent Knowledge"
+  },
+  {
    "description": "Configure language model settings ",
    "fieldname": "llm_configuration_section",
    "fieldtype": "Section Break",
@@ -308,7 +328,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-05 12:57:58.416884",
+ "modified": "2026-01-15 10:59:11.145310",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

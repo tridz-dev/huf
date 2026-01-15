@@ -27,7 +27,10 @@
   "cached_tokens",
   "parent_run",
   "is_child",
-  "agent_orchestration"
+  "agent_orchestration",
+  "knowledge_section",
+  "knowledge_sources_used",
+  "chunks_injected"
  ],
  "fields": [
   {
@@ -178,6 +181,23 @@
    "fieldname": "call_recording",
    "fieldtype": "Attach",
    "label": "Call Recording",
+   "read_only": 1
+  },
+  {
+   "fieldname": "knowledge_section",
+   "fieldtype": "Section Break",
+   "label": "Knowledge Usage"
+  },
+  {
+   "fieldname": "knowledge_sources_used",
+   "fieldtype": "JSON",
+   "label": "Knowledge Sources Used",
+   "read_only": 1
+  },
+  {
+   "fieldname": "chunks_injected",
+   "fieldtype": "Int",
+   "label": "Chunks Injected",
    "read_only": 1
   }
  ],

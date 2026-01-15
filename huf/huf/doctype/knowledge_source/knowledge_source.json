@@ -1,0 +1,197 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:source_name",
+ "creation": "2026-01-10 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "configuration_section",
+  "source_name",
+  "description",
+  "column_break_1",
+  "knowledge_type",
+  "scope",
+  "storage_settings_section",
+  "storage_mode",
+  "sqlite_file",
+  "sqlite_file_path",
+  "chunking_settings_section",
+  "chunk_size",
+  "chunk_overlap",
+  "status_section",
+  "status",
+  "last_indexed_at",
+  "column_break_status",
+  "total_chunks",
+  "total_inputs",
+  "index_size_bytes",
+  "error_message",
+  "disabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "configuration_section",
+   "fieldtype": "Section Break",
+   "label": "Configuration"
+  },
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Site",
+   "fieldtype": "Select",
+   "label": "Scope",
+   "options": "Site\nWorkspace\nAgent\nGlobal",
+   "reqd": 1,
+   "fieldname": "scope"
+  },
+  {
+   "fieldname": "storage_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Storage Settings"
+  },
+  {
+   "default": "Frappe File",
+   "fieldtype": "Select",
+   "label": "Storage Mode",
+   "options": "Frappe File",
+   "reqd": 1,
+   "fieldname": "storage_mode"
+  },
+  {
+   "fieldname": "sqlite_file",
+   "fieldtype": "Attach",
+   "label": "SQLite File",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sqlite_file_path",
+   "fieldtype": "Data",
+   "label": "SQLite File Path",
+   "read_only": 1
+  },
+  {
+   "fieldname": "chunking_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Chunking Settings"
+  },
+  {
+   "default": 512,
+   "fieldtype": "Int",
+   "label": "Chunk Size",
+   "non_negative": 1,
+   "fieldname": "chunk_size"
+  },
+  {
+   "default": 50,
+   "fieldtype": "Int",
+   "label": "Chunk Overlap",
+   "non_negative": 1,
+   "fieldname": "chunk_overlap"
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "default": "Pending",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Pending\nIndexing\nReady\nError\nRebuilding",
+   "read_only": 1,
+   "fieldname": "status"
+  },
+  {
+   "fieldname": "last_indexed_at",
+   "fieldtype": "Datetime",
+   "label": "Last Indexed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": 0,
+   "fieldname": "total_chunks",
+   "fieldtype": "Int",
+   "label": "Total Chunks",
+   "read_only": 1
+  },
+  {
+   "default": 0,
+   "fieldname": "total_inputs",
+   "fieldtype": "Int",
+   "label": "Total Inputs",
+   "read_only": 1
+  },
+  {
+   "default": 0,
+   "fieldname": "index_size_bytes",
+   "fieldtype": "Int",
+   "label": "Index Size (bytes)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "read_only": 1
+  },
+  {
+   "default": 0,
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "knowledge_type",
+   "fieldtype": "Select",
+   "label": "Knowledge Type",
+   "options": "sqlite_fts",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-01-10 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Knowledge Source",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
