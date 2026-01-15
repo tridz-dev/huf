@@ -292,6 +292,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 "temperature": temperature,
             }
 
+            if context and context.get("response_format"):
+                completion_kwargs["response_format"] = context.get("response_format")
+
             if top_p:
                 completion_kwargs["top_p"] = top_p
 
