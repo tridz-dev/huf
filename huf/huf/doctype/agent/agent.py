@@ -5,11 +5,16 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from huf.ai.agent_hooks import clear_doc_event_agents_cache
+from frappe.utils import now_datetime
+from huf.ai.agent_integration import run_agent_sync 
 
 try:
     from litellm.utils import supports_prompt_caching
 except ImportError:
     supports_prompt_caching = None
+
+from huf.ai.orchestration.planning import run_planning
+from huf.ai.orchestration.orchestrator import parse_plan_steps, create_orchestration
 
 def get_permission_query_conditions(user):
     if not user:
@@ -106,10 +111,97 @@ class Agent(Document):
 
     def on_update(self):
         clear_doc_event_agents_cache()
+        
+        if self.flags.in_insert:
+            return
 
+        if self.enable_multi_run and (
+            self.has_value_changed("instructions") or 
+            self.has_value_changed("enable_multi_run")
+        ):
+            self.generate_default_plan()
+        
     def on_trash(self):
         clear_doc_event_agents_cache()
+    
+    def generate_default_plan(self):
+        """
+        Generates the default plan using run_agent_sync directly.
+        Returns the agent_run_id so it can be used as a Parent Run.
+        """
+        if not self.instructions:
+            return None
 
+        planning_prompt = f"""You are a planning assistant. Break down the user's objective into a sequence of clear, atomic steps that can be executed one at a time.
+
+            Rules:
+            - Each step should be self-contained and actionable
+            - Steps should be in logical order
+            - Return ONLY a numbered list, nothing else
+            - Keep steps concise but clear
+
+            Example format:
+            1. First action to take
+            2. Second action to take
+
+            Now break down this objective:
+            {self.instructions}"""
+
+        try:
+            result = run_agent_sync(
+                agent_name=self.name,
+                prompt=planning_prompt,
+                provider=self.provider,
+                model=self.model,
+                channel_id="orchestration_planning"
+            )
+            
+            planning_run_id = result.get("agent_run_id")
+            plan_text = result.get("response", "")
+            
+            steps = parse_plan_steps(plan_text)
+            
+            if steps:
+                self.reload()
+                self.set("default_plan", [])
+                for idx, step in enumerate(steps, start=1):
+                    self.append("default_plan", {
+                        "step_index": idx,
+                        "instruction": step,
+                        "status": "pending"
+                    })
+                
+                self.flags.ignore_recursion = True
+                self.save()
+                self.flags.ignore_recursion = False
+            
+            return planning_run_id, steps
+                
+        except Exception as e:
+            frappe.log_error(f"Plan Generation Failed: {str(e)}", "Agent Plan Error")
+            return None
+
+    def after_insert(self):
+        """
+        Trigger Multi-Run setup on Agent Creation.
+        Uses the Planning Run as the Parent Run.
+        """
+        self.flags.in_insert = True
+        if self.enable_multi_run and self.instructions:
+            try:
+                planning_run_id, steps = self.generate_default_plan()                
+                if planning_run_id:
+                    create_orchestration(
+                        agent_name=self.name, 
+                        user_prompt=self.instructions,
+                        parent_run_id=planning_run_id,
+                        override_plan=steps 
+                    )
+                
+            except Exception as e:
+                frappe.log_error(f"Multi-Run Setup Failed: {str(e)}", "Agent Creation Error")
+
+    
     def has_permission(self, permission_type=None, verbose=False):
         user = frappe.session.user
 
