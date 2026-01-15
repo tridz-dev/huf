@@ -337,7 +337,7 @@ def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None,
         is_output=is_output
     )
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest=True)
 def run_agent_sync(
     agent_name: str,
     prompt: str,
@@ -347,7 +347,8 @@ def run_agent_sync(
     external_id: str = None,
     conversation_id: str = None,
     parent_run_id: str = None,
-    orchestration_id: str = None
+    orchestration_id: str = None,
+    response_format = None
 ):
 
     if not agent_name or not prompt:
@@ -356,6 +357,9 @@ def run_agent_sync(
         channel_id = "api"
 
     agent_doc = frappe.get_doc("Agent", agent_name)
+
+    if frappe.session.user == "Guest" and not agent_doc.allow_guest:
+        frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -449,11 +453,19 @@ def run_agent_sync(
                 "Knowledge Context Error"
             )
 
+        # Parse response_format if string
+        if response_format and isinstance(response_format, str):
+            try:
+                response_format = json.loads(response_format)
+            except Exception:
+                pass
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
             "conversation_history": history,
-            "agent_name": agent_name
+            "agent_name": agent_name,
+            "response_format": response_format
         }
 
         base_prompt = f"""
@@ -483,7 +495,8 @@ def run_agent_sync(
                 "channel": channel_id,
                 "external_id": external_id,
                 "conversation_history": history,
-                "agent_name": agent_name
+                "agent_name": agent_name,
+                "response_format": response_format
             }
             run = RunProvider.run(agent, enhanced_prompt, provider, model,context)
 
