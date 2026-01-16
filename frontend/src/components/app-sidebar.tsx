@@ -1,15 +1,18 @@
 import * as React from "react"
 import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server } from "lucide-react"
+import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { AppSidebarHeader } from "@/components/app-sidebar-header"
+import { ChatSidebarContent } from "@/components/chat/ChatSidebarContent"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 const navItems = [
@@ -69,6 +72,13 @@ const navItems = [
 // ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const location = useLocation()
+  const { isMobile } = useSidebar()
+  const isChatPage = location.pathname.startsWith('/chat')
+  
+  // Show chat list in sidebar on mobile when on chat page
+  const showChatList = isMobile && isChatPage
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
@@ -76,6 +86,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navItems} />
+        {showChatList && <ChatSidebarContent />}
         {/* <NavMain items={systemItems} label="System" /> */}
       </SidebarContent>
       <SidebarFooter>

@@ -4,11 +4,13 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { ChatList } from '@/components/chat/ChatList';
 import { ChatWindow } from '@/components/chat/ChatWindow';
 import { findScrollableContainer } from '@/utils/htmlUtils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export function ChatPage() {
   const navigate = useNavigate();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
   const { setOpen } = useSidebar();
+  const isMobile = useIsMobile();
   const normalizedChatId = routeChatId && routeChatId !== 'new' ? routeChatId : null;
   const [selectedChatId, setSelectedChatId] = useState<string | null>(normalizedChatId);
   const [chatListRefreshKey, setChatListRefreshKey] = useState(0);
@@ -55,12 +57,19 @@ export function ChatPage() {
 
   return (
     <div className="flex h-screen min-h-0 w-full overflow-hidden" ref={chatPageRef}>
-      <ChatList
-        selectedChatId={selectedChatId}
-        onSelectChat={handleSelectChat}
-        onNewChat={handleNewChat}
-        refreshKey={chatListRefreshKey}
-      />
+      {/* Desktop: Always visible sidebar */}
+      {!isMobile && (
+        <div className="hidden md:block">
+          <ChatList
+            selectedChatId={selectedChatId}
+            onSelectChat={handleSelectChat}
+            onNewChat={handleNewChat}
+            refreshKey={chatListRefreshKey}
+          />
+        </div>
+      )}
+
+      {/* Mobile: Chat list is shown in app sidebar, so we just show the chat window */}
       <div className="flex-1 min-h-0" ref={chatWindowRef}>
         <ChatWindow
           chatId={selectedChatId}
