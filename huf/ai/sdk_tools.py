@@ -208,8 +208,23 @@ def create_function_tool(
 
                 if _function.__name__ in ["handle_get_request", "handle_post_request"]:
                     args_dict["tool_name"] = name
+                import inspect
 
-                result = _function(**args_dict)
+                sig = inspect.signature(_function)
+                accepts_kwargs = any(
+                    p.kind == inspect.Parameter.VAR_KEYWORD 
+                    for p in sig.parameters.values()
+                )
+                if accepts_kwargs:
+                    result = _function(**args_dict)
+                else:
+                    valid_params = set(sig.parameters.keys())
+                    
+                    filtered_args = {
+                        k: v for k, v in args_dict.items() 
+                        if k in valid_params
+                    }
+                    result = _function(**filtered_args)
 
                 if hasattr(result, "as_dict"):
                     result = result.as_dict()
