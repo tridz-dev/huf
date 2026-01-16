@@ -31,7 +31,13 @@ function App() {
   useEffect(() => {
     // Wait for frappe.boot to be available
     const siteName = (window as any).frappe?.boot?.sitename;
-    const port = (window as any).frappe?.boot?.socketio_port;
+    /*
+     If in development, use the port set in window.frappe.boot.socketio_port for development server
+     for local development with build, use the port set in frappe.boot.socketio_port.
+     for production, with proper domain no port is required (think so!)
+    */
+    const hasPort = !!window.location?.port
+    const port = hasPort ? (window as any).frappe?.boot?.socketio_port : '';
     
     if (!siteName) {
       console.warn("Site name not available yet, socket connection will be skipped");
