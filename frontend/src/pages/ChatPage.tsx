@@ -17,10 +17,13 @@ export function ChatPage() {
   const chatPageRef = useRef<HTMLDivElement>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when page mounts and content is loaded
+  // Close sidebar on initial mount only
   useEffect(() => {
     setOpen(false);
-    
+  }, []);
+
+  // Scroll to bottom when chat content changes
+  useEffect(() => {
     const scrollToBottom = () => {
       if (!chatWindowRef.current) 
         return;
@@ -39,7 +42,7 @@ export function ChatPage() {
       }
     };
     scrollToBottom();
-  }, [setOpen, selectedChatId]);
+  }, [selectedChatId]);
 
   useEffect(() => {
     setSelectedChatId(normalizedChatId);
