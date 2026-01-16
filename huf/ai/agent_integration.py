@@ -281,7 +281,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 update_data = {}
 
                 if result is not None:
-                    update_data["tool_result"] = result if isinstance(result, str) else json.dumps(result)
+                    update_data["tool_result"] = json.dumps(result)
                 
                 if error:
                     update_data["status"] = "Failed"
@@ -293,8 +293,8 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 doc.save()
                 return doc.name 
             else:
-                 frappe.log_error(f"Received tool output for run {agent_run} but no Queued tool call found.", "Agent Tool Call Warning")
-                 return None
+                frappe.log_error(f"Received tool output for run {agent_run} but no Queued tool call found.", "Agent Tool Call Warning")
+                return None
 
         else:
             is_mcp_tool = 0
