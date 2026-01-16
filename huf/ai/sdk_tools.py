@@ -59,6 +59,10 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     if not function_doc.function_path:
                         continue
                     function_path = function_doc.function_path
+                elif function_doc.types == "Client Side Tool":
+                    function_path = "huf.ai.cilent_side_tool.client_side_function"
+                    if not function_doc.function_name:
+                        continue
                 else:
                     if function_doc.types == "Get List":
                         function_path = "huf.ai.sdk_tools.handle_get_list"
@@ -130,6 +134,10 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         and function_doc.reference_doctype
                     ):
                         extra_args["reference_doctype"] = function_doc.reference_doctype
+                    
+                    elif function_doc.types == "Client Side Tool":
+                        if function_doc.function_name:
+                            extra_args["function_name"] = function_doc.function_name
 
                     tool = create_function_tool(
                         function_doc.tool_name,
@@ -187,6 +195,12 @@ def create_function_tool(
                     ctx = None
 
                 args_dict = json.loads(args_json or "{}")
+
+                if isinstance(ctx, dict):
+                    if "conversation_id" in ctx:
+                        args_dict["conversation_id"] = ctx["conversation_id"]
+                    if "agent_run_id" in ctx:
+                        args_dict["agent_run_id"] = ctx["agent_run_id"]
 
                 for key, value in _extra_args.items():
                     if key not in args_dict:
@@ -546,7 +560,7 @@ def handle_create_document(reference_doctype=None, **kwargs):
         return {"success": False, "error": str(e)}
 
 
-def handle_delete_document(document_id=None, reference_doctype=None):
+def handle_delete_document(document_id=None, reference_doctype=None,**kwargs):
     """
     Delete a document
 
@@ -576,7 +590,7 @@ def handle_delete_document(document_id=None, reference_doctype=None):
 
 
 def handle_get_list(
-	filters=None, fields=None, limit=0, order_by="modified desc", reference_doctype=None
+	filters=None, fields=None, limit=0, order_by="modified desc", reference_doctype=None, **kwargs
 ):
 	"""
 	Get a list of documents from a doctype
@@ -878,7 +892,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
 def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, **kwargs):
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
 
-def handle_run_agent(agent_name: str, prompt: str):
+def handle_run_agent(agent_name: str, prompt: str, **kwargs):
     """
     Queue another agent execution instead of blocking.
     """

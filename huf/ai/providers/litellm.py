@@ -38,9 +38,9 @@ class SimpleResult:
         self.cost = cost
 
 
-async def _execute_tool_call(tool, args_json):
+async def _execute_tool_call(tool, args_json, context=None):
     """Execute a tool call and return the result"""
-    return await tool.on_invoke_tool(None, args_json)
+    return await tool.on_invoke_tool(ctx=context, args_json=args_json)
 
 
 def _find_tool(agent, tool_name):
@@ -403,7 +403,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 if tool_to_run:
                     try:
                         result_content = await _execute_tool_call(
-                            tool_to_run, tool_args
+                            tool_to_run, tool_args, context
                         )
                     except Exception as e:
                         result_content = f"Error executing tool {tool_name}: {str(e)}"
@@ -684,7 +684,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                 if tool_to_run:
                                     try:
                                         result_content = await _execute_tool_call(
-                                            tool_to_run, tool_args
+                                            tool_to_run, tool_args, context
                                         )
                                     except Exception as e:
                                         result_content = f"Error executing tool {tool_name}: {str(e)}"

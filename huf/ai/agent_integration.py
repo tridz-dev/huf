@@ -465,7 +465,9 @@ def run_agent_sync(
             "external_id": external_id,
             "conversation_history": history,
             "agent_name": agent_name,
-            "response_format": response_format
+            "response_format": response_format,
+            "conversation_id": conversation.name,
+            "agent_run_id": run_doc.name
         }
 
         base_prompt = f"""
@@ -496,7 +498,9 @@ def run_agent_sync(
                 "external_id": external_id,
                 "conversation_history": history,
                 "agent_name": agent_name,
-                "response_format": response_format
+                "response_format": response_format,
+                "conversation_id": conversation.name,
+                "agent_run_id": run_doc.name
             }
             run = RunProvider.run(agent, enhanced_prompt, provider, model,context)
 
@@ -762,7 +766,9 @@ async def run_agent_stream(
             "channel": channel_id,
             "external_id": external_id,
             "conversation_history": history,
-            "agent_name": agent_name
+            "agent_name": agent_name,
+            "conversation_id": conversation.name,
+            "agent_run_id": run_doc.name
         }
         
         enhanced_prompt = f"""
