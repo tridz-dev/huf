@@ -20,6 +20,7 @@ import { IntegrationsPageWrapper } from './pages/IntegrationsPageWrapper';
 import { ChatPage } from './pages/ChatPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { Toaster } from './components/ui/sonner';
+import { toast } from 'sonner';
 import Executions from './pages/Executions';
 import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
 import { useEffect } from 'react';
@@ -40,6 +41,10 @@ function App() {
     const port = hasPort ? (window as any).frappe?.boot?.socketio_port : '';
     
     if (!siteName) {
+      toast.error("Socket connection failed", {
+        description: "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+        duration: 5000,
+      });
       console.warn("Site name not available yet, socket connection will be skipped");
       return;
     }
@@ -53,6 +58,10 @@ function App() {
 
     socket.on("connect_error", (error) => {
       console.error("❌ Socket connection error:", error);
+      toast.error("Socket connection failed", {
+        description: "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+        duration: 5000,
+      });
     });
 
     socket.on("disconnect", (reason) => {
