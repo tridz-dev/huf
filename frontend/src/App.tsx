@@ -20,6 +20,7 @@ import { IntegrationsPageWrapper } from './pages/IntegrationsPageWrapper';
 import { ChatPage } from './pages/ChatPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { Toaster } from './components/ui/sonner';
+import { toast } from 'sonner';
 import Executions from './pages/Executions';
 import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
 import { useEffect } from 'react';
@@ -31,9 +32,19 @@ function App() {
   useEffect(() => {
     // Wait for frappe.boot to be available
     const siteName = (window as any).frappe?.boot?.sitename;
-    const port = (window as any).frappe?.boot?.socketio_port;
+    /*
+     If in development, use the port set in window.frappe.boot.socketio_port for development server
+     for local development with build, use the port set in frappe.boot.socketio_port.
+     for production, with proper domain no port is required (think so!)
+    */
+    const hasPort = !!window.location?.port
+    const port = hasPort ? (window as any).frappe?.boot?.socketio_port : '';
     
     if (!siteName) {
+      toast.error("Socket connection failed", {
+        description: "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+        duration: 5000,
+      });
       console.warn("Site name not available yet, socket connection will be skipped");
       return;
     }
@@ -47,6 +58,10 @@ function App() {
 
     socket.on("connect_error", (error) => {
       console.error("❌ Socket connection error:", error);
+      toast.error("Socket connection failed", {
+        description: "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+        duration: 5000,
+      });
     });
 
     socket.on("disconnect", (reason) => {
