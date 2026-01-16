@@ -39,7 +39,8 @@ class AgentToolFunction(Document):
 				"Run Agent",
 				"Attach File to Document",
 				"App Provided",
-				"Speech to Text"
+				"Speech to Text",
+				"Client Side Tool"
 			]:
 				frappe.throw(_("Please select a DocType for this function."))
 
@@ -580,6 +581,7 @@ class AgentToolFunction(Document):
 	def before_save(self):
 
 		params = self.get_params_as_dict()
+		self.params = json.dumps(params, indent=4)
 
 		function_definition = {
 			"name": self.tool_name,
