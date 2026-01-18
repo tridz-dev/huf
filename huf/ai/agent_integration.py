@@ -378,7 +378,7 @@ def run_agent_sync(
         )
 
 
-    history = conv_manager.get_conversation_history(conversation.name)
+    history = conv_manager.get_conversation_history(conversation.name, limit=1000)
     run_doc = frappe.get_doc({
         "doctype": "Agent Run",
         "agent": agent_name,
@@ -432,7 +432,7 @@ def run_agent_sync(
         frappe.db.set_value("Agent", agent_name, {
             "total_run": total_runs,
             "last_run": last_run_time
-        })
+        },update_modified=False)
         safe_commit()
 
         manager = AgentManager(agent_name)
@@ -470,9 +470,39 @@ def run_agent_sync(
             "agent_run_id": run_doc.name
         }
 
+        to_summarize, remaining = conv_manager.summarize_conversation(
+            conversation.name, history, provider, model, agent_name, limit=20
+        )
+
+        if to_summarize:
+            try:
+                summary_agent = Agent(
+                    name=agent_name,
+                    instructions="You are a helpful assistant. Summarize the provided conversation history concisely, capturing key decisions and context.",
+                    model=agent.model,
+                    tools=[],
+                    model_settings=agent.model_settings,
+                )
+                
+                summary_input = json.dumps(to_summarize, indent=2)
+                summary_prompt = f"Summarize this conversation history:\n{summary_input}"
+
+                sum_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(sum_loop)
+                try:
+                    sum_context = {"agent_name": agent_name, "is_system_op": True} 
+                    sum_run = RunProvider.run(summary_agent, summary_prompt, provider, model, sum_context)
+                    sum_result = sum_loop.run_until_complete(sum_run)
+                    summary_text = getattr(sum_result, "final_output", "Could not generate summary.")
+                finally:
+                    sum_loop.close()
+
+                history = [{"role": "system", "content": f"Previous Conversation Summary: {summary_text}"}] + remaining
+            except Exception as e:
+                frappe.log_error(f"Summarization failed: {str(e)}", "Agent Summarization Error")
+                pass
+
         base_prompt = f"""
-            Conversation history:
-            {json.dumps(history, indent=2)}
             Current user message:
             {prompt}
         """
@@ -732,7 +762,7 @@ async def run_agent_stream(
                 title=f"Streaming chat with {agent_name}"
             )
         
-        history = conv_manager.get_conversation_history(conversation.name)
+        history = conv_manager.get_conversation_history(conversation.name, limit=1000)
         
         # Create Agent Run document
         run_doc = frappe.get_doc({
@@ -756,7 +786,7 @@ async def run_agent_stream(
         frappe.db.set_value("Agent", agent_name, {
             "total_run": total_runs,
             "last_run": last_run_time
-        })
+        },update_modified=False)
         safe_commit()
         
         manager = AgentManager(agent_name)
@@ -771,12 +801,39 @@ async def run_agent_stream(
             "agent_run_id": run_doc.name
         }
         
+        # SUMMARIZATION LOGIC
+        to_summarize, remaining = conv_manager.summarize_conversation(
+            conversation.name, history, provider, model, agent_name, limit=20
+        )
+
+        if to_summarize:
+            try:
+                summary_agent = Agent(
+                    name=agent_name, 
+                    instructions="You are a helpful assistant. Summarize the provided conversation history concisely, capturing key decisions and context.",
+                    model=agent.model,
+                    tools=[],
+                    model_settings=agent.model_settings,
+                )
+                
+                summary_input = json.dumps(to_summarize, indent=2)
+                summary_prompt = f"Summarize this conversation history:\n{summary_input}"
+
+                sum_context = {"agent_name": agent_name, "is_system_op": True} 
+                sum_result = await RunProvider.run(summary_agent, summary_prompt, provider, model, sum_context)
+                summary_text = getattr(sum_result, "final_output", "Could not generate summary.")
+
+                history = [{"role": "system", "content": f"Previous Conversation Summary: {summary_text}"}] + remaining
+            except Exception as e:
+                frappe.log_error(f"Summarization failed: {str(e)}", "Agent Summarization Error")
+                pass
+
         enhanced_prompt = f"""
-            Conversation history:
-            {json.dumps(history, indent=2)}
             Current user message:
             {prompt}
         """
+
+        context["conversation_history"] = history
         
         # Stream from provider
         full_response = ""
