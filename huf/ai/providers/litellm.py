@@ -600,6 +600,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "messages": messages,
             "temperature": temperature,
             "stream": True,  # Enable streaming
+            "stream_options": {"include_usage": True} # Request usage stats in stream
         }
         
         # Trim messages to fit context window
@@ -637,7 +638,13 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 streaming_content = ""
 
                 # Process streaming chunks
+                stream_usage = None
+                
                 for chunk in stream:
+                    # Capture usage if present (often in last chunk)
+                    if hasattr(chunk, "usage") and chunk.usage:
+                        stream_usage = chunk.usage
+
                     if not chunk.choices:
                         continue
 
@@ -739,11 +746,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                             current_tool_calls = {}
                             break
 
-                        # Final response - no more tool calls
                         if finish_reason == "stop":
                             yield {
                                 "type": "complete",
                                 "full_response": full_response,
+                                "usage": stream_usage
                             }
                             return
 

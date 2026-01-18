@@ -643,6 +643,23 @@ def run_agent_sync(
                 input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
                 output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
                 cached_tokens = getattr(usage, "cached_tokens", 0)
+
+            # --- UPDATE CONVERSATION METRICS ---
+            try:
+                total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
+                
+                frappe.db.sql("""
+                    UPDATE `tabAgent Conversation`
+                    SET 
+                        total_input_tokens = total_input_tokens + %s,
+                        total_output_tokens = total_output_tokens + %s,
+                        total_tokens = total_tokens + %s,
+                        total_cost = total_cost + %s
+                    WHERE name = %s
+                """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
+            except Exception as e:
+                frappe.log_error(f"Failed to update conversation metrics: {str(e)}")
+            # -----------------------------------
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
@@ -860,7 +877,51 @@ async def run_agent_stream(
                 
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
+                    usage = chunk.get("usage", {})
                     
+                    # Calculate metrics
+                    cost = 0.0
+                    input_tokens = 0
+                    output_tokens = 0
+                    cached_tokens = 0
+                    
+                    if usage:
+                        # Try to calculate cost if possible or use 0
+                        # LiteLLM usually provides cost in response object, not always in usage dict
+                        # We might need to rely on what we have.
+                        # For stream, cost calculation might be tricky without response object.
+                        # We will skip cost calc for now or assume 0 until we have a better way.
+                        # Wait, litellm.completion_cost takes response object.
+                        
+                        if isinstance(usage, dict):
+                            input_tokens = getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0))
+                            output_tokens = getattr(usage, "completion_tokens", usage.get("completion_tokens", 0))
+                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
+                        else:
+                             input_tokens = getattr(usage, "prompt_tokens", 0)
+                             output_tokens = getattr(usage, "completion_tokens", 0)
+                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
+
+                        # COST NOTE: LiteLLM stream chunks usage doesn't include cost. 
+                        # We would need to calculate it manually using completion_cost(model=model, rx=usage)
+                        # but that requires importing completion_cost and model prices.
+                        # For now, we will leave cost as 0.0 for streams to avoid errors, 
+                        # or try to calculate if we really need it. User asked for total context.
+
+                        # Update Conversation Metrics
+                        try:
+                            frappe.db.sql("""
+                                UPDATE `tabAgent Conversation`
+                                SET 
+                                    total_input_tokens = total_input_tokens + %s,
+                                    total_output_tokens = total_output_tokens + %s,
+                                    total_tokens = total_tokens + %s,
+                                    total_cost = total_cost + %s
+                                WHERE name = %s
+                            """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
+                        except Exception as e:
+                            frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
+
                     # Save final response
                     conv_manager.add_message(conversation, "agent", full_response, provider, model, agent_name, run_doc.name)
                     
@@ -870,6 +931,8 @@ async def run_agent_stream(
                         "prompt": prompt,
                         "model": model,
                         "provider": provider,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
                         "end_time": now_datetime()
                     }, update_modified=True)
                     safe_commit()
