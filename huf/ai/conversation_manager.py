@@ -117,12 +117,12 @@ class ConversationManager:
             filters={"conversation": conversation_name},
             fields=["role", "content", "creation"],
             order_by="conversation_index asc",
-            limit=limit
+            limit=limit if limit else 1000
         )
 
         return [
             {
-                "role": msg.role,
+                "role": "assistant" if msg.role == "agent" else msg.role,
                 "content": msg.content
             }
             for msg in messages
@@ -131,3 +131,17 @@ class ConversationManager:
     def close_conversation(self, conversation_name):
         """Mark conversation as inactive"""
         frappe.db.set_value("Agent Conversation", conversation_name, "is_active", 0)
+
+    def summarize_conversation(self, conversation_name, history, provider, model, agent_name, limit=20):
+        """Summarize conversation if it exceeds the limit"""
+        if len(history) <= limit:
+            return None, history
+
+        split_index = int(len(history) * 0.7)
+        to_summarize = history[:split_index]
+        remaining = history[split_index:]
+
+        summary_prompt = "Summarize the following conversation history concisely, capturing key information, context, and decisions. Maintain the flow of information."
+        
+        return to_summarize, remaining
+
