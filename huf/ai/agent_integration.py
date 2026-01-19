@@ -377,6 +377,15 @@ def run_agent_sync(
             title=f"Chat with {agent_name}"
         )
 
+    if conversation.model:
+        if conversation.model != model:
+             frappe.throw(
+                 _("Agent model has changed from {0} to {1}. Please start a new conversation.").format(conversation.model, model),
+                 frappe.ValidationError
+             )
+    else:
+        frappe.db.set_value("Agent Conversation", conversation.name, "model", model)
+
 
     history = conv_manager.get_conversation_history(conversation.name, limit=1000)
     run_doc = frappe.get_doc({
@@ -778,6 +787,18 @@ async def run_agent_stream(
             conversation = conv_manager.create_new_conversation(
                 title=f"Streaming chat with {agent_name}"
             )
+        
+        # Model Validation
+        if conversation.model:
+            if conversation.model != model:
+                 yield {
+                     "type": "error",
+                     "error": f"Agent model has changed from {conversation.model} to {model}. Please start a new conversation."
+                 }
+                 return
+        else:
+            # Legacy: Lock to current model
+            frappe.db.set_value("Agent Conversation", conversation.name, "model", model)
         
         history = conv_manager.get_conversation_history(conversation.name, limit=1000)
         
