@@ -26,7 +26,8 @@ class ConversationManager:
             "external_id": self.external_id,
             "created_at": now(),
             "last_activity": now(),
-            "is_active": 1
+            "is_active": 1,
+            "model": frappe.db.get_value("Agent", self.agent_name, "model")
         })
         conv.insert()
         return conv
@@ -67,7 +68,8 @@ class ConversationManager:
             "external_id": self.external_id,
             "created_at": now(),
             "last_activity": now(),
-            "is_active": 1
+            "is_active": 1,
+            "model": frappe.db.get_value("Agent", self.agent_name, "model")
         })
         conv.insert()
         return conv
