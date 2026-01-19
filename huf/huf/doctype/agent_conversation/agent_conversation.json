@@ -8,6 +8,7 @@
   "last_activity",
   "created_at",
   "agent",
+  "model",
   "session_id",
   "channel",
   "external_id",
@@ -32,6 +33,13 @@
    "in_list_view": 1,
    "label": "Agent",
    "options": "Agent"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "AI Model",
+   "read_only": 1
   },
   {
    "fieldname": "created_at",
@@ -110,7 +118,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-19 01:29:38.748433",
+ "modified": "2026-01-19 13:26:11.599292",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Conversation",
