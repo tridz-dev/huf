@@ -216,7 +216,7 @@ def new_conversation(agent: str, message: str):
 
     except Exception as e:
         frappe.log_error(message=f"new_conversation error: {frappe.get_traceback()}", title="Huf API")
-        return {"success": False, "error": str(e)}
+        raise
 
 
 @frappe.whitelist()
@@ -255,4 +255,4 @@ def send_message_to_conversation(conversation: str, message: str):
 
     except Exception as e:
         frappe.log_error(message=f"send_message_to_conversation error: {frappe.get_traceback()}", title="Huf API")
-        return {"success": False, "error": str(e)}
+        raise
