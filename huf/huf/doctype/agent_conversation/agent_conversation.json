@@ -14,6 +14,7 @@
   "external_id",
   "column_break_9v4t",
   "is_active",
+  "summary",
   "total_messages",
   "total_input_tokens",
   "total_output_tokens",
@@ -28,6 +29,11 @@
    "label": "Title"
   },
   {
+   "fieldname": "summary",
+   "fieldtype": "Long Text",
+   "label": "Summary"
+  },
+{
    "fieldname": "agent",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -118,7 +124,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-19 13:26:11.599292",
+ "modified": "2026-01-20 11:11:11.599292",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Conversation",
