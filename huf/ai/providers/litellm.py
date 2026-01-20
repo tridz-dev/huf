@@ -452,6 +452,39 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         return SimpleResult(f"LiteLLM Provider Error: {str(e)}")
 
 
+async def get_simple_completion(model: str, messages: list, provider: str) -> str:
+    """
+    Lightweight wrapper for simple completion tasks (like summarization).
+    Bypasses Agent logic for direct LLM access.
+    """
+    try:
+        litellm.drop_params = True
+        
+        provider_doc = frappe.get_doc("AI Provider", provider)
+        api_key = provider_doc.get_password("api_key")
+        
+        normalized_model = _normalize_model_name(model, provider)
+        provider_name = normalized_model.split("/")[0]
+        
+        completion_kwargs = {
+            "model": normalized_model,
+            "messages": messages,
+            "temperature": 0.3,
+        }
+        
+        _setup_api_key(provider_name, api_key, completion_kwargs)
+        
+        response = await asyncio.to_thread(
+            litellm.completion, **completion_kwargs
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        frappe.log_error(f"LiteLLM Simple Completion Error: {str(e)}", "LiteLLM Provider")
+        return ""
+
+
 async def run_stream(agent, enhanced_prompt, provider, model, context=None):
     """
     Streaming version of LiteLLM provider implementation.
