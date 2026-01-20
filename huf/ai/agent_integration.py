@@ -248,6 +248,9 @@ class AgentManager:
             tools=self.tools or [],
             model_settings=model_settings,
         )
+        
+        # Set max_turns from agent configuration
+        agent.max_turns = self.agent_doc.max_turns or 20
 
         if not hasattr(agent, "tools") or agent.tools is None:
             agent.tools = []
@@ -337,6 +340,70 @@ def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None,
         is_output=is_output
     )
 
+@frappe.whitelist()
+def run_background_summarization(conversation_name, agent_name):
+    """
+    Background job to summarize conversation history.
+    """
+    try:
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        conv_manager = ConversationManager(agent_name=agent_name)
+        
+        history_limit = agent_doc.history_limit or 20
+        # Fetch slightly more than limit to check for overflow
+        history = conv_manager.get_conversation_history(conversation_name, limit=history_limit + 20)
+        
+        if len(history) <= history_limit:
+            return
+
+        stored_summary = conv_manager.get_stored_summary(conversation_name)
+        
+        # Calculate overflow
+        overflow_count = len(history) - history_limit
+        to_summarize = history[:overflow_count]
+        
+        from huf.ai.providers.litellm import get_simple_completion
+        summary_model = agent_doc.summary_model or agent_doc.model
+        summary_provider = agent_doc.provider
+        
+        if agent_doc.summary_model:
+            summary_provider = frappe.db.get_value("AI Model", agent_doc.summary_model, "provider")
+
+        # Prepare input: Previous Summary + Overflow Messages
+        summary_input_data = {
+            "existing_summary": stored_summary or "None",
+            "new_messages_to_incorporate": to_summarize
+        }
+        
+        summary_prompt = f"""
+        You are maintaining a rolling summary of a conversation.
+        
+        1. Update the 'Existing Summary' by incorporating the 'New Messages'.
+        2. Keep the summary concise but retain key details (names, decisions, technical context).
+        3. Output ONLY the new summary text.
+
+        Data:
+        {json.dumps(summary_input_data, indent=2)}
+        """
+        
+        messages = [{"role": "user", "content": summary_prompt}]
+        
+        # Run completion (sync in this background job context)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            new_summary_text = loop.run_until_complete(
+                get_simple_completion(summary_model, messages, summary_provider)
+            )
+            if new_summary_text:
+                conv_manager.update_stored_summary(conversation_name, new_summary_text)
+                frappe.db.commit()
+        finally:
+            loop.close()
+            
+    except Exception as e:
+        frappe.log_error(f"Background summarization failed: {str(e)}", "Agent Background Summarization")
+
 @frappe.whitelist(allow_guest=True)
 def run_agent_sync(
     agent_name: str,
@@ -387,7 +454,9 @@ def run_agent_sync(
         frappe.db.set_value("Agent Conversation", conversation.name, "model", model)
 
 
-    history = conv_manager.get_conversation_history(conversation.name, limit=1000)
+    # Optimized history fetching with dynamic limit + buffer
+    fetch_limit = (agent_doc.history_limit or 20) + 10
+    history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
     run_doc = frappe.get_doc({
         "doctype": "Agent Run",
         "agent": agent_name,
@@ -455,6 +524,7 @@ def run_agent_sync(
             knowledge_context = build_knowledge_context(
                 agent_name=agent_name,
                 user_query=prompt,
+                max_tokens=agent_doc.max_knowledge_tokens or 4000
             )
         except Exception as e:
             frappe.log_error(
@@ -479,38 +549,19 @@ def run_agent_sync(
             "agent_run_id": run_doc.name
         }
 
-        to_summarize, remaining = conv_manager.summarize_conversation(
-            conversation.name, history, provider, model, agent_name, limit=20
-        )
-
-        if to_summarize:
-            try:
-                summary_agent = Agent(
-                    name=agent_name,
-                    instructions="You are a helpful assistant. Summarize the provided conversation history concisely, capturing key decisions and context.",
-                    model=agent.model,
-                    tools=[],
-                    model_settings=agent.model_settings,
-                )
-                
-                summary_input = json.dumps(to_summarize, indent=2)
-                summary_prompt = f"Summarize this conversation history:\n{summary_input}"
-
-                sum_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(sum_loop)
-                try:
-                    sum_context = {"agent_name": agent_name, "is_system_op": True} 
-                    sum_run = RunProvider.run(summary_agent, summary_prompt, provider, model, sum_context)
-                    sum_result = sum_loop.run_until_complete(sum_run)
-                    summary_text = getattr(sum_result, "final_output", "Could not generate summary.")
-                finally:
-                    sum_loop.close()
-
-                history = [{"role": "system", "content": f"Previous Conversation Summary: {summary_text}"}] + remaining
-            except Exception as e:
-                frappe.log_error(f"Summarization failed: {str(e)}", "Agent Summarization Error")
-                pass
-
+        context_strategy = agent_doc.context_strategy or "Summarize"
+        history_limit = agent_doc.history_limit or 20
+        stored_summary = conv_manager.get_stored_summary(conversation.name)
+        
+        if context_strategy == "Summarize":
+            # Just inject the stored summary. Actual summarization happens in background.
+            if stored_summary:
+                history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
+        
+        elif context_strategy == "FIFO":
+            if len(history) > history_limit:
+                history = history[-history_limit:]
+        
         base_prompt = f"""
             Current user message:
             {prompt}
@@ -687,6 +738,16 @@ def run_agent_sync(
             "end_time": now_datetime()
         }, update_modified=True)
         safe_commit()
+
+        if context_strategy == "Summarize":
+            current_history_len = len(history)
+            if current_history_len >= history_limit:
+                 frappe.enqueue(
+                    "huf.ai.agent_integration.run_background_summarization",
+                    queue="default", 
+                    conversation_name=conversation.name,
+                    agent_name=agent_name
+                )
 
         structured = None
         try:
