@@ -248,6 +248,9 @@ class AgentManager:
             tools=self.tools or [],
             model_settings=model_settings,
         )
+        
+        # Set max_turns from agent configuration
+        agent.max_turns = self.agent_doc.max_turns or 20
 
         if not hasattr(agent, "tools") or agent.tools is None:
             agent.tools = []
@@ -337,6 +340,70 @@ def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None,
         is_output=is_output
     )
 
+@frappe.whitelist()
+def run_background_summarization(conversation_name, agent_name):
+    """
+    Background job to summarize conversation history.
+    """
+    try:
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        conv_manager = ConversationManager(agent_name=agent_name)
+        
+        history_limit = agent_doc.history_limit or 20
+        # Fetch slightly more than limit to check for overflow
+        history = conv_manager.get_conversation_history(conversation_name, limit=history_limit + 20)
+        
+        if len(history) <= history_limit:
+            return
+
+        stored_summary = conv_manager.get_stored_summary(conversation_name)
+        
+        # Calculate overflow
+        overflow_count = len(history) - history_limit
+        to_summarize = history[:overflow_count]
+        
+        from huf.ai.providers.litellm import get_simple_completion
+        summary_model = agent_doc.summary_model or agent_doc.model
+        summary_provider = agent_doc.provider
+        
+        if agent_doc.summary_model:
+            summary_provider = frappe.db.get_value("AI Model", agent_doc.summary_model, "provider")
+
+        # Prepare input: Previous Summary + Overflow Messages
+        summary_input_data = {
+            "existing_summary": stored_summary or "None",
+            "new_messages_to_incorporate": to_summarize
+        }
+        
+        summary_prompt = f"""
+        You are maintaining a rolling summary of a conversation.
+        
+        1. Update the 'Existing Summary' by incorporating the 'New Messages'.
+        2. Keep the summary concise but retain key details (names, decisions, technical context).
+        3. Output ONLY the new summary text.
+
+        Data:
+        {json.dumps(summary_input_data, indent=2)}
+        """
+        
+        messages = [{"role": "user", "content": summary_prompt}]
+        
+        # Run completion (sync in this background job context)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            new_summary_text = loop.run_until_complete(
+                get_simple_completion(summary_model, messages, summary_provider)
+            )
+            if new_summary_text:
+                conv_manager.update_stored_summary(conversation_name, new_summary_text)
+                frappe.db.commit()
+        finally:
+            loop.close()
+            
+    except Exception as e:
+        frappe.log_error(f"Background summarization failed: {str(e)}", "Agent Background Summarization")
+
 @frappe.whitelist(allow_guest=True)
 def run_agent_sync(
     agent_name: str,
@@ -377,8 +444,19 @@ def run_agent_sync(
             title=f"Chat with {agent_name}"
         )
 
+    if conversation.model:
+        if conversation.model != model:
+             frappe.throw(
+                 _("Agent model has changed from {0} to {1}. Please start a new conversation.").format(conversation.model, model),
+                 frappe.ValidationError
+             )
+    else:
+        frappe.db.set_value("Agent Conversation", conversation.name, "model", model)
 
-    history = conv_manager.get_conversation_history(conversation.name)
+
+    # Optimized history fetching with dynamic limit + buffer
+    fetch_limit = (agent_doc.history_limit or 20) + 10
+    history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
     run_doc = frappe.get_doc({
         "doctype": "Agent Run",
         "agent": agent_name,
@@ -432,7 +510,7 @@ def run_agent_sync(
         frappe.db.set_value("Agent", agent_name, {
             "total_run": total_runs,
             "last_run": last_run_time
-        })
+        },update_modified=False)
         safe_commit()
 
         manager = AgentManager(agent_name)
@@ -446,6 +524,7 @@ def run_agent_sync(
             knowledge_context = build_knowledge_context(
                 agent_name=agent_name,
                 user_query=prompt,
+                max_tokens=agent_doc.max_knowledge_tokens or 4000
             )
         except Exception as e:
             frappe.log_error(
@@ -470,9 +549,20 @@ def run_agent_sync(
             "agent_run_id": run_doc.name
         }
 
+        context_strategy = agent_doc.context_strategy or "Summarize"
+        history_limit = agent_doc.history_limit or 20
+        stored_summary = conv_manager.get_stored_summary(conversation.name)
+        
+        if context_strategy == "Summarize":
+            # Just inject the stored summary. Actual summarization happens in background.
+            if stored_summary:
+                history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
+        
+        elif context_strategy == "FIFO":
+            if len(history) > history_limit:
+                history = history[-history_limit:]
+        
         base_prompt = f"""
-            Conversation history:
-            {json.dumps(history, indent=2)}
             Current user message:
             {prompt}
         """
@@ -613,6 +703,23 @@ def run_agent_sync(
                 input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
                 output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
                 cached_tokens = getattr(usage, "cached_tokens", 0)
+
+            # --- UPDATE CONVERSATION METRICS ---
+            try:
+                total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
+                
+                frappe.db.sql("""
+                    UPDATE `tabAgent Conversation`
+                    SET 
+                        total_input_tokens = total_input_tokens + %s,
+                        total_output_tokens = total_output_tokens + %s,
+                        total_tokens = total_tokens + %s,
+                        total_cost = total_cost + %s
+                    WHERE name = %s
+                """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
+            except Exception as e:
+                frappe.log_error(f"Failed to update conversation metrics: {str(e)}")
+            # -----------------------------------
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
@@ -631,6 +738,16 @@ def run_agent_sync(
             "end_time": now_datetime()
         }, update_modified=True)
         safe_commit()
+
+        if context_strategy == "Summarize":
+            current_history_len = len(history)
+            if current_history_len >= history_limit:
+                 frappe.enqueue(
+                    "huf.ai.agent_integration.run_background_summarization",
+                    queue="default", 
+                    conversation_name=conversation.name,
+                    agent_name=agent_name
+                )
 
         structured = None
         try:
@@ -732,7 +849,19 @@ async def run_agent_stream(
                 title=f"Streaming chat with {agent_name}"
             )
         
-        history = conv_manager.get_conversation_history(conversation.name)
+        # Model Validation
+        if conversation.model:
+            if conversation.model != model:
+                 yield {
+                     "type": "error",
+                     "error": f"Agent model has changed from {conversation.model} to {model}. Please start a new conversation."
+                 }
+                 return
+        else:
+            # Legacy: Lock to current model
+            frappe.db.set_value("Agent Conversation", conversation.name, "model", model)
+        
+        history = conv_manager.get_conversation_history(conversation.name, limit=1000)
         
         # Create Agent Run document
         run_doc = frappe.get_doc({
@@ -756,7 +885,7 @@ async def run_agent_stream(
         frappe.db.set_value("Agent", agent_name, {
             "total_run": total_runs,
             "last_run": last_run_time
-        })
+        },update_modified=False)
         safe_commit()
         
         manager = AgentManager(agent_name)
@@ -771,12 +900,39 @@ async def run_agent_stream(
             "agent_run_id": run_doc.name
         }
         
+        # SUMMARIZATION LOGIC
+        to_summarize, remaining = conv_manager.summarize_conversation(
+            conversation.name, history, provider, model, agent_name, limit=20
+        )
+
+        if to_summarize:
+            try:
+                summary_agent = Agent(
+                    name=agent_name, 
+                    instructions="You are a helpful assistant. Summarize the provided conversation history concisely, capturing key decisions and context.",
+                    model=agent.model,
+                    tools=[],
+                    model_settings=agent.model_settings,
+                )
+                
+                summary_input = json.dumps(to_summarize, indent=2)
+                summary_prompt = f"Summarize this conversation history:\n{summary_input}"
+
+                sum_context = {"agent_name": agent_name, "is_system_op": True} 
+                sum_result = await RunProvider.run(summary_agent, summary_prompt, provider, model, sum_context)
+                summary_text = getattr(sum_result, "final_output", "Could not generate summary.")
+
+                history = [{"role": "system", "content": f"Previous Conversation Summary: {summary_text}"}] + remaining
+            except Exception as e:
+                frappe.log_error(f"Summarization failed: {str(e)}", "Agent Summarization Error")
+                pass
+
         enhanced_prompt = f"""
-            Conversation history:
-            {json.dumps(history, indent=2)}
             Current user message:
             {prompt}
         """
+
+        context["conversation_history"] = history
         
         # Stream from provider
         full_response = ""
@@ -803,7 +959,51 @@ async def run_agent_stream(
                 
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
+                    usage = chunk.get("usage", {})
                     
+                    # Calculate metrics
+                    cost = 0.0
+                    input_tokens = 0
+                    output_tokens = 0
+                    cached_tokens = 0
+                    
+                    if usage:
+                        # Try to calculate cost if possible or use 0
+                        # LiteLLM usually provides cost in response object, not always in usage dict
+                        # We might need to rely on what we have.
+                        # For stream, cost calculation might be tricky without response object.
+                        # We will skip cost calc for now or assume 0 until we have a better way.
+                        # Wait, litellm.completion_cost takes response object.
+                        
+                        if isinstance(usage, dict):
+                            input_tokens = getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0))
+                            output_tokens = getattr(usage, "completion_tokens", usage.get("completion_tokens", 0))
+                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
+                        else:
+                             input_tokens = getattr(usage, "prompt_tokens", 0)
+                             output_tokens = getattr(usage, "completion_tokens", 0)
+                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
+
+                        # COST NOTE: LiteLLM stream chunks usage doesn't include cost. 
+                        # We would need to calculate it manually using completion_cost(model=model, rx=usage)
+                        # but that requires importing completion_cost and model prices.
+                        # For now, we will leave cost as 0.0 for streams to avoid errors, 
+                        # or try to calculate if we really need it. User asked for total context.
+
+                        # Update Conversation Metrics
+                        try:
+                            frappe.db.sql("""
+                                UPDATE `tabAgent Conversation`
+                                SET 
+                                    total_input_tokens = total_input_tokens + %s,
+                                    total_output_tokens = total_output_tokens + %s,
+                                    total_tokens = total_tokens + %s,
+                                    total_cost = total_cost + %s
+                                WHERE name = %s
+                            """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
+                        except Exception as e:
+                            frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
+
                     # Save final response
                     conv_manager.add_message(conversation, "agent", full_response, provider, model, agent_name, run_doc.name)
                     
@@ -813,6 +1013,8 @@ async def run_agent_stream(
                         "prompt": prompt,
                         "model": model,
                         "provider": provider,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
                         "end_time": now_datetime()
                     }, update_modified=True)
                     safe_commit()

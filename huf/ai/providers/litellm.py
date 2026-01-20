@@ -24,7 +24,7 @@ import frappe
 import litellm
 from litellm import InternalServerError, RateLimitError, APIError
 from litellm import InternalServerError, RateLimitError, APIError, completion_cost
-from litellm.utils import supports_prompt_caching
+from litellm.utils import supports_prompt_caching, trim_messages
 from huf.ai.tool_serializer import serialize_tools
 
 
@@ -228,6 +228,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             
             messages.append({"role": "system", "content": system_content})
         
+        # Insert Conversation History if available
+        if context and context.get("conversation_history"):
+            messages.extend(context["conversation_history"])
+        
         # Add user message with cache_control if conversation history caching is enabled
         if not (enable_prompt_caching and model_supports_caching and cache_conversation_history):
             user_content = enhanced_prompt
@@ -288,9 +292,17 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # Build completion params
             completion_kwargs = {
                 "model": normalized_model,
-                "messages": messages,
                 "temperature": temperature,
             }
+
+            # Trim messages to fit context window
+            try:
+                messages = trim_messages(messages=messages, model=normalized_model)
+                completion_kwargs["messages"] = messages
+            except Exception as e:
+                frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
+                # Continue with untrimmed messages if trimming fails
+                pass
 
             if context and context.get("response_format"):
                 completion_kwargs["response_format"] = context.get("response_format")
@@ -440,6 +452,39 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         return SimpleResult(f"LiteLLM Provider Error: {str(e)}")
 
 
+async def get_simple_completion(model: str, messages: list, provider: str) -> str:
+    """
+    Lightweight wrapper for simple completion tasks (like summarization).
+    Bypasses Agent logic for direct LLM access.
+    """
+    try:
+        litellm.drop_params = True
+        
+        provider_doc = frappe.get_doc("AI Provider", provider)
+        api_key = provider_doc.get_password("api_key")
+        
+        normalized_model = _normalize_model_name(model, provider)
+        provider_name = normalized_model.split("/")[0]
+        
+        completion_kwargs = {
+            "model": normalized_model,
+            "messages": messages,
+            "temperature": 0.3,
+        }
+        
+        _setup_api_key(provider_name, api_key, completion_kwargs)
+        
+        response = await asyncio.to_thread(
+            litellm.completion, **completion_kwargs
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        frappe.log_error(f"LiteLLM Simple Completion Error: {str(e)}", "LiteLLM Provider")
+        return ""
+
+
 async def run_stream(agent, enhanced_prompt, provider, model, context=None):
     """
     Streaming version of LiteLLM provider implementation.
@@ -533,6 +578,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             
             messages.append({"role": "system", "content": system_content})
         
+        # Insert Conversation History if available
+        if context and context.get("conversation_history"):
+            messages.extend(context["conversation_history"])
+        
         user_content = enhanced_prompt
         if enable_prompt_caching and model_supports_caching and cache_conversation_history:
             if provider_name == "anthropic":
@@ -584,7 +633,16 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "messages": messages,
             "temperature": temperature,
             "stream": True,  # Enable streaming
+            "stream_options": {"include_usage": True} # Request usage stats in stream
         }
+        
+        # Trim messages to fit context window
+        try:
+            messages = trim_messages(messages=messages, model=normalized_model)
+            completion_kwargs["messages"] = messages
+        except Exception as e:
+            frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
+            pass
 
         if top_p:
             completion_kwargs["top_p"] = top_p
@@ -613,7 +671,13 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 streaming_content = ""
 
                 # Process streaming chunks
+                stream_usage = None
+                
                 for chunk in stream:
+                    # Capture usage if present (often in last chunk)
+                    if hasattr(chunk, "usage") and chunk.usage:
+                        stream_usage = chunk.usage
+
                     if not chunk.choices:
                         continue
 
@@ -715,11 +779,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                             current_tool_calls = {}
                             break
 
-                        # Final response - no more tool calls
                         if finish_reason == "stop":
                             yield {
                                 "type": "complete",
                                 "full_response": full_response,
+                                "usage": stream_usage
                             }
                             return
 

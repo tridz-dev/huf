@@ -5,15 +5,21 @@
  "engine": "InnoDB",
  "field_order": [
   "title",
+  "last_activity",
+  "created_at",
   "agent",
+  "model",
   "session_id",
   "channel",
   "external_id",
   "column_break_9v4t",
   "is_active",
-  "created_at",
-  "last_activity",
-  "total_messages"
+  "summary",
+  "total_messages",
+  "total_input_tokens",
+  "total_output_tokens",
+  "total_tokens",
+  "total_cost"
  ],
  "fields": [
   {
@@ -23,11 +29,23 @@
    "label": "Title"
   },
   {
+   "fieldname": "summary",
+   "fieldtype": "Long Text",
+   "label": "Summary"
+  },
+{
    "fieldname": "agent",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Agent",
    "options": "Agent"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "AI Model",
+   "read_only": 1
   },
   {
    "fieldname": "created_at",
@@ -58,6 +76,35 @@
    "read_only": 1
   },
   {
+   "default": "0",
+   "fieldname": "total_input_tokens",
+   "fieldtype": "Int",
+   "label": "Total Input Tokens",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_output_tokens",
+   "fieldtype": "Int",
+   "label": "Total Output Tokens",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_tokens",
+   "fieldtype": "Int",
+   "label": "Total Tokens",
+   "read_only": 1
+  },
+  {
+   "default": "0.0",
+   "fieldname": "total_cost",
+   "fieldtype": "Currency",
+   "label": "Total Cost",
+   "precision": "6",
+   "read_only": 1
+  },
+  {
    "fieldname": "session_id",
    "fieldtype": "Data",
    "label": "Session ID",
@@ -77,7 +124,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-31 17:11:49.915579",
+ "modified": "2026-01-20 11:11:11.599292",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Conversation",

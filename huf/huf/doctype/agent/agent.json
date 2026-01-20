@@ -43,6 +43,14 @@
         "knowledge_tab",
         "knowledge_section",
         "agent_knowledge",
+        "advance_settings_tab",
+        "context_settings_section",
+        "context_strategy",
+        "history_limit",
+        "column_break_ctx",
+        "summary_ratio",
+        "max_knowledge_tokens",
+        "max_turns",
         "permissions_tab",
         "allow_guest",
         "allowed_users",
@@ -200,6 +208,69 @@
             "options": "Agent Knowledge"
         },
         {
+            "fieldname": "advance_settings_tab",
+            "fieldtype": "Tab Break",
+            "label": "Advanced Settings"
+        },
+        {
+            "description": "Configure advanced context and memory settings",
+            "fieldname": "context_settings_section",
+            "fieldtype": "Section Break",
+            "label": "Context Settings"
+        },
+        {
+            "default": "Summarize",
+            "description": "How to handle conversation history when it exceeds the limit. 'Summarize' compresses old messages, 'FIFO' drops them.",
+            "fieldname": "context_strategy",
+            "fieldtype": "Select",
+            "label": "Context Strategy",
+            "options": "Summarize\nFIFO\nNone"
+        },
+        {
+            "default": "20",
+            "description": "Maximum number of messages to keep in active context before applying strategy.",
+            "fieldname": "history_limit",
+            "fieldtype": "Int",
+            "label": "History Limit",
+            "non_negative": 1
+        },
+        {
+            "fieldname": "column_break_ctx",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "0.7",
+            "description": "Ratio of history to summarize effectively. 0.7 means 70% of oldest messages.",
+            "fieldname": "summary_ratio",
+            "fieldtype": "Float",
+            "label": "Summary Ratio",
+            "non_negative": 1,
+            "precision": "2"
+        },
+        {
+            "description": "Optional: Lightweight model to use specifically for summarization tasks.",
+            "fieldname": "summary_model",
+            "fieldtype": "Link",
+            "label": "Summary Model",
+            "options": "AI Model"
+        },
+        {
+            "default": "4000",
+            "description": "Maximum tokens to use for injected knowledge context.",
+            "fieldname": "max_knowledge_tokens",
+            "fieldtype": "Int",
+            "label": "Max Knowledge Tokens",
+            "non_negative": 1
+        },
+        {
+            "default": "20",
+            "description": "Maximum consecutive turns/steps the agent can take in a single run.",
+            "fieldname": "max_turns",
+            "fieldtype": "Int",
+            "label": "Max Turns",
+            "non_negative": 1
+        },
+        {
             "description": "Configure language model settings ",
             "fieldname": "llm_configuration_section",
             "fieldtype": "Section Break",
@@ -349,7 +420,7 @@
     "grid_page_length": 50,
     "index_web_pages_for_search": 1,
     "links": [],
-    "modified": "2026-01-15 10:59:11.145310",
+    "modified": "2026-01-19 16:45:11.145310",
     "modified_by": "Administrator",
     "module": "Huf",
     "name": "Agent",
