@@ -405,7 +405,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 all_new_items.append(
                     SimpleNamespace(
                         type="tool_call_item",
-                        raw_item=SimpleNamespace(name=tool_name, arguments=tool_args),
+                        raw_item=SimpleNamespace(name=tool_name, arguments=tool_args, id=tool_call.id),
                     )
                 )
 
