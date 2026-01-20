@@ -598,6 +598,8 @@ def run_agent_sync(
         finally:
             loop.close()
 
+        client_side_tool_calls = []
+
         for item in getattr(result, "new_items", []):
             if item.type == "tool_call_item":
                 raw = item.raw_item  
@@ -605,6 +607,20 @@ def run_agent_sync(
 
                 tool_name = getattr(raw, "name", "Unknown Tool")
                 tool_args = getattr(raw, "arguments", "{}")
+                
+                tool_type = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "types")
+                if tool_type == "Client Side Tool":
+                    call_id = getattr(raw, "id", None)
+                     
+                    client_side_tool_calls.append({
+                         "id": call_id,
+                         "type": "function", 
+                         "function": {
+                             "name": tool_name,
+                             "arguments": tool_args 
+                        }
+                    })
+
                 msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
                 
                 message_doc = conv_manager.add_message(
@@ -758,6 +774,7 @@ def run_agent_sync(
         return {
             "success": True,
             "response": final_output,
+            "client_side_tool_calls": client_side_tool_calls,
             "structured": structured,
             "provider": manager.agent_doc.provider,
             "agent_run_id": run_doc.name,
