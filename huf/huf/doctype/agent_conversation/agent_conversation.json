@@ -12,6 +12,7 @@
   "session_id",
   "channel",
   "external_id",
+  "conversation_data",
   "column_break_9v4t",
   "is_active",
   "summary",
@@ -33,7 +34,7 @@
    "fieldtype": "Long Text",
    "label": "Summary"
   },
-{
+  {
    "fieldname": "agent",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -119,12 +120,18 @@
    "fieldname": "external_id",
    "fieldtype": "Data",
    "label": "External ID"
+  },
+  {
+   "default": "{\"version\": 1, \"items\": []}",
+   "fieldname": "conversation_data",
+   "fieldtype": "JSON",
+   "label": "Conversation Data"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-20 11:11:11.599292",
+ "modified": "2026-01-21 15:28:46.958647",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Conversation",
