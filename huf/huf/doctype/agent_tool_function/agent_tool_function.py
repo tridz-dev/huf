@@ -40,7 +40,10 @@ class AgentToolFunction(Document):
 				"Attach File to Document",
 				"App Provided",
 				"Speech to Text",
-				"Client Side Tool"
+				"Client Side Tool",
+				"Get Conversation Data",
+				"Set Conversation Data",
+				"Load Conversation Data"
 			]:
 				frappe.throw(_("Please select a DocType for this function."))
 
@@ -426,6 +429,54 @@ class AgentToolFunction(Document):
 						"description": "Optional API key override (leave empty to use AI Provider)."
 					}
 				},
+				"required": [],
+				"additionalProperties": False
+			}
+
+		elif self.types == "Get Conversation Data":
+			params = {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string",
+						"description": "Name of the item to retrieve."
+					},
+					"default": {
+						"type": "string",
+						"description": "Default value if not found."
+					}
+				},
+				"required": ["name"],
+				"additionalProperties": False
+			}
+		elif self.types == "Set Conversation Data":
+			params = {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string",
+						"description": "Name of the item to set."
+					},
+					"value": {
+						"type": "string",
+						"description": "Value to store (scalar, object, or array)."
+					},
+					"value_type": {
+						"type": "string",
+						"description": "Type of value (scalar, object, array). Optional."
+					},
+					"source": {
+						"type": "string",
+						"description": "Source of data (agent/user). Default: agent"
+					}
+				},
+				"required": ["name", "value"],
+				"additionalProperties": False
+			}
+		elif self.types == "Load Conversation Data":
+			params = {
+				"type": "object",
+				"properties": {},
 				"required": [],
 				"additionalProperties": False
 			}

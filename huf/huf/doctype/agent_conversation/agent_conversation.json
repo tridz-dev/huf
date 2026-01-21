@@ -4,59 +4,79 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "overview_tab",
   "title",
-  "last_activity",
-  "created_at",
   "agent",
   "model",
-  "session_id",
-  "channel",
-  "external_id",
   "column_break_9v4t",
   "is_active",
+  "session_id",
+  "created_at",
+  "last_activity",
+  "details_tab",
   "summary",
-  "total_messages",
+  "conversation_data",
+  "metrics_tab",
+  "token_breakdown_section",
   "total_input_tokens",
-  "total_output_tokens",
   "total_tokens",
-  "total_cost"
+  "total_messages",
+  "column_break_metrics",
+  "total_output_tokens",
+  "total_cost",
+  "system_tab",
+  "channel",
+  "external_id"
  ],
  "fields": [
   {
+   "description": "Auto-generated title based on the first few interactions of the conversation.",
    "fieldname": "title",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Title"
+   "label": "Title",
+   "read_only": 1
   },
   {
+   "description": "Rolling summary of the conversation context, used when the history limit is exceeded.",
    "fieldname": "summary",
    "fieldtype": "Long Text",
-   "label": "Summary"
+   "in_list_view": 1,
+   "label": "Summary",
+   "read_only": 1
   },
-{
+  {
+   "description": "The AI Agent configuration used for this conversation.",
    "fieldname": "agent",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Agent",
-   "options": "Agent"
+   "options": "Agent",
+   "read_only": 1
   },
   {
+   "description": "The specific AI model (e.g., GPT-4) used by the agent during this session.",
    "fieldname": "model",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Model",
    "options": "AI Model",
    "read_only": 1
   },
   {
+   "description": "Timestamp when the conversation started.",
    "fieldname": "created_at",
    "fieldtype": "Datetime",
    "in_list_view": 1,
-   "label": "Created At"
+   "label": "Created At",
+   "read_only": 1
   },
   {
+   "description": "Timestamp of the most recent message or activity in this conversation.",
    "fieldname": "last_activity",
    "fieldtype": "Datetime",
-   "label": "Last Activity"
+   "label": "Last Activity",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_9v4t",
@@ -64,12 +84,14 @@
   },
   {
    "default": "1",
+   "description": "Indicates if the conversation is currently active. Archived conversations may be read-only.",
    "fieldname": "is_active",
    "fieldtype": "Check",
    "label": "Is Active",
    "read_only": 1
   },
   {
+   "description": "Total count of messages exchanged in this conversation.",
    "fieldname": "total_messages",
    "fieldtype": "Int",
    "label": "Total Messages",
@@ -77,6 +99,7 @@
   },
   {
    "default": "0",
+   "description": "Cumulative number of input tokens sent to the LLM.",
    "fieldname": "total_input_tokens",
    "fieldtype": "Int",
    "label": "Total Input Tokens",
@@ -84,6 +107,7 @@
   },
   {
    "default": "0",
+   "description": "Cumulative number of output tokens received from the LLM.",
    "fieldname": "total_output_tokens",
    "fieldtype": "Int",
    "label": "Total Output Tokens",
@@ -91,6 +115,7 @@
   },
   {
    "default": "0",
+   "description": "Total token usage (Input + Output) for this conversation.",
    "fieldname": "total_tokens",
    "fieldtype": "Int",
    "label": "Total Tokens",
@@ -98,6 +123,7 @@
   },
   {
    "default": "0.0",
+   "description": "Estimated total cost of the conversation based on model pricing.",
    "fieldname": "total_cost",
    "fieldtype": "Currency",
    "label": "Total Cost",
@@ -105,26 +131,69 @@
    "read_only": 1
   },
   {
+   "description": "Unique identifier for the session, often linked to a browser session or API client.",
    "fieldname": "session_id",
    "fieldtype": "Data",
    "label": "Session ID",
+   "read_only": 1,
    "reqd": 1
   },
   {
+   "description": "The communication channel (e.g., 'API', 'WhatsApp', 'Desk').",
    "fieldname": "channel",
    "fieldtype": "Data",
-   "label": "Channel"
+   "label": "Channel",
+   "read_only": 1
   },
   {
+   "description": "Optional external reference ID (e.g., a WhatsApp phone number or external user ID).",
    "fieldname": "external_id",
    "fieldtype": "Data",
-   "label": "External ID"
+   "label": "External ID",
+   "read_only": 1
+  },
+  {
+   "default": "{\"version\": 1, \"items\": []}",
+   "description": "Persistent memory store for the agent. Contains structured key-value pairs (user preferences, constraints, etc.) that survive summarization.",
+   "fieldname": "conversation_data",
+   "fieldtype": "JSON",
+   "label": "Conversation Data",
+   "read_only": 1
+  },
+  {
+   "fieldname": "overview_tab",
+   "fieldtype": "Tab Break",
+   "label": "Overview"
+  },
+  {
+   "fieldname": "details_tab",
+   "fieldtype": "Tab Break",
+   "label": "Context & Memory"
+  },
+  {
+   "fieldname": "metrics_tab",
+   "fieldtype": "Tab Break",
+   "label": "Metrics"
+  },
+  {
+   "fieldname": "system_tab",
+   "fieldtype": "Tab Break",
+   "label": "System Info"
+  },
+  {
+   "fieldname": "column_break_metrics",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "token_breakdown_section",
+   "fieldtype": "Section Break",
+   "label": "Token Breakdown"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-20 11:11:11.599292",
+ "modified": "2026-01-21 19:13:42.068454",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Conversation",

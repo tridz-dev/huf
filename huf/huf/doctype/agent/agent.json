@@ -47,8 +47,10 @@
         "context_settings_section",
         "context_strategy",
         "history_limit",
+        "enable_conversation_data",
         "column_break_ctx",
         "summary_ratio",
+        "summary_model",
         "max_knowledge_tokens",
         "max_turns",
         "permissions_tab",
@@ -415,12 +417,19 @@
             "fieldtype": "Table MultiSelect",
             "label": "Allowed Roles",
             "options": "Agent Role"
+        },
+        {
+        "default": "0",
+        "description": "If enabled, the agent can store key-value pairs in the conversation context.",
+        "fieldname": "enable_conversation_data",
+        "fieldtype": "Check",
+        "label": "Allow Conversation Data Management"
         }
     ],
     "grid_page_length": 50,
     "index_web_pages_for_search": 1,
     "links": [],
-    "modified": "2026-01-19 16:45:11.145310",
+    "modified": "2026-01-21 15:28:02.892806",
     "modified_by": "Administrator",
     "module": "Huf",
     "name": "Agent",
