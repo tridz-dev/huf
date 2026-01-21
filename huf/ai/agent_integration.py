@@ -234,6 +234,21 @@ class AgentManager:
     """
             instructions += tools_instruction
 
+        if self.agent_doc.enable_conversation_data:
+             instructions += """
+    
+                SYSTEM INSTRUCTION - MEMORY MANAGEMENT:
+                You are equipped with a persistent memory system ('Conversation Data'). 
+                1. AUTOMATIC SAVING: Whenever the user provides important information, YOU MUST immediately use the 'set_conversation_data' tool.
+                2. DYNAMIC KEYS: You determine the key names (snake_case). E.g., 'student_profile', 'project_requirements'.
+                3. DATA STRUCTURE: 
+                - If the user gives a simple value (e.g. name), save as a string.
+                - If the user gives a list  save as an ARRAY.
+                - If the user gives grouped info or a complex entity, save as an OBJECT.
+                    Example: set_conversation_data(name="course_preferences", value={"primary": "CS", "alternatives": ["Math", "Physics"]})
+                4. MEMORY CHECK: Check 'load_conversation_data' before asking redundant questions.
+            """
+
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
             top_p=self.agent_doc.top_p
@@ -557,6 +572,20 @@ def run_agent_sync(
             # Just inject the stored summary. Actual summarization happens in background.
             if stored_summary:
                 history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
+        
+        # Inject Conversation Data Snapshot if enabled
+        if agent_doc.enable_conversation_data and conversation.conversation_data:
+             try:
+                data_snapshot = json.loads(conversation.conversation_data)
+                # Filter to only show name/value to save tokens
+                simplified_items = {item["name"]: item["value"] for item in data_snapshot.get("items", [])}
+                if simplified_items:
+                    data_msg = f"CURRENT MEMORY STATE (Conversation Data): {json.dumps(simplified_items, ensure_ascii=False)}"
+                    # Insert right after summary but before user messages
+                    insert_idx = 1 if stored_summary else 0
+                    history.insert(insert_idx, {"role": "system", "content": data_msg})
+             except:
+                 pass
         
         elif context_strategy == "FIFO":
             if len(history) > history_limit:
