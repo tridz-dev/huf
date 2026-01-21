@@ -22,8 +22,7 @@ from types import SimpleNamespace
 
 import frappe
 import litellm
-from litellm import InternalServerError, RateLimitError, APIError
-from litellm import InternalServerError, RateLimitError, APIError, completion_cost
+from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, completion_cost
 from litellm.utils import supports_prompt_caching, trim_messages
 from huf.ai.tool_serializer import serialize_tools
 
@@ -36,6 +35,11 @@ class SimpleResult:
         self.usage = usage or {}
         self.new_items = new_items or []
         self.cost = cost
+
+
+# High-performance in-memory cache for provider capabilities
+# Stores capability flags to avoid Redis hits on every request
+_L1_CAPABILITY_CACHE = {}
 
 
 async def _execute_tool_call(tool, args_json, context=None):
@@ -313,15 +317,63 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             provider_name = normalized_model.split("/")[0]
             _setup_api_key(provider_name, api_key, completion_kwargs)
 
+            capability_cache_key = f"litellm_tool_json_conflict:{provider_name}"
+            
+            known_conflict = _L1_CAPABILITY_CACHE.get(capability_cache_key)
+             
+            if known_conflict is None:
+                known_conflict = frappe.cache().get_value(capability_cache_key)
+                if known_conflict:
+                    _L1_CAPABILITY_CACHE[capability_cache_key] = 1
+            
+            is_json_mode = context and context.get("response_format")
+            
+            if tools and is_json_mode and known_conflict:
+                tools = None
+            
             if tools:
                 completion_kwargs["tools"] = tools
                 completion_kwargs["tool_choice"] = "auto"
 
             # LiteLLM call
             try:
-                response = await asyncio.to_thread(
-                    litellm.completion, **completion_kwargs
-                )
+                try:
+                    response = await asyncio.to_thread(
+                        litellm.completion, **completion_kwargs
+                    )
+                except BadRequestError as e:
+                    err_msg = str(e).lower()
+                    conflict_keywords = [
+                        "response_format", 
+                        "response mime type", 
+                        "tool", 
+                        "function calling",
+                        "json", 
+                        "unsupported"
+                    ]
+                    
+                    is_config_conflict = (
+                        completion_kwargs.get("tools") 
+                        and completion_kwargs.get("response_format")
+                        and any(k in err_msg for k in conflict_keywords)
+                    )
+
+                    if is_config_conflict:
+                        _L1_CAPABILITY_CACHE[capability_cache_key] = 1
+                        frappe.cache().set_value(capability_cache_key, 1)
+
+                        frappe.log_error(
+                            f"Provider '{provider}' returned bad request. Retrying without tools and caching capability limitation. Error: {str(e)}", 
+                            "LiteLLM Auto-Recovery"
+                        )
+                        completion_kwargs.pop("tools", None)
+                        completion_kwargs.pop("tool_choice", None)
+                        
+                        response = await asyncio.to_thread(
+                            litellm.completion, **completion_kwargs
+                        )
+                    else:
+                        raise e
 
                 try:
                     current_cost = completion_cost(completion_response=response)
