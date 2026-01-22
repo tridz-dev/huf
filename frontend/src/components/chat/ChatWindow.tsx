@@ -150,6 +150,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const [messages, setMessages] = useState<MessageType[]>([]);
   const stickContextRef = useRef<StickToBottomContext | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
+  const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
   let isNewChat = !chatId;
   
@@ -568,6 +569,19 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       // setModelName('');
     }
   }, [chatId, searchParams]);
+
+  // Auto-focus input field when chat window opens or chatId changes
+  useEffect(() => {
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      const textarea = inputContainerRef.current?.querySelector('textarea[name="message"]') as HTMLTextAreaElement | null;
+      if (textarea) {
+        textarea.focus();
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [chatId]);
 
   const handleFeedback = useCallback(
     async (
@@ -1000,7 +1014,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
             ))}
           </Suggestions> */}
 
-          <div className="w-full px-4">
+          <div className="w-full px-4" ref={inputContainerRef}>
             <PromptInput globalDrop multiple onSubmit={handleSubmit}>
               <ConditionalPromptInputHeader />
 
