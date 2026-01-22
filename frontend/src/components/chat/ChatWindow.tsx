@@ -76,6 +76,7 @@ import { useChatSocket, type ToolCallEvent } from '@/hooks/useChatSocket';
 import { CopyButton } from './CopyButton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Image } from '@/components/ai-elements/image';
+import { MessageLoadingState } from './MessageLoadingState';
 
 // Map tool_status to ExtendedToolState
 const mapToolStatusToState = (status?: string): ExtendedToolState => {
@@ -938,17 +939,16 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                           ) : (
                             <>
                             <MessageContent>
-                              {/* Show skeleton while message is generating */}
+                              {/* Show loading state while message is generating */}
                               {(status === 'submitted' || status === 'streaming') && 
                                message.from === 'assistant' && 
-                               (!version.content || version.content.trim() === '') && 
-                               !message.tools ? (
-                                <div className="flex flex-col gap-2 w-full max-w-md">
-                                  <Skeleton className="h-4 w-full" />
-                                  <Skeleton className="h-4 w-5/6" />
-                                  <Skeleton className="h-4 w-4/6" />
-                                </div>
-                              ) : message.kind === 'Image' ? (
+                               (!version.content || version.content.trim() === '') && (
+                                <MessageLoadingState
+                                  hasTools={!!message.tools && message.tools.length > 0}
+                                  toolName={message.tools?.[0]?.name}
+                                />
+                              )}
+                              {message.kind === 'Image' ? (
                                 <div className="flex flex-col gap-2">
                                   {message.generatedImage ? (
                                     <Image 
@@ -965,7 +965,10 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                                     <MessageResponse>{version.content}</MessageResponse>
                                   )}
                                 </div>
-                              ) : (
+                              ) : !((status === 'submitted' || status === 'streaming') && 
+                                    message.from === 'assistant' && 
+                                    (!version.content || version.content.trim() === '') && 
+                                    !message.tools) && (
                                 <MessageResponse>{version.content}</MessageResponse>
                               )}
                               {message.from === 'assistant' && version.content && !message.tools && (
