@@ -261,6 +261,8 @@ def create_function_tool(
                         args_dict["conversation_id"] = ctx["conversation_id"]
                     if "agent_run_id" in ctx:
                         args_dict["agent_run_id"] = ctx["agent_run_id"]
+                    if "agent_name" in ctx:
+                        args_dict["agent_name"] = ctx["agent_name"]
 
                 for key, value in _extra_args.items():
                     if key not in args_dict:
@@ -285,6 +287,10 @@ def create_function_tool(
                         if k in valid_params
                     }
                     result = _function(**filtered_args)
+                
+                # Handle async functions
+                if asyncio.iscoroutine(result):
+                    result = await result
 
                 if hasattr(result, "as_dict"):
                     result = result.as_dict()
@@ -1139,5 +1145,243 @@ def handle_load_conversation_data(conversation_id: str = None, **kwargs):
         state = _load_state(data_json)
         return {"success": True, "data": state}
     except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def _get_default_image_model(provider_name: str) -> str:
+    """
+    Get default image generation model for a provider.
+    
+    Based on LiteLLM documentation: https://docs.litellm.ai/docs/image_generation
+    
+    Args:
+        provider_name: Lowercase provider name (e.g., "openai", "azure", "google")
+    
+    Returns:
+        str: Default image model name, or None if not supported
+    """
+    defaults = {
+        "openai": "dall-e-3",
+        "azure": "dall-e-3",  # Azure uses same models with azure/ prefix
+        "openrouter": "dall-e-3",  # OpenRouter can route to OpenAI models
+        "google": "google/gemini-2.5-flash-image",
+        "vertex_ai": "vertex_ai/imagegeneration@006",
+        "bedrock": "bedrock/stability.stable-diffusion-xl-v0",
+        "recraft": "recraft/recraftv3",
+    }
+    
+    return defaults.get(provider_name.lower())
+
+@frappe.whitelist()
+async def handle_generate_image(
+    prompt: str,
+    size: str = "1024x1024",
+    quality: str = "standard",
+    n: int = 1,
+    agent_name: str = None,
+    conversation_id: str = None,
+    **kwargs
+):
+    """
+    Generate an image using the agent's configured provider and image generation model.
+    
+    Uses LiteLLM's image_generation() function. The model used is either:
+    1. The agent's explicitly configured image_generation_model field, OR
+    2. An auto-detected suitable image model based on the provider
+    
+    Args:
+        prompt: Text description of the image to generate
+        size: Image size (1024x1024, 1792x1024, 1024x1792, etc.)
+        quality: Image quality (standard, hd, high, medium, low)
+        n: Number of images to generate (1-10)
+        agent_name: Automatically passed from context
+        conversation_id: Automatically passed from context
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "images": [{"url": str, "file_id": str}],
+            "message": str
+        }
+    """
+    try:
+        # Get agent configuration from context
+        if not agent_name:
+            return {"success": False, "error": "Agent name not found in context"}
+        
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+        
+        if not api_key:
+            return {"success": False, "error": "API key not configured for provider"}
+        
+        # Determine image generation model
+        image_model = None
+        
+        if hasattr(agent_doc, "image_generation_model") and agent_doc.image_generation_model:
+            # Use explicitly configured image model
+            model_doc = frappe.get_doc("AI Model", agent_doc.image_generation_model)
+            image_model = model_doc.model_name
+        else:
+            # Auto-detect suitable image model based on provider
+            provider_name = provider_doc.provide_name.lower()
+            image_model = _get_default_image_model(provider_name)
+        
+        if not image_model:
+            return {
+                "success": False,
+                "error": f"Image generation not supported for provider '{provider_doc.provide_name}'. Please configure an image_generation_model in agent settings."
+            }
+        
+        # Normalize to LiteLLM format
+        from huf.ai.providers.litellm import _normalize_model_name
+        normalized_model = _normalize_model_name(image_model, agent_doc.provider)
+        
+        # Call LiteLLM image generation
+        import litellm
+        
+        response = await asyncio.to_thread(
+            litellm.image_generation,
+            prompt=prompt,
+            model=normalized_model,
+            n=n,
+            size=size,
+            quality=quality,
+            api_key=api_key
+        )
+        
+        # Get conversation_index once if conversation_id exists
+        # Each Agent Message needs a unique, sequential conversation_index to maintain order.
+        conversation_index = None
+        if conversation_id:
+            try:
+                last_index = frappe.db.sql("""
+                    SELECT MAX(conversation_index) as last_index
+                    FROM `tabAgent Message`
+                    WHERE conversation = %s
+                """, (conversation_id,), as_dict=1)
+                
+                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
+            except Exception:
+                conversation_index = 1
+        
+        # Process response and save images
+        images = []
+        if hasattr(response, 'data') and response.data:
+            for idx, image_data in enumerate(response.data):
+                # Get image URL or base64
+                image_url = None
+                image_b64 = None
+                
+                if hasattr(image_data, 'url'):
+                    image_url = image_data.url
+                elif hasattr(image_data, 'b64_json'):
+                    image_b64 = image_data.b64_json
+                elif isinstance(image_data, dict):
+                    image_url = image_data.get('url')
+                    image_b64 = image_data.get('b64_json')
+                
+                if not image_url and not image_b64:
+                    continue
+                
+                # Download and save image
+                image_bytes = None
+                filename = f"generated_image_{idx + 1}.png"
+                
+                if image_url and image_url.startswith('http'):
+                    # Download from URL
+                    img_response = requests.get(image_url, timeout=30)
+                    img_response.raise_for_status()
+                    image_bytes = img_response.content
+                elif image_b64:
+                    # Base64 encoded
+                    image_bytes = base64.b64decode(image_b64)
+                elif image_url:
+                    # Local file path or other format
+                    frappe.log_error(f"Unsupported image URL format: {image_url}", "Image Generation")
+                    continue
+                
+                if not image_bytes:
+                    continue
+                
+                # Save to Frappe (attach to conversation first, then we'll attach to message)
+                saved_file = save_file(
+                    filename,
+                    image_bytes,
+                    "Agent Conversation",
+                    conversation_id or "Unknown",
+                    is_private=False
+                )
+                
+                file_id = saved_file.name if hasattr(saved_file, 'name') else saved_file.get('name')
+                file_url = saved_file.file_url if hasattr(saved_file, 'file_url') else saved_file.get('file_url')
+                
+                images.append({
+                    "url": file_url or f"/files/{filename}",
+                    "file_id": file_id
+                })
+                
+                # Create Agent Message with kind "Image" for each generated image
+                if conversation_id and conversation_index is not None:
+                    try:
+                        # Get provider and model from agent
+                        provider = agent_doc.provider
+                        model = agent_doc.model
+                        
+                        # Create Agent Message with kind "Image"
+                        message_doc = frappe.get_doc({
+                            "doctype": "Agent Message",
+                            "conversation": conversation_id,
+                            "role": "agent",
+                            "content": f"Generated image: {prompt}",
+                            "kind": "Image",
+                            "generated_image": file_url or f"/files/{filename}",
+                            "agent": agent_name,
+                            "provider": provider,
+                            "model": model,  # Link to AI Model
+                            "agent_run": kwargs.get("agent_run_id"),
+                            "conversation_index": conversation_index + idx,  # Increment for each image
+                            "is_agent_message": 1,
+                            "user": "Agent"
+                        })
+                        message_doc.insert(ignore_permissions=True)
+                        
+                    except Exception as e:
+                        frappe.log_error(
+                            f"Error creating Agent Message for generated image: {str(e)}",
+                            "Image Generation Message Creation"
+                        )
+                        # Continue even if message creation fails
+        
+        # Update conversation total_messages once after all images are created
+        if conversation_id and conversation_index is not None and images:
+            try:
+                final_index = conversation_index + len(images) - 1
+                frappe.db.sql("""
+                    UPDATE `tabAgent Conversation`
+                    SET total_messages = %s, last_activity = NOW()
+                    WHERE name = %s
+                """, (final_index, conversation_id))
+            except Exception as e:
+                frappe.log_error(
+                    f"Error updating conversation total_messages: {str(e)}",
+                    "Image Generation Message Creation"
+                )
+        
+        if not images:
+            return {
+                "success": False,
+                "error": "Image generation succeeded but no images were returned"
+            }
+        
+        return {
+            "success": True,
+            "images": images,
+            "message": f"Generated {len(images)} image(s) successfully"
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Image generation error: {str(e)}", "Image Generation Tool")
         return {"success": False, "error": str(e)}
 
