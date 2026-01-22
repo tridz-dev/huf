@@ -663,23 +663,7 @@ def run_agent_sync(
                     kind="Tool Call",
                     tool_call_id=tool_call_id 
                 )
-                
-                # Emit socket event for tool call started (after message is created so we have message_id)
-                frappe.publish_realtime(
-                    event=f'conversation:{conversation.name}',
-                    message={
-                        "type": "tool_call_started",
-                        "conversation_id": conversation.name,
-                        "agent_run_id": run_doc.name,
-                        "tool_call_id": tool_call_id,
-                        "message_id": message_doc.name,
-                        "tool_name": tool_name,
-                        "tool_status": "Queued",
-                        "tool_args": tool_args if isinstance(tool_args, dict) else json.loads(tool_args) if isinstance(tool_args, str) else {},
-                    },
-                    user=frappe.session.user,
-                    after_commit=False
-                )
+                safe_commit()
 
             elif item.type == "tool_call_output_item":
                 raw = item.raw_item
