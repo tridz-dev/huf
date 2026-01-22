@@ -663,8 +663,8 @@ def run_agent_sync(
                     kind="Tool Call",
                     tool_call_id=tool_call_id 
                 )
-
-                # Emit socket event for tool call started
+                
+                # Emit socket event for tool call started (after message is created so we have message_id)
                 frappe.publish_realtime(
                     event=f'conversation:{conversation.name}',
                     message={
@@ -677,7 +677,8 @@ def run_agent_sync(
                         "tool_status": "Queued",
                         "tool_args": tool_args if isinstance(tool_args, dict) else json.loads(tool_args) if isinstance(tool_args, str) else {},
                     },
-                    user=frappe.session.user
+                    user=frappe.session.user,
+                    after_commit=False
                 )
 
             elif item.type == "tool_call_output_item":
@@ -707,25 +708,44 @@ def run_agent_sync(
                         msg_doc.kind = "Tool Result"
                         msg_doc.save(ignore_permissions=True)
 
-                        # Emit socket event for tool call completed/failed
-                        event_type = "tool_call_completed" if tool_status == "Completed" else "tool_call_failed"
-                        frappe.publish_realtime(
-                            event=f'conversation:{conversation.name}',
-                            message={
-                                "type": event_type,
-                                "conversation_id": conversation.name,
-                                "agent_run_id": run_doc.name,
-                                "tool_call_id": updated_tool_call_id,
-                                "message_id": message_name,
-                                "tool_name": tool_name,
-                                "tool_status": tool_status,
-                                "tool_result": tool_result if tool_status == "Completed" else None,
-                                "error": tool_call_doc.error_message if tool_status == "Failed" else None,
+                    # Emit socket event for tool call completed/failed
+                    # Always emit, even if message not found (e.g., for image generation which creates its own message)
+                    # For image generation, try to find the Image message created by the tool
+                    if not message_name and tool_name == "generate_image":
+                        # Look for Image message created by this tool call
+                        image_message = frappe.db.get_value(
+                            "Agent Message",
+                            {
+                                "conversation": conversation.name,
+                                "agent_run": run_doc.name,
+                                "kind": "Image"
                             },
-                            user=frappe.session.user,
+                            "name",
+                            order_by="creation desc",
+                            limit=1
                         )
+                        if image_message:
+                            message_name = image_message
+                    
+                    event_type = "tool_call_completed" if tool_status == "Completed" else "tool_call_failed"
+                    frappe.publish_realtime(
+                        event=f'conversation:{conversation.name}',
+                        message={
+                            "type": event_type,
+                            "conversation_id": conversation.name,
+                            "agent_run_id": run_doc.name,
+                            "tool_call_id": updated_tool_call_id,
+                            "message_id": message_name or None,
+                            "tool_name": tool_name,
+                            "tool_status": tool_status,
+                            "tool_result": tool_result if tool_status == "Completed" else None,
+                            "error": tool_call_doc.error_message if tool_status == "Failed" else None,
+                        },
+                        user=frappe.session.user,
+                    )
         
         final_output = getattr(result, "final_output", str(result))
+        print("-----------------################----------------Final tool output: ", final_output)
         usage = getattr(result, "usage", None)
         cost = getattr(result, "cost", 0)  
         input_tokens = 0
