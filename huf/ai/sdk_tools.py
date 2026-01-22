@@ -1305,38 +1305,21 @@ async def handle_generate_image(
                 if not image_bytes:
                     continue
                 
-                # Save to Frappe (attach to conversation first, then we'll attach to message)
-                saved_file = save_file(
-                    filename,
-                    image_bytes,
-                    "Agent Conversation",
-                    conversation_id or "Unknown",
-                    is_private=False
-                )
-                
-                file_id = saved_file.name if hasattr(saved_file, 'name') else saved_file.get('name')
-                file_url = saved_file.file_url if hasattr(saved_file, 'file_url') else saved_file.get('file_url')
-                
-                images.append({
-                    "url": file_url or f"/files/{filename}",
-                    "file_id": file_id
-                })
-                
-                # Create Agent Message with kind "Image" for each generated image
+                # Create Agent Message first (we'll attach the file to it)
+                message_doc = None
                 if conversation_id and conversation_index is not None:
                     try:
                         # Get provider and model from agent
                         provider = agent_doc.provider
                         model = agent_doc.model
                         
-                        # Create Agent Message with kind "Image"
+                        # Create Agent Message with kind "Image" first (without image)
                         message_doc = frappe.get_doc({
                             "doctype": "Agent Message",
                             "conversation": conversation_id,
                             "role": "agent",
                             "content": f"Generated image: {prompt}",
                             "kind": "Image",
-                            "generated_image": file_url or f"/files/{filename}",
                             "agent": agent_name,
                             "provider": provider,
                             "model": model,  # Link to AI Model
@@ -1346,13 +1329,74 @@ async def handle_generate_image(
                             "user": "Agent"
                         })
                         message_doc.insert(ignore_permissions=True)
-                        
                     except Exception as e:
                         frappe.log_error(
                             f"Error creating Agent Message for generated image: {str(e)}",
                             "Image Generation Message Creation"
                         )
                         # Continue even if message creation fails
+                
+                # Save file attached to the Agent Message (or conversation if message creation failed)
+                if message_doc:
+                    saved_file = save_file(
+                        filename,
+                        image_bytes,
+                        "Agent Message",
+                        message_doc.name,
+                        is_private=False,
+                        df="generated_image"
+                    )
+                else:
+                    # Fallback: attach to conversation if message creation failed
+                    saved_file = save_file(
+                        filename,
+                        image_bytes,
+                        "Agent Conversation",
+                        conversation_id or "Unknown",
+                        is_private=False
+                    )
+                
+                # save_file returns a File document object
+                file_url = getattr(saved_file, 'file_url', None)
+                file_id = getattr(saved_file, 'name', None)
+                
+                # Ensure we have a file_url
+                if not file_url:
+                    file_url = f"/files/{getattr(saved_file, 'file_name', filename)}"
+                
+                # Update the message with the file URL if message was created
+                # This ensures the Attach Image field displays the image correctly
+                if message_doc and file_url:
+                    message_doc.db_set("generated_image", file_url)
+                    frappe.db.commit()
+                    
+                    # Emit socket event for new agent message (Image)
+                    try:
+                        frappe.publish_realtime(
+                            event=f'conversation:{conversation_id}',
+                            message={
+                                "type": "new_agent_message",
+                                "conversation_id": conversation_id,
+                                "message_id": message_doc.name,
+                                "kind": "Image",
+                                "content": message_doc.content,
+                                "generated_image": file_url,
+                                "agent_run_id": kwargs.get("agent_run_id"),
+                                "conversation_index": message_doc.conversation_index,
+                            },
+                            user=frappe.session.user,
+                            after_commit=False
+                        )
+                    except Exception as e:
+                        frappe.log_error(
+                            f"Error emitting new_agent_message socket event: {str(e)}",
+                            "Image Generation Socket Event"
+                        )
+                
+                images.append({
+                    "url": file_url or f"/files/{filename}",
+                    "file_id": file_id
+                })
         
         # Update conversation total_messages once after all images are created
         if conversation_id and conversation_index is not None and images:
@@ -1375,6 +1419,7 @@ async def handle_generate_image(
                 "error": "Image generation succeeded but no images were returned"
             }
         
+        print("Returned images: ", images)
         return {
             "success": True,
             "images": images,
