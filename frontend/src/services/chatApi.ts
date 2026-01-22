@@ -32,6 +32,7 @@ export interface AgentMessageDoc {
   content: string;
   is_agent_message?: 0 | 1 | string;
   kind?: string;
+  generated_image?: string;
   tool_name?: string;
   tool_status?: string;
   tool_args?: string | Record<string, unknown>;
@@ -45,6 +46,7 @@ export interface ChatMessage {
   content: string;
   isAgent: boolean;
   kind?: string;
+  generatedImage?: string;
   toolName?: string;
   toolStatus?: string;
   toolArgs?: string | Record<string, unknown>;
@@ -73,6 +75,7 @@ function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
     content: doc.content || '',
     isAgent,
     kind: doc.kind,
+    generatedImage: doc.generated_image,
     toolName: doc.tool_name,
     toolStatus: doc.tool_status,
     toolArgs: doc.tool_args,
@@ -153,7 +156,7 @@ export async function getConversationMessages(
 
   try {
     const messages = await db.getDocList(doctype['Agent Message'], {
-      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
       filters: [['conversation', '=', conversation]],
       orderBy: { field: 'creation', order: 'desc' },
       limit,
