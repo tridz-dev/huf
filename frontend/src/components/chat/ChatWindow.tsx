@@ -75,6 +75,7 @@ import type { ExtendedToolState } from '@/components/ai-elements/types';
 import { useChatSocket, type ToolCallEvent } from '@/hooks/useChatSocket';
 import { CopyButton } from './CopyButton';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Image } from '@/components/ai-elements/image';
 
 // Map tool_status to ExtendedToolState
 const mapToolStatusToState = (status?: string): ExtendedToolState => {
@@ -231,23 +232,23 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
         error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
       };
 
-      // Find message by message_id
-      const messageIndex = prev.findIndex((msg) => 
-        msg.versions.some((v) => v.id === event.message_id)
-      );
+      // Find message by agent_run_id (unique per agent run)
+      const messageIndex = prev.findIndex((msg) => msg.key === event.agent_run_id);
 
       if (messageIndex >= 0) {
-        // Message exists - update or add tool by tool_call_id
+        // Message exists - update or add tool by agent_run_id + tool_name (more reliable than tool_call_id)
         const message = prev[messageIndex];
         const existingTools = message.tools || [];
         const toolIndex = existingTools.findIndex(
-          (tool) => tool.tool_call_id === event.tool_call_id
+          (tool) => tool.name === event.tool_name
         );
 
         const updatedTools = [...existingTools];
         if (toolIndex >= 0) {
+          // Update existing tool
           updatedTools[toolIndex] = updatedTool;
         } else {
+          // Add new tool
           updatedTools.push(updatedTool);
         }
 
@@ -263,16 +264,15 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
         return updated;
       } else {
         // Message doesn't exist - create new message with tool
-        // For image generation, show skeleton while generating
         const isImageGeneration = event.tool_name === 'generate_image' && event.type === 'tool_call_started';
         
         const newMessage: MessageType = {
-          key: event.message_id,
+          key: event.agent_run_id,
           from: 'assistant',
           kind: isImageGeneration ? 'Image' : undefined,
           versions: [
             {
-              id: event.message_id,
+              id: event.message_id || event.agent_run_id,
               content: '',
             },
           ],
@@ -925,13 +925,23 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                             <>
                             <MessageContent>
                               {/* Show skeleton while message is generating */}
-                              {message.kind === 'Image' ? (
+                              {(status === 'submitted' || status === 'streaming') && 
+                               message.from === 'assistant' && 
+                               (!version.content || version.content.trim() === '') && 
+                               !message.tools ? (
+                                <div className="flex flex-col gap-2 w-full max-w-md">
+                                  <Skeleton className="h-4 w-full" />
+                                  <Skeleton className="h-4 w-5/6" />
+                                  <Skeleton className="h-4 w-4/6" />
+                                </div>
+                              ) : message.kind === 'Image' ? (
                                 <div className="flex flex-col gap-2">
                                   {message.generatedImage ? (
-                                    <img 
+                                    <Image 
                                       src={message.generatedImage} 
                                       alt={version.content || 'Generated image'}
                                       className="max-w-full h-auto rounded-lg border max-h-[512px] object-contain"
+                                      showDownloadButton={true}
                                     />
                                   ) : (
                                     // Show skeleton while image is generating
