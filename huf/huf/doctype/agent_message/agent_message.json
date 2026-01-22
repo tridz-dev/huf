@@ -13,6 +13,7 @@
   "model",
   "agent",
   "kind",
+  "generated_image",
   "column_break_asyu",
   "session_id",
   "user",
@@ -56,7 +57,7 @@
    "fieldname": "kind",
    "fieldtype": "Select",
    "label": "Kind",
-   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError"
+   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage"
   },
   {
    "default": "user",
@@ -156,12 +157,18 @@
    "fieldname": "tool_status",
    "fieldtype": "Data",
    "label": "Tool Status"
+  },
+  {
+   "depends_on": "eval:doc.kind == \"Image\";",
+   "fieldname": "generated_image",
+   "fieldtype": "Attach Image",
+   "label": "Generated Image"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-31 17:15:37.749149",
+ "modified": "2026-01-22 19:25:00.356614",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",
