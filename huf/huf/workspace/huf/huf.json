@@ -175,7 +175,7 @@
    "type": "Link"
   }
  ],
- "modified": "2025-12-05 18:33:24.033003",
+ "modified": "2026-01-23 18:00:49.398106",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Huf",
@@ -183,10 +183,6 @@
   {
    "label": "Total Agent Runs",
    "number_card_name": "Total Agent Runs"
-  },
-  {
-   "label": "Average Runtime(Minutes)",
-   "number_card_name": "Average Time"
   },
   {
    "label": "Success Rate",
@@ -204,5 +200,6 @@
  "roles": [],
  "sequence_id": 33.0,
  "shortcuts": [],
- "title": "Huf"
+ "title": "Huf",
+ "type": "Workspace"
 }
