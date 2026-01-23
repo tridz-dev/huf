@@ -34,13 +34,13 @@ export function AgentFormPage() {
   const tabConfig = {
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description'],
+      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions'],
       default: true,
       disabled: false,
     },
     behavior: {
       label: 'Behavior',
-      fields: ['allow_chat', 'persist_conversation', 'persist_user_history', 'enable_multi_run', 'instructions'],
+      fields: ['allow_chat', 'persist_conversation', 'persist_user_history', 'enable_multi_run'],
       default: false,
       disabled: false,
     },
@@ -809,11 +809,18 @@ export function AgentFormPage() {
               </TabsList>
 
               <TabsContent value="general" className="space-y-4">
-                <GeneralTab form={form} providers={providers} models={models} watchProvider={watchProvider} />
+                <GeneralTab 
+                  form={form} 
+                  providers={providers} 
+                  models={models} 
+                  watchProvider={watchProvider}
+                  optimizingPrompt={optimizingPrompt}
+                  onOptimizePrompt={handleOptimizePrompt}
+                />
               </TabsContent>
 
               <TabsContent value="behavior" className="space-y-4">
-                <BehaviorTab form={form} optimizingPrompt={optimizingPrompt} onOptimizePrompt={handleOptimizePrompt} />
+                <BehaviorTab form={form} />
               </TabsContent>
 
               <TabsContent value="triggers" className="space-y-4">
