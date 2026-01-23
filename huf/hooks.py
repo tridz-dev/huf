@@ -15,7 +15,7 @@ source_link = "https://github.com/tridz-dev/huf.git"
 add_to_apps_screen = [
 	{
 		"name": "huf",
-        "logo": "/assets/huf/Images/Huf.jpg",
+        "logo": "/assets/huf/Images/huf.png",
 		"title": "Huf",
 		"route": "huf",
 		"has_permission": "huf.permission.check_app_permission"
