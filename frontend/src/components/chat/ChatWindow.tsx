@@ -57,6 +57,8 @@ import {
   SourcesTrigger,
 } from '@/components/ai-elements/sources';
 
+import {NewAgentMessageEvent} from '@/hooks/useChatSocket';
+
 // import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion';
 import {
   getConversationMessages,
@@ -72,6 +74,9 @@ import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/componen
 import type { ExtendedToolState } from '@/components/ai-elements/types';
 import { useChatSocket, type ToolCallEvent } from '@/hooks/useChatSocket';
 import { CopyButton } from './CopyButton';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Image } from '@/components/ai-elements/image';
+import { MessageLoadingState } from './MessageLoadingState';
 
 // Map tool_status to ExtendedToolState
 const mapToolStatusToState = (status?: string): ExtendedToolState => {
@@ -101,6 +106,8 @@ type MessageType = {
     content: string;
     duration: number;
   };
+  kind?: string;
+  generatedImage?: string;
   tools?: {
     tool_call_id: string;
     name: string;
@@ -144,6 +151,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
   const [messages, setMessages] = useState<MessageType[]>([]);
   const stickContextRef = useRef<StickToBottomContext | null>(null);
   const lastMessageIdRef = useRef<string | null>(null);
+  const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
   let isNewChat = !chatId;
   
@@ -226,40 +234,47 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
         error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
       };
 
-      // Find message by message_id
-      const messageIndex = prev.findIndex((msg) => 
-        msg.versions.some((v) => v.id === event.message_id)
-      );
+      // Find message by agent_run_id (unique per agent run)
+      const messageIndex = prev.findIndex((msg) => msg.key === event.agent_run_id);
 
       if (messageIndex >= 0) {
-        // Message exists - update or add tool by tool_call_id
+        // Message exists - update or add tool by agent_run_id + tool_name (more reliable than tool_call_id)
         const message = prev[messageIndex];
         const existingTools = message.tools || [];
         const toolIndex = existingTools.findIndex(
-          (tool) => tool.tool_call_id === event.tool_call_id
+          (tool) => tool.name === event.tool_name
         );
 
         const updatedTools = [...existingTools];
         if (toolIndex >= 0) {
+          // Update existing tool
           updatedTools[toolIndex] = updatedTool;
         } else {
+          // Add new tool
           updatedTools.push(updatedTool);
         }
 
+        // For image generation, set kind="Image" to show skeleton
+        const isImageGeneration = event.tool_name === 'generate_image' && event.type === 'tool_call_started';
+        
         const updated = [...prev];
         updated[messageIndex] = {
           ...message,
+          kind: isImageGeneration ? 'Image' : message.kind,
           tools: updatedTools,
         };
         return updated;
       } else {
         // Message doesn't exist - create new message with tool
+        const isImageGeneration = event.tool_name === 'generate_image' && event.type === 'tool_call_started';
+        
         const newMessage: MessageType = {
-          key: event.message_id,
+          key: event.agent_run_id,
           from: 'assistant',
+          kind: isImageGeneration ? 'Image' : undefined,
           versions: [
             {
-              id: event.message_id,
+              id: event.message_id || event.agent_run_id,
               content: '',
             },
           ],
@@ -270,9 +285,56 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
     });
   }, [chatId]);
 
+  // Handle new agent message events (e.g., Image messages)
+  const handleNewMessage = useCallback((event: NewAgentMessageEvent) => {
+    // Only process events for the current conversation
+    if (event.conversation_id !== chatId) {
+      return;
+    }
+
+    setMessages((prev) => {
+      // Check if message already exists
+      const messageIndex = prev.findIndex((msg) => 
+        msg.versions.some((v) => v.id === event.message_id)
+      );
+
+      if (messageIndex >= 0) {
+        // Update existing message
+        const updated = [...prev];
+        updated[messageIndex] = {
+          ...updated[messageIndex],
+          kind: event.kind,
+          generatedImage: event.generated_image,
+          versions: updated[messageIndex].versions.map((v) => 
+            v.id === event.message_id 
+              ? { ...v, content: event.content || v.content }
+              : v
+          ),
+        };
+        return updated;
+      } else {
+        // Create new message
+        const newMessage: MessageType = {
+          key: event.message_id,
+          from: 'assistant',
+          kind: event.kind,
+          generatedImage: event.generated_image,
+          versions: [
+            {
+              id: event.message_id,
+              content: event.content || '',
+            },
+          ],
+        };
+        return [...prev, newMessage];
+      }
+    });
+  }, [chatId]);
+
   useChatSocket({
     conversationId: chatId,
     onToolUpdate: handleToolUpdate,
+    onNewMessage: handleNewMessage,
   });
 
   useEffect(() => {
@@ -303,6 +365,8 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
         const baseMessage: MessageType = {
           key: item.id,
           from: item.isAgent ? 'assistant' : 'user',
+          kind: item.kind,
+          generatedImage: item.generatedImage,
           versions: [
             {
               id: item.id,
@@ -506,6 +570,19 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       // setModelName('');
     }
   }, [chatId, searchParams]);
+
+  // Auto-focus input field when chat window opens or chatId changes
+  useEffect(() => {
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      const textarea = inputContainerRef.current?.querySelector('textarea[name="message"]') as HTMLTextAreaElement | null;
+      if (textarea) {
+        textarea.focus();
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [chatId]);
 
   const handleFeedback = useCallback(
     async (
@@ -862,7 +939,38 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                           ) : (
                             <>
                             <MessageContent>
-                              <MessageResponse>{version.content}</MessageResponse>
+                              {/* Show loading state while message is generating */}
+                              {(status === 'submitted' || status === 'streaming') && 
+                               message.from === 'assistant' && 
+                               (!version.content || version.content.trim() === '') && (
+                                <MessageLoadingState
+                                  hasTools={!!message.tools && message.tools.length > 0}
+                                  toolName={message.tools?.[0]?.name}
+                                />
+                              )}
+                              {message.kind === 'Image' ? (
+                                <div className="flex flex-col gap-2">
+                                  {message.generatedImage ? (
+                                    <Image 
+                                      src={message.generatedImage} 
+                                      alt={version.content || 'Generated image'}
+                                      className="max-w-full h-auto rounded-lg border max-h-[512px] object-contain"
+                                      showDownloadButton={true}
+                                    />
+                                  ) : (
+                                    // Show skeleton while image is generating
+                                    <Skeleton className="w-full h-[512px] rounded-lg" />
+                                  )}
+                                  {version.content && (
+                                    <MessageResponse>{version.content}</MessageResponse>
+                                  )}
+                                </div>
+                              ) : !((status === 'submitted' || status === 'streaming') && 
+                                    message.from === 'assistant' && 
+                                    (!version.content || version.content.trim() === '') && 
+                                    !message.tools) && (
+                                <MessageResponse>{version.content}</MessageResponse>
+                              )}
                               {message.from === 'assistant' && version.content && !message.tools && (
                                 <MessageActions
                                   content={version.content}
@@ -879,8 +987,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                             </>
                           )}
                         </div>
-                      </Message>
-                    ))}
+                      </Message>))}
                   </MessageBranchContent>
 
                   {versions.length > 1 && (
@@ -897,8 +1004,6 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
         </ConversationContent>
         {!isNewChat && <ConversationScrollButton />}
       </Conversation>
-      {/* </div> */}
-
       {/* Input Area - Fixed at Bottom */}
       <div className="shrink-0 border-t border-border bg-background">
         <div className="grid gap-4 p-4">
@@ -912,7 +1017,7 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
             ))}
           </Suggestions> */}
 
-          <div className="w-full px-4">
+          <div className="w-full px-4" ref={inputContainerRef}>
             <PromptInput globalDrop multiple onSubmit={handleSubmit}>
               <ConditionalPromptInputHeader />
 

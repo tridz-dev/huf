@@ -466,6 +466,25 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
                 if tool_to_run:
                     try:
+                        # Emit socket event for tool execution start BEFORE executing
+                        if context and context.get("conversation_id"):
+                            frappe.publish_realtime(
+                                event=f'conversation:{context.get("conversation_id")}',
+                                message={
+                                    "type": "tool_call_started",
+                                    "conversation_id": context.get("conversation_id"),
+                                    "agent_run_id": context.get("agent_run_id"),
+                                    "tool_call_id": tool_call.id,  # Use LLM's tool_call.id as temporary ID
+                                    "message_id": tool_call.id,  # Temporary ID, will be updated after message creation
+                                    "tool_name": tool_name,
+                                    "tool_status": "Queued",
+                                    "tool_args": tool_args if isinstance(tool_args, dict) else json.loads(tool_args) if isinstance(tool_args, str) else {},
+                                },
+                                user=frappe.session.user,
+                                after_commit=False
+                            )
+                            frappe.db.commit()
+                        
                         result_content = await _execute_tool_call(
                             tool_to_run, tool_args, context
                         )
@@ -799,6 +818,25 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
                                 if tool_to_run:
                                     try:
+                                        # Emit socket event for tool execution start BEFORE executing
+                                        if context and context.get("conversation_id"):
+                                            frappe.publish_realtime(
+                                                event=f'conversation:{context.get("conversation_id")}',
+                                                message={
+                                                    "type": "tool_call_started",
+                                                    "conversation_id": context.get("conversation_id"),
+                                                    "agent_run_id": context.get("agent_run_id"),
+                                                    "tool_call_id": tool_call["id"],  # Use LLM's tool_call.id as temporary ID
+                                                    "message_id": tool_call["id"],  # Temporary ID, will be updated after message creation
+                                                    "tool_name": tool_name,
+                                                    "tool_status": "Queued",
+                                                    "tool_args": tool_args if isinstance(tool_args, dict) else json.loads(tool_args) if isinstance(tool_args, str) else {},
+                                                },
+                                                user=frappe.session.user,
+                                                after_commit=False
+                                            )
+                                            frappe.db.commit()
+                                        
                                         result_content = await _execute_tool_call(
                                             tool_to_run, tool_args, context
                                         )

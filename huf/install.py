@@ -11,6 +11,7 @@ import frappe
 def after_install():
     create_demo_ai_providers()
     create_demo_ai_models()
+    create_image_generation_tool()
     frappe.db.commit()
     """
 	Called after app installation.
@@ -35,6 +36,7 @@ def after_migrate():
 	Syncs all discovered tools from all installed apps.
 	"""
 	try:
+		create_image_generation_tool()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
 		frappe.log_error(
@@ -163,3 +165,65 @@ def create_demo_ai_models():
             doc.flags.ignore_validate = True
             doc.insert(ignore_permissions=True)
 
+def create_image_generation_tool():
+    """Create the image generation tool in Agent Tool Function DocType."""
+    tool_name = "generate_image"
+    print("Creating image generation tool")
+    # Check if tool already exists
+    if frappe.db.exists("Agent Tool Function", {"tool_name": tool_name}):
+        return
+    if not frappe.db.exists("Agent Tool Type","Generation"):
+        tool_type_doc=frappe.new_doc("Agent Tool Type")
+        tool_type_doc.name1="Generation"
+        tool_type_doc.insert()
+    # Define tool parameters (child table entries)
+    parameters = [
+        {
+            "label": "Prompt",
+            "fieldname": "prompt",
+            "type": "string",
+            "required": 1,
+            "description": "A detailed text description of the image to generate. Be specific about style, colors, composition, and subject matter."
+        },
+        {
+            "label": "Size",
+            "fieldname": "size",
+            "type": "string",
+            "required": 0,
+            "description": "Image dimensions. Default: 1024x1024. Options vary by model.",
+            "options": "1024x1024"
+        },
+        {
+            "label": "Quality",
+            "fieldname": "quality",
+            "type": "string",
+            "required": 0,
+            "description": "Image quality. 'hd' for higher quality but slower. Default: standard",
+            "options": "standard\nhd\nhigh\nmedium\nlow"
+        },
+        {
+            "label": "Number of Images",
+            "fieldname": "n",
+            "type": "integer",
+            "required": 0,
+            "description": "Number of images to generate. Default: 1. Note: dall-e-3 only supports n=1."
+        }
+    ]
+    
+    # Create tool document
+    tool_doc = frappe.get_doc({
+        "doctype": "Agent Tool Function",
+        "tool_name": tool_name,
+        "description": "Generate an image from a text description using AI. Use this when the user asks for image creation, visualization, or artwork generation.",
+        "types": "Custom Function",
+        "function_path": "huf.ai.sdk_tools.handle_generate_image",
+        "pass_parameters_as_json": 1,
+        "parameters": parameters,
+        "tool_type": "Generation"
+    })
+    try:
+        tool_doc.insert()
+        print("Image generation tool created successfully")
+    except Exception as e:
+        print(f"Error creating image generation tool: {e}")
+        frappe.log_error(f"Error creating image generation tool: {str(e)}", "Image Generation Tool Creation")
