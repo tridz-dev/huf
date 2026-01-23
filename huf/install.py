@@ -190,16 +190,16 @@ def create_image_generation_tool():
             "fieldname": "size",
             "type": "string",
             "required": 0,
-            "description": "Image dimensions. Default: 1024x1024. Options vary by model.",
-            "options": "1024x1024"
+            "description": "Image dimensions. Default: 'auto'. Options vary by model. <a href='https://docs.litellm.ai/docs/image_generation#optional-litellm-fields'>Documentation</a>",
+            "options": "auto"
         },
         {
             "label": "Quality",
             "fieldname": "quality",
             "type": "string",
             "required": 0,
-            "description": "Image quality. 'hd' for higher quality but slower. Default: standard",
-            "options": "standard\nhd\nhigh\nmedium\nlow"
+            "description": "Image quality. Default 'auto'. Options vary by model. <a href='https://docs.litellm.ai/docs/image_generation#optional-litellm-fields'>Documentation</a>",
+            "options": "auto"
         },
         {
             "label": "Number of Images",
@@ -207,6 +207,14 @@ def create_image_generation_tool():
             "type": "integer",
             "required": 0,
             "description": "Number of images to generate. Default: 1. Note: dall-e-3 only supports n=1."
+        },
+        {
+            "label": "Response Format",
+            "fieldname": "response_format",
+            "type": "string",
+            "required": 0,
+            "description": "Response format. Default 'url'",
+            "options": "url\nb64_json."
         }
     ]
     
@@ -214,7 +222,7 @@ def create_image_generation_tool():
     tool_doc = frappe.get_doc({
         "doctype": "Agent Tool Function",
         "tool_name": tool_name,
-        "description": "Generate an image from a text description using AI. Use this when the user asks for image creation, visualization, or artwork generation.",
+        "description": "Generate an image from a text description using AI. Use this when the user asks for image creation, visualization, or artwork generation. Do not show the image URL in the output message.",
         "types": "Custom Function",
         "function_path": "huf.ai.sdk_tools.handle_generate_image",
         "pass_parameters_as_json": 1,
