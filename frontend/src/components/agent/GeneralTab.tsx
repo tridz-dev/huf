@@ -1,4 +1,3 @@
-import { Sparkles } from 'lucide-react';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,10 +5,10 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Button } from '@/components/ui/button';
 import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
+import { InstructionsTextarea } from './InstructionsTextarea';
 
 interface GeneralTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -188,34 +187,24 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
           <CardTitle>Instructions</CardTitle>
           <CardDescription>Define system prompt, goals, and constraints</CardDescription>
         </CardHeader>
-        <CardContent className="relative">
+        <CardContent>
           <FormField
             control={form.control}
             name="instructions"
             render={({ field }) => (
               <FormItem>
-                <FormControl>
-                  <Textarea
-                    placeholder="Define system prompt, goals, constraints..."
-                    className="min-h-[300px] font-mono resize-y"
-                    {...field}
-                  />
-                </FormControl>
+                <InstructionsTextarea
+                  form={form}
+                  field={field}
+                  optimizingPrompt={optimizingPrompt}
+                  onOptimizePrompt={onOptimizePrompt}
+                  showOptimize={true}
+                  showExpand={true}
+                />
                 <FormMessage />
               </FormItem>
             )}
           />
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            className="absolute top-4 right-10"
-            onClick={onOptimizePrompt}
-            disabled={optimizingPrompt}
-          >
-            <Sparkles className="w-4 h-4 mr-2" />
-            {optimizingPrompt ? 'Optimizing...' : 'Optimize'}
-          </Button>
         </CardContent>
       </Card>
     </div>
