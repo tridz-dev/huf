@@ -19,7 +19,7 @@
    "fieldname": "provider_name",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Provide Name",
+   "label": "Provider Name",
    "reqd": 1,
    "unique": 1
   },
@@ -63,7 +63,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-18 10:24:01.646587",
+ "modified": "2026-01-23 16:18:02.769392",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "AI Provider",

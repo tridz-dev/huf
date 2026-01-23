@@ -1225,13 +1225,13 @@ async def handle_generate_image(
             image_model = model_doc.model_name
         else:
             # Auto-detect suitable image model based on provider
-            provider_name = provider_doc.provide_name.lower()
+            provider_name = provider_doc.provider_name.lower()
             image_model = _get_default_image_model(provider_name)
         
         if not image_model:
             return {
                 "success": False,
-                "error": f"Image generation not supported for provider '{provider_doc.provide_name}'. Please configure an image_generation_model in agent settings."
+                "error": f"Image generation not supported for provider '{provider_doc.provider_name}'. Please configure an image_generation_model in agent settings."
             }
         
         # Normalize to LiteLLM format
