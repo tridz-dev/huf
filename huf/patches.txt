@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 
 huf.patches.add_tool_types
+huf.patches.v1.update_image_tool
