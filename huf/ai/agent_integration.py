@@ -1,6 +1,7 @@
 import asyncio
 import json
 from types import SimpleNamespace
+import litellm
 
 import frappe
 from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
@@ -273,20 +274,31 @@ class AgentManager:
         return agent
 
 def safe_commit():
-    if not hasattr(frappe.local, "_realtime_log"):
+    if getattr(frappe.local, "_realtime_log", None) is None:
         frappe.local._realtime_log = []
-    frappe.db.commit()
+    
+    try:
+        frappe.db.commit()
+    except AttributeError as e:
+        if "_realtime_log" in str(e):
+            pass
+        else:
+            raise
 
-def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False):
+def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False, tool_call_id=None):
     """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
         if is_output:
+            filters = {
+                "agent_run": agent_run,
+                "status": "Queued"
+            }
+            if tool_call_id:
+                filters["call_id"] = tool_call_id
+
             existing_queued = frappe.get_all(
                 "Agent Tool Call",
-                filters={
-                    "agent_run": agent_run,
-                    "status": "Queued"
-                },
+                filters=filters,
                 pluck="name",
                 limit=1,
                 order_by="creation asc"
@@ -334,7 +346,8 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "tool_args": json.dumps(args) if args else None,
                 "tool_result": json.dumps(result) if result else None,
                 "error_message": error,
-                "status": "Queued"
+                "status": "Queued",
+                "call_id": tool_call_id 
             })
             doc.insert()
             return doc.name
@@ -352,7 +365,8 @@ def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None,
         args=getattr(raw_call, "arguments", None) if not is_output else None,
         result=tool_result,
         error=error,
-        is_output=is_output
+        is_output=is_output,
+        tool_call_id=getattr(raw_call, "id", None)
     )
 
 @frappe.whitelist()
@@ -1002,43 +1016,72 @@ async def run_agent_stream(
                     if tool_call:
                         raw_item = SimpleNamespace(
                             name=tool_call.get("function", {}).get("name", ""),
-                            arguments=tool_call.get("function", {}).get("arguments", "{}")
+                            arguments=tool_call.get("function", {}).get("arguments", "{}"),
+                            id=tool_call.get("id")
                         )
-                        log_tool_call(run_doc, conversation, raw_item, is_output=False)
+                        tool_call_id = log_tool_call(run_doc, conversation, raw_item, is_output=False)
+
+                        tool_name = getattr(raw_item, "name", "Unknown Tool")
+                        tool_args = getattr(raw_item, "arguments", "{}")
+                        
+                        msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
+                        
+                        conv_manager.add_message(
+                            conversation, 
+                            role="agent", 
+                            content=msg_content, 
+                            provider=provider,
+                            model=model,
+                            agent=agent_name,
+                            run_name=run_doc.name,
+                            kind="Tool Call",
+                            tool_call_id=tool_call_id
+                        )
+                        safe_commit()
+                        
                     yield chunk
                 
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
                     usage = chunk.get("usage", {})
+                    frappe.log_error(f"Stream Usage Received: {usage} Type: {type(usage)}", "Debug Stream Usage")
                     
                     # Calculate metrics
                     cost = 0.0
                     input_tokens = 0
                     output_tokens = 0
                     cached_tokens = 0
+                    total_tokens = 0
                     
                     if usage:
-                        # Try to calculate cost if possible or use 0
-                        # LiteLLM usually provides cost in response object, not always in usage dict
-                        # We might need to rely on what we have.
-                        # For stream, cost calculation might be tricky without response object.
-                        # We will skip cost calc for now or assume 0 until we have a better way.
-                        # Wait, litellm.completion_cost takes response object.
                         
                         if isinstance(usage, dict):
-                            input_tokens = getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0))
-                            output_tokens = getattr(usage, "completion_tokens", usage.get("completion_tokens", 0))
+                            input_tokens = getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0) if isinstance(usage, dict) else 0)
+                            output_tokens = getattr(usage, "completion_tokens", usage.get("completion_tokens", 0) if isinstance(usage, dict) else 0)
+                            
+                            details = getattr(usage, "prompt_tokens_details", None)
+                            if details:
+                                cached_tokens = getattr(details, "cached_tokens", 0)
+                            elif isinstance(usage, dict):
+                                cached_tokens = usage.get("cached_tokens", 0)
+                            
                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
                         else:
-                             input_tokens = getattr(usage, "prompt_tokens", 0)
-                             output_tokens = getattr(usage, "completion_tokens", 0)
+                             input_tokens = getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))
+                             output_tokens = getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))
+                             cached_tokens = getattr(usage, "cached_tokens", 0)
                              total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
 
-                        # COST NOTE: LiteLLM stream chunks usage doesn't include cost. 
-                        # We would need to calculate it manually using completion_cost(model=model, rx=usage)
-                        # but that requires importing completion_cost and model prices.
-                        # For now, we will leave cost as 0.0 for streams to avoid errors, 
-                        # or try to calculate if we really need it. User asked for total context.
+                        # Calculate cost
+                        try:
+                            cost = litellm.completion_cost(
+                                model=model, 
+                                prompt_tokens=input_tokens, 
+                                completion_tokens=output_tokens
+                            )
+                        except Exception as e:
+                            frappe.log_error(f"Failed to calculate cost: {str(e)}", "Agent Stream Cost")
+                            cost = 0.0
 
                         # Update Conversation Metrics
                         try:
@@ -1065,10 +1108,13 @@ async def run_agent_stream(
                         "provider": provider,
                         "input_tokens": input_tokens,
                         "output_tokens": output_tokens,
+                        "cached_tokens": cached_tokens,
+                        "cost": cost,
                         "end_time": now_datetime()
                     }, update_modified=True)
                     safe_commit()
                     
+                    chunk["conversation_id"] = conversation.name
                     yield chunk
                     return
                 
