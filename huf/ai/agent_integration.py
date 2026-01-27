@@ -422,9 +422,9 @@ def run_background_summarization(conversation_name, agent_name):
 @frappe.whitelist(allow_guest=True)
 def run_agent_sync(
     agent_name: str,
-    prompt: str,
-    provider : str,
-    model : str,
+    prompt: str = None,
+    provider : str = None,
+    model : str = None,
     channel_id: str = None,
     external_id: str = None,
     conversation_id: str = None,
@@ -433,8 +433,8 @@ def run_agent_sync(
     response_format = None
 ):
 
-    if not agent_name or not prompt:
-        frappe.throw(_("Both agent_name and prompt are required"))
+    if not agent_name:
+        frappe.throw(_("Agent Name is required"))
     if not channel_id:
         channel_id = "api"
 
@@ -459,14 +459,15 @@ def run_agent_sync(
             title=f"Chat with {agent_name}"
         )
 
-    if conversation.model:
-        if conversation.model != model:
-             frappe.throw(
-                 _("Agent model has changed from {0} to {1}. Please start a new conversation.").format(conversation.model, model),
-                 frappe.ValidationError
-             )
-    else:
-        frappe.db.set_value("Agent Conversation", conversation.name, "model", model)
+    # if conversation.model:
+    #     if conversation.model != model:
+    #          frappe.throw(
+    #              _("Agent model has changed from {0} to {1}. Please start a new conversation.").format(conversation.model, model),
+    #              frappe.ValidationError
+    #          )
+    # else:
+    
+    frappe.db.set_value("Agent Conversation", conversation.name, "model", agent_doc.model)
 
 
     # Optimized history fetching with dynamic limit + buffer
@@ -478,14 +479,14 @@ def run_agent_sync(
         "status": "Queued",
         "conversation": conversation.name,
         "prompt": prompt,
-        "model": model,
-        "provider": provider,
+        "model": agent_doc.model,
+        "provider": agent_doc.provider,
         "parent_run": parent_run_id,
         "is_child": 1 if parent_run_id else 0,
         "agent_orchestration": orchestration_id
     })
     run_doc.insert()  
-    conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name)
+    conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
 
@@ -621,7 +622,7 @@ def run_agent_sync(
                 "conversation_id": conversation.name,
                 "agent_run_id": run_doc.name
             }
-            run = RunProvider.run(agent, enhanced_prompt, provider, model,context)
+            run = RunProvider.run(agent, enhanced_prompt, agent_doc.provider, agent_doc.model,context)
 
             result = loop.run_until_complete(run)
         finally:
@@ -656,8 +657,8 @@ def run_agent_sync(
                     conversation, 
                     role="agent", 
                     content=msg_content, 
-                    provider=provider, 
-                    model=model, 
+                    provider=agent_doc.provider, 
+                    model=agent_doc.model, 
                     agent=agent_name, 
                     run_name=run_doc.name,
                     kind="Tool Call",
@@ -729,7 +730,6 @@ def run_agent_sync(
                     )
         
         final_output = getattr(result, "final_output", str(result))
-        print("-----------------################----------------Final tool output: ", final_output)
         usage = getattr(result, "usage", None)
         cost = getattr(result, "cost", 0)  
         input_tokens = 0
@@ -776,14 +776,14 @@ def run_agent_sync(
                 "cost": cost
             })
 
-        conv_manager.add_message(conversation, "agent", final_output, provider, model, agent_name, run_doc.name)
+        conv_manager.add_message(conversation, "agent", final_output, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
 
         frappe.db.set_value("Agent Run", run_doc.name, {
             "status": "Success",
             "response": final_output,
             "prompt": prompt,
-            "model": model,
-            "provider": provider,
+            "model": agent_doc.model,
+            "provider": agent_doc.provider,
             "end_time": now_datetime()
         }, update_modified=True)
         safe_commit()
