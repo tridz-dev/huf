@@ -11,7 +11,6 @@ frappe.ui.form.on("Agent Chat", {
 
 function render_chat_ui(frm) {
     const wrapper = $(frm.fields_dict.chat_ui.wrapper);
-    
     wrapper.css({
         "padding": "0",
         "margin": "0",
@@ -287,37 +286,93 @@ function do_send(frm, msg, textarea, messagesEl) {
 
     textarea.val("").css("height", "44px");
 
-    frappe.call({
-        method: "huf.ai.agent_chat.send_message",
-        args: {
-            docname: frm.doc.name,
-            message: msg,
-            agent: selectedAgent
+    // STREAMING IMPLEMENTATION
+    const agentName = selectedAgent || frm.doc.agent;
+    const streamUrl = `/huf/stream/${encodeURIComponent(agentName)}`;
+
+    // Create specific ID for this message bubble
+    const msgId = "msg-" + frappe.utils.get_random(6);
+    // Append empty agent bubble first
+    append_message(messagesEl, "agent", agentName, "", new Date(), msgId);
+    const bubbleContent = messagesEl.find(`#${msgId} .chat-bubble-content`); // We need to target the content div inside the bubble
+
+    // Helper to scroll
+    const scroll = () => scroll_to_bottom(messagesEl);
+
+    fetch(streamUrl, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Frappe-CSRF-Token": frappe.csrf_token
         },
-        callback(r) {
-            if (r.message && r.message.success) {
-                append_message(messagesEl, "agent", frm.doc.agent, r.message.response, new Date());
-                if (r.message.conversation_id && !frm.doc.conversation) {
-                    frm.set_value("conversation", r.message.conversation_id);
+        body: JSON.stringify({
+            prompt: msg,
+            conversation_id: frm.doc.conversation
+        })
+    }).then(async response => {
+        if (!response.ok) throw new Error("Network response was not ok");
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullResponse = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop(); // Keep incomplete line
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+
+                        if (data.type === 'delta') {
+                            const text = data.content || '';
+                            fullResponse += text;
+                            // Update UI - for now just set text, Markdown rendering might be heavy per-chunk
+                            // ideally use a streaming markdown parser or just append text
+                            bubbleContent.html(frappe.markdown(fullResponse));
+                            scroll();
+                        } else if (data.type === 'tool_call') {
+                            const toolName = data.tool_call?.function?.name || 'tool';
+                            // Optional: indicate tool usage
+                            // bubbleContent.append(`<div class="text-xs text-gray-500">🛠️ Using ${toolName}...</div>`);
+                        } else if (data.type === 'complete') {
+                            fullResponse = data.full_response || fullResponse;
+                            bubbleContent.html(frappe.markdown(fullResponse));
+
+                            if (data.conversation_id && !frm.doc.conversation) {
+                                frm.set_value("conversation", data.conversation_id);
+                            }
+                            if (!frm.doc.agent && selectedAgent) {
+                                frm.set_value("agent", selectedAgent);
+                            }
+                            scroll();
+                        } else if (data.type === 'error') {
+                            bubbleContent.append(`<div style="color:red; margin-top:8px;">Error: ${data.error}</div>`);
+                        }
+                    } catch (e) {
+                        console.error("Error parsing stream chunk", e);
+                    }
                 }
-                if (!frm.doc.agent && selectedAgent) {
-                    frm.set_value("agent", selectedAgent);
-                }
-                scroll_to_bottom(messagesEl);
-            } else {
-                append_message(messagesEl, "system", "System", "Error: " + (r.message?.error || "Unknown"), new Date());
             }
-        },
-        always: function () {
-            sendBtn.html(sendBtn.data("original-icon"));
-            sendBtn.prop("disabled", false);
-            textarea.prop("disabled", false);
-            textarea.focus();
         }
+    }).catch(err => {
+        console.error("Stream error:", err);
+        append_message(messagesEl, "system", "System", "Error: " + err.message, new Date());
+    }).finally(() => {
+        sendBtn.html(sendBtn.data("original-icon"));
+        sendBtn.prop("disabled", false);
+        textarea.prop("disabled", false);
+        textarea.focus();
     });
 }
 
-function append_message(messagesEl, role, sender, content, ts) {
+function append_message(messagesEl, role, sender, content, ts, customId) {
     const isUser = role === "user";
     const isSystem = role === "system";
 
@@ -330,7 +385,7 @@ function append_message(messagesEl, role, sender, content, ts) {
     const align = isUser ? "flex-end" : "flex-start";
     const time = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
     const displayName = isUser ? "You" : (isSystem ? "System" : sender);
-    const msgId = "msg-" + frappe.utils.get_random(6);
+    const msgId = customId || ("msg-" + frappe.utils.get_random(6));
 
     messagesEl.append(`
         <div style="display:flex; justify-content:${align}; margin-bottom:16px;">
@@ -338,7 +393,7 @@ function append_message(messagesEl, role, sender, content, ts) {
 
                 <!-- Chat Bubble -->
                 <div id="${msgId}" style="${bubbleStyle} padding:10px 14px; border-radius:12px; font-size:14px; line-height:1.5;">
-                    ${frappe.markdown(content || "")}
+                    <div class="chat-bubble-content">${frappe.markdown(content || "")}</div>
                     <button class="copy-msg-btn" data-target="${msgId}" 
                         style="position:absolute; top:6px; padding:6px; right:6px; border:none; background:none; cursor:pointer; color:black; display:none;"
                         title="Copy">
