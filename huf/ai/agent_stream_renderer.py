@@ -53,8 +53,9 @@ class AgentStreamRenderer(BaseRenderer):
 
 	def _render_agent_stream(self, agent_name: str):
 		"""Generate SSE stream for agent response."""
-		# Get prompt from query parameters or request body
+		# Get prompt and files from query parameters or request body
 		prompt = frappe.form_dict.get("prompt") or frappe.form_dict.get("message", "")
+		files = frappe.form_dict.get("files") or []
 		
 		if not prompt:
 			# Try to get from POST body
@@ -62,6 +63,7 @@ class AgentStreamRenderer(BaseRenderer):
 				if frappe.request.method == "POST":
 					body = frappe.request.get_json(force=True) or {}
 					prompt = body.get("prompt") or body.get("message", "")
+					files = body.get("files") or []
 			except Exception:
 				pass
 		
@@ -148,7 +150,8 @@ class AgentStreamRenderer(BaseRenderer):
 					model=model,
 					channel_id=channel_id,
 					external_id=external_id,
-					conversation_id=conversation_id
+					conversation_id=conversation_id,
+					files=files
 				)
 				
 				# Convert async generator to sync
