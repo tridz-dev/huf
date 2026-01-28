@@ -35,17 +35,13 @@ function render_chat_ui(frm) {
             <div class="chat-input-container" style="padding:16px; border-top:1px solid #e5e7eb; background:#f9fafb;">
                 <div style="display:flex; gap:8px; align-items:flex-end;">
                     <textarea 
-                        class="chat-input" 
-                        placeholder="Type your message..." 
-                        style="flex:1; resize:none; border:1px solid #d1d5db; border-radius:8px; padding:12px; font-size:14px; line-height:1.4; min-height:44px; max-height:120px; outline:none; transition:border-color 0.2s;"
-                        rows="1"
-                    ></textarea>
-                    <input type="file" accept="audio/*" class="audio-file-input" style="display:none;" />
-                    <button class="audio-upload-btn btn" title="Upload audio">
+                    class="chat-input form-control" 
+                    placeholder="Type a message..." 
+                    style="flex:1; resize:none; height:44px; border:1px solid #d1d5db; border-radius:8px; padding:10px; font-size:14px; "></textarea>
+                    <input type="file" multiple class="agent-file-input" style="display:none;" />
+                     <button class="agent-attach-btn btn" title="Attach file">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                         </svg>
                     </button>
                     <button class="audio-record-btn btn" title="Record audio">
@@ -76,8 +72,59 @@ function render_chat_ui(frm) {
         const recordBtn = wrapper.find(".audio-record-btn");
         let mediaRecorder = null;
         let chunks = [];
+        let pendingFiles = []; // [ {file: File, b64: "...", isImage: bool} ]
 
-        uploadBtn.on("click", () => audioInput.click());
+
+        const fileInput = wrapper.find(".agent-file-input");
+        const attachBtn = wrapper.find(".agent-attach-btn");
+        const inputArea = wrapper.find(".chat-input-container");
+
+        // PREVIEW CONTAINER
+        const previewContainer = $(`<div class="file-preview-area" style="display:flex; gap:8px; padding:8px 0; overflow-x:auto;"></div>`);
+        inputArea.prepend(previewContainer);
+
+        attachBtn.on("click", () => fileInput.click());
+
+        fileInput.on("change", function () {
+            Array.from(this.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const isImage = file.type.startsWith("image/");
+                    pendingFiles.push({
+                        file: file,
+                        b64: e.target.result,
+                        isImage: isImage,
+                        name: file.name
+                    });
+                    render_previews();
+                };
+                reader.readAsDataURL(file);
+            });
+            // clear input so same file can be selected again
+            $(this).val("");
+        });
+
+        function render_previews() {
+            previewContainer.empty();
+            pendingFiles.forEach((mf, idx) => {
+                const el = $(`
+                    <div style="position:relative; display:inline-block; border:1px solid #ddd; border-radius:6px; padding:4px; max-width:120px; background:#fff;">
+                        ${mf.isImage
+                        ? `<img src="${mf.b64}" style="height:50px; width:auto; display:block; border-radius:4px;">`
+                        : `<div style="height:50px; display:flex; align-items:center; justify-content:center; font-size:11px; padding:0 8px; background:#f3f4f6; color:#555;">${frappe.utils.escape_html(mf.name)}</div>`
+                    }
+                        <div class="remove-btn" data-idx="${idx}" style="position:absolute; top:-6px; right:-6px; background:red; color:white; border-radius:50%; width:16px; height:16px; display:flex; align-items:center; justify-content:center; font-size:12px; cursor:pointer;">&times;</div>
+                    </div>
+                `);
+                el.find(".remove-btn").on("click", function () {
+                    const i = $(this).data("idx");
+                    pendingFiles.splice(i, 1);
+                    render_previews();
+                });
+                previewContainer.append(el);
+            });
+        }
+
         audioInput.on("change", function (e) {
             const file = this.files[0];
             if (!file) return;
@@ -194,13 +241,13 @@ function render_chat_ui(frm) {
         load_history(frm, messagesEl);
 
         // Send on button
-        sendBtn.on("click", () => send_message(frm, textarea, messagesEl));
+        sendBtn.on("click", () => send_message(frm, textarea, messagesEl, pendingFiles));
 
         // Enter to send
         textarea.on("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                send_message(frm, textarea, messagesEl);
+                send_message(frm, textarea, messagesEl, pendingFiles);
             }
         });
 
@@ -244,22 +291,22 @@ function load_history(frm, messagesEl) {
     });
 }
 
-function send_message(frm, textarea, messagesEl) {
+function send_message(frm, textarea, messagesEl, pendingFiles) {
     const msg = textarea.val().trim();
-    if (!msg) return;
+    if (!msg && (!pendingFiles || pendingFiles.length === 0)) return;
 
     textarea.css("height", "44px");
 
     if (frm.is_new()) {
         frm.save().then(() => {
-            do_send(frm, msg, textarea, messagesEl);
+            do_send(frm, msg, textarea, messagesEl, pendingFiles);
         });
     } else {
-        do_send(frm, msg, textarea, messagesEl);
+        do_send(frm, msg, textarea, messagesEl, pendingFiles);
     }
 }
 
-function do_send(frm, msg, textarea, messagesEl) {
+function do_send(frm, msg, textarea, messagesEl, pendingFiles) {
     const wrapper = $(frm.fields_dict.chat_ui.wrapper);
     const sendBtn = wrapper.find(".chat-send");
     const selectedAgent = wrapper.find(".agent-select").val() || frm.doc.agent;
@@ -281,10 +328,36 @@ function do_send(frm, msg, textarea, messagesEl) {
         </svg>
     `);
 
-    append_message(messagesEl, "user", frappe.session.user, msg, new Date());
+
+
+    // Optimistically append user message with files
+    let visualItems = [];
+    if (msg) visualItems.push(msg);
+    if (pendingFiles && pendingFiles.length > 0) {
+        pendingFiles.forEach(pf => {
+            if (pf.isImage) {
+                visualItems.push(`![${pf.name}](${pf.b64})`);
+            } else {
+                visualItems.push(`📄 **${pf.name}**`);
+            }
+        });
+    }
+
+    append_message(messagesEl, "user", frappe.session.user, visualItems.join("\n\n"), new Date());
     scroll_to_bottom(messagesEl);
 
+    // Snapshot of pending files to send
+    const filePayload = pendingFiles.map(f => ({
+        filename: f.name,
+        content: f.b64.split(",", 2)[1], // send base64 data only
+        is_image: f.isImage ? 1 : 0
+    }));
+
+    // Clear UI
+    pendingFiles.length = 0; // Clear array
     textarea.val("").css("height", "44px");
+    $(frm.fields_dict.chat_ui.wrapper).find(".file-preview-area").empty();
+
 
     // STREAMING IMPLEMENTATION
     const agentName = selectedAgent || frm.doc.agent;
@@ -307,7 +380,8 @@ function do_send(frm, msg, textarea, messagesEl) {
         },
         body: JSON.stringify({
             prompt: msg,
-            conversation_id: frm.doc.conversation
+            conversation_id: frm.doc.conversation,
+            files: filePayload
         })
     }).then(async response => {
         if (!response.ok) throw new Error("Network response was not ok");
@@ -340,7 +414,7 @@ function do_send(frm, msg, textarea, messagesEl) {
                         } else if (data.type === 'tool_call') {
                             const toolName = data.tool_call?.function?.name || 'tool';
                             // Optional: indicate tool usage
-                            // bubbleContent.append(`<div class="text-xs text-gray-500">🛠️ Using ${toolName}...</div>`);
+                            // bubbleContent.append(`< div class="text-xs text-gray-500" >🛠️ Using ${ toolName }...</div > `);
                         } else if (data.type === 'complete') {
                             fullResponse = data.full_response || fullResponse;
                             bubbleContent.html(frappe.markdown(fullResponse));
@@ -353,7 +427,7 @@ function do_send(frm, msg, textarea, messagesEl) {
                             }
                             scroll();
                         } else if (data.type === 'error') {
-                            bubbleContent.append(`<div style="color:red; margin-top:8px;">Error: ${data.error}</div>`);
+                            bubbleContent.append(`< div style = "color:red; margin-top:8px;" > Error: ${data.error}</div > `);
                         }
                     } catch (e) {
                         console.error("Error parsing stream chunk", e);
@@ -394,10 +468,10 @@ function append_message(messagesEl, role, sender, content, ts, customId) {
                 <!-- Chat Bubble -->
                 <div id="${msgId}" style="${bubbleStyle} padding:10px 14px; border-radius:12px; font-size:14px; line-height:1.5;">
                     <div class="chat-bubble-content">${frappe.markdown(content || "")}</div>
-                    <button class="copy-msg-btn" data-target="${msgId}" 
+                    <button class="copy-msg-btn" data-target="${msgId}"
                         style="position:absolute; top:6px; padding:6px; right:6px; border:none; background:none; cursor:pointer; color:black; display:none;"
                         title="Copy">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2-2v1" /></svg>
                     </button>
                 </div>
 
@@ -407,9 +481,9 @@ function append_message(messagesEl, role, sender, content, ts, customId) {
 
             </div>
         </div>
-    `);
+        `);
 
-    const bubble = messagesEl.find(`#${msgId}`);
+    const bubble = messagesEl.find(`#${msgId} `);
     const copyBtn = bubble.find(".copy-msg-btn");
 
     bubble.on("mouseenter", () => copyBtn.show());
