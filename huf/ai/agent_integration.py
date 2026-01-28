@@ -444,7 +444,8 @@ def run_agent_sync(
     conversation_id: str = None,
     parent_run_id: str = None,
     orchestration_id: str = None,
-    response_format = None
+    response_format = None,
+    files: list = None
 ):
 
     if not agent_name:
@@ -500,7 +501,7 @@ def run_agent_sync(
         "agent_orchestration": orchestration_id
     })
     run_doc.insert()  
-    conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
+    conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name, files=files)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
 
@@ -576,7 +577,8 @@ def run_agent_sync(
             "agent_name": agent_name,
             "response_format": response_format,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "files": files
         }
 
         context_strategy = agent_doc.context_strategy or "Summarize"
@@ -634,7 +636,8 @@ def run_agent_sync(
                 "agent_name": agent_name,
                 "response_format": response_format,
                 "conversation_id": conversation.name,
-                "agent_run_id": run_doc.name
+                "agent_run_id": run_doc.name,
+                "files": files
             }
             run = RunProvider.run(agent, enhanced_prompt, agent_doc.provider, agent_doc.model,context)
 
@@ -851,7 +854,8 @@ async def run_agent_stream(
     model: str,
     channel_id: str = None,
     external_id: str = None,
-    conversation_id: str = None
+    conversation_id: str = None,
+    files: list = None
 ):
     """
     Streaming version of run_agent_sync.
@@ -938,7 +942,7 @@ async def run_agent_stream(
             "provider": provider
         })
         run_doc.insert()
-        conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name)
+        conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name, files=files)
         run_doc.db_set("start_time", now_datetime())
         safe_commit()
         
@@ -961,7 +965,8 @@ async def run_agent_stream(
             "conversation_history": history,
             "agent_name": agent_name,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "files": files
         }
         
         # SUMMARIZATION LOGIC
@@ -1044,8 +1049,6 @@ async def run_agent_stream(
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
                     usage = chunk.get("usage", {})
-                    frappe.log_error(f"Stream Usage Received: {usage} Type: {type(usage)}", "Debug Stream Usage")
-                    
                     # Calculate metrics
                     cost = 0.0
                     input_tokens = 0
