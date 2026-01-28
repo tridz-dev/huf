@@ -74,7 +74,7 @@ class ConversationManager:
         conv.insert()
         return conv
 
-    def add_message(self, conversation, role, content, provider, model, agent, run_name=None, kind="Message", tool_call_id=None):
+    def add_message(self, conversation, role, content, provider, model, agent, run_name=None, kind="Message", tool_call_id=None, files=None):
         """Add message to conversation"""
         try:
             last_index = frappe.db.sql("""
@@ -101,6 +101,38 @@ class ConversationManager:
                 "tool_calll": tool_call_id 
             })
             message.insert()
+
+            if files:
+                for f in files:
+                    try:
+                        filename = f.get("filename")
+                        content = f.get("content")
+                        is_image = f.get("is_image", 0)
+
+                        if filename and content:
+                            from frappe.utils.file_manager import save_file
+                            import base64
+                            
+                            content_bytes = base64.b64decode(content)
+                            
+                            saved_file = save_file(
+                                fname=filename,
+                                content=content_bytes,
+                                dt="Agent Message",
+                                dn=message.name,
+                                folder="Home/Attachments",
+                                is_private=0
+                            )
+
+                            message.append("files", {
+                                "file": saved_file.file_url,
+                                "file_name": filename,
+                                "is_image": is_image
+                            })
+                    except Exception as e:
+                        frappe.log_error(f"Error saving attachment {f.get('filename')}: {str(e)}", "Agent Attachment Error")
+                
+                message.save()
 
             frappe.db.set_value("Agent Conversation", conversation.name, {
                 "total_messages": last_index + 1,
