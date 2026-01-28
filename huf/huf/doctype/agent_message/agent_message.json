@@ -24,7 +24,8 @@
   "tool_calll",
   "tool_name",
   "tool_status",
-  "tool_args"
+  "tool_args",
+  "files"
  ],
  "fields": [
   {
@@ -163,12 +164,18 @@
    "fieldname": "generated_image",
    "fieldtype": "Attach Image",
    "label": "Generated Image"
+  },
+  {
+   "fieldname": "files",
+   "fieldtype": "Table",
+   "label": "Files",
+   "options": "Agent Message File"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-22 19:25:00.356614",
+ "modified": "2026-01-28 11:25:00.356614",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",
