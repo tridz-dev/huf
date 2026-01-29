@@ -746,10 +746,16 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 
                 for chunk in stream:
                     # Capture usage if present (often in last chunk)
-                    if hasattr(chunk, "usage") and chunk.usage:
-                        stream_usage = chunk.usage
-
+                    chunk_usage = getattr(chunk, "usage", None)
+                    if not chunk_usage and isinstance(chunk, dict):
+                        chunk_usage = chunk.get("usage")
+                        
+                    if chunk_usage:
+                        stream_usage = chunk_usage
+                
                     if not chunk.choices:
+                        if chunk_usage:
+                             stream_usage = chunk_usage
                         continue
 
                     delta = chunk.choices[0].delta
@@ -840,6 +846,54 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                         result_content = await _execute_tool_call(
                                             tool_to_run, tool_args, context
                                         )
+                                        
+                                        # Update Tool Status in DB and Emit Event
+                                        if context and context.get("conversation_id"):
+                                            try:
+                                                tool_call_doc = frappe.db.get_value("Agent Tool Call", {
+                                                    "conversation": context.get("conversation_id"),
+                                                    "call_id": tool_call["id"]
+                                                }, "name")
+                                                
+                                                if tool_call_doc:
+                                                    frappe.db.set_value("Agent Tool Call", tool_call_doc, {
+                                                        "status": "Completed",
+                                                        "tool_result": str(result_content)[:140000],
+                                                    }, update_modified=False)
+                                                    
+                                                    message_name = frappe.db.get_value("Agent Message", {"tool_calll": tool_call_doc}, "name")
+                                                    if message_name:
+                                                        msg_doc = frappe.get_doc("Agent Message", message_name)
+                                                        result_str = json.dumps(result_content) if not isinstance(result_content, str) else str(result_content)
+                                                        
+                                                        new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
+                                                        
+                                                        msg_doc.content = new_content
+                                                        msg_doc.kind = "Tool Result"
+                                                        msg_doc.save(ignore_permissions=True)
+                                                    else:
+                                                        frappe.log_error(f"LiteLLM Stream: Could not find message for tool_calll='{tool_call_doc}'", "Debug Stream")
+                                                    
+                                                    frappe.publish_realtime(
+                                                        event=f'conversation:{context.get("conversation_id")}',
+                                                        message={
+                                                            "type": "tool_call_completed",
+                                                            "tool_call_id": tool_call["id"],
+                                                            "tool_name": tool_name,
+                                                            "status": "Completed",
+                                                            "result": str(result_content)[:1000]
+                                                        },
+                                                        user=frappe.session.user,
+                                                        after_commit=False
+                                                    )
+                                                    
+                                                    if getattr(frappe.local, "_realtime_log", None) is None:
+                                                        frappe.local._realtime_log = []
+                                                    frappe.db.commit()
+                                            except AttributeError:
+                                                pass
+                                            except Exception as e:
+                                                print(f"Error updating tool status: {e}")
                                     except Exception as e:
                                         result_content = f"Error executing tool {tool_name}: {str(e)}"
                                 else:
@@ -870,6 +924,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                             break
 
                         if finish_reason == "stop":
+                            if stream_usage and hasattr(stream_usage, "dict"):
+                                 stream_usage = stream_usage.dict()
+                            elif stream_usage and hasattr(stream_usage, "model_dump"):
+                                 stream_usage = stream_usage.model_dump()
+                                 
                             yield {
                                 "type": "complete",
                                 "full_response": full_response,
@@ -891,9 +950,15 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 return
 
         # Max rounds reached
+        if stream_usage and hasattr(stream_usage, "dict"):
+             stream_usage = stream_usage.dict()
+        elif stream_usage and hasattr(stream_usage, "model_dump"):
+             stream_usage = stream_usage.model_dump()
+             
         yield {
             "type": "complete",
             "full_response": full_response or "Agent stopped after max rounds.",
+            "usage": stream_usage
         }
 
     except Exception as e:

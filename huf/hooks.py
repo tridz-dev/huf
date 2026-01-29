@@ -57,6 +57,9 @@ add_to_apps_screen = [
 # Home Pages
 # ----------
 website_route_rules = [
+    {"from_route": "/huf/stream/<path:agent_name>", "to_route": "huf/stream"},
+    {"from_route": "/huf/stream", "to_route": "huf/stream"},
+
     # Docs routes must come before the catch-all /huf route
     {"from_route": "/huf/docs", "to_route": "huf/docs"},
     {
@@ -64,7 +67,6 @@ website_route_rules = [
         "to_route": "huf/docs/<path:app_path>"
     },
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
-    {"from_route": "/huf/stream", "to_route": "huf/stream"}
 ]
 
 # Register custom page renderer for SSE streaming and docs

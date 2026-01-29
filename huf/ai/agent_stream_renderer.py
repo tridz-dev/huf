@@ -7,6 +7,7 @@ Allows real-time streaming of agent responses without modifying existing DocType
 import asyncio
 import json
 from typing import Generator
+import urllib.parse
 
 import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
@@ -29,16 +30,26 @@ class AgentStreamRenderer(BaseRenderer):
 
 	def render(self):
 		"""Render either HTML page or SSE stream based on path."""
-		if self.path == "huf/stream":
-			return self._render_html_page()
-		else:
-			# Path format: huf/stream/<agent_name>
+		# Check if agent_name is in form_dict (from rule /huf/stream/<path:agent_name>)
+		agent_name = frappe.form_dict.get("agent_name")
+		
+		# Fallback: Extract from path
+		if not agent_name and self.path.startswith("huf/stream/"):
 			parts = self.path.split("/")
 			if len(parts) >= 3:
 				agent_name = parts[2]
-				return self._render_agent_stream(agent_name)
-			else:
-				return self._render_error("Invalid path format. Expected: /huf/stream/<agent_name>")
+		
+		if agent_name:
+			try:
+				agent_name = urllib.parse.unquote(agent_name)
+			except Exception:
+				pass
+			return self._render_agent_stream(agent_name)
+			
+		elif self.path == "huf/stream":
+			return self._render_html_page()
+		else:
+			return self._render_error("Invalid path format. Expected: /huf/stream/<agent_name>")
 
 	def _render_agent_stream(self, agent_name: str):
 		"""Generate SSE stream for agent response."""
@@ -107,7 +118,15 @@ class AgentStreamRenderer(BaseRenderer):
 		# Get optional parameters
 		channel_id = frappe.form_dict.get("channel_id", "sse_stream")
 		external_id = frappe.form_dict.get("external_id") or frappe.session.user
-		conversation_id = frappe.form_dict.get("conversation_id")
+		
+		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
+		if not conversation_id:
+			try:
+				if frappe.request.method == "POST":
+					body = frappe.request.get_json(force=True) or {}
+					conversation_id = body.get("conversation_id") or body.get("conversation")
+			except Exception:
+				pass
 		
 		# Create async generator wrapper
 		def stream_generator() -> Generator[str, None, None]:
@@ -349,25 +368,17 @@ class AgentStreamRenderer(BaseRenderer):
 					} else if (data.type === 'tool_call') {
 						// Show tool call info
 						const toolName = data.tool_call?.function?.name || 'Unknown';
-						responseDiv.textContent += `\\n\\n[Calling tool: ${toolName}]\\n`;
+					} else if (data.type === 'complete') {
+						// Handle completion
+						responseDiv.textContent = data.full_response || responseDiv.textContent;
+						updateStatus('Completed', 'complete');
+						eventSource.close();
+						streamBtn.disabled = false;
 					}
 				} catch (e) {
 					console.error('Error parsing event:', e);
 				}
 			};
-
-			// Handle completion
-			eventSource.addEventListener('complete', function(event) {
-				try {
-					const data = JSON.parse(event.data);
-					responseDiv.textContent = data.full_response || responseDiv.textContent;
-					updateStatus('Completed', 'complete');
-				} catch (e) {
-					updateStatus('Completed', 'complete');
-				}
-				eventSource.close();
-				streamBtn.disabled = false;
-			});
 
 			// Handle errors
 			eventSource.onerror = function(error) {
