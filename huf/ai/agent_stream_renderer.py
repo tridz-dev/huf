@@ -55,7 +55,6 @@ class AgentStreamRenderer(BaseRenderer):
 		"""Generate SSE stream for agent response."""
 		# Get prompt and files from query parameters or request body
 		prompt = frappe.form_dict.get("prompt") or frappe.form_dict.get("message", "")
-		files = frappe.form_dict.get("files") or []
 		
 		if not prompt:
 			# Try to get from POST body
@@ -63,7 +62,6 @@ class AgentStreamRenderer(BaseRenderer):
 				if frappe.request.method == "POST":
 					body = frappe.request.get_json(force=True) or {}
 					prompt = body.get("prompt") or body.get("message", "")
-					files = body.get("files") or []
 			except Exception:
 				pass
 		
@@ -130,6 +128,14 @@ class AgentStreamRenderer(BaseRenderer):
 			except Exception:
 				pass
 		
+		files = []
+		try:
+			if frappe.request.method == "POST":
+				body = frappe.request.get_json(force=True) or {}
+				files = body.get("files") or []
+		except Exception:
+			pass
+
 		# Create async generator wrapper
 		def stream_generator() -> Generator[str, None, None]:
 			"""Wrapper to convert async generator to sync generator for Werkzeug Response."""
