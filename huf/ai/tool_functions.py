@@ -46,6 +46,7 @@ def create_document(doctype: str, data: dict, function=None):
 
 	doc = frappe.get_doc({"doctype": doctype, **data})
 	doc.insert()
+	frappe.db.commit()
 	return {"document_id": doc.name, "message": "Document created", "doctype": doctype}
 
 
@@ -103,6 +104,7 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
         
         doc.update(data)
         doc.save()
+        frappe.db.commit()
         
         return {
             "success": True,
@@ -161,6 +163,7 @@ def delete_document(doctype: str, document_id: str):
             return {"success": False, "error": f"{doctype} {document_id} not found"}
             
         frappe.delete_doc(doctype, document_id)
+        frappe.db.commit()
         return {"success": True, "message": f"{doctype} {document_id} deleted successfully"}
     except Exception as e:
         frappe.log_error(f"Error deleting {doctype} {document_id}: {str(e)}")
@@ -181,6 +184,7 @@ def submit_document(doctype: str, document_id: str):
 	"""
 	doc = frappe.get_doc(doctype, document_id)
 	doc.submit()
+	frappe.db.commit()
 	return {
 		"document_id": document_id,
 		"message": f"{doctype} {document_id} submitted",
@@ -194,6 +198,7 @@ def cancel_document(doctype: str, document_id: str):
 	"""
 	doc = frappe.get_doc(doctype, document_id)
 	doc.cancel()
+	frappe.db.commit()
 	return {
 		"document_id": document_id,
 		"message": f"{doctype} {document_id} cancelled",
@@ -344,6 +349,7 @@ def attach_file_to_document(doctype: str, document_id: str, file_path: str):
         }
     )
     newFile.insert()
+    frappe.db.commit()
 
     return {"document_id": document_id, "message": "File attached", "file_id": newFile.name}
 
