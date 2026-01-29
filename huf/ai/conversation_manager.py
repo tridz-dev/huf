@@ -108,8 +108,15 @@ class ConversationManager:
                         filename = f.get("filename")
                         content = f.get("content")
                         is_image = f.get("is_image", 0)
+                        file_url = f.get("file_url")
 
-                        if filename and content:
+                        if file_url:
+                            message.append("files", {
+                                "file": file_url,
+                                "file_name": filename,
+                                "is_image": is_image
+                            })
+                        elif filename and content:
                             from frappe.utils.file_manager import save_file
                             import base64
                             
