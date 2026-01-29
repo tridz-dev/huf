@@ -37,7 +37,7 @@ function render_chat_ui(frm) {
                     <textarea 
                     class="chat-input form-control" 
                     placeholder="Type a message..." 
-                    style="flex:1; resize:none; height:44px; border:1px solid #d1d5db; border-radius:8px; padding:10px; font-size:14px; "></textarea>
+                    style="flex:1; resize:none; height:44px;font-color:rgb(1, 6, 12); border:1px solid #d1d5db; border-radius:8px; padding:10px; font-size:14px; "></textarea>
                     <input type="file" multiple class="agent-file-input" style="display:none;" />
                      <button class="agent-attach-btn btn" title="Attach file">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
