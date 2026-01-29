@@ -38,18 +38,299 @@ class SimpleResult:
 
 
 # High-performance in-memory cache for provider capabilities
-# Stores capability flags to avoid Redis hits on every request
+# Stores capability flags to avoid winning Redis hits on every request
 _L1_CAPABILITY_CACHE = {}
 
 
 async def _execute_tool_call(tool, args_json, context=None):
-    """Execute a tool call and return the result"""
-    return await tool.on_invoke_tool(ctx=context, args_json=args_json)
+    """
+    Execute a tool call and return the result.
+    Handles both async and sync tool implementations safely.
+    """
+    import inspect
+    
+    # helper to check if it's a coroutine function
+    if inspect.iscoroutinefunction(tool.on_invoke_tool):
+        return await tool.on_invoke_tool(ctx=context, args_json=args_json)
+    else:
+        # Run sync tools in a separate thread to avoid blocking the asyncio loop
+        return await asyncio.to_thread(tool.on_invoke_tool, ctx=context, args_json=args_json)
+
+
+def _extract_text_from_file(file_name: str, file_bytes: bytes, mime_type: str) -> str:
+    """
+    Universal text extractor for various file formats.
+    Returns: Extracted text string or error message.
+    """
+    import io
+    
+    status_msg = f"[Attached File: {file_name}]"
+    
+    try:
+        # 1. PDF
+        if mime_type == "application/pdf":
+            try:
+                import pypdf
+                pdf_file = io.BytesIO(file_bytes)
+                pdf_reader = pypdf.PdfReader(pdf_file)
+                text = ""
+                for page in pdf_reader.pages:
+                    text += page.extract_text() + "\n"
+                
+                # Truncate to avoid Rate Limits (10k TPM limit on some keys)
+                if len(text) > 15000:
+                    text = text[:15000] + "\n... [Content truncated due to size limit]"
+                    
+                return f"--- PDF Content: {file_name} ---\n{text}\n--- End PDF Content ---"
+            except ImportError:
+                return f"[{file_name}: pypdf library not installed - cannot extract text]"
+            except Exception as e:
+                return f"[{file_name}: PDF extraction failed - {str(e)}]"
+
+        # 2. Word documents (.docx)
+        elif mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" or file_name.endswith(".docx"):
+            try:
+                import docx
+                doc_file = io.BytesIO(file_bytes)
+                doc = docx.Document(doc_file)
+                text = "\n".join([para.text for para in doc.paragraphs])
+                
+                if len(text) > 15000:
+                    text = text[:15000] + "\n... [Content truncated due to size limit]"
+                    
+                return f"--- Word Document: {file_name} ---\n{text}\n--- End Word Document ---"
+            except ImportError:
+                 return f"[{file_name}: python-docx library not installed]"
+            except Exception as e:
+                 return f"[{file_name}: Word extraction failed - {str(e)}]"
+
+        # 3. Excel spreadsheets (.xlsx, .xls)
+        elif mime_type in (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+            "application/vnd.ms-excel"
+        ) or file_name.endswith((".xlsx", ".xls")):
+            try:
+                # Try pandas first as it handles multiple formats
+                try:
+                    import pandas as pd
+                    excel_file = io.BytesIO(file_bytes)
+                    # Read all sheets
+                    dfs = pd.read_excel(excel_file, sheet_name=None)
+                    text = ""
+                    for sheet_name, df in dfs.items():
+                        text += f"\nSheet: {sheet_name}\n{df.to_csv(index=False)}\n"
+                    return f"--- Excel Spreadsheet: {file_name} ---\n{text}\n--- End Excel Spreadsheet ---"
+                except ImportError:
+                    # Fallback to openpyxl for xlsx if pandas missing
+                    if mime_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" or file_name.endswith(".xlsx"):
+                        import openpyxl
+                        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                        text = ""
+                        for sheet in wb.sheetnames:
+                            ws = wb[sheet]
+                            data = []
+                            for row in ws.iter_rows(values_only=True):
+                                # Filter None values
+                                row_data = [str(c) for c in row if c is not None]
+                                if row_data:
+                                    data.append(",".join(row_data))
+                            text += f"\nSheet: {sheet}\n" + "\n".join(data) + "\n"
+                        return f"--- Excel Spreadsheet: {file_name} ---\n{text}\n--- End Excel Spreadsheet ---"
+                    else:
+                        return f"[{file_name}: pandas/openpyxl libraries not installed]"
+            except Exception as e:
+                return f"[{file_name}: Excel extraction failed - {str(e)}]"
+
+        # 4. PowerPoint (.pptx)
+        elif mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation" or file_name.endswith(".pptx"):
+            try:
+                from pptx import Presentation
+                prs = Presentation(io.BytesIO(file_bytes))
+                text = ""
+                for i, slide in enumerate(prs.slides):
+                    slide_text = []
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text"):
+                            slide_text.append(shape.text)
+                    text += f"Slide {i+1}:\n" + "\n".join(slide_text) + "\n"
+                
+                if len(text) > 15000:
+                    text = text[:15000] + "\n... [Content truncated due to size limit]"
+                    
+                return f"--- Presentation: {file_name} ---\n{text}\n--- End Presentation ---"
+            except ImportError:
+                 return f"[{file_name}: python-pptx library not installed]"
+            except Exception as e:
+                 return f"[{file_name}: PowerPoint extraction failed - {str(e)}]"
+
+        # 5. OpenOffice Text (.odt)
+        elif mime_type == "application/vnd.oasis.opendocument.text" or file_name.endswith(".odt"):
+            try:
+                from odf import text, teletype
+                from odf.opendocument import load
+                doc = load(io.BytesIO(file_bytes))
+                all_text = []
+                for element in doc.getElementsByType(text.P):
+                    all_text.append(teletype.extractText(element))
+                return f"--- ODT Document: {file_name} ---\n" + "\n".join(all_text) + "\n--- End ODT Content ---"
+            except ImportError:
+                 return f"[{file_name}: odfpy library not installed]"
+            except Exception as e:
+                 return f"[{file_name}: ODT extraction failed - {str(e)}]"
+
+        # 6. Generic Text/Code Files
+        elif (
+            mime_type.startswith("text/") 
+            or mime_type in (
+                "application/json", 
+                "application/javascript", 
+                "application/xml", 
+                "application/x-yaml",
+                "application/ld+json",
+                "application/x-httpd-php",
+                "application/x-sh",
+                "application/rtf"
+            )
+            or file_name.endswith((".py", ".js", ".md", ".csv", ".log", ".ini", ".conf", ".sh", ".css", ".html"))
+            or (mime_type == "application/octet-stream" and file_name.endswith(".txt"))
+        ):
+            try:
+                decoded = file_bytes.decode('utf-8')
+                if len(decoded) > 15000:
+                    decoded = decoded[:15000] + "\n... [Content truncated due to size limit]"
+                return f"--- File Content: {file_name} ---\n{decoded}\n--- End File Content ---"
+            except UnicodeDecodeError:
+                # Try latin-1 fallback
+                try:
+                    decoded = file_bytes.decode('latin-1')
+                    return f"--- File Content: {file_name} ---\n{decoded}\n--- End File Content ---"
+                except:
+                    pass
+
+        # Return placeholder for truly binary/unknown files
+        return status_msg
+
+    except Exception as e:
+        frappe.log_error(f"Universal File Extraction Error for {file_name}: {str(e)}", "LiteLLM File Extract")
+        return f"[{file_name}: Error processing file]"
 
 
 def _find_tool(agent, tool_name):
     """Find a tool by name in the agent's tools"""
     return next((t for t in agent.tools if t.name == tool_name), None)
+
+
+def _sanitize_messages(messages: list) -> list:
+    """
+    Sanitize message history for strict providers (Anthropic, Perplexity).
+    - Merges consecutive messages of the same role (User+User, Assistant+Assistant).
+    - Moves all system messages to the start.
+    - Ensures the sequence generally follows System -> User -> Assistant -> User.
+    """
+    if not messages:
+        return []
+
+    sanitized = []
+    current_system = []
+    
+    # Separation pass
+    non_system = []
+    for msg in messages:
+        if msg.get("role") == "system":
+            current_system.append(msg)
+        else:
+            non_system.append(msg)
+
+    # Merge consecutive non-system messages
+    if non_system:
+        current_msg = non_system[0]
+        for i in range(1, len(non_system)):
+            next_msg = non_system[i]
+            
+            # Check for mergeable consecutive roles (User-User or Assistant-Assistant)
+            # EXCEPTION: Do not merge if tool_calls involved, as structure is strict there (User -> ToolCall -> ToolResult -> Assistant)
+            is_tool_related = (
+                "tool_calls" in current_msg or "tool_call_id" in current_msg or
+                "tool_calls" in next_msg or "tool_call_id" in next_msg
+            )
+            
+            if (
+                current_msg["role"] == next_msg["role"] 
+                and not is_tool_related
+            ):
+                # Merge content
+                c1 = current_msg.get("content", "")
+                c2 = next_msg.get("content", "")
+                
+                # Handle list content (multimodal) vs string
+                if isinstance(c1, list) and isinstance(c2, list):
+                    current_msg["content"] = c1 + c2
+                elif isinstance(c1, list):
+                    # Append string as text block
+                    current_msg["content"] = c1 + [{"type": "text", "text": str(c2)}]
+                elif isinstance(c2, list):
+                    # Prepend string as text block
+                    current_msg["content"] = [{"type": "text", "text": str(c1)}] + c2
+                else:
+                    # String concat
+                    current_msg["content"] = str(c1) + "\n\n" + str(c2)
+            else:
+                sanitized.append(current_msg)
+                current_msg = next_msg
+        sanitized.append(current_msg)
+
+    # Reconstruct: System messages first (merged if multiple instructions?), then sanitized flow
+    final_messages = current_system + sanitized
+    return final_messages
+
+
+def _update_tool_status(conversation_id, tool_call_id, status, tool_name, result=None, error=None, agent_run_id=None):
+    """Helper to update tool call status and emit socket event"""
+    try:
+        tool_call_doc = frappe.db.get_value("Agent Tool Call", {
+            "conversation": conversation_id,
+            "call_id": tool_call_id
+        }, "name")
+        
+        if tool_call_doc:
+            update_dict = {"status": status}
+            if result is not None:
+                update_dict["tool_result"] = str(result)[:140000]
+            if error:
+                update_dict["error_message"] = str(error)
+                
+            frappe.db.set_value("Agent Tool Call", tool_call_doc, update_dict, update_modified=False)
+            
+            # Update Message if exists
+            message_name = frappe.db.get_value("Agent Message", {"tool_calll": tool_call_doc}, "name")
+            if message_name and status == "Completed":
+                msg_doc = frappe.get_doc("Agent Message", message_name)
+                result_str = json.dumps(result) if not isinstance(result, str) else str(result)
+                new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
+                msg_doc.content = new_content
+                msg_doc.kind = "Tool Result"
+                msg_doc.save(ignore_permissions=True)
+            
+            # Emit Event
+            frappe.publish_realtime(
+                event=f'conversation:{conversation_id}',
+                message={
+                    "type": "tool_call_completed" if status == "Completed" else "tool_call_failed",
+                    "tool_call_id": tool_call_id,
+                    "tool_name": tool_name,
+                    "status": status,
+                    "result": str(result)[:1000] if result else None,
+                    "error": str(error) if error else None
+                },
+                user=frappe.session.user,
+                after_commit=False
+            )
+            
+            if getattr(frappe.local, "_realtime_log", None) is None:
+                frappe.local._realtime_log = []
+            frappe.db.commit()
+    except Exception as e:
+        frappe.log_error(f"Error updating tool status: {e}", "LiteLLM Stream Update Error")
 
 
 def _normalize_model_name(model: str, provider: str) -> str:
@@ -237,27 +518,73 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             messages.extend(context["conversation_history"])
         
         # Add user message with cache_control if conversation history caching is enabled
+        user_content = enhanced_prompt
+
+        if context and context.get("files"):
+            # If we have files, user_content becomes a list
+            user_content_list = [{"type": "text", "text": enhanced_prompt}]
+            
+            for f in context.get("files"):
+                file_name = f.get("filename") or f.get("file_name", "attachment")
+                b64_data = f.get("content")
+                is_image = f.get("is_image", 0)
+
+                if b64_data:
+                    import mimetypes
+                    import base64
+                    
+                    mime_type, _ = mimetypes.guess_type(file_name)
+                    if not mime_type:
+                        mime_type = "application/octet-stream"
+
+                    if is_image:
+                        valid_image_types = ("image/png", "image/jpeg", "image/webp", "image/heic")
+                        if mime_type not in valid_image_types:
+                            mime_type = "image/jpeg"
+
+                        user_content_list.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{b64_data}"
+                            }
+                        })
+                    else:
+                        try:
+                            file_bytes = base64.b64decode(b64_data)
+                            text_content = _extract_text_from_file(file_name, file_bytes, mime_type)
+                            if user_content_list and user_content_list[0].get("type") == "text":
+                                user_content_list[0]["text"] += f"\n\n{text_content}"
+                                
+                        except Exception as e:
+                            frappe.log_error(f"Error processing attachment {file_name}: {str(e)}", "LiteLLM Attachment Error")
+
+            user_content = user_content_list
+            
         if not (enable_prompt_caching and model_supports_caching and cache_conversation_history):
             user_content = enhanced_prompt
         else:
-            if provider_name == "anthropic":
-                # Anthropic: content array with cache_control
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt,
-                        "cache_control": {"type": cache_control_type}
-                    }
-                ]
-            elif provider_name in ("openai", "deepseek"):
+            if isinstance(user_content, str):
+                if provider_name == "anthropic":
+                    # Anthropic: content array with cache_control
+                    user_content = [
+                        {
+                            "type": "text",
+                            "text": user_content,
+                            "cache_control": {"type": cache_control_type}
+                        }
+                    ]
+                elif provider_name in ("openai", "deepseek"):
                 # OpenAI/Deepseek: content array format
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt
-                    }
-                ]
-        
+                    user_content = [
+                        {
+                            "type": "text",
+                            "text": user_content
+                        }
+                    ]
+            else:
+                if provider_name == "anthropic" and user_content:
+                    user_content[-1]["cache_control"] = {"type": cache_control_type}
+
         messages.append({"role": "user", "content": user_content})
 
         # Convert tools
@@ -301,7 +628,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
             # Trim messages to fit context window
             try:
+                # Sanitize messages (merge consecutive user messages, fix system order)
+                messages = _sanitize_messages(messages)
                 messages = trim_messages(messages=messages, model=normalized_model)
+                completion_kwargs["messages"] = messages
                 completion_kwargs["messages"] = messages
             except Exception as e:
                 frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
@@ -654,22 +984,76 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             messages.extend(context["conversation_history"])
         
         user_content = enhanced_prompt
+
+        # --- Multimodal Handling (Start - Stream) ---
+        if context and context.get("files"):
+            # If we have files, user_content becomes a list
+            user_content_list = [{"type": "text", "text": enhanced_prompt}]
+            
+            for f in context.get("files"):
+                file_name = f.get("filename") or f.get("file_name", "attachment")
+                b64_data = f.get("content")
+                is_image = f.get("is_image", 0)
+
+                if b64_data:
+                    import mimetypes
+                    import base64
+                    
+                    mime_type, _ = mimetypes.guess_type(file_name)
+                    if not mime_type:
+                        mime_type = "application/octet-stream"
+
+                    if is_image:
+                        # Image Handling
+                        # Gemini is strict about mime types. 
+                        valid_image_types = ("image/png", "image/jpeg", "image/webp", "image/heic")
+                        if mime_type not in valid_image_types:
+                             mime_type = "image/jpeg"
+
+                        user_content_list.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{b64_data}"
+                            }
+                        })
+                    else:
+                        # Universal Text Extraction
+                        try:
+                            file_bytes = base64.b64decode(b64_data)
+                            text_content = _extract_text_from_file(file_name, file_bytes, mime_type)
+                            
+                            # Append extracted text to the first text block
+                            if user_content_list and user_content_list[0].get("type") == "text":
+                                user_content_list[0]["text"] += f"\n\n{text_content}"
+                                
+                        except Exception as e:
+                            frappe.log_error(f"Error processing attachment {file_name}: {str(e)}", "LiteLLM Stream Attachment Error")
+
+            user_content = user_content_list
+            # --- Multimodal Handling (End) ---
+
+
         if enable_prompt_caching and model_supports_caching and cache_conversation_history:
-            if provider_name == "anthropic":
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt,
-                        "cache_control": {"type": cache_control_type}
-                    }
-                ]
-            elif provider_name in ("openai", "deepseek"):
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt
-                    }
-                ]
+            if isinstance(user_content, str):
+                if provider_name == "anthropic":
+                    user_content = [
+                        {
+                            "type": "text",
+                            "text": user_content,
+                            "cache_control": {"type": cache_control_type}
+                        }
+                    ]
+                elif provider_name in ("openai", "deepseek"):
+                    user_content = [
+                        {
+                            "type": "text",
+                            "text": user_content
+                        }
+                    ]
+            else:
+                # Multimodal List
+                 if provider_name == "anthropic" and user_content:
+                     user_content[-1]["cache_control"] = {"type": cache_control_type}
         
         messages.append({"role": "user", "content": user_content})
 
@@ -709,7 +1093,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         
         # Trim messages to fit context window
         try:
+            # Sanitize messages (merge consecutive user messages, fix system order)
+            messages = _sanitize_messages(messages)
             messages = trim_messages(messages=messages, model=normalized_model)
+            completion_kwargs["messages"] = messages
             completion_kwargs["messages"] = messages
         except Exception as e:
             frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
@@ -781,6 +1168,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
                             if tool_call_delta.id:
                                 tc["id"] = tool_call_delta.id
+                            elif not tc["id"]:
+                                # Generate ID if missing (common in some streaming providers)
+                                import uuid
+                                tc["id"] = f"call_{str(uuid.uuid4())[:8]}"
 
                             if hasattr(tool_call_delta, "function"):
                                 if tool_call_delta.function.name:
@@ -843,55 +1234,40 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                         
                                         # Update Tool Status in DB and Emit Event
                                         if context and context.get("conversation_id"):
-                                            try:
-                                                tool_call_doc = frappe.db.get_value("Agent Tool Call", {
-                                                    "conversation": context.get("conversation_id"),
-                                                    "call_id": tool_call["id"]
-                                                }, "name")
-                                                
-                                                if tool_call_doc:
-                                                    frappe.db.set_value("Agent Tool Call", tool_call_doc, {
-                                                        "status": "Completed",
-                                                        "tool_result": str(result_content)[:140000],
-                                                    }, update_modified=False)
-                                                    
-                                                    message_name = frappe.db.get_value("Agent Message", {"tool_calll": tool_call_doc}, "name")
-                                                    if message_name:
-                                                        msg_doc = frappe.get_doc("Agent Message", message_name)
-                                                        result_str = json.dumps(result_content) if not isinstance(result_content, str) else str(result_content)
-                                                        
-                                                        new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
-                                                        
-                                                        msg_doc.content = new_content
-                                                        msg_doc.kind = "Tool Result"
-                                                        msg_doc.save(ignore_permissions=True)
-                                                    else:
-                                                        frappe.log_error(f"LiteLLM Stream: Could not find message for tool_calll='{tool_call_doc}'", "Debug Stream")
-                                                    
-                                                    frappe.publish_realtime(
-                                                        event=f'conversation:{context.get("conversation_id")}',
-                                                        message={
-                                                            "type": "tool_call_completed",
-                                                            "tool_call_id": tool_call["id"],
-                                                            "tool_name": tool_name,
-                                                            "status": "Completed",
-                                                            "result": str(result_content)[:1000]
-                                                        },
-                                                        user=frappe.session.user,
-                                                        after_commit=False
-                                                    )
-                                                    
-                                                    if getattr(frappe.local, "_realtime_log", None) is None:
-                                                        frappe.local._realtime_log = []
-                                                    frappe.db.commit()
-                                            except AttributeError:
-                                                pass
-                                            except Exception as e:
-                                                print(f"Error updating tool status: {e}")
+                                            _update_tool_status(
+                                                conversation_id=context.get("conversation_id"),
+                                                tool_call_id=tool_call["id"],
+                                                status="Completed",
+                                                tool_name=tool_name,
+                                                result=result_content,
+                                                agent_run_id=context.get("agent_run_id")
+                                            )
+
                                     except Exception as e:
                                         result_content = f"Error executing tool {tool_name}: {str(e)}"
+                                        # Failure Update
+                                        if context and context.get("conversation_id"):
+                                            _update_tool_status(
+                                                conversation_id=context.get("conversation_id"),
+                                                tool_call_id=tool_call["id"],
+                                                status="Failed",
+                                                tool_name=tool_name,
+                                                error=str(e),
+                                                agent_run_id=context.get("agent_run_id")
+                                            )
+
                                 else:
                                     result_content = f"Tool '{tool_name}' not found."
+                                    # Not Found Update
+                                    if context and context.get("conversation_id"):
+                                        _update_tool_status(
+                                            conversation_id=context.get("conversation_id"),
+                                            tool_call_id=tool_call["id"],
+                                            status="Failed",
+                                            tool_name=tool_name,
+                                            error="Tool not found",
+                                            agent_run_id=context.get("agent_run_id")
+                                        )
 
                                 tool_results.append(
                                     {
