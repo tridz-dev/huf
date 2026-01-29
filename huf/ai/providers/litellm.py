@@ -527,9 +527,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             for f in context.get("files"):
                 file_name = f.get("filename") or f.get("file_name", "attachment")
                 b64_data = f.get("content")
+                file_url = f.get("file_url")
                 is_image = f.get("is_image", 0)
 
-                if b64_data:
+                file_bytes = None
+                mime_type = "application/octet-stream"
+
+                try:
                     import mimetypes
                     import base64
                     
@@ -537,31 +541,71 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     if not mime_type:
                         mime_type = "application/octet-stream"
 
+                    if file_url:
+                        try:
+                            from urllib.parse import unquote, urlparse
+                            import os
+
+                            parsed = urlparse(file_url)
+                            file_url = parsed.path
+                            
+                            file_url = unquote(file_url)
+                            
+                            full_path = None
+                            if "/private/files/" in file_url:
+                                filename_part = file_url.split("/private/files/")[-1]
+                                full_path = frappe.get_site_path("private", "files", filename_part)
+                            elif "/files/" in file_url:
+                                filename_part = file_url.split("/files/")[-1]
+                                full_path = frappe.get_site_path("public", "files", filename_part)
+                            else:
+                                full_path = frappe.get_site_path(file_url.lstrip("/"))
+                            
+                            full_path = os.path.abspath(full_path)
+
+                            
+                            if full_path and os.path.exists(full_path):
+                                with open(full_path, "rb") as disk_file:
+                                    file_bytes = disk_file.read()
+                                
+                                if is_image:
+                                    b64_data = base64.b64encode(file_bytes).decode('utf-8')
+                            else:
+                                frappe.log_error(f"File not found on disk: {full_path} (Original URL: {file_url})", "LiteLLM File Read")
+                                continue
+                        except Exception as e:
+                             frappe.log_error(f"Path resolution error for {file_url}: {e}", "LiteLLM File Error")
+                             continue
+                    
+                    elif b64_data:
+                        file_bytes = base64.b64decode(b64_data)
+
                     if is_image:
                         valid_image_types = ("image/png", "image/jpeg", "image/webp", "image/heic")
                         if mime_type not in valid_image_types:
                             mime_type = "image/jpeg"
 
-                        user_content_list.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{b64_data}"
-                            }
-                        })
+                        if b64_data:
+                            user_content_list.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:{mime_type};base64,{b64_data}"
+                                }
+                            })
                     else:
-                        try:
-                            file_bytes = base64.b64decode(b64_data)
+                        if file_bytes:
                             text_content = _extract_text_from_file(file_name, file_bytes, mime_type)
                             if user_content_list and user_content_list[0].get("type") == "text":
                                 user_content_list[0]["text"] += f"\n\n{text_content}"
                                 
-                        except Exception as e:
-                            frappe.log_error(f"Error processing attachment {file_name}: {str(e)}", "LiteLLM Attachment Error")
+                except Exception as e:
+                    frappe.log_error(f"Error processing attachment {file_name}: {str(e)}", "LiteLLM Attachment Error")
 
             user_content = user_content_list
             
         if not (enable_prompt_caching and model_supports_caching and cache_conversation_history):
-            user_content = enhanced_prompt
+            if not context.get("files"):
+                user_content = enhanced_prompt
         else:
             if isinstance(user_content, str):
                 if provider_name == "anthropic":
@@ -995,43 +1039,76 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 b64_data = f.get("content")
                 is_image = f.get("is_image", 0)
 
-                if b64_data:
-                    import mimetypes
-                    import base64
-                    
-                    mime_type, _ = mimetypes.guess_type(file_name)
-                    if not mime_type:
-                        mime_type = "application/octet-stream"
+                file_bytes = None
+                mime_type = "application/octet-stream"
+                
+                import mimetypes
+                import base64
+                import os
+                
+                mime_type, _ = mimetypes.guess_type(file_name)
+                if not mime_type:
+                    mime_type = "application/octet-stream"
 
-                    if is_image:
-                        # Image Handling
-                        # Gemini is strict about mime types. 
-                        valid_image_types = ("image/png", "image/jpeg", "image/webp", "image/heic")
-                        if mime_type not in valid_image_types:
-                             mime_type = "image/jpeg"
+                full_path = None
+                if f.get("file_url"):
+                    file_url = f.get("file_url")
+                    try:
+                        from urllib.parse import unquote, urlparse
 
+                        parsed = urlparse(file_url)
+                        file_url = parsed.path
+                        file_url = unquote(file_url)
+                        
+                        if "/private/files/" in file_url:
+                            filename_part = file_url.split("/private/files/")[-1]
+                            full_path = frappe.get_site_path("private", "files", filename_part)
+                        elif "/files/" in file_url:
+                            filename_part = file_url.split("/files/")[-1]
+                            full_path = frappe.get_site_path("public", "files", filename_part)
+                        else:
+                            full_path = frappe.get_site_path(file_url.lstrip("/"))
+                        
+                        full_path = os.path.abspath(full_path)
+
+                        if full_path and os.path.exists(full_path):
+                            with open(full_path, "rb") as disk_file:
+                                file_bytes = disk_file.read()
+                            
+                            if is_image:
+                                b64_data = base64.b64encode(file_bytes).decode('utf-8')
+                        else:
+                            frappe.log_error(f"Stream: File not found on disk: {full_path} (URL: {file_url})", "LiteLLM Stream")
+                    except Exception as e:
+                         frappe.log_error(f"Stream: Path resolution error: {str(e)}", "LiteLLM Stream")
+
+                elif b64_data:
+                    file_bytes = base64.b64decode(b64_data)
+
+                if is_image:
+                    valid_image_types = ("image/png", "image/jpeg", "image/webp", "image/heic")
+                    if mime_type not in valid_image_types:
+                        mime_type = "image/jpeg"
+                     
+                    if b64_data:
                         user_content_list.append({
                             "type": "image_url",
                             "image_url": {
                                 "url": f"data:{mime_type};base64,{b64_data}"
                             }
                         })
-                    else:
-                        # Universal Text Extraction
+                else:
+                    if file_bytes:
                         try:
-                            file_bytes = base64.b64decode(b64_data)
-                            text_content = _extract_text_from_file(file_name, file_bytes, mime_type)
-                            
-                            # Append extracted text to the first text block
+                            text_content = await asyncio.to_thread(
+                                _extract_text_from_file, file_name, file_bytes, mime_type
+                            )
                             if user_content_list and user_content_list[0].get("type") == "text":
                                 user_content_list[0]["text"] += f"\n\n{text_content}"
-                                
                         except Exception as e:
                             frappe.log_error(f"Error processing attachment {file_name}: {str(e)}", "LiteLLM Stream Attachment Error")
 
             user_content = user_content_list
-            # --- Multimodal Handling (End) ---
-
 
         if enable_prompt_caching and model_supports_caching and cache_conversation_history:
             if isinstance(user_content, str):
