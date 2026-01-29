@@ -306,7 +306,7 @@ function send_message(frm, textarea, messagesEl, pendingFiles) {
     }
 }
 
-function do_send(frm, msg, textarea, messagesEl, pendingFiles) {
+async function do_send(frm, msg, textarea, messagesEl, pendingFiles) {
     const wrapper = $(frm.fields_dict.chat_ui.wrapper);
     const sendBtn = wrapper.find(".chat-send");
     const selectedAgent = wrapper.find(".agent-select").val() || frm.doc.agent;
@@ -328,14 +328,13 @@ function do_send(frm, msg, textarea, messagesEl, pendingFiles) {
         </svg>
     `);
 
-
-
     // Optimistically append user message with files
     let visualItems = [];
     if (msg) visualItems.push(msg);
     if (pendingFiles && pendingFiles.length > 0) {
         pendingFiles.forEach(pf => {
             if (pf.isImage) {
+                // For preview we can still use the local b64 or blob
                 visualItems.push(`![${pf.name}](${pf.b64})`);
             } else {
                 visualItems.push(`📄 **${pf.name}**`);
@@ -346,11 +345,27 @@ function do_send(frm, msg, textarea, messagesEl, pendingFiles) {
     append_message(messagesEl, "user", frappe.session.user, visualItems.join("\n\n"), new Date());
     scroll_to_bottom(messagesEl);
 
-    // Snapshot of pending files to send
-    const filePayload = pendingFiles.map(f => ({
-        filename: f.name,
-        content: f.b64.split(",", 2)[1], // send base64 data only
-        is_image: f.isImage ? 1 : 0
+    // 1. Upload files first
+    let uploadedFiles = [];
+    try {
+        if (pendingFiles.length > 0) {
+            uploadedFiles = await upload_pending_files(pendingFiles);
+        }
+    } catch (e) {
+        frappe.msgprint("Error uploading files: " + e.message);
+        console.error(e);
+        // Reset UI
+        sendBtn.html(sendBtn.data("original-icon"));
+        sendBtn.prop("disabled", false);
+        textarea.prop("disabled", false);
+        return;
+    }
+
+    // Snapshot of pending files to send (now references)
+    const filePayload = uploadedFiles.map(f => ({
+        filename: f.filename,
+        file_url: f.file_url,
+        is_image: f.is_image ? 1 : 0
     }));
 
     // Clear UI
@@ -444,6 +459,55 @@ function do_send(frm, msg, textarea, messagesEl, pendingFiles) {
         textarea.prop("disabled", false);
         textarea.focus();
     });
+}
+
+function upload_pending_files(files) {
+    return Promise.all(files.map(f => {
+        return new Promise((resolve, reject) => {
+            const formData = new FormData();
+            formData.append('file', f.file, f.name);
+            formData.append('is_private', 0); // Public for now, or ensure agents can access private files
+            formData.append('folder', 'Home/Attachments');
+
+            // Use $.ajax directly for reliable multipart upload
+            $.ajax({
+                url: '/api/method/upload_file',
+                type: 'POST',
+                data: formData,
+                headers: {
+                    'X-Frappe-CSRF-Token': frappe.csrf_token
+                },
+                processData: false,
+                contentType: false,
+                success: function (r) {
+                    if (r.message) {
+                        resolve({
+                            filename: r.message.file_name,
+                            file_url: r.message.file_url,
+                            is_image: f.isImage
+                        });
+                    } else if (r.file_url) {
+                        resolve({
+                            filename: r.file_name,
+                            file_url: r.file_url,
+                            is_image: f.isImage
+                        });
+                    } else {
+                        reject(new Error("Upload failed"));
+                    }
+                },
+                error: function (r) {
+                    let err = "Upload failed";
+                    try {
+                        const res = JSON.parse(r.responseText);
+                        if (res.exception) err = res.exception;
+                        else if (res._server_messages) err = JSON.parse(res._server_messages).join(", ");
+                    } catch (e) { }
+                    reject(new Error(err));
+                }
+            });
+        });
+    }));
 }
 
 function append_message(messagesEl, role, sender, content, ts, customId) {
