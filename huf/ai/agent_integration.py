@@ -850,8 +850,8 @@ def run_agent_sync(
 async def run_agent_stream(
     agent_name: str,
     prompt: str,
-    provider: str,
-    model: str,
+    provider: str= None,
+    model: str = None,
     channel_id: str = None,
     external_id: str = None,
     conversation_id: str = None,
@@ -918,16 +918,16 @@ async def run_agent_stream(
             )
         
         # Model Validation
-        if conversation.model:
-            if conversation.model != model:
-                 yield {
-                     "type": "error",
-                     "error": f"Agent model has changed from {conversation.model} to {model}. Please start a new conversation."
-                 }
-                 return
-        else:
+        # if conversation.model:
+        #     if conversation.model != model:
+        #          yield {
+        #              "type": "error",
+        #              "error": f"Agent model has changed from {conversation.model} to {model}. Please start a new conversation."
+        #          }
+        #          return
+        # else:
             # Legacy: Lock to current model
-            frappe.db.set_value("Agent Conversation", conversation.name, "model", model)
+        frappe.db.set_value("Agent Conversation", conversation.name, "model", agent_doc.model)
         
         history = conv_manager.get_conversation_history(conversation.name, limit=1000)
         
@@ -938,11 +938,11 @@ async def run_agent_stream(
             "status": "Started",
             "conversation": conversation.name,
             "prompt": prompt,
-            "model": model,
-            "provider": provider
+            "model": agent_doc.model,
+            "provider": agent_doc.provider
         })
         run_doc.insert()
-        conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name, files=files)
+        conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name, files=files)
         run_doc.db_set("start_time", now_datetime())
         safe_commit()
         
@@ -971,7 +971,7 @@ async def run_agent_stream(
         
         # SUMMARIZATION LOGIC
         to_summarize, remaining = conv_manager.summarize_conversation(
-            conversation.name, history, provider, model, agent_name, limit=20
+            conversation.name, history, agent_doc.provider, agent_doc.model, agent_name, limit=20
         )
 
         if to_summarize:
@@ -988,7 +988,7 @@ async def run_agent_stream(
                 summary_prompt = f"Summarize this conversation history:\n{summary_input}"
 
                 sum_context = {"agent_name": agent_name, "is_system_op": True} 
-                sum_result = await RunProvider.run(summary_agent, summary_prompt, provider, model, sum_context)
+                sum_result = await RunProvider.run(summary_agent, summary_prompt, agent_doc.provider, agent_doc.model, sum_context)
                 summary_text = getattr(sum_result, "final_output", "Could not generate summary.")
 
                 history = [{"role": "system", "content": f"Previous Conversation Summary: {summary_text}"}] + remaining
@@ -1006,7 +1006,7 @@ async def run_agent_stream(
         # Stream from provider
         full_response = ""
         try:
-            stream = RunProvider.run_stream(agent, enhanced_prompt, provider, model, context)
+            stream = RunProvider.run_stream(agent, enhanced_prompt, agent_doc.provider, agent_doc.model, context)
             
             async for chunk in stream:
                 chunk_type = chunk.get("type")
@@ -1035,8 +1035,8 @@ async def run_agent_stream(
                             conversation, 
                             role="agent", 
                             content=msg_content, 
-                            provider=provider,
-                            model=model,
+                            provider=agent_doc.provider,
+                            model=agent_doc.model,
                             agent=agent_name,
                             run_name=run_doc.name,
                             kind="Tool Call",
@@ -1078,7 +1078,7 @@ async def run_agent_stream(
                         # Calculate cost
                         try:
                             cost = litellm.completion_cost(
-                                model=model, 
+                                model=agent_doc.model, 
                                 prompt_tokens=input_tokens, 
                                 completion_tokens=output_tokens
                             )
@@ -1101,14 +1101,14 @@ async def run_agent_stream(
                             frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
 
                     # Save final response
-                    conv_manager.add_message(conversation, "agent", full_response, provider, model, agent_name, run_doc.name)
+                    conv_manager.add_message(conversation, "agent", full_response, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
                     
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Success",
                         "response": full_response,
                         "prompt": prompt,
-                        "model": model,
-                        "provider": provider,
+                        "model": agent_doc.model,
+                        "provider": agent_doc.provider,
                         "input_tokens": input_tokens,
                         "output_tokens": output_tokens,
                         "cached_tokens": cached_tokens,
