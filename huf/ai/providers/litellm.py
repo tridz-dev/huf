@@ -746,10 +746,16 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 
                 for chunk in stream:
                     # Capture usage if present (often in last chunk)
-                    if hasattr(chunk, "usage") and chunk.usage:
-                        stream_usage = chunk.usage
-
+                    chunk_usage = getattr(chunk, "usage", None)
+                    if not chunk_usage and isinstance(chunk, dict):
+                        chunk_usage = chunk.get("usage")
+                        
+                    if chunk_usage:
+                        stream_usage = chunk_usage
+                
                     if not chunk.choices:
+                        if chunk_usage:
+                             stream_usage = chunk_usage
                         continue
 
                     delta = chunk.choices[0].delta
@@ -918,6 +924,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                             break
 
                         if finish_reason == "stop":
+                            if stream_usage and hasattr(stream_usage, "dict"):
+                                 stream_usage = stream_usage.dict()
+                            elif stream_usage and hasattr(stream_usage, "model_dump"):
+                                 stream_usage = stream_usage.model_dump()
+                                 
                             yield {
                                 "type": "complete",
                                 "full_response": full_response,
@@ -939,9 +950,15 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 return
 
         # Max rounds reached
+        if stream_usage and hasattr(stream_usage, "dict"):
+             stream_usage = stream_usage.dict()
+        elif stream_usage and hasattr(stream_usage, "model_dump"):
+             stream_usage = stream_usage.model_dump()
+             
         yield {
             "type": "complete",
             "full_response": full_response or "Agent stopped after max rounds.",
+            "usage": stream_usage
         }
 
     except Exception as e:

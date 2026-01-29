@@ -2,6 +2,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 import litellm
+from litellm import token_counter, completion_cost
 
 import frappe
 from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
@@ -20,6 +21,7 @@ from .tool_functions import (
 )
 from .conversation_manager import ConversationManager
 from .run import RunProvider
+from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 
 
 class AgentManager:
@@ -991,10 +993,53 @@ async def run_agent_stream(
                 frappe.log_error(f"Summarization failed: {str(e)}", "Agent Summarization Error")
                 pass
 
-        enhanced_prompt = f"""
+        if agent_doc.enable_conversation_data and conversation.conversation_data:
+             try:
+                data_snapshot = json.loads(conversation.conversation_data)
+                simplified_items = {item["name"]: item["value"] for item in data_snapshot.get("items", [])}
+                if simplified_items:
+                    data_msg = f"CURRENT MEMORY STATE (Conversation Data): {json.dumps(simplified_items, ensure_ascii=False)}"
+                    insert_idx = 0
+                    for i, m in enumerate(history):
+                        if m.get("role") != "system":
+                            insert_idx = i
+                            break
+                    if insert_idx == 0 and history and history[0].get("role") == "system":
+                         insert_idx = 1
+                    
+                    history.insert(insert_idx, {"role": "system", "content": data_msg})
+             except:
+                 pass
+
+        knowledge_context = None
+        try:
+            
+            knowledge_context = build_knowledge_context(
+                agent_name=agent_name,
+                user_query=prompt,
+                max_tokens=agent_doc.max_knowledge_tokens or 4000
+            )
+        except Exception as e:
+            frappe.log_error(
+                f"Error building knowledge context: {str(e)}",
+                "Knowledge Context Error"
+            )
+
+        base_prompt = f"""
             Current user message:
             {prompt}
         """
+        
+        if knowledge_context and knowledge_context.get("context_text"):
+            enhanced_prompt = inject_knowledge_context(base_prompt, knowledge_context)
+            
+            if knowledge_context.get("sources_used"):
+                run_doc.db_set({
+                    "knowledge_sources_used": json.dumps(knowledge_context["sources_used"]),
+                    "chunks_injected": len(knowledge_context.get("chunks_used", []))
+                })
+        else:
+            enhanced_prompt = base_prompt
 
         context["conversation_history"] = history
         
@@ -1067,20 +1112,44 @@ async def run_agent_stream(
                             
                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
                         else:
-                             input_tokens = getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))
-                             output_tokens = getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))
-                             cached_tokens = getattr(usage, "cached_tokens", 0)
-                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
+                            input_tokens = getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))
+                            output_tokens = getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))
+                            cached_tokens = getattr(usage, "cached_tokens", 0)
+                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
 
-                        # Calculate cost
+                    if input_tokens == 0 or output_tokens == 0:
                         try:
-                            cost = litellm.completion_cost(
-                                model=model, 
-                                prompt_tokens=input_tokens, 
-                                completion_tokens=output_tokens
-                            )
+                            
+                            msgs_for_count = history + [{"role": "user", "content": prompt}]
+                            input_tokens = token_counter(model=model, messages=msgs_for_count)
+                            output_tokens = token_counter(model=model, text=full_response)
+                            total_tokens = input_tokens + output_tokens
                         except Exception as e:
-                            frappe.log_error(f"Failed to calculate cost: {str(e)}", "Agent Stream Cost")
+                            frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
+                        
+                        try:
+                            mock_response = {
+                                "usage": {
+                                    "prompt_tokens": input_tokens,
+                                    "completion_tokens": output_tokens,
+                                    "total_tokens": input_tokens + output_tokens
+                                },
+                                "model": model
+                            }
+                            
+                            pricing_model = model
+                            if provider and "/" not in model and provider.lower() not in model.lower():
+                                pricing_model = f"{provider.lower()}/{model}"
+                               
+                            mock_response["model"] = pricing_model
+                                
+                            cost = litellm.completion_cost(
+                                completion_response=mock_response,
+                                model=pricing_model
+                            )
+
+                        except Exception as e:
+                            frappe.log_error(f"Cost calculation failed for {model}: {e}", "Agent Stream Cost")
                             cost = 0.0
 
                         # Update Conversation Metrics
