@@ -1,417 +1,546 @@
 # Better Charts Implementation Plan
 
+> Based on analysis of [nivo](https://github.com/plouc/nivo) and [ai-elements](https://github.com/vercel/ai-elements) source code.
+
 ## Current State
 
-| Feature | Status |
-|---------|--------|
-| Mermaid charts | Infrastructure only (not rendering) |
-| Recharts | UI components built (`/frontend/src/components/ui/chart.tsx`) |
-| ai-elements | Full suite including Artifact, Image, WebPreview |
-| Image generation | Working (via `generatedImage` field + socket events) |
-| Web preview | Component built, not integrated in chat |
-| Streamdown | Markdown renderer (no diagram support) |
+| Feature | Status | Location |
+|---------|--------|----------|
+| Recharts | UI components built (unused) | `frontend/src/components/ui/chart.tsx` |
+| ai-elements | Full suite (29 components) | `frontend/src/components/ai-elements/` |
+| Artifact component | Ready | `ai-elements/artifact.tsx` |
+| Tool component | Ready | `ai-elements/tool.tsx` |
+| Image component | Working | `ai-elements/image.tsx` |
+| Web Preview | Built, not integrated | `ai-elements/web-preview.tsx` |
 
 ## Goal
 
-Add rich, interactive data visualization using **nivo** charts to the chat interface, supporting:
-- Pie, Bar, Line, Area, Heatmap, Radar, Sankey, and more
-- Both static (image) and interactive (React component) rendering
+Integrate **nivo** charts into HUF chat using the existing ai-elements patterns, supporting:
+- 12+ chart types: bar, line, pie, radar, heatmap, sankey, treemap, etc.
+- Both static (SVG) and interactive (React) rendering
 - AI-driven chart generation via tool calling
+- Export functionality (PNG, SVG, data)
 
 ---
 
-## Proposed Approaches
+## Nivo Architecture (from source analysis)
 
-### Approach 1: Nivo HTTP API + Image Artifact (Fastest MVP)
-
-**Overview:** Use nivo's server-side rendering HTTP API to generate chart images, display them as image artifacts in chat.
-
+### Package Structure
 ```
-User Request → AI generates chart config → POST to nivo.rocks/api → PNG/SVG returned → Display as Image
-```
+@nivo/core          - Core utilities, ResponsiveWrapper, hooks
+@nivo/theming       - Theme system and defaults
+@nivo/colors        - Color schemes (nivo, paired, category10, etc.)
+@nivo/static        - Server-side rendering with Joi validation
+@nivo/express       - Express.js HTTP API router
 
-**Architecture:**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Backend (Python)                        │
-├─────────────────────────────────────────────────────────────────┤
-│  1. New Tool: generate_chart                                    │
-│     - Input: chart_type, data, config                           │
-│     - Calls: https://nivo.rocks/api/charts/{type}               │
-│     - Output: base64 image or URL                               │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Frontend (React)                           │
-├─────────────────────────────────────────────────────────────────┤
-│  2. Extend ChatWindow to handle kind="Chart"                    │
-│     - Similar to current Image handling                         │
-│     - Uses existing <Image> component for display               │
-│     - Optional: Download as PNG/SVG                             │
-└─────────────────────────────────────────────────────────────────┘
+Chart packages:
+@nivo/bar           - Bar charts (grouped/stacked, horizontal/vertical)
+@nivo/line          - Line charts
+@nivo/pie           - Pie and donut charts
+@nivo/radar         - Radar/spider charts
+@nivo/heatmap       - Heatmaps
+@nivo/sankey        - Sankey diagrams
+@nivo/treemap       - Treemaps
+@nivo/sunburst      - Sunburst charts
+@nivo/chord         - Chord diagrams
+@nivo/calendar      - Calendar heatmaps
+@nivo/circle-packing - Circle packing
+@nivo/icicle        - Icicle charts
 ```
 
-**Pros:**
-- Fastest to implement (2-3 days)
-- No new frontend dependencies
-- Uses existing Image artifact infrastructure
-- Works with current socket event system
-- Charts render identically every time
+### Key Files from Nivo
+```
+nivo/packages/static/src/renderer.ts      - renderChart() function for SSR
+nivo/packages/static/src/mappings/        - Chart type definitions with Joi schemas
+nivo/packages/express/src/index.ts        - Express router implementation
+```
 
-**Cons:**
-- No interactivity (hover, click, zoom)
-- Depends on external nivo.rocks API (rate limits, availability)
-- Limited customization vs. React components
+### renderChart Function (from `renderer.ts`)
+```typescript
+import { renderToStaticMarkup } from 'react-dom/server'
 
-**Implementation Steps:**
+const staticProps = {
+    animate: false,
+    isInteractive: false,
+    renderWrapper: false,
+    theme: {},
+}
 
-1. **Backend Tool** (`huf/ai/sdk_tools.py`):
-```python
-@tool
-def generate_chart(
-    chart_type: str,  # pie, bar, line, area, heatmap, etc.
-    data: list[dict],
-    config: dict = None
-) -> str:
-    """Generate a chart image using nivo."""
-    url = f"https://nivo.rocks/api/charts/{chart_type}"
-    payload = {
-        "width": config.get("width", 800),
-        "height": config.get("height", 600),
-        "data": data,
-        **config
+export const renderChart = ({ type, props }, override) => {
+    const chart = chartsMapping[type]
+    const mergedProps = {
+        ...staticProps,
+        ...chart.defaults,
+        ...props,
+        ...pick(override, chart.runtimeProps || []),
     }
-    response = requests.post(url, json=payload)
-    # Return base64 encoded image
-    return base64.b64encode(response.content).decode()
+    const rendered = renderToStaticMarkup(createElement(chart.component, mergedProps))
+    return `<?xml version="1.0" ?>${rendered}`
+}
 ```
 
-2. **Register tool in agent** (`huf/ai/agent_manager.py`)
-
-3. **Frontend handling** in `ChatWindow.tsx`:
+### Chart Mapping Pattern (from `mappings/bar.ts`)
 ```typescript
-{message.kind === 'Chart' && (
-  <Image
-    src={message.generatedChart}
-    alt="Generated chart"
-    showDownloadButton={true}
-  />
-)}
+export const barMapping = {
+    component: Bar,
+    schema: Joi.object().keys({
+        width: dimensions.width,
+        height: dimensions.height,
+        margin: dimensions.margin,
+        data: custom.array().min(1).required(),
+        indexBy: Joi.string().required(),
+        keys: Joi.array().sparse(false).min(1).unique().required(),
+        groupMode: Joi.any().valid('grouped', 'stacked'),
+        layout: Joi.any().valid('horizontal', 'vertical'),
+        colors: ordinalColors,
+        // ... more
+    }),
+    runtimeProps: ['width', 'height', 'colors', 'groupMode'],
+    defaults: {
+        margin: { top: 40, right: 50, bottom: 40, left: 50 },
+    },
+}
 ```
 
-**Effort:** ~2-3 days
+### Supported Chart Types (from `mappings/index.ts`)
+```typescript
+export const chartsMapping = {
+    bar: barMapping,
+    circle_packing: circlePackingMapping,
+    calendar: calendarMapping,
+    chord: chordMapping,
+    heatmap: heatmapMapping,
+    icicle: icicleMapping,
+    line: lineMapping,
+    pie: pieMapping,
+    radar: radarMapping,
+    sankey: sankeyMapping,
+    sunburst: sunburstMapping,
+    treemap: treemapMapping,
+}
+```
 
 ---
 
-### Approach 2: Self-Hosted Nivo API + Chart Artifact
+## ai-elements Architecture (from source analysis)
 
-**Overview:** Run nivo's server-side rendering locally (or on your server) for better reliability and no rate limits.
+### Artifact Pattern (from `artifact.tsx`)
+```tsx
+<Artifact>                          // flex flex-col overflow-hidden rounded-lg border
+  <ArtifactHeader>                  // flex items-center justify-between border-b bg-muted/50
+    <ArtifactTitle>Chart Title</ArtifactTitle>
+    <ArtifactActions>
+      <ArtifactAction icon={Download} tooltip="Export PNG" onClick={...} />
+    </ArtifactActions>
+    <ArtifactClose onClick={...} />
+  </ArtifactHeader>
+  <ArtifactContent>                 // flex-1 overflow-auto p-4
+    {/* Chart content here */}
+  </ArtifactContent>
+</Artifact>
+```
+
+### Tool Pattern (from `tool.tsx`)
+```tsx
+<Tool>                              // Collapsible with border
+  <ToolHeader
+    title="generate-chart"
+    type="dynamic-tool"
+    state="output-available"        // input-streaming, output-available, output-error
+    toolName="generate-chart"
+  />
+  <ToolContent>
+    <ToolInput input={{ type: "bar", data: [...] }} />
+    <ToolOutput output={<ChartComponent />} />  // Accepts ReactElement!
+  </ToolContent>
+</Tool>
+```
+
+**Key insight from `tool.tsx:148`:** ToolOutput can render React elements directly:
+```typescript
+if (typeof output === "object" && !isValidElement(output)) {
+  Output = <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
+} else if (typeof output === "string") {
+  Output = <CodeBlock code={output} language="json" />
+}
+// Otherwise renders: <div>{output as ReactNode}</div>
+```
+
+---
+
+## Implementation Plans
+
+### Plan A: Interactive React Charts via Tool Output (Recommended)
+
+**Overview:** Use nivo React components directly in the frontend, rendered inside Tool or Artifact components.
 
 **Architecture:**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    New Microservice (Node.js)                   │
+│                      Backend Tool                               │
 ├─────────────────────────────────────────────────────────────────┤
-│  Nivo Chart Server                                              │
-│  - Express/Fastify API                                          │
-│  - Routes: POST /charts/:type                                   │
-│  - Uses: @nivo/core, @nivo/pie, @nivo/bar, etc.                │
-│  - Uses: @nivo/api (official server utilities)                  │
-│  - Returns: SVG or PNG (via puppeteer/canvas)                   │
+│  @tool generate_chart(type, data, config) -> dict              │
+│  Returns JSON config that frontend interprets                   │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Backend (Python/Frappe)                    │
+│                      Frontend                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  Tool: generate_chart → calls local chart server                │
+│  ChatWindow detects tool result with chart config               │
+│  Renders <ChartArtifact> with nivo React component              │
+│  Full interactivity (hover, click, animations)                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Nivo Server Setup:**
+#### Backend Implementation
 
-```javascript
-// chart-server/index.js
-const express = require('express');
-const { renderChart } = require('@nivo/api');
-const { Pie } = require('@nivo/pie');
-const { Bar } = require('@nivo/bar');
-
-const app = express();
-app.use(express.json());
-
-const CHART_COMPONENTS = {
-  pie: Pie,
-  bar: Bar,
-  line: Line,
-  // ... more
-};
-
-app.post('/charts/:type', async (req, res) => {
-  const { type } = req.params;
-  const Component = CHART_COMPONENTS[type];
-
-  const svg = await renderChart({
-    component: Component,
-    props: req.body,
-  });
-
-  res.type('image/svg+xml').send(svg);
-});
-
-app.listen(3001);
-```
-
-**Pros:**
-- Full control over rendering
-- No external API dependencies
-- No rate limits
-- Can cache rendered charts
-- Supports all nivo customization options
-
-**Cons:**
-- Requires additional service deployment
-- More infrastructure to maintain
-- Still no interactivity
-
-**Effort:** ~4-5 days
-
----
-
-### Approach 3: Interactive React Charts via Artifact (Best UX)
-
-**Overview:** Render nivo React components directly in the frontend within an Artifact container, enabling full interactivity.
-
-**Architecture:**
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Backend (Python)                           │
-├─────────────────────────────────────────────────────────────────┤
-│  Tool: generate_chart                                           │
-│  - Returns JSON config (not image)                              │
-│  - Stored in message.chart_config                               │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Frontend (React)                           │
-├─────────────────────────────────────────────────────────────────┤
-│  New Component: ChartArtifact                                   │
-│  - Receives chart_config from message                           │
-│  - Dynamically renders nivo component                           │
-│  - Full interactivity (hover, tooltips, legends)                │
-│  - Export buttons (PNG, SVG, CSV data)                          │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**New Components:**
-
-```typescript
-// frontend/src/components/ai-elements/chart-artifact.tsx
-
-import { ResponsivePie } from '@nivo/pie';
-import { ResponsiveBar } from '@nivo/bar';
-import { ResponsiveLine } from '@nivo/line';
-// ... more imports
-
-const CHART_COMPONENTS = {
-  pie: ResponsivePie,
-  bar: ResponsiveBar,
-  line: ResponsiveLine,
-  area: ResponsiveAreaBump,
-  heatmap: ResponsiveHeatMap,
-  radar: ResponsiveRadar,
-  sankey: ResponsiveSankey,
-  treemap: ResponsiveTreeMap,
-};
-
-interface ChartArtifactProps {
-  type: keyof typeof CHART_COMPONENTS;
-  data: any[];
-  config?: Record<string, any>;
-}
-
-export function ChartArtifact({ type, data, config }: ChartArtifactProps) {
-  const ChartComponent = CHART_COMPONENTS[type];
-
-  return (
-    <Artifact>
-      <ArtifactHeader>
-        <ArtifactTitle>{type.charAt(0).toUpperCase() + type.slice(1)} Chart</ArtifactTitle>
-        <ArtifactActions>
-          <ArtifactAction
-            icon={Download}
-            tooltip="Export PNG"
-            onClick={handleExportPng}
-          />
-          <ArtifactAction
-            icon={Code}
-            tooltip="View Data"
-            onClick={handleViewData}
-          />
-        </ArtifactActions>
-      </ArtifactHeader>
-      <ArtifactContent className="h-[400px]">
-        <ChartComponent
-          data={data}
-          {...config}
-          // Common defaults
-          margin={{ top: 40, right: 80, bottom: 80, left: 80 }}
-          animate={true}
-          motionConfig="gentle"
-        />
-      </ArtifactContent>
-    </Artifact>
-  );
-}
-```
-
-**Integration in ChatWindow.tsx:**
-
-```typescript
-{message.kind === 'Chart' && message.chartConfig && (
-  <ChartArtifact
-    type={message.chartConfig.type}
-    data={message.chartConfig.data}
-    config={message.chartConfig.config}
-  />
-)}
-```
-
-**Backend Tool:**
-
+**File: `huf/ai/tools/chart_tool.py`**
 ```python
+from agents import tool
+from typing import Literal
+
+CHART_TYPES = Literal[
+    "bar", "line", "pie", "radar", "heatmap",
+    "sankey", "treemap", "sunburst", "chord", "calendar"
+]
+
 @tool
 def generate_chart(
-    chart_type: Literal["pie", "bar", "line", "area", "heatmap", "radar", "sankey", "treemap"],
+    chart_type: CHART_TYPES,
+    title: str,
     data: list[dict],
-    title: str = None,
     config: dict = None
 ) -> dict:
     """
-    Generate an interactive chart.
+    Generate a data visualization chart.
+
+    Use this tool when the user wants to visualize data as a chart.
 
     Args:
-        chart_type: Type of chart (pie, bar, line, area, heatmap, radar, sankey, treemap)
-        data: Chart data in nivo format
-        title: Optional chart title
-        config: Optional chart configuration (colors, margins, legends, etc.)
+        chart_type: Type of chart to generate
+            - bar: Compare values across categories
+            - line: Show trends over time
+            - pie: Show proportions of a whole
+            - radar: Compare multiple variables
+            - heatmap: Show intensity across two dimensions
+            - sankey: Show flow between nodes
+            - treemap: Show hierarchical data as nested rectangles
+            - sunburst: Show hierarchical data as concentric rings
+            - chord: Show relationships between entities
+            - calendar: Show values over calendar days
+        title: Descriptive title for the chart
+        data: Chart data. Format varies by chart type:
+            - bar: [{"category": "A", "value1": 10, "value2": 20}, ...]
+            - line: [{"id": "series1", "data": [{"x": "Jan", "y": 100}, ...]}, ...]
+            - pie: [{"id": "slice1", "label": "Slice 1", "value": 30}, ...]
+            - radar: [{"category": "A", "series1": 80, "series2": 60}, ...]
+            - heatmap: [{"id": "row1", "data": [{"x": "col1", "y": 50}, ...]}, ...]
+            - sankey: {"nodes": [...], "links": [...]}
+            - treemap: {"name": "root", "children": [...]}
+            - chord: [[n, n, ...], ...] (matrix format)
+        config: Optional configuration overrides (colors, margins, legends, etc.)
 
     Returns:
-        Chart configuration to be rendered by the frontend
+        Chart configuration for frontend rendering
     """
+    # Default configurations per chart type
+    defaults = {
+        "bar": {
+            "keys": _extract_numeric_keys(data),
+            "indexBy": _find_index_key(data),
+            "groupMode": "grouped",
+            "layout": "vertical",
+            "colors": {"scheme": "nivo"},
+            "enableLabel": True,
+            "labelSkipWidth": 12,
+            "labelSkipHeight": 12,
+        },
+        "line": {
+            "xScale": {"type": "point"},
+            "yScale": {"type": "linear", "min": "auto", "max": "auto"},
+            "curve": "monotoneX",
+            "pointSize": 10,
+            "pointBorderWidth": 2,
+            "useMesh": True,
+            "enableSlices": "x",
+        },
+        "pie": {
+            "innerRadius": 0.5,
+            "padAngle": 0.7,
+            "cornerRadius": 3,
+            "activeOuterRadiusOffset": 8,
+            "arcLinkLabelsSkipAngle": 10,
+            "arcLabelsSkipAngle": 10,
+            "colors": {"scheme": "nivo"},
+        },
+        "radar": {
+            "indexBy": "category",
+            "keys": _extract_numeric_keys(data),
+            "maxValue": "auto",
+            "curve": "linearClosed",
+            "fillOpacity": 0.25,
+            "dotSize": 8,
+        },
+        "heatmap": {
+            "colors": {
+                "type": "sequential",
+                "scheme": "blues",
+            },
+            "emptyColor": "#555555",
+        },
+    }
+
+    base_config = defaults.get(chart_type, {})
+    merged_config = {**base_config, **(config or {})}
+
     return {
         "type": chart_type,
-        "data": data,
         "title": title,
-        "config": config or {}
+        "data": data,
+        "config": merged_config,
+        "_render": "chart",  # Signal to frontend this is a chart
     }
+
+
+def _extract_numeric_keys(data: list[dict]) -> list[str]:
+    """Extract keys with numeric values from first data item."""
+    if not data:
+        return []
+    first = data[0]
+    return [k for k, v in first.items() if isinstance(v, (int, float))]
+
+
+def _find_index_key(data: list[dict]) -> str:
+    """Find the likely index/category key."""
+    if not data:
+        return "id"
+    first = data[0]
+    for key in ["id", "name", "category", "label", "index"]:
+        if key in first:
+            return key
+    # Return first string key
+    for k, v in first.items():
+        if isinstance(v, str):
+            return k
+    return list(first.keys())[0]
 ```
 
-**Pros:**
-- Full interactivity (hover, tooltips, click events)
-- Smooth animations via react-spring
-- Responsive sizing
-- Supports all nivo features (patterns, gradients, theming)
-- No external API calls
-- Export to multiple formats
+#### Frontend Implementation
 
-**Cons:**
-- Larger frontend bundle (nivo packages)
-- More complex implementation
-- Need to handle chart config validation
+**File: `frontend/src/components/ai-elements/chart-artifact.tsx`**
+```tsx
+"use client";
 
-**Package Additions:**
-```bash
-npm install @nivo/core @nivo/pie @nivo/bar @nivo/line @nivo/heatmap @nivo/radar @nivo/sankey @nivo/treemap
-```
+import { cn } from "@/lib/utils";
+import { ResponsiveBar } from "@nivo/bar";
+import { ResponsiveLine } from "@nivo/line";
+import { ResponsivePie } from "@nivo/pie";
+import { ResponsiveRadar } from "@nivo/radar";
+import { ResponsiveHeatMap } from "@nivo/heatmap";
+import { ResponsiveSankey } from "@nivo/sankey";
+import { ResponsiveTreeMap } from "@nivo/treemap";
+import { ResponsiveSunburst } from "@nivo/sunburst";
+import { ResponsiveChord } from "@nivo/chord";
+import { ResponsiveCalendar } from "@nivo/calendar";
+import { Download, Table, Maximize2 } from "lucide-react";
+import { useRef, useState, useCallback } from "react";
+import {
+  Artifact,
+  ArtifactHeader,
+  ArtifactTitle,
+  ArtifactActions,
+  ArtifactAction,
+  ArtifactContent,
+} from "./artifact";
 
-**Effort:** ~5-7 days
+// Chart component registry
+const CHART_COMPONENTS = {
+  bar: ResponsiveBar,
+  line: ResponsiveLine,
+  pie: ResponsivePie,
+  radar: ResponsiveRadar,
+  heatmap: ResponsiveHeatMap,
+  sankey: ResponsiveSankey,
+  treemap: ResponsiveTreeMap,
+  sunburst: ResponsiveSunburst,
+  chord: ResponsiveChord,
+  calendar: ResponsiveCalendar,
+} as const;
 
----
+type ChartType = keyof typeof CHART_COMPONENTS;
 
-### Approach 4: Hybrid - Interactive + Static Fallback (Recommended)
+// Default theme that matches shadcn/ui
+const defaultTheme = {
+  background: "transparent",
+  text: {
+    fontFamily: "inherit",
+    fontSize: 11,
+    fill: "hsl(var(--foreground))",
+  },
+  axis: {
+    domain: {
+      line: {
+        stroke: "hsl(var(--border))",
+        strokeWidth: 1,
+      },
+    },
+    ticks: {
+      line: {
+        stroke: "hsl(var(--border))",
+        strokeWidth: 1,
+      },
+      text: {
+        fill: "hsl(var(--muted-foreground))",
+      },
+    },
+    legend: {
+      text: {
+        fill: "hsl(var(--foreground))",
+        fontSize: 12,
+      },
+    },
+  },
+  grid: {
+    line: {
+      stroke: "hsl(var(--border))",
+      strokeOpacity: 0.5,
+    },
+  },
+  tooltip: {
+    container: {
+      background: "hsl(var(--popover))",
+      color: "hsl(var(--popover-foreground))",
+      fontSize: 12,
+      borderRadius: 6,
+      boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+      padding: "8px 12px",
+    },
+  },
+  legends: {
+    text: {
+      fill: "hsl(var(--muted-foreground))",
+    },
+  },
+};
 
-**Overview:** Combine Approaches 2 and 3. Render interactive charts by default, with static image fallback for export/sharing.
+// Default margins
+const defaultMargin = { top: 40, right: 80, bottom: 60, left: 60 };
 
-**Architecture:**
+export interface ChartConfig {
+  type: ChartType;
+  title: string;
+  data: any;
+  config?: Record<string, any>;
+}
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Message with Chart                         │
-├─────────────────────────────────────────────────────────────────┤
-│  message.chartConfig = {                                        │
-│    type: "pie",                                                 │
-│    data: [...],                                                 │
-│    config: {...},                                               │
-│    staticImage?: "base64..." // Optional pre-rendered           │
-│  }                                                              │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                    ┌───────────┴───────────┐
-                    ▼                       ▼
-        ┌───────────────────┐   ┌───────────────────┐
-        │ Interactive Mode  │   │   Static Mode     │
-        │ (Default)         │   │   (Export/Share)  │
-        ├───────────────────┤   ├───────────────────┤
-        │ <ChartArtifact>   │   │ <Image>           │
-        │ with nivo React   │   │ from staticImage  │
-        └───────────────────┘   └───────────────────┘
-```
+export interface ChartArtifactProps {
+  chart: ChartConfig;
+  className?: string;
+}
 
-**Features:**
-
-1. **Interactive by default** - Full nivo React rendering
-2. **Static on demand** - Generate image for:
-   - Export/download
-   - Share via link
-   - Email embedding
-   - Low-bandwidth mode
-3. **Lazy generation** - Static image only created when needed
-
-**Implementation:**
-
-```typescript
-// ChartArtifact with dual mode
-export function ChartArtifact({ type, data, config, staticImage }: ChartArtifactProps) {
-  const [mode, setMode] = useState<'interactive' | 'static'>('interactive');
+export function ChartArtifact({ chart, className }: ChartArtifactProps) {
   const chartRef = useRef<HTMLDivElement>(null);
+  const [showData, setShowData] = useState(false);
 
-  const handleExport = async () => {
-    if (staticImage) {
-      downloadImage(staticImage);
-    } else {
-      // Client-side export using html2canvas or svg serialization
-      const svg = chartRef.current?.querySelector('svg');
-      if (svg) {
-        const svgData = new XMLSerializer().serializeToString(svg);
-        downloadSvg(svgData);
-      }
-    }
+  const ChartComponent = CHART_COMPONENTS[chart.type];
+
+  if (!ChartComponent) {
+    return (
+      <Artifact className={className}>
+        <ArtifactHeader>
+          <ArtifactTitle>Unsupported Chart Type</ArtifactTitle>
+        </ArtifactHeader>
+        <ArtifactContent>
+          <p className="text-muted-foreground">
+            Chart type "{chart.type}" is not supported.
+          </p>
+        </ArtifactContent>
+      </Artifact>
+    );
+  }
+
+  const handleExportSVG = useCallback(() => {
+    const svg = chartRef.current?.querySelector("svg");
+    if (!svg) return;
+
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([svgData], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${chart.title.toLowerCase().replace(/\s+/g, "-")}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [chart.title]);
+
+  const handleExportPNG = useCallback(async () => {
+    const svg = chartRef.current?.querySelector("svg");
+    if (!svg) return;
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+
+    const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+
+    img.onload = () => {
+      canvas.width = img.width * 2;
+      canvas.height = img.height * 2;
+      ctx?.scale(2, 2);
+      ctx?.drawImage(img, 0, 0);
+
+      const pngUrl = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = pngUrl;
+      a.download = `${chart.title.toLowerCase().replace(/\s+/g, "-")}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    img.src = url;
+  }, [chart.title]);
+
+  // Merge config with defaults
+  const chartProps = {
+    data: chart.data,
+    margin: defaultMargin,
+    theme: defaultTheme,
+    animate: true,
+    motionConfig: "gentle",
+    ...chart.config,
   };
 
   return (
-    <Artifact>
+    <Artifact className={cn("min-h-[400px]", className)}>
       <ArtifactHeader>
-        <ArtifactTitle>{title}</ArtifactTitle>
+        <ArtifactTitle>{chart.title}</ArtifactTitle>
         <ArtifactActions>
           <ArtifactAction
-            icon={mode === 'interactive' ? Image : Activity}
-            tooltip={mode === 'interactive' ? 'Static View' : 'Interactive View'}
-            onClick={() => setMode(m => m === 'interactive' ? 'static' : 'interactive')}
+            icon={Table}
+            tooltip="View Data"
+            onClick={() => setShowData(!showData)}
           />
-          <ArtifactAction icon={Download} tooltip="Export" onClick={handleExport} />
+          <ArtifactAction
+            icon={Download}
+            tooltip="Export PNG"
+            onClick={handleExportPNG}
+          />
         </ArtifactActions>
       </ArtifactHeader>
-      <ArtifactContent className="h-[400px]" ref={chartRef}>
-        {mode === 'interactive' ? (
-          <ChartComponent data={data} {...config} />
+      <ArtifactContent className="p-0">
+        {showData ? (
+          <div className="p-4 overflow-auto max-h-[400px]">
+            <pre className="text-xs">
+              {JSON.stringify(chart.data, null, 2)}
+            </pre>
+          </div>
         ) : (
-          <Image src={staticImage} alt="Chart" />
+          <div ref={chartRef} className="h-[400px] w-full">
+            <ChartComponent {...chartProps} />
+          </div>
         )}
       </ArtifactContent>
     </Artifact>
@@ -419,304 +548,433 @@ export function ChartArtifact({ type, data, config, staticImage }: ChartArtifact
 }
 ```
 
-**Effort:** ~7-10 days
+**Update `frontend/src/components/chat/ChatWindow.tsx`:**
+```tsx
+import { ChartArtifact } from "@/components/ai-elements/chart-artifact";
+
+// In message rendering, detect chart tool output:
+{tool.result?._render === "chart" && (
+  <ChartArtifact chart={tool.result} />
+)}
+```
+
+#### Package Dependencies
+
+```bash
+npm install @nivo/core @nivo/bar @nivo/line @nivo/pie @nivo/radar \
+  @nivo/heatmap @nivo/sankey @nivo/treemap @nivo/sunburst @nivo/chord @nivo/calendar
+```
+
+**Bundle size consideration:** ~200-400KB gzipped for all packages. Can use dynamic imports:
+```tsx
+const ChartComponent = lazy(() =>
+  import(`@nivo/${chart.type}`).then(m => ({ default: m[`Responsive${capitalize(chart.type)}`] }))
+);
+```
 
 ---
 
-### Approach 5: WebPreview + Sandboxed Chart Editor (Most Flexible)
+### Plan B: Server-Side Rendering with @nivo/static
 
-**Overview:** Use the existing WebPreview component to render a sandboxed chart editor/viewer with full nivo capabilities.
+**Overview:** Use nivo's `renderChart` function on the backend to generate static SVGs. No frontend nivo dependencies.
 
 **Architecture:**
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       Chart Viewer App                          │
-│              (Separate static site or iframe src)               │
+│                   Python Backend + Node Worker                  │
 ├─────────────────────────────────────────────────────────────────┤
-│  - Receives chart config via postMessage or URL params         │
-│  - Full nivo installation                                       │
-│  - Interactive editing capabilities                             │
-│  - Export functionality built-in                                │
+│  1. Python tool receives chart request                          │
+│  2. Calls Node.js subprocess with @nivo/static                  │
+│  3. Node renders SVG using renderChart()                        │
+│  4. Returns SVG string or base64                                │
 └─────────────────────────────────────────────────────────────────┘
                                 │
-                    Embedded in WebPreview
-                                │
+                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      ChatWindow                                  │
+│                      Frontend                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  <WebPreview                                                    │
-│    defaultUrl={`/chart-viewer?config=${encodedConfig}`}         │
-│  />                                                             │
+│  Displays SVG in <Image> component (existing)                   │
+│  No nivo packages needed on frontend                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Chart Viewer App:**
+#### Node.js Chart Renderer
 
-```typescript
-// chart-viewer/src/App.tsx (separate build target or static site)
-function ChartViewer() {
-  const [config, setConfig] = useState(null);
+**File: `huf/chart-renderer/index.js`**
+```javascript
+#!/usr/bin/env node
+const { renderChart } = require('@nivo/static');
 
-  useEffect(() => {
-    // Receive config via URL or postMessage
-    const params = new URLSearchParams(window.location.search);
-    const configStr = params.get('config');
-    if (configStr) {
-      setConfig(JSON.parse(decodeURIComponent(configStr)));
-    }
-
-    window.addEventListener('message', (e) => {
-      if (e.data.type === 'CHART_CONFIG') {
-        setConfig(e.data.config);
+// Read JSON config from stdin
+let input = '';
+process.stdin.on('data', chunk => input += chunk);
+process.stdin.on('end', () => {
+  try {
+    const config = JSON.parse(input);
+    const svg = renderChart({
+      type: config.type,
+      props: {
+        width: config.width || 800,
+        height: config.height || 500,
+        data: config.data,
+        ...config.props,
       }
-    });
-  }, []);
+    }, {});
 
-  if (!config) return <Loading />;
+    console.log(JSON.stringify({ svg }));
+  } catch (error) {
+    console.log(JSON.stringify({ error: error.message }));
+    process.exit(1);
+  }
+});
+```
 
-  const ChartComponent = CHART_COMPONENTS[config.type];
-
-  return (
-    <div className="w-full h-screen">
-      <ChartComponent data={config.data} {...config.config} />
-    </div>
-  );
+**File: `huf/chart-renderer/package.json`**
+```json
+{
+  "name": "huf-chart-renderer",
+  "private": true,
+  "dependencies": {
+    "@nivo/static": "^0.87.0"
+  }
 }
 ```
 
-**Pros:**
-- Complete isolation (security)
-- Full nivo capabilities
-- Can include chart editor UI
-- WebPreview already built
-- Could reuse nivo.rocks storybook or similar
+#### Python Integration
 
-**Cons:**
-- Requires separate app deployment
-- More complex message passing
-- Potential iframe limitations
+**File: `huf/ai/tools/chart_tool.py`**
+```python
+import subprocess
+import json
+import base64
+from agents import tool
 
-**Effort:** ~5-7 days
+@tool
+def generate_chart(chart_type: str, title: str, data: list, config: dict = None) -> dict:
+    """Generate a chart image using nivo."""
+
+    chart_config = {
+        "type": chart_type,
+        "width": config.get("width", 800) if config else 800,
+        "height": config.get("height", 500) if config else 500,
+        "data": data,
+        "props": config or {},
+    }
+
+    # Call Node.js renderer
+    result = subprocess.run(
+        ["node", "huf/chart-renderer/index.js"],
+        input=json.dumps(chart_config),
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        return {"error": result.stderr}
+
+    response = json.loads(result.stdout)
+    if "error" in response:
+        return {"error": response["error"]}
+
+    # Return as base64 for Image component
+    svg_bytes = response["svg"].encode('utf-8')
+    return {
+        "title": title,
+        "image": f"data:image/svg+xml;base64,{base64.b64encode(svg_bytes).decode()}",
+        "_render": "image",
+    }
+```
+
+---
+
+### Plan C: Nivo HTTP API Server (External Service)
+
+**Overview:** Run nivo's Express server as a microservice, call it from Python.
+
+**Based on:** `nivo/packages/express/src/index.ts`
+
+#### Nivo Server Setup
+
+**File: `huf/services/chart-api/app.js`**
+```javascript
+const express = require('express');
+const { nivo } = require('@nivo/express');
+
+const app = express();
+app.use(express.json({ limit: '10mb' }));
+
+// Mount nivo router at /nivo
+app.use('/nivo', nivo);
+
+// Health check
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+const PORT = process.env.CHART_API_PORT || 3030;
+app.listen(PORT, () => {
+  console.log(`Chart API running on port ${PORT}`);
+});
+```
+
+#### Docker Setup
+
+**File: `huf/services/chart-api/Dockerfile`**
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --production
+COPY . .
+EXPOSE 3030
+CMD ["node", "app.js"]
+```
+
+#### Python Client
+
+```python
+import requests
+import frappe
+
+CHART_API_URL = frappe.conf.get("chart_api_url", "http://localhost:3030")
+
+@tool
+def generate_chart(chart_type: str, title: str, data: list, config: dict = None) -> dict:
+    """Generate chart via nivo HTTP API."""
+
+    payload = {
+        "width": config.get("width", 800) if config else 800,
+        "height": config.get("height", 500) if config else 500,
+        "data": data,
+        **(config or {}),
+    }
+
+    # POST to nivo API - creates chart and returns ID + URL
+    response = requests.post(
+        f"{CHART_API_URL}/nivo/charts/{chart_type}",
+        json=payload,
+    )
+
+    if response.status_code != 201:
+        return {"error": response.text}
+
+    result = response.json()
+
+    # Fetch the rendered SVG
+    svg_response = requests.get(result["url"])
+
+    return {
+        "title": title,
+        "svg": svg_response.text,
+        "_render": "svg",
+    }
+```
+
+---
+
+### Plan D: Hybrid - Interactive + Static Export
+
+**Overview:** Combine Plan A (interactive) with Plan B (static export) for best of both worlds.
+
+**Features:**
+1. **Default:** Interactive React charts with full nivo features
+2. **Export:** Generate static SVG/PNG via @nivo/static on demand
+3. **Fallback:** Static rendering for email/sharing
+
+#### Implementation
+
+**Frontend ChartArtifact with export:**
+```tsx
+export function ChartArtifact({ chart }: ChartArtifactProps) {
+  const handleExport = async (format: 'svg' | 'png') => {
+    // Call backend to generate static version
+    const response = await fetch('/api/chart/export', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: chart.type,
+        data: chart.data,
+        config: chart.config,
+        format,
+      }),
+    });
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chart.${format}`;
+    a.click();
+  };
+
+  return (
+    <Artifact>
+      {/* ... header with export buttons ... */}
+      <ArtifactContent>
+        <ResponsiveChart {...chartProps} />
+      </ArtifactContent>
+    </Artifact>
+  );
+}
+```
 
 ---
 
 ## Comparison Matrix
 
-| Approach | Interactivity | Dependencies | Complexity | Time | Reliability |
-|----------|--------------|--------------|------------|------|-------------|
-| 1. HTTP API | None | Minimal | Low | 2-3d | External API |
-| 2. Self-hosted API | None | Node service | Medium | 4-5d | Self-managed |
-| 3. React Charts | Full | @nivo packages | Medium | 5-7d | Client-only |
-| 4. Hybrid | Full + Export | @nivo + server | High | 7-10d | Best |
-| 5. WebPreview | Full + Isolated | Separate app | Medium | 5-7d | Isolated |
+| Aspect | Plan A (React) | Plan B (Static) | Plan C (HTTP API) | Plan D (Hybrid) |
+|--------|---------------|-----------------|-------------------|-----------------|
+| **Interactivity** | Full | None | None | Full |
+| **Frontend deps** | @nivo/* | None | None | @nivo/* |
+| **Backend deps** | None | Node subprocess | Node service | Both |
+| **Bundle size** | +200-400KB | 0 | 0 | +200-400KB |
+| **Animations** | Yes | No | No | Yes |
+| **Export quality** | Client-side | High (server) | High (server) | Highest |
+| **Complexity** | Low | Medium | High | Medium |
+| **Infrastructure** | None | Node runtime | Docker service | Node runtime |
+| **Time to implement** | 3-5 days | 4-6 days | 5-7 days | 6-8 days |
 
 ---
 
-## Recommended Implementation Path
+## Recommended Approach
 
-### Phase 1: Quick Win (Week 1)
-**Implement Approach 1** - HTTP API integration
-- Add `generate_chart` tool
-- Use existing Image artifact
-- Validate concept with users
-- Support: pie, bar, line charts
+### Phase 1: Plan A (Interactive React Charts) - 3-5 days
 
-### Phase 2: Interactive Upgrade (Week 2-3)
-**Implement Approach 3** - Interactive React charts
-- Install nivo packages
-- Create ChartArtifact component
-- Add client-side export
-- Support all chart types
+**Why:**
+- Fastest to implement
+- Best user experience (interactive)
+- Uses existing ai-elements patterns (Artifact, Tool)
+- No additional infrastructure
+- nivo bundle size is acceptable for a chat app
 
-### Phase 3: Polish (Week 4)
-**Add Hybrid Features** from Approach 4
-- Static image fallback for sharing
-- Chart data table view
-- Copy chart config
-- Theme customization
+**Implementation order:**
+1. Install nivo packages
+2. Create `ChartArtifact` component
+3. Create `generate_chart` tool
+4. Update ChatWindow to detect chart output
+5. Add client-side export (PNG/SVG)
 
----
+### Phase 2: Add Static Export (Plan D) - 2-3 days
 
-## Detailed Implementation Checklist
+**After Phase 1:**
+1. Add Node.js chart renderer
+2. Create `/api/chart/export` endpoint
+3. Add high-quality export buttons
 
-### Backend Changes
+### Phase 3: Polish - 1-2 days
 
-- [ ] Create `generate_chart` tool in `huf/ai/sdk_tools.py`
-- [ ] Define chart type enum and data schemas
-- [ ] Add chart config to message metadata
-- [ ] Register tool with agent
-
-### Frontend Changes
-
-- [ ] Install nivo packages
-  ```bash
-  npm install @nivo/core @nivo/pie @nivo/bar @nivo/line @nivo/heatmap @nivo/radar
-  ```
-- [ ] Create `ChartArtifact` component
-- [ ] Create individual chart wrapper components
-- [ ] Add chart rendering to `ChatWindow.tsx`
-- [ ] Implement export functionality
-- [ ] Add chart theming (match app theme)
-
-### Testing
-
-- [ ] Unit tests for chart tool
-- [ ] Visual regression tests for charts
-- [ ] Test all chart types with sample data
-- [ ] Test export functionality
+1. Theme integration with shadcn/ui
+2. Responsive sizing
+3. Error handling and fallbacks
+4. Documentation
 
 ---
 
-## Sample Tool Definitions
+## Data Format Reference
 
-### Simple Tool (MVP)
+### Bar Chart
+```json
+{
+  "type": "bar",
+  "data": [
+    { "country": "USA", "sales": 100, "profit": 50 },
+    { "country": "UK", "sales": 80, "profit": 30 }
+  ],
+  "config": {
+    "keys": ["sales", "profit"],
+    "indexBy": "country"
+  }
+}
+```
 
-```python
-from agents import tool
-from typing import Literal
-
-@tool
-def generate_chart(
-    chart_type: Literal["pie", "bar", "line"],
-    title: str,
-    data: list[dict],
-    x_axis: str = None,  # For bar/line charts
-    y_axis: str = None,  # For bar/line charts
-) -> dict:
-    """
-    Generate a data visualization chart.
-
-    Use this tool when the user wants to visualize data.
-
-    Args:
-        chart_type: The type of chart to generate
-        title: A descriptive title for the chart
-        data: The data to visualize. Format depends on chart type:
-            - pie: [{"id": "label", "value": 100}, ...]
-            - bar: [{"category": "A", "value": 100}, ...]
-            - line: [{"id": "series1", "data": [{"x": 0, "y": 10}, ...]}, ...]
-        x_axis: Label for X axis (bar/line only)
-        y_axis: Label for Y axis (bar/line only)
-
-    Returns:
-        Chart configuration for frontend rendering
-    """
-    config = {
-        "margin": {"top": 50, "right": 130, "bottom": 50, "left": 60},
-        "animate": True,
+### Line Chart
+```json
+{
+  "type": "line",
+  "data": [
+    {
+      "id": "Revenue",
+      "data": [
+        { "x": "Jan", "y": 100 },
+        { "x": "Feb", "y": 150 }
+      ]
     }
-
-    if chart_type == "pie":
-        config.update({
-            "innerRadius": 0.5,
-            "padAngle": 0.7,
-            "cornerRadius": 3,
-            "activeOuterRadiusOffset": 8,
-            "arcLinkLabelsSkipAngle": 10,
-            "arcLabelsSkipAngle": 10,
-        })
-    elif chart_type == "bar":
-        config.update({
-            "keys": ["value"],
-            "indexBy": "category",
-            "padding": 0.3,
-            "axisBottom": {"legend": x_axis} if x_axis else None,
-            "axisLeft": {"legend": y_axis} if y_axis else None,
-        })
-    elif chart_type == "line":
-        config.update({
-            "xScale": {"type": "point"},
-            "yScale": {"type": "linear", "min": "auto", "max": "auto"},
-            "pointSize": 10,
-            "pointBorderWidth": 2,
-            "useMesh": True,
-        })
-
-    return {
-        "type": chart_type,
-        "title": title,
-        "data": data,
-        "config": config
-    }
+  ]
+}
 ```
 
-### Advanced Tool (Full Featured)
+### Pie Chart
+```json
+{
+  "type": "pie",
+  "data": [
+    { "id": "React", "label": "React", "value": 40 },
+    { "id": "Vue", "label": "Vue", "value": 30 },
+    { "id": "Angular", "label": "Angular", "value": 30 }
+  ]
+}
+```
 
-```python
-@tool
-def generate_advanced_chart(
-    chart_type: Literal["pie", "bar", "line", "area", "heatmap", "radar", "sankey", "treemap"],
-    title: str,
-    data: list[dict],
-    config: dict = None,
-    theme: Literal["default", "dark", "nivo", "category10"] = "default",
-    legend_position: Literal["top", "right", "bottom", "left", "none"] = "right",
-    enable_labels: bool = True,
-    enable_grid: bool = True,
-) -> dict:
-    """
-    Generate an advanced data visualization chart with full customization.
+### Sankey
+```json
+{
+  "type": "sankey",
+  "data": {
+    "nodes": [
+      { "id": "Source A" },
+      { "id": "Target B" }
+    ],
+    "links": [
+      { "source": "Source A", "target": "Target B", "value": 100 }
+    ]
+  }
+}
+```
 
-    Args:
-        chart_type: Type of chart
-        title: Chart title
-        data: Chart data (format varies by chart type)
-        config: Advanced nivo configuration (overrides defaults)
-        theme: Color theme
-        legend_position: Position of legend
-        enable_labels: Show data labels
-        enable_grid: Show grid lines (applicable charts)
-
-    Returns:
-        Full chart configuration
-    """
-    # Implementation...
+### Treemap
+```json
+{
+  "type": "treemap",
+  "data": {
+    "name": "root",
+    "children": [
+      { "name": "Category A", "value": 100 },
+      {
+        "name": "Category B",
+        "children": [
+          { "name": "Sub B1", "value": 50 },
+          { "name": "Sub B2", "value": 30 }
+        ]
+      }
+    ]
+  }
+}
 ```
 
 ---
 
-## Frontend Component Structure
+## Files to Create/Modify
 
+### New Files
 ```
-frontend/src/components/
-├── ai-elements/
-│   ├── chart-artifact.tsx       # Main chart artifact component
-│   └── charts/
-│       ├── index.ts             # Chart component registry
-│       ├── pie-chart.tsx        # Pie chart wrapper
-│       ├── bar-chart.tsx        # Bar chart wrapper
-│       ├── line-chart.tsx       # Line chart wrapper
-│       ├── heatmap-chart.tsx    # Heatmap wrapper
-│       ├── radar-chart.tsx      # Radar chart wrapper
-│       └── chart-export.tsx     # Export utilities
+frontend/src/components/ai-elements/chart-artifact.tsx   # Chart component
+huf/ai/tools/chart_tool.py                              # Backend tool
+huf/chart-renderer/index.js                             # Optional: static renderer
+huf/chart-renderer/package.json
 ```
 
----
-
-## Open Questions
-
-1. **Bundle size**: Nivo adds ~200-400KB gzipped. Is this acceptable?
-   - Alternative: Dynamic imports for each chart type
-
-2. **Data limits**: How much data should a single chart support?
-   - Recommendation: Warn at 1000 points, limit at 10000
-
-3. **Chart storage**: Should chart configs be stored in DB for regeneration?
-   - Recommendation: Store in message metadata like images
-
-4. **Real-time updates**: Should charts support live data updates?
-   - Could integrate with socket events for dashboard use cases
-
-5. **Accessibility**: Ensure charts are screen-reader friendly
-   - Nivo supports aria labels and keyboard navigation
+### Modified Files
+```
+frontend/src/components/chat/ChatWindow.tsx             # Detect chart output
+frontend/package.json                                   # Add @nivo/* deps
+huf/ai/agent_manager.py                                 # Register tool
+```
 
 ---
 
 ## References
 
+- [Nivo Source - Static Renderer](/.research/nivo/packages/static/src/renderer.ts)
+- [Nivo Source - Express Router](/.research/nivo/packages/express/src/index.ts)
+- [Nivo Source - Chart Mappings](/.research/nivo/packages/static/src/mappings/)
+- [ai-elements Source - Artifact](/.research/ai-elements/packages/elements/src/artifact.tsx)
+- [ai-elements Source - Tool](/.research/ai-elements/packages/elements/src/tool.tsx)
 - [Nivo Documentation](https://nivo.rocks/)
 - [Nivo GitHub](https://github.com/plouc/nivo)
-- [Nivo Storybook](https://nivo.rocks/storybook/)
-- [Nivo API Reference](https://nivo.rocks/pie/api/)
-- [Vercel ai-elements](https://github.com/vercel/ai-elements)
