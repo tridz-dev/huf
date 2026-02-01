@@ -56,6 +56,41 @@ bench setup requirements  # Installs dependencies including litellm
 
 **Note**: After installation or update, run `bench setup requirements` to ensure all dependencies (including `litellm`) are installed. Then restart your site with `bench restart`.
 
+## Quick Try with Docker
+
+Want to try HUF without setting up a full Frappe environment? Use the Docker quick-try setup:
+
+```bash
+cd huf-quicktry
+docker compose up
+```
+
+Then open http://localhost:8000 and login with:
+- **User:** Administrator
+- **Password:** admin
+
+### Switching Branches
+
+To try a specific branch:
+
+```bash
+HUF_BRANCH=your-branch-name docker compose up
+```
+
+### Configuration
+
+You can customize the setup with environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SITE_NAME` | huf.localhost | Frappe site name |
+| `DB_ROOT_PW` | 123 | MariaDB root password |
+| `ADMIN_PW` | admin | Frappe admin password |
+| `HUF_REPO` | https://github.com/tridz-dev/huf.git | HUF repository URL |
+| `HUF_BRANCH` | main | Branch to install |
+
+> **Note:** This is a development/quick-try setup using `bench start`. For production deployments, use the official [frappe_docker](https://github.com/frappe/frappe_docker) pattern with nginx, gunicorn, and workers.
+
 ## Architecture Overview
 
 Huf is built around a set of interconnected DocTypes that define the components of an AI agent. The core logic is handled by Python classes that integrate with an AI provider (like OpenAI) and manage the agent's lifecycle.
