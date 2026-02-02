@@ -8,7 +8,7 @@ SITE_NAME=${SITE_NAME:-huf.localhost}
 DB_ROOT_PW=${DB_ROOT_PW:-123}
 ADMIN_PW=${ADMIN_PW:-admin}
 HUF_REPO=${HUF_REPO:-https://github.com/tridz-dev/huf.git}
-HUF_BRANCH=${HUF_BRANCH:-main}
+HUF_BRANCH=${HUF_BRANCH:-develop}
 
 cd /home/frappe
 

@@ -21,11 +21,11 @@ services:
     command: bash /workspace/init.sh
     environment:
       - SHELL=/bin/bash
+      - HUF_BRANCH=develop
+      - UV_HTTP_TIMEOUT=300
     working_dir: /home/frappe
     volumes:
       - .:/workspace
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
     ports:
       - "8000:8000"
       - "9000:9000"
@@ -35,5 +35,3 @@ services:
 
 volumes:
   mariadb-data:
-  sites:
-  logs:
