@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { CheckIcon } from 'lucide-react';
+import { CheckIcon, Plus } from 'lucide-react';
 import {
   ModelSelector,
   ModelSelectorContent,
@@ -15,7 +15,6 @@ import {
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
-import { PromptInputButton } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
@@ -25,10 +24,9 @@ interface AgentModelSelectorProps {
   value: string;
   onValueChange: (value: string) => void;
   disabled?: boolean;
-  variant?: 'default' | 'header';
 }
 
-export function AgentModelSelector({ value, onValueChange, disabled, variant = 'default' }: AgentModelSelectorProps) {
+export function AgentModelSelector({ value, onValueChange, disabled }: AgentModelSelectorProps) {
   const [open, setOpen] = useState(false);
 
   // Fetch agent models for selector
@@ -75,8 +73,6 @@ export function AgentModelSelector({ value, onValueChange, disabled, variant = '
     }
   }, [open, setModelSearch]);
 
-  const selectedModelData = agentModels.find((m) => m.id === value);
-
   // Group models by chef
   const groupedModels = agentModels.reduce(
     (acc, m) => {
@@ -90,32 +86,21 @@ export function AgentModelSelector({ value, onValueChange, disabled, variant = '
     {} as Record<string, AgentModelItem[]>
   );
 
-  const TriggerButton = variant === 'header' ? Button : PromptInputButton;
-
   return (
     <ModelSelector onOpenChange={setOpen} open={open}>
       <ModelSelectorTrigger asChild>
-        <TriggerButton 
+        <Button 
+          size="icon" 
+          variant="ghost" 
           disabled={disabled}
-          variant={variant === 'header' ? 'ghost' : undefined}
           className={cn(
-            variant === 'header' && 'h-auto p-0 gap-x-1 items-center text-sm font-semibold hover:bg-transparent',
-            variant === 'header' && disabled && 'disabled:opacity-100'
+            'text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900',
+            disabled && 'disabled:opacity-100'
           )}
         >
-          {selectedModelData?.chefSlug && (
-            <ModelSelectorLogo provider={selectedModelData.chefSlug} />
-          )}
-          {selectedModelData?.name ? (
-            <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>
-          ) : (
-            variant === 'header' && (
-              <span className={cn(disabled && 'text-muted-foreground')}>
-                {modelsLoading ? 'Loading...' : 'No model selected'}
-              </span>
-            )
-          )}
-        </TriggerButton>
+          <Plus className="w-5 h-5" />
+          <span className="sr-only">New Chat</span>
+        </Button>
       </ModelSelectorTrigger>
 
       <ModelSelectorContent shouldFilter={false} className="min-h-[40%]">

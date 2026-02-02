@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Clock4, Users } from 'lucide-react';
+import { Clock4, Plus, Users } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Skeleton } from '../ui/skeleton';
@@ -16,6 +16,8 @@ import { useChatList } from './useChatList';
 import ChatAvatar from './ChatAvatar';
 import { getInitials } from '@/utils/getInitials';
 import { toDate, startOfDay } from '@/utils/time';
+import { AgentModelSelector } from './AgentModelSelector';
+import { Button } from '../ui/button';
 
 function getRecentBucketLabel(ts?: string): string {
   const d = toDate(ts);
@@ -79,10 +81,15 @@ export default function ChatListing() {
     navigate(`/chat/${chatId}`);
   };
 
+  const handleAgentSelect = useCallback((agentId: string) => {
+    // Automatically navigate to new chat when agent is selected
+    navigate(`/chat/new?agent=${agentId}`);
+  }, [navigate]);
+
   return (
     <div className="h-full min-w-96 bg-sidebar flex flex-col overflow-hidden">
       <div className="shrink-0 p-4 pb-0 sticky top-0 z-10 bg-sidebar">
-        <ChatListHeader />
+        <ChatListHeader onAgentSelect={handleAgentSelect} />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto p-4 pt-4" id="chat-listing-scroll">
         <Tabs defaultValue="agent" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -161,6 +168,12 @@ function AgentConversationItem({
   onSelectChat: (chatId: string) => void;
   isOpen: boolean;
 }) {
+  const navigate = useNavigate();
+
+  const handleNewConversation = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent accordion from toggling
+    navigate(`/chat/new?agent=${agent.name}`);
+  }, [navigate, agent.name]);
   const {
     items: conversations,
     initialLoading,
@@ -202,9 +215,18 @@ function AgentConversationItem({
             {agent.agent_name}
           </span>
         </div>
-        <span className="text-[10px] text-zinc-400 bg-zinc-200 px-1.5 py-0.5 rounded-full border border-zinc-200 ml-auto">
+        <span className="text-[10px] min-w-6 text-zinc-400 bg-zinc-200 px-1.5 py-0.5 rounded-full border border-zinc-200 ml-auto">
           {agent.conversationCount}
         </span>
+        <Button 
+          size="icon" 
+          variant="ghost" 
+          className="h-fit w-fit opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-300 rounded text-zinc-400 hover:text-zinc-900 transition-all ml-1"
+          onClick={handleNewConversation}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span className="sr-only">New Conversation</span>
+        </Button>
       </AccordionTrigger>
 
       <AccordionContent className="space-y-0.5 ml-3 pl-3 border-l border-zinc-200 overflow-hidden transition-all duration-300 opacity-100">
@@ -396,12 +418,27 @@ function RecentsConversationList({
   );
 }
 
-function ChatListHeader() {
+function ChatListHeader({ 
+  onAgentSelect 
+}: { 
+  onAgentSelect?: (agentId: string) => void;
+}) {
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
+
+  const handleAgentChange = useCallback((agentId: string) => {
+    setSelectedAgent(agentId);
+    onAgentSelect?.(agentId);
+  }, [onAgentSelect]);
+
   return (
-    <div className="">
-      <div>
-        <h1 className="font-semibold text-lg tracking-tight">Workspaces</h1>
-      </div>
+    <div className="flex items-center justify-between">
+      <h1 className="font-semibold text-lg tracking-tight">Workspaces</h1>
+      {onAgentSelect && (
+        <AgentModelSelector
+          value={selectedAgent}
+          onValueChange={handleAgentChange}
+        />
+      )}
     </div>
   );
 }
