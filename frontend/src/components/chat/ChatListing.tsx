@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger } from "../ui/tabs"
 
 export default function ChatListing(){
     return (
-        <div>
+        <div className="h-full min-h-screen min-w-96 bg-sidebar">
             <ChatListHeader/>
         </div>
     )
@@ -11,7 +11,7 @@ export default function ChatListing(){
 
 function ChatListHeader(){
     return(
-        <div className="p-4 space-y-4 h-full min-h-screen md:max-w-xs bg-sidebar">
+        <div className="p-4 space-y-4">
             <div>
                 <h1 className="font-semibold text-lg tracking-tight">Workspaces</h1>
             </div>
