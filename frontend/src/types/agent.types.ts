@@ -198,4 +198,5 @@ export interface AgentDoc {
   }>; // Array of MCP server references
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
+  agent_color?: string | null; // Hex color code for agent background
 }

@@ -143,6 +143,7 @@ export interface AgentWithCount {
   agent_name: string;
   conversationCount: number;
   last_updated?: string;
+  agent_color?: string | null;
 }
 
 /**
@@ -153,7 +154,7 @@ export async function getAgentsWithConversationCounts(): Promise<AgentWithCount[
   try {
     // Fetch all agents sorted by last updated (modified field)
     const agents = await db.getDocList(doctype.Agent, {
-      fields: ['name', 'agent_name', 'modified'],
+      fields: ['name', 'agent_name', 'modified', 'agent_color'],
       orderBy: { field: 'modified', order: 'asc' },
       limit: 1000, // Reasonable limit for agents
     });
@@ -170,6 +171,7 @@ export async function getAgentsWithConversationCounts(): Promise<AgentWithCount[
           agent_name: agent.agent_name || agent.name,
           conversationCount: count || 0,
           last_updated: agent.modified,
+          agent_color: (agent as any).agent_color || null,
         };
       })
     );

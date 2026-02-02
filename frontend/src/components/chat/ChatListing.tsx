@@ -18,6 +18,8 @@ import { getInitials } from '@/utils/getInitials';
 import { toDate, startOfDay } from '@/utils/time';
 import { AgentModelSelector } from './AgentModelSelector';
 import { Button } from '../ui/button';
+import { DEFAULT_AGENT_COLOR } from '@/data/color';
+import { getAgent } from '@/services/agentApi';
 
 function getRecentBucketLabel(ts?: string): string {
   const d = toDate(ts);
@@ -225,7 +227,9 @@ function AgentConversationItem({
         arrowPosition="left"
       >
         <div className="flex-1 flex gap-x-2 items-center">
-          <ChatAvatar variant="listing_ai">{getInitials(agent.agent_name)}</ChatAvatar>
+          <ChatAvatar variant="listing_ai" color={agent.agent_color || DEFAULT_AGENT_COLOR}>
+            {getInitials(agent.agent_name)}
+          </ChatAvatar>
           <span className="text-sm font-medium truncate text-zinc-500 group-hover:text-zinc-900 transition-colors">
             {agent.agent_name}
           </span>
@@ -313,6 +317,7 @@ function RecentsConversationList({
   isActive: boolean;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [agentColorMap, setAgentColorMap] = useState<Map<string, string | null>>(new Map());
   
   const {
     chats: conversations,
@@ -326,6 +331,32 @@ function RecentsConversationList({
     enabled: isActive, // Only load when tab is active
     refreshOnRouteChange: false, // Don't refresh on route change for this use case
   });
+
+  // Fetch agent colors for unique agents in conversations
+  useEffect(() => {
+    if (!isActive || conversations.length === 0) return;
+
+    const uniqueAgents = Array.from(new Set(conversations.map(chat => chat.agent).filter(Boolean)));
+    const newColorMap = new Map<string, string | null>();
+
+    // Fetch colors for all unique agents
+    Promise.all(
+      uniqueAgents.map(async (agentName) => {
+        try {
+          const agentData = await getAgent(agentName);
+          return { name: agentName, color: agentData.agent_color || null };
+        } catch (error) {
+          console.error(`Failed to fetch agent color for ${agentName}:`, error);
+          return { name: agentName, color: null };
+        }
+      })
+    ).then((results) => {
+      results.forEach(({ name, color }) => {
+        newColorMap.set(name, color);
+      });
+      setAgentColorMap(newColorMap);
+    });
+  }, [conversations, isActive]);
 
   // Set the scroll ref to the parent scroll container (the main ChatListing scroll area)
   useEffect(() => {
@@ -403,7 +434,12 @@ function RecentsConversationList({
                           )}
                         >
                           <div className="flex flex-1 gap-2 items-center min-w-0">
-                            <ChatAvatar variant="chat_ai">{getInitials(chat.agent)}</ChatAvatar>
+                            <ChatAvatar 
+                              variant="chat_ai"
+                              color={agentColorMap.get(chat.agent) || DEFAULT_AGENT_COLOR}
+                            >
+                              {getInitials(chat.agent)}
+                            </ChatAvatar>
                             <div className="mb-1 min-w-0">
                               <span className="text-sm font-medium truncate text-zinc-900 block">
                                 {chat.title}
