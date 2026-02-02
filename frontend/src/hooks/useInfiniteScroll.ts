@@ -503,6 +503,7 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   }, [debouncedSearch, debouncedFilters, autoLoad, isEnabled, reset]);
 
   // Reload when initial params change or component mounts
+  // Note: Don't include isEnabled here - we handle it separately to preserve items
   useEffect(() => {
     currentPageRef.current = 0;
     setItems([]);
@@ -517,7 +518,21 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [initialParamsKey, autoLoad, isEnabled, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialParamsKey, autoLoad, fetchData]);
+
+  // Handle enabled state separately - preserve items when toggling
+  useEffect(() => {
+    if (autoLoad && isEnabled && items.length === 0 && !initialLoading && !loading) {
+      // Only fetch if enabled, no items, and not loading
+      fetchData(false);
+    } else if (!isEnabled) {
+      // When disabled, just stop loading but preserve items
+      setInitialLoading(false);
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [isEnabled, autoLoad, items.length, initialLoading, loading, fetchData]);
 
   return {
     items,
