@@ -295,7 +295,7 @@ function ChatMessageList({
             }
             const response = await getConversationMessages({
                 conversation: chatId,
-                limit: params.limit || 30,
+                limit: params.limit || 20,
                 start: params.start || 0,
             });
             return {
@@ -304,7 +304,7 @@ function ChatMessageList({
             };
         },
         initialParams: initialParams as any,
-        pageSize: 30,
+        pageSize: 20,
         direction: 'reverse',
         enabled: shouldFetchMessages,
         autoLoad: shouldFetchMessages,
@@ -784,6 +784,18 @@ function ChatInput({
     const MIN_HEIGHT = 60;
     const MAX_HEIGHT = 200;
 
+    // Auto-focus input field when chat window opens or chatId changes
+    useEffect(() => {
+        // Small delay to ensure DOM is ready
+        const timer = setTimeout(() => {
+            if (textareaRef.current) {
+                textareaRef.current.focus();
+            }
+        }, 100);
+
+        return () => clearTimeout(timer);
+    }, [chatId]);
+
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -874,6 +886,13 @@ function ChatInput({
                 } else {
                     isCreatingConversationRef.current = false;
                 }
+
+                // Focus input after successful message creation
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                    }
+                }, 200);
             } else {
                 // Existing conversation
                 // Add placeholder assistant message
@@ -915,6 +934,13 @@ function ChatInput({
                     );
                 }
                 onStatusChange('ready');
+
+                // Focus input after successful message send
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                    }
+                }, 100);
             }
         } catch (error) {
             console.error('Error sending message:', error);
