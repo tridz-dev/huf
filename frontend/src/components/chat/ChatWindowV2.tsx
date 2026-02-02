@@ -13,7 +13,7 @@ import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { toDate } from "@/utils/time";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
-import { Send } from "lucide-react";
+import { CornerDownLeft, Send } from "lucide-react";
 import { Textarea } from "../ui/textarea";
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
@@ -24,6 +24,7 @@ import { MessageActions } from './MessageActions';
 import { MessageLoadingState } from './MessageLoadingState';
 import { Image } from '@/components/ai-elements/image';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ShortcutKey } from "../ui/shortcut-key";
 
 function formatTime(timestamp?: string): string {
     if (!timestamp) return '';
@@ -804,30 +805,60 @@ function ChatInput({
         return null;
     }
 
+    // return (
+    //     <div className="border-t border-zinc-200 bg-white p-4">
+    //         <form onSubmit={handleSubmit} className="flex gap-2 items-end">
+    //             <div className="flex-1">
+    //                 <Textarea
+    //                     ref={textareaRef}
+    //                     value={message}
+    //                     onChange={(e) => setMessage(e.target.value)}
+    //                     onKeyDown={handleKeyDown}
+    //                     placeholder="Type your message..."
+    //                     className="min-h-[60px] max-h-[200px] resize-none"
+    //                     disabled={isSubmitting}
+    //                 />
+    //             </div>
+    //             <Button
+    //                 type="submit"
+    //                 disabled={!message.trim() || isSubmitting}
+    //                 size="icon"
+    //                 className="h-[60px] w-[60px] shrink-0"
+    //             >
+    //                 <Send className="h-4 w-4" />
+    //                 <span className="sr-only">Send message</span>
+    //             </Button>
+    //         </form>
+    //     </div>
+    // );
+    
     return (
-        <div className="border-t border-zinc-200 bg-white p-4">
+        <div className="px-6 pb-6 pt-2">
             <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-                <div className="flex-1">
+                <div className="w-full border border-zinc-200 rounded-xl shadow-2xl focus-within:ring-1 focus-within:ring-ring transition-all">
                     <Textarea
-                        ref={textareaRef}
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Type your message..."
-                        className="min-h-[60px] max-h-[200px] resize-none"
-                        disabled={isSubmitting}
+                    className="p-4 w-full min-h-15 focus-visible:ring-0 border-none shadow-none"
                     />
+                    <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
+                        <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
+                            Use
+                            <ShortcutKey>
+                                Shift + Enter
+                            </ShortcutKey>
+                            for new line
+                        </span>
+                        <Button
+                            type="submit"
+                            disabled={!message.trim() || isSubmitting}
+                            size="icon"
+                            className="shrink-0"
+                        >
+                            <CornerDownLeft/>
+                        </Button>
+                    </div>
                 </div>
-                <Button
-                    type="submit"
-                    disabled={!message.trim() || isSubmitting}
-                    size="icon"
-                    className="h-[60px] w-[60px] shrink-0"
-                >
-                    <Send className="h-4 w-4" />
-                    <span className="sr-only">Send message</span>
-                </Button>
             </form>
+            <p className="mt-3 text-[10px] text-zinc-400 text-center">AI output can be inaccurate. Double check important info.</p>
         </div>
-    );
+    )
 }
