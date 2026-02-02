@@ -1,20 +1,13 @@
 import { Clock4, Users } from "lucide-react"
-import { Tabs, TabsList, TabsTrigger } from "../ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion"
+import ChatAvatar from "./ChatAvatar"
+import { Link } from "react-router-dom"
 
 export default function ChatListing(){
     return (
-        <div className="h-full min-h-screen min-w-96 bg-sidebar">
+        <div className="h-full min-h-screen min-w-96 bg-sidebar p-4 space-y-4">
             <ChatListHeader/>
-        </div>
-    )
-}
-
-function ChatListHeader(){
-    return(
-        <div className="p-4 space-y-4">
-            <div>
-                <h1 className="font-semibold text-lg tracking-tight">Workspaces</h1>
-            </div>
             <Tabs defaultValue="agent">
                 <TabsList className="w-full">
                     {LIST_TABS.map((tab)=>(
@@ -24,8 +17,54 @@ function ChatListHeader(){
                         </TabsTrigger>
                     ))}
                 </TabsList>
+                <ChatListingAgent/>
+                <ChatListingRecent/>
             </Tabs>
         </div>
+    )
+}
+
+function ChatListHeader(){
+    return(
+        <div className="">
+            <div>
+                <h1 className="font-semibold text-lg tracking-tight">Workspaces</h1>
+            </div>
+        </div>
+    )
+}
+
+function ChatListingAgent(){
+    return (
+        <TabsContent value="agent" >
+            <Accordion type="multiple" className="space-y-4">
+                <AccordionItem value="item-1" className="border-b-0">
+                    <AccordionTrigger className="group gap-2 mb-1 py-1 px-1 hover:bg-zinc-200 cursor-pointer select-none rounded-lg" arrowPosition="left">
+                        <div className="flex-1 flex gap-x-2 items-center">
+                            <ChatAvatar variant="listing_ai">DE</ChatAvatar>
+                            <span className="text-sm font-medium truncate text-zinc-500 group-hover:text-zinc-900 transition-colors">DevOps Copilot</span>
+                        </div>
+                        <span className="text-[10px] text-zinc-400 bg-zinc-200 px-1.5 py-0.5 rounded-full border border-zinc-200 ml-auto">2</span>
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-0.5 ml-3 pl-3 border-l border-zinc-200 overflow-hidden transition-all duration-300 opacity-100">
+                        <Link to="/chat" className="group flex flex-col p-2 rounded-md cursor-pointer transition-all border-l-2 bg-zinc-200 border-indigo-500">
+                            <span className="text-xs font-medium truncate text-zinc-900">
+                                Conversation Header Here
+                            </span>
+                            <p className="text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">Agent Name Here</p>
+                        </Link>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
+        </TabsContent>
+    )
+}
+
+function ChatListingRecent(){
+    return (
+        <TabsContent value="recents">
+            hihiii
+        </TabsContent>
     )
 }
 
