@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import type { ToolUIPart } from 'ai';
 import { useSidebar } from "../ui/sidebar";
@@ -13,7 +13,7 @@ import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { toDate } from "@/utils/time";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
-import { CornerDownLeft } from "lucide-react";
+import { Bot, CornerDownLeft } from "lucide-react";
 import { Textarea } from "../ui/textarea";
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
@@ -207,6 +207,16 @@ function ChatWindowHeader({ chatId: chatIdProp }: { chatId?: string | null }){
                     )}
                 </div>
             </div>
+            <div>
+                <Link to={`/agents/${agent.name}`}>
+                    <Button asChild variant="outline" className="gap-x-2 text-xs text-muted-foreground" size="sm">
+                        <div>
+                        <Bot className="w-4 h-4" />
+                        <span>Open Agent</span>
+                        </div>
+                    </Button>
+                </Link>
+            </div>
         </header>
     )
 }
@@ -228,6 +238,8 @@ function ChatMessageList({
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const lastMessageIdRef = useRef<string | null>(null);
+    const scrollContainerRef = useRef<HTMLElement | null>(null);
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
 
@@ -541,6 +553,10 @@ function ChatMessageList({
                 setMessages([]);
             }
             
+            // Reset last message ID when switching chats to force scroll to bottom
+            lastMessageIdRef.current = null;
+            
+            // Clear the newly created conversation ref after transition
             if (isTransitioningToNewConversation) {
                 newlyCreatedConversationIdRef.current = null;
             }
@@ -548,15 +564,78 @@ function ChatMessageList({
         previousChatIdRef.current = chatId;
     }, [chatId]);
 
+    // Find and cache the scrollable container
+    useEffect(() => {
+        if (!messagesEndRef.current) {
+            return;
+        }
+
+        // Find the scrollable container
+        let element = messagesEndRef.current.parentElement;
+        
+        while (element) {
+            const style = window.getComputedStyle(element);
+            if (
+                style.overflowY === 'auto' ||
+                style.overflowY === 'scroll' ||
+                style.overflow === 'auto' ||
+                style.overflow === 'scroll'
+            ) {
+                scrollContainerRef.current = element;
+                break;
+            }
+            element = element.parentElement;
+        }
+    }, [messages.length]);
+
     // Scroll to bottom when messages change
     useEffect(() => {
-        if (messagesEndRef.current) {
-            // Use requestAnimationFrame to ensure DOM is updated
+        if (isNewChat || initialLoading || messages.length === 0) {
+            const lastId = messages[messages.length - 1]?.key ?? null;
+            lastMessageIdRef.current = lastId;
+            return;
+        }
+
+        const lastId = messages[messages.length - 1]?.key ?? null;
+
+        // Scroll if: new message added OR chat switched (lastMessageIdRef is null)
+        if (lastId && (lastId !== lastMessageIdRef.current || lastMessageIdRef.current === null)) {
+            // Use requestAnimationFrame and setTimeout to ensure DOM is ready
             requestAnimationFrame(() => {
-                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                const scrollContainer = scrollContainerRef.current;
+                if (scrollContainer) {
+                    // Scroll to absolute bottom with smooth behavior
+                    scrollContainer.scrollTo({
+                        top: scrollContainer.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                    // Fallback scroll after a short delay to ensure we're at the bottom
+                    setTimeout(() => {
+                        if (scrollContainer) {
+                            scrollContainer.scrollTo({
+                                top: scrollContainer.scrollHeight,
+                                behavior: 'smooth'
+                            });
+                            // Additional fallback to ensure we're truly at the bottom
+                            setTimeout(() => {
+                                if (scrollContainer) {
+                                    scrollContainer.scrollTo({
+                                        top: scrollContainer.scrollHeight,
+                                        behavior: 'smooth'
+                                    });
+                                }
+                            }, 100);
+                        }
+                    }, 50);
+                } else if (messagesEndRef.current) {
+                    // Fallback to scrollIntoView if no scroll container found
+                    messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }
             });
         }
-    }, [messages.length, messages]);
+
+        lastMessageIdRef.current = lastId;
+    }, [isNewChat, initialLoading, messages]);
 
     const handleFeedback = useCallback(
         async (
