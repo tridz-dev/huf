@@ -3,7 +3,7 @@ import ChatWindow from "@/components/chat/ChatWindowV2";
 
 export function ChatPage(){
     return (
-        <section className="flex">
+        <section className="flex h-screen overflow-hidden">
             <ChatListing/>
             <ChatWindow/>
         </section>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Clock4, Users } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -80,9 +80,12 @@ export default function ChatListing() {
   };
 
   return (
-    <div className="h-full min-h-screen min-w-96 bg-sidebar p-4 space-y-4 overflow-y-auto">
-      <ChatListHeader />
-      <Tabs defaultValue="agent" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+    <div className="h-full min-w-96 bg-sidebar flex flex-col overflow-hidden">
+      <div className="shrink-0 p-4 pb-0 sticky top-0 z-10 bg-sidebar">
+        <ChatListHeader />
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 pt-4" id="chat-listing-scroll">
+        <Tabs defaultValue="agent" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="w-full">
           {LIST_TABS.map((tab) => (
             <TabsTrigger
@@ -140,7 +143,8 @@ export default function ChatListing() {
             isActive={activeTab === 'recents'}
           />
         </TabsContent>
-      </Tabs>
+        </Tabs>
+      </div>
     </div>
   );
 }
@@ -271,6 +275,8 @@ function RecentsConversationList({
   onSelectChat: (chatId: string) => void;
   isActive: boolean;
 }) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
   const {
     chats: conversations,
     initialLoading,
@@ -278,10 +284,22 @@ function RecentsConversationList({
     hasMore,
     error,
     sentinelRef,
+    scrollRef,
   } = useChatList({
     enabled: isActive, // Only load when tab is active
     refreshOnRouteChange: false, // Don't refresh on route change for this use case
   });
+
+  // Set the scroll ref to the parent scroll container (the main ChatListing scroll area)
+  useEffect(() => {
+    // Find the parent scroll container
+    const parentScroll = scrollContainerRef.current?.closest('#chat-listing-scroll') as HTMLDivElement | null;
+    if (parentScroll) {
+      scrollRef.current = parentScroll;
+    } else if (scrollContainerRef.current) {
+      scrollRef.current = scrollContainerRef.current;
+    }
+  }, [scrollRef]);
 
   const byRecents = useMemo(() => {
     const map = new Map<string, ChatListItem[]>();
@@ -320,60 +338,60 @@ function RecentsConversationList({
   }
 
   return (
-    <div className="space-y-4">
-      {byRecents.every(([, items]) => items.length === 0) ? (
-        <div className="p-3 text-sm text-muted-foreground text-center">No conversations yet</div>
-      ) : (
-        <>
-          {byRecents.map(([label, items]) => {
-            if (items.length === 0) return null;
-            return (
-              <div key={label}>
-                <span className="px-2 text-xs font-medium text-zinc-400 uppercase tracking-wider">
-                  {label}
-                </span>
-                <div className="mt-2 space-y-1">
-                  {items.map((chat) => {
-                    const isSelected = selectedChatId === chat.id;
-                    return (
-                      <button
-                        key={chat.id}
-                        type="button"
-                        onClick={() => onSelectChat(chat.id)}
-                        className={cn(
-                          'flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border',
-                          isSelected
-                            ? 'bg-zinc-200 border-zinc-200'
-                            : 'border-transparent bg-transparent hover:bg-zinc-200'
-                        )}
-                      >
-                        <div className="flex flex-1 gap-2 items-center min-w-0">
-                          <ChatAvatar variant="chat_ai">{getInitials(chat.agent)}</ChatAvatar>
-                          <div className="mb-1 min-w-0">
-                            <span className="text-sm font-medium truncate text-zinc-900 block">
-                              {chat.title}
-                            </span>
-                            <p className="text-xs truncate text-zinc-500">{chat.agent}</p>
+    <div ref={scrollContainerRef} className="space-y-4">
+        {byRecents.every(([, items]) => items.length === 0) ? (
+          <div className="p-3 text-sm text-muted-foreground text-center">No conversations yet</div>
+        ) : (
+          <>
+            {byRecents.map(([label, items]) => {
+              if (items.length === 0) return null;
+              return (
+                <div key={label}>
+                  <span className="px-2 text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                    {label}
+                  </span>
+                  <div className="mt-2 space-y-1">
+                    {items.map((chat) => {
+                      const isSelected = selectedChatId === chat.id;
+                      return (
+                        <button
+                          key={chat.id}
+                          type="button"
+                          onClick={() => onSelectChat(chat.id)}
+                          className={cn(
+                            'flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border',
+                            isSelected
+                              ? 'bg-zinc-200 border-zinc-200'
+                              : 'border-transparent bg-transparent hover:bg-zinc-200'
+                          )}
+                        >
+                          <div className="flex flex-1 gap-2 items-center min-w-0">
+                            <ChatAvatar variant="chat_ai">{getInitials(chat.agent)}</ChatAvatar>
+                            <div className="mb-1 min-w-0">
+                              <span className="text-sm font-medium truncate text-zinc-900 block">
+                                {chat.title}
+                              </span>
+                              <p className="text-xs truncate text-zinc-500">{chat.agent}</p>
+                            </div>
                           </div>
-                        </div>
-                        <span className="mt-1.5 text-[10px] text-zinc-400 flex-shrink-0 justify-self-end self-start">
-                          {chat.timestampLabel ?? ''}
-                        </span>
-                      </button>
-                    );
-                  })}
+                          <span className="mt-1.5 text-[10px] text-zinc-400 flex-shrink-0 justify-self-end self-start">
+                            {chat.timestampLabel ?? ''}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-          {hasMore && (
-            <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
-          )}
-          {loadingMore && (
-            <div className="p-2 text-xs text-muted-foreground text-center">Loading more...</div>
-          )}
-        </>
-      )}
+              );
+            })}
+            {hasMore && (
+              <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
+            )}
+            {loadingMore && (
+              <div className="p-2 text-xs text-muted-foreground text-center">Loading more...</div>
+            )}
+          </>
+        )}
     </div>
   );
 }
