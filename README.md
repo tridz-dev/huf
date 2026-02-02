@@ -247,8 +247,8 @@ bench restart
 ## Documentation
 
 - [**Full Documentation**](https://docs.huf.ai/) — Guides, tutorials, and API reference
-- [**AGENTS.md**](./AGENTS.md) — Detailed technical documentation for developers
-- [**CLAUDE.md**](./CLAUDE.md) — Context for AI coding assistants
+- [**AGENTS.md**](./AGENTS.md) — Technical context for AI agents. Adopts the [agents.md](https://agents.md) standard.
+- [**CLAUDE.md**](./CLAUDE.md) — Defines coding standards, review criteria, and project-specific rules. Claude reads this file during runs and follows your conventions.
 
 
 ---
