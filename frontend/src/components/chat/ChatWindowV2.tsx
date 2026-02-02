@@ -25,6 +25,7 @@ import { MessageLoadingState } from './MessageLoadingState';
 import { Image } from '@/components/ai-elements/image';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ShortcutKey } from "../ui/shortcut-key";
+import { DEFAULT_AGENT_COLOR } from "@/data/color";
 
 function formatTime(timestamp?: string): string {
     if (!timestamp) return '';
@@ -187,7 +188,7 @@ function ChatWindowHeader({ chatId: chatIdProp }: { chatId?: string | null }){
     return (
         <header className="h-16 px-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
             <div className="flex gap-x-4 items-center">
-                <ChatAvatar variant="chat_ai">
+                <ChatAvatar variant="chat_ai" color={agent.agent_color || DEFAULT_AGENT_COLOR}>
                     {getInitials(agent.agent_name)}
                 </ChatAvatar>
                 <div className="flex flex-col">
@@ -223,19 +224,28 @@ function ChatMessageList({
     const isNewChat = !chatId;
     
     const [agentName, setAgentName] = useState<string>('');
+    const [agentColor, setAgentColor] = useState<string | null>(null);
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
 
-    // Get agent name from conversation or query params
+    // Get agent name and color from conversation or query params
     useEffect(() => {
         if (chatId) {
             getConversation(chatId)
-                .then((conversation) => {
+                .then(async (conversation) => {
                     if (conversation?.agent) {
                         setAgentName(conversation.agent);
+                        // Fetch agent to get color
+                        try {
+                            const agentData = await getAgent(conversation.agent);
+                            setAgentColor(agentData.agent_color || null);
+                        } catch (error) {
+                            console.error('Failed to load agent color', error);
+                            setAgentColor(null);
+                        }
                     }
                 })
                 .catch((error) => {
@@ -244,6 +254,19 @@ function ChatMessageList({
         } else {
             const agentFromQuery = searchParams.get('agent') ?? '';
             setAgentName(agentFromQuery);
+            // Fetch agent to get color
+            if (agentFromQuery) {
+                getAgent(agentFromQuery)
+                    .then((agentData) => {
+                        setAgentColor(agentData.agent_color || null);
+                    })
+                    .catch((error) => {
+                        console.error('Failed to load agent color', error);
+                        setAgentColor(null);
+                    });
+            } else {
+                setAgentColor(null);
+            }
         }
     }, [chatId, searchParams]);
 
@@ -583,6 +606,7 @@ function ChatMessageList({
                                     key={message.key} 
                                     message={message} 
                                     agentName={agentName}
+                                    agentColor={agentColor}
                                     status={status}
                                     onFeedback={handleFeedback}
                                 />
@@ -609,11 +633,13 @@ function ChatMessageList({
 function ChatMessage({ 
     message, 
     agentName,
+    agentColor,
     status,
     onFeedback,
 }: { 
     message: MessageType;
     agentName: string;
+    agentColor: string | null;
     status: 'submitted' | 'streaming' | 'ready' | 'error';
     onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
 }) {
@@ -625,7 +651,10 @@ function ChatMessage({
 
     return (
         <div className={cn("flex gap-3 group relative", isUser ? "flex-row" : "flex-row")}>
-            <ChatAvatar variant={isUser ? "chat_user" : "chat_ai"}>
+            <ChatAvatar 
+                variant={isUser ? "chat_user" : "chat_ai"}
+                color={!isUser ? (agentColor || DEFAULT_AGENT_COLOR) : undefined}
+            >
                 {isUser ? userInitials : getInitials(agentName)}
             </ChatAvatar>
             <div className="flex-1 min-w-0">

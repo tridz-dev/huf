@@ -36,6 +36,7 @@ const AGENT_LIST_FIELDS = [
   'disabled',
   'last_run',
   'total_run',
+  'agent_color',
 ];
 
 /**
