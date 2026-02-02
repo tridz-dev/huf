@@ -13,10 +13,11 @@ type Chat = ChatListItem;
 interface UseChatListOptions {
   refreshKey?: number;
   refreshOnRouteChange?: boolean;
+  enabled?: boolean;
 }
 
 export function useChatList(options: UseChatListOptions = {}) {
-  const { refreshKey, refreshOnRouteChange = false } = options;
+  const { refreshKey, refreshOnRouteChange = false, enabled = true } = options;
   const location = useLocation();
 
   const {
@@ -34,7 +35,7 @@ export function useChatList(options: UseChatListOptions = {}) {
       return {
         data: response.data.map((conv) => ({
           ...conv,
-          timestamp: conv.timestamp ? formatTimeAgo(conv.timestamp) : undefined,
+          timestampLabel: conv.timestamp ? formatTimeAgo(conv.timestamp) : undefined,
         })),
         hasMore: response.hasMore,
         total: response.total,
@@ -43,7 +44,8 @@ export function useChatList(options: UseChatListOptions = {}) {
     pageSize: 20,
     initialParams: {
       filters: [["channel", "=", "Chat"]]
-    }
+    },
+    enabled, // Pass through enabled option
   });
 
   // Refresh when refreshKey changes (for ChatList component)
