@@ -61,7 +61,7 @@ bench setup requirements  # Installs dependencies including litellm
 Want to try HUF without setting up a full Frappe environment? Use the Docker quick-try setup:
 
 ```bash
-cd huf-quicktry
+cd docker
 docker compose up
 ```
 
