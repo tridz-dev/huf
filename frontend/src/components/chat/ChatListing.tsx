@@ -104,12 +104,12 @@ export default function ChatListing() {
 
   return (
     <div className="h-full min-w-96 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
-      <div className="shrink-0 p-4 pb-0 sticky top-0 z-10 bg-sidebar">
+      <div className="shrink-0 p-4 sticky top-0 z-10 bg-sidebar">
         <ChatListHeader onAgentSelect={handleAgentSelect} />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 pt-4" id="chat-listing-scroll">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 bg-sidebar" id="chat-listing-scroll">
         <Tabs defaultValue="agent" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="w-full">
+        <TabsList className="w-full bg-sidebar sticky top-0 z-10">
           {LIST_TABS.map((tab) => (
             <TabsTrigger
               key={tab.value}
