@@ -55,6 +55,8 @@
   "max_turns",
   "image_generation_section",
   "image_generation_model",
+  "huf_ui_section",
+  "agent_color",
   "permissions_tab",
   "allow_guest",
   "allowed_users",
@@ -438,12 +440,23 @@
    "fieldtype": "Link",
    "label": "Image Generation Model",
    "options": "AI Model"
+  },
+  {
+   "fieldname": "huf_ui_section",
+   "fieldtype": "Section Break",
+   "label": "Huf UI"
+  },
+  {
+   "description": "This color will be used to display as the background color of Agent Avatar in Agent Chat. Enter color code including #, ex: #6366F1 ",
+   "fieldname": "agent_color",
+   "fieldtype": "Data",
+   "label": "Agent Color"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-22 18:51:55.256834",
+ "modified": "2026-02-03 00:14:38.235962",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",
