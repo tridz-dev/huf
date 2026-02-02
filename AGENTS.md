@@ -9,6 +9,7 @@ The application is built on the Frappe Framework (Python) and uses the standard 
 
 ## Repo Layout
 -   `huf/`: The root of the Frappe app.
+-   `doc/` branches: Used for planning, documenting features, and R&D. (e.g., `doc/KnowledgePlan`)
 -   `huf/huf/`: The main Python module.
 -   `huf/huf/doctype/`: Contains all DocType definitions, each in its own folder.
     -   `<doctype_name>/<doctype_name>.json`: Schema definition.
