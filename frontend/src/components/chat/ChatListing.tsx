@@ -41,7 +41,16 @@ export default function ChatListing() {
 
   const [agents, setAgents] = useState<AgentWithCount[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
-  const [openAgents, setOpenAgents] = useState<string[]>([]);
+  
+  // Persist open agents state in sessionStorage
+  const [openAgents, setOpenAgents] = useState<string[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('chat-listing-open-agents');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const [activeTab, setActiveTab] = useState('agent');
 
@@ -72,9 +81,14 @@ export default function ChatListing() {
     };
   }, []);
 
-  // Handle accordion open/close
+  // Handle accordion open/close and persist to sessionStorage
   const handleAccordionChange = useCallback((value: string[]) => {
     setOpenAgents(value);
+    try {
+      sessionStorage.setItem('chat-listing-open-agents', JSON.stringify(value));
+    } catch (error) {
+      console.error('Failed to save open agents to sessionStorage:', error);
+    }
   }, []);
 
   const handleSelectChat = (chatId: string) => {
@@ -106,7 +120,7 @@ export default function ChatListing() {
           ))}
         </TabsList>
 
-        <TabsContent value="agent">
+        <TabsContent value="agent" className="mt-0">
           {agentsLoading ? (
             <div className="space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -127,6 +141,7 @@ export default function ChatListing() {
           ) : (
             <Accordion
               type="multiple"
+              value={openAgents}
               className="space-y-4"
               onValueChange={handleAccordionChange}
             >
