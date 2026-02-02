@@ -1,0 +1,37 @@
+name: huf
+
+services:
+  mariadb:
+    image: docker.io/mariadb:10.11
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: 123
+    volumes:
+      - mariadb-data:/var/lib/mysql
+
+  redis:
+    image: redis:alpine
+
+  frappe:
+    image: frappe/bench:latest
+    command: bash /workspace/init.sh
+    environment:
+      - SHELL=/bin/bash
+      - HUF_BRANCH=develop
+      - UV_HTTP_TIMEOUT=300
+    working_dir: /home/frappe
+    volumes:
+      - .:/workspace
+    ports:
+      - "8000:8000"
+      - "9000:9000"
+    depends_on:
+      - mariadb
+      - redis
+
+volumes:
+  mariadb-data:
