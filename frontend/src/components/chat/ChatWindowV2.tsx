@@ -275,6 +275,12 @@ function ChatMessageList({
         return chatId ? { conversation: chatId } : {};
     }, [chatId]);
 
+    // Don't fetch messages if we're transitioning to a newly created conversation
+    // Use useMemo to make it reactive - it will recalculate when chatId changes
+    const shouldFetchMessages = useMemo(() => {
+        return Boolean(chatId) && chatId !== newlyCreatedConversationIdRef.current;
+    }, [chatId]);
+
     // Fetch messages
     const {
         items: conversationItems,
@@ -300,9 +306,9 @@ function ChatMessageList({
         initialParams: initialParams as any,
         pageSize: 30,
         direction: 'reverse',
-        enabled: !!chatId,
-        autoLoad: !!chatId,
-        autoLoadMore: !!chatId,
+        enabled: shouldFetchMessages,
+        autoLoad: shouldFetchMessages,
+        autoLoadMore: shouldFetchMessages,
     });
 
     // Handle tool updates from socket
@@ -451,6 +457,8 @@ function ChatMessageList({
         }
 
         if (chatId === newlyCreatedConversationIdRef.current) {
+            // For newly created conversations, don't overwrite messages from API
+            // They're already in state from the immediate display
             return;
         }
 
@@ -542,8 +550,13 @@ function ChatMessageList({
 
     // Scroll to bottom when messages change
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages.length]);
+        if (messagesEndRef.current) {
+            // Use requestAnimationFrame to ensure DOM is updated
+            requestAnimationFrame(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+            });
+        }
+    }, [messages.length, messages]);
 
     const handleFeedback = useCallback(
         async (
@@ -595,7 +608,9 @@ function ChatMessageList({
                         </div>
                     ) : (
                         <div className="space-y-8">
-                            {hasMore && <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />}
+                            {hasMore && (
+                                <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
+                            )}
                             {loadingMore && (
                                 <div className="text-xs text-muted-foreground text-center py-2">
                                     Loading previous messages...
@@ -617,14 +632,15 @@ function ChatMessageList({
                 </div>
             </div>
             <div className="max-w-4xl mx-auto w-full">
-                <ChatInput 
-                    chatId={chatId} 
-                    agentName={agentName}
-                    onConversationCreated={onConversationCreated}
-                    onStatusChange={setStatus}
-                    isCreatingConversationRef={isCreatingConversationRef}
-                    newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
-                />
+            <ChatInput 
+                chatId={chatId} 
+                agentName={agentName}
+                onConversationCreated={onConversationCreated}
+                onStatusChange={setStatus}
+                isCreatingConversationRef={isCreatingConversationRef}
+                newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
+                setMessages={setMessages}
+            />
             </div>
         </div>
     );
@@ -751,6 +767,7 @@ function ChatInput({
     onStatusChange,
     isCreatingConversationRef,
     newlyCreatedConversationIdRef,
+    setMessages,
 }: { 
     chatId: string | null;
     agentName: string;
@@ -758,6 +775,7 @@ function ChatInput({
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
     isCreatingConversationRef: React.MutableRefObject<boolean>;
     newlyCreatedConversationIdRef: React.MutableRefObject<string | null>;
+    setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>;
 }) {
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -773,16 +791,52 @@ function ChatInput({
             return;
         }
 
+        const messageText = message.trim();
         setIsSubmitting(true);
         onStatusChange('submitted');
+
+        // Add user message immediately
+        const userMessageKey = `user-${Date.now()}`;
+        const userMessage: MessageType = {
+            key: userMessageKey,
+            from: 'user',
+            versions: [
+                {
+                    id: userMessageKey,
+                    content: messageText,
+                },
+            ],
+        };
+        setMessages((prev) => [...prev, userMessage]);
+
+        // Clear input immediately
+        setMessage('');
+        if (textareaRef.current) {
+            textareaRef.current.focus();
+        }
 
         try {
             if (!chatId) {
                 // New conversation
                 isCreatingConversationRef.current = true;
+                
+                // Add placeholder assistant message
+                const assistantMessageId = `assistant-${Date.now()}`;
+                const assistantMessage: MessageType = {
+                    key: assistantMessageId,
+                    from: 'assistant',
+                    versions: [
+                        {
+                            id: assistantMessageId,
+                            content: '',
+                        },
+                    ],
+                };
+                setMessages((prev) => [...prev, assistantMessage]);
+
                 const response = await newConversation({
                     agent: agentName,
-                    message: message.trim(),
+                    message: messageText,
                 });
 
                 const conversationId = response.message?.conversation_id;
@@ -790,8 +844,22 @@ function ChatInput({
 
                 if (responseText) {
                     onStatusChange('streaming');
-                    // Simulate streaming
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    // Update assistant message with response
+                    setMessages((prev) =>
+                        prev.map((msg) =>
+                            msg.key === assistantMessageId
+                                ? {
+                                      ...msg,
+                                      versions: [
+                                          {
+                                              id: assistantMessageId,
+                                              content: responseText,
+                                          },
+                                      ],
+                                  }
+                                : msg
+                        )
+                    );
                     onStatusChange('ready');
                 } else {
                     onStatusChange('ready');
@@ -808,16 +876,45 @@ function ChatInput({
                 }
             } else {
                 // Existing conversation
-                await sendMessageToConversation({
-                    conversation: chatId,
-                    message: message.trim(),
-                });
-                onStatusChange('ready');
-            }
+                // Add placeholder assistant message
+                const assistantMessageId = `assistant-${Date.now()}`;
+                const assistantMessage: MessageType = {
+                    key: assistantMessageId,
+                    from: 'assistant',
+                    versions: [
+                        {
+                            id: assistantMessageId,
+                            content: '',
+                        },
+                    ],
+                };
+                setMessages((prev) => [...prev, assistantMessage]);
 
-            setMessage('');
-            if (textareaRef.current) {
-                textareaRef.current.focus();
+                const response = await sendMessageToConversation({
+                    conversation: chatId,
+                    message: messageText,
+                });
+
+                // Update assistant message with response
+                if (response.message?.response) {
+                    onStatusChange('streaming');
+                    setMessages((prev) =>
+                        prev.map((msg) =>
+                            msg.key === assistantMessageId
+                                ? {
+                                      ...msg,
+                                      versions: [
+                                          {
+                                              id: assistantMessageId,
+                                              content: response.message.response,
+                                          },
+                                      ],
+                                  }
+                                : msg
+                        )
+                    );
+                }
+                onStatusChange('ready');
             }
         } catch (error) {
             console.error('Error sending message:', error);
@@ -828,7 +925,7 @@ function ChatInput({
         } finally {
             setIsSubmitting(false);
         }
-    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef]);
+    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
