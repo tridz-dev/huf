@@ -7,3 +7,4 @@
 
 huf.patches.add_tool_types
 huf.patches.v1.update_image_tool
+huf.patches.v1.update_agent_background_color
