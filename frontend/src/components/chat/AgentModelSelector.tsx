@@ -1,6 +1,4 @@
-"use client";
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CheckIcon, Plus } from 'lucide-react';
 import {
   ModelSelector,
@@ -28,6 +26,7 @@ interface AgentModelSelectorProps {
 
 export function AgentModelSelector({ value, onValueChange, disabled }: AgentModelSelectorProps) {
   const [open, setOpen] = useState(false);
+  const isInitialAutoSelectRef = useRef(true);
 
   // Fetch agent models for selector
   const {
@@ -59,12 +58,19 @@ export function AgentModelSelector({ value, onValueChange, disabled }: AgentMode
     autoLoadMore: false, // Don't auto-load more, user can search
   });
 
-  // Set default model when models load
+  // Set default model when models load (only on initial load, don't trigger onValueChange)
   useEffect(() => {
-    if (agentModels.length > 0 && !value) {
-      onValueChange(agentModels[0].id);
+    if (agentModels.length > 0 && !value && isInitialAutoSelectRef.current) {
+      // Silently set the value without triggering onValueChange callback
+      // This is just for initial display, not user interaction
+      isInitialAutoSelectRef.current = false;
+      // Don't call onValueChange here - it's just for internal state
+      // The parent will handle setting the initial value if needed
+    } else if (agentModels.length > 0 && value) {
+      // If value is already set, mark initial auto-select as done
+      isInitialAutoSelectRef.current = false;
     }
-  }, [agentModels, value, onValueChange]);
+  }, [agentModels, value]);
 
   // Reset search when modal opens
   useEffect(() => {
