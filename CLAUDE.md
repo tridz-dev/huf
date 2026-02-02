@@ -24,7 +24,8 @@ This file provides context and instructions for Claude Code and other AI coding 
 huf/
 ├── huf/                          # Backend (Frappe app)
 │   ├── ai/                       # Core AI logic
-│   │   ├── agent_integration.py  # AgentManager, run_agent_sync
+│   │   ├── agent_integration.py  # AgentManager, run_agent_sync, run_agent_stream
+│   │   ├── agent_stream_renderer.py # SSE page renderer for streaming
 │   │   ├── agent_scheduler.py    # Scheduled agent execution
 │   │   ├── agent_hooks.py        # DocType event triggers
 │   │   ├── conversation_manager.py # Conversation history
@@ -35,7 +36,6 @@ huf/
 │   │   ├── mcp_client.py         # MCP protocol support
 │   │   ├── http_handler.py       # HTTP tools with SSRF protection
 │   │   ├── run.py                # Provider routing layer
-│   │   ├── agent_stream_renderer.py # SSE streaming
 │   │   ├── providers/            # LLM provider implementations
 │   │   │   ├── litellm.py        # Unified LiteLLM provider
 │   │   │   ├── openrouter.py     # OpenRouter with retry logic
@@ -68,6 +68,9 @@ huf/
 │       ├── services/             # API service layer
 │       ├── types/                # TypeScript definitions
 │       └── lib/                  # Utilities (Frappe SDK wrapper)
+├── docker/                       # Docker quick-try environment
+│   ├── docker-compose.yml        # MariaDB, Redis, Frappe services
+│   └── init.sh                   # Automated setup script
 ├── docs/                         # Documentation site (Next.js)
 ├── .github/workflows/            # CI/CD definitions
 ├── pyproject.toml                # Python config and dependencies
@@ -124,6 +127,14 @@ yarn build            # Build docs + frontend
 yarn build-frontend   # Build frontend only
 yarn build-docs       # Build documentation
 ```
+
+### Docker Quick-Try
+For quick evaluation without a full Frappe bench setup:
+```bash
+cd docker
+docker compose up
+```
+This starts MariaDB, Redis, and Frappe with HUF pre-installed. Access at `http://localhost:8000` (admin/admin). First run takes 5-8 minutes for setup.
 
 ## Code Style and Conventions
 
@@ -209,11 +220,20 @@ import type { Agent } from '@/types/agent.types';
 ## Key Backend Files
 
 ### Agent Execution Flow
-1. **`agent_integration.py`**: `AgentManager` prepares agents, `run_agent_sync()` is the main API endpoint
-2. **`run.py`**: `RunProvider` routes to appropriate LLM provider
-3. **`providers/litellm.py`**: Unified provider handling via LiteLLM
-4. **`sdk_tools.py`**: Converts `Agent Tool Function` DocTypes to SDK tools
-5. **`tool_functions.py`**: Low-level Frappe database operations
+1. **`agent_integration.py`**: `AgentManager` prepares agents, provides both sync and streaming execution:
+   - `run_agent_sync()` - Synchronous execution, returns complete response
+   - `run_agent_stream()` - Async generator yielding chunks for real-time streaming
+2. **`agent_stream_renderer.py`**: SSE page renderer for `/huf/stream/<agent_name>` endpoint
+3. **`run.py`**: `RunProvider` routes to appropriate LLM provider
+4. **`providers/litellm.py`**: Unified provider handling via LiteLLM
+5. **`sdk_tools.py`**: Converts `Agent Tool Function` DocTypes to SDK tools
+6. **`tool_functions.py`**: Low-level Frappe database operations
+
+### Streaming Support
+HUF supports Server-Sent Events (SSE) for real-time agent response streaming:
+- **Endpoint**: `/huf/stream/<agent_name>?prompt=<message>`
+- **Demo page**: `/huf/stream` (HTML test interface)
+- **Chunk types**: `delta` (partial response), `tool_call`, `complete`, `error`
 
 ### Event-Driven Agents
 - **`agent_hooks.py`**: Document event triggers (`after_insert`, `on_submit`, etc.)
@@ -236,12 +256,24 @@ def run_agent_sync(agent_name, prompt, channel_id=None, external_id=None):
 
 ### Frontend API Calls
 ```typescript
-// Using Frappe JS SDK
+// Using Frappe JS SDK (synchronous)
 import { call } from '@/lib/frappe';
 const result = await call.get('huf.ai.agent_integration.run_agent_sync', {
     agent_name: 'my-agent',
     prompt: 'Hello'
 });
+
+// Using SSE for streaming
+const eventSource = new EventSource(`/huf/stream/${agentName}?prompt=${encodeURIComponent(prompt)}`);
+eventSource.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'delta') {
+        // Handle streaming chunk: data.full_response
+    } else if (data.type === 'complete') {
+        // Final response: data.full_response
+        eventSource.close();
+    }
+};
 ```
 
 ## Security Considerations
@@ -295,7 +327,9 @@ Test files are located in:
 4. **LiteLLM Dependency**: Required for LLM access, auto-installed via `bench setup requirements`
 5. **Model Names**: Can be user-friendly (`gpt-4-turbo`) or LiteLLM format (`openai/gpt-4-turbo`)
 6. **MCP Protocol**: HUF is an MCP client only (not a server)
-7. **Real-time Updates**: Socket.io for live agent feedback
+7. **Real-time Updates**: Socket.io for live agent feedback, SSE for streaming responses
+8. **Streaming vs Sync**: Use `run_agent_stream()` for chat UIs, `run_agent_sync()` for triggers/automation
+9. **Docker Dev**: Use `docker/` for quick evaluation; use Frappe bench for full development
 
 ## Related Documentation
 
