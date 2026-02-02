@@ -607,8 +607,8 @@ function ChatMessageList({
                             <p className="text-sm text-muted-foreground">No messages yet</p>
                         </div>
                     ) : (
-                        <div className="space-y-8">
-                            {hasMore && (
+                        <div className="mt-2 space-y-8">
+                            {(hasMore && !isNewChat && !newlyCreatedConversationIdRef.current && !isCreatingConversationRef.current) && (
                                 <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
                             )}
                             {loadingMore && (
