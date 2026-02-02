@@ -2,7 +2,7 @@ name: huf
 
 services:
   mariadb:
-    image: mariadb:10.8
+    image: docker.io/mariadb:10.11
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
