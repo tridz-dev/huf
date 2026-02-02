@@ -171,7 +171,7 @@ Full visibility into what your AI is doing:
 
 ```bash
 git clone https://github.com/tridz-dev/huf.git
-cd huf/huf-quicktry
+cd huf/docker
 docker compose up
 ```
 
