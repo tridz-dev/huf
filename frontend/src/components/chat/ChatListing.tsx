@@ -209,8 +209,13 @@ function AgentConversationItem({
             <Skeleton className="h-10 w-full rounded-md" />
             <Skeleton className="h-10 w-full rounded-md" />
           </div>
-        ) : conversations.length === 0 ? (
+        ) : conversations.length === 0 && agent.conversationCount === 0 ? (
           <div className="p-2 text-xs text-muted-foreground">No conversations</div>
+        ) : conversations.length === 0 && agent.conversationCount > 0 ? (
+          <div className="space-y-2 p-2">
+            <Skeleton className="h-10 w-full rounded-md" />
+            <Skeleton className="h-10 w-full rounded-md" />
+          </div>
         ) : (
           <>
             {conversations.map((chat) => {
