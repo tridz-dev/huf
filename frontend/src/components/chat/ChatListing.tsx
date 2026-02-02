@@ -101,7 +101,7 @@ export default function ChatListing() {
   }, [navigate]);
 
   return (
-    <div className="h-full min-w-96 bg-sidebar flex flex-col overflow-hidden">
+    <div className="h-full min-w-96 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
       <div className="shrink-0 p-4 pb-0 sticky top-0 z-10 bg-sidebar">
         <ChatListHeader onAgentSelect={handleAgentSelect} />
       </div>
