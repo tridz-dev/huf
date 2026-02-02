@@ -13,7 +13,7 @@ import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { toDate } from "@/utils/time";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
-import { CornerDownLeft, Send } from "lucide-react";
+import { CornerDownLeft } from "lucide-react";
 import { Textarea } from "../ui/textarea";
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
@@ -560,44 +560,48 @@ function ChatMessageList({
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                {initialLoading ? (
-                    <div className="flex items-center justify-center h-full">
-                        <p className="text-sm text-muted-foreground">Loading messages...</p>
-                    </div>
-                ) : messages.length === 0 && !isNewChat ? (
-                    <div className="flex items-center justify-center h-full">
-                        <p className="text-sm text-muted-foreground">No messages yet</p>
-                    </div>
-                ) : (
-                    <div className="space-y-8">
-                        {hasMore && <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />}
-                        {loadingMore && (
-                            <div className="text-xs text-muted-foreground text-center py-2">
-                                Loading previous messages...
-                            </div>
-                        )}
-                        {messages.map((message) => (
-                            <ChatMessage 
-                                key={message.key} 
-                                message={message} 
-                                agentName={agentName}
-                                status={status}
-                                onFeedback={handleFeedback}
-                            />
-                        ))}
-                        <div ref={messagesEndRef} />
-                    </div>
-                )}
+            <div className="flex-1 overflow-y-auto">
+                <div className="max-w-4xl mx-auto px-6 py-4 space-y-4">
+                    {initialLoading ? (
+                        <div className="flex items-center justify-center h-full">
+                            <p className="text-sm text-muted-foreground">Loading messages...</p>
+                        </div>
+                    ) : messages.length === 0 && !isNewChat ? (
+                        <div className="flex items-center justify-center h-full">
+                            <p className="text-sm text-muted-foreground">No messages yet</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-8">
+                            {hasMore && <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />}
+                            {loadingMore && (
+                                <div className="text-xs text-muted-foreground text-center py-2">
+                                    Loading previous messages...
+                                </div>
+                            )}
+                            {messages.map((message) => (
+                                <ChatMessage 
+                                    key={message.key} 
+                                    message={message} 
+                                    agentName={agentName}
+                                    status={status}
+                                    onFeedback={handleFeedback}
+                                />
+                            ))}
+                            <div ref={messagesEndRef} />
+                        </div>
+                    )}
+                </div>
             </div>
-            <ChatInput 
-                chatId={chatId} 
-                agentName={agentName}
-                onConversationCreated={onConversationCreated}
-                onStatusChange={setStatus}
-                isCreatingConversationRef={isCreatingConversationRef}
-                newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
-            />
+            <div className="max-w-4xl mx-auto w-full">
+                <ChatInput 
+                    chatId={chatId} 
+                    agentName={agentName}
+                    onConversationCreated={onConversationCreated}
+                    onStatusChange={setStatus}
+                    isCreatingConversationRef={isCreatingConversationRef}
+                    newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
+                />
+            </div>
         </div>
     );
 }
@@ -837,7 +841,13 @@ function ChatInput({
             <form onSubmit={handleSubmit} className="flex gap-2 items-end">
                 <div className="w-full border border-zinc-200 rounded-xl shadow-2xl focus-within:ring-1 focus-within:ring-ring transition-all">
                     <Textarea
-                    className="p-4 w-full min-h-15 focus-visible:ring-0 border-none shadow-none"
+                        ref={textareaRef}
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Type your message..."
+                        className="p-4 w-full min-h-[60px] max-h-[200px] resize-none focus-visible:ring-0 border-none shadow-none"
+                        disabled={isSubmitting}
                     />
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
                         <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
