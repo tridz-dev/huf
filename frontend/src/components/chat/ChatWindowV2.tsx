@@ -733,6 +733,9 @@ function ChatInput({
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    
+    const MIN_HEIGHT = 60;
+    const MAX_HEIGHT = 200;
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -805,37 +808,70 @@ function ChatInput({
         }
     }, [handleSubmit]);
 
+    // Auto-resize textarea based on content
+    const adjustTextareaHeight = useCallback(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        // Use double requestAnimationFrame to ensure DOM has fully updated
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (!textarea) return;
+                
+                // Store current min-height to restore later
+                const currentMinHeight = textarea.style.minHeight;
+                
+                // Reset height to get accurate scrollHeight measurement
+                // Use a very small value instead of 0 to avoid layout issues
+                textarea.style.height = '1px';
+                textarea.style.minHeight = '0';
+                textarea.style.overflowY = 'hidden';
+                
+                // Force a reflow to ensure accurate measurement
+                void textarea.offsetHeight;
+                
+                // Get the scrollHeight (this is the natural height of the content including padding)
+                const scrollHeight = textarea.scrollHeight;
+                
+                // Restore min-height
+                textarea.style.minHeight = currentMinHeight || '';
+                
+                // Calculate new height, ensuring it's within bounds
+                const newHeight = Math.min(Math.max(scrollHeight, MIN_HEIGHT), MAX_HEIGHT);
+                
+                // Always apply the calculated height to ensure accuracy
+                textarea.style.height = `${newHeight}px`;
+                
+                // Enable scrolling if content exceeds max height
+                if (scrollHeight > MAX_HEIGHT) {
+                    textarea.style.overflowY = 'auto';
+                } else {
+                    textarea.style.overflowY = 'hidden';
+                }
+            });
+        });
+    }, []);
+
+    // Adjust height when message changes
+    useEffect(() => {
+        if (!textareaRef.current) return;
+        
+        // If message is empty, reset to min height immediately
+        if (!message) {
+            const textarea = textareaRef.current;
+            textarea.style.height = `${MIN_HEIGHT}px`;
+            textarea.style.overflowY = 'hidden';
+            return;
+        }
+        
+        // Otherwise, adjust height based on content
+        adjustTextareaHeight();
+    }, [message, adjustTextareaHeight]);
+
     if (!agentName) {
         return null;
     }
 
-    // return (
-    //     <div className="border-t border-zinc-200 bg-white p-4">
-    //         <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-    //             <div className="flex-1">
-    //                 <Textarea
-    //                     ref={textareaRef}
-    //                     value={message}
-    //                     onChange={(e) => setMessage(e.target.value)}
-    //                     onKeyDown={handleKeyDown}
-    //                     placeholder="Type your message..."
-    //                     className="min-h-[60px] max-h-[200px] resize-none"
-    //                     disabled={isSubmitting}
-    //                 />
-    //             </div>
-    //             <Button
-    //                 type="submit"
-    //                 disabled={!message.trim() || isSubmitting}
-    //                 size="icon"
-    //                 className="h-[60px] w-[60px] shrink-0"
-    //             >
-    //                 <Send className="h-4 w-4" />
-    //                 <span className="sr-only">Send message</span>
-    //             </Button>
-    //         </form>
-    //     </div>
-    // );
-    
     return (
         <div className="px-6 pb-6 pt-2">
             <form onSubmit={handleSubmit} className="flex gap-2 items-end">
@@ -843,10 +879,17 @@ function ChatInput({
                     <Textarea
                         ref={textareaRef}
                         value={message}
-                        onChange={(e) => setMessage(e.target.value)}
+                        onChange={(e) => {
+                            setMessage(e.target.value);
+                            // Height adjustment is handled in useEffect
+                        }}
+                        rows={2}
                         onKeyDown={handleKeyDown}
                         placeholder="Type your message..."
                         className="p-4 w-full min-h-[60px] max-h-[200px] resize-none focus-visible:ring-0 border-none shadow-none"
+                        style={{ 
+                            height: `${MIN_HEIGHT}px`
+                        }}
                         disabled={isSubmitting}
                     />
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
