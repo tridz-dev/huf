@@ -8,7 +8,6 @@ import { ModalProvider } from './contexts/ModalContext';
 import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
-import { ChatHeaderActions } from './components/ChatHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
 import { HomePage } from './pages/HomePage';
 import { AgentsPage } from './pages/AgentsPage';
@@ -17,7 +16,7 @@ import { FlowListPage } from './pages/FlowListPage';
 import { FlowCanvasPageWrapper } from './pages/FlowCanvasPageWrapper';
 import { DataPage } from './pages/DataPage';
 import { IntegrationsPageWrapper } from './pages/IntegrationsPageWrapper';
-import { ChatPage } from './pages/ChatPage';
+import { ChatPage } from './pages/ChatPageV2';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
@@ -158,7 +157,7 @@ function App() {
             path="/chat"
             element={
               <ProtectedRoute>
-                <UnifiedLayout headerActions={<ChatHeaderActions />}>
+                <UnifiedLayout hideHeader>
                   <ChatPage />
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -168,7 +167,7 @@ function App() {
             path="/chat/:chatId"
             element={
               <ProtectedRoute>
-                <UnifiedLayout headerActions={<ChatHeaderActions />}>
+                <UnifiedLayout hideHeader>
                   <ChatPage />
                 </UnifiedLayout>
               </ProtectedRoute>

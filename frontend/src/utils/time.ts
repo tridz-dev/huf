@@ -115,3 +115,22 @@ export function calculateDuration(
   }
 }
 
+/**
+ * Converts a string to a Date object
+ * @param value - String to convert
+ * @returns Date object or null if invalid
+ */
+export function toDate(value?: string): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Returns the start of the day for a given date
+ * @param d - Date object
+ * @returns Date object representing the start of the day
+ */
+export function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}

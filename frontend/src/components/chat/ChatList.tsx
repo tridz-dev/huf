@@ -31,9 +31,9 @@ export function ChatList({ selectedChatId, onSelectChat, onNewChat, refreshKey, 
             {chat.agent}
           </p>
         )}
-        {chat.timestamp && (
+        {chat.timestampLabel && (
           <p className="text-xs text-muted-foreground mt-1">
-            {chat.timestamp}
+            {chat.timestampLabel}
           </p>
         )}
       </div>

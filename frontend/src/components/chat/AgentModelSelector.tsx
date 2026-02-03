@@ -1,7 +1,5 @@
-"use client";
-
-import { useState, useEffect } from 'react';
-import { CheckIcon } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { CheckIcon, Plus } from 'lucide-react';
 import {
   ModelSelector,
   ModelSelectorContent,
@@ -15,7 +13,6 @@ import {
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
-import { PromptInputButton } from '@/components/ai-elements/prompt-input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
@@ -25,11 +22,12 @@ interface AgentModelSelectorProps {
   value: string;
   onValueChange: (value: string) => void;
   disabled?: boolean;
-  variant?: 'default' | 'header';
+  showLabel?: boolean;
 }
 
-export function AgentModelSelector({ value, onValueChange, disabled, variant = 'default' }: AgentModelSelectorProps) {
+export function AgentModelSelector({ value, onValueChange, disabled, showLabel = false }: AgentModelSelectorProps) {
   const [open, setOpen] = useState(false);
+  const isInitialAutoSelectRef = useRef(true);
 
   // Fetch agent models for selector
   const {
@@ -61,12 +59,19 @@ export function AgentModelSelector({ value, onValueChange, disabled, variant = '
     autoLoadMore: false, // Don't auto-load more, user can search
   });
 
-  // Set default model when models load
+  // Set default model when models load (only on initial load, don't trigger onValueChange)
   useEffect(() => {
-    if (agentModels.length > 0 && !value) {
-      onValueChange(agentModels[0].id);
+    if (agentModels.length > 0 && !value && isInitialAutoSelectRef.current) {
+      // Silently set the value without triggering onValueChange callback
+      // This is just for initial display, not user interaction
+      isInitialAutoSelectRef.current = false;
+      // Don't call onValueChange here - it's just for internal state
+      // The parent will handle setting the initial value if needed
+    } else if (agentModels.length > 0 && value) {
+      // If value is already set, mark initial auto-select as done
+      isInitialAutoSelectRef.current = false;
     }
-  }, [agentModels, value, onValueChange]);
+  }, [agentModels, value]);
 
   // Reset search when modal opens
   useEffect(() => {
@@ -74,8 +79,6 @@ export function AgentModelSelector({ value, onValueChange, disabled, variant = '
       setModelSearch('');
     }
   }, [open, setModelSearch]);
-
-  const selectedModelData = agentModels.find((m) => m.id === value);
 
   // Group models by chef
   const groupedModels = agentModels.reduce(
@@ -90,32 +93,22 @@ export function AgentModelSelector({ value, onValueChange, disabled, variant = '
     {} as Record<string, AgentModelItem[]>
   );
 
-  const TriggerButton = variant === 'header' ? Button : PromptInputButton;
-
   return (
     <ModelSelector onOpenChange={setOpen} open={open}>
       <ModelSelectorTrigger asChild>
-        <TriggerButton 
+        <Button 
+          size={showLabel ? "default" : "icon"}
+          variant={showLabel ? "outline" : "ghost"}
           disabled={disabled}
-          variant={variant === 'header' ? 'ghost' : undefined}
           className={cn(
-            variant === 'header' && 'h-auto p-0 gap-x-1 items-center text-sm font-semibold hover:bg-transparent',
-            variant === 'header' && disabled && 'disabled:opacity-100'
+            'text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900',
+            showLabel && 'gap-2',
+            disabled && 'disabled:opacity-100'
           )}
         >
-          {selectedModelData?.chefSlug && (
-            <ModelSelectorLogo provider={selectedModelData.chefSlug} />
-          )}
-          {selectedModelData?.name ? (
-            <ModelSelectorName>{selectedModelData.name}</ModelSelectorName>
-          ) : (
-            variant === 'header' && (
-              <span className={cn(disabled && 'text-muted-foreground')}>
-                {modelsLoading ? 'Loading...' : 'No model selected'}
-              </span>
-            )
-          )}
-        </TriggerButton>
+          <Plus className={showLabel ? "w-4 h-4" : "w-5 h-5"} />
+          {showLabel && <span>Select Agent</span>}
+        </Button>
       </ModelSelectorTrigger>
 
       <ModelSelectorContent shouldFilter={false} className="min-h-[40%]">

@@ -2,6 +2,7 @@ import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { PaginationParams, PaginatedResponse } from '@/types/pagination';
+import { fetchDocCount } from './utilsApi';
 
 /**
  * Agent Conversation document from Frappe
@@ -21,7 +22,15 @@ export interface ChatListItem {
   id: string;
   title: string;
   agent: string;
+  /**
+   * Raw timestamp (ISO/datetime string from Frappe).
+   * Use `timestampLabel` for display-friendly formatting.
+   */
   timestamp?: string;
+  /**
+   * UI-friendly label (e.g. "2m ago"). Populated by UI hooks.
+   */
+  timestampLabel?: string;
 }
 
 type ConversationFilter = [keyof AgentConversationDoc | string, string, unknown];
@@ -123,6 +132,119 @@ export async function getConversations(
     };
   } catch (error) {
     handleFrappeError(error, 'Error fetching conversations');
+  }
+}
+
+/**
+ * Agent with conversation count (for "By Agent" tab)
+ */
+export interface AgentWithCount {
+  name: string;
+  agent_name: string;
+  conversationCount: number;
+  last_updated?: string;
+  agent_color?: string | null;
+}
+
+/**
+ * Fetch agents sorted by last updated, with conversation counts.
+ * Used for "By Agent" tab to show agents without loading all conversations.
+ */
+export async function getAgentsWithConversationCounts(): Promise<AgentWithCount[]> {
+  try {
+    // Fetch all agents sorted by last updated (modified field)
+    const agents = await db.getDocList(doctype.Agent, {
+      fields: ['name', 'agent_name', 'modified', 'agent_color'],
+      orderBy: { field: 'modified', order: 'asc' },
+      limit: 1000, // Reasonable limit for agents
+    });
+
+    // Fetch conversation count for each agent
+    const agentsWithCounts: AgentWithCount[] = await Promise.all(
+      (agents as Array<{ name: string; agent_name: string; modified?: string }>).map(async (agent) => {
+        const count = await fetchDocCount(doctype['Agent Conversation'], [
+          ['agent', '=', agent.name],
+          ['channel', '=', 'Chat'],
+        ]);
+        return {
+          name: agent.name,
+          agent_name: agent.agent_name || agent.name,
+          conversationCount: count || 0,
+          last_updated: agent.modified,
+          agent_color: (agent as any).agent_color || null,
+        };
+      })
+    );
+
+    // Filter out agents with 0 conversations and sort by last updated
+    return agentsWithCounts
+      .filter((agent) => agent.conversationCount > 0)
+      .sort((a, b) => {
+        const aTime = a.last_updated ? new Date(a.last_updated).getTime() : 0;
+        const bTime = b.last_updated ? new Date(b.last_updated).getTime() : 0;
+        return bTime - aTime; // Descending (newest first)
+      });
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching agents with conversation counts');
+    return [];
+  }
+}
+
+/**
+ * Fetch conversations for a specific agent.
+ * Used for lazy loading when user opens an agent accordion.
+ */
+export async function getConversationsByAgent(
+  agentName: string,
+  params: { limit?: number; start?: number } = {}
+): Promise<PaginatedResponse<ChatListItem>> {
+  const { limit = 100, start = 0 } = params;
+
+  try {
+    const conversations = await db.getDocList(doctype['Agent Conversation'], {
+      fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
+      filters: [
+        ['agent', '=', agentName],
+        ['channel', '=', 'Chat'],
+      ],
+      orderBy: { field: 'modified', order: 'desc' },
+      limit,
+      limit_start: start,
+    });
+
+    const mapped = (conversations as AgentConversationDoc[]).map(mapChatListItem);
+    return {
+      data: mapped,
+      hasMore: mapped.length === limit,
+    };
+  } catch (error) {
+    handleFrappeError(error, `Error fetching conversations for agent ${agentName}`);
+    return {
+      data: [],
+      hasMore: false,
+    };
+  }
+}
+
+/**
+ * Fetch all conversations for date grouping (Recents tab).
+ * Fetches a large batch to properly group by date.
+ */
+export async function getAllConversationsForRecents(
+  limit: number = 500
+): Promise<ChatListItem[]> {
+  try {
+    const conversations = await db.getDocList(doctype['Agent Conversation'], {
+      fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
+      filters: [['channel', '=', 'Chat']],
+      orderBy: { field: 'modified', order: 'desc' },
+      limit,
+    });
+
+    return (conversations as AgentConversationDoc[]).map(mapChatListItem);
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching all conversations for recents');
+    return [];
   }
 }
 
