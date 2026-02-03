@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import type { ToolUIPart } from 'ai';
 import { useSidebar } from "../ui/sidebar";
 import ChatAvatar from "./ChatAvatar";
 import { getInitials } from "@/utils/getInitials";
 import { useUser } from "@/contexts/UserContext";
-import { getConversation, getConversationMessages, newConversation, sendMessageToConversation, createAgentRunFeedback, type ChatMessage } from "@/services/chatApi";
+import { getConversation, getConversationMessages, newConversation, sendMessageToConversation, createAgentRunFeedback, type ChatMessage, getAgentsWithConversationCounts, type AgentWithCount } from "@/services/chatApi";
 import { getAgent } from "@/services/agentApi";
 import type { AgentDoc } from "@/types/agent.types";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
@@ -26,6 +26,7 @@ import { Image } from '@/components/ai-elements/image';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ShortcutKey } from "../ui/shortcut-key";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
+import { AgentModelSelector } from "./AgentModelSelector";
 
 function formatTime(timestamp?: string): string {
     if (!timestamp) return '';
@@ -237,8 +238,9 @@ function ChatMessageList({
     const [agentColor, setAgentColor] = useState<string | null>(null);
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const lastMessageKeyRef = useRef<string | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const lastMessageIdRef = useRef<string | null>(null);
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
 
@@ -552,9 +554,6 @@ function ChatMessageList({
                 setMessages([]);
             }
             
-            // Reset last message ID when switching chats to force scroll to bottom
-            lastMessageIdRef.current = null;
-            
             // Clear the newly created conversation ref after transition
             if (isTransitioningToNewConversation) {
                 newlyCreatedConversationIdRef.current = null;
@@ -563,36 +562,43 @@ function ChatMessageList({
         previousChatIdRef.current = chatId;
     }, [chatId]);
 
-    // Scroll to bottom helper
-    const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-        const container = scrollContainerRef.current;
-        if (container) {
-            container.scrollTo({
-                top: container.scrollHeight,
-                behavior,
-            });
-        }
-    }, []);
-
-    // Scroll to bottom when messages change
+    // Scroll to bottom - simple approach using element ref
+    const scrollToBottom = useCallback((instant = false) => {
+        const el = scrollContainerRef.current;
+        if (!el) return;
+      
+        el.scrollTo({
+          top: el.scrollHeight,
+          behavior: instant ? 'auto' : 'smooth',
+        });
+      }, []);
+      const scrollToBottomAfterPaint = (instant = false) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            scrollToBottom(instant);
+          });
+        });
+      };    
+    // Scroll to bottom when initial load completes or chat changes
     useEffect(() => {
-        if (isNewChat || initialLoading || messages.length === 0) {
-            lastMessageIdRef.current = messages[messages.length - 1]?.key ?? null;
-            return;
+        if (initialLoading || messages.length === 0) return;
+      
+        scrollToBottomAfterPaint(true);
+        lastMessageKeyRef.current = messages[messages.length - 1]?.key ?? null;
+      }, [initialLoading, chatId]);
+
+    // Scroll to bottom only when a NEW message is added at the end (not when loading older messages)
+    useEffect(() => {
+        if (initialLoading || messages.length === 0) return;
+      
+        const currentLastKey = messages[messages.length - 1]?.key ?? null;
+      
+        if (currentLastKey !== lastMessageKeyRef.current) {
+          scrollToBottomAfterPaint(false);
         }
-
-        const lastId = messages[messages.length - 1]?.key ?? null;
-
-        // Scroll if: new message added OR chat switched (lastMessageIdRef is null)
-        if (lastId && (lastId !== lastMessageIdRef.current || lastMessageIdRef.current === null)) {
-            // Use requestAnimationFrame to ensure DOM has updated
-            requestAnimationFrame(() => {
-                scrollToBottom('smooth');
-            });
-        }
-
-        lastMessageIdRef.current = lastId;
-    }, [isNewChat, initialLoading, messages, scrollToBottom]);
+      
+        lastMessageKeyRef.current = currentLastKey;
+      }, [messages]);
 
     const handleFeedback = useCallback(
         async (
@@ -622,17 +628,13 @@ function ChatMessageList({
 
     if (isNewChat && !agentName) {
         return (
-            <div className="flex-1 flex items-center justify-center">
-                <div className="text-center space-y-2">
-                    <p className="text-sm text-muted-foreground">Select an agent to start chatting</p>
-                </div>
-            </div>
+            <EmptyChatState />
         );
     }
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0">
+            <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
                 <div className="max-w-4xl mx-auto px-6 py-4 space-y-4">
                     {initialLoading ? (
                         <div className="flex items-center justify-center py-20">
@@ -660,8 +662,10 @@ function ChatMessageList({
                                     agentColor={agentColor}
                                     status={status}
                                     onFeedback={handleFeedback}
+                                    scrollToBottomAfterPaint={scrollToBottomAfterPaint}
                                 />
                             ))}
+                            <div ref={messagesEndRef} />
                         </div>
                     )}
                 </div>
@@ -687,12 +691,14 @@ function ChatMessage({
     agentColor,
     status,
     onFeedback,
+    scrollToBottomAfterPaint,
 }: { 
     message: MessageType;
     agentName: string;
     agentColor: string | null;
     status: 'submitted' | 'streaming' | 'ready' | 'error';
     onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
+    scrollToBottomAfterPaint: (instant?: boolean) => void;
 }) {
     const { user } = useUser();
     const isUser = message.from === 'user';
@@ -757,6 +763,7 @@ function ChatMessage({
                                             alt={message.versions[0]?.content || 'Generated image'}
                                             className="max-w-full h-auto rounded-lg border max-h-[512px] object-contain"
                                             showDownloadButton={true}
+                                            onLoad={() => scrollToBottomAfterPaint(false)}
                                         />
                                     ) : (
                                         <Skeleton className="w-full h-[512px] rounded-lg" />
@@ -789,6 +796,102 @@ function ChatMessage({
                             </div>
                         )}
                     </Message>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function EmptyChatState() {
+    const navigate = useNavigate();
+    const [recentAgents, setRecentAgents] = useState<AgentWithCount[]>([]);
+    const [loadingAgents, setLoadingAgents] = useState(true);
+    const [selectedAgent, setSelectedAgent] = useState<string>('');
+
+    // Fetch recently used agents
+    useEffect(() => {
+        let cancelled = false;
+
+        async function fetchRecentAgents() {
+            setLoadingAgents(true);
+            try {
+                const agents = await getAgentsWithConversationCounts();
+                if (!cancelled) {
+                    // Get top 5 recently used agents
+                    setRecentAgents(agents.slice(0, 5));
+                }
+            } catch (error) {
+                console.error('Error fetching recent agents:', error);
+            } finally {
+                if (!cancelled) {
+                    setLoadingAgents(false);
+                }
+            }
+        }
+
+        fetchRecentAgents();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const handleAgentSelect = useCallback((agentId: string) => {
+        setSelectedAgent(agentId);
+        navigate(`/chat/new?agent=${agentId}`);
+    }, [navigate]);
+
+    const handleRecentAgentClick = useCallback((agentName: string) => {
+        navigate(`/chat/new?agent=${agentName}`);
+    }, [navigate]);
+
+    return (
+        <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-6 max-w-md w-full px-6">
+                <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Select an agent to start chatting</p>
+                    <div className="flex justify-center">
+                        <AgentModelSelector
+                            value={selectedAgent}
+                            onValueChange={handleAgentSelect}
+                            showLabel={true}
+                        />
+                    </div>
+                </div>
+                
+                {recentAgents.length > 0 && (
+                    <div className="space-y-3">
+                        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                            Recently used agents
+                        </p>
+                        <div className="flex flex-wrap gap-2 justify-center">
+                            {loadingAgents ? (
+                                Array.from({ length: 6 }).map((_, i) => (
+                                    <Skeleton key={i} className="h-10 w-24 rounded-lg" />
+                                ))
+                            ) : (
+                                recentAgents.map((agent) => (
+                                    <Button
+                                        key={agent.name}
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleRecentAgentClick(agent.name)}
+                                        className="gap-2 hover:bg-zinc-100"
+                                    >
+                                        <ChatAvatar 
+                                            variant="listing_ai" 
+                                            color={agent.agent_color || DEFAULT_AGENT_COLOR}
+                                        >
+                                            {getInitials(agent.agent_name)}
+                                        </ChatAvatar>
+                                        <span className="text-xs font-medium text-zinc-700">
+                                            {agent.agent_name}
+                                        </span>
+                                    </Button>
+                                ))
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
         </div>
