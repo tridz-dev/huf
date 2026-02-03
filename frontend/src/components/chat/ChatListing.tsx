@@ -107,7 +107,7 @@ export default function ChatListing() {
       <div className="shrink-0 p-4 sticky top-0 z-1 bg-sidebar">
         <ChatListHeader onAgentSelect={handleAgentSelect} />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 bg-sidebar " id="chat-listing-scroll">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
         <Tabs defaultValue="agent" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="sticky top-0 z-1 bg-sidebar">
           <TabsList className="w-full">
