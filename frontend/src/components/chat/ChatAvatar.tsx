@@ -36,7 +36,7 @@ export default function ChatAvatar({children,className,variant,color,...props}:C
     
     return (
         <Avatar 
-            className={cn(chatAvatarVariants({variant,className}), bgClass)} 
+            className={cn(chatAvatarVariants({variant,className:`static ${className}`}), bgClass)} 
             style={style}
             {...props}
         >
