@@ -237,9 +237,8 @@ function ChatMessageList({
     const [agentColor, setAgentColor] = useState<string | null>(null);
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const lastMessageIdRef = useRef<string | null>(null);
-    const scrollContainerRef = useRef<HTMLElement | null>(null);
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
 
@@ -564,35 +563,21 @@ function ChatMessageList({
         previousChatIdRef.current = chatId;
     }, [chatId]);
 
-    // Find and cache the scrollable container
-    useEffect(() => {
-        if (!messagesEndRef.current) {
-            return;
+    // Scroll to bottom helper
+    const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+        const container = scrollContainerRef.current;
+        if (container) {
+            container.scrollTo({
+                top: container.scrollHeight,
+                behavior,
+            });
         }
-
-        // Find the scrollable container
-        let element = messagesEndRef.current.parentElement;
-        
-        while (element) {
-            const style = window.getComputedStyle(element);
-            if (
-                style.overflowY === 'auto' ||
-                style.overflowY === 'scroll' ||
-                style.overflow === 'auto' ||
-                style.overflow === 'scroll'
-            ) {
-                scrollContainerRef.current = element;
-                break;
-            }
-            element = element.parentElement;
-        }
-    }, [messages.length]);
+    }, []);
 
     // Scroll to bottom when messages change
     useEffect(() => {
         if (isNewChat || initialLoading || messages.length === 0) {
-            const lastId = messages[messages.length - 1]?.key ?? null;
-            lastMessageIdRef.current = lastId;
+            lastMessageIdRef.current = messages[messages.length - 1]?.key ?? null;
             return;
         }
 
@@ -600,42 +585,14 @@ function ChatMessageList({
 
         // Scroll if: new message added OR chat switched (lastMessageIdRef is null)
         if (lastId && (lastId !== lastMessageIdRef.current || lastMessageIdRef.current === null)) {
-            // Use requestAnimationFrame and setTimeout to ensure DOM is ready
+            // Use requestAnimationFrame to ensure DOM has updated
             requestAnimationFrame(() => {
-                const scrollContainer = scrollContainerRef.current;
-                if (scrollContainer) {
-                    // Scroll to absolute bottom with smooth behavior
-                    scrollContainer.scrollTo({
-                        top: scrollContainer.scrollHeight,
-                        behavior: 'smooth'
-                    });
-                    // Fallback scroll after a short delay to ensure we're at the bottom
-                    setTimeout(() => {
-                        if (scrollContainer) {
-                            scrollContainer.scrollTo({
-                                top: scrollContainer.scrollHeight,
-                                behavior: 'smooth'
-                            });
-                            // Additional fallback to ensure we're truly at the bottom
-                            setTimeout(() => {
-                                if (scrollContainer) {
-                                    scrollContainer.scrollTo({
-                                        top: scrollContainer.scrollHeight,
-                                        behavior: 'smooth'
-                                    });
-                                }
-                            }, 100);
-                        }
-                    }, 50);
-                } else if (messagesEndRef.current) {
-                    // Fallback to scrollIntoView if no scroll container found
-                    messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                }
+                scrollToBottom('smooth');
             });
         }
 
         lastMessageIdRef.current = lastId;
-    }, [isNewChat, initialLoading, messages]);
+    }, [isNewChat, initialLoading, messages, scrollToBottom]);
 
     const handleFeedback = useCallback(
         async (
@@ -674,15 +631,15 @@ function ChatMessageList({
     }
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto min-h-0">
                 <div className="max-w-4xl mx-auto px-6 py-4 space-y-4">
                     {initialLoading ? (
-                        <div className="flex items-center justify-center h-full">
+                        <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
                         </div>
                     ) : messages.length === 0 && !isNewChat ? (
-                        <div className="flex items-center justify-center h-full">
+                        <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">No messages yet</p>
                         </div>
                     ) : (
@@ -705,12 +662,11 @@ function ChatMessageList({
                                     onFeedback={handleFeedback}
                                 />
                             ))}
-                            <div ref={messagesEndRef} />
                         </div>
                     )}
                 </div>
             </div>
-            <div className="max-w-4xl mx-auto w-full">
+            <div className="max-w-4xl mx-auto w-full shrink-0">
             <ChatInput 
                 chatId={chatId} 
                 agentName={agentName}
