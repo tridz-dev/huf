@@ -219,6 +219,9 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
 
   const currentPageRef = useRef(0);
   const isFetchingRef = useRef(false);
+  // Prevent "enabled" effect from re-fetching forever when API returns empty lists.
+  // Reset this when params change / reset() is called.
+  const didFetchAtLeastOnceRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const fetchFnRef = useRef(fetchFn);
@@ -298,6 +301,8 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
           currentPageRef.current = 0;
         }
 
+        didFetchAtLeastOnceRef.current = true;
+
         setHasMore(response.hasMore);
         // Only update total if it's provided (from first page)
         if (response.total !== undefined) {
@@ -307,6 +312,11 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
         if (response.hasMore) {
           currentPageRef.current += 1;
         }
+
+        // Note: do not toggle ignoreFirstIntersectionRef here. In reverse mode, the
+        // sentinel can remain intersecting, and ignoring the next intersection can stall
+        // pagination entirely. We handle accidental double-triggers via a small cooldown
+        // in the observer callback instead.
 
         const previousHeight = prevScrollHeight;
         const previousTop = prevScrollTop;
@@ -350,6 +360,7 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   const reset = useCallback(async () => {
     currentPageRef.current = 0;
     setHasMore(true);
+    didFetchAtLeastOnceRef.current = false;
     await fetchData(false);
   }, [fetchData]);
 
@@ -362,6 +373,7 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   // Track if we should ignore the first intersection (when sentinel is initially visible)
   const ignoreFirstIntersectionRef = useRef(true);
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const lastAutoLoadMoreAtRef = useRef<number>(0);
 
   // Reset ignore flag when initial load completes (backup in case observer never triggers)
   useEffect(() => {
@@ -441,6 +453,14 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
               ignoreFirstIntersectionRef.current = false;
               return;
             }
+
+            // Cooldown to avoid double-calls when the observer is recreated while the sentinel is still visible
+            // (common in reverse chat lists where items are prepended).
+            const now = Date.now();
+            if (now - lastAutoLoadMoreAtRef.current < 250) {
+              return;
+            }
+            lastAutoLoadMoreAtRef.current = now;
             
             loadMore();
           }
@@ -503,12 +523,14 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   }, [debouncedSearch, debouncedFilters, autoLoad, isEnabled, reset]);
 
   // Reload when initial params change or component mounts
+  // Note: Don't include isEnabled here - we handle it separately to preserve items
   useEffect(() => {
     currentPageRef.current = 0;
     setItems([]);
     setHasMore(true);
     setTotal(undefined);
     setError(null);
+    didFetchAtLeastOnceRef.current = false;
 
     if (autoLoad && isEnabled) {
       fetchData(false);
@@ -517,7 +539,28 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [initialParamsKey, autoLoad, isEnabled, fetchData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialParamsKey, autoLoad, fetchData]);
+
+  // Handle enabled state separately - preserve items when toggling
+  useEffect(() => {
+    if (
+      autoLoad &&
+      isEnabled &&
+      !didFetchAtLeastOnceRef.current &&
+      items.length === 0 &&
+      !initialLoading &&
+      !loading
+    ) {
+      // Only fetch if enabled, no items, not loading, and we haven't already fetched once.
+      fetchData(false);
+    } else if (!isEnabled) {
+      // When disabled, just stop loading but preserve items
+      setInitialLoading(false);
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [isEnabled, autoLoad, items.length, initialLoading, loading, fetchData]);
 
   return {
     items,

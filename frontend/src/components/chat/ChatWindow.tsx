@@ -844,7 +844,6 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
       <div className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 shrink-0">
           <AgentModelSelector
-            variant="header"
             disabled={!isNewChat}
             value={model}
             onValueChange={setModel}

@@ -50,9 +50,9 @@ export function ChatSidebarContent() {
               {chat.agent}
             </p>
           )}
-          {chat.timestamp && (
+          {chat.timestampLabel && (
             <p className="text-xs text-muted-foreground">
-              {chat.timestamp}
+              {chat.timestampLabel}
             </p>
           )}
         </div>

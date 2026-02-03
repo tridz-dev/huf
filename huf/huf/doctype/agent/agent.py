@@ -7,6 +7,7 @@ from frappe.model.document import Document
 from huf.ai.agent_hooks import clear_doc_event_agents_cache
 from frappe.utils import now_datetime
 from huf.ai.agent_integration import run_agent_sync 
+import random
 
 try:
     from litellm.utils import supports_prompt_caching
@@ -181,11 +182,29 @@ class Agent(Document):
             frappe.log_error(f"Plan Generation Failed: {str(e)}", "Agent Plan Error")
             return None
 
+    def set_default_color(self):
+        if not self.agent_color:
+                avatar_colors_hex = [
+                    "#6366F1",  # indigo-500
+                    "#2563EB",  # blue-600
+                    "#10B981",  # emerald-500
+                    "#14B8A6",  # teal-500
+                    "#8B5CF6",  # violet-500
+                    "#A855F7",  # purple-500
+                    "#F97316",  # orange-500
+                    "#F43F5E",  # rose-500
+                    "#475569",  # slate-600
+                    "#52525B",  # zinc-600
+                ]
+                self.agent_color = random.choice(avatar_colors_hex)
+                self.save()
+
     def after_insert(self):
         """
         Trigger Multi-Run setup on Agent Creation.
         Uses the Planning Run as the Parent Run.
         """
+        self.set_default_color()
         self.flags.in_insert = True
         if self.enable_multi_run and self.instructions:
             try:

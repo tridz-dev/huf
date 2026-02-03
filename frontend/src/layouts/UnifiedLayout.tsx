@@ -26,7 +26,7 @@ export function UnifiedLayout({ children, hideHeader, headerActions, breadcrumbs
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="h-svh max-h-svh overflow-hidden">
         {!hideHeader && (
           <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b">
             <div className="flex items-center gap-2 px-4 w-full">
@@ -36,7 +36,7 @@ export function UnifiedLayout({ children, hideHeader, headerActions, breadcrumbs
             </div>
           </header>
         )}
-        <main className="flex-1 overflow-hidden flex flex-col">
+        <main className="flex-1 overflow-hidden flex flex-col min-h-0">
           {children || <Outlet />}
         </main>
       </SidebarInset>
