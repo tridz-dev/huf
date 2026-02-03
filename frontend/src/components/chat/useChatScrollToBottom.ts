@@ -11,6 +11,7 @@ export function useChatScrollToBottom(args: {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastMessageKeyRef = useRef<string | null>(null);
+  const didInitialScrollKeyRef = useRef<string | null>(null);
 
   const scrollToBottom = useCallback((instant = false) => {
     const el = scrollContainerRef.current;
@@ -37,9 +38,13 @@ export function useChatScrollToBottom(args: {
   useEffect(() => {
     if (initialLoading || messages.length === 0) return;
 
+    const scrollKey = chatId ?? '__new_chat__';
+    if (didInitialScrollKeyRef.current === scrollKey) return;
+
     scrollToBottomAfterPaint(true);
     lastMessageKeyRef.current = messages[messages.length - 1]?.key ?? null;
-  }, [initialLoading, chatId, messages.length, scrollToBottomAfterPaint, messages]);
+    didInitialScrollKeyRef.current = scrollKey;
+  }, [initialLoading, chatId, messages.length, scrollToBottomAfterPaint]);
 
   // New message appended: smooth scroll
   useEffect(() => {
