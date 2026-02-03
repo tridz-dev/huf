@@ -9,6 +9,7 @@ export type ImageProps = (Experimental_GeneratedImage & {
   alt?: string;
   src?: never;
   showDownloadButton?: boolean;
+  onLoad?: () => void;
 }) | {
   src: string;
   className?: string;
@@ -17,6 +18,7 @@ export type ImageProps = (Experimental_GeneratedImage & {
   uint8Array?: never;
   mediaType?: never;
   showDownloadButton?: boolean;
+  onLoad?: () => void;
 };
 
 export const Image = ({
@@ -25,6 +27,7 @@ export const Image = ({
   mediaType,
   src,
   showDownloadButton = false,
+  onLoad,
   ...props
 }: ImageProps) => {
   const imageSrc = src || (base64 && mediaType ? `data:${mediaType};base64,${base64}` : undefined);
@@ -86,6 +89,7 @@ export const Image = ({
           props.className
         )}
         src={imageSrc}
+        onLoad={onLoad}
       />
       {showDownloadButton && (
         <div className="absolute top-2 right-2 opacity-0 group-hover/image-container:opacity-100 transition-opacity">

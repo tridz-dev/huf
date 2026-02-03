@@ -22,9 +22,10 @@ interface AgentModelSelectorProps {
   value: string;
   onValueChange: (value: string) => void;
   disabled?: boolean;
+  showLabel?: boolean;
 }
 
-export function AgentModelSelector({ value, onValueChange, disabled }: AgentModelSelectorProps) {
+export function AgentModelSelector({ value, onValueChange, disabled, showLabel = false }: AgentModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const isInitialAutoSelectRef = useRef(true);
 
@@ -96,16 +97,17 @@ export function AgentModelSelector({ value, onValueChange, disabled }: AgentMode
     <ModelSelector onOpenChange={setOpen} open={open}>
       <ModelSelectorTrigger asChild>
         <Button 
-          size="icon" 
-          variant="ghost" 
+          size={showLabel ? "default" : "icon"}
+          variant={showLabel ? "outline" : "ghost"}
           disabled={disabled}
           className={cn(
             'text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900',
+            showLabel && 'gap-2',
             disabled && 'disabled:opacity-100'
           )}
         >
-          <Plus className="w-5 h-5" />
-          <span className="sr-only">New Chat</span>
+          <Plus className={showLabel ? "w-4 h-4" : "w-5 h-5"} />
+          {showLabel && <span>Select Agent</span>}
         </Button>
       </ModelSelectorTrigger>
 
