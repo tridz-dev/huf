@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Clock4, Plus, Users } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -94,10 +94,6 @@ export default function ChatListing() {
     }
   }, []);
 
-  const handleSelectChat = (chatId: string) => {
-    navigate(`/chat/${chatId}`);
-  };
-
   const handleAgentSelect = useCallback((agentId: string) => {
     // Automatically navigate to new chat when agent is selected
     navigate(`/chat/new?agent=${agentId}`);
@@ -154,7 +150,6 @@ export default function ChatListing() {
                   key={agent.name}
                   agent={agent}
                   selectedChatId={selectedChatId}
-                  onSelectChat={handleSelectChat}
                   isOpen={openAgents.includes(agent.name)}
                 />
               ))}
@@ -165,7 +160,6 @@ export default function ChatListing() {
         <TabsContent value="recents">
           <RecentsConversationList
             selectedChatId={selectedChatId}
-            onSelectChat={handleSelectChat}
             isActive={activeTab === 'recents'}
           />
         </TabsContent>
@@ -179,12 +173,10 @@ export default function ChatListing() {
 function AgentConversationItem({
   agent,
   selectedChatId,
-  onSelectChat,
   isOpen,
 }: {
   agent: AgentWithCount;
   selectedChatId: string | null;
-  onSelectChat: (chatId: string) => void;
   isOpen: boolean;
 }) {
   const navigate = useNavigate();
@@ -268,10 +260,9 @@ function AgentConversationItem({
             {conversations.map((chat) => {
               const isSelected = selectedChatId === chat.id;
               return (
-                <button
+                <Link
                   key={chat.id}
-                  type="button"
-                  onClick={() => onSelectChat(chat.id)}
+                  to={`/chat/${chat.id}`}
                   className={cn(
                     'group flex w-full text-left flex-col p-1 rounded-md cursor-pointer transition-all border-l-2',
                     isSelected
@@ -287,7 +278,7 @@ function AgentConversationItem({
                   <p className="ps-1 text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
                     {chat.timestampLabel ?? ''}
                   </p>
-                </button>
+                </Link>
               );
             })}
             {hasMore && (
@@ -315,11 +306,9 @@ function AgentConversationItem({
 
 function RecentsConversationList({
   selectedChatId,
-  onSelectChat,
   isActive,
 }: {
   selectedChatId: string | null;
-  onSelectChat: (chatId: string) => void;
   isActive: boolean;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -428,12 +417,12 @@ function RecentsConversationList({
                     {items.map((chat) => {
                       const isSelected = selectedChatId === chat.id;
                       return (
-                        <button
+                        <Link
                           key={chat.id}
+                          to={`/chat/${chat.id}`}
                           type="button"
-                          onClick={() => onSelectChat(chat.id)}
                           className={cn(
-                            'flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border',
+                            'group flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border relative',
                             isSelected
                               ? 'bg-zinc-200 border-zinc-200'
                               : 'border-transparent bg-transparent hover:bg-zinc-200'
@@ -455,10 +444,10 @@ function RecentsConversationList({
                               <p className="ps-1 text-xs truncate text-zinc-500">{chat.agent}</p>
                             </div>
                           </div>
-                          <span className="mt-1.5 text-[10px] text-zinc-400 flex-shrink-0 justify-self-end self-start">
-                            {chat.timestampLabel ?? ''}
+                          <span className="mb-1 flex-shrink-0 text-[10px] text-zinc-400 flex-shrink-0 self-end">
+                              {chat.timestampLabel ?? ''}
                           </span>
-                        </button>
+                        </Link>
                       );
                     })}
                   </div>
