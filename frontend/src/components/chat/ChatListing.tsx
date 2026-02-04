@@ -21,6 +21,7 @@ import { Button } from '../ui/button';
 import { DEFAULT_AGENT_COLOR } from '@/data/color';
 import { getAgent } from '@/services/agentApi';
 import ConversationTitle from './ConversationTitle';
+import ConversationMenu from './ConversationMenu';
 
 function getRecentBucketLabel(ts?: string): string {
   const d = toDate(ts);
@@ -260,25 +261,26 @@ function AgentConversationItem({
             {conversations.map((chat) => {
               const isSelected = selectedChatId === chat.id;
               return (
-                <Link
-                  key={chat.id}
-                  to={`/chat/${chat.id}`}
-                  className={cn(
-                    'group flex w-full text-left flex-col p-1 rounded-md cursor-pointer transition-all border-l-2',
-                    isSelected
-                      ? 'bg-zinc-200 border-indigo-500'
-                      : 'bg-transparent border-transparent hover:bg-zinc-200 hover:border-zinc-200'
-                  )}
-                >
-                  <ConversationTitle
-                  variant="agent_list"
-                  value={chat.title}
-                  conversationId={chat.id}
-                  />
-                  <p className="ps-1 text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
-                    {chat.timestampLabel ?? ''}
-                  </p>
-                </Link>
+                <ConversationMenu key={chat.id}>
+                  <Link
+                    to={`/chat/${chat.id}`}
+                    className={cn(
+                      'group flex w-full text-left flex-col p-1 rounded-md cursor-pointer transition-all border-l-2',
+                      isSelected
+                        ? 'bg-zinc-200 border-indigo-500'
+                        : 'bg-transparent border-transparent hover:bg-zinc-200 hover:border-zinc-200'
+                    )}
+                  >
+                    <ConversationTitle
+                    variant="agent_list"
+                    value={chat.title}
+                    conversationId={chat.id}
+                    />
+                    <p className="ps-1 text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
+                      {chat.timestampLabel ?? ''}
+                    </p>
+                  </Link>
+                </ConversationMenu>
               );
             })}
             {hasMore && (
@@ -417,37 +419,38 @@ function RecentsConversationList({
                     {items.map((chat) => {
                       const isSelected = selectedChatId === chat.id;
                       return (
-                        <Link
-                          key={chat.id}
-                          to={`/chat/${chat.id}`}
-                          type="button"
-                          className={cn(
-                            'group flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border relative',
-                            isSelected
-                              ? 'bg-zinc-200 border-zinc-200'
-                              : 'border-transparent bg-transparent hover:bg-zinc-200'
-                          )}
-                        >
-                          <div className="flex flex-1 gap-1 items-center min-w-0">
-                            <ChatAvatar 
-                              variant="chat_ai"
-                              color={agentColorMap.get(chat.agent) || DEFAULT_AGENT_COLOR}
-                            >
-                              {getInitials(chat.agent)}
-                            </ChatAvatar>
-                            <div className="mb-1 w-full">
-                              <ConversationTitle
-                              variant="recents_list"
-                              value={chat.title}
-                              conversationId={chat.id}
-                              />
-                              <p className="ps-1 text-xs truncate text-zinc-500">{chat.agent}</p>
+                        <ConversationMenu key={chat.id}>
+                          <Link
+                            to={`/chat/${chat.id}`}
+                            type="button"
+                            className={cn(
+                              'group flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border relative',
+                              isSelected
+                                ? 'bg-zinc-200 border-zinc-200'
+                                : 'border-transparent bg-transparent hover:bg-zinc-200'
+                            )}
+                          >
+                            <div className="flex flex-1 gap-1 items-center min-w-0">
+                              <ChatAvatar 
+                                variant="chat_ai"
+                                color={agentColorMap.get(chat.agent) || DEFAULT_AGENT_COLOR}
+                              >
+                                {getInitials(chat.agent)}
+                              </ChatAvatar>
+                              <div className="mb-1 w-full">
+                                <ConversationTitle
+                                variant="recents_list"
+                                value={chat.title}
+                                conversationId={chat.id}
+                                />
+                                <p className="ps-1 text-xs truncate text-zinc-500">{chat.agent}</p>
+                              </div>
                             </div>
-                          </div>
-                          <span className="mb-1 flex-shrink-0 text-[10px] text-zinc-400 flex-shrink-0 self-end">
-                              {chat.timestampLabel ?? ''}
-                          </span>
-                        </Link>
+                            <span className="mb-1 flex-shrink-0 text-[10px] text-zinc-400 flex-shrink-0 self-end">
+                                {chat.timestampLabel ?? ''}
+                            </span>
+                          </Link>
+                        </ConversationMenu>
                       );
                     })}
                   </div>
