@@ -51,6 +51,17 @@ export default function ConversationTitle({variant,value,conversationId}:Convers
         if (e.target.value === value)
             return
         updateTitle(e.target.value)
+        if (inputRef.current){
+            inputRef.current.scrollTo({
+                left:0
+            })
+        }
+    }
+
+    function handleEnterKey(e:React.KeyboardEvent<HTMLInputElement>){
+        if (e.key == "Enter" && active && inputRef?.current && (inputRef?.current.value != value)){
+            inputRef.current.blur()
+        }
     }
 
     async function updateTitle(value:string){
@@ -73,6 +84,7 @@ export default function ConversationTitle({variant,value,conversationId}:Convers
         readOnly={!active}
         onDoubleClick={activateInput}
         onMouseDown={handleDisableReadOnlyFocus}
+        onKeyDown={handleEnterKey}
         onBlur={onBlur}
         />
     )
