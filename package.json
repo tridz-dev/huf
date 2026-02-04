@@ -7,8 +7,8 @@
     "main": "index.js",
     "scripts": {
       "dev": "cd frontend && yarn dev",
-      "build": "yarn build-docs && yarn build-frontend",
-      "build-docs": "cd docs && yarn install && yarn run build",
+      "install": "cd frontend && yarn install",
+      "build": "yarn build-frontend",
       "build-frontend": "cd frontend && yarn install && yarn build",
       "postinstall": "cd frontend && yarn install && yarn build"
     }
