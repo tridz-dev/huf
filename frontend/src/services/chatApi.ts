@@ -399,3 +399,13 @@ export async function createAgentRunFeedback(params: AgentRunFeedbackParams): Pr
     handleFrappeError(error, 'Error submitting feedback');
   }
 }
+
+export async function updateConversationTitle(conversationId:string,title:string){
+  try{
+    await db.updateDoc(doctype['Agent Conversation'],conversationId,{
+      title
+    })
+  }catch(e){
+    handleFrappeError(e,"Error update conversation title")
+  }
+}
