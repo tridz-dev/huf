@@ -29,7 +29,7 @@ class ConversationManager:
             "is_active": 1,
             "model": frappe.db.get_value("Agent", self.agent_name, "model")
         })
-        conv.insert()
+        conv.insert(ignore_permissions=True)
         return conv
 
     def get_or_create_conversation(self, title=None, conversation_id=None):
@@ -71,7 +71,7 @@ class ConversationManager:
             "is_active": 1,
             "model": frappe.db.get_value("Agent", self.agent_name, "model")
         })
-        conv.insert()
+        conv.insert(ignore_permissions=True)
         return conv
 
     def add_message(self, conversation, role, content, provider, model, agent, run_name=None, kind="Message", tool_call_id=None):
@@ -100,7 +100,7 @@ class ConversationManager:
                 "is_agent_message": 1 if role == "agent" else 0,
                 "tool_calll": tool_call_id 
             })
-            message.insert()
+            message.insert(ignore_permissions=True)
 
             frappe.db.set_value("Agent Conversation", conversation.name, {
                 "total_messages": last_index + 1,
