@@ -713,3 +713,301 @@ To make WebPreview and Artifact work:
 | `frontend/src/components/chat/WebPreviewRenderer.tsx` | NEW - WebPreview UI |
 | `frontend/src/components/chat/ChatWindow.tsx` | UPDATE - Integration |
 | `huf/huf/doctype/agent/agent.py` | UPDATE - System prompts |
+
+---
+
+## JSX Preview with Recharts Support
+
+HUF supports dynamic JSX rendering for interactive data visualizations. This allows the AI to generate charts and UI components that render directly in the chat.
+
+### Supported Artifact Types
+
+Two artifact types support JSX rendering:
+- `jsx` - General JSX/React code
+- `chart` - Data visualizations (same rendering, semantic distinction)
+
+### Available Recharts Components
+
+The following Recharts components are available for rendering:
+
+| Component | Description |
+|-----------|-------------|
+| `LineChart`, `Line` | Line charts for trends |
+| `BarChart`, `Bar` | Bar charts for comparisons |
+| `PieChart`, `Pie`, `Cell` | Pie charts for proportions |
+| `AreaChart`, `Area` | Area charts for cumulative data |
+| `ScatterChart`, `Scatter` | Scatter plots for correlations |
+| `RadarChart`, `Radar` | Radar charts for multi-variable comparisons |
+| `ComposedChart` | Mixed chart types |
+| `Treemap` | Hierarchical data visualization |
+| `FunnelChart`, `Funnel` | Funnel charts for stages |
+| `XAxis`, `YAxis` | Axis components |
+| `CartesianGrid` | Grid lines |
+| `Tooltip` | Interactive tooltips |
+| `Legend` | Chart legends |
+| `ResponsiveContainer` | Responsive wrapper |
+| `PolarGrid`, `PolarAngleAxis`, `PolarRadiusAxis` | Polar coordinate components |
+
+### Default Bindings
+
+These are available in JSX expressions:
+- `COLORS` - Default color palette: `['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00C49F', '#FFBB28', '#FF8042', '#0088FE']`
+- `Math`, `JSON`, `Array`, `Object`, `console` - Standard JavaScript utilities
+
+### System Prompt for Chart Generation
+
+Add this to your agent's system prompt:
+
+```
+## Chart/JSX Artifact Format
+
+When generating data visualizations or interactive UI components, use the following artifact format:
+
+<artifact type="chart" title="CHART TITLE">
+JSX CODE HERE
+</artifact>
+
+## Available Components
+
+You have access to all Recharts components:
+- LineChart, Line, BarChart, Bar, PieChart, Pie, Cell
+- AreaChart, Area, ScatterChart, Scatter
+- RadarChart, Radar, ComposedChart, Treemap
+- FunnelChart, Funnel
+- XAxis, YAxis, CartesianGrid, Tooltip, Legend
+- ResponsiveContainer, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+
+## Available Variables
+
+- `COLORS` - Array of chart colors: ['#8884d8', '#82ca9d', '#ffc658', ...]
+
+## Chart Examples
+
+### Line Chart
+<artifact type="chart" title="Monthly Sales">
+<ResponsiveContainer width="100%" height={300}>
+  <LineChart data={[
+    { month: 'Jan', sales: 4000 },
+    { month: 'Feb', sales: 3000 },
+    { month: 'Mar', sales: 5000 },
+    { month: 'Apr', sales: 4500 },
+    { month: 'May', sales: 6000 }
+  ]}>
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis dataKey="month" />
+    <YAxis />
+    <Tooltip />
+    <Legend />
+    <Line type="monotone" dataKey="sales" stroke="#8884d8" strokeWidth={2} />
+  </LineChart>
+</ResponsiveContainer>
+</artifact>
+
+### Bar Chart
+<artifact type="chart" title="Product Comparison">
+<ResponsiveContainer width="100%" height={300}>
+  <BarChart data={[
+    { name: 'Product A', value: 400 },
+    { name: 'Product B', value: 300 },
+    { name: 'Product C', value: 500 },
+    { name: 'Product D', value: 280 }
+  ]}>
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis dataKey="name" />
+    <YAxis />
+    <Tooltip />
+    <Legend />
+    <Bar dataKey="value" fill="#82ca9d" />
+  </BarChart>
+</ResponsiveContainer>
+</artifact>
+
+### Pie Chart
+<artifact type="chart" title="Market Share">
+<ResponsiveContainer width="100%" height={300}>
+  <PieChart>
+    <Pie
+      data={[
+        { name: 'Chrome', value: 65 },
+        { name: 'Firefox', value: 15 },
+        { name: 'Safari', value: 12 },
+        { name: 'Edge', value: 8 }
+      ]}
+      dataKey="value"
+      nameKey="name"
+      cx="50%"
+      cy="50%"
+      outerRadius={100}
+      label
+    >
+      {[0, 1, 2, 3].map((index) => (
+        <Cell key={`cell-${index}`} fill={COLORS[index]} />
+      ))}
+    </Pie>
+    <Tooltip />
+    <Legend />
+  </PieChart>
+</ResponsiveContainer>
+</artifact>
+
+### Multi-Line Chart
+<artifact type="chart" title="Revenue vs Expenses">
+<ResponsiveContainer width="100%" height={300}>
+  <LineChart data={[
+    { month: 'Jan', revenue: 4000, expenses: 2400 },
+    { month: 'Feb', revenue: 3000, expenses: 1398 },
+    { month: 'Mar', revenue: 5000, expenses: 3800 },
+    { month: 'Apr', revenue: 4780, expenses: 3908 }
+  ]}>
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis dataKey="month" />
+    <YAxis />
+    <Tooltip />
+    <Legend />
+    <Line type="monotone" dataKey="revenue" stroke="#8884d8" />
+    <Line type="monotone" dataKey="expenses" stroke="#82ca9d" />
+  </LineChart>
+</ResponsiveContainer>
+</artifact>
+
+### Area Chart
+<artifact type="chart" title="User Growth">
+<ResponsiveContainer width="100%" height={300}>
+  <AreaChart data={[
+    { month: 'Jan', users: 1000 },
+    { month: 'Feb', users: 1500 },
+    { month: 'Mar', users: 2300 },
+    { month: 'Apr', users: 3200 },
+    { month: 'May', users: 4800 }
+  ]}>
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis dataKey="month" />
+    <YAxis />
+    <Tooltip />
+    <Area type="monotone" dataKey="users" stroke="#8884d8" fill="#8884d8" fillOpacity={0.3} />
+  </AreaChart>
+</ResponsiveContainer>
+</artifact>
+
+## Guidelines for Chart Generation
+
+1. Always wrap charts in `<ResponsiveContainer width="100%" height={300}>` for responsiveness
+2. Include `CartesianGrid`, `Tooltip`, and `Legend` for better UX
+3. Use the `COLORS` array for consistent coloring
+4. Inline the data directly in the JSX (no external variables)
+5. Keep chart height between 250-400px for readability
+6. Use meaningful labels and titles
+7. For pie charts, use `<Cell>` components with `COLORS` for each segment
+```
+
+### Example User Interactions
+
+**User**: Show me a chart of quarterly sales data
+
+**Assistant**:
+Here's a visualization of quarterly sales:
+
+<artifact type="chart" title="Quarterly Sales 2024">
+<ResponsiveContainer width="100%" height={300}>
+  <BarChart data={[
+    { quarter: 'Q1', sales: 45000, target: 40000 },
+    { quarter: 'Q2', sales: 52000, target: 50000 },
+    { quarter: 'Q3', sales: 48000, target: 55000 },
+    { quarter: 'Q4', sales: 61000, target: 60000 }
+  ]}>
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis dataKey="quarter" />
+    <YAxis />
+    <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
+    <Legend />
+    <Bar dataKey="sales" fill="#8884d8" name="Actual Sales" />
+    <Bar dataKey="target" fill="#82ca9d" name="Target" />
+  </BarChart>
+</ResponsiveContainer>
+</artifact>
+
+The chart shows actual sales vs targets for each quarter. Q4 exceeded targets while Q3 fell short.
+
+---
+
+**User**: Create a pie chart showing browser market share
+
+**Assistant**:
+<artifact type="chart" title="Browser Market Share 2024">
+<ResponsiveContainer width="100%" height={350}>
+  <PieChart>
+    <Pie
+      data={[
+        { name: 'Chrome', value: 64.7 },
+        { name: 'Safari', value: 19.3 },
+        { name: 'Firefox', value: 3.0 },
+        { name: 'Edge', value: 5.2 },
+        { name: 'Other', value: 7.8 }
+      ]}
+      dataKey="value"
+      nameKey="name"
+      cx="50%"
+      cy="50%"
+      outerRadius={120}
+      label={({ name, value }) => `${name}: ${value}%`}
+    >
+      {[0, 1, 2, 3, 4].map((index) => (
+        <Cell key={`cell-${index}`} fill={COLORS[index]} />
+      ))}
+    </Pie>
+    <Tooltip formatter={(value) => `${value}%`} />
+    <Legend />
+  </PieChart>
+</ResponsiveContainer>
+</artifact>
+
+Chrome dominates with nearly 65% market share, followed by Safari at 19%.
+
+### Export Functionality
+
+Charts can be exported by users:
+- **PNG Export**: Uses `html2canvas` for high-quality image capture
+- **SVG Export**: Extracts the SVG element directly for vector graphics
+
+The export buttons appear in the top-right corner of each chart artifact.
+
+### Streaming Support
+
+The JSXPreview component handles streaming responses by:
+1. Auto-completing unclosed JSX tags during streaming
+2. Gracefully handling partial/incomplete JSX
+3. Re-rendering as more content arrives
+
+### Error Handling
+
+If JSX parsing fails:
+- An error message is displayed in the artifact area
+- The raw JSX source is available in the "View Source" section
+- Errors are logged to the console for debugging
+
+### Custom Components
+
+To add custom components beyond Recharts:
+
+```typescript
+// In jsx-preview.tsx, add to availableComponents:
+const availableComponents: Record<string, ComponentType<any>> = {
+  // ... existing Recharts components
+  // Add custom components:
+  CustomCard: MyCustomCardComponent,
+  DataTable: MyDataTableComponent,
+};
+```
+
+### Best Practices for AI-Generated Charts
+
+1. **Data Format**: Always inline data arrays directly in the JSX
+2. **Responsive Design**: Use `ResponsiveContainer` for all charts
+3. **Accessibility**: Include `Tooltip` and `Legend` components
+4. **Consistent Styling**: Use the `COLORS` array for visual consistency
+5. **Appropriate Chart Types**:
+   - Line charts: Trends over time
+   - Bar charts: Categorical comparisons
+   - Pie charts: Part-to-whole relationships (limit to 5-7 segments)
+   - Area charts: Cumulative values over time
+   - Scatter plots: Correlations between variables
