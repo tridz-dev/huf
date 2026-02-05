@@ -26,6 +26,12 @@ export interface ParsedWebPreview {
 	title?: string;
 }
 
+export interface ParsedJSXPreview {
+	jsx: string;
+	title?: string;
+	isStreaming?: boolean;
+}
+
 export interface ArtifactParseResult {
 	text: string;
 	artifacts: ParsedArtifact[];
@@ -34,4 +40,9 @@ export interface ArtifactParseResult {
 export interface WebPreviewParseResult {
 	text: string;
 	previews: ParsedWebPreview[];
+}
+
+export interface JSXPreviewParseResult {
+	text: string;
+	previews: ParsedJSXPreview[];
 }

@@ -79,9 +79,11 @@ import { Image } from '@/components/ai-elements/image';
 import { MessageLoadingState } from './MessageLoadingState';
 import { ArtifactRenderer } from './ArtifactRenderer';
 import { WebPreviewRenderer } from './WebPreviewRenderer';
+import { JSXPreviewRenderer } from './JSXPreviewRenderer';
 import { parseArtifacts, hasArtifacts } from '@/utils/artifactParser';
 import { parseWebPreviews, hasWebPreviews } from '@/utils/webPreviewParser';
-import type { ParsedArtifact, ParsedWebPreview } from '@/types/artifact.types';
+import { parseJSXPreviews, hasJSXPreviews } from '@/utils/jsxPreviewParser';
+import type { ParsedArtifact, ParsedWebPreview, ParsedJSXPreview } from '@/types/artifact.types';
 
 // Map tool_status to ExtendedToolState
 const mapToolStatusToState = (status?: string): ExtendedToolState => {
@@ -100,39 +102,71 @@ const mapToolStatusToState = (status?: string): ExtendedToolState => {
 };
 
 /**
- * Helper component that parses and renders message content with artifacts and web previews.
- * This extracts <artifact> and <web-preview> tags from the content and renders them appropriately.
+ * Helper component that parses and renders message content with artifacts, web previews, and JSX previews.
+ * This extracts <artifact>, <web-preview>, and <jsx-preview> tags from the content and renders them appropriately.
  */
 interface MessageContentWithArtifactsProps {
   content: string;
   messageKey: string;
 }
 
+/**
+ * Decode HTML entities in content to handle escaped tags like &lt;web-preview&gt;
+ * This handles cases where the backend sends HTML-escaped content.
+ */
+function decodeHtmlEntities(text: string): string {
+  if (typeof document === 'undefined') {
+    // SSR fallback: basic entity decoding
+    return text
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&');
+  }
+  
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 function MessageContentWithArtifacts({ content, messageKey }: MessageContentWithArtifactsProps) {
-  // Check if content has artifacts or web previews
-  const contentHasArtifacts = hasArtifacts(content);
-  const contentHasWebPreviews = hasWebPreviews(content);
+  // Decode HTML entities first (handles &lt;web-preview&gt; → <web-preview>)
+  const decodedContent = decodeHtmlEntities(content);
+
+  // Check if content has artifacts, web previews, or JSX previews
+  const contentHasArtifacts = hasArtifacts(decodedContent);
+  const contentHasWebPreviews = hasWebPreviews(decodedContent);
+  const contentHasJSXPreviews = hasJSXPreviews(decodedContent);
 
   // If no special content, render as plain markdown
-  if (!contentHasArtifacts && !contentHasWebPreviews) {
+  if (!contentHasArtifacts && !contentHasWebPreviews && !contentHasJSXPreviews) {
     return <MessageResponse>{content}</MessageResponse>;
   }
 
-  // Parse artifacts and web previews
-  let textContent = content;
+  // Parse in order: JSX previews → web previews → artifacts
+  // This prevents nested tags from being captured incorrectly
+  let textContent = decodedContent;
   let artifacts: ParsedArtifact[] = [];
   let webPreviews: ParsedWebPreview[] = [];
+  let jsxPreviews: ParsedJSXPreview[] = [];
 
-  if (contentHasArtifacts) {
-    const parsed = parseArtifacts(textContent);
+  if (contentHasJSXPreviews) {
+    const parsed = parseJSXPreviews(textContent);
     textContent = parsed.text;
-    artifacts = parsed.artifacts;
+    jsxPreviews = parsed.previews;
   }
 
   if (contentHasWebPreviews) {
     const parsed = parseWebPreviews(textContent);
     textContent = parsed.text;
     webPreviews = parsed.previews;
+  }
+
+  if (contentHasArtifacts) {
+    const parsed = parseArtifacts(textContent);
+    textContent = parsed.text;
+    artifacts = parsed.artifacts;
   }
 
   return (
@@ -142,14 +176,19 @@ function MessageContentWithArtifacts({ content, messageKey }: MessageContentWith
         <MessageResponse>{textContent}</MessageResponse>
       )}
 
-      {/* Render artifacts */}
-      {artifacts.map((artifact) => (
-        <ArtifactRenderer key={`${messageKey}-${artifact.id}`} artifact={artifact} />
+      {/* Render JSX previews */}
+      {jsxPreviews.map((preview, idx) => (
+        <JSXPreviewRenderer key={`${messageKey}-jsx-${idx}`} preview={preview} />
       ))}
 
       {/* Render web previews */}
       {webPreviews.map((preview, idx) => (
         <WebPreviewRenderer key={`${messageKey}-preview-${idx}`} preview={preview} />
+      ))}
+
+      {/* Render artifacts */}
+      {artifacts.map((artifact) => (
+        <ArtifactRenderer key={`${messageKey}-${artifact.id}`} artifact={artifact} />
       ))}
     </>
   );
@@ -1022,7 +1061,10 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                                     <Skeleton className="w-full h-[512px] rounded-lg" />
                                   )}
                                   {version.content && (
-                                    <MessageResponse>{version.content}</MessageResponse>
+                                    <MessageContentWithArtifacts
+                                      content={version.content}
+                                      messageKey={message.key}
+                                    />
                                   )}
                                 </div>
                               ) : !((status === 'submitted' || status === 'streaming') &&
