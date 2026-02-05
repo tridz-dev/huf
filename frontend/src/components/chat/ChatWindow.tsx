@@ -77,6 +77,11 @@ import { CopyButton } from './CopyButton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Image } from '@/components/ai-elements/image';
 import { MessageLoadingState } from './MessageLoadingState';
+import { ArtifactRenderer } from './ArtifactRenderer';
+import { WebPreviewRenderer } from './WebPreviewRenderer';
+import { parseArtifacts, hasArtifacts } from '@/utils/artifactParser';
+import { parseWebPreviews, hasWebPreviews } from '@/utils/webPreviewParser';
+import type { ParsedArtifact, ParsedWebPreview } from '@/types/artifact.types';
 
 // Map tool_status to ExtendedToolState
 const mapToolStatusToState = (status?: string): ExtendedToolState => {
@@ -93,6 +98,62 @@ const mapToolStatusToState = (status?: string): ExtendedToolState => {
       return 'input-streaming';
   }
 };
+
+/**
+ * Helper component that parses and renders message content with artifacts and web previews.
+ * This extracts <artifact> and <web-preview> tags from the content and renders them appropriately.
+ */
+interface MessageContentWithArtifactsProps {
+  content: string;
+  messageKey: string;
+}
+
+function MessageContentWithArtifacts({ content, messageKey }: MessageContentWithArtifactsProps) {
+  // Check if content has artifacts or web previews
+  const contentHasArtifacts = hasArtifacts(content);
+  const contentHasWebPreviews = hasWebPreviews(content);
+
+  // If no special content, render as plain markdown
+  if (!contentHasArtifacts && !contentHasWebPreviews) {
+    return <MessageResponse>{content}</MessageResponse>;
+  }
+
+  // Parse artifacts and web previews
+  let textContent = content;
+  let artifacts: ParsedArtifact[] = [];
+  let webPreviews: ParsedWebPreview[] = [];
+
+  if (contentHasArtifacts) {
+    const parsed = parseArtifacts(textContent);
+    textContent = parsed.text;
+    artifacts = parsed.artifacts;
+  }
+
+  if (contentHasWebPreviews) {
+    const parsed = parseWebPreviews(textContent);
+    textContent = parsed.text;
+    webPreviews = parsed.previews;
+  }
+
+  return (
+    <>
+      {/* Render text content if any remains */}
+      {textContent && textContent.trim() && (
+        <MessageResponse>{textContent}</MessageResponse>
+      )}
+
+      {/* Render artifacts */}
+      {artifacts.map((artifact) => (
+        <ArtifactRenderer key={`${messageKey}-${artifact.id}`} artifact={artifact} />
+      ))}
+
+      {/* Render web previews */}
+      {webPreviews.map((preview, idx) => (
+        <WebPreviewRenderer key={`${messageKey}-preview-${idx}`} preview={preview} />
+      ))}
+    </>
+  );
+}
 
 type MessageType = {
   key: string;
@@ -939,8 +1000,8 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                             <>
                             <MessageContent>
                               {/* Show loading state while message is generating */}
-                              {(status === 'submitted' || status === 'streaming') && 
-                               message.from === 'assistant' && 
+                              {(status === 'submitted' || status === 'streaming') &&
+                               message.from === 'assistant' &&
                                (!version.content || version.content.trim() === '') && (
                                 <MessageLoadingState
                                   hasTools={!!message.tools && message.tools.length > 0}
@@ -950,8 +1011,8 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                               {message.kind === 'Image' ? (
                                 <div className="flex flex-col gap-2">
                                   {message.generatedImage ? (
-                                    <Image 
-                                      src={message.generatedImage} 
+                                    <Image
+                                      src={message.generatedImage}
                                       alt={version.content || 'Generated image'}
                                       className="max-w-full h-auto rounded-lg border max-h-[512px] object-contain"
                                       showDownloadButton={true}
@@ -964,11 +1025,14 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
                                     <MessageResponse>{version.content}</MessageResponse>
                                   )}
                                 </div>
-                              ) : !((status === 'submitted' || status === 'streaming') && 
-                                    message.from === 'assistant' && 
-                                    (!version.content || version.content.trim() === '') && 
+                              ) : !((status === 'submitted' || status === 'streaming') &&
+                                    message.from === 'assistant' &&
+                                    (!version.content || version.content.trim() === '') &&
                                     !message.tools) && (
-                                <MessageResponse>{version.content}</MessageResponse>
+                                <MessageContentWithArtifacts
+                                  content={version.content}
+                                  messageKey={message.key}
+                                />
                               )}
                               {message.from === 'assistant' && version.content && !message.tools && (
                                 <MessageActions
