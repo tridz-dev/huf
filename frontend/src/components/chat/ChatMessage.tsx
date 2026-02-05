@@ -3,7 +3,7 @@ import ChatAvatar from "./ChatAvatar";
 import { getInitials } from "@/utils/getInitials";
 import { useUser } from "@/contexts/UserContext";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
-import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
+import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import { MessageActions } from './MessageActions';
 import { MessageLoadingState } from './MessageLoadingState';
@@ -12,6 +12,7 @@ import { Image } from '@/components/ai-elements/image';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatTime } from './utils';
 import type { MessageType } from './types';
+import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
 
 interface ChatMessageProps {
     message: MessageType;
@@ -99,14 +100,20 @@ export function ChatMessage({
                                         <Skeleton className="w-full h-[512px] rounded-lg" />
                                     )}
                                     {message.versions[0]?.content && (
-                                        <MessageResponse>{message.versions[0].content}</MessageResponse>
+                                        <MessageContentWithArtifacts
+                                            content={message.versions[0].content}
+                                            messageKey={message.key}
+                                        />
                                     )}
                                 </div>
                             ) : !((status === 'submitted' || status === 'streaming') && 
                                   message.from === 'assistant' && 
                                   (!message.versions[0]?.content || message.versions[0].content.trim() === '') && 
                                   !message.tools) && (
-                                <MessageResponse>{message.versions[0]?.content || ''}</MessageResponse>
+                                <MessageContentWithArtifacts
+                                    content={message.versions[0]?.content || ''}
+                                    messageKey={message.key}
+                                />
                             )}
                         </MessageContent>
                         {/* Actions for assistant messages */}
