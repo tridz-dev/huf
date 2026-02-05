@@ -275,6 +275,32 @@ class AgentManager:
 
         return agent
 
+def _is_user_allowed(agent_doc, user: str) -> bool:
+    """Check if user is allowed to run this agent"""
+    
+    # Guest check
+    if user == "Guest":
+        return agent_doc.allow_guest
+    
+    # Check allowed_users if specified
+    if agent_doc.allowed_users:
+        allowed_user_names = [u.user for u in agent_doc.allowed_users]
+        if user in allowed_user_names:
+            return True
+    
+    # Check allowed_roles if specified  
+    if agent_doc.allowed_roles:
+        allowed_role_names = [r.role for r in agent_doc.allowed_roles]
+        user_roles = frappe.get_roles(user)
+        if any(role in user_roles for role in allowed_role_names):
+            return True
+    
+    # If no restrictions specified, allow all logged-in users
+    if not agent_doc.allowed_users and not agent_doc.allowed_roles:
+        return True
+    
+    return False
+
 def safe_commit():
     if getattr(frappe.local, "_realtime_log", None) is None:
         frappe.local._realtime_log = []
@@ -322,7 +348,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                     update_data["status"] = "Completed"
                 
                 doc.update(update_data)
-                doc.save()
+                doc.save(ignore_permissions=True)
                 return doc.name 
             else:
                 frappe.log_error(f"Received tool output for run {agent_run} but no Queued tool call found.", "Agent Tool Call Warning")
@@ -351,7 +377,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "status": "Queued",
                 "call_id": tool_call_id 
             })
-            doc.insert()
+            doc.insert(ignore_permissions=True)
             return doc.name
 
         frappe.db.commit()
@@ -459,6 +485,12 @@ def run_agent_sync(
     if frappe.session.user == "Guest" and not agent_doc.allow_guest:
         frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
 
+    if not _is_user_allowed(agent_doc, frappe.session.user):
+        frappe.throw(
+            _("You are not authorized to use this agent."),
+            frappe.PermissionError
+        )
+
     conv_manager = ConversationManager(
         agent_name=agent_name,
         channel=channel_id,
@@ -501,7 +533,7 @@ def run_agent_sync(
         "is_child": 1 if parent_run_id else 0,
         "agent_orchestration": orchestration_id
     })
-    run_doc.insert()  
+    run_doc.insert(ignore_permissions=True)
     conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
@@ -890,6 +922,22 @@ async def run_agent_stream(
     
     try:
         agent_doc = frappe.get_doc("Agent", agent_name)
+
+        # 1. Guest Check
+        if frappe.session.user == "Guest" and not agent_doc.allow_guest:
+            yield {
+                "type": "error",
+                "error": "Access denied. This agent does not allow guest access."
+            }
+            return
+
+        # 2. Permission Check (User/Role binding)
+        if not _is_user_allowed(agent_doc, frappe.session.user):
+            yield {
+                "type": "error",
+                "error": "You are not authorized to use this agent."
+            }
+            return
         
         # Validate agent allows chat (for streaming UI)
         if not agent_doc.allow_chat:
@@ -939,7 +987,7 @@ async def run_agent_stream(
             "model": model,
             "provider": provider
         })
-        run_doc.insert()
+        run_doc.insert(ignore_permissions=True)
         conv_manager.add_message(conversation, "user", prompt, provider, model, agent_name, run_doc.name)
         run_doc.db_set("start_time", now_datetime())
         safe_commit()
