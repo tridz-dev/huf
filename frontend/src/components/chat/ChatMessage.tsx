@@ -76,7 +76,7 @@ export function ChatMessage({
                     ))
                 ) : (
                     <Message from={message.from} className={cn(isUser && "!ml-0")}>
-                        <MessageContent className={cn(isUser && "!ml-0")}>
+                        <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
                             {/* Show loading state while message is generating */}
                             {(status === 'submitted' || status === 'streaming') && 
                              message.from === 'assistant' && 
