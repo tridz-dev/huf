@@ -28,11 +28,13 @@ import {
 	FileTextIcon,
 	ImageIcon,
 	LayoutIcon,
+	BarChartIcon,
 } from 'lucide-react';
 import type { ParsedArtifact, ArtifactType } from '@/types/artifact.types';
 import type { BundledLanguage } from 'shiki';
 import { cn } from '@/lib/utils';
 import { Mermaid } from '@/components/ui/mermaid';
+import { JSXPreview, JSXPreviewContent, JSXPreviewExport } from '@/components/ui/jsx-preview';
 
 interface ArtifactRendererProps {
 	artifact: ParsedArtifact;
@@ -49,6 +51,8 @@ const ARTIFACT_ICONS: Record<ArtifactType, typeof CodeIcon> = {
 	mermaid: LayoutIcon,
 	'react-component': CodeIcon,
 	markdown: FileTextIcon,
+	jsx: LayoutIcon,
+	chart: BarChartIcon,
 };
 
 // Map common language aliases to Shiki language names
@@ -130,6 +134,8 @@ export function ArtifactRenderer({
 			extension = 'mmd';
 		} else if (artifact.type === 'markdown' || artifact.type === 'document') {
 			extension = 'md';
+		} else if (artifact.type === 'jsx' || artifact.type === 'chart') {
+			extension = 'jsx';
 		}
 
 		a.download = artifact.title
@@ -206,6 +212,25 @@ export function ArtifactRenderer({
 			case 'markdown':
 			case 'document':
 				return <MessageResponse>{artifact.content}</MessageResponse>;
+
+			case 'jsx':
+			case 'chart':
+				return (
+					<div className="flex flex-col gap-2">
+						<JSXPreview jsx={artifact.content} className="min-h-[300px]">
+							<JSXPreviewContent />
+							<div className="absolute top-2 right-2">
+								<JSXPreviewExport filename={artifact.title?.replace(/[^a-z0-9]/gi, '_') || 'chart'} />
+							</div>
+						</JSXPreview>
+						<details className="text-xs">
+							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+								View Source
+							</summary>
+							<CodeBlock code={artifact.content} language="jsx" />
+						</details>
+					</div>
+				);
 
 			default:
 				return (

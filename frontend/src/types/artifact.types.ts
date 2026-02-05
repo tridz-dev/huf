@@ -9,7 +9,9 @@ export type ArtifactType =
 	| 'svg'
 	| 'mermaid'
 	| 'react-component'
-	| 'markdown';
+	| 'markdown'
+	| 'jsx'
+	| 'chart';
 
 export interface ParsedArtifact {
 	id: string;
