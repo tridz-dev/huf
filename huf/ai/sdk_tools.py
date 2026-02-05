@@ -24,6 +24,27 @@ import hashlib
 from datetime import datetime, timedelta
 
 
+MUTATING_TOOL_TYPES = {
+    "Create Document", "Create Multiple Documents",
+    "Update Document", "Update Multiple Documents", 
+    "Delete Document", "Delete Multiple Documents",
+    "Submit Document", "Cancel Document",
+    "Set Value", "POST", "Run Agent"
+}
+
+def _check_tool_permission(tool_type: str, context: dict = None):
+    """Guard function to block dangerous tools for Guest users"""
+    user = frappe.session.user
+    
+    #Guest cannot use mutating tools
+    if user == "Guest" and tool_type in MUTATING_TOOL_TYPES:
+        return {
+            "allowed": False,
+            "error": f"Guest users cannot use {tool_type} tools. Please log in."
+        }
+    
+    return {"allowed": True}
+
 def create_agent_tools(agent) -> list[FunctionTool]:
     """
     Create function tools for Huf Agent
@@ -151,6 +172,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path,
                         params,
                         extra_args=extra_args,
+                        tool_type=function_doc.types
                     )
 
                     if tool:
@@ -224,6 +246,7 @@ def create_function_tool(
     tool_name: str,
     parameters: dict[str, Any],
     extra_args: dict[str, Any] = None,
+    tool_type: str = None,
 ) -> FunctionTool:
     """
     Create a FunctionTool for Huf Tool functions
@@ -249,6 +272,13 @@ def create_function_tool(
         _function = function
 
         async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
+
+            #Permission check before execution
+            if tool_type:
+                perm_check = _check_tool_permission(tool_type, ctx)
+                if not perm_check["allowed"]:
+                    return json.dumps({"error": perm_check["error"], "denied": True})
+
             try:
                 if args_json is None and isinstance(ctx, str):
                     args_json = ctx
@@ -626,6 +656,13 @@ def handle_create_document(reference_doctype=None, **kwargs):
         if not frappe.db.exists("DocType", reference_doctype):
             return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
 
+        if not frappe.has_permission(reference_doctype, "create"):
+            return {
+                "success": False,
+                "error": f"You do not have permission to create {reference_doctype}",
+                "permission_denied": True
+            }
+
         doc = frappe.get_doc({"doctype": reference_doctype, **kwargs})
         doc.insert()
 
@@ -661,6 +698,14 @@ def handle_delete_document(document_id=None, reference_doctype=None,**kwargs):
 
         if not frappe.db.exists(reference_doctype, document_id):
             return {"success": False, "error": f"Document {document_id} not found in {reference_doctype}"}
+
+        #Pre-check delete permission
+        if not frappe.has_permission(reference_doctype, "delete", doc=document_id):
+            return {
+                "success": False,
+                "error": f"You do not have delete permission on {reference_doctype} {document_id}",
+                "permission_denied": True
+            }
 
         frappe.delete_doc(reference_doctype, document_id)
 
@@ -806,6 +851,13 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
 
     if not frappe.db.exists(reference_doctype, document_id):
         return {"success": False, "error": f"{reference_doctype} {document_id} not found"}
+
+    if not frappe.has_permission(reference_doctype, "write", doc=document_id):
+        return {
+            "success": False,
+            "error": f"You do not have write permission on {reference_doctype} {document_id}",
+            "permission_denied": True
+        }
 
     try:
         doc = frappe.get_doc(reference_doctype, document_id)
