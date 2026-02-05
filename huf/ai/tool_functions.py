@@ -44,6 +44,14 @@ def create_document(doctype: str, data: dict, function=None):
 				if not data.get(param.fieldname):
 					data[param.fieldname] = param.default_value
 
+	#Pre-check permission
+	if not frappe.has_permission(doctype, "create"):
+		return {
+			"success": False,
+			"error": f"You do not have permission to create {doctype}",
+			"permission_denied": True
+		}
+
 	doc = frappe.get_doc({"doctype": doctype, **data})
 	doc.insert()
 	return {"document_id": doc.name, "message": "Document created", "doctype": doctype}
@@ -92,6 +100,14 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
             
         if not frappe.db.exists(doctype, document_id):
             return {"success": False, "error": f"{doctype} {document_id} not found"}
+            
+        if not frappe.has_permission(doctype, "write", doc=document_id):
+            return {
+                "success": False,
+                "error": f"You do not have write permission on {doctype} {document_id}",
+                "permission_denied": True
+            }
+
             
         doc = frappe.get_doc(doctype, document_id)
         
@@ -160,6 +176,14 @@ def delete_document(doctype: str, document_id: str):
         if not frappe.db.exists(doctype, document_id):
             return {"success": False, "error": f"{doctype} {document_id} not found"}
             
+        #Pre-check delete permission
+        if not frappe.has_permission(doctype, "delete", doc=document_id):
+            return {
+                "success": False,
+                "error": f"You do not have delete permission on {doctype} {document_id}",
+                "permission_denied": True
+            }
+
         frappe.delete_doc(doctype, document_id)
         return {"success": True, "message": f"{doctype} {document_id} deleted successfully"}
     except Exception as e:
@@ -180,6 +204,14 @@ def submit_document(doctype: str, document_id: str):
 	Submit a document in the database
 	"""
 	doc = frappe.get_doc(doctype, document_id)
+	
+	if not frappe.has_permission(doctype, "submit", doc=document_id):
+		return {
+			"success": False, 
+			"error": f"You do not have submit permission on {doctype} {document_id}",
+			"permission_denied": True
+		}
+
 	doc.submit()
 	return {
 		"document_id": document_id,
@@ -193,6 +225,14 @@ def cancel_document(doctype: str, document_id: str):
 	Cancel a document in the database
 	"""
 	doc = frappe.get_doc(doctype, document_id)
+
+	if not frappe.has_permission(doctype, "cancel", doc=document_id):
+		return {
+			"success": False, 
+			"error": f"You do not have cancel permission on {doctype} {document_id}",
+			"permission_denied": True
+		}
+
 	doc.cancel()
 	return {
 		"document_id": document_id,
