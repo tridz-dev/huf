@@ -313,174 +313,6 @@ export interface JSXPreviewExportProps {
 	filename?: string;
 }
 
-/**
- * Inline computed styles on an SVG element and all its descendants.
- * Resolves modern CSS (oklch, etc.) to rgb via getComputedStyle.
- */
-function inlineSvgStyles(original: Element, clone: Element): void {
-	const computed = window.getComputedStyle(original);
-	const el = clone as SVGElement & { style: CSSStyleDeclaration };
-	const props = ['fill', 'stroke', 'stroke-width', 'font-family', 'font-size', 'font-weight', 'opacity', 'color', 'text-anchor', 'dominant-baseline'];
-	props.forEach((prop) => {
-		const val = computed.getPropertyValue(prop);
-		if (val) el.style?.setProperty(prop, val);
-	});
-	const origChildren = original.children;
-	const cloneChildren = clone.children;
-	for (let i = 0; i < origChildren.length && i < cloneChildren.length; i++) {
-		inlineSvgStyles(origChildren[i], cloneChildren[i]);
-	}
-}
-
-/**
- * Read legend items from Recharts' HTML legend and return structured data.
- */
-function extractLegendItems(container: HTMLElement): Array<{ color: string; label: string }> {
-	const items: Array<{ color: string; label: string }> = [];
-	// Recharts renders legend items as <li> elements with an <svg> icon and text
-	const legendItems = container.querySelectorAll('.recharts-legend-item');
-	legendItems.forEach((li) => {
-		const svg = li.querySelector('svg');
-		const surface = svg?.querySelector('path, rect, circle, line');
-		const color = surface
-			? window.getComputedStyle(surface).fill || surface.getAttribute('fill') || '#888'
-			: '#888';
-		const textEl = li.querySelector('.recharts-legend-item-text');
-		const label = textEl?.textContent?.trim() || '';
-		if (label) items.push({ color, label });
-	});
-	return items;
-}
-
-/**
- * Append legend items as native SVG elements below the chart.
- * Returns the extra height added for the legend row.
- */
-function appendLegendToSvg(
-	svg: SVGElement,
-	items: Array<{ color: string; label: string }>,
-	chartWidth: number,
-	yOffset: number,
-): number {
-	if (items.length === 0) return 0;
-
-	const ns = 'http://www.w3.org/2000/svg';
-	const legendGroup = document.createElementNS(ns, 'g');
-	legendGroup.setAttribute('class', 'exported-legend');
-
-	const boxSize = 10;
-	const gap = 8;
-	const itemGap = 20;
-	const fontSize = 12;
-
-	// Measure total width to center the legend row
-	const canvas = document.createElement('canvas');
-	const ctx = canvas.getContext('2d');
-	ctx!.font = `${fontSize}px sans-serif`;
-
-	let totalWidth = 0;
-	const widths = items.map((item) => {
-		const textWidth = ctx!.measureText(item.label).width;
-		return boxSize + gap + textWidth;
-	});
-	totalWidth = widths.reduce((sum, w) => sum + w, 0) + itemGap * (items.length - 1);
-
-	let x = (chartWidth - totalWidth) / 2;
-	const y = yOffset + 8;
-
-	items.forEach((item, i) => {
-		// Color box
-		const rect = document.createElementNS(ns, 'rect');
-		rect.setAttribute('x', String(x));
-		rect.setAttribute('y', String(y));
-		rect.setAttribute('width', String(boxSize));
-		rect.setAttribute('height', String(boxSize));
-		rect.setAttribute('fill', item.color);
-		rect.setAttribute('rx', '2');
-		legendGroup.appendChild(rect);
-
-		// Label text
-		const text = document.createElementNS(ns, 'text');
-		text.setAttribute('x', String(x + boxSize + gap));
-		text.setAttribute('y', String(y + boxSize - 1));
-		text.setAttribute('font-size', String(fontSize));
-		text.setAttribute('font-family', 'sans-serif');
-		text.setAttribute('fill', '#333');
-		text.textContent = item.label;
-		legendGroup.appendChild(text);
-
-		x += widths[i] + itemGap;
-	});
-
-	svg.appendChild(legendGroup);
-	return boxSize + 20; // legend row height
-}
-
-/**
- * Convert an SVG element to PNG, including Recharts legend items
- * that are rendered as HTML outside the SVG.
- */
-function svgWithLegendToPng(
-	svgElement: SVGElement,
-	container: HTMLElement,
-	scale = 2,
-): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const svg = svgElement.cloneNode(true) as SVGElement;
-
-		const width = svgElement.clientWidth || svgElement.getBoundingClientRect().width;
-		let height = svgElement.clientHeight || svgElement.getBoundingClientRect().height;
-		svg.setAttribute('width', String(width));
-		svg.setAttribute('height', String(height));
-
-		// Inline computed styles (resolves oklch → rgb)
-		inlineSvgStyles(svgElement, svg);
-
-		// Extract legend items from the HTML and inject into SVG
-		const legendItems = extractLegendItems(container);
-		const legendHeight = appendLegendToSvg(svg, legendItems, width, height);
-		height += legendHeight;
-		svg.setAttribute('height', String(height));
-		// Update viewBox if present
-		const vb = svgElement.getAttribute('viewBox');
-		if (vb) {
-			const parts = vb.split(/\s+|,/);
-			if (parts.length === 4) {
-				svg.setAttribute('viewBox', `${parts[0]} ${parts[1]} ${parts[2]} ${height}`);
-			}
-		}
-
-		const serializer = new XMLSerializer();
-		const svgString = serializer.serializeToString(svg);
-		const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-		const url = URL.createObjectURL(svgBlob);
-
-		const img = new window.Image();
-		img.onload = () => {
-			const canvas = document.createElement('canvas');
-			canvas.width = width * scale;
-			canvas.height = height * scale;
-			const ctx = canvas.getContext('2d');
-			if (!ctx) {
-				URL.revokeObjectURL(url);
-				reject(new Error('Could not get canvas context'));
-				return;
-			}
-			ctx.fillStyle = '#ffffff';
-			ctx.fillRect(0, 0, canvas.width, canvas.height);
-			ctx.scale(scale, scale);
-			ctx.drawImage(img, 0, 0);
-			URL.revokeObjectURL(url);
-			resolve(canvas.toDataURL('image/png'));
-		};
-		img.onerror = () => {
-			URL.revokeObjectURL(url);
-			reject(new Error('Failed to load SVG as image'));
-		};
-		img.src = url;
-	});
-}
-
 export function JSXPreviewExport({
 	className,
 	filename = 'chart',
@@ -493,24 +325,17 @@ export function JSXPreviewExport({
 
 		setIsExporting(true);
 		try {
-			const container =
-				containerRef.current.querySelector('.jsx-preview-content') as HTMLElement
-				|| containerRef.current;
+			// Dynamic import to avoid bundling html2canvas unless needed
+			const html2canvas = (await import('html2canvas')).default;
 
-			// Find the largest SVG (the chart, not small icons)
-			const svgElements = container.querySelectorAll('svg');
-			if (svgElements.length === 0) {
-				console.warn('No SVG elements found to export as PNG');
-				return;
-			}
-			const svg = Array.from(svgElements).reduce((largest, el) =>
-				el.getBoundingClientRect().width > largest.getBoundingClientRect().width ? el : largest
-			);
+			const canvas = await html2canvas(containerRef.current, {
+				backgroundColor: '#ffffff',
+				scale: 2, // Higher quality
+			});
 
-			const dataUrl = await svgWithLegendToPng(svg, container);
 			const link = document.createElement('a');
 			link.download = `${filename}.png`;
-			link.href = dataUrl;
+			link.href = canvas.toDataURL('image/png');
 			link.click();
 		} catch (err) {
 			console.error('Failed to export PNG:', err);
@@ -554,6 +379,8 @@ export function JSXPreviewExport({
 		URL.revokeObjectURL(url);
 	}, [containerRef, filename]);
 
+	// TODO: PNG export via html2canvas may fail with oklch() CSS colors.
+	// Consider replacing with modern-screenshot or dom-to-image-more.
 	return (
 		<div className={cn('flex items-center gap-2', className)}>
 			<Button
