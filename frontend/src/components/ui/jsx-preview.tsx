@@ -313,6 +313,68 @@ export interface JSXPreviewExportProps {
 	filename?: string;
 }
 
+/**
+ * Convert an SVG element to a PNG data URL via the browser's native
+ * SVG rendering. This bypasses html2canvas entirely and avoids issues
+ * with modern CSS color functions like oklch().
+ */
+function svgToPng(svgElement: SVGElement, scale = 2): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const svg = svgElement.cloneNode(true) as SVGElement;
+
+		// Ensure dimensions are set
+		const width = svgElement.clientWidth || svgElement.getBoundingClientRect().width;
+		const height = svgElement.clientHeight || svgElement.getBoundingClientRect().height;
+		svg.setAttribute('width', String(width));
+		svg.setAttribute('height', String(height));
+
+		// Inline computed styles so the exported SVG looks correct
+		const allElements = svgElement.querySelectorAll('*');
+		const clonedElements = svg.querySelectorAll('*');
+		allElements.forEach((originalEl, i) => {
+			const clonedEl = clonedElements[i] as SVGElement | HTMLElement;
+			if (!clonedEl) return;
+			const computed = window.getComputedStyle(originalEl);
+			const important = ['fill', 'stroke', 'font-family', 'font-size', 'font-weight', 'opacity', 'color'];
+			important.forEach((prop) => {
+				const val = computed.getPropertyValue(prop);
+				if (val) {
+					clonedEl.style.setProperty(prop, val);
+				}
+			});
+		});
+
+		const serializer = new XMLSerializer();
+		const svgString = serializer.serializeToString(svg);
+		const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+		const url = URL.createObjectURL(svgBlob);
+
+		const img = new window.Image();
+		img.onload = () => {
+			const canvas = document.createElement('canvas');
+			canvas.width = width * scale;
+			canvas.height = height * scale;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) {
+				URL.revokeObjectURL(url);
+				reject(new Error('Could not get canvas context'));
+				return;
+			}
+			ctx.fillStyle = '#ffffff';
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			ctx.scale(scale, scale);
+			ctx.drawImage(img, 0, 0);
+			URL.revokeObjectURL(url);
+			resolve(canvas.toDataURL('image/png'));
+		};
+		img.onerror = () => {
+			URL.revokeObjectURL(url);
+			reject(new Error('Failed to load SVG as image'));
+		};
+		img.src = url;
+	});
+}
+
 export function JSXPreviewExport({
 	className,
 	filename = 'chart',
@@ -325,17 +387,22 @@ export function JSXPreviewExport({
 
 		setIsExporting(true);
 		try {
-			// Dynamic import to avoid bundling html2canvas unless needed
-			const html2canvas = (await import('html2canvas')).default;
+			// Find SVG elements (Recharts renders as SVG)
+			const svgElements = containerRef.current.querySelectorAll('svg');
+			if (svgElements.length === 0) {
+				console.warn('No SVG elements found to export as PNG');
+				return;
+			}
 
-			const canvas = await html2canvas(containerRef.current, {
-				backgroundColor: '#ffffff',
-				scale: 2, // Higher quality
-			});
+			// Use the largest SVG (usually the chart, not icons)
+			const svg = Array.from(svgElements).reduce((largest, el) =>
+				el.getBoundingClientRect().width > largest.getBoundingClientRect().width ? el : largest
+			);
 
+			const dataUrl = await svgToPng(svg);
 			const link = document.createElement('a');
 			link.download = `${filename}.png`;
-			link.href = canvas.toDataURL('image/png');
+			link.href = dataUrl;
 			link.click();
 		} catch (err) {
 			console.error('Failed to export PNG:', err);
