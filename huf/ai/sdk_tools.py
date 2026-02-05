@@ -29,7 +29,8 @@ MUTATING_TOOL_TYPES = {
     "Update Document", "Update Multiple Documents", 
     "Delete Document", "Delete Multiple Documents",
     "Submit Document", "Cancel Document",
-    "Set Value", "POST", "Run Agent"
+    "Set Value", "POST", "Run Agent",
+    "Attach File to Document"
 }
 
 def _check_tool_permission(tool_type: str, context: dict = None):
