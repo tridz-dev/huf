@@ -77,6 +77,7 @@ import { CopyButton } from './CopyButton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Image } from '@/components/ai-elements/image';
 import { MessageLoadingState } from './MessageLoadingState';
+import { ChartArtifact, isChartResult } from '@/components/ai-elements/chart-artifact';
 
 // Map tool_status to ExtendedToolState
 const mapToolStatusToState = (status?: string): ExtendedToolState => {
@@ -919,22 +920,46 @@ export function ChatWindow({ chatId, onConversationCreated }: ChatWindowProps) {
 
                           {/* Render tool component if this is a tool result message */}
                           {message.tools && message.tools.length > 0 ? (
-                            message.tools.map((tool, toolIndex) => (
-                              <Tool key={`${message.key}-tool-${toolIndex}`}>
-                                <ToolHeader
-                                  title={tool.name}
-                                  type={`tool-${tool.name}` as any}
-                                  state={tool.status}
-                                />
-                                <ToolContent>
-                                  <ToolInput input={tool.parameters} />
-                                  <ToolOutput
-                                    output={tool.result}
-                                    errorText={tool.error}
+                            message.tools.map((tool, toolIndex) => {
+                              // Parse tool result to check if it's a chart
+                              let parsedResult: any = null;
+                              if (tool.result) {
+                                try {
+                                  parsedResult = typeof tool.result === 'string'
+                                    ? JSON.parse(tool.result)
+                                    : tool.result;
+                                } catch {
+                                  parsedResult = null;
+                                }
+                              }
+
+                              // Check if this is a chart result
+                              if (isChartResult(parsedResult)) {
+                                return (
+                                  <ChartArtifact
+                                    key={`${message.key}-chart-${toolIndex}`}
+                                    chart={parsedResult}
                                   />
-                                </ToolContent>
-                              </Tool>
-                            ))
+                                );
+                              }
+
+                              return (
+                                <Tool key={`${message.key}-tool-${toolIndex}`}>
+                                  <ToolHeader
+                                    title={tool.name}
+                                    type={`tool-${tool.name}` as any}
+                                    state={tool.status}
+                                  />
+                                  <ToolContent>
+                                    <ToolInput input={tool.parameters} />
+                                    <ToolOutput
+                                      output={tool.result}
+                                      errorText={tool.error}
+                                    />
+                                  </ToolContent>
+                                </Tool>
+                              );
+                            })
                           ) : (
                             <>
                             <MessageContent>

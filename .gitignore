@@ -18,3 +18,5 @@ docs/yarn.lock
 
 huf/public/_next
 huf/www/huf/docs
+# Research/reference repositories
+.research/

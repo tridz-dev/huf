@@ -307,6 +307,40 @@ scheduler_events = {
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
+# Tool definitions for HUF agents
+# These are auto-discovered and synced to Agent Tool Function documents
+huf_tools = [
+    {
+        "tool_name": "generate_chart",
+        "description": """Generate interactive data visualization charts. Use this tool when the user wants to visualize data as a chart.
+
+Supported chart types:
+- bar: Compare values across categories
+- line: Show trends over time
+- pie: Show proportions of a whole
+- radar: Compare multiple variables
+- heatmap: Show intensity across two dimensions
+- sankey: Show flow between nodes
+- treemap: Hierarchical data as nested rectangles
+- sunburst: Hierarchical data as concentric rings
+- chord: Relationships between entities
+- calendar: Values over calendar days
+
+Data format examples:
+- bar: [{"category": "A", "value": 10}, {"category": "B", "value": 20}]
+- line: [{"id": "Series 1", "data": [{"x": "Jan", "y": 100}, {"x": "Feb", "y": 150}]}]
+- pie: [{"id": "Slice 1", "label": "Slice 1", "value": 30}, {"id": "Slice 2", "label": "Slice 2", "value": 70}]
+- sankey: {"nodes": [{"id": "A"}, {"id": "B"}], "links": [{"source": "A", "target": "B", "value": 100}]}""",
+        "function_path": "huf.ai.chart_tools.handle_generate_chart",
+        "parameters": [
+            {"name": "chart_type", "type": "Data", "required": True},
+            {"name": "title", "type": "Data", "required": True},
+            {"name": "data", "type": "JSON", "required": True},
+            {"name": "config", "type": "JSON", "required": False},
+        ],
+    },
+]
+
 fixtures = [
     {
         "dt": "Custom HTML Block",
