@@ -1550,13 +1550,12 @@ async def handle_transcribe_audio(
         else:
             return {"success": False, "error": "Either file_id or file_url is required"}
         
-        # Get file content
+        # Get file path for LiteLLM
+        # LiteLLM transcription accepts file path or file-like object
         try:
             file_path = file_doc.get_full_path()
-            with open(file_path, "rb") as audio_file:
-                file_content = audio_file.read()
         except Exception as e:
-            return {"success": False, "error": f"Error reading file: {str(e)}"}
+            return {"success": False, "error": f"Error getting file path: {str(e)}"}
         
         # Determine transcription model
         if not model:
@@ -1578,9 +1577,10 @@ async def handle_transcribe_audio(
         import litellm
         
         # Build parameters for transcription
+        # LiteLLM accepts file path (string) or file-like object
         transcription_params = {
             "model": normalized_model,
-            "file": file_content,
+            "file": file_path,  # Pass file path directly
             "api_key": api_key
         }
         
