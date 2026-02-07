@@ -136,6 +136,11 @@ const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitle>(
         if (e.key == "Enter" && active && inputRef?.current && (inputRef?.current.value != value)){
             inputRef.current.blur()
         }
+        if (e.key == "Escape" && active){
+            resetValue()
+            inputRef.current?.blur()
+            setActive(false)
+        }
     }
 
     async function updateTitle(value:string){
