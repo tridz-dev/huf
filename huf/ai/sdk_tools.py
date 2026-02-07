@@ -1482,3 +1482,29 @@ async def handle_generate_image(
         frappe.log_error(f"Image generation error: {str(e)}", "Image Generation Tool")
         return {"success": False, "error": str(e)}
 
+
+def _get_default_tts_model(provider_name: str) -> str:
+    """
+    Get default TTS model for a provider.
+    
+    Based on LiteLLM documentation: https://docs.litellm.ai/docs/audio_speech
+    
+    Args:
+        provider_name: Lowercase provider name (e.g., "openai", "google", "elevenlabs")
+    
+    Returns:
+        str: Default TTS model name, or None if not supported
+    """
+    defaults = {
+        "openai": "tts-1",
+        "azure": "tts-1",
+        "google": "gemini/gemini-2.5-flash-preview-tts",
+        "gemini": "gemini/gemini-2.5-flash-preview-tts",
+        "vertex_ai": "vertex_ai/gemini-2.5-flash-preview-tts",
+        "elevenlabs": "elevenlabs/eleven_multilingual_v2",
+        "aws": "aws/polly",
+        "minimax": "minimax/speech-01",
+    }
+    
+    return defaults.get(provider_name.lower())
+
