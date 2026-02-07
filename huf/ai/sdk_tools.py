@@ -1538,8 +1538,13 @@ async def handle_transcribe_audio(
                 return {"success": False, "error": f"File not found: {str(e)}"}
         elif file_url:
             # Try to find file by URL
-            file_path = file_url.replace("/files/", "")
-            file_doc = frappe.get_doc("File", {"file_url": file_url})
+            try:
+                file_doc = frappe.get_doc("File", {"file_url": file_url})
+            except Exception:
+                # Try alternative lookup
+                file_name = file_url.replace("/files/", "")
+                file_doc = frappe.get_doc("File", {"file_name": file_name})
+            
             if not file_doc:
                 return {"success": False, "error": f"File not found at URL: {file_url}"}
         else:
