@@ -11,6 +11,7 @@ export interface AgentConversationDoc {
   name: string;
   title: string;
   agent: string;
+  model?: string;
   last_activity?: string;
   modified?: string;
 }

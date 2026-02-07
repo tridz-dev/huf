@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { getConversationMessages, createAgentRunFeedback, type ChatMessage } from "@/services/chatApi";
+import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
+import { getAgent } from "@/services/agentApi";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent } from '@/hooks/useChatSocket';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
@@ -34,8 +35,47 @@ export function ChatMessageList({
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
+    const [isModelMismatch, setIsModelMismatch] = useState(false);
 
     const { agentName, agentColor } = useChatAgentIdentity(chatId, searchParams);
+
+    // Check for model mismatch between conversation and agent
+    useEffect(() => {
+        if (!chatId || !agentName) {
+            setIsModelMismatch(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        async function checkModelMismatch() {
+            try {
+                const [conversation, agent] = await Promise.all([
+                    getConversation(chatId!),
+                    getAgent(agentName),
+                ]);
+
+                if (cancelled) return;
+
+                if (conversation?.model && agent?.model) {
+                    setIsModelMismatch(conversation.model !== agent.model);
+                } else {
+                    setIsModelMismatch(false);
+                }
+            } catch (error) {
+                console.error('Error checking model mismatch:', error);
+                if (!cancelled) {
+                    setIsModelMismatch(false);
+                }
+            }
+        }
+
+        checkModelMismatch();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [chatId, agentName]);
 
     // Memoize initialParams to ensure stable reference but detect chatId changes
     const initialParams = useMemo(() => {
@@ -223,6 +263,7 @@ export function ChatMessageList({
                 isCreatingConversationRef={isCreatingConversationRef}
                 newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
                 setMessages={setMessages}
+                isModelMismatch={isModelMismatch}
             />
             </div>
         </div>
