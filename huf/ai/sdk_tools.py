@@ -1248,8 +1248,8 @@ async def handle_generate_image(
         size: Image size (1024x1024, 1792x1024, 1024x1792, etc.) - Standard parameter
         quality: Image quality (standard, hd, high, medium, low)
         n: Number of images to generate (1-10)
-        aspect_ratio: (Optional) Aspect ratio for image (e.g., "16:9", "9:16", "1:1") - For Google/Gemini models
-        image_size: (Optional) Image resolution (e.g., "2K", "4K", "1K") - For Google/Gemini models
+        aspect_ratio: (Optional) Aspect ratio for image (e.g., "16:9", "9:16", "1:1") - Supported by Google/Gemini. LiteLLM forwards to providers that support it.
+        image_size: (Optional) Image resolution (e.g., "2K", "4K", "1K") - Supported by Google/Gemini. LiteLLM forwards to providers that support it.
         agent_name: Automatically passed from context
         conversation_id: Automatically passed from context
     
@@ -1308,16 +1308,14 @@ async def handle_generate_image(
             "api_key": api_key
         }
         
-        # Add provider-specific parameters for Google/Gemini models
-        # These will be passed as kwargs to the provider API
-        provider_name = provider_doc.provider_name.lower()
-        if provider_name in ["google", "vertex_ai", "gemini"] and (aspect_ratio or image_size):
-            # For Google models, we can pass imageConfig parameters
-            # LiteLLM will forward these as provider-specific kwargs
-            if aspect_ratio:
-                generation_params["aspect_ratio"] = aspect_ratio
-            if image_size:
-                generation_params["image_size"] = image_size
+        # Add provider-specific parameters
+        # LiteLLM will forward these as kwargs to providers that support them
+        # Per LiteLLM docs: "Any non-openai params, will be treated as provider-specific params"
+        # Providers that don't support these will ignore them gracefully
+        if aspect_ratio:
+            generation_params["aspect_ratio"] = aspect_ratio
+        if image_size:
+            generation_params["image_size"] = image_size
         
         response = await asyncio.to_thread(
             litellm.image_generation,

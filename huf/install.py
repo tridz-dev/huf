@@ -215,7 +215,7 @@ def create_image_generation_tool():
             "fieldname": "aspect_ratio",
             "type": "string",
             "required": 0,
-            "description": "Aspect ratio for the image (e.g., '16:9', '9:16', '1:1'). Supported by Google/Gemini models. Overrides size parameter when used.",
+            "description": "Aspect ratio for the image (e.g., '16:9', '9:16', '1:1'). Supported by Google/Gemini models. LiteLLM forwards this to providers that support it. Overrides size parameter when used.",
             "options": "16:9\n9:16\n1:1\n4:3\n3:4"
         },
         {
@@ -223,7 +223,7 @@ def create_image_generation_tool():
             "fieldname": "image_size",
             "type": "string",
             "required": 0,
-            "description": "Image resolution quality (e.g., '2K', '4K', '1K'). Supported by Google/Gemini models. Higher resolution improves text readability in generated images.",
+            "description": "Image resolution quality (e.g., '2K', '4K', '1K'). Supported by Google/Gemini models. LiteLLM forwards this to providers that support it. Higher resolution improves text readability in generated images.",
             "options": "1K\n2K\n4K"
         },
         {
