@@ -20,7 +20,7 @@ import { AgentModelSelector } from './AgentModelSelector';
 import { Button } from '../ui/button';
 import { DEFAULT_AGENT_COLOR } from '@/data/color';
 import { getAgent } from '@/services/agentApi';
-import ConversationTitle from './ConversationTitle';
+import ConversationTitle, { type ConversationTitleRef } from './ConversationTitle';
 import ConversationMenu from './ConversationMenu';
 
 function getRecentBucketLabel(ts?: string): string {
@@ -57,6 +57,17 @@ export default function ChatListing() {
   });
 
   const [activeTab, setActiveTab] = useState('agent');
+
+  // Ref map to store refs for each conversation title
+  const titleRefs = useRef<Map<string, ConversationTitleRef>>(new Map());
+
+  // Callback to handle rename action
+  const handleRename = useCallback((conversationId: string) => {
+    const titleRef = titleRefs.current.get(conversationId);
+    if (titleRef) {
+      titleRef.activateInput();
+    }
+  }, []);
 
   // Fetch agents with counts on mount
   useEffect(() => {
@@ -152,6 +163,8 @@ export default function ChatListing() {
                   agent={agent}
                   selectedChatId={selectedChatId}
                   isOpen={openAgents.includes(agent.name)}
+                  titleRefs={titleRefs}
+                  onRename={handleRename}
                 />
               ))}
             </Accordion>
@@ -162,6 +175,8 @@ export default function ChatListing() {
           <RecentsConversationList
             selectedChatId={selectedChatId}
             isActive={activeTab === 'recents'}
+            titleRefs={titleRefs}
+            onRename={handleRename}
           />
         </TabsContent>
         </Tabs>
@@ -175,10 +190,14 @@ function AgentConversationItem({
   agent,
   selectedChatId,
   isOpen,
+  titleRefs,
+  onRename,
 }: {
   agent: AgentWithCount;
   selectedChatId: string | null;
   isOpen: boolean;
+  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  onRename: (conversationId: string) => void;
 }) {
   const navigate = useNavigate();
 
@@ -261,9 +280,23 @@ function AgentConversationItem({
             {conversations.map((chat) => {
               const isSelected = selectedChatId === chat.id;
               return (
-                <ConversationMenu key={chat.id}>
+                <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
                   <Link
                     to={`/chat/${chat.id}`}
+                    onClick={(e) => {
+                      // Only prevent navigation if the click is directly on a menu item
+                      // Check if the event originated from within the context menu portal
+                      const target = e.target as HTMLElement;
+                      const isFromMenu = target.closest('[data-radix-portal]') || 
+                                        target.closest('[role="menuitem"]') ||
+                                        (e.nativeEvent as any).composedPath?.().some((el: any) => 
+                                          el?.getAttribute?.('role') === 'menuitem'
+                                        );
+                      if (isFromMenu) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }
+                    }}
                     className={cn(
                       'group flex w-full text-left flex-col p-1 rounded-md cursor-pointer transition-all border-l-2',
                       isSelected
@@ -272,6 +305,10 @@ function AgentConversationItem({
                     )}
                   >
                     <ConversationTitle
+                    ref={(el) => {
+                      if (el) titleRefs.current.set(chat.id, el);
+                      else titleRefs.current.delete(chat.id);
+                    }}
                     variant="agent_list"
                     value={chat.title}
                     conversationId={chat.id}
@@ -309,9 +346,13 @@ function AgentConversationItem({
 function RecentsConversationList({
   selectedChatId,
   isActive,
+  titleRefs,
+  onRename,
 }: {
   selectedChatId: string | null;
   isActive: boolean;
+  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  onRename: (conversationId: string) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [agentColorMap, setAgentColorMap] = useState<Map<string, string | null>>(new Map());
@@ -419,10 +460,24 @@ function RecentsConversationList({
                     {items.map((chat) => {
                       const isSelected = selectedChatId === chat.id;
                       return (
-                        <ConversationMenu key={chat.id}>
+                        <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
                           <Link
                             to={`/chat/${chat.id}`}
                             type="button"
+                            onClick={(e) => {
+                              // Only prevent navigation if the click is directly on a menu item
+                              // Check if the event originated from within the context menu portal
+                              const target = e.target as HTMLElement;
+                              const isFromMenu = target.closest('[data-radix-portal]') || 
+                                                target.closest('[role="menuitem"]') ||
+                                                (e.nativeEvent as any).composedPath?.().some((el: any) => 
+                                                  el?.getAttribute?.('role') === 'menuitem'
+                                                );
+                              if (isFromMenu) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }
+                            }}
                             className={cn(
                               'group flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border relative',
                               isSelected
@@ -439,6 +494,10 @@ function RecentsConversationList({
                               </ChatAvatar>
                               <div className="mb-1 w-full">
                                 <ConversationTitle
+                                ref={(el) => {
+                                  if (el) titleRefs.current.set(chat.id, el);
+                                  else titleRefs.current.delete(chat.id);
+                                }}
                                 variant="recents_list"
                                 value={chat.title}
                                 conversationId={chat.id}
