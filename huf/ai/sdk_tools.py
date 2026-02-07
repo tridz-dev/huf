@@ -1230,6 +1230,8 @@ async def handle_generate_image(
     size: str = "1024x1024",
     quality: str = "standard",
     n: int = 1,
+    aspect_ratio: str = None,
+    image_size: str = None,
     agent_name: str = None,
     conversation_id: str = None,
     **kwargs
@@ -1243,17 +1245,20 @@ async def handle_generate_image(
     
     Args:
         prompt: Text description of the image to generate
-        size: Image size (1024x1024, 1792x1024, 1024x1792, etc.)
+        size: Image size (1024x1024, 1792x1024, 1024x1792, etc.) - Standard parameter
         quality: Image quality (standard, hd, high, medium, low)
         n: Number of images to generate (1-10)
+        aspect_ratio: (Optional) Aspect ratio for image (e.g., "16:9", "9:16", "1:1") - For Google/Gemini models
+        image_size: (Optional) Image resolution (e.g., "2K", "4K", "1K") - For Google/Gemini models
         agent_name: Automatically passed from context
         conversation_id: Automatically passed from context
     
     Returns:
         dict: {
             "success": bool,
-            "images": [{"url": str, "file_id": str}],
-            "message": str
+            "images": [{"url": str, "file_id": str, "message_id": str, "prompt": str}],
+            "message": str,
+            "conversation_id": str
         }
     """
     try:
@@ -1293,14 +1298,30 @@ async def handle_generate_image(
         # Call LiteLLM image generation
         import litellm
         
+        # Build parameters for image generation
+        generation_params = {
+            "prompt": prompt,
+            "model": normalized_model,
+            "n": n,
+            "size": size,
+            "quality": quality,
+            "api_key": api_key
+        }
+        
+        # Add provider-specific parameters for Google/Gemini models
+        # These will be passed as kwargs to the provider API
+        provider_name = provider_doc.provider_name.lower()
+        if provider_name in ["google", "vertex_ai", "gemini"] and (aspect_ratio or image_size):
+            # For Google models, we can pass imageConfig parameters
+            # LiteLLM will forward these as provider-specific kwargs
+            if aspect_ratio:
+                generation_params["aspect_ratio"] = aspect_ratio
+            if image_size:
+                generation_params["image_size"] = image_size
+        
         response = await asyncio.to_thread(
             litellm.image_generation,
-            prompt=prompt,
-            model=normalized_model,
-            n=n,
-            size=size,
-            quality=quality,
-            api_key=api_key
+            **generation_params
         )
         
         # Get conversation_index once if conversation_id exists
@@ -1447,7 +1468,13 @@ async def handle_generate_image(
                 
                 images.append({
                     "url": file_url or f"/files/{filename}",
-                    "file_id": file_id
+                    "file_id": file_id,
+                    "message_id": message_doc.name if message_doc else None,
+                    "prompt": prompt,
+                    "size": size,
+                    "quality": quality,
+                    "aspect_ratio": aspect_ratio,
+                    "image_size": image_size
                 })
         
         # Update conversation total_messages once after all images are created
@@ -1475,10 +1502,68 @@ async def handle_generate_image(
         return {
             "success": True,
             "images": images,
-            "message": f"Generated {len(images)} image(s) successfully"
+            "message": f"Generated {len(images)} image(s) successfully",
+            "conversation_id": conversation_id
         }
         
     except Exception as e:
         frappe.log_error(f"Image generation error: {str(e)}", "Image Generation Tool")
+        return {"success": False, "error": str(e)}
+
+
+def handle_get_conversation_images(conversation_id: str = None, limit: int = 10, **kwargs):
+    """
+    Retrieve generated images from a conversation.
+    
+    This helper function allows agents to fetch images that were generated
+    in a conversation, including by child agents via run_agent.
+    
+    Args:
+        conversation_id: The conversation ID to fetch images from
+        limit: Maximum number of images to return (default: 10)
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "images": [{"message_id": str, "url": str, "content": str, "created": str}],
+            "count": int
+        }
+    """
+    try:
+        if not conversation_id:
+            return {"success": False, "error": "conversation_id is required"}
+        
+        # Query Agent Messages with kind="Image" from the conversation
+        messages = frappe.get_all(
+            "Agent Message",
+            filters={
+                "conversation": conversation_id,
+                "kind": "Image"
+            },
+            fields=["name", "content", "generated_image", "creation", "conversation_index"],
+            order_by="conversation_index desc",
+            limit=limit
+        )
+        
+        images = []
+        for msg in messages:
+            if msg.generated_image:
+                images.append({
+                    "message_id": msg.name,
+                    "url": msg.generated_image,
+                    "content": msg.content,
+                    "created": str(msg.creation),
+                    "conversation_index": msg.conversation_index
+                })
+        
+        return {
+            "success": True,
+            "images": images,
+            "count": len(images),
+            "conversation_id": conversation_id
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Error fetching conversation images: {str(e)}", "Get Conversation Images")
         return {"success": False, "error": str(e)}
 
