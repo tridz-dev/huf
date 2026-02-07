@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Clock4, Plus, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Skeleton } from '../ui/skeleton';
@@ -82,6 +83,12 @@ export default function ChatListing() {
         }
       } catch (error) {
         console.error('Error fetching agents:', error);
+        if (!cancelled) {
+          toast.error('Failed to load agents', {
+            description: error instanceof Error ? error.message : 'An error occurred while fetching agents. Please try again.',
+            duration: 5000,
+          });
+        }
       } finally {
         if (!cancelled) {
           setAgentsLoading(false);
@@ -211,6 +218,7 @@ function AgentConversationItem({
     loadingMore,
     hasMore,
     loadMore,
+    error,
   } = useInfiniteScroll(
     {
       fetchFn: async (params) => {
@@ -233,6 +241,16 @@ function AgentConversationItem({
       enabled: isOpen, // Only enable when open
     }
   );
+
+  // Show error toast when there's an error
+  useEffect(() => {
+    if (error && isOpen) {
+      toast.error('Failed to load conversations', {
+        description: error.message || `An error occurred while fetching conversations for ${agent.agent_name}. Please try again.`,
+        duration: 5000,
+      });
+    }
+  }, [error, isOpen, agent.agent_name]);
 
   return (
     <AccordionItem value={agent.name} className="border-b-0">
@@ -369,6 +387,16 @@ function RecentsConversationList({
     enabled: isActive, // Only load when tab is active
     refreshOnRouteChange: false, // Don't refresh on route change for this use case
   });
+
+  // Show error toast when there's an error
+  useEffect(() => {
+    if (error && isActive) {
+      toast.error('Failed to load conversations', {
+        description: error.message || 'An error occurred while fetching conversations. Please try again.',
+        duration: 5000,
+      });
+    }
+  }, [error, isActive]);
 
   // Fetch agent colors for unique agents in conversations
   useEffect(() => {

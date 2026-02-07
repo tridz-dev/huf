@@ -383,8 +383,9 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   }, [initialLoading]);
 
   // Automatically observe sentinel element to load more items
+  // Don't auto-load more if there's an error (prevents infinite retries)
   useEffect(() => {
-    if (!autoLoadMore || !hasMore || !isEnabled) {
+    if (!autoLoadMore || !hasMore || !isEnabled || error) {
       return;
     }
 
@@ -483,7 +484,7 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
         observerRef.current = null;
       }
     };
-  }, [autoLoadMore, hasMore, isEnabled, loadMore, effectiveRootMargin, items.length, isReverse]);
+  }, [autoLoadMore, hasMore, isEnabled, loadMore, effectiveRootMargin, items.length, isReverse, error]);
 
   // Set search query
   const setSearch = useCallback((value: string) => {
@@ -515,15 +516,17 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   }, []);
 
   // Reset and reload when search or filters change (debounced)
+  // Don't auto-load if there's an error (prevents infinite retries)
   useEffect(() => {
-    if (autoLoad && isEnabled) {
+    if (autoLoad && isEnabled && !error) {
       reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, debouncedFilters, autoLoad, isEnabled, reset]);
+  }, [debouncedSearch, debouncedFilters, autoLoad, isEnabled, reset, error]);
 
   // Reload when initial params change or component mounts
   // Note: Don't include isEnabled here - we handle it separately to preserve items
+  // This effect always clears error and resets state, so it's safe to fetch
   useEffect(() => {
     currentPageRef.current = 0;
     setItems([]);
@@ -543,16 +546,18 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   }, [initialParamsKey, autoLoad, fetchData]);
 
   // Handle enabled state separately - preserve items when toggling
+  // Don't auto-fetch if there's an error (prevents infinite retries)
   useEffect(() => {
     if (
       autoLoad &&
       isEnabled &&
+      !error &&
       !didFetchAtLeastOnceRef.current &&
       items.length === 0 &&
       !initialLoading &&
       !loading
     ) {
-      // Only fetch if enabled, no items, not loading, and we haven't already fetched once.
+      // Only fetch if enabled, no items, not loading, no error, and we haven't already fetched once.
       fetchData(false);
     } else if (!isEnabled) {
       // When disabled, just stop loading but preserve items
@@ -560,7 +565,7 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [isEnabled, autoLoad, items.length, initialLoading, loading, fetchData]);
+  }, [isEnabled, autoLoad, items.length, initialLoading, loading, fetchData, error]);
 
   return {
     items,
