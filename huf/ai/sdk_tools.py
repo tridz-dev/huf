@@ -1509,3 +1509,43 @@ async def handle_generate_image(
         frappe.log_error(f"Image generation error: {str(e)}", "Image Generation Tool")
         return {"success": False, "error": str(e)}
 
+
+def _determine_ocr_strategy(file_path: str, file_type: str) -> str:
+    """Determine OCR strategy based on file type."""
+    # Check file extension if type not clear
+    ext = file_path.lower().split('.')[-1] if '.' in file_path else ""
+    
+    # PDF and documents - use OCR endpoint
+    if file_type in ["pdf", "application/pdf"] or ext == "pdf":
+        return "ocr"
+    
+    # Images - use vision models
+    if file_type.startswith("image/") or ext in ["jpg", "jpeg", "png", "webp", "gif"]:
+        return "vision"
+    
+    # Default to vision for unknown types
+    return "vision"
+
+
+def _get_default_ocr_model(provider_name: str, strategy: str) -> str:
+    """Get default OCR/Vision model for a provider."""
+    if strategy == "ocr":
+        # OCR endpoint models
+        defaults = {
+            "mistral": "mistral/mistral-ocr-latest",
+            "azure": "azure_ai/ocr",
+            "google": "vertex_ai/ocr",
+            "vertex_ai": "vertex_ai/ocr",
+        }
+    else:
+        # Vision models
+        defaults = {
+            "mistral": "mistral/mistral-small-latest",
+            "openai": "gpt-4o",
+            "google": "gemini/gemini-2.0-flash-exp",
+            "gemini": "gemini/gemini-2.0-flash-exp",
+            "anthropic": "claude-3-5-sonnet-20241022",
+        }
+    
+    return defaults.get(provider_name.lower())
+
