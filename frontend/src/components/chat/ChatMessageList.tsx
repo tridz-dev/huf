@@ -95,6 +95,7 @@ export function ChatMessageList({
         loadingMore,
         hasMore,
         sentinelRef,
+        error: messagesError,
     } = useInfiniteScroll<
         { limit?: number; start?: number },
         ChatMessage
@@ -138,6 +139,16 @@ export function ChatMessageList({
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
     });
+
+    // Show error toast when there's an error loading messages
+    useEffect(() => {
+        if (messagesError && chatId) {
+            toast.error('Failed to load messages', {
+                description: messagesError.message || 'An error occurred while fetching messages. Please try again.',
+                duration: 5000,
+            });
+        }
+    }, [messagesError, chatId]);
 
     // Transform conversationItems to MessageType and merge with socket messages
     useEffect(() => {
@@ -224,6 +235,13 @@ export function ChatMessageList({
                     {initialLoading ? (
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
+                        </div>
+                    ) : messagesError && !initialLoading ? (
+                        <div className="flex items-center justify-center py-20">
+                            <div className="text-center">
+                                <p className="text-sm text-destructive mb-2">Failed to load messages</p>
+                                <p className="text-xs text-muted-foreground">{messagesError.message || 'An error occurred while fetching messages.'}</p>
+                            </div>
                         </div>
                     ) : messages.length === 0 && !isNewChat ? (
                         <div className="flex items-center justify-center py-20">
