@@ -1549,3 +1549,73 @@ def _get_default_ocr_model(provider_name: str, strategy: str) -> str:
     
     return defaults.get(provider_name.lower())
 
+
+async def _process_with_ocr_endpoint(
+    file_path: str,
+    model: str,
+    api_key: str,
+    pages: str = None,
+    include_images: bool = False
+):
+    """Process document using LiteLLM OCR endpoint."""
+    import litellm
+    import base64
+    
+    try:
+        # Read file and encode to base64
+        with open(file_path, "rb") as f:
+            file_content = f.read()
+            base64_content = base64.b64encode(file_content).decode('utf-8')
+        
+        # Determine document type
+        ext = file_path.lower().split('.')[-1]
+        mime_type = "application/pdf" if ext == "pdf" else f"image/{ext}"
+        
+        # Build OCR parameters
+        ocr_params = {
+            "model": model,
+            "document": {
+                "type": "document_url",
+                "document_url": f"data:{mime_type};base64,{base64_content}"
+            },
+            "api_key": api_key
+        }
+        
+        # Add optional parameters
+        if pages:
+            # Convert comma-separated string to list of integers
+            page_list = [int(p.strip()) for p in pages.split(",")]
+            ocr_params["pages"] = page_list
+        
+        if include_images:
+            ocr_params["include_image_base64"] = True
+        
+        # Call LiteLLM OCR
+        response = await asyncio.to_thread(
+            litellm.ocr,
+            **ocr_params
+        )
+        
+        # Extract text from all pages
+        all_text = []
+        pages_data = []
+        
+        for page in response.pages:
+            all_text.append(f"## Page {page.index + 1}\n\n{page.markdown}")
+            pages_data.append({
+                "index": page.index,
+                "text": page.markdown,
+                "dimensions": page.dimensions if hasattr(page, 'dimensions') else None
+            })
+        
+        combined_text = "\n\n".join(all_text)
+        
+        return {
+            "success": True,
+            "text": combined_text,
+            "pages": pages_data
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
