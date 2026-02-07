@@ -28,7 +28,7 @@ export default function ConversationMenu({children, onRename}:ConversationMenuPr
             }}>
             <ContextMenuGroup>
                 <ContextMenuItem onSelect={handleRename}>
-                    <PencilIcon/>
+                    <PencilIcon className="w-4 h-4 mr-2"/>
                     Rename
                 </ContextMenuItem>
             </ContextMenuGroup>
