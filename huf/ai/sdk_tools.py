@@ -1675,3 +1675,202 @@ async def _process_with_vision_model(
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
+async def handle_ocr_document(
+    file_id: str = None,
+    file_url: str = None,
+    pages: str = None,
+    include_images: bool = False,
+    model: str = None,
+    agent_name: str = None,
+    conversation_id: str = None,
+    **kwargs
+):
+    """
+    Extract text from documents and images using OCR.
+    
+    Intelligently routes to:
+    - LiteLLM OCR endpoint for PDFs (multi-page documents)
+    - Vision models for single images (better context understanding)
+    
+    Args:
+        file_id: File document ID (preferred)
+        file_url: File URL/path (alternative)
+        pages: Comma-separated page numbers (e.g., "0,1,2") - PDFs only
+        include_images: Extract images from document (PDFs only)
+        model: Optional model override
+        agent_name: Automatically passed from context
+        conversation_id: Automatically passed from context
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "text": str,              # Extracted text in markdown
+            "pages": list,            # Page-by-page breakdown (PDFs)
+            "strategy": str,          # "ocr" or "vision"
+            "file_id": str,
+            "message_id": str,
+            "model": str
+        }
+    """
+    try:
+        # Get agent configuration from context
+        if not agent_name:
+            return {"success": False, "error": "Agent name not found in context"}
+        
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+        
+        if not api_key:
+            return {"success": False, "error": "API key not configured for provider"}
+        
+        # Get file
+        file_doc = None
+        if file_id:
+            try:
+                file_doc = frappe.get_doc("File", file_id)
+            except Exception as e:
+                return {"success": False, "error": f"File not found: {str(e)}"}
+        elif file_url:
+            # Try to find file by URL
+            file_path = file_url.replace("/files/", "")
+            file_doc = frappe.db.get_value("File", 
+                {"file_url": file_url}, 
+                ["name"], as_dict=True)
+            if file_doc:
+                file_doc = frappe.get_doc("File", file_doc.name)
+            else:
+                # Try by file name
+                file_doc = frappe.db.get_value("File", 
+                    {"file_name": file_path}, 
+                    ["name"], as_dict=True)
+                if file_doc:
+                    file_doc = frappe.get_doc("File", file_doc.name)
+        
+        if not file_doc:
+            return {"success": False, "error": "Either file_id or file_url is required"}
+        
+        # Get file path and type
+        file_path = file_doc.get_full_path()
+        file_type = file_doc.file_type or ""
+        file_name = file_doc.file_name or ""
+        
+        # Determine strategy
+        strategy = _determine_ocr_strategy(file_path, file_type)
+        
+        # Determine model
+        ocr_model = None
+        if model:
+            ocr_model = model
+        else:
+            provider_name = provider_doc.provider_name.lower()
+            ocr_model = _get_default_ocr_model(provider_name, strategy)
+        
+        if not ocr_model:
+            return {
+                "success": False,
+                "error": f"OCR not supported for provider '{provider_doc.provider_name}' with strategy '{strategy}'. Please provide a model parameter."
+            }
+        
+        # Normalize model name
+        from huf.ai.providers.litellm import _normalize_model_name
+        normalized_model = _normalize_model_name(ocr_model, agent_doc.provider)
+        
+        # Route to appropriate method
+        if strategy == "ocr":
+            result = await _process_with_ocr_endpoint(
+                file_path, normalized_model, api_key, pages, include_images
+            )
+        else:
+            result = await _process_with_vision_model(
+                file_path, normalized_model, api_key
+            )
+        
+        if not result["success"]:
+            return result
+        
+        extracted_text = result["text"]
+        pages_data = result.get("pages", [])
+        
+        # Create Agent Message with extracted text
+        message_doc = None
+        if conversation_id:
+            try:
+                # Get conversation_index
+                last_index = frappe.db.sql("""
+                    SELECT MAX(conversation_index) as last_index
+                    FROM `tabAgent Message`
+                    WHERE conversation = %s
+                """, (conversation_id,), as_dict=1)
+                
+                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
+                
+                # Create Agent Message
+                message_doc = frappe.get_doc({
+                    "doctype": "Agent Message",
+                    "conversation": conversation_id,
+                    "role": "agent",
+                    "content": f"Extracted text from {file_name}:\n\n{extracted_text[:500]}{'...' if len(extracted_text) > 500 else ''}",
+                    "kind": "Text",
+                    "agent": agent_name,
+                    "provider": agent_doc.provider,
+                    "model": agent_doc.model,
+                    "agent_run": kwargs.get("agent_run_id"),
+                    "conversation_index": conversation_index,
+                    "is_agent_message": 1,
+                    "user": "Agent"
+                })
+                message_doc.insert(ignore_permissions=True)
+                
+                # Update conversation
+                frappe.db.sql("""
+                    UPDATE `tabAgent Conversation`
+                    SET total_messages = %s, last_activity = NOW()
+                    WHERE name = %s
+                """, (conversation_index, conversation_id))
+                
+                frappe.db.commit()
+                
+                # Emit socket event
+                try:
+                    frappe.publish_realtime(
+                        event=f'conversation:{conversation_id}',
+                        message={
+                            "type": "new_agent_message",
+                            "conversation_id": conversation_id,
+                            "message_id": message_doc.name,
+                            "kind": "Text",
+                            "content": message_doc.content,
+                            "conversation_index": conversation_index,
+                        },
+                        user=frappe.session.user,
+                        after_commit=False
+                    )
+                except Exception as e:
+                    frappe.log_error(
+                        f"Error emitting new_agent_message socket event: {str(e)}",
+                        "OCR Socket Event"
+                    )
+            except Exception as e:
+                frappe.log_error(
+                    f"Error creating Agent Message for OCR: {str(e)}",
+                    "OCR Message Creation"
+                )
+        
+        return {
+            "success": True,
+            "text": extracted_text,
+            "pages": pages_data,
+            "strategy": strategy,
+            "file_id": file_doc.name,
+            "file_name": file_name,
+            "message_id": message_doc.name if message_doc else None,
+            "model": normalized_model,
+            "conversation_id": conversation_id
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"OCR error: {str(e)}", "OCR Tool")
+        return {"success": False, "error": str(e)}
+
