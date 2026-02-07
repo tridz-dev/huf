@@ -12,6 +12,7 @@ def after_install():
     create_demo_ai_providers()
     create_demo_ai_models()
     create_image_generation_tool()
+    create_get_conversation_images_tool()
     frappe.db.commit()
     """
 	Called after app installation.
@@ -37,6 +38,7 @@ def after_migrate():
 	"""
 	try:
 		create_image_generation_tool()
+		create_get_conversation_images_tool()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
 		frappe.log_error(
@@ -209,6 +211,22 @@ def create_image_generation_tool():
             "description": "Number of images to generate. Default: 1. Note: dall-e-3 only supports n=1."
         },
         {
+            "label": "Aspect Ratio",
+            "fieldname": "aspect_ratio",
+            "type": "string",
+            "required": 0,
+            "description": "Aspect ratio for the image (e.g., '16:9', '9:16', '1:1'). Supported by Google/Gemini models. Overrides size parameter when used.",
+            "options": "16:9\n9:16\n1:1\n4:3\n3:4"
+        },
+        {
+            "label": "Image Size",
+            "fieldname": "image_size",
+            "type": "string",
+            "required": 0,
+            "description": "Image resolution quality (e.g., '2K', '4K', '1K'). Supported by Google/Gemini models. Higher resolution improves text readability in generated images.",
+            "options": "1K\n2K\n4K"
+        },
+        {
             "label": "Response Format",
             "fieldname": "response_format",
             "type": "string",
@@ -235,3 +253,50 @@ def create_image_generation_tool():
     except Exception as e:
         print(f"Error creating image generation tool: {e}")
         frappe.log_error(f"Error creating image generation tool: {str(e)}", "Image Generation Tool Creation")
+
+
+def create_get_conversation_images_tool():
+    """Create the get_conversation_images tool in Agent Tool Function DocType."""
+    tool_name = "get_conversation_images"
+    print("Creating get_conversation_images tool")
+    
+    # Check if tool already exists
+    if frappe.db.exists("Agent Tool Function", {"tool_name": tool_name}):
+        return
+    
+    # Define tool parameters
+    parameters = [
+        {
+            "label": "Conversation ID",
+            "fieldname": "conversation_id",
+            "type": "string",
+            "required": 0,
+            "description": "The conversation ID to fetch images from. If not provided, uses current conversation context."
+        },
+        {
+            "label": "Limit",
+            "fieldname": "limit",
+            "type": "integer",
+            "required": 0,
+            "description": "Maximum number of images to return. Default: 10."
+        }
+    ]
+    
+    # Create tool document
+    tool_doc = frappe.get_doc({
+        "doctype": "Agent Tool Function",
+        "tool_name": tool_name,
+        "description": "Retrieve generated images from a conversation. Use this to access images that were generated earlier in the conversation or by child agents via run_agent. Returns image URLs, message IDs, and metadata.",
+        "types": "Custom Function",
+        "function_path": "huf.ai.sdk_tools.handle_get_conversation_images",
+        "pass_parameters_as_json": 1,
+        "parameters": parameters,
+        "tool_type": "Retrieval"
+    })
+    
+    try:
+        tool_doc.insert()
+        print("Get conversation images tool created successfully")
+    except Exception as e:
+        print(f"Error creating get_conversation_images tool: {e}")
+        frappe.log_error(f"Error creating get_conversation_images tool: {str(e)}", "Get Conversation Images Tool Creation")
