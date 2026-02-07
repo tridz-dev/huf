@@ -168,91 +168,134 @@ def create_demo_ai_models():
             doc.insert(ignore_permissions=True)
 
 def create_image_generation_tool():
-    """Create the image generation tool in Agent Tool Function DocType."""
+    """Create or update the image generation tool in Agent Tool Function DocType."""
     tool_name = "generate_image"
-    print("Creating image generation tool")
-    # Check if tool already exists
-    if frappe.db.exists("Agent Tool Function", {"tool_name": tool_name}):
-        return
-    if not frappe.db.exists("Agent Tool Type","Generation"):
-        tool_type_doc=frappe.new_doc("Agent Tool Type")
-        tool_type_doc.name1="Generation"
-        tool_type_doc.insert()
-    # Define tool parameters (child table entries)
-    parameters = [
-        {
-            "label": "Prompt",
-            "fieldname": "prompt",
-            "type": "string",
-            "required": 1,
-            "description": "A detailed text description of the image to generate. Be specific about style, colors, composition, and subject matter."
-        },
-        {
-            "label": "Size",
-            "fieldname": "size",
-            "type": "string",
-            "required": 0,
-            "description": "Image dimensions. Default: 'auto'. Options vary by model. <a href='https://docs.litellm.ai/docs/image_generation#optional-litellm-fields'>Documentation</a>",
-            "options": "auto"
-        },
-        {
-            "label": "Quality",
-            "fieldname": "quality",
-            "type": "string",
-            "required": 0,
-            "description": "Image quality. Default 'auto'. Options vary by model. <a href='https://docs.litellm.ai/docs/image_generation#optional-litellm-fields'>Documentation</a>",
-            "options": "auto"
-        },
-        {
-            "label": "Number of Images",
-            "fieldname": "n",
-            "type": "integer",
-            "required": 0,
-            "description": "Number of images to generate. Default: 1. Note: dall-e-3 only supports n=1."
-        },
-        {
-            "label": "Aspect Ratio",
-            "fieldname": "aspect_ratio",
-            "type": "string",
-            "required": 0,
-            "description": "Aspect ratio for the image (e.g., '16:9', '9:16', '1:1'). Supported by Google/Gemini models. LiteLLM forwards this to providers that support it. Overrides size parameter when used.",
-            "options": "16:9\n9:16\n1:1\n4:3\n3:4"
-        },
-        {
-            "label": "Image Size",
-            "fieldname": "image_size",
-            "type": "string",
-            "required": 0,
-            "description": "Image resolution quality (e.g., '2K', '4K', '1K'). Supported by Google/Gemini models. LiteLLM forwards this to providers that support it. Higher resolution improves text readability in generated images.",
-            "options": "1K\n2K\n4K"
-        },
-        {
-            "label": "Response Format",
-            "fieldname": "response_format",
-            "type": "string",
-            "required": 0,
-            "description": "Response format. Default 'url'",
-            "options": "url\nb64_json."
-        }
-    ]
+    print("Creating/updating image generation tool")
     
-    # Create tool document
-    tool_doc = frappe.get_doc({
-        "doctype": "Agent Tool Function",
-        "tool_name": tool_name,
-        "description": "Generate an image from a text description using AI. Use this when the user asks for image creation, visualization, or artwork generation. Do not show the image URL in the output message.",
-        "types": "Custom Function",
-        "function_path": "huf.ai.sdk_tools.handle_generate_image",
-        "pass_parameters_as_json": 1,
-        "parameters": parameters,
-        "tool_type": "Generation"
-    })
-    try:
-        tool_doc.insert()
-        print("Image generation tool created successfully")
-    except Exception as e:
-        print(f"Error creating image generation tool: {e}")
-        frappe.log_error(f"Error creating image generation tool: {str(e)}", "Image Generation Tool Creation")
+    # Ensure Generation tool type exists
+    if not frappe.db.exists("Agent Tool Type", "Generation"):
+        tool_type_doc = frappe.new_doc("Agent Tool Type")
+        tool_type_doc.name1 = "Generation"
+        tool_type_doc.insert()
+    
+    # Check if tool already exists
+    tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+    
+    if tool_exists:
+        # Update existing tool - add missing parameters
+        tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+        existing_fieldnames = [param.fieldname for param in tool_doc.parameters]
+        
+        # Define new parameters to add
+        new_parameters = [
+            {
+                "label": "Aspect Ratio",
+                "fieldname": "aspect_ratio",
+                "type": "string",
+                "required": 0,
+                "description": "Aspect ratio for the image (e.g., '16:9', '9:16', '1:1'). Supported by Google/Gemini models. LiteLLM forwards this to providers that support it. Overrides size parameter when used.",
+                "options": "16:9\n9:16\n1:1\n4:3\n3:4"
+            },
+            {
+                "label": "Image Size",
+                "fieldname": "image_size",
+                "type": "string",
+                "required": 0,
+                "description": "Image resolution quality (e.g., '2K', '4K', '1K'). Supported by Google/Gemini models. LiteLLM forwards this to providers that support it. Higher resolution improves text readability in generated images.",
+                "options": "1K\n2K\n4K"
+            }
+        ]
+        
+        # Add missing parameters
+        for param in new_parameters:
+            if param["fieldname"] not in existing_fieldnames:
+                tool_doc.append("parameters", param)
+        
+        # Update description if needed
+        tool_doc.description = "Generate an image from a text description using AI. Use this when the user asks for image creation, visualization, or artwork generation. Do not show the image URL in the output message."
+        tool_doc.function_path = "huf.ai.sdk_tools.handle_generate_image"
+        
+        try:
+            tool_doc.save()
+            print("Image generation tool updated successfully")
+        except Exception as e:
+            print(f"Error updating image generation tool: {e}")
+            frappe.log_error(f"Error updating image generation tool: {str(e)}", "Image Generation Tool Update")
+    else:
+        # Create new tool
+        parameters = [
+            {
+                "label": "Prompt",
+                "fieldname": "prompt",
+                "type": "string",
+                "required": 1,
+                "description": "A detailed text description of the image to generate. Be specific about style, colors, composition, and subject matter."
+            },
+            {
+                "label": "Size",
+                "fieldname": "size",
+                "type": "string",
+                "required": 0,
+                "description": "Image dimensions. Default: 'auto'. Options vary by model. <a href='https://docs.litellm.ai/docs/image_generation#optional-litellm-fields'>Documentation</a>",
+                "options": "auto"
+            },
+            {
+                "label": "Quality",
+                "fieldname": "quality",
+                "type": "string",
+                "required": 0,
+                "description": "Image quality. Default 'auto'. Options vary by model. <a href='https://docs.litellm.ai/docs/image_generation#optional-litellm-fields'>Documentation</a>",
+                "options": "auto"
+            },
+            {
+                "label": "Number of Images",
+                "fieldname": "n",
+                "type": "integer",
+                "required": 0,
+                "description": "Number of images to generate. Default: 1. Note: dall-e-3 only supports n=1."
+            },
+            {
+                "label": "Aspect Ratio",
+                "fieldname": "aspect_ratio",
+                "type": "string",
+                "required": 0,
+                "description": "Aspect ratio for the image (e.g., '16:9', '9:16', '1:1'). Supported by Google/Gemini models. LiteLLM forwards this to providers that support it. Overrides size parameter when used.",
+                "options": "16:9\n9:16\n1:1\n4:3\n3:4"
+            },
+            {
+                "label": "Image Size",
+                "fieldname": "image_size",
+                "type": "string",
+                "required": 0,
+                "description": "Image resolution quality (e.g., '2K', '4K', '1K'). Supported by Google/Gemini models. LiteLLM forwards this to providers that support it. Higher resolution improves text readability in generated images.",
+                "options": "1K\n2K\n4K"
+            },
+            {
+                "label": "Response Format",
+                "fieldname": "response_format",
+                "type": "string",
+                "required": 0,
+                "description": "Response format. Default 'url'",
+                "options": "url\nb64_json."
+            }
+        ]
+        
+        tool_doc = frappe.get_doc({
+            "doctype": "Agent Tool Function",
+            "tool_name": tool_name,
+            "description": "Generate an image from a text description using AI. Use this when the user asks for image creation, visualization, or artwork generation. Do not show the image URL in the output message.",
+            "types": "Custom Function",
+            "function_path": "huf.ai.sdk_tools.handle_generate_image",
+            "pass_parameters_as_json": 1,
+            "parameters": parameters,
+            "tool_type": "Generation"
+        })
+        try:
+            tool_doc.insert()
+            print("Image generation tool created successfully")
+        except Exception as e:
+            print(f"Error creating image generation tool: {e}")
+            frappe.log_error(f"Error creating image generation tool: {str(e)}", "Image Generation Tool Creation")
 
 
 def create_get_conversation_images_tool():

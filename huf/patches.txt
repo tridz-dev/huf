@@ -8,4 +8,3 @@
 huf.patches.add_tool_types
 huf.patches.v1.update_image_tool
 huf.patches.v1.update_agent_background_color
-huf.patches.v1.add_image_tool_advanced_params
