@@ -1592,3 +1592,59 @@ async def _process_with_ocr_endpoint(
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
+async def _process_with_vision_model(
+    file_path: str,
+    model: str,
+    api_key: str
+):
+    """Process image using LiteLLM vision models."""
+    import litellm
+    import base64
+    
+    try:
+        # Read file and encode to base64
+        with open(file_path, "rb") as f:
+            file_content = f.read()
+            base64_image = base64.b64encode(file_content).decode('utf-8')
+        
+        # Determine image type
+        ext = file_path.lower().split('.')[-1]
+        mime_type = f"image/{ext}" if ext in ["jpg", "jpeg", "png", "webp", "gif"] else "image/jpeg"
+        
+        # Build vision request
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Extract all text from this image. Preserve formatting, structure, and layout. Return the text in markdown format."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": f"data:{mime_type};base64,{base64_image}"
+                    }
+                ]
+            }
+        ]
+        
+        # Call LiteLLM completion with vision
+        response = await asyncio.to_thread(
+            litellm.completion,
+            model=model,
+            messages=messages,
+            api_key=api_key
+        )
+        
+        extracted_text = response.choices[0].message.content
+        
+        return {
+            "success": True,
+            "text": extracted_text,
+            "pages": [{"index": 0, "text": extracted_text}]
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
