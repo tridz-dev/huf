@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Clock4, Plus, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Skeleton } from '../ui/skeleton';
@@ -20,6 +21,8 @@ import { AgentModelSelector } from './AgentModelSelector';
 import { Button } from '../ui/button';
 import { DEFAULT_AGENT_COLOR } from '@/data/color';
 import { getAgent } from '@/services/agentApi';
+import ConversationTitle, { type ConversationTitleRef } from './ConversationTitle';
+import ConversationMenu from './ConversationMenu';
 
 function getRecentBucketLabel(ts?: string): string {
   const d = toDate(ts);
@@ -56,6 +59,17 @@ export default function ChatListing() {
 
   const [activeTab, setActiveTab] = useState('agent');
 
+  // Ref map to store refs for each conversation title
+  const titleRefs = useRef<Map<string, ConversationTitleRef>>(new Map());
+
+  // Callback to handle rename action
+  const handleRename = useCallback((conversationId: string) => {
+    const titleRef = titleRefs.current.get(conversationId);
+    if (titleRef) {
+      titleRef.activateInput();
+    }
+  }, []);
+
   // Fetch agents with counts on mount
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +83,12 @@ export default function ChatListing() {
         }
       } catch (error) {
         console.error('Error fetching agents:', error);
+        if (!cancelled) {
+          toast.error('Failed to load agents', {
+            description: error instanceof Error ? error.message : 'An error occurred while fetching agents. Please try again.',
+            duration: 5000,
+          });
+        }
       } finally {
         if (!cancelled) {
           setAgentsLoading(false);
@@ -93,10 +113,6 @@ export default function ChatListing() {
     }
   }, []);
 
-  const handleSelectChat = (chatId: string) => {
-    navigate(`/chat/${chatId}`);
-  };
-
   const handleAgentSelect = useCallback((agentId: string) => {
     // Automatically navigate to new chat when agent is selected
     navigate(`/chat/new?agent=${agentId}`);
@@ -109,7 +125,7 @@ export default function ChatListing() {
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
         <Tabs defaultValue="agent" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="sticky top-0 z-1 bg-sidebar">
+        <div className="sticky top-0 z-2 bg-sidebar">
           <TabsList className="w-full">
             {LIST_TABS.map((tab) => (
               <TabsTrigger
@@ -153,8 +169,9 @@ export default function ChatListing() {
                   key={agent.name}
                   agent={agent}
                   selectedChatId={selectedChatId}
-                  onSelectChat={handleSelectChat}
                   isOpen={openAgents.includes(agent.name)}
+                  titleRefs={titleRefs}
+                  onRename={handleRename}
                 />
               ))}
             </Accordion>
@@ -164,8 +181,9 @@ export default function ChatListing() {
         <TabsContent value="recents">
           <RecentsConversationList
             selectedChatId={selectedChatId}
-            onSelectChat={handleSelectChat}
             isActive={activeTab === 'recents'}
+            titleRefs={titleRefs}
+            onRename={handleRename}
           />
         </TabsContent>
         </Tabs>
@@ -178,13 +196,15 @@ export default function ChatListing() {
 function AgentConversationItem({
   agent,
   selectedChatId,
-  onSelectChat,
   isOpen,
+  titleRefs,
+  onRename,
 }: {
   agent: AgentWithCount;
   selectedChatId: string | null;
-  onSelectChat: (chatId: string) => void;
   isOpen: boolean;
+  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  onRename: (conversationId: string) => void;
 }) {
   const navigate = useNavigate();
 
@@ -198,6 +218,7 @@ function AgentConversationItem({
     loadingMore,
     hasMore,
     loadMore,
+    error,
   } = useInfiniteScroll(
     {
       fetchFn: async (params) => {
@@ -220,6 +241,16 @@ function AgentConversationItem({
       enabled: isOpen, // Only enable when open
     }
   );
+
+  // Show error toast when there's an error
+  useEffect(() => {
+    if (error && isOpen) {
+      toast.error('Failed to load conversations', {
+        description: error.message || `An error occurred while fetching conversations for ${agent.agent_name}. Please try again.`,
+        duration: 5000,
+      });
+    }
+  }, [error, isOpen, agent.agent_name]);
 
   return (
     <AccordionItem value={agent.name} className="border-b-0">
@@ -267,22 +298,44 @@ function AgentConversationItem({
             {conversations.map((chat) => {
               const isSelected = selectedChatId === chat.id;
               return (
-                <button
-                  key={chat.id}
-                  type="button"
-                  onClick={() => onSelectChat(chat.id)}
-                  className={cn(
-                    'group flex w-full text-left flex-col p-2 rounded-md cursor-pointer transition-all border-l-2',
-                    isSelected
-                      ? 'bg-zinc-200 border-indigo-500'
-                      : 'bg-transparent border-transparent hover:bg-zinc-200 hover:border-zinc-200'
-                  )}
-                >
-                  <span className="text-xs font-medium truncate text-zinc-900">{chat.title}</span>
-                  <p className="text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
-                    {chat.timestampLabel ?? ''}
-                  </p>
-                </button>
+                <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
+                  <Link
+                    to={`/chat/${chat.id}`}
+                    onClick={(e) => {
+                      // Only prevent navigation if the click is directly on a menu item
+                      // Check if the event originated from within the context menu portal
+                      const target = e.target as HTMLElement;
+                      const isFromMenu = target.closest('[data-radix-portal]') || 
+                                        target.closest('[role="menuitem"]') ||
+                                        (e.nativeEvent as any).composedPath?.().some((el: any) => 
+                                          el?.getAttribute?.('role') === 'menuitem'
+                                        );
+                      if (isFromMenu) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }
+                    }}
+                    className={cn(
+                      'group flex w-full text-left flex-col p-1 rounded-md cursor-pointer transition-all border-l-2',
+                      isSelected
+                        ? 'bg-zinc-200 border-indigo-500'
+                        : 'bg-transparent border-transparent hover:bg-zinc-200 hover:border-zinc-200'
+                    )}
+                  >
+                    <ConversationTitle
+                    ref={(el) => {
+                      if (el) titleRefs.current.set(chat.id, el);
+                      else titleRefs.current.delete(chat.id);
+                    }}
+                    variant="agent_list"
+                    value={chat.title}
+                    conversationId={chat.id}
+                    />
+                    <p className="ps-1 text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
+                      {chat.timestampLabel ?? ''}
+                    </p>
+                  </Link>
+                </ConversationMenu>
               );
             })}
             {hasMore && (
@@ -310,12 +363,14 @@ function AgentConversationItem({
 
 function RecentsConversationList({
   selectedChatId,
-  onSelectChat,
   isActive,
+  titleRefs,
+  onRename,
 }: {
   selectedChatId: string | null;
-  onSelectChat: (chatId: string) => void;
   isActive: boolean;
+  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  onRename: (conversationId: string) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [agentColorMap, setAgentColorMap] = useState<Map<string, string | null>>(new Map());
@@ -332,6 +387,16 @@ function RecentsConversationList({
     enabled: isActive, // Only load when tab is active
     refreshOnRouteChange: false, // Don't refresh on route change for this use case
   });
+
+  // Show error toast when there's an error
+  useEffect(() => {
+    if (error && isActive) {
+      toast.error('Failed to load conversations', {
+        description: error.message || 'An error occurred while fetching conversations. Please try again.',
+        duration: 5000,
+      });
+    }
+  }, [error, isActive]);
 
   // Fetch agent colors for unique agents in conversations
   useEffect(() => {
@@ -423,35 +488,56 @@ function RecentsConversationList({
                     {items.map((chat) => {
                       const isSelected = selectedChatId === chat.id;
                       return (
-                        <button
-                          key={chat.id}
-                          type="button"
-                          onClick={() => onSelectChat(chat.id)}
-                          className={cn(
-                            'flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border',
-                            isSelected
-                              ? 'bg-zinc-200 border-zinc-200'
-                              : 'border-transparent bg-transparent hover:bg-zinc-200'
-                          )}
-                        >
-                          <div className="flex flex-1 gap-2 items-center min-w-0">
-                            <ChatAvatar 
-                              variant="chat_ai"
-                              color={agentColorMap.get(chat.agent) || DEFAULT_AGENT_COLOR}
-                            >
-                              {getInitials(chat.agent)}
-                            </ChatAvatar>
-                            <div className="mb-1 min-w-0">
-                              <span className="text-sm font-medium truncate text-zinc-900 block">
-                                {chat.title}
-                              </span>
-                              <p className="text-xs truncate text-zinc-500">{chat.agent}</p>
+                        <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
+                          <Link
+                            to={`/chat/${chat.id}`}
+                            type="button"
+                            onClick={(e) => {
+                              // Only prevent navigation if the click is directly on a menu item
+                              // Check if the event originated from within the context menu portal
+                              const target = e.target as HTMLElement;
+                              const isFromMenu = target.closest('[data-radix-portal]') || 
+                                                target.closest('[role="menuitem"]') ||
+                                                (e.nativeEvent as any).composedPath?.().some((el: any) => 
+                                                  el?.getAttribute?.('role') === 'menuitem'
+                                                );
+                              if (isFromMenu) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }
+                            }}
+                            className={cn(
+                              'group flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border relative',
+                              isSelected
+                                ? 'bg-zinc-200 border-zinc-200'
+                                : 'border-transparent bg-transparent hover:bg-zinc-200'
+                            )}
+                          >
+                            <div className="flex flex-1 gap-1 items-center min-w-0">
+                              <ChatAvatar 
+                                variant="chat_ai"
+                                color={agentColorMap.get(chat.agent) || DEFAULT_AGENT_COLOR}
+                              >
+                                {getInitials(chat.agent)}
+                              </ChatAvatar>
+                              <div className="mb-1 w-full">
+                                <ConversationTitle
+                                ref={(el) => {
+                                  if (el) titleRefs.current.set(chat.id, el);
+                                  else titleRefs.current.delete(chat.id);
+                                }}
+                                variant="recents_list"
+                                value={chat.title}
+                                conversationId={chat.id}
+                                />
+                                <p className="ps-1 text-xs truncate text-zinc-500">{chat.agent}</p>
+                              </div>
                             </div>
-                          </div>
-                          <span className="mt-1.5 text-[10px] text-zinc-400 flex-shrink-0 justify-self-end self-start">
-                            {chat.timestampLabel ?? ''}
-                          </span>
-                        </button>
+                            <span className="mb-1 flex-shrink-0 text-[10px] text-zinc-400 flex-shrink-0 self-end">
+                                {chat.timestampLabel ?? ''}
+                            </span>
+                          </Link>
+                        </ConversationMenu>
                       );
                     })}
                   </div>
