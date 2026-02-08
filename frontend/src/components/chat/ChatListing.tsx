@@ -120,12 +120,12 @@ export default function ChatListing() {
 
   return (
     <div className="h-full min-w-96 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
-      <div className="shrink-0 p-4 sticky top-0 z-1 bg-sidebar">
+      <div className="shrink-0 p-4 sticky top-0 z-10 bg-sidebar">
         <ChatListHeader onAgentSelect={handleAgentSelect} />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
         <Tabs defaultValue="agent" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="sticky top-0 z-2 bg-sidebar">
+        <div className="sticky top-0 z-10 bg-sidebar">
           <TabsList className="w-full">
             {LIST_TABS.map((tab) => (
               <TabsTrigger
