@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Calendar, Activity, Settings, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgents } from '../services/agentApi';
@@ -41,6 +43,7 @@ export function AgentsPage() {
     setFilter,
     loadMore,
     total,
+    error,
   } = useInfiniteScroll<
     { status?: 'active' | 'disabled' | 'all'; page?: number; limit?: number; start?: number; search?: string },
     AgentDoc
@@ -76,6 +79,16 @@ export function AgentsPage() {
     autoLoad: true,
   });
 
+  // Show error toast when there's an error
+  useEffect(() => {
+    if (error) {
+      toast.error('Failed to load agents', {
+        description: error.message || 'An error occurred while fetching agents. Please try again.',
+        duration: 5000,
+      });
+    }
+  }, [error]);
+
   return (
     <PageLayout
       subtitle="Manage your AI agents and their configurations"
@@ -95,6 +108,12 @@ export function AgentsPage() {
         />
       }
     >
+      {error && !initialLoading && (
+        <div className="text-center py-12">
+          <p className="text-destructive mb-4">Failed to load agents</p>
+          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching agents.'}</p>
+        </div>
+      )}
       <GridView
         items={agents}
         columns={{ sm: 1, md: 2, lg: 3 }}
