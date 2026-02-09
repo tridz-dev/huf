@@ -49,8 +49,9 @@
   },
   {
    "fieldname": "content",
-   "fieldtype": "Long Text",
+   "fieldtype": "Code",
    "label": "Content",
+   "options": "Markdown",
    "read_only": 1
   },
   {
