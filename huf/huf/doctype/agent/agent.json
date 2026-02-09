@@ -335,6 +335,7 @@
   },
   {
    "default": "0",
+   "description": "Enables multi-step planning and execution. If enabled, the agent will analyze the request to create a step-by-step plan (or use a Default Plan) and execute them sequentially.",
    "fieldname": "enable_multi_run",
    "fieldtype": "Check",
    "label": "Enable Multi Run"
@@ -384,11 +385,13 @@
    "label": "Cache Conversation History"
   },
   {
+   "depends_on": "eval:doc.enable_multi_run == 1",
    "fieldname": "multi_run_setting_section",
    "fieldtype": "Section Break",
    "label": "Multi Run Setting"
   },
   {
+   "depends_on": "eval:doc.enable_multi_run ==1",
    "fieldname": "default_plan",
    "fieldtype": "Table",
    "label": "Default Plan",
@@ -456,7 +459,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-03 00:14:38.235962",
+ "modified": "2026-02-09 12:05:14.211963",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

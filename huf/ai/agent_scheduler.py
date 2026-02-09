@@ -1,10 +1,14 @@
 import frappe
+from frappe import _
 from frappe.utils import now_datetime, add_to_date
 from .agent_integration import run_agent_sync
 
 @frappe.whitelist()
 def run_scheduled_agents():
     now = now_datetime().replace(microsecond=0)
+    
+    if frappe.session.user != "Administrator" and not frappe.has_permission("Agent Trigger", "write"):
+        frappe.throw(_("Permission denied: You cannot run scheduled agents manually."), frappe.PermissionError)
 
     if not frappe.db.exists("DocType", "Agent Trigger"):
         return
