@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Clock4, Plus, Users } from 'lucide-react';
-import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Skeleton } from '../ui/skeleton';
@@ -21,8 +20,6 @@ import { AgentModelSelector } from './AgentModelSelector';
 import { Button } from '../ui/button';
 import { DEFAULT_AGENT_COLOR } from '@/data/color';
 import { getAgent } from '@/services/agentApi';
-import ConversationTitle, { type ConversationTitleRef } from './ConversationTitle';
-import ConversationMenu from './ConversationMenu';
 
 function getRecentBucketLabel(ts?: string): string {
   const d = toDate(ts);
@@ -57,18 +54,7 @@ export default function ChatListing() {
     }
   });
 
-  const [activeTab, setActiveTab] = useState('agent');
-
-  // Ref map to store refs for each conversation title
-  const titleRefs = useRef<Map<string, ConversationTitleRef>>(new Map());
-
-  // Callback to handle rename action
-  const handleRename = useCallback((conversationId: string) => {
-    const titleRef = titleRefs.current.get(conversationId);
-    if (titleRef) {
-      titleRef.activateInput();
-    }
-  }, []);
+  const [activeTab, setActiveTab] = useState('recents');
 
   // Fetch agents with counts on mount
   useEffect(() => {
@@ -83,12 +69,6 @@ export default function ChatListing() {
         }
       } catch (error) {
         console.error('Error fetching agents:', error);
-        if (!cancelled) {
-          toast.error('Failed to load agents', {
-            description: error instanceof Error ? error.message : 'An error occurred while fetching agents. Please try again.',
-            duration: 5000,
-          });
-        }
       } finally {
         if (!cancelled) {
           setAgentsLoading(false);
@@ -113,24 +93,28 @@ export default function ChatListing() {
     }
   }, []);
 
+  const handleSelectChat = (chatId: string) => {
+    navigate(`/chat/${chatId}`);
+  };
+
   const handleAgentSelect = useCallback((agentId: string) => {
     // Automatically navigate to new chat when agent is selected
     navigate(`/chat/new?agent=${agentId}`);
   }, [navigate]);
 
   return (
-    <div className="h-full min-w-96 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
-      <div className="shrink-0 p-4 sticky top-0 z-10 bg-sidebar">
+    <div className="h-full min-w-80 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
+      <div className="shrink-0 px-3 pt-3 pb-2 sticky top-0 z-1 bg-sidebar">
         <ChatListHeader onAgentSelect={handleAgentSelect} />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
-        <Tabs defaultValue="agent" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="sticky top-0 z-10 bg-sidebar">
-          <TabsList className="w-full">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
+        <Tabs defaultValue="recents" value={activeTab} onValueChange={setActiveTab} className="space-y-2">
+        <div className="sticky top-0 z-1 bg-sidebar">
+          <TabsList className="w-full h-8">
             {LIST_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.value}
-                className="w-1/2 space-x-2 text-xs font-medium"
+                className="w-1/2 space-x-1.5 text-xs font-medium h-7"
                 value={tab.value}
               >
                 <tab.icon className="w-3 h-3" />
@@ -161,7 +145,7 @@ export default function ChatListing() {
             <Accordion
               type="multiple"
               value={openAgents}
-              className="space-y-4"
+              className="space-y-2"
               onValueChange={handleAccordionChange}
             >
               {agents.map((agent) => (
@@ -169,9 +153,8 @@ export default function ChatListing() {
                   key={agent.name}
                   agent={agent}
                   selectedChatId={selectedChatId}
+                  onSelectChat={handleSelectChat}
                   isOpen={openAgents.includes(agent.name)}
-                  titleRefs={titleRefs}
-                  onRename={handleRename}
                 />
               ))}
             </Accordion>
@@ -181,9 +164,8 @@ export default function ChatListing() {
         <TabsContent value="recents">
           <RecentsConversationList
             selectedChatId={selectedChatId}
+            onSelectChat={handleSelectChat}
             isActive={activeTab === 'recents'}
-            titleRefs={titleRefs}
-            onRename={handleRename}
           />
         </TabsContent>
         </Tabs>
@@ -196,15 +178,13 @@ export default function ChatListing() {
 function AgentConversationItem({
   agent,
   selectedChatId,
+  onSelectChat,
   isOpen,
-  titleRefs,
-  onRename,
 }: {
   agent: AgentWithCount;
   selectedChatId: string | null;
+  onSelectChat: (chatId: string) => void;
   isOpen: boolean;
-  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
-  onRename: (conversationId: string) => void;
 }) {
   const navigate = useNavigate();
 
@@ -218,7 +198,6 @@ function AgentConversationItem({
     loadingMore,
     hasMore,
     loadMore,
-    error,
   } = useInfiniteScroll(
     {
       fetchFn: async (params) => {
@@ -241,16 +220,6 @@ function AgentConversationItem({
       enabled: isOpen, // Only enable when open
     }
   );
-
-  // Show error toast when there's an error
-  useEffect(() => {
-    if (error && isOpen) {
-      toast.error('Failed to load conversations', {
-        description: error.message || `An error occurred while fetching conversations for ${agent.agent_name}. Please try again.`,
-        duration: 5000,
-      });
-    }
-  }, [error, isOpen, agent.agent_name]);
 
   return (
     <AccordionItem value={agent.name} className="border-b-0">
@@ -298,44 +267,22 @@ function AgentConversationItem({
             {conversations.map((chat) => {
               const isSelected = selectedChatId === chat.id;
               return (
-                <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
-                  <Link
-                    to={`/chat/${chat.id}`}
-                    onClick={(e) => {
-                      // Only prevent navigation if the click is directly on a menu item
-                      // Check if the event originated from within the context menu portal
-                      const target = e.target as HTMLElement;
-                      const isFromMenu = target.closest('[data-radix-portal]') || 
-                                        target.closest('[role="menuitem"]') ||
-                                        (e.nativeEvent as any).composedPath?.().some((el: any) => 
-                                          el?.getAttribute?.('role') === 'menuitem'
-                                        );
-                      if (isFromMenu) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }
-                    }}
-                    className={cn(
-                      'group flex w-full text-left flex-col p-1 rounded-md cursor-pointer transition-all border-l-2',
-                      isSelected
-                        ? 'bg-zinc-200 border-indigo-500'
-                        : 'bg-transparent border-transparent hover:bg-zinc-200 hover:border-zinc-200'
-                    )}
-                  >
-                    <ConversationTitle
-                    ref={(el) => {
-                      if (el) titleRefs.current.set(chat.id, el);
-                      else titleRefs.current.delete(chat.id);
-                    }}
-                    variant="agent_list"
-                    value={chat.title}
-                    conversationId={chat.id}
-                    />
-                    <p className="ps-1 text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
-                      {chat.timestampLabel ?? ''}
-                    </p>
-                  </Link>
-                </ConversationMenu>
+                <button
+                  key={chat.id}
+                  type="button"
+                  onClick={() => onSelectChat(chat.id)}
+                  className={cn(
+                    'group flex w-full text-left flex-col p-2 rounded-md cursor-pointer transition-all border-l-2',
+                    isSelected
+                      ? 'bg-zinc-200 border-indigo-500'
+                      : 'bg-transparent border-transparent hover:bg-zinc-200 hover:border-zinc-200'
+                  )}
+                >
+                  <span className="text-xs font-medium truncate text-zinc-900">{chat.title}</span>
+                  <p className="text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
+                    {chat.timestampLabel ?? ''}
+                  </p>
+                </button>
               );
             })}
             {hasMore && (
@@ -363,14 +310,12 @@ function AgentConversationItem({
 
 function RecentsConversationList({
   selectedChatId,
+  onSelectChat,
   isActive,
-  titleRefs,
-  onRename,
 }: {
   selectedChatId: string | null;
+  onSelectChat: (chatId: string) => void;
   isActive: boolean;
-  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
-  onRename: (conversationId: string) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [agentColorMap, setAgentColorMap] = useState<Map<string, string | null>>(new Map());
@@ -387,16 +332,6 @@ function RecentsConversationList({
     enabled: isActive, // Only load when tab is active
     refreshOnRouteChange: false, // Don't refresh on route change for this use case
   });
-
-  // Show error toast when there's an error
-  useEffect(() => {
-    if (error && isActive) {
-      toast.error('Failed to load conversations', {
-        description: error.message || 'An error occurred while fetching conversations. Please try again.',
-        duration: 5000,
-      });
-    }
-  }, [error, isActive]);
 
   // Fetch agent colors for unique agents in conversations
   useEffect(() => {
@@ -456,15 +391,14 @@ function RecentsConversationList({
 
   if (initialLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-1">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={`recent-skel-${i}`} className="flex p-3 gap-2 items-center rounded-lg border">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-3 w-1/3" />
+          <div key={`recent-skel-${i}`} className="flex px-2 py-1.5 gap-2 items-center rounded-md">
+            <Skeleton className="h-6 w-6 rounded-full shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="h-2.5 w-1/3" />
             </div>
-            <Skeleton className="h-3 w-10" />
           </div>
         ))}
       </div>
@@ -472,7 +406,7 @@ function RecentsConversationList({
   }
 
   return (
-    <div ref={scrollContainerRef} className="space-y-4">
+    <div ref={scrollContainerRef} className="space-y-3">
         {byRecents.every(([, items]) => items.length === 0) ? (
           <div className="p-3 text-sm text-muted-foreground text-center">No conversations yet</div>
         ) : (
@@ -481,63 +415,40 @@ function RecentsConversationList({
               if (items.length === 0) return null;
               return (
                 <div key={label}>
-                  <span className="px-2 text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                  <span className="px-1 text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
                     {label}
                   </span>
-                  <div className="mt-2 space-y-1">
+                  <div className="mt-1 space-y-0.5">
                     {items.map((chat) => {
                       const isSelected = selectedChatId === chat.id;
                       return (
-                        <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
-                          <Link
-                            to={`/chat/${chat.id}`}
-                            type="button"
-                            onClick={(e) => {
-                              // Only prevent navigation if the click is directly on a menu item
-                              // Check if the event originated from within the context menu portal
-                              const target = e.target as HTMLElement;
-                              const isFromMenu = target.closest('[data-radix-portal]') || 
-                                                target.closest('[role="menuitem"]') ||
-                                                (e.nativeEvent as any).composedPath?.().some((el: any) => 
-                                                  el?.getAttribute?.('role') === 'menuitem'
-                                                );
-                              if (isFromMenu) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                              }
-                            }}
-                            className={cn(
-                              'group flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border relative',
-                              isSelected
-                                ? 'bg-zinc-200 border-zinc-200'
-                                : 'border-transparent bg-transparent hover:bg-zinc-200'
-                            )}
+                        <button
+                          key={chat.id}
+                          type="button"
+                          onClick={() => onSelectChat(chat.id)}
+                          className={cn(
+                            'flex w-full text-left px-2 py-1.5 gap-2 items-center rounded-md cursor-pointer transition-all',
+                            isSelected
+                              ? 'bg-zinc-200'
+                              : 'bg-transparent hover:bg-zinc-100'
+                          )}
+                        >
+                          <ChatAvatar 
+                            variant="chat_ai"
+                            color={agentColorMap.get(chat.agent) || DEFAULT_AGENT_COLOR}
                           >
-                            <div className="flex flex-1 gap-1 items-center min-w-0">
-                              <ChatAvatar 
-                                variant="chat_ai"
-                                color={agentColorMap.get(chat.agent) || DEFAULT_AGENT_COLOR}
-                              >
-                                {getInitials(chat.agent)}
-                              </ChatAvatar>
-                              <div className="mb-1 w-full">
-                                <ConversationTitle
-                                ref={(el) => {
-                                  if (el) titleRefs.current.set(chat.id, el);
-                                  else titleRefs.current.delete(chat.id);
-                                }}
-                                variant="recents_list"
-                                value={chat.title}
-                                conversationId={chat.id}
-                                />
-                                <p className="ps-1 text-xs truncate text-zinc-500">{chat.agent}</p>
-                              </div>
-                            </div>
-                            <span className="mb-1 flex-shrink-0 text-[10px] text-zinc-400 flex-shrink-0 self-end">
-                                {chat.timestampLabel ?? ''}
+                            {getInitials(chat.agent)}
+                          </ChatAvatar>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs font-medium truncate text-zinc-900 block">
+                              {chat.title}
                             </span>
-                          </Link>
-                        </ConversationMenu>
+                            <p className="text-[10px] truncate text-zinc-400">{chat.agent}</p>
+                          </div>
+                          <span className="text-[10px] text-zinc-400 flex-shrink-0 self-start mt-0.5">
+                            {chat.timestampLabel ?? ''}
+                          </span>
+                        </button>
                       );
                     })}
                   </div>
@@ -570,7 +481,7 @@ function ChatListHeader({
 
   return (
     <div className="flex items-center justify-between">
-      <h1 className="font-semibold text-lg tracking-tight">Workspaces</h1>
+      <h1 className="font-semibold text-sm tracking-tight text-zinc-700">Chat</h1>
       {onAgentSelect && (
         <AgentModelSelector
           value={selectedAgent}
