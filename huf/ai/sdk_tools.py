@@ -1293,6 +1293,7 @@ async def handle_generate_image(
         
         # Call LiteLLM image generation
         import litellm
+        litellm.drop_params = True 
         
         response = await asyncio.to_thread(
             litellm.image_generation,
@@ -1327,11 +1328,14 @@ async def handle_generate_image(
                 image_url = None
                 image_b64 = None
                 
+                # Handle Pydantic model / Object access
                 if hasattr(image_data, 'url'):
                     image_url = image_data.url
-                elif hasattr(image_data, 'b64_json'):
+                if hasattr(image_data, 'b64_json'):
                     image_b64 = image_data.b64_json
-                elif isinstance(image_data, dict):
+                
+                # Handle Dictionary access (if not an object)
+                if not image_url and not image_b64 and isinstance(image_data, dict):
                     image_url = image_data.get('url')
                     image_b64 = image_data.get('b64_json')
                 
