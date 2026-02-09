@@ -3,10 +3,92 @@ import json
 import os
 from datetime import datetime
 import frappe
+from frappe import _
 from frappe.utils import now_datetime
 
 TOOL_DOCTYPE = "Agent Tool Function"
 CACHE_DOCTYPE = "Agent Settings"  # Singleton for caching
+
+class PermissionAwareToolRegistry:
+    """Registry that filters tools based on user permissions"""
+    
+    TOOL_PERMISSIONS = {
+        "Get Document": {"permission": "read"},
+        "Get List": {"permission": "read"},
+        "Create Document": {"permission": "create"},
+        "Create Multiple Documents": {"permission": "create"},
+        "Update Document": {"permission": "write"},
+        "Update Multiple Documents": {"permission": "write"},
+        "Delete Document": {"permission": "delete"},
+        "Delete Multiple Documents": {"permission": "delete"},
+        "Submit Document": {"permission": "submit"},
+        "Cancel Document": {"permission": "cancel"},
+        "Attach File to Document": {"permission": "create"} 
+    }
+    
+    MUTATING_TOOL_TYPES = {
+        "Create Document", "Create Multiple Documents",
+        "Update Document", "Update Multiple Documents", 
+        "Delete Document", "Delete Multiple Documents",
+        "Submit Document", "Cancel Document",
+        "Set Value", "POST", "Run Agent",
+        "Attach File to Document"
+    }
+
+    @classmethod
+    def get_allowed_tools(cls, agent_doc, user: str) -> list:
+        """Return only tools the user has permission to use"""
+        all_tools = []
+        
+        if not hasattr(agent_doc, "agent_tool"):
+            return []
+
+        for tool_link in agent_doc.agent_tool:
+            try:
+                tool_doc = frappe.get_doc("Agent Tool Function", tool_link.tool)
+                
+                if cls._can_use_tool(tool_doc, user):
+                    all_tools.append(tool_doc)
+
+            except Exception as e:
+                frappe.log_error(f"Error checking tool permission for {tool_link.tool}: {e}", "Tool Registry")
+        
+        return all_tools
+    
+    @classmethod
+    def _can_use_tool(cls, tool_doc, user: str) -> bool:
+        """Check if user has permission for this tool"""
+        tool_type = tool_doc.types
+        
+        #Guest Restrictions
+        if user == "Guest":
+            #Explicitly Allowed
+            if bool(tool_doc.allowed_for_guest):
+                return True
+                
+            #Hard block mutated tools if NOT explicitly allowed
+            if tool_type in cls.MUTATING_TOOL_TYPES:
+                return False
+                
+            return False
+
+        #Reference DocType Permission Checks
+        if tool_doc.reference_doctype:
+            perm_type = None
+             
+            #Explicitly configured permission
+            if tool_doc.required_permission:
+                perm_type = tool_doc.required_permission
+             
+            #Implicit based on tool type
+            elif tool_type in cls.TOOL_PERMISSIONS:
+                perm_type = cls.TOOL_PERMISSIONS[tool_type]["permission"]
+             
+            if perm_type:
+                if not frappe.has_permission(doctype=tool_doc.reference_doctype, ptype=perm_type, user=user):
+                    return False
+                     
+        return True
 
 def _iter_declared_tools():
     for group in frappe.get_hooks("huf_tools") or []:
