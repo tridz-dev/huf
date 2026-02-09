@@ -56,6 +56,10 @@ def knowledge_search(
 			if source.disabled:
 				continue
 			
+			#Ensure user has access to this Knowledge Source
+			if not frappe.has_permission("Knowledge Source", "read", source_name):
+				continue
+			
 			# Initialize backend
 			backend_class = get_backend(source.knowledge_type)
 			backend = backend_class()

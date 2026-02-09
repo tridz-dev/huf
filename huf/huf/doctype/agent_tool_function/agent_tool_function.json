@@ -20,6 +20,10 @@
   "function_name",
   "header_section",
   "http_headers",
+  "section_break_ajuk",
+  "required_permission",
+  "is_read_only",
+  "allowed_for_guest",
   "parameters_section",
   "parameters",
   "params",
@@ -56,6 +60,27 @@
    "fieldtype": "Link",
    "label": "Reference DocType",
    "options": "DocType"
+  },
+  {
+   "description": "Permission level required to use this tool",
+   "fieldname": "required_permission",
+   "fieldtype": "Select",
+   "label": "Required Permission",
+   "options": "\nread\nwrite\ncreate\ndelete\nsubmit\ncancel"
+  },
+  {
+   "default": "0",
+   "description": "If checked, this tool does not modify data",
+   "fieldname": "is_read_only",
+   "fieldtype": "Check",
+   "label": "Read Only"
+  },
+  {
+   "default": "0",
+   "description": "If checked, Guest users can use this tool",
+   "fieldname": "allowed_for_guest",
+   "fieldtype": "Check",
+   "label": "Allowed for Guest"
   },
   {
    "fieldname": "parameters_section",
@@ -138,12 +163,16 @@
    "fieldname": "function_name",
    "fieldtype": "Data",
    "label": "Function Name"
+  },
+  {
+   "fieldname": "section_break_ajuk",
+   "fieldtype": "Section Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-21 17:05:38.558518",
+ "modified": "2026-02-09 16:30:18.371944",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Function",
