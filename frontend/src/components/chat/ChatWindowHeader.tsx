@@ -20,21 +20,34 @@ export function ChatWindowHeader({ chatId: chatIdProp }: ChatWindowHeaderProps) 
     const chatId = chatIdProp ?? (routeChatId && routeChatId !== 'new' ? routeChatId : null);
     
     const [agent, setAgent] = useState<AgentDoc | null>(null);
+    const [conversationModel, setConversationModel] = useState<string | null>(null);
 
     useEffect(() => {
         let cancelled = false;
 
+        // Reset conversation model when chatId changes (especially when going to new conversation)
+        if (!chatId) {
+            setConversationModel(null);
+        }
+
         async function fetchAgentData() {
             try {
                 let agentName: string | null = null;
+                let model: string | null = null;
 
                 // Get agent name from conversation or query params
                 if (chatId) {
-                    // Existing conversation - get agent from conversation
+                    // Existing conversation - get agent and model from conversation
                     try {
                         const conversation = await getConversation(chatId);
                         if (conversation?.agent) {
                             agentName = conversation.agent;
+                        }
+                        if (conversation?.model) {
+                            model = conversation.model;
+                        }
+                        if (!cancelled) {
+                            setConversationModel(model);
                         }
                     } catch (error) {
                         console.error('Error fetching conversation:', error);
@@ -115,9 +128,9 @@ export function ChatWindowHeader({ chatId: chatIdProp }: ChatWindowHeaderProps) 
                 <div className="flex flex-col">
                     <div className="flex gap-x-2 items-center">
                         <span className="font-semibold text-sm text-zinc-900">{agent.agent_name}</span>
-                        {agent.model && (
+                        {(conversationModel || agent.model) && (
                             <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-medium text-indigo-400">
-                                {agent.model}
+                                {conversationModel || agent.model}
                             </span>
                         )}
                     </div>
