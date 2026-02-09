@@ -24,25 +24,23 @@ import hashlib
 from datetime import datetime, timedelta
 
 
-MUTATING_TOOL_TYPES = {
-    "Create Document", "Create Multiple Documents",
-    "Update Document", "Update Multiple Documents", 
-    "Delete Document", "Delete Multiple Documents",
-    "Submit Document", "Cancel Document",
-    "Set Value", "POST", "Run Agent",
-    "Attach File to Document"
-}
+from .tool_registry import PermissionAwareToolRegistry
+MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
 
-def _check_tool_permission(tool_type: str, context: dict = None):
+def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_guest: bool = False):
     """Guard function to block dangerous tools for Guest users"""
     user = frappe.session.user
     
-    #Guest cannot use mutating tools
-    if user == "Guest" and tool_type in MUTATING_TOOL_TYPES:
-        return {
-            "allowed": False,
-            "error": f"Guest users cannot use {tool_type} tools. Please log in."
-        }
+    #Guest cannot use mutating tools unless explicitly allowed
+    if user == "Guest":
+        if allowed_for_guest:
+            return {"allowed": True}
+             
+        if tool_type in MUTATING_TOOL_TYPES:
+            return {
+                "allowed": False,
+                "error": f"Guest users cannot use {tool_type} tools. Please log in."
+            }
     
     return {"allowed": True}
 
@@ -70,11 +68,12 @@ def create_agent_tools(agent) -> list[FunctionTool]:
     
     # Load native tools from Agent Tool Function documents
 
-    if hasattr(agent, "agent_tool") and agent.agent_tool:
-        for func in agent.agent_tool:
+    from huf.ai.tool_registry import PermissionAwareToolRegistry
+    
+    allowed_tool_docs = PermissionAwareToolRegistry.get_allowed_tools(agent, frappe.session.user)
+
+    for function_doc in allowed_tool_docs:
             try:
-                # Fetch linked tool function doc
-                function_doc = frappe.get_doc("Agent Tool Function", func.tool)
 
                 function_path = None
                 if function_doc.types in ["Custom Function", "App Provided"]:
@@ -167,13 +166,18 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         if function_doc.function_name:
                             extra_args["function_name"] = function_doc.function_name
 
+                    elif function_doc.types == "Run Agent":
+                        if function_doc.agent:
+                            extra_args["agent_name"] = function_doc.agent
+
                     tool = create_function_tool(
                         function_doc.tool_name,
                         function_doc.description,
                         function_path,
                         params,
                         extra_args=extra_args,
-                        tool_type=function_doc.types
+                        tool_type=function_doc.types,
+                        allowed_for_guest=bool(function_doc.allowed_for_guest)
                     )
 
                     if tool:
@@ -182,7 +186,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             except Exception as e:
                 frappe.log_error(
                     "SDK Functions Debug",
-                    f"Error processing function {func.tool}: {str(e)}"
+                    f"Error processing function {function_doc.name}: {str(e)}"
                 )
 
     
@@ -248,6 +252,7 @@ def create_function_tool(
     parameters: dict[str, Any],
     extra_args: dict[str, Any] = None,
     tool_type: str = None,
+    allowed_for_guest: bool = False
 ) -> FunctionTool:
     """
     Create a FunctionTool for Huf Tool functions
@@ -276,7 +281,7 @@ def create_function_tool(
 
             #Permission check before execution
             if tool_type:
-                perm_check = _check_tool_permission(tool_type, ctx)
+                perm_check = _check_tool_permission(tool_type, ctx, allowed_for_guest=allowed_for_guest)
                 if not perm_check["allowed"]:
                     return json.dumps({"error": perm_check["error"], "denied": True})
 
@@ -295,9 +300,14 @@ def create_function_tool(
                     if "agent_name" in ctx:
                         args_dict["agent_name"] = ctx["agent_name"]
 
-                for key, value in _extra_args.items():
-                    if key not in args_dict:
-                        args_dict[key] = value
+                if _extra_args:
+                    args_dict.update(_extra_args)
+
+                if "ignore_permissions" in args_dict:
+                    del args_dict["ignore_permissions"]
+                
+                if allowed_for_guest and frappe.session.user == "Guest":
+                    args_dict["ignore_permissions"] = True
 
                 if _function.__name__ in ["handle_get_request", "handle_post_request"]:
                     args_dict["tool_name"] = name
@@ -639,12 +649,13 @@ def create_list_function(doctype: str) -> Callable:
 
 # Built-in handlers for standard function types
 
-def handle_create_document(reference_doctype=None, **kwargs):
+def handle_create_document(reference_doctype=None, ignore_permissions=False, **kwargs):
     """
     Create a new document
 
     Args:
         reference_doctype (str): DocType of the document
+        ignore_permissions (bool): Bypass permission checks (used for allowed Guest tools)
         **kwargs: Fields of the document
 
     Returns:
@@ -657,7 +668,7 @@ def handle_create_document(reference_doctype=None, **kwargs):
         if not frappe.db.exists("DocType", reference_doctype):
             return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
 
-        if not frappe.has_permission(reference_doctype, "create"):
+        if not ignore_permissions and not frappe.has_permission(reference_doctype, "create"):
             return {
                 "success": False,
                 "error": f"You do not have permission to create {reference_doctype}",
@@ -665,7 +676,7 @@ def handle_create_document(reference_doctype=None, **kwargs):
             }
 
         doc = frappe.get_doc({"doctype": reference_doctype, **kwargs})
-        doc.insert()
+        doc.insert(ignore_permissions=ignore_permissions)
 
         doc_dict = doc.as_dict()
         import datetime
@@ -679,13 +690,14 @@ def handle_create_document(reference_doctype=None, **kwargs):
         return {"success": False, "error": str(e)}
 
 
-def handle_delete_document(document_id=None, reference_doctype=None,**kwargs):
+def handle_delete_document(document_id=None, reference_doctype=None, ignore_permissions=False, **kwargs):
     """
     Delete a document
 
     Args:
         document_id (str): ID of the document
         reference_doctype (str): DocType of the document
+        ignore_permissions (bool): Bypass permission checks
 
     Returns:
         dict: Deletion result
@@ -701,14 +713,14 @@ def handle_delete_document(document_id=None, reference_doctype=None,**kwargs):
             return {"success": False, "error": f"Document {document_id} not found in {reference_doctype}"}
 
         #Pre-check delete permission
-        if not frappe.has_permission(reference_doctype, "delete", doc=document_id):
+        if not ignore_permissions and not frappe.has_permission(reference_doctype, "delete", doc=document_id):
             return {
                 "success": False,
                 "error": f"You do not have delete permission on {reference_doctype} {document_id}",
                 "permission_denied": True
             }
 
-        frappe.delete_doc(reference_doctype, document_id)
+        frappe.delete_doc(reference_doctype, document_id, ignore_permissions=ignore_permissions)
 
         return {"success": True, "message": f"{reference_doctype} {document_id} deleted"}
     except Exception as e:
@@ -834,14 +846,14 @@ def handle_get_list(
 		return {"success": False, "error": str(e)}
 
 
-def handle_update_document(document_id=None, data=None, reference_doctype=None, **kwargs):
+def handle_update_document(document_id=None, data=None, reference_doctype=None, ignore_permissions=False, **kwargs):
     """
     Update a document in the database
     """
     if data is None:
         data = {}
         for key, value in kwargs.items():
-            if key not in ["document_id", "reference_doctype"]:
+            if key not in ["document_id", "reference_doctype", "ignore_permissions"]:
                 data[key] = value
 
     if not reference_doctype:
@@ -853,7 +865,7 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
     if not frappe.db.exists(reference_doctype, document_id):
         return {"success": False, "error": f"{reference_doctype} {document_id} not found"}
 
-    if not frappe.has_permission(reference_doctype, "write", doc=document_id):
+    if not ignore_permissions and not frappe.has_permission(reference_doctype, "write", doc=document_id):
         return {
             "success": False,
             "error": f"You do not have write permission on {reference_doctype} {document_id}",
@@ -866,7 +878,7 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
         for field, value in data.items():
             doc.set(field, value)
 
-        doc.save()
+        doc.save(ignore_permissions=ignore_permissions)
         frappe.db.commit() 
 
         return {
@@ -961,11 +973,21 @@ def handle_update_documents(reference_doctype: str, documents: list = None, data
 def handle_delete_documents(reference_doctype: str, document_ids: list, **kwargs):
     return delete_documents(reference_doctype, document_ids or [])
 
-def handle_submit_document(reference_doctype: str, document_id: str, **kwargs):
-    return submit_document(reference_doctype, document_id)
+def handle_submit_document(reference_doctype: str, document_id: str, ignore_permissions=False, **kwargs):
+    if not ignore_permissions and not frappe.has_permission(reference_doctype, "submit", doc=document_id):
+        return {"success": False, "error": "No permission to submit"}
+    
+    doc = frappe.get_doc(reference_doctype, document_id)
+    doc.submit()
+    return {"success": True, "message": "Submitted"}
 
-def handle_cancel_document(reference_doctype: str, document_id: str, **kwargs):
-    return cancel_document(reference_doctype, document_id)
+def handle_cancel_document(reference_doctype: str, document_id: str, ignore_permissions=False, **kwargs):
+    if not ignore_permissions and not frappe.has_permission(reference_doctype, "cancel", doc=document_id):
+        return {"success": False, "error": "No permission to cancel"}
+
+    doc = frappe.get_doc(reference_doctype, document_id)
+    doc.cancel()
+    return {"success": True, "message": "Cancelled"}
 
 def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, **kwargs):
     """
