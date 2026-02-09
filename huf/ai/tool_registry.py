@@ -60,6 +60,10 @@ class PermissionAwareToolRegistry:
         """Check if user has permission for this tool"""
         tool_type = tool_doc.types
         
+        # Read Only restriction
+        if tool_doc.is_read_only and tool_type in cls.MUTATING_TOOL_TYPES:
+            return False
+        
         #Guest Restrictions
         if user == "Guest":
             #Explicitly Allowed
