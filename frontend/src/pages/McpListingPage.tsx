@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Calendar, Settings, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getMCPServers } from '../services/mcpApi';
@@ -26,6 +28,7 @@ export default function McpListingPage() {
     setSearch,
     loadMore,
     total,
+    error,
   } = useInfiniteScroll<
     { page?: number; limit?: number; start?: number; search?: string },
     MCPServerDoc
@@ -60,6 +63,16 @@ export default function McpListingPage() {
     autoLoad: true,
   });
 
+  // Show error toast when there's an error
+  useEffect(() => {
+    if (error) {
+      toast.error('Failed to load MCP servers', {
+        description: error.message || 'An error occurred while fetching MCP servers. Please try again.',
+        duration: 5000,
+      });
+    }
+  }, [error]);
+
   return (
     <PageLayout
       subtitle="Manage Model Context Protocol (MCP) servers and their configurations"
@@ -71,6 +84,12 @@ export default function McpListingPage() {
         />
       }
     >
+      {error && !initialLoading && (
+        <div className="text-center py-12">
+          <p className="text-destructive mb-4">Failed to load MCP servers</p>
+          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching MCP servers.'}</p>
+        </div>
+      )}
       <GridView
         items={servers}
         columns={{ sm: 1, md: 2, lg: 3 }}

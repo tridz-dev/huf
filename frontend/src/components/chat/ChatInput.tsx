@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CornerDownLeft } from "lucide-react";
+import { CornerDownLeft, Plus } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { ShortcutKey } from "../ui/shortcut-key";
@@ -15,6 +16,7 @@ interface ChatInputProps {
     isCreatingConversationRef: React.MutableRefObject<boolean>;
     newlyCreatedConversationIdRef: React.MutableRefObject<string | null>;
     setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>;
+    isModelMismatch?: boolean;
 }
 
 export function ChatInput({ 
@@ -25,7 +27,9 @@ export function ChatInput({
     isCreatingConversationRef,
     newlyCreatedConversationIdRef,
     setMessages,
+    isModelMismatch = false,
 }: ChatInputProps) {
+    const navigate = useNavigate();
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -269,8 +273,35 @@ export function ChatInput({
         adjustTextareaHeight();
     }, [message, adjustTextareaHeight]);
 
+    const handleNewConversation = useCallback(() => {
+        if (agentName) {
+            navigate(`/chat/new?agent=${agentName}`);
+        }
+    }, [navigate, agentName]);
+
     if (!agentName) {
         return null;
+    }
+
+    if (isModelMismatch && chatId) {
+        return (
+            <div className="px-6 pb-6 pt-2">
+                <div className="w-full border border-zinc-200 rounded-xl bg-zinc-50 p-6">
+                    <div className="flex flex-col items-center justify-center gap-4 text-center">
+                        <p className="text-sm text-zinc-600">
+                            Model changed, please start a new conversation
+                        </p>
+                        <Button
+                            onClick={handleNewConversation}
+                            className="gap-2"
+                        >
+                            <Plus className="w-4 h-4" />
+                            New Conversation
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -291,7 +322,7 @@ export function ChatInput({
                         style={{ 
                             height: `${MIN_HEIGHT}px`
                         }}
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || isModelMismatch}
                     />
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
                         <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
@@ -303,7 +334,7 @@ export function ChatInput({
                         </span>
                         <Button
                             type="submit"
-                            disabled={!message.trim() || isSubmitting}
+                            disabled={!message.trim() || isSubmitting || isModelMismatch}
                             size="icon"
                             className="shrink-0"
                         >
