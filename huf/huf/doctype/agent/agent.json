@@ -48,6 +48,7 @@
   "context_strategy",
   "history_limit",
   "enable_conversation_data",
+  "autonaming_of_conversation_title",
   "column_break_ctx",
   "summary_ratio",
   "summary_model",
@@ -454,12 +455,19 @@
    "fieldname": "agent_color",
    "fieldtype": "Data",
    "label": "Agent Color"
+  },
+  {
+   "default": "1",
+   "description": "If enabled, the conversation title will be automatically updated based on the initial context.",
+   "fieldname": "autonaming_of_conversation_title",
+   "fieldtype": "Check",
+   "label": "Autonaming of conversation title"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-09 12:05:14.211963",
+ "modified": "2026-02-09 18:23:31.825896",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",
