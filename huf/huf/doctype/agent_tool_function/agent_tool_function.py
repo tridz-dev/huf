@@ -480,6 +480,19 @@ class AgentToolFunction(Document):
 				"required": [],
 				"additionalProperties": False
 			}
+		
+		elif self.types == "Run Agent":
+			params = {
+				"type": "object",
+				"properties": {
+					"prompt": {
+						"type": "string",
+						"description": "The instruction or question for the agent."
+					}
+				},
+				"required": ["prompt"],
+				"additionalProperties": False
+			}
 					
 		else:
 			params = self.build_params_json_from_table()
