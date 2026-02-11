@@ -292,7 +292,7 @@ def create_ocr_document_tool():
             {
                 "label": "Include Images",
                 "fieldname": "include_images",
-                "type": "check",
+                "type": "boolean",
                 "required": 0,
                 "description": "Extract images from document as base64. Only for PDFs with OCR endpoint."
             },
