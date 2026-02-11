@@ -461,6 +461,55 @@ def run_background_summarization(conversation_name, agent_name):
     except Exception as e:
         frappe.log_error(f"Background summarization failed: {str(e)}", "Agent Background Summarization")
 
+@frappe.whitelist()
+def generate_conversation_title(conversation_name, agent_name):
+    """
+    Background job to auto-name conversation based on context.
+    """
+    try:
+        # Check if title is still default to avoid overwriting user changes
+        current_title = frappe.db.get_value("Agent Conversation", conversation_name, "title")
+        if current_title and not (current_title.startswith("Chat with") or current_title.startswith("Conversation with") or current_title.startswith("Streaming chat with")):
+             return
+
+        conv_manager = ConversationManager(agent_name=agent_name)
+        history = conv_manager.get_conversation_history(conversation_name, limit=5)
+        
+        if not history:
+            return
+
+        prompt = f"""
+        Analyze the following conversation start and generate a short, concise title (max 6 words).
+        The title should summarize the user's intent or the main topic.
+        Do not use quotes.
+        Conversation:
+        {json.dumps(history)}
+        """
+        
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        provider = agent_doc.provider
+        model = agent_doc.model
+        
+        from huf.ai.providers.litellm import get_simple_completion
+        
+        messages = [{"role": "user", "content": prompt}]
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+             title = loop.run_until_complete(
+                get_simple_completion(model, messages, provider)
+            )
+             if title:
+                 title = title.strip().strip('"').strip("'")
+                 frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
+                 frappe.db.commit()
+        finally:
+            loop.close()
+            
+    except Exception as e:
+        frappe.log_error(f"Title generation failed: {str(e)}", "Agent Auto-naming")
+
 @frappe.whitelist(allow_guest=True)
 def run_agent_sync(
     agent_name: str,
@@ -835,6 +884,17 @@ def run_agent_sync(
             "end_time": now_datetime()
         }, update_modified=True)
         safe_commit()
+
+        # Auto-naming check
+        if agent_doc.autonaming_of_conversation_title:
+            conv_title = conversation.title
+            if conv_title and (conv_title.startswith("Chat with") or conv_title.startswith("Conversation with")):
+                frappe.enqueue(
+                    "huf.ai.agent_integration.generate_conversation_title",
+                    queue="default",
+                    conversation_name=conversation.name,
+                    agent_name=agent_name
+                )
 
         if context_strategy == "Summarize":
             current_history_len = len(history)
@@ -1230,6 +1290,20 @@ async def run_agent_stream(
                         "end_time": now_datetime()
                     }, update_modified=True)
                     safe_commit()
+
+                    # Auto-naming check for stream
+                    try:
+                        if agent_doc.autonaming_of_conversation_title:
+                            conv_title = frappe.db.get_value("Agent Conversation", conversation.name, "title")
+                            if conv_title and (conv_title.startswith("Chat with") or conv_title.startswith("Conversation with") or conv_title.startswith("Streaming chat with")):
+                                frappe.enqueue(
+                                    "huf.ai.agent_integration.generate_conversation_title",
+                                    queue="default",
+                                    conversation_name=conversation.name,
+                                    agent_name=agent_name
+                                )
+                    except Exception:
+                        pass
                     
                     chunk["conversation_id"] = conversation.name
                     yield chunk

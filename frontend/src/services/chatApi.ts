@@ -11,6 +11,7 @@ export interface AgentConversationDoc {
   name: string;
   title: string;
   agent: string;
+  model?: string;
   last_activity?: string;
   modified?: string;
 }
@@ -397,5 +398,15 @@ export async function createAgentRunFeedback(params: AgentRunFeedbackParams): Pr
     });
   } catch (error) {
     handleFrappeError(error, 'Error submitting feedback');
+  }
+}
+
+export async function updateConversationTitle(conversationId:string,title:string){
+  try{
+    await db.updateDoc(doctype['Agent Conversation'],conversationId,{
+      title
+    })
+  }catch(e){
+    handleFrappeError(e,"Error update conversation title")
   }
 }
