@@ -1675,7 +1675,7 @@ async def _process_with_vision_model(
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-
+@frappe.whitelist()
 async def handle_ocr_document(
     file_id: str = None,
     file_url: str = None,
