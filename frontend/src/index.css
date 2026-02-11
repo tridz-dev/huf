@@ -172,4 +172,32 @@
   [data-sonner-toast] [data-cancel]:hover {
     background-color: oklch(var(--muted) / 0.8);
   }
+
+  /* Close button positioning and sizing */
+  [data-sonner-toast] {
+    position: relative;
+    padding-right: 2.5rem !important;
+  }
+
+  /* Target the close button - sonner uses button[data-close-button] */
+  [data-sonner-toast] button[data-close-button] {
+    position: absolute !important;
+    right: 0.05rem !important;
+    top: 1rem !important;
+    left: auto !important;
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+    min-width: 1.75rem !important;
+    min-height: 1.75rem !important;
+    padding: 0.375rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+  }
+
+  [data-sonner-toast] button[data-close-button] svg {
+    width: 1.125rem !important;
+    height: 1.125rem !important;
+  }
 }
