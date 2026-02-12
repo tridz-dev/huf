@@ -58,7 +58,7 @@ Stores credentials for different AI service providers. Huf uses LiteLLM to provi
 
 | Label          | Fieldname      | Type       | Description                               |
 | :------------- | :------------- | :--------- | :---------------------------------------- |
-| **Provide Name** | `provide_name` | Data       | The unique name of the provider (e.g., OpenAI, Anthropic, Google, OpenRouter). Provider names are case-insensitive and automatically routed to LiteLLM. **Note**: The field name uses "provide_name" (with "provide" instead of "provider") due to existing database schema; this is intentional for backward compatibility. |
+| **Provide Name** | `provider_name` | Data       | The unique name of the provider (e.g., OpenAI, Anthropic, Google, OpenRouter). Provider names are case-insensitive and automatically routed to LiteLLM. **Note**: The field name uses "provider_name" (with "provide" instead of "provider") due to existing database schema; this is intentional for backward compatibility. |
 | **API Key**    | `api_key`      | Password   | The API key for the provider. Stored securely using Frappe's Password field type.             |
 
 **Supported Providers via LiteLLM:**
