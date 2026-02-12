@@ -40,7 +40,18 @@ function render_chat_ui(frm) {
                         style="flex:1; resize:none; border:1px solid #d1d5db; border-radius:8px; padding:12px; font-size:14px; line-height:1.4; min-height:44px; max-height:120px; outline:none; transition:border-color 0.2s;"
                         rows="1"
                     ></textarea>
+                    
+                    <!-- Audio Input -->
                     <input type="file" accept="audio/*" class="audio-file-input" style="display:none;" />
+                    <!-- Doc/Image Input -->
+                    <input type="file" accept="image/*,application/pdf" class="doc-file-input" style="display:none;" />
+                    
+                    <button class="doc-upload-btn btn" title="Upload Document/Image">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                        </svg>
+                    </button>
+
                     <button class="audio-upload-btn btn" title="Upload audio">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -74,10 +85,17 @@ function render_chat_ui(frm) {
         const audioInput = wrapper.find(".audio-file-input");
         const uploadBtn = wrapper.find(".audio-upload-btn");
         const recordBtn = wrapper.find(".audio-record-btn");
+
+        const docInput = wrapper.find(".doc-file-input");
+        const docUploadBtn = wrapper.find(".doc-upload-btn");
+
         let mediaRecorder = null;
         let chunks = [];
 
         uploadBtn.on("click", () => audioInput.click());
+
+        docUploadBtn.on("click", () => docInput.click());
+
         audioInput.on("change", function (e) {
             const file = this.files[0];
             if (!file) return;
@@ -85,6 +103,17 @@ function render_chat_ui(frm) {
             reader.onload = function (evt) {
                 const b64 = evt.target.result;
                 sendAudioToServer(frm, b64, file.name);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        docInput.on("change", function (e) {
+            const file = this.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (evt) {
+                const b64 = evt.target.result;
+                sendDocToServer(frm, b64, file.name);
             };
             reader.readAsDataURL(file);
         });
@@ -151,6 +180,47 @@ function render_chat_ui(frm) {
                     }
                 }
 
+            });
+        }
+
+        function sendDocToServer(frm, dataUrl, filename) {
+            const messagesEl = $(frm.fields_dict.chat_ui.wrapper).find(".agent-chat-messages");
+            append_message(messagesEl, "user", frappe.session.user, `(file upload: ${filename})`, new Date());
+
+            // Show processing status
+            const statusId = "status-" + frappe.utils.get_random(5);
+            append_message(messagesEl, "system", "System", "Uploading and processing...", new Date(), statusId);
+            scroll_to_bottom(messagesEl);
+
+
+            frappe.call({
+                method: "huf.ai.agent_chat.upload_file_and_process",
+                args: {
+                    docname: frm.doc.name,
+                    filename: filename,
+                    b64data: dataUrl,
+                    agent: frm.doc.agent,
+                    conversation: frm.doc.conversation
+                },
+                callback: function (r) {
+                    // Remove status message
+                    messagesEl.find(`#${statusId}`).closest('div[style*="margin-bottom:16px"]').remove();
+
+                    if (r.message && r.message.success) {
+                        
+                        let text = r.message.text || "Processed successfully.";
+                        // Optionally show the extracted text as a system / agent message
+                        append_message(messagesEl, "agent", frm.doc.agent, `**Extracted from ${filename}:**\n\n${text}`, new Date());
+
+                        if (r.message.conversation_id && !frm.doc.conversation) {
+                            frm.set_value("conversation", r.message.conversation_id);
+                        }
+
+                        scroll_to_bottom(messagesEl);
+                    } else {
+                        append_message(messagesEl, "system", "System", "Processing failed: " + (r.message?.error || "Unknown"), new Date());
+                    }
+                }
             });
         }
 
