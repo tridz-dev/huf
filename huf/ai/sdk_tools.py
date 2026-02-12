@@ -24,24 +24,23 @@ import hashlib
 from datetime import datetime, timedelta
 
 
-MUTATING_TOOL_TYPES = {
-    "Create Document", "Create Multiple Documents",
-    "Update Document", "Update Multiple Documents", 
-    "Delete Document", "Delete Multiple Documents",
-    "Submit Document", "Cancel Document",
-    "Set Value", "POST", "Run Agent"
-}
+from .tool_registry import PermissionAwareToolRegistry
+MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
 
-def _check_tool_permission(tool_type: str, context: dict = None):
+def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_guest: bool = False):
     """Guard function to block dangerous tools for Guest users"""
     user = frappe.session.user
     
-    #Guest cannot use mutating tools
-    if user == "Guest" and tool_type in MUTATING_TOOL_TYPES:
-        return {
-            "allowed": False,
-            "error": f"Guest users cannot use {tool_type} tools. Please log in."
-        }
+    #Guest cannot use mutating tools unless explicitly allowed
+    if user == "Guest":
+        if allowed_for_guest:
+            return {"allowed": True}
+             
+        if tool_type in MUTATING_TOOL_TYPES:
+            return {
+                "allowed": False,
+                "error": f"Guest users cannot use {tool_type} tools. Please log in."
+            }
     
     return {"allowed": True}
 
@@ -69,11 +68,12 @@ def create_agent_tools(agent) -> list[FunctionTool]:
     
     # Load native tools from Agent Tool Function documents
 
-    if hasattr(agent, "agent_tool") and agent.agent_tool:
-        for func in agent.agent_tool:
+    from huf.ai.tool_registry import PermissionAwareToolRegistry
+    
+    allowed_tool_docs = PermissionAwareToolRegistry.get_allowed_tools(agent, frappe.session.user)
+
+    for function_doc in allowed_tool_docs:
             try:
-                # Fetch linked tool function doc
-                function_doc = frappe.get_doc("Agent Tool Function", func.tool)
 
                 function_path = None
                 if function_doc.types in ["Custom Function", "App Provided"]:
@@ -166,13 +166,18 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         if function_doc.function_name:
                             extra_args["function_name"] = function_doc.function_name
 
+                    elif function_doc.types == "Run Agent":
+                        if function_doc.agent:
+                            extra_args["agent_name"] = function_doc.agent
+
                     tool = create_function_tool(
                         function_doc.tool_name,
                         function_doc.description,
                         function_path,
                         params,
                         extra_args=extra_args,
-                        tool_type=function_doc.types
+                        tool_type=function_doc.types,
+                        allowed_for_guest=bool(function_doc.allowed_for_guest)
                     )
 
                     if tool:
@@ -181,7 +186,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             except Exception as e:
                 frappe.log_error(
                     "SDK Functions Debug",
-                    f"Error processing function {func.tool}: {str(e)}"
+                    f"Error processing function {function_doc.name}: {str(e)}"
                 )
 
     
@@ -247,6 +252,7 @@ def create_function_tool(
     parameters: dict[str, Any],
     extra_args: dict[str, Any] = None,
     tool_type: str = None,
+    allowed_for_guest: bool = False
 ) -> FunctionTool:
     """
     Create a FunctionTool for Huf Tool functions
@@ -275,7 +281,7 @@ def create_function_tool(
 
             #Permission check before execution
             if tool_type:
-                perm_check = _check_tool_permission(tool_type, ctx)
+                perm_check = _check_tool_permission(tool_type, ctx, allowed_for_guest=allowed_for_guest)
                 if not perm_check["allowed"]:
                     return json.dumps({"error": perm_check["error"], "denied": True})
 
@@ -294,9 +300,14 @@ def create_function_tool(
                     if "agent_name" in ctx:
                         args_dict["agent_name"] = ctx["agent_name"]
 
-                for key, value in _extra_args.items():
-                    if key not in args_dict:
-                        args_dict[key] = value
+                if _extra_args:
+                    args_dict.update(_extra_args)
+
+                if "ignore_permissions" in args_dict:
+                    del args_dict["ignore_permissions"]
+                
+                if allowed_for_guest and frappe.session.user == "Guest":
+                    args_dict["ignore_permissions"] = True
 
                 if _function.__name__ in ["handle_get_request", "handle_post_request"]:
                     args_dict["tool_name"] = name
@@ -638,12 +649,13 @@ def create_list_function(doctype: str) -> Callable:
 
 # Built-in handlers for standard function types
 
-def handle_create_document(reference_doctype=None, **kwargs):
+def handle_create_document(reference_doctype=None, ignore_permissions=False, **kwargs):
     """
     Create a new document
 
     Args:
         reference_doctype (str): DocType of the document
+        ignore_permissions (bool): Bypass permission checks (used for allowed Guest tools)
         **kwargs: Fields of the document
 
     Returns:
@@ -656,7 +668,7 @@ def handle_create_document(reference_doctype=None, **kwargs):
         if not frappe.db.exists("DocType", reference_doctype):
             return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
 
-        if not frappe.has_permission(reference_doctype, "create"):
+        if not ignore_permissions and not frappe.has_permission(reference_doctype, "create"):
             return {
                 "success": False,
                 "error": f"You do not have permission to create {reference_doctype}",
@@ -664,7 +676,7 @@ def handle_create_document(reference_doctype=None, **kwargs):
             }
 
         doc = frappe.get_doc({"doctype": reference_doctype, **kwargs})
-        doc.insert()
+        doc.insert(ignore_permissions=ignore_permissions)
 
         doc_dict = doc.as_dict()
         import datetime
@@ -678,13 +690,14 @@ def handle_create_document(reference_doctype=None, **kwargs):
         return {"success": False, "error": str(e)}
 
 
-def handle_delete_document(document_id=None, reference_doctype=None,**kwargs):
+def handle_delete_document(document_id=None, reference_doctype=None, ignore_permissions=False, **kwargs):
     """
     Delete a document
 
     Args:
         document_id (str): ID of the document
         reference_doctype (str): DocType of the document
+        ignore_permissions (bool): Bypass permission checks
 
     Returns:
         dict: Deletion result
@@ -700,14 +713,14 @@ def handle_delete_document(document_id=None, reference_doctype=None,**kwargs):
             return {"success": False, "error": f"Document {document_id} not found in {reference_doctype}"}
 
         #Pre-check delete permission
-        if not frappe.has_permission(reference_doctype, "delete", doc=document_id):
+        if not ignore_permissions and not frappe.has_permission(reference_doctype, "delete", doc=document_id):
             return {
                 "success": False,
                 "error": f"You do not have delete permission on {reference_doctype} {document_id}",
                 "permission_denied": True
             }
 
-        frappe.delete_doc(reference_doctype, document_id)
+        frappe.delete_doc(reference_doctype, document_id, ignore_permissions=ignore_permissions)
 
         return {"success": True, "message": f"{reference_doctype} {document_id} deleted"}
     except Exception as e:
@@ -833,14 +846,14 @@ def handle_get_list(
 		return {"success": False, "error": str(e)}
 
 
-def handle_update_document(document_id=None, data=None, reference_doctype=None, **kwargs):
+def handle_update_document(document_id=None, data=None, reference_doctype=None, ignore_permissions=False, **kwargs):
     """
     Update a document in the database
     """
     if data is None:
         data = {}
         for key, value in kwargs.items():
-            if key not in ["document_id", "reference_doctype"]:
+            if key not in ["document_id", "reference_doctype", "ignore_permissions"]:
                 data[key] = value
 
     if not reference_doctype:
@@ -852,7 +865,7 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
     if not frappe.db.exists(reference_doctype, document_id):
         return {"success": False, "error": f"{reference_doctype} {document_id} not found"}
 
-    if not frappe.has_permission(reference_doctype, "write", doc=document_id):
+    if not ignore_permissions and not frappe.has_permission(reference_doctype, "write", doc=document_id):
         return {
             "success": False,
             "error": f"You do not have write permission on {reference_doctype} {document_id}",
@@ -865,7 +878,7 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
         for field, value in data.items():
             doc.set(field, value)
 
-        doc.save()
+        doc.save(ignore_permissions=ignore_permissions)
         frappe.db.commit() 
 
         return {
@@ -960,11 +973,21 @@ def handle_update_documents(reference_doctype: str, documents: list = None, data
 def handle_delete_documents(reference_doctype: str, document_ids: list, **kwargs):
     return delete_documents(reference_doctype, document_ids or [])
 
-def handle_submit_document(reference_doctype: str, document_id: str, **kwargs):
-    return submit_document(reference_doctype, document_id)
+def handle_submit_document(reference_doctype: str, document_id: str, ignore_permissions=False, **kwargs):
+    if not ignore_permissions and not frappe.has_permission(reference_doctype, "submit", doc=document_id):
+        return {"success": False, "error": "No permission to submit"}
+    
+    doc = frappe.get_doc(reference_doctype, document_id)
+    doc.submit()
+    return {"success": True, "message": "Submitted"}
 
-def handle_cancel_document(reference_doctype: str, document_id: str, **kwargs):
-    return cancel_document(reference_doctype, document_id)
+def handle_cancel_document(reference_doctype: str, document_id: str, ignore_permissions=False, **kwargs):
+    if not ignore_permissions and not frappe.has_permission(reference_doctype, "cancel", doc=document_id):
+        return {"success": False, "error": "No permission to cancel"}
+
+    doc = frappe.get_doc(reference_doctype, document_id)
+    doc.cancel()
+    return {"success": True, "message": "Cancelled"}
 
 def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, **kwargs):
     """
@@ -1487,6 +1510,371 @@ async def handle_generate_image(
         return {"success": False, "error": str(e)}
 
 
+def _determine_ocr_strategy(file_path: str, file_type: str) -> str:
+    """Determine OCR strategy based on file type."""
+    # Check file extension if type not clear
+    ext = file_path.lower().split('.')[-1] if '.' in file_path else ""
+    
+    # PDF and documents - use OCR endpoint
+    if file_type in ["pdf", "application/pdf"] or ext == "pdf":
+        return "ocr"
+    
+    # Images - use vision models
+    if file_type.startswith("image/") or ext in ["jpg", "jpeg", "png", "webp", "gif"]:
+        return "vision"
+    
+    # Default to vision for unknown types
+    return "vision"
+
+
+def _get_default_ocr_model(provider_name: str, strategy: str) -> str:
+    """Get default OCR/Vision model for a provider."""
+    if strategy == "ocr":
+        # OCR endpoint models
+        defaults = {
+            "mistral": "mistral/mistral-ocr-latest",
+            "azure": "azure_ai/ocr",
+            "google": "vertex_ai/ocr",
+            "vertex_ai": "vertex_ai/ocr",
+        }
+    else:
+        # Vision models
+        defaults = {
+            "mistral": "mistral/mistral-small-latest",
+            "openai": "gpt-4o",
+            "google": "gemini/gemini-2.0-flash-exp",
+            "gemini": "gemini/gemini-2.0-flash-exp",
+            "anthropic": "claude-3-5-sonnet-20241022",
+        }
+    
+    return defaults.get(provider_name.lower())
+
+
+async def _process_with_ocr_endpoint(
+    file_path: str,
+    model: str,
+    api_key: str,
+    pages: str = None,
+    include_images: bool = False
+):
+    """Process document using LiteLLM OCR endpoint."""
+    import litellm
+    import base64
+    
+    try:
+        # Read file and encode to base64
+        with open(file_path, "rb") as f:
+            file_content = f.read()
+            base64_content = base64.b64encode(file_content).decode('utf-8')
+        
+        # Determine document type
+        ext = file_path.lower().split('.')[-1]
+        mime_type = "application/pdf" if ext == "pdf" else f"image/{ext}"
+        
+        # Build OCR parameters
+        ocr_params = {
+            "model": model,
+            "document": {
+                "type": "document_url",
+                "document_url": f"data:{mime_type};base64,{base64_content}"
+            },
+            "api_key": api_key
+        }
+        
+        # Add optional parameters
+        if pages:
+            # Convert comma-separated string to list of integers
+            page_list = [int(p.strip()) for p in pages.split(",")]
+            ocr_params["pages"] = page_list
+        
+        if include_images:
+            ocr_params["include_image_base64"] = True
+        
+        # Call LiteLLM OCR
+        response = await asyncio.to_thread(
+            litellm.ocr,
+            **ocr_params
+        )
+        
+        # Extract text from all pages
+        all_text = []
+        pages_data = []
+        
+        for page in response.pages:
+            all_text.append(f"## Page {page.index + 1}\n\n{page.markdown}")
+            pages_data.append({
+                "index": page.index,
+                "text": page.markdown,
+                "dimensions": page.dimensions if hasattr(page, 'dimensions') else None
+            })
+        
+        combined_text = "\n\n".join(all_text)
+        
+        return {
+            "success": True,
+            "text": combined_text,
+            "pages": pages_data
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+async def _process_with_vision_model(
+    file_path: str,
+    model: str,
+    api_key: str
+):
+    """Process image using LiteLLM vision models."""
+    import litellm
+    import base64
+    
+    try:
+        # Read file and encode to base64
+        with open(file_path, "rb") as f:
+            file_content = f.read()
+            base64_image = base64.b64encode(file_content).decode('utf-8')
+        
+        # Determine image type
+        ext = file_path.lower().split('.')[-1]
+        mime_type = f"image/{ext}" if ext in ["jpg", "jpeg", "png", "webp", "gif"] else "image/jpeg"
+        
+        # Build vision request
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Extract all text from this image. Preserve formatting, structure, and layout. Return the text in markdown format."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": f"data:{mime_type};base64,{base64_image}"
+                    }
+                ]
+            }
+        ]
+        
+        # Call LiteLLM completion with vision
+        response = await asyncio.to_thread(
+            litellm.completion,
+            model=model,
+            messages=messages,
+            api_key=api_key
+        )
+        
+        extracted_text = response.choices[0].message.content
+        
+        return {
+            "success": True,
+            "text": extracted_text,
+            "pages": [{"index": 0, "text": extracted_text}]
+        }
+        
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@frappe.whitelist()
+async def handle_ocr_document(
+    file_id: str = None,
+    file_url: str = None,
+    pages: str = None,
+    include_images: bool = False,
+    model: str = None,
+    agent_name: str = None,
+    conversation_id: str = None,
+    **kwargs
+):
+    """
+    Extract text from documents and images using OCR.
+    
+    Intelligently routes to:
+    - LiteLLM OCR endpoint for PDFs (multi-page documents)
+    - Vision models for single images (better context understanding)
+    
+    Args:
+        file_id: File document ID (preferred)
+        file_url: File URL/path (alternative)
+        pages: Comma-separated page numbers (e.g., "0,1,2") - PDFs only
+        include_images: Extract images from document (PDFs only)
+        model: Optional model override
+        agent_name: Automatically passed from context
+        conversation_id: Automatically passed from context
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "text": str,              # Extracted text in markdown
+            "pages": list,            # Page-by-page breakdown (PDFs)
+            "strategy": str,          # "ocr" or "vision"
+            "file_id": str,
+            "message_id": str,
+            "model": str
+        }
+    """
+    try:
+        # Get agent configuration from context
+        if not agent_name:
+            return {"success": False, "error": "Agent name not found in context"}
+        
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+        
+        if not api_key:
+            return {"success": False, "error": "API key not configured for provider"}
+        
+        # Get file
+        file_doc = None
+        if file_id:
+            try:
+                file_doc = frappe.get_doc("File", file_id)
+            except Exception as e:
+                return {"success": False, "error": f"File not found: {str(e)}"}
+        elif file_url:
+            # Try to find file by URL
+            file_path = file_url.replace("/files/", "")
+            file_doc = frappe.db.get_value("File", 
+                {"file_url": file_url}, 
+                ["name"], as_dict=True)
+            if file_doc:
+                file_doc = frappe.get_doc("File", file_doc.name)
+            else:
+                # Try by file name
+                file_doc = frappe.db.get_value("File", 
+                    {"file_name": file_path}, 
+                    ["name"], as_dict=True)
+                if file_doc:
+                    file_doc = frappe.get_doc("File", file_doc.name)
+        
+        if not file_doc:
+            return {"success": False, "error": "Either file_id or file_url is required"}
+        
+        # Get file path and type
+        file_path = file_doc.get_full_path()
+        file_type = file_doc.file_type or ""
+        file_name = file_doc.file_name or ""
+        
+        # Determine strategy
+        strategy = _determine_ocr_strategy(file_path, file_type)
+        
+        # Determine model
+        ocr_model = None
+        if model:
+            ocr_model = model
+        else:
+            provider_name = provider_doc.provider_name.lower()
+            ocr_model = _get_default_ocr_model(provider_name, strategy)
+        
+        if not ocr_model:
+            return {
+                "success": False,
+                "error": f"OCR not supported for provider '{provider_doc.provider_name}' with strategy '{strategy}'. Please provide a model parameter."
+            }
+        
+        # Normalize model name
+        from huf.ai.providers.litellm import _normalize_model_name
+        normalized_model = _normalize_model_name(ocr_model, agent_doc.provider)
+        
+        # Route to appropriate method
+        if strategy == "ocr":
+            result = await _process_with_ocr_endpoint(
+                file_path, normalized_model, api_key, pages, include_images
+            )
+        else:
+            result = await _process_with_vision_model(
+                file_path, normalized_model, api_key
+            )
+        
+        if not result["success"]:
+            return result
+        
+        extracted_text = result["text"]
+        pages_data = result.get("pages", [])
+        
+        # Create Agent Message with extracted text
+        message_doc = None
+        if conversation_id:
+            try:
+                # Get conversation_index
+                last_index = frappe.db.sql("""
+                    SELECT MAX(conversation_index) as last_index
+                    FROM `tabAgent Message`
+                    WHERE conversation = %s
+                """, (conversation_id,), as_dict=1)
+                
+                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
+                
+                # Create Agent Message
+                message_doc = frappe.get_doc({
+                    "doctype": "Agent Message",
+                    "conversation": conversation_id,
+                    "role": "agent",
+                    "content": f"Extracted text from {file_name}:\n\n{extracted_text[:500]}{'...' if len(extracted_text) > 500 else ''}",
+                    "kind": "Message",
+                    "agent": agent_name,
+                    "provider": agent_doc.provider,
+                    "model": agent_doc.model,
+                    "agent_run": kwargs.get("agent_run_id"),
+                    "conversation_index": conversation_index,
+                    "is_agent_message": 1,
+                    "user": "Agent"
+                })
+                message_doc.insert(ignore_permissions=True)
+                
+                # Update conversation
+                frappe.db.sql("""
+                    UPDATE `tabAgent Conversation`
+                    SET total_messages = %s, last_activity = NOW()
+                    WHERE name = %s
+                """, (conversation_index, conversation_id))
+                
+                frappe.db.commit()
+                
+                # Emit socket event
+                try:
+                    frappe.publish_realtime(
+                        event=f'conversation:{conversation_id}',
+                        message={
+                            "type": "new_agent_message",
+                            "conversation_id": conversation_id,
+                            "message_id": message_doc.name,
+                            "kind": "Message",
+                            "content": message_doc.content,
+                            "conversation_index": conversation_index,
+                        },
+                        user=frappe.session.user,
+                        after_commit=False
+                    )
+                except Exception as e:
+                    frappe.log_error(
+                        f"Error emitting new_agent_message socket event: {str(e)}",
+                        "OCR Socket Event"
+                    )
+            except Exception as e:
+                frappe.log_error(
+                    f"Error creating Agent Message for OCR: {str(e)}",
+                    "OCR Message Creation"
+                )
+        
+        return {
+            "success": True,
+            "text": extracted_text,
+            "pages": pages_data,
+            "strategy": strategy,
+            "file_id": file_doc.name,
+            "file_name": file_name,
+            "message_id": message_doc.name if message_doc else None,
+            "model": normalized_model,
+            "conversation_id": conversation_id
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"OCR error: {str(e)}", "OCR Tool")
+        return {"success": False, "error": str(e)}
+
+@frappe.whitelist()
 async def handle_transcribe_audio(
     file_id: str = None,
     file_url: str = None,

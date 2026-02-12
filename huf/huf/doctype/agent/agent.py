@@ -75,7 +75,7 @@ class Agent(Document):
                     model_doc = frappe.get_doc("AI Model", self.model)
                     model_name = model_doc.model_name
                     provider_doc = frappe.get_doc("AI Provider", self.provider)
-                    provider_name = provider_doc.provide_name or provider_doc.name
+                    provider_name = provider_doc.provider_name or provider_doc.name
                     
                     # Normalize model name (add provider prefix if needed)
                     normalized_model = model_name
