@@ -215,6 +215,9 @@ async def execute_mcp_tool(
         The result from the MCP tool execution
     """
     try:
+        if not frappe.has_permission("MCP Server", "read", server_name):
+            return {"error": f"Permission denied: You do not have access to MCP Server {server_name}", "success": False}
+
         mcp_server = frappe.get_doc("MCP Server", server_name)
         
         # Build headers
@@ -362,6 +365,9 @@ def sync_mcp_server_tools(server_name: str) -> dict:
         dict: Result with success status and tool count
     """
     try:
+        if not frappe.has_permission("MCP Server", "write", server_name):
+             return {"success": False, "error": f"Permission denied: You cannot sync MCP Server {server_name}"}
+
         mcp_server = frappe.get_doc("MCP Server", server_name)
         headers = _build_mcp_headers(mcp_server)
         
