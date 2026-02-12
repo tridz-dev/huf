@@ -407,6 +407,33 @@ Child table used in the `Agent` DocType to bind Knowledge Sources.
 | **Priority** | `priority` | Int | Retrieval priority (higher = first). |
 | **Token Budget** | `token_budget` | Int | Max tokens to inject from this source (for `Mandatory` mode). |
 
+### Standard Tools (System Available)
+
+Huf comes with several built-in tools that are automatically registered during installation and available to agents.
+
+#### 1. ocr_document
+
+Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents.
+
+-   **Function**: `huf.ai.sdk_tools.handle_ocr_document`
+-   **Parameters**:
+    -   `file_id` (string): File document ID from Frappe (preferred).
+    -   `file_url` (string): File URL/path (alternative).
+    -   `pages` (string): Comma-separated page numbers to process (e.g., '0,1,2'). Leave empty for all pages. Only for PDFs.
+    -   `include_images` (boolean): Extract images from document as base64. Only for PDFs with OCR endpoint.
+    -   `model` (string): Optional OCR/Vision model override.
+
+#### 2. generate_image
+
+Generate an image from a text description using AI.
+
+-   **Function**: `huf.ai.sdk_tools.handle_generate_image`
+-   **Parameters**:
+    -   `prompt` (string): A detailed text description of the image to generate.
+    -   `size` (string): Image dimensions (default '1024x1024').
+    -   `quality` (string): Image quality (default 'standard').
+    -   `n` (integer): Number of images to generate (default 1).
+
 ### Core Classes and Methods
 
 The primary logic is located in the `huf/ai` directory.
