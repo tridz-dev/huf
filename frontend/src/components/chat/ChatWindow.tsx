@@ -178,7 +178,7 @@ function MessageContentWithArtifacts({ content, messageKey }: MessageContentWith
 
       {/* Render JSX previews */}
       {jsxPreviews.map((preview, idx) => (
-        <JSXPreviewRenderer key={`${messageKey}-jsx-${idx}`} preview={preview} />
+        <JSXPreviewRenderer key={`${messageKey}-jsx-${idx}`} preview={preview} messageId={messageKey} />
       ))}
 
       {/* Render web previews */}
@@ -188,7 +188,7 @@ function MessageContentWithArtifacts({ content, messageKey }: MessageContentWith
 
       {/* Render artifacts */}
       {artifacts.map((artifact) => (
-        <ArtifactRenderer key={`${messageKey}-${artifact.id}`} artifact={artifact} />
+        <ArtifactRenderer key={`${messageKey}-${artifact.id}`} artifact={artifact} messageId={messageKey} />
       ))}
     </>
   );
