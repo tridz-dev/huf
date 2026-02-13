@@ -13,6 +13,7 @@
   "model",
   "agent",
   "kind",
+  "content_type",
   "generated_image",
   "column_break_asyu",
   "session_id",
@@ -49,8 +50,9 @@
   },
   {
    "fieldname": "content",
-   "fieldtype": "Long Text",
+   "fieldtype": "Code",
    "label": "Content",
+   "options": "Markdown",
    "read_only": 1
   },
   {
@@ -159,6 +161,12 @@
    "label": "Tool Status"
   },
   {
+   "fieldname": "content_type",
+   "fieldtype": "Select",
+   "label": "Content Type",
+   "options": "\nText\nJSX\nMermaid\nMarkdown\nArtifact\nHTML\nImage"
+  },
+  {
    "depends_on": "eval:doc.kind == \"Image\";",
    "fieldname": "generated_image",
    "fieldtype": "Attach Image",
@@ -168,7 +176,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-22 19:25:00.356614",
+ "modified": "2026-02-13 10:30:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",

@@ -5,7 +5,7 @@ import { ChatMessageList } from "./ChatMessageList";
 
 interface ChatWindowProps {
     chatId?: string | null;
-    onConversationCreated?: (conversationId: string) => void;
+    onConversationCreated?: (conversationId: string, agentName?: string) => void;
 }
 
 export default function ChatWindow({ chatId: chatIdProp, onConversationCreated }: ChatWindowProps){
