@@ -24,7 +24,13 @@ export function createFrappeSocket({ siteName, port = "9000", protocol, host }: 
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: 1,
+  });
+
+  // Disable reconnection permanently after all retries are exhausted
+  socket.on("reconnect_failed", () => {
+    console.warn("Socket reconnection failed after 1 retries. Stopping further reconnection attempts.");
+    socket.io.opts.reconnection = false;
   });
 
   return socket;
