@@ -48,6 +48,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
     loadMore,
     total,
     reset,
+    error,
   } = useInfiniteScroll<
     { page?: number; limit?: number; start?: number; search?: string },
     AIProvider
@@ -82,10 +83,26 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
     autoLoad: true,
   });
 
+  // Show error toast when there's an error
+  useEffect(() => {
+    if (error) {
+      toast.error('Failed to load providers', {
+        description: error.message || 'An error occurred while fetching providers. Please try again.',
+        duration: 5000,
+      });
+    }
+  }, [error]);
+
   // Fetch all models once to get model counts
   useEffect(() => {
     getModels().then((modelsData) => {
       setModels(modelsData);
+    }).catch((error) => {
+      console.error('Error fetching models:', error);
+      toast.error('Failed to load models', {
+        description: error instanceof Error ? error.message : 'An error occurred while fetching models.',
+        duration: 5000,
+      });
     });
   }, []);
 
@@ -191,6 +208,12 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
         />
       }
     >
+      {error && !initialLoading && (
+        <div className="text-center py-12">
+          <p className="text-destructive mb-4">Failed to load providers</p>
+          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching providers.'}</p>
+        </div>
+      )}
       <GridView
         items={providers}
         columns={{ sm: 1, md: 2, lg: 3 }}

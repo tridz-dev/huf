@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { getConversationMessages, createAgentRunFeedback, type ChatMessage } from "@/services/chatApi";
+import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
+import { getAgent } from "@/services/agentApi";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent } from '@/hooks/useChatSocket';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
@@ -34,8 +35,47 @@ export function ChatMessageList({
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
+    const [isModelMismatch, setIsModelMismatch] = useState(false);
 
     const { agentName, agentColor } = useChatAgentIdentity(chatId, searchParams);
+
+    // Check for model mismatch between conversation and agent
+    useEffect(() => {
+        if (!chatId || !agentName) {
+            setIsModelMismatch(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        async function checkModelMismatch() {
+            try {
+                const [conversation, agent] = await Promise.all([
+                    getConversation(chatId!),
+                    getAgent(agentName),
+                ]);
+
+                if (cancelled) return;
+
+                if (conversation?.model && agent?.model) {
+                    setIsModelMismatch(conversation.model !== agent.model);
+                } else {
+                    setIsModelMismatch(false);
+                }
+            } catch (error) {
+                console.error('Error checking model mismatch:', error);
+                if (!cancelled) {
+                    setIsModelMismatch(false);
+                }
+            }
+        }
+
+        checkModelMismatch();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [chatId, agentName]);
 
     // Memoize initialParams to ensure stable reference but detect chatId changes
     const initialParams = useMemo(() => {
@@ -55,6 +95,7 @@ export function ChatMessageList({
         loadingMore,
         hasMore,
         sentinelRef,
+        error: messagesError,
     } = useInfiniteScroll<
         { limit?: number; start?: number },
         ChatMessage
@@ -98,6 +139,16 @@ export function ChatMessageList({
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
     });
+
+    // Show error toast when there's an error loading messages
+    useEffect(() => {
+        if (messagesError && chatId) {
+            toast.error('Failed to load messages', {
+                description: messagesError.message || 'An error occurred while fetching messages. Please try again.',
+                duration: 5000,
+            });
+        }
+    }, [messagesError, chatId]);
 
     // Transform conversationItems to MessageType and merge with socket messages
     useEffect(() => {
@@ -185,6 +236,13 @@ export function ChatMessageList({
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
                         </div>
+                    ) : messagesError && !initialLoading ? (
+                        <div className="flex items-center justify-center py-20">
+                            <div className="text-center">
+                                <p className="text-sm text-destructive mb-2">Failed to load messages</p>
+                                <p className="text-xs text-muted-foreground">{messagesError.message || 'An error occurred while fetching messages.'}</p>
+                            </div>
+                        </div>
                     ) : messages.length === 0 && !isNewChat ? (
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">No messages yet</p>
@@ -223,6 +281,7 @@ export function ChatMessageList({
                 isCreatingConversationRef={isCreatingConversationRef}
                 newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
                 setMessages={setMessages}
+                isModelMismatch={isModelMismatch}
             />
             </div>
         </div>

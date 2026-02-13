@@ -256,3 +256,92 @@ def send_message_to_conversation(conversation: str, message: str):
     except Exception as e:
         frappe.log_error(message=f"send_message_to_conversation error: {frappe.get_traceback()}", title="Huf API")
         raise
+
+@frappe.whitelist()
+def upload_file_and_process(docname: str, filename: str, b64data: str, agent: str = None, conversation: str = None):
+    """
+    Upload a file (PDF/Image) and process it with OCR/Vision.
+    Returns the extracted text and optionally creates an Agent Message.
+    """
+    if not b64data or not filename:
+        frappe.throw(_("Filename and file data are required"))
+
+    # Decode base64
+    if "," in b64data:
+        b64data = b64data.split(",", 1)[1]
+    
+    try:
+        file_bytes = base64.b64decode(b64data)
+    except Exception:
+        frappe.throw(_("Invalid base64 data"))
+
+    # Get Chat Doc
+    chat = frappe.get_doc("Agent Chat", docname)
+    if agent and chat.agent != agent:
+        chat.db_set("agent", agent)
+        chat.agent = agent
+
+    # select provider/model based on agent
+    if not chat.agent:
+         frappe.throw(_("Agent must be selected"))
+    
+    # Save file
+    
+    try:
+        msg = frappe.get_doc({
+            "doctype": "Agent Message",
+            "conversation": conversation or chat.conversation,
+            "role": "user",
+            "kind":"Message",
+            "content": f"Uploaded file: {filename}",
+            "user": frappe.session.user
+        })
+        msg.insert()
+
+        saved_file = save_file(
+            filename, 
+            file_bytes, 
+            "Agent Message", 
+            msg.name, 
+            is_private=False
+        )
+    except Exception as e:
+         frappe.log_error(f"File Save Error: {str(e)}")
+         frappe.throw(_("Failed to save file"))
+
+    file_id = saved_file.name
+
+    try:
+        import asyncio
+        
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        if loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+            sdk_tools.handle_ocr_document(
+                file_id=file_id,
+                agent_name=chat.agent,
+                conversation_id=conversation or chat.conversation
+            ),
+            loop
+            )
+            result = future.result()
+        else:
+             result = loop.run_until_complete(sdk_tools.handle_ocr_document(
+                file_id=file_id,
+                agent_name=chat.agent,
+                conversation_id=conversation or chat.conversation
+             ))
+
+        if not result.get("success"):
+            return result
+
+        return result
+
+    except Exception as e:
+        frappe.log_error(f"OCR Processing Error: {str(e)}")
+        return {"success": False, "error": str(e)}
