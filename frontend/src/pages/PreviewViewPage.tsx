@@ -1,14 +1,15 @@
 /**
- * Full-screen preview page for viewing full message content.
+ * Full-screen preview page for message content.
  *
  * Route: /huf/view/:messageId
+ * Default: JSX only (previews + jsx/chart artifacts).
+ * Query: ?preview=full — show full message (text, JSX, web, artifacts).
  *
- * Fetches the Agent Message by ID and renders the full content (text, JSX,
- * web previews, artifacts) in the same structure as chat, full-screen.
+ * Toolbar toggles "JSX only" (default) / "Full message".
  */
 
 import { useEffect, useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, ExternalLink, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/frappe-sdk';
@@ -48,6 +49,8 @@ function decodeHtmlEntities(text: string): string {
 
 export function PreviewViewPage() {
 	const { messageId } = useParams<{ messageId: string }>();
+	const [searchParams] = useSearchParams();
+	const jsxOnly = searchParams.get('preview') !== 'full';
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<AgentMessageDoc | null>(null);
@@ -152,6 +155,15 @@ export function PreviewViewPage() {
 		webPreviews.length > 0 ||
 		artifacts.length > 0;
 
+	const jsxOnlyArtifacts = artifacts.filter(
+		(a) => a.type === 'jsx' || a.type === 'chart'
+	);
+	const hasJsxContent = jsxPreviews.length > 0 || jsxOnlyArtifacts.length > 0;
+	const showJsxOnlyContent = jsxOnly && hasJsxContent;
+
+	const viewJsxOnlyUrl = messageId ? `/view/${messageId}` : '';
+	const viewFullUrl = messageId ? `/view/${messageId}?preview=full` : '';
+
 	return (
 		<div className="flex h-screen flex-col bg-background">
 			{/* Toolbar */}
@@ -172,19 +184,46 @@ export function PreviewViewPage() {
 							</Button>
 						</Link>
 					)}
-					<span className="text-sm text-muted-foreground">
-						Full message
-					</span>
 				</div>
 				<div className="flex items-center gap-2">
+					{jsxOnly ? (
+						<Link to={viewFullUrl}>
+							<Button variant="outline" size="sm">
+								Full message
+							</Button>
+						</Link>
+					) : (
+						<Link to={viewJsxOnlyUrl}>
+							<Button variant="outline" size="sm">
+								JSX only
+							</Button>
+						</Link>
+					)}
 					<JSXPreviewExportStandalone containerRef={containerRef} />
 				</div>
 			</header>
 
-			{/* Content — same structure as chat: text, JSX, web previews, artifacts */}
+			{/* Content */}
 			<main ref={containerRef} className="min-h-0 flex-1 overflow-auto p-6">
 				<div className="mx-auto max-w-4xl space-y-4">
-					{!hasContent ? (
+					{jsxOnly ? (
+						/* JSX-only mode: only JSX previews and jsx/chart artifacts */
+						!showJsxOnlyContent ? (
+							<p className="text-sm text-muted-foreground">
+								No JSX or chart content in this message. Switch to Full message to see
+								everything.
+							</p>
+						) : (
+							<>
+								{jsxPreviews.map((preview, idx) => (
+									<JSXPreviewRenderer key={`preview-${idx}`} preview={preview} />
+								))}
+								{jsxOnlyArtifacts.map((artifact) => (
+									<ArtifactRenderer key={artifact.id} artifact={artifact} />
+								))}
+							</>
+						)
+					) : !hasContent ? (
 						<p className="text-sm text-muted-foreground">No content in this message.</p>
 					) : (
 						<>
@@ -194,21 +233,13 @@ export function PreviewViewPage() {
 								</div>
 							)}
 							{jsxPreviews.map((preview, idx) => (
-								<JSXPreviewRenderer
-									key={`preview-${idx}`}
-									preview={preview}
-									/* no messageId: already on view page, hide Open button */
-								/>
+								<JSXPreviewRenderer key={`preview-${idx}`} preview={preview} />
 							))}
 							{webPreviews.map((preview, idx) => (
 								<WebPreviewRenderer key={`web-${idx}`} preview={preview} />
 							))}
 							{artifacts.map((artifact) => (
-								<ArtifactRenderer
-									key={artifact.id}
-									artifact={artifact}
-									/* no messageId: already on view page */
-								/>
+								<ArtifactRenderer key={artifact.id} artifact={artifact} />
 							))}
 						</>
 					)}
