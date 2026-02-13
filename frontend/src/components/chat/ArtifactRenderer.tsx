@@ -227,9 +227,11 @@ export function ArtifactRenderer({
 				return (
 					<div className="flex flex-col gap-2">
 						<JSXPreview jsx={artifact.content} className="min-h-[300px]">
-							<JSXPreviewContent />
-							<div className="absolute top-2 right-2">
+							<div className="absolute top-2 right-2 z-10">
 								<JSXPreviewExport filename={artifact.title?.replace(/[^a-z0-9]/gi, '_') || 'chart'} />
+							</div>
+							<div className="pt-10">
+								<JSXPreviewContent />
 							</div>
 						</JSXPreview>
 						<details className="text-xs">

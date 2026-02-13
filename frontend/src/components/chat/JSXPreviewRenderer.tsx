@@ -62,7 +62,9 @@ export function JSXPreviewRenderer({ preview, messageId }: JSXPreviewRendererPro
 					</TooltipProvider>
 				)}
 			</div>
-			<JSXPreviewContent />
+			<div className="pt-10">
+				<JSXPreviewContent />
+			</div>
 		</JSXPreview>
 	);
 }
