@@ -132,10 +132,13 @@ export function ChatInput({
 
                 if (conversationId && onConversationCreated) {
                     newlyCreatedConversationIdRef.current = conversationId;
+                    // Call onConversationCreated first to trigger navigation
+                    onConversationCreated(conversationId, agentName);
+                    // Clear the creating flag after navigation completes and messages are loaded
+                    // Increased timeout to ensure navigation and initial render complete
                     setTimeout(() => {
                         isCreatingConversationRef.current = false;
-                    }, 100);
-                    onConversationCreated(conversationId, agentName);
+                    }, 500);
                 } else {
                     isCreatingConversationRef.current = false;
                 }
