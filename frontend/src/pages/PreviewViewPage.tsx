@@ -1,10 +1,10 @@
 /**
- * Full-screen preview page for viewing JSX/artifact content from a message.
+ * Full-screen preview page for viewing full message content.
  *
  * Route: /huf/view/:messageId
  *
- * Fetches the Agent Message by ID, parses JSX and artifact content,
- * and renders it full-screen with a minimal toolbar.
+ * Fetches the Agent Message by ID and renders the full content (text, JSX,
+ * web previews, artifacts) in the same structure as chat, full-screen.
  */
 
 import { useEffect, useState, useRef } from 'react';
@@ -16,12 +16,12 @@ import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { parseJSXPreviews, hasJSXPreviews } from '@/utils/jsxPreviewParser';
 import { parseArtifacts, hasArtifacts } from '@/utils/artifactParser';
-import {
-	JSXPreview,
-	JSXPreviewContent,
-	JSXPreviewExport,
-} from '@/components/ui/jsx-preview';
-import type { ParsedJSXPreview, ParsedArtifact } from '@/types/artifact.types';
+import { parseWebPreviews, hasWebPreviews } from '@/utils/webPreviewParser';
+import { MessageResponse } from '@/components/ai-elements/message';
+import { JSXPreviewRenderer } from '@/components/chat/JSXPreviewRenderer';
+import { WebPreviewRenderer } from '@/components/chat/WebPreviewRenderer';
+import { ArtifactRenderer } from '@/components/chat/ArtifactRenderer';
+import type { ParsedJSXPreview, ParsedArtifact, ParsedWebPreview } from '@/types/artifact.types';
 
 interface AgentMessageDoc {
 	name: string;
@@ -51,8 +51,10 @@ export function PreviewViewPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<AgentMessageDoc | null>(null);
+	const [textContent, setTextContent] = useState('');
 	const [jsxPreviews, setJsxPreviews] = useState<ParsedJSXPreview[]>([]);
-	const [jsxArtifacts, setJsxArtifacts] = useState<ParsedArtifact[]>([]);
+	const [webPreviews, setWebPreviews] = useState<ParsedWebPreview[]>([]);
+	const [artifacts, setArtifacts] = useState<ParsedArtifact[]>([]);
 	const containerRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -70,29 +72,32 @@ export function PreviewViewPage() {
 
 				const decoded = decodeHtmlEntities(agentMessage.content || '');
 
-				// Parse JSX previews
+				// Parse in same order as MessageContentWithArtifacts: JSX → web → artifacts
+				let remaining = decoded;
 				const previews: ParsedJSXPreview[] = [];
-				const artifacts: ParsedArtifact[] = [];
+				const web: ParsedWebPreview[] = [];
+				const arts: ParsedArtifact[] = [];
 
-				if (hasJSXPreviews(decoded)) {
-					const parsed = parseJSXPreviews(decoded);
+				if (hasJSXPreviews(remaining)) {
+					const parsed = parseJSXPreviews(remaining);
+					remaining = parsed.text;
 					previews.push(...parsed.previews);
 				}
-
-				if (hasArtifacts(decoded)) {
-					const parsed = parseArtifacts(decoded);
-					const jsxTypes = parsed.artifacts.filter(
-						(a) => a.type === 'jsx' || a.type === 'chart'
-					);
-					artifacts.push(...jsxTypes);
+				if (hasWebPreviews(remaining)) {
+					const parsed = parseWebPreviews(remaining);
+					remaining = parsed.text;
+					web.push(...parsed.previews);
+				}
+				if (hasArtifacts(remaining)) {
+					const parsed = parseArtifacts(remaining);
+					remaining = parsed.text;
+					arts.push(...parsed.artifacts);
 				}
 
+				setTextContent(remaining.replace(/\n{3,}/g, '\n\n').trim());
 				setJsxPreviews(previews);
-				setJsxArtifacts(artifacts);
-
-				if (previews.length === 0 && artifacts.length === 0) {
-					setError('No JSX or chart content found in this message');
-				}
+				setWebPreviews(web);
+				setArtifacts(arts);
 			} catch (err) {
 				handleFrappeError(err, 'Error fetching message');
 				setError('Failed to load message. It may not exist or you may not have access.');
@@ -141,15 +146,16 @@ export function PreviewViewPage() {
 		);
 	}
 
-	const allItems = [
-		...jsxPreviews.map((p, i) => ({ type: 'preview' as const, data: p, key: `preview-${i}` })),
-		...jsxArtifacts.map((a) => ({ type: 'artifact' as const, data: a, key: `artifact-${a.id}` })),
-	];
+	const hasContent =
+		(textContent && textContent.trim()) ||
+		jsxPreviews.length > 0 ||
+		webPreviews.length > 0 ||
+		artifacts.length > 0;
 
 	return (
 		<div className="flex h-screen flex-col bg-background">
 			{/* Toolbar */}
-			<header className="flex items-center justify-between border-b px-4 py-2">
+			<header className="flex shrink-0 items-center justify-between border-b px-4 py-2">
 				<div className="flex items-center gap-3">
 					{message?.conversation ? (
 						<Link to={`/chat/${message.conversation}`}>
@@ -167,7 +173,7 @@ export function PreviewViewPage() {
 						</Link>
 					)}
 					<span className="text-sm text-muted-foreground">
-						{jsxPreviews.length + jsxArtifacts.length} preview{allItems.length !== 1 ? 's' : ''}
+						Full message
 					</span>
 				</div>
 				<div className="flex items-center gap-2">
@@ -175,33 +181,37 @@ export function PreviewViewPage() {
 				</div>
 			</header>
 
-			{/* Content */}
-			<main ref={containerRef} className="flex-1 overflow-auto p-6">
-				<div className="mx-auto max-w-6xl space-y-6">
-					{allItems.map((item) => {
-						const jsx =
-							item.type === 'preview'
-								? (item.data as ParsedJSXPreview).jsx
-								: (item.data as ParsedArtifact).content;
-
-						const title =
-							item.type === 'preview'
-								? (item.data as ParsedJSXPreview).title
-								: (item.data as ParsedArtifact).title;
-
-						return (
-							<section key={item.key}>
-								{title && (
-									<h2 className="mb-2 text-sm font-medium text-muted-foreground">
-										{title}
-									</h2>
-								)}
-								<JSXPreview jsx={jsx} className="min-h-[300px] w-full">
-									<JSXPreviewContent />
-								</JSXPreview>
-							</section>
-						);
-					})}
+			{/* Content — same structure as chat: text, JSX, web previews, artifacts */}
+			<main ref={containerRef} className="min-h-0 flex-1 overflow-auto p-6">
+				<div className="mx-auto max-w-4xl space-y-4">
+					{!hasContent ? (
+						<p className="text-sm text-muted-foreground">No content in this message.</p>
+					) : (
+						<>
+							{textContent && textContent.trim() && (
+								<div className="prose prose-sm dark:prose-invert max-w-none">
+									<MessageResponse>{textContent}</MessageResponse>
+								</div>
+							)}
+							{jsxPreviews.map((preview, idx) => (
+								<JSXPreviewRenderer
+									key={`preview-${idx}`}
+									preview={preview}
+									/* no messageId: already on view page, hide Open button */
+								/>
+							))}
+							{webPreviews.map((preview, idx) => (
+								<WebPreviewRenderer key={`web-${idx}`} preview={preview} />
+							))}
+							{artifacts.map((artifact) => (
+								<ArtifactRenderer
+									key={artifact.id}
+									artifact={artifact}
+									/* no messageId: already on view page */
+								/>
+							))}
+						</>
+					)}
 				</div>
 			</main>
 		</div>
