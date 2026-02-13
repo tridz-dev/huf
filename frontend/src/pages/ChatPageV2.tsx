@@ -14,9 +14,16 @@ export function ChatPage(){
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const toggleSidebar = useCallback(() => setSidebarOpen((prev) => !prev), []);
 
-    const handleConversationCreated = (conversationId: string) => {
+    const handleConversationCreated = useCallback((conversationId: string, agentName?: string) => {
+        // Dispatch custom event to notify ChatListing
+        const event = new CustomEvent('huf:conversation-created', {
+            detail: { conversationId, agentName }
+        });
+        window.dispatchEvent(event);
+        
+        // Navigate to the conversation
         navigate(`/chat/${conversationId}`);
-    };
+    }, [navigate]);
 
     return (
         <section className="flex h-full overflow-hidden relative">

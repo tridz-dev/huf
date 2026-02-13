@@ -19,7 +19,7 @@ import {
 
 interface ChatMessageListProps {
     chatId?: string | null;
-    onConversationCreated?: (conversationId: string) => void;
+    onConversationCreated?: (conversationId: string, agentName?: string) => void;
 }
 
 export function ChatMessageList({ 
