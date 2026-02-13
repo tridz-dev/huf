@@ -82,20 +82,20 @@ export function MessageContentWithArtifacts({ content, messageKey }: MessageCont
 				<MessageResponse>{textContent}</MessageResponse>
 			)}
 
-			{/* Render JSX previews */}
-			{jsxPreviews.map((preview, idx) => (
-				<JSXPreviewRenderer key={`${messageKey}-jsx-${idx}`} preview={preview} />
-			))}
+		{/* Render JSX previews */}
+		{jsxPreviews.map((preview, idx) => (
+			<JSXPreviewRenderer key={`${messageKey}-jsx-${idx}`} preview={preview} messageId={messageKey} />
+		))}
 
-			{/* Render web previews */}
-			{webPreviews.map((preview, idx) => (
-				<WebPreviewRenderer key={`${messageKey}-preview-${idx}`} preview={preview} />
-			))}
+		{/* Render web previews */}
+		{webPreviews.map((preview, idx) => (
+			<WebPreviewRenderer key={`${messageKey}-preview-${idx}`} preview={preview} />
+		))}
 
-			{/* Render artifacts */}
-			{artifacts.map((artifact) => (
-				<ArtifactRenderer key={`${messageKey}-${artifact.id}`} artifact={artifact} />
-			))}
+		{/* Render artifacts */}
+		{artifacts.map((artifact) => (
+			<ArtifactRenderer key={`${messageKey}-${artifact.id}`} artifact={artifact} messageId={messageKey} />
+		))}
 		</>
 	);
 }
