@@ -508,7 +508,7 @@ def generate_conversation_title(conversation_name, agent_name):
             loop.close()
             
     except Exception as e:
-        frappe.log_error(f"Title generation failed: {str(e)}", "Agent Auto-naming")
+        frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
 
 @frappe.whitelist(allow_guest=True)
 def run_agent_sync(
