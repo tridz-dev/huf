@@ -11,7 +11,7 @@ import type { MessageType } from './types';
 interface ChatInputProps {
     chatId: string | null;
     agentName: string;
-    onConversationCreated?: (conversationId: string) => void;
+    onConversationCreated?: (conversationId: string, agentName?: string) => void;
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
     isCreatingConversationRef: React.MutableRefObject<boolean>;
     newlyCreatedConversationIdRef: React.MutableRefObject<string | null>;
@@ -135,7 +135,7 @@ export function ChatInput({
                     setTimeout(() => {
                         isCreatingConversationRef.current = false;
                     }, 100);
-                    onConversationCreated(conversationId);
+                    onConversationCreated(conversationId, agentName);
                 } else {
                     isCreatingConversationRef.current = false;
                 }
