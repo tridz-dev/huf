@@ -114,7 +114,7 @@ export function WebPreviewRenderer({
 					</Button>
 				</div>
 			) : (
-				<div className="relative flex-1">
+				<div className="relative flex-1 flex">
 					<WebPreviewBody
 						key={key}
 						onLoad={handleIframeLoad}
