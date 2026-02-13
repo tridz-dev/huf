@@ -18,7 +18,7 @@ import { getInitials } from '@/utils/getInitials';
 import { toDate, startOfDay } from '@/utils/time';
 import { AgentModelSelector } from './AgentModelSelector';
 import { Button } from '../ui/button';
-import { DEFAULT_AGENT_COLOR } from '@/data/color';
+// import { DEFAULT_AGENT_COLOR } from '@/data/color';
 import { getAgent } from '@/services/agentApi';
 
 function getRecentBucketLabel(ts?: string): string {
@@ -228,7 +228,7 @@ function AgentConversationItem({
         arrowPosition="left"
       >
         <div className="flex-1 flex gap-x-2 items-center">
-          <ChatAvatar variant="listing_ai" color={agent.agent_color || DEFAULT_AGENT_COLOR}>
+          <ChatAvatar variant="listing_ai" color={agent.agent_color || undefined}>
             {getInitials(agent.agent_name)}
           </ChatAvatar>
           <span className="text-sm font-medium truncate text-zinc-500 group-hover:text-zinc-900 transition-colors">
@@ -435,7 +435,7 @@ function RecentsConversationList({
                         >
                           <ChatAvatar 
                             variant="chat_ai"
-                            color={agentColorMap.get(chat.agent) || DEFAULT_AGENT_COLOR}
+                            color={agentColorMap.get(chat.agent) || undefined}
                           >
                             {getInitials(chat.agent)}
                           </ChatAvatar>
