@@ -107,7 +107,7 @@ export function ChatWindowHeader({ chatId: chatIdProp }: ChatWindowHeaderProps) 
 
     if (!agent) {
         return (
-            <header className="h-16 px-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+            <header className="h-16 pl-14 pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
                 <div className="flex gap-x-4 items-center">
                     <ChatAvatar variant="chat_ai">?</ChatAvatar>
                     <div className="flex flex-col">
@@ -120,7 +120,7 @@ export function ChatWindowHeader({ chatId: chatIdProp }: ChatWindowHeaderProps) 
     }
 
     return (
-        <header className="h-16 px-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-16 pl-14 pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
             <div className="flex gap-x-4 items-center">
                 <ChatAvatar variant="chat_ai" color={agent.agent_color || DEFAULT_AGENT_COLOR}>
                     {getInitials(agent.agent_name)}

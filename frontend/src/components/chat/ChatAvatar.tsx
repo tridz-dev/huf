@@ -31,7 +31,7 @@ export default function ChatAvatar({children,className,variant,color,...props}:C
     
     // Use default background classes only if no color is provided
     const bgClass = !color && (variant === 'listing_ai' || variant === 'chat_ai')
-        ? (variant === 'listing_ai' ? 'bg-blue-600' : 'bg-purple-600')
+        ? (variant === 'listing_ai' ? 'bg-transparent' : 'bg-transparent')
         : '';
     
     return (

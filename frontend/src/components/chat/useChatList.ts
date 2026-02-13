@@ -29,6 +29,7 @@ export function useChatList(options: UseChatListOptions = {}) {
     sentinelRef,
     scrollRef,
     reset,
+    addItem,
   } = useInfiniteScroll<ConversationListParams, Chat>({
     fetchFn: async (params) => {
       const response = await getConversations(params);
@@ -70,5 +71,6 @@ export function useChatList(options: UseChatListOptions = {}) {
     error,
     sentinelRef,
     scrollRef,
+    addItem,
   };
 }

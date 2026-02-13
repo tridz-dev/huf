@@ -10,6 +10,7 @@ import type { ChatListItem, AgentWithCount } from '@/services/chatApi';
 import {
   getAgentsWithConversationCounts,
   getConversationsByAgent,
+  getConversation,
 } from '@/services/chatApi';
 import { formatTimeAgo } from '@/utils/time';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
@@ -19,7 +20,7 @@ import { getInitials } from '@/utils/getInitials';
 import { toDate, startOfDay } from '@/utils/time';
 import { AgentModelSelector } from './AgentModelSelector';
 import { Button } from '../ui/button';
-import { DEFAULT_AGENT_COLOR } from '@/data/color';
+// import { DEFAULT_AGENT_COLOR } from '@/data/color';
 import { getAgent } from '@/services/agentApi';
 import ConversationTitle, { type ConversationTitleRef } from './ConversationTitle';
 import ConversationMenu from './ConversationMenu';
@@ -57,10 +58,14 @@ export default function ChatListing() {
     }
   });
 
-  const [activeTab, setActiveTab] = useState('agent');
+  const [activeTab, setActiveTab] = useState('recents');
 
   // Ref map to store refs for each conversation title
   const titleRefs = useRef<Map<string, ConversationTitleRef>>(new Map());
+  
+  // Refs to store addItem functions from child components
+  const recentsAddItemRef = useRef<((item: ChatListItem) => void) | null>(null);
+  const agentAddItemRefs = useRef<Map<string, (item: ChatListItem) => void>>(new Map());
 
   // Callback to handle rename action
   const handleRename = useCallback((conversationId: string) => {
@@ -103,6 +108,77 @@ export default function ChatListing() {
     };
   }, []);
 
+  // Listen for new conversation events
+  useEffect(() => {
+    const handleNewConversation = async (event: CustomEvent<{ conversationId: string; agentName?: string }>) => {
+      const { conversationId, agentName } = event.detail;
+      
+      try {
+        // Fetch conversation details
+        const conversationDoc = await getConversation(conversationId);
+        if (!conversationDoc) {
+          console.error('Failed to fetch conversation:', conversationId);
+          return;
+        }
+
+        // Map to ChatListItem format
+        const conversationItem: ChatListItem = {
+          id: conversationDoc.name,
+          title: conversationDoc.title || 'Untitled Chat',
+          agent: conversationDoc.agent || '',
+          timestamp: conversationDoc.last_activity || conversationDoc.modified,
+          timestampLabel: conversationDoc.last_activity || conversationDoc.modified 
+            ? formatTimeAgo(conversationDoc.last_activity || conversationDoc.modified) 
+            : undefined,
+        };
+
+        // Add to the list based on which tab is currently active
+        if (activeTab === 'recents') {
+          // Add to recents list if recents tab is active
+          if (recentsAddItemRef.current) {
+            recentsAddItemRef.current(conversationItem);
+          }
+        } else if (activeTab === 'agent' && agentName) {
+          // Add to agent-specific list if agents tab is active and agent name is provided
+          if (agentAddItemRefs.current.has(agentName)) {
+            const agentAddItem = agentAddItemRefs.current.get(agentName);
+            if (agentAddItem) {
+              agentAddItem(conversationItem);
+            }
+          }
+          
+          // Open agent accordion if not already open
+          if (!openAgents.includes(agentName)) {
+            const newOpenAgents = [...openAgents, agentName];
+            setOpenAgents(newOpenAgents);
+            try {
+              sessionStorage.setItem('chat-listing-open-agents', JSON.stringify(newOpenAgents));
+            } catch (error) {
+              console.error('Failed to save open agents to sessionStorage:', error);
+            }
+          }
+        }
+
+        // Update agent counts
+        try {
+          const agentsData = await getAgentsWithConversationCounts();
+          setAgents(agentsData);
+        } catch (error) {
+          console.error('Error refreshing agent counts:', error);
+        }
+      } catch (error) {
+        console.error('Error adding conversation to list:', error);
+      }
+    };
+
+    const listener = handleNewConversation as unknown as EventListener;
+    window.addEventListener('huf:conversation-created', listener);
+    
+    return () => {
+      window.removeEventListener('huf:conversation-created', listener);
+    };
+  }, [openAgents, activeTab]);
+
   // Handle accordion open/close and persist to sessionStorage
   const handleAccordionChange = useCallback((value: string[]) => {
     setOpenAgents(value);
@@ -119,18 +195,18 @@ export default function ChatListing() {
   }, [navigate]);
 
   return (
-    <div className="h-full min-w-96 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
-      <div className="shrink-0 p-4 sticky top-0 z-10 bg-sidebar">
+    <div className="h-full min-w-80 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
+      <div className="shrink-0 px-3 pt-3 pb-2 sticky top-0 z-1 bg-sidebar">
         <ChatListHeader onAgentSelect={handleAgentSelect} />
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
-        <Tabs defaultValue="agent" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="sticky top-0 z-10 bg-sidebar">
-          <TabsList className="w-full">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
+        <Tabs defaultValue="recents" value={activeTab} onValueChange={setActiveTab} className="space-y-2">
+        <div className="sticky top-0 z-1 bg-sidebar">
+          <TabsList className="w-full h-8">
             {LIST_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.value}
-                className="w-1/2 space-x-2 text-xs font-medium"
+                className="w-1/2 space-x-1.5 text-xs font-medium h-7"
                 value={tab.value}
               >
                 <tab.icon className="w-3 h-3" />
@@ -161,7 +237,7 @@ export default function ChatListing() {
             <Accordion
               type="multiple"
               value={openAgents}
-              className="space-y-4"
+              className="space-y-2"
               onValueChange={handleAccordionChange}
             >
               {agents.map((agent) => (
@@ -170,8 +246,11 @@ export default function ChatListing() {
                   agent={agent}
                   selectedChatId={selectedChatId}
                   isOpen={openAgents.includes(agent.name)}
-                  titleRefs={titleRefs}
                   onRename={handleRename}
+                  titleRefs={titleRefs}
+                  onAddItemReady={(addItem: (item: ChatListItem) => void) => {
+                    agentAddItemRefs.current.set(agent.name, addItem);
+                  }}
                 />
               ))}
             </Accordion>
@@ -182,8 +261,11 @@ export default function ChatListing() {
           <RecentsConversationList
             selectedChatId={selectedChatId}
             isActive={activeTab === 'recents'}
-            titleRefs={titleRefs}
             onRename={handleRename}
+            titleRefs={titleRefs}
+            onAddItemReady={(addItem) => {
+              recentsAddItemRef.current = addItem;
+            }}
           />
         </TabsContent>
         </Tabs>
@@ -197,14 +279,16 @@ function AgentConversationItem({
   agent,
   selectedChatId,
   isOpen,
-  titleRefs,
   onRename,
+  titleRefs,
+  onAddItemReady,
 }: {
   agent: AgentWithCount;
   selectedChatId: string | null;
   isOpen: boolean;
-  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
   onRename: (conversationId: string) => void;
+  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
 }) {
   const navigate = useNavigate();
 
@@ -218,7 +302,7 @@ function AgentConversationItem({
     loadingMore,
     hasMore,
     loadMore,
-    error,
+    addItem,
   } = useInfiniteScroll(
     {
       fetchFn: async (params) => {
@@ -242,15 +326,12 @@ function AgentConversationItem({
     }
   );
 
-  // Show error toast when there's an error
+  // Store addItem function in ref for parent to use
   useEffect(() => {
-    if (error && isOpen) {
-      toast.error('Failed to load conversations', {
-        description: error.message || `An error occurred while fetching conversations for ${agent.agent_name}. Please try again.`,
-        duration: 5000,
-      });
+    if (addItem && isOpen && onAddItemReady) {
+      onAddItemReady(addItem as (item: ChatListItem) => void);
     }
-  }, [error, isOpen, agent.agent_name]);
+  }, [addItem, isOpen, onAddItemReady]);
 
   return (
     <AccordionItem value={agent.name} className="border-b-0">
@@ -259,7 +340,7 @@ function AgentConversationItem({
         arrowPosition="left"
       >
         <div className="flex-1 flex gap-x-2 items-center">
-          <ChatAvatar variant="listing_ai" color={agent.agent_color || DEFAULT_AGENT_COLOR}>
+          <ChatAvatar variant="listing_ai" color={agent.agent_color || undefined}>
             {getInitials(agent.agent_name)}
           </ChatAvatar>
           <span className="text-sm font-medium truncate text-zinc-500 group-hover:text-zinc-900 transition-colors">
@@ -323,13 +404,13 @@ function AgentConversationItem({
                     )}
                   >
                     <ConversationTitle
-                    ref={(el) => {
-                      if (el) titleRefs.current.set(chat.id, el);
-                      else titleRefs.current.delete(chat.id);
-                    }}
-                    variant="agent_list"
-                    value={chat.title}
-                    conversationId={chat.id}
+                      ref={(el) => {
+                        if (el) titleRefs.current.set(chat.id, el);
+                        else titleRefs.current.delete(chat.id);
+                      }}
+                      variant="agent_list"
+                      value={chat.title}
+                      conversationId={chat.id}
                     />
                     <p className="ps-1 text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
                       {chat.timestampLabel ?? ''}
@@ -364,13 +445,15 @@ function AgentConversationItem({
 function RecentsConversationList({
   selectedChatId,
   isActive,
-  titleRefs,
   onRename,
+  titleRefs,
+  onAddItemReady,
 }: {
   selectedChatId: string | null;
   isActive: boolean;
-  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
   onRename: (conversationId: string) => void;
+  titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [agentColorMap, setAgentColorMap] = useState<Map<string, string | null>>(new Map());
@@ -383,20 +466,18 @@ function RecentsConversationList({
     error,
     sentinelRef,
     scrollRef,
+    addItem,
   } = useChatList({
     enabled: isActive, // Only load when tab is active
     refreshOnRouteChange: false, // Don't refresh on route change for this use case
   });
 
-  // Show error toast when there's an error
+  // Store addItem function in ref for parent to use
   useEffect(() => {
-    if (error && isActive) {
-      toast.error('Failed to load conversations', {
-        description: error.message || 'An error occurred while fetching conversations. Please try again.',
-        duration: 5000,
-      });
+    if (addItem && isActive && onAddItemReady) {
+      onAddItemReady(addItem as (item: ChatListItem) => void);
     }
-  }, [error, isActive]);
+  }, [addItem, isActive, onAddItemReady]);
 
   // Fetch agent colors for unique agents in conversations
   useEffect(() => {
@@ -456,15 +537,14 @@ function RecentsConversationList({
 
   if (initialLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-1">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={`recent-skel-${i}`} className="flex p-3 gap-2 items-center rounded-lg border">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-2/3" />
-              <Skeleton className="h-3 w-1/3" />
+          <div key={`recent-skel-${i}`} className="flex px-2 py-1.5 gap-2 items-center rounded-md">
+            <Skeleton className="h-6 w-6 rounded-full shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3 w-2/3" />
+              <Skeleton className="h-2.5 w-1/3" />
             </div>
-            <Skeleton className="h-3 w-10" />
           </div>
         ))}
       </div>
@@ -472,7 +552,7 @@ function RecentsConversationList({
   }
 
   return (
-    <div ref={scrollContainerRef} className="space-y-4">
+    <div ref={scrollContainerRef} className="space-y-3">
         {byRecents.every(([, items]) => items.length === 0) ? (
           <div className="p-3 text-sm text-muted-foreground text-center">No conversations yet</div>
         ) : (
@@ -481,17 +561,16 @@ function RecentsConversationList({
               if (items.length === 0) return null;
               return (
                 <div key={label}>
-                  <span className="px-2 text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                  <span className="px-1 text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
                     {label}
                   </span>
-                  <div className="mt-2 space-y-1">
+                  <div className="mt-1 space-y-0.5">
                     {items.map((chat) => {
                       const isSelected = selectedChatId === chat.id;
                       return (
                         <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
                           <Link
                             to={`/chat/${chat.id}`}
-                            type="button"
                             onClick={(e) => {
                               // Only prevent navigation if the click is directly on a menu item
                               // Check if the event originated from within the context menu portal
@@ -507,21 +586,20 @@ function RecentsConversationList({
                               }
                             }}
                             className={cn(
-                              'group flex w-full text-left p-3 gap-2 items-center rounded-lg cursor-pointer transition-all border relative',
+                              'group flex w-full text-left px-2 py-1.5 gap-2 items-center rounded-md cursor-pointer transition-all',
                               isSelected
-                                ? 'bg-zinc-200 border-zinc-200'
-                                : 'border-transparent bg-transparent hover:bg-zinc-200'
+                                ? 'bg-zinc-200'
+                                : 'bg-transparent hover:bg-zinc-100'
                             )}
                           >
-                            <div className="flex flex-1 gap-1 items-center min-w-0">
-                              <ChatAvatar 
-                                variant="chat_ai"
-                                color={agentColorMap.get(chat.agent) || DEFAULT_AGENT_COLOR}
-                              >
-                                {getInitials(chat.agent)}
-                              </ChatAvatar>
-                              <div className="mb-1 w-full">
-                                <ConversationTitle
+                            <ChatAvatar 
+                              variant="chat_ai"
+                              color={agentColorMap.get(chat.agent) || undefined}
+                            >
+                              {getInitials(chat.agent)}
+                            </ChatAvatar>
+                            <div className="flex-1 min-w-0 mb-1">
+                              <ConversationTitle
                                 ref={(el) => {
                                   if (el) titleRefs.current.set(chat.id, el);
                                   else titleRefs.current.delete(chat.id);
@@ -529,12 +607,11 @@ function RecentsConversationList({
                                 variant="recents_list"
                                 value={chat.title}
                                 conversationId={chat.id}
-                                />
-                                <p className="ps-1 text-xs truncate text-zinc-500">{chat.agent}</p>
-                              </div>
+                              />
+                              <p className="ps-1 text-xs truncate text-zinc-500">{chat.agent}</p>
                             </div>
                             <span className="mb-1 flex-shrink-0 text-[10px] text-zinc-400 flex-shrink-0 self-end">
-                                {chat.timestampLabel ?? ''}
+                              {chat.timestampLabel ?? ''}
                             </span>
                           </Link>
                         </ConversationMenu>
@@ -570,7 +647,7 @@ function ChatListHeader({
 
   return (
     <div className="flex items-center justify-between">
-      <h1 className="font-semibold text-lg tracking-tight">Workspaces</h1>
+      <h1 className="font-semibold text-sm tracking-tight text-zinc-700">Chat</h1>
       {onAgentSelect && (
         <AgentModelSelector
           value={selectedAgent}
