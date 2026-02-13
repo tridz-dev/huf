@@ -545,9 +545,18 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         
         _setup_api_key(provider_name, api_key, completion_kwargs)
         
-        response = await asyncio.to_thread(
-            litellm.completion, **completion_kwargs
-        )
+        try:
+            response = await asyncio.to_thread(
+                litellm.completion, **completion_kwargs
+            )
+        except BadRequestError as e:
+            if "unsupported value" in str(e).lower() and "temperature" in str(e).lower():
+                completion_kwargs.pop("temperature", None)
+                response = await asyncio.to_thread(
+                    litellm.completion, **completion_kwargs
+                )
+            else:
+                raise e
         
         return response.choices[0].message.content
         
