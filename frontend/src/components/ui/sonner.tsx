@@ -11,6 +11,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       duration={3000}
       className="toaster group"
       position="bottom-right"
+      closeButton
       toastOptions={{
         classNames: {
           toast:
@@ -22,7 +23,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           cancelButton:
             '!bg-muted !text-muted-foreground !rounded-md !hover:!bg-muted/80 !transition-colors',
           closeButton:
-            '!bg-transparent !text-muted-foreground !hover:!bg-muted !border-border',
+            '!absolute !right-2 !top-2 !left-auto !w-6 !h-6 !min-w-6 !min-h-6 !p-1.5 !bg-transparent !text-muted-foreground !hover:!bg-muted !border-border !flex !items-center !justify-center',
           success:
             '!border-emerald-500/50 !bg-card dark:!bg-card',
           error:
