@@ -1873,6 +1873,20 @@ async def handle_ocr_document(
     except Exception as e:
         frappe.log_error(f"OCR error: {str(e)}", "OCR Tool")
         return {"success": False, "error": str(e)}
+
+def _get_default_voice(provider_name: str) -> str:
+    """Get default voice for a provider."""
+    defaults = {
+        "openai": "alloy",
+        "elevenlabs": "21m00Tcm4TlvDq8ikWAM",
+        "google": "Puck",
+        "vertex_ai": "Puck",
+        "gemini": "Puck",
+        "azure": "en-US-JennyNeural",
+        "mistral": "mistral-male-1"
+    }
+    return defaults.get(provider_name.lower(), "alloy")
+
 def _get_default_tts_model(provider_name: str) -> str:
     """
     Get default TTS model for a provider.
@@ -1901,7 +1915,7 @@ def _get_default_tts_model(provider_name: str) -> str:
 @frappe.whitelist()
 async def handle_generate_audio(
     input: str,
-    voice: str = "alloy",
+    voice: str = None,
     model: str = None,
     speed: float = 1.0,
     response_format: str = "mp3",
@@ -1960,16 +1974,28 @@ async def handle_generate_audio(
         if model:
             # Use explicitly provided model
             tts_model = model
+
+            # If model is provided but voice isn't, determine default voice based on provider
+            if not voice:
+                voice = _get_default_voice(provider_doc.provider_name.lower())
         else:
             # Auto-detect suitable TTS model based on provider
             provider_name = provider_doc.provider_name.lower()
             tts_model = _get_default_tts_model(provider_name)
+            
+            # If voice not provided, get default for this provider
+            if not voice:
+                voice = _get_default_voice(provider_name)
         
         if not tts_model:
             return {
                 "success": False,
                 "error": f"Text-to-speech not supported for provider '{provider_doc.provider_name}'. Please provide a model parameter."
             }
+        
+        # Determine Voice if not provided
+        if not voice:
+            voice = _get_default_voice(provider_doc.provider_name.lower())
         
         # Normalize to LiteLLM format
         from huf.ai.providers.litellm import _normalize_model_name
@@ -1982,9 +2008,21 @@ async def handle_generate_audio(
         speech_params = {
             "model": normalized_model,
             "input": input,
-            "voice": voice,
-            "api_key": api_key
+            "voice": voice
         }
+        
+        env_var_providers = {
+            "google": "GEMINI_API_KEY",
+            "vertex_ai": "GEMINI_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+        }
+        
+        provider_key = provider_doc.provider_name.lower()
+        if provider_key in env_var_providers:
+            import os
+            os.environ[env_var_providers[provider_key]] = api_key
+        else:
+            speech_params["api_key"] = api_key
         
         # Add optional parameters
         # LiteLLM forwards provider-specific params automatically
@@ -2136,7 +2174,7 @@ async def handle_generate_audio(
         }
         
     except Exception as e:
-        frappe.log_error(f"Audio generation error: {str(e)}", "Audio Generation Tool")
+        frappe.log_error(title="Audio Generation Tool", message=f"Audio generation error: {str(e)}")
         return {"success": False, "error": str(e)}
 
 
