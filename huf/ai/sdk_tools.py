@@ -1874,3 +1874,308 @@ async def handle_ocr_document(
         frappe.log_error(f"OCR error: {str(e)}", "OCR Tool")
         return {"success": False, "error": str(e)}
 
+def _get_default_voice(provider_name: str) -> str:
+    """Get default voice for a provider."""
+    defaults = {
+        "openai": "alloy",
+        "elevenlabs": "21m00Tcm4TlvDq8ikWAM",
+        "google": "Puck",
+        "vertex_ai": "Puck",
+        "gemini": "Puck",
+        "azure": "en-US-JennyNeural",
+        "mistral": "mistral-male-1"
+    }
+    return defaults.get(provider_name.lower(), "alloy")
+
+def _get_default_tts_model(provider_name: str) -> str:
+    """
+    Get default TTS model for a provider.
+    
+    Based on LiteLLM documentation: https://docs.litellm.ai/docs/audio_speech
+    
+    Args:
+        provider_name: Lowercase provider name (e.g., "openai", "google", "elevenlabs")
+    
+    Returns:
+        str: Default TTS model name, or None if not supported
+    """
+    defaults = {
+        "openai": "tts-1",
+        "azure": "tts-1",
+        "google": "gemini/gemini-2.5-flash-preview-tts",
+        "gemini": "gemini/gemini-2.5-flash-preview-tts",
+        "vertex_ai": "vertex_ai/gemini-2.5-flash-preview-tts",
+        "elevenlabs": "elevenlabs/eleven_multilingual_v2",
+        "aws": "aws/polly",
+        "minimax": "minimax/speech-01",
+    }
+    
+    return defaults.get(provider_name.lower())
+
+@frappe.whitelist()
+async def handle_generate_audio(
+    input: str,
+    voice: str = None,
+    model: str = None,
+    speed: float = 1.0,
+    response_format: str = "mp3",
+    agent_name: str = None,
+    conversation_id: str = None,
+    **kwargs
+):
+    """
+    Generate audio (speech) from text using LiteLLM's speech() function.
+    
+    Uses LiteLLM's speech() function. The model used is either:
+    1. The explicitly provided model parameter, OR
+    2. An auto-detected suitable TTS model based on the provider
+    
+    Args:
+        input: Text to convert to speech (required)
+        voice: Voice to use (e.g., "alloy", "echo", "fable", "onyx", "nova", "shimmer")
+        model: Optional model name (e.g., "tts-1", "tts-1-hd", "gemini-2.5-flash-preview-tts")
+        speed: Speech speed from 0.25 to 4.0 (default: 1.0)
+        response_format: Audio format (mp3, opus, aac, flac, wav, pcm)
+        agent_name: Automatically passed from context
+        conversation_id: Automatically passed from context
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "audio": {
+                "url": str,
+                "file_id": str,
+                "message_id": str,
+                "input_text": str,
+                "voice": str,
+                "speed": float,
+                "format": str,
+                "model": str
+            },
+            "message": str,
+            "conversation_id": str
+        }
+    """
+    try:
+        # Get agent configuration from context
+        if not agent_name:
+            return {"success": False, "error": "Agent name not found in context"}
+        
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+        
+        if not api_key:
+            return {"success": False, "error": "API key not configured for provider"}
+        
+        # Determine TTS model
+        tts_model = None
+        
+        if model:
+            # Use explicitly provided model
+            tts_model = model
+
+            # If model is provided but voice isn't, determine default voice based on provider
+            if not voice:
+                voice = _get_default_voice(provider_doc.provider_name.lower())
+        else:
+            # Auto-detect suitable TTS model based on provider
+            provider_name = provider_doc.provider_name.lower()
+            tts_model = _get_default_tts_model(provider_name)
+            
+            # If voice not provided, get default for this provider
+            if not voice:
+                voice = _get_default_voice(provider_name)
+        
+        if not tts_model:
+            return {
+                "success": False,
+                "error": f"Text-to-speech not supported for provider '{provider_doc.provider_name}'. Please provide a model parameter."
+            }
+        
+        # Determine Voice if not provided
+        if not voice:
+            voice = _get_default_voice(provider_doc.provider_name.lower())
+        
+        # Normalize to LiteLLM format
+        from huf.ai.providers.litellm import _normalize_model_name
+        normalized_model = _normalize_model_name(tts_model, agent_doc.provider)
+        
+        # Call LiteLLM speech generation
+        import litellm
+        
+        # Build parameters for speech generation
+        speech_params = {
+            "model": normalized_model,
+            "input": input,
+            "voice": voice
+        }
+        
+        env_var_providers = {
+            "google": "GEMINI_API_KEY",
+            "vertex_ai": "GEMINI_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+        }
+        
+        provider_key = provider_doc.provider_name.lower()
+        if provider_key in env_var_providers:
+            import os
+            os.environ[env_var_providers[provider_key]] = api_key
+        else:
+            speech_params["api_key"] = api_key
+        
+        # Add optional parameters
+        # LiteLLM forwards provider-specific params automatically
+        if speed != 1.0:
+            speech_params["speed"] = speed
+        if response_format != "mp3":
+            speech_params["response_format"] = response_format
+        
+        # Call LiteLLM speech (returns HttpxBinaryResponseContent)
+        response = await asyncio.to_thread(
+            litellm.speech,
+            **speech_params
+        )
+        
+        # Get audio content from response
+        # LiteLLM speech() returns HttpxBinaryResponseContent
+        audio_bytes = response.content
+        
+        # Get conversation_index for message ordering
+        conversation_index = None
+        if conversation_id:
+            try:
+                last_index = frappe.db.sql("""
+                    SELECT MAX(conversation_index) as last_index
+                    FROM `tabAgent Message`
+                    WHERE conversation = %s
+                """, (conversation_id,), as_dict=1)
+                
+                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
+            except Exception:
+                conversation_index = 1
+        
+        # Generate filename
+        filename = f"generated_audio_{conversation_index}.{response_format}"
+        
+        # Create Agent Message first (we'll attach the file to it)
+        message_doc = None
+        if conversation_id and conversation_index is not None:
+            try:
+                # Get provider and model from agent
+                provider = agent_doc.provider
+                model_name = agent_doc.model
+                
+                # Create Agent Message with kind "Audio"
+                message_doc = frappe.get_doc({
+                    "doctype": "Agent Message",
+                    "conversation": conversation_id,
+                    "role": "agent",
+                    "content": f"Generated audio: {input[:100]}{'...' if len(input) > 100 else ''}",
+                    "kind": "Audio",
+                    "agent": agent_name,
+                    "provider": provider,
+                    "model": model_name,
+                    "agent_run": kwargs.get("agent_run_id"),
+                    "conversation_index": conversation_index,
+                    "is_agent_message": 1,
+                    "user": "Agent"
+                })
+                message_doc.insert(ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(
+                    f"Error creating Agent Message for generated audio: {str(e)}",
+                    "Audio Generation Message Creation"
+                )
+        
+        # Save file attached to the Agent Message
+        if message_doc:
+            saved_file = save_file(
+                filename,
+                audio_bytes,
+                "Agent Message",
+                message_doc.name,
+                is_private=False,
+                df="generated_audio"
+            )
+        else:
+            # Fallback: attach to conversation if message creation failed
+            saved_file = save_file(
+                filename,
+                audio_bytes,
+                "Agent Conversation",
+                conversation_id or "Unknown",
+                is_private=False
+            )
+        
+        # Get file URL
+        file_url = getattr(saved_file, 'file_url', None)
+        file_id = getattr(saved_file, 'name', None)
+        
+        if not file_url:
+            file_url = f"/files/{getattr(saved_file, 'file_name', filename)}"
+        
+        # Update the message with the file URL
+        if message_doc and file_url:
+            message_doc.db_set("generated_audio", file_url)
+            frappe.db.commit()
+            
+            # Emit socket event for new agent message (Audio)
+            try:
+                frappe.publish_realtime(
+                    event=f'conversation:{conversation_id}',
+                    message={
+                        "type": "new_agent_message",
+                        "conversation_id": conversation_id,
+                        "message_id": message_doc.name,
+                        "kind": "Audio",
+                        "content": message_doc.content,
+                        "generated_audio": file_url,
+                        "agent_run_id": kwargs.get("agent_run_id"),
+                        "conversation_index": message_doc.conversation_index,
+                    },
+                    user=frappe.session.user,
+                    after_commit=False
+                )
+            except Exception as e:
+                frappe.log_error(
+                    f"Error emitting new_agent_message socket event: {str(e)}",
+                    "Audio Generation Socket Event"
+                )
+        
+        # Update conversation total_messages
+        if conversation_id and conversation_index is not None:
+            try:
+                frappe.db.sql("""
+                    UPDATE `tabAgent Conversation`
+                    SET total_messages = %s, last_activity = NOW()
+                    WHERE name = %s
+                """, (conversation_index, conversation_id))
+            except Exception as e:
+                frappe.log_error(
+                    f"Error updating conversation total_messages: {str(e)}",
+                    "Audio Generation Message Creation"
+                )
+        
+        return {
+            "success": True,
+            "audio": {
+                "url": file_url,
+                "file_id": file_id,
+                "message_id": message_doc.name if message_doc else None,
+                "input_text": input,
+                "voice": voice,
+                "speed": speed,
+                "format": response_format,
+                "model": normalized_model
+            },
+            "message": "Generated audio successfully",
+            "conversation_id": conversation_id
+        }
+        
+    except Exception as e:
+        frappe.log_error(title="Audio Generation Tool", message=f"Audio generation error: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
+

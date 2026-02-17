@@ -15,6 +15,7 @@
   "kind",
   "content_type",
   "generated_image",
+  "generated_audio",
   "column_break_asyu",
   "session_id",
   "user",
@@ -59,7 +60,7 @@
    "fieldname": "kind",
    "fieldtype": "Select",
    "label": "Kind",
-   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage"
+   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage\nAudio"
   },
   {
    "default": "user",
@@ -171,6 +172,12 @@
    "fieldname": "generated_image",
    "fieldtype": "Attach Image",
    "label": "Generated Image"
+  },
+  {
+   "depends_on": "eval:doc.kind == \"Audio\";",
+   "fieldname": "generated_audio",
+   "fieldtype": "Attach",
+   "label": "Generated Audio"
   }
  ],
  "grid_page_length": 50,
