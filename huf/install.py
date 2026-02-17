@@ -12,6 +12,7 @@ def after_install():
     create_demo_ai_providers()
     create_demo_ai_models()
     create_image_generation_tool()
+    create_generate_audio_tool()
     create_ocr_document_tool()
     frappe.db.commit()
     """
@@ -38,6 +39,7 @@ def after_migrate():
 	"""
 	try:
 		create_image_generation_tool()
+		create_generate_audio_tool()
 		create_ocr_document_tool()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
@@ -322,3 +324,89 @@ def create_ocr_document_tool():
         except Exception as e:
             print(f"Error creating ocr_document tool: {e}")
             frappe.log_error(f"Error creating ocr_document tool: {str(e)}", "OCR Document Tool Creation")
+
+def create_generate_audio_tool():
+    """Create or update the generate_audio tool in Agent Tool Function DocType."""
+    tool_name = "generate_audio"
+    print("Creating/updating generate_audio tool")
+    
+    # Ensure Audio Generation tool type exists
+    if not frappe.db.exists("Agent Tool Type", "Audio Generation"):
+        tool_type_doc = frappe.new_doc("Agent Tool Type")
+        tool_type_doc.name1 = "Audio Generation"
+        tool_type_doc.insert()
+    
+    # Check if tool already exists
+    tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+    
+    if tool_exists:
+        # Update existing tool - add missing parameters if needed
+        tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+        tool_doc.description = "Generate audio (speech) from text using AI text-to-speech. Use this when the user asks to convert text to speech, create voice narration, or generate audio. Supports multiple providers via LiteLLM (OpenAI, Gemini, ElevenLabs, etc.)."
+        tool_doc.function_path = "huf.ai.sdk_tools.handle_generate_audio"
+        tool_doc.tool_type = "Audio Generation"
+        try:
+            tool_doc.save()
+            print("Generate audio tool updated successfully")
+        except Exception as e:
+            print(f"Error updating generate_audio tool: {e}")
+            frappe.log_error(f"Error updating generate_audio tool: {str(e)}", "Generate Audio Tool Update")
+    else:
+        # Create new tool
+        parameters = [
+            {
+                "label": "Input Text",
+                "fieldname": "input",
+                "type": "string",
+                "required": 1,
+                "description": "The text to convert to speech. Maximum length varies by provider."
+            },
+            {
+                "label": "Voice",
+                "fieldname": "voice",
+                "type": "string",
+                "required": 0,
+                "description": "Voice to use for speech generation. Options vary by provider. OpenAI: alloy, echo, fable, onyx, nova, shimmer. Default: 'alloy'.",
+                "options": "alloy\necho\nfable\nonyx\nnova\nshimmer"
+            },
+            {
+                "label": "Model",
+                "fieldname": "model",
+                "type": "string",
+                "required": 0,
+                "description": "Optional TTS model override. Defaults based on provider: OpenAI (tts-1), Gemini (gemini-2.5-flash-preview-tts), ElevenLabs (eleven_multilingual_v2)."
+            },
+            {
+                "label": "Speed",
+                "fieldname": "speed",
+                "type": "number",
+                "required": 0,
+                "description": "Speech speed from 0.25 to 4.0. Default: 1.0. Supported by OpenAI and some other providers."
+            },
+            {
+                "label": "Response Format",
+                "fieldname": "response_format",
+                "type": "string",
+                "required": 0,
+                "description": "Audio format. Default: 'mp3'. Options: mp3, opus, aac, flac, wav, pcm.",
+                "options": "mp3\nopus\naac\nflac\nwav\npcm"
+            }
+        ]
+        
+        tool_doc = frappe.get_doc({
+            "doctype": "Agent Tool Function",
+            "tool_name": tool_name,
+            "description": "Generate audio (speech) from text using AI text-to-speech. Use this when the user asks to convert text to speech, create voice narration, or generate audio. Supports multiple providers via LiteLLM (OpenAI, Gemini, ElevenLabs, etc.).",
+            "types": "Custom Function",
+            "function_path": "huf.ai.sdk_tools.handle_generate_audio",
+            "pass_parameters_as_json": 1,
+            "parameters": parameters,
+            "tool_type": "Audio Generation"
+        })
+        
+        try:
+            tool_doc.insert()
+            print("Generate audio tool created successfully")
+        except Exception as e:
+            print(f"Error creating generate_audio tool: {e}")
+            frappe.log_error(f"Error creating generate_audio tool: {str(e)}", "Generate Audio Tool Creation")
