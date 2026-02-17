@@ -136,6 +136,11 @@ export interface UseInfiniteScrollReturn<TItem> {
   reset: () => Promise<void>;
 
   /**
+   * Add an item to the beginning of the list (useful for prepending new items)
+   */
+  addItem: (item: TItem) => void;
+
+  /**
    * Total number of items (if provided by API)
    */
   total: number | undefined;
@@ -370,6 +375,29 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
     await fetchData(true);
   }, [isEnabled, hasMore, loading, loadingMore, fetchData]);
 
+  // Add an item to the beginning of the list
+  const addItem = useCallback((item: TItem) => {
+    setItems((prev) => {
+      // Check if item already exists to avoid duplicates
+      const itemId = (item as any).id || (item as any).name;
+      if (itemId) {
+        const exists = prev.some((existingItem: any) => {
+          const existingId = (existingItem as any).id || (existingItem as any).name;
+          return existingId === itemId;
+        });
+        if (exists) {
+          // Update existing item if it exists
+          return prev.map((existingItem: any) => {
+            const existingId = (existingItem as any).id || (existingItem as any).name;
+            return existingId === itemId ? item : existingItem;
+          });
+        }
+      }
+      // Prepend new item to the beginning
+      return [item, ...prev];
+    });
+  }, []);
+
   // Track if we should ignore the first intersection (when sentinel is initially visible)
   const ignoreFirstIntersectionRef = useRef(true);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -581,6 +609,7 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
     setFilters,
     loadMore,
     reset,
+    addItem,
     total,
     scrollRef,
     sentinelRef,
