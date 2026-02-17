@@ -45,7 +45,7 @@
   },
   {
    "fieldname": "call_id",
-   "fieldtype": "Data",
+   "fieldtype": "Small Text",
    "hidden": 1,
    "label": "Call ID"
   },
@@ -87,7 +87,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-06 17:58:52.558076",
+ "modified": "2026-02-17 22:49:02.897342",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Call",
