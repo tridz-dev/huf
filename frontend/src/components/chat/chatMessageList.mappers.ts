@@ -114,8 +114,19 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
 
 export function mergeConversationItemsIntoMessages(
   prev: MessageType[],
-  conversationItems: ChatMessage[]
+  conversationItems: ChatMessage[],
+  preserveDuringTransition: boolean = false
 ): MessageType[] {
+  // During transition, if API returns empty, preserve all existing messages
+  if (preserveDuringTransition && conversationItems.length === 0) {
+    return prev;
+  }
+
+  // If we have no items to merge, return previous messages (preserve state)
+  if (conversationItems.length === 0) {
+    return prev;
+  }
+
   const mapped: MessageType[] = conversationItems.map((item) => {
     const tempMessage = prev.find((msg) => msg.key === item.id);
     const tempTools = tempMessage?.tools || [];
@@ -165,9 +176,14 @@ export function mergeConversationItemsIntoMessages(
   });
 
   const apiMessageIds = new Set(conversationItems.map((item) => item.id));
-  const remainingTempMessages = prev.filter(
-    (msg) => !apiMessageIds.has(msg.key) && msg.tools && msg.tools.length > 0
-  );
+  
+  // During transition, preserve all messages not in API response
+  // Otherwise, only preserve temporary messages with tools
+  const remainingTempMessages = preserveDuringTransition
+    ? prev.filter((msg) => !apiMessageIds.has(msg.key))
+    : prev.filter(
+        (msg) => !apiMessageIds.has(msg.key) && msg.tools && msg.tools.length > 0
+      );
 
   return [...mapped, ...remainingTempMessages];
 }

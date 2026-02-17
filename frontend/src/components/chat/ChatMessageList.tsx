@@ -19,7 +19,7 @@ import {
 
 interface ChatMessageListProps {
     chatId?: string | null;
-    onConversationCreated?: (conversationId: string) => void;
+    onConversationCreated?: (conversationId: string, agentName?: string) => void;
 }
 
 export function ChatMessageList({ 
@@ -36,6 +36,7 @@ export function ChatMessageList({
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
     const [isModelMismatch, setIsModelMismatch] = useState(false);
+    const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
 
     const { agentName, agentColor } = useChatAgentIdentity(chatId, searchParams);
 
@@ -83,9 +84,28 @@ export function ChatMessageList({
     }, [chatId]);
 
     // Don't fetch messages if we're transitioning to a newly created conversation
-    // Use useMemo to make it reactive - it will recalculate when chatId changes
+    // Use state-based check for reliable reactivity
     const shouldFetchMessages = useMemo(() => {
-        return Boolean(chatId) && chatId !== newlyCreatedConversationIdRef.current;
+        return Boolean(chatId) && !isTransitioningToNewConversation;
+    }, [chatId, isTransitioningToNewConversation]);
+
+    // Enable fetching after transition period (when ref is cleared)
+    useEffect(() => {
+        if (chatId && newlyCreatedConversationIdRef.current === chatId) {
+            // We're transitioning to a newly created conversation
+            setIsTransitioningToNewConversation(true);
+            
+            // Enable fetching after a delay to allow navigation to complete
+            // Use a longer delay to ensure messages are already displayed
+            const timeoutId = setTimeout(() => {
+                setIsTransitioningToNewConversation(false);
+            }, 800);
+            
+            return () => clearTimeout(timeoutId);
+        } else if (chatId && newlyCreatedConversationIdRef.current !== chatId) {
+            // Not transitioning to new conversation, ensure fetching is enabled
+            setIsTransitioningToNewConversation(false);
+        }
     }, [chatId]);
 
     // Fetch messages
@@ -163,28 +183,45 @@ export function ChatMessageList({
             return;
         }
 
-        if (chatId === newlyCreatedConversationIdRef.current) {
-            // For newly created conversations, don't overwrite messages from API
-            // They're already in state from the immediate display
+        // During transition to new conversation, preserve existing messages
+        // Only merge when we have actual API data
+        if (isTransitioningToNewConversation) {
+            // If we have conversationItems, merge them; otherwise preserve existing messages
+            if (conversationItems.length > 0) {
+                setMessages((prev) => mergeConversationItemsIntoMessages(prev, conversationItems, true));
+            }
+            // If conversationItems is empty, keep existing messages (don't clear)
             return;
         }
 
-        setMessages((prev) => mergeConversationItemsIntoMessages(prev, conversationItems));
-    }, [chatId, conversationItems]);
+        // Normal merge for existing conversations
+        setMessages((prev) => mergeConversationItemsIntoMessages(prev, conversationItems, false));
+    }, [chatId, conversationItems, isTransitioningToNewConversation]);
 
     // Reset state when switching chats
     const previousChatIdRef = useRef<string | null>(chatId);
     useEffect(() => {
         if (chatId && chatId !== previousChatIdRef.current) {
-            const isTransitioningToNewConversation = chatId === newlyCreatedConversationIdRef.current;
+            const isNewConversationTransition = chatId === newlyCreatedConversationIdRef.current;
             
-            if (!isTransitioningToNewConversation) {
+            if (!isNewConversationTransition) {
+                // Clear messages when switching to a different conversation
                 setMessages([]);
+                // Ensure transition state is cleared for non-transition cases
+                setIsTransitioningToNewConversation(false);
             }
             
-            // Clear the newly created conversation ref after transition
-            if (isTransitioningToNewConversation) {
-                newlyCreatedConversationIdRef.current = null;
+            // Delay clearing the ref until after messages are safely loaded
+            // This prevents race conditions with the merge effect
+            if (isNewConversationTransition) {
+                // Clear ref after transition period and message loading
+                // Also clear transition state to ensure fetching is enabled
+                const timeoutId = setTimeout(() => {
+                    newlyCreatedConversationIdRef.current = null;
+                    setIsTransitioningToNewConversation(false);
+                }, 1000); // Longer delay to ensure messages are loaded
+                
+                return () => clearTimeout(timeoutId);
             }
         }
         previousChatIdRef.current = chatId;
@@ -228,11 +265,14 @@ export function ChatMessageList({
         );
     }
 
+    // Don't show loading state if we already have messages (e.g., during transition)
+    const shouldShowLoading = initialLoading && messages.length === 0;
+
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
                 <div className="max-w-4xl mx-auto px-6 py-4 space-y-4">
-                    {initialLoading ? (
+                    {shouldShowLoading ? (
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
                         </div>

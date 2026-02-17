@@ -26,6 +26,7 @@ import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
 import { McpDetailsPageWrapper } from './pages/McpDetailsPageWrapper';
 import McpListingPage from './pages/McpListingPage';
+import { PreviewViewPage } from './pages/PreviewViewPage';
 
 function App() {
   useEffect(() => {
@@ -228,6 +229,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <McpDetailsPageWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/view/:messageId"
+            element={
+              <ProtectedRoute>
+                <PreviewViewPage />
               </ProtectedRoute>
             }
           />
