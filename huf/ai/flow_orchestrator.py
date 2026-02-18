@@ -175,21 +175,11 @@ def parse_decision(raw_response: str, valid_node_ids: set[str]) -> dict:
 	try:
 		decision = json.loads(response_text)
 	except json.JSONDecodeError:
-		# Try to find JSON object in the response
-		import re
-
-		json_match = re.search(r"\{[^{}]*\}", response_text, re.DOTALL)
-		if json_match:
-			try:
-				decision = json.loads(json_match.group())
-			except json.JSONDecodeError:
-				frappe.throw(
-					_("Router/orchestrator response is not valid JSON: {0}").format(response_text[:200]),
-					frappe.ValidationError,
-				)
-		else:
+		# Try to extract JSON object from surrounding text by finding balanced braces
+		decision = _extract_json_object(response_text)
+		if decision is None:
 			frappe.throw(
-				_("Router/orchestrator response does not contain a JSON object: {0}").format(
+				_("Router/orchestrator response does not contain valid JSON: {0}").format(
 					response_text[:200]
 				),
 				frappe.ValidationError,
@@ -255,3 +245,43 @@ def build_flow_context_system_message(flow_context: dict, current_node: str, com
 		parts.append(f"Completed nodes: {', '.join(completed_nodes)}")
 
 	return "\n".join(parts)
+
+
+def _extract_json_object(text: str) -> dict | None:
+	"""
+	Extract the first valid JSON object from text by finding balanced braces.
+
+	Handles nested JSON objects correctly unlike simple regex.
+	"""
+	start = text.find("{")
+	if start == -1:
+		return None
+
+	depth = 0
+	in_string = False
+	escape_next = False
+
+	for i in range(start, len(text)):
+		c = text[i]
+		if escape_next:
+			escape_next = False
+			continue
+		if c == "\\":
+			escape_next = True
+			continue
+		if c == '"':
+			in_string = not in_string
+			continue
+		if in_string:
+			continue
+		if c == "{":
+			depth += 1
+		elif c == "}":
+			depth -= 1
+			if depth == 0:
+				try:
+					return json.loads(text[start : i + 1])
+				except json.JSONDecodeError:
+					return None
+
+	return None
