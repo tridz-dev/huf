@@ -1542,8 +1542,8 @@ def _get_default_ocr_model(provider_name: str, strategy: str) -> str:
         defaults = {
             "mistral": "mistral/mistral-small-latest",
             "openai": "gpt-4o",
-            "google": "gemini/gemini-2.0-flash-exp",
-            "gemini": "gemini/gemini-2.0-flash-exp",
+            "google": "gemini/gemini-2.5-flash",
+            "gemini": "gemini/gemini-2.5-flash",
             "anthropic": "claude-3-5-sonnet-20241022",
         }
     
@@ -1637,7 +1637,13 @@ async def _process_with_vision_model(
         
         # Determine image type
         ext = file_path.lower().split('.')[-1]
-        mime_type = f"image/{ext}" if ext in ["jpg", "jpeg", "png", "webp", "gif"] else "image/jpeg"
+        
+        if ext == "pdf":
+            mime_type = "application/pdf"
+        elif ext in ["jpg", "jpeg", "png", "webp", "gif"]:
+            mime_type = f"image/{ext}"
+        else:
+            mime_type = "image/jpeg"
         
         # Build vision request
         messages = [
@@ -1758,6 +1764,11 @@ async def handle_ocr_document(
         
         # Determine strategy
         strategy = _determine_ocr_strategy(file_path, file_type)
+        
+        # Override strategy for Google/Gemini: Use Vision (Multimodal) for PDFs too
+        provider_name = provider_doc.provider_name.lower()
+        if provider_name in ["google", "gemini"] and (strategy == "ocr" or file_path.lower().endswith(".pdf")):
+            strategy = "vision"
         
         # Determine model
         ocr_model = None
