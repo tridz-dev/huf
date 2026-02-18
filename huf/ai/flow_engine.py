@@ -10,7 +10,6 @@ Core graph orchestration engine that:
 - Supports normal and agentic execution modes
 """
 
-import asyncio
 import json
 
 import frappe
@@ -745,11 +744,13 @@ def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = ""
 
 def _create_flow_conversation(flow_id: str, entry_node_id: str) -> "frappe.Document":
 	"""Create a shared Agent Conversation for a flow run."""
+	from uuid import uuid4
+
 	conv = frappe.get_doc(
 		{
 			"doctype": "Agent Conversation",
 			"title": f"Flow: {flow_id}",
-			"session_id": f"flow:{flow_id}:{frappe.generate_hash(length=8)}",
+			"session_id": f"flow:{flow_id}:{uuid4().hex[:8]}",
 			"is_active": 1,
 		}
 	)
