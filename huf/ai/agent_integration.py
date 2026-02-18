@@ -521,7 +521,10 @@ def run_agent_sync(
     conversation_id: str = None,
     parent_run_id: str = None,
     orchestration_id: str = None,
-    response_format = None
+    response_format = None,
+    flow_run_id: str = None,
+    flow_node_id: str = None,
+    run_kind: str = None,
 ):
 
     if not agent_name:
@@ -570,7 +573,7 @@ def run_agent_sync(
     # Optimized history fetching with dynamic limit + buffer
     fetch_limit = (agent_doc.history_limit or 20) + 10
     history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
-    run_doc = frappe.get_doc({
+    run_doc_data = {
         "doctype": "Agent Run",
         "agent": agent_name,
         "status": "Queued",
@@ -581,7 +584,20 @@ def run_agent_sync(
         "parent_run": parent_run_id,
         "is_child": 1 if parent_run_id else 0,
         "agent_orchestration": orchestration_id
-    })
+    }
+    # Add flow linkage fields if provided
+    if flow_run_id:
+        run_doc_data["flow_run"] = flow_run_id
+    if flow_node_id:
+        run_doc_data["flow_node_id"] = flow_node_id
+    if run_kind:
+        run_doc_data["run_kind"] = run_kind
+    if flow_run_id:
+        flow_id = frappe.db.get_value("Flow Run", flow_run_id, "flow_id")
+        if flow_id:
+            run_doc_data["flow_id"] = flow_id
+
+    run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert(ignore_permissions=True)
     conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
