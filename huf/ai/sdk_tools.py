@@ -2188,5 +2188,234 @@ async def handle_generate_audio(
         frappe.log_error(title="Audio Generation Tool", message=f"Audio generation error: {str(e)}")
         return {"success": False, "error": str(e)}
 
+@frappe.whitelist()
+async def handle_transcribe_audio(
+    file_id: str = None,
+    file_url: str = None,
+    language: str = None,
+    model: str = None,
+    agent_name: str = None,
+    conversation_id: str = None,
+    **kwargs
+):
+    """
+    Transcribe audio using LiteLLM's transcription function.
+    
+    Uses LiteLLM's transcription() function. The model used is either:
+    1. The explicitly provided model parameter, OR
+    2. An auto-detected suitable transcription model based on the provider
+    
+    Args:
+        file_id: File document ID (preferred) - File must exist in Frappe
+        file_url: File URL/path (alternative) - e.g., "/files/audio.mp3"
+        language: Optional language code (e.g., "en", "es", "fr") - ISO 639-1 format
+        model: Optional model name (e.g., "whisper-1", "whisper-large-v3")
+               If not provided, defaults based on provider
+        agent_name: Automatically passed from context
+        conversation_id: Automatically passed from context
+    
+    Returns:
+        dict: {
+            "success": bool,
+            "text": str,
+            "file_id": str,
+            "message_id": str,
+            "language": str
+        }
+    """
+    try:
+        # Get message_id for upsert logic
+        message_id = kwargs.get("message_id")
+        
+        # Get agent configuration from context
+        if not agent_name:
+            return {"success": False, "error": "Agent name not found in context"}
+        
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+        
+        if not api_key:
+            return {"success": False, "error": "API key not configured for provider"}
+        
+        # Get audio file
+        file_doc = None
+        if file_id:
+            try:
+                file_doc = frappe.get_doc("File", file_id)
+            except Exception as e:
+                return {"success": False, "error": f"File not found: {str(e)}"}
+        elif file_url:
+            # Try to find file by URL
+            try:
+                file_doc = frappe.get_doc("File", {"file_url": file_url})
+            except Exception:
+                # Try alternative lookup
+                file_name = file_url.replace("/files/", "")
+                file_doc = frappe.get_doc("File", {"file_name": file_name})
+            
+            if not file_doc:
+                return {"success": False, "error": f"File not found at URL: {file_url}"}
+        else:
+            return {"success": False, "error": "Either file_id or file_url is required"}
+        
+        # Get file path for LiteLLM
+        # LiteLLM transcription accepts file path or file-like object
+        try:
+            file_path = file_doc.get_full_path()
+        except Exception as e:
+            return {"success": False, "error": f"Error getting file path: {str(e)}"}
+        
+        # Determine transcription model
+        if not model:
+            provider_name = provider_doc.provider_name.lower()
+            if provider_name in ["openai", "azure"]:
+                model = "whisper-1"
+            elif provider_name == "groq":
+                model = "groq/whisper-large-v3"
+            elif provider_name == "deepgram":
+                model = "deepgram/nova-2"
+            else:
+                model = "whisper-1"  # Default fallback
+        
+        # Normalize model name for LiteLLM
+        from huf.ai.providers.litellm import _normalize_model_name
+        normalized_model = _normalize_model_name(model, agent_doc.provider)
+        
+        # Call LiteLLM transcription
+        import litellm
+        
+        # Build parameters for transcription
+        # LiteLLM accepts file path (string) or file-like object
+        transcription_params = {
+            "model": normalized_model,
+            "file": file_path,  # Pass file path directly
+            "api_key": api_key
+        }
+        
+        # Add optional parameters
+        if language:
+            transcription_params["language"] = language
+        
+        # Call LiteLLM transcription
+        def _sync_transcribe(params):
+            with open(file_path, "rb") as audio_file:
+                params["file"] = audio_file
+                return litellm.transcription(**params)
 
+        try:
+            response = await asyncio.to_thread(_sync_transcribe, transcription_params)
+        except Exception as e:
+            return {"success": False, "error": f"Transcription failed: {str(e)}"}
+        
+        # Extract text from response
+        # LiteLLM transcription returns a dict with 'text' key or object
+        if hasattr(response, "text"):
+            transcribed_text = response.text
+        elif isinstance(response, dict):
+            transcribed_text = response.get("text", "")
+        else:
+             transcribed_text = str(response)
+        
+        if not transcribed_text:
+            return {"success": False, "error": "Transcription returned empty result"}
+        
+        # Create Agent Message with transcription result
+        message_doc = None
+        if conversation_id:
+            try:
+                # Get conversation_index
+                last_index = frappe.db.sql("""
+                    SELECT MAX(conversation_index) as last_index
+                    FROM `tabAgent Message`
+                    WHERE conversation = %s
+                """, (conversation_id,), as_dict=1)
+                
+                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
+                
+                # Create or Update Agent Message
+                if message_id and frappe.db.exists("Agent Message", message_id):
+                    message_doc = frappe.get_doc("Agent Message", message_id)
+                    message_doc.content = transcribed_text
+                    if not message_doc.kind: message_doc.kind = "Audio"
+                    message_doc.save(ignore_permissions=True)
+                    
+                else:
+                    message_doc = frappe.get_doc({
+                        "doctype": "Agent Message",
+                        "conversation": conversation_id,
+                        "role": "user",
+                        "content": transcribed_text,
+                        "kind": "Audio",
+                        "agent": agent_name,
+                        "provider": agent_doc.provider,
+                        "model": agent_doc.model,
+                        "agent_run": kwargs.get("agent_run_id"),
+                        "conversation_index": conversation_index,
+                        "is_agent_message": 0,
+                        "user": frappe.session.user
+                    })
+                    message_doc.insert(ignore_permissions=True)
+                
+                # Check if file is already attached to this message
+                if file_doc and message_doc:
+                    if not file_doc.attached_to_name:
+                        file_doc.db_set("attached_to_name", message_doc.name)
+                        file_doc.db_set("attached_to_doctype", "Agent Message")
+                        file_doc.db_set("is_private", 0)
 
+                # Update conversation total_messages
+                if not message_id:
+                    frappe.db.sql("""
+                        UPDATE `tabAgent Conversation`
+                        SET total_messages = %s, last_activity = NOW()
+                        WHERE name = %s
+                    """, (conversation_index, conversation_id))
+                else:
+                    frappe.db.set_value("Agent Conversation", conversation_id, "last_activity", frappe.utils.now())
+                
+                frappe.db.commit()
+                
+                # Emit socket event for new message
+                try:
+                    frappe.publish_realtime(
+                        event=f'conversation:{conversation_id}',
+                        message={
+                            "type": "update_message" if message_id else "new_user_message",
+                            "conversation_id": conversation_id,
+                            "message_id": message_doc.name,
+                            "content": transcribed_text,
+                            "kind": "Audio",
+                            "file": {
+                                "file_name": file_doc.file_name,
+                                "file_url": file_doc.file_url 
+                            } if file_doc else None,
+                            "conversation_index": conversation_index,
+                        },
+                        user=frappe.session.user,
+                        after_commit=False
+                    )
+                except Exception as e:
+                    frappe.log_error(
+                        f"Error emitting new_user_message socket event: {str(e)}",
+                        "Audio Transcription Socket Event"
+                    )
+                    
+            except Exception as e:
+                frappe.log_error(
+                    f"Error creating Agent Message for transcription: {str(e)}",
+                    "Audio Transcription Message Creation"
+                )
+        
+        return {
+            "success": True,
+            "text": transcribed_text,
+            "file_id": file_doc.name,
+            "message_id": message_doc.name if message_doc else None,
+            "language": language or "auto-detected",
+            "model": normalized_model
+        }
+        
+    except Exception as e:
+        frappe.log_error(f"Audio transcription error: {str(e)}", "Audio Transcription Tool")
+        return {"success": False, "error": str(e)}
