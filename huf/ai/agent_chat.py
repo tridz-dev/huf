@@ -36,6 +36,7 @@ def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
         "conversation": conversation or chat.conversation,
         "role": "user",
         "content": f"(voice message: {filename})",
+        "kind": "Audio",
         "user": frappe.session.user
     })
     msg.insert(ignore_permissions=True)
@@ -53,28 +54,65 @@ def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
         return {"success": False, "error": "Could not save audio file to database."}
 
     file_id = None
+    file_url = None
     if hasattr(saved_file, "name"):
         file_id = saved_file.name
+        file_url = saved_file.file_url 
+        # Link file URL to voice_message field
+        frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
     elif isinstance(saved_file, dict):
         file_id = saved_file.get("name")
+        file_url = saved_file.get("file_url")
+        if file_url:
+             frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
     
     if not file_id:
         file_id = frappe.db.get_value("File", {
             "attached_to_doctype": "Agent Message", 
             "attached_to_name": msg.name
         }, "name", order_by="creation desc")
+        
+    if file_id and not file_url:
+        file_url = frappe.db.get_value("File", file_id, "file_url")
+        if file_url:
+            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
 
     if not file_id:
         return {"success": False, "error": "File was saved but ID could not be retrieved."}
 
     provider = frappe.db.get_value("Agent", chat.agent, "provider")
     
-    res = transcription_handler.handle_speech_to_text(
-        file_id=file_id,
-        provider=provider,
-        conversation=conversation or chat.conversation,
-        message_id=msg.name
-    )
+    try:
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        if loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+                sdk_tools.handle_transcribe_audio(
+                    file_id=file_id,
+                    agent_name=chat.agent,
+                    conversation_id=conversation or chat.conversation,
+                    message_id=msg.name
+                ),
+                loop
+            )
+            res = future.result()
+        else:
+            res = loop.run_until_complete(
+                sdk_tools.handle_transcribe_audio(
+                    file_id=file_id,
+                    agent_name=chat.agent,
+                    conversation_id=conversation or chat.conversation,
+                    message_id=msg.name
+                )
+            )
+    except Exception as e:
+         frappe.log_error(f"Transcription Error: {str(e)}")
+         return {"success": False, "error": str(e)}
 
     if not res.get("success"):
         return res

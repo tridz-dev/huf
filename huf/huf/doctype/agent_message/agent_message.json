@@ -16,6 +16,7 @@
   "content_type",
   "generated_image",
   "generated_audio",
+  "voice_message",
   "column_break_asyu",
   "session_id",
   "user",
@@ -60,7 +61,8 @@
    "fieldname": "kind",
    "fieldtype": "Select",
    "label": "Kind",
-   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage\nAudio"
+   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage\nAudio",
+   "read_only": 1
   },
   {
    "default": "user",
@@ -159,31 +161,41 @@
    "fetch_from": "tool_calll.status",
    "fieldname": "tool_status",
    "fieldtype": "Data",
-   "label": "Tool Status"
+   "label": "Tool Status",
+   "read_only": 1
   },
   {
    "fieldname": "content_type",
    "fieldtype": "Select",
    "label": "Content Type",
-   "options": "\nText\nJSX\nMermaid\nMarkdown\nArtifact\nHTML\nImage"
+   "options": "\nText\nJSX\nMermaid\nMarkdown\nArtifact\nHTML\nImage",
+   "read_only": 1
   },
   {
    "depends_on": "eval:doc.kind == \"Image\";",
    "fieldname": "generated_image",
    "fieldtype": "Attach Image",
-   "label": "Generated Image"
+   "label": "Generated Image",
+   "read_only": 1
   },
   {
    "depends_on": "eval:doc.kind == \"Audio\";",
    "fieldname": "generated_audio",
    "fieldtype": "Attach",
-   "label": "Generated Audio"
+   "label": "Generated Audio",
+   "read_only": 1
+  },
+  {
+   "fieldname": "voice_message",
+   "fieldtype": "Attach",
+   "label": "Voice Message",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-13 10:30:00.000000",
+ "modified": "2026-02-18 13:37:33.353103",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",
