@@ -19,6 +19,7 @@ import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
+import { AdvancedTab } from '../components/agent/AdvancedTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
@@ -34,7 +35,7 @@ export function AgentFormPage() {
   const tabConfig = {
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions'],
+      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions', 'enable_prompt_caching'],
       default: true,
       disabled: false,
     },
@@ -53,6 +54,12 @@ export function AgentFormPage() {
     tools: {
       label: 'Tools & MCP',
       fields: [], // Tools tab doesn't have form fields
+      default: false,
+      disabled: false,
+    },
+    advanced: {
+      label: 'Advanced Settings',
+      fields: ['context_strategy', 'summary_ratio', 'history_limit', 'max_knowledge_tokens', 'max_turns', 'enable_conversation_data', 'autonaming_of_conversation_title'],
       default: false,
       disabled: false,
     },
@@ -147,6 +154,14 @@ export function AgentFormPage() {
         enable_multi_run: false,
         description: '',
         instructions: '',
+        enable_prompt_caching: false,
+        context_strategy: undefined,
+        summary_ratio: undefined,
+        history_limit: undefined,
+        max_knowledge_tokens: undefined,
+        max_turns: undefined,
+        enable_conversation_data: false,
+        autonaming_of_conversation_title: false,
       },
   });
 
@@ -296,6 +311,14 @@ export function AgentFormPage() {
           enable_multi_run: data.enable_multi_run === 1,
           description: data.description || '',
           instructions: data.instructions || '',
+          enable_prompt_caching: data.enable_prompt_caching === 1,
+          context_strategy: data.context_strategy || undefined,
+          summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
+          history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
+          max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
+          max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
+          enable_conversation_data: data.enable_conversation_data === 1,
+          autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
         });
         // Track initial disabled state
         setInitialDisabled(data.disabled === 1);
@@ -409,6 +432,14 @@ export function AgentFormPage() {
         enable_multi_run: values.enable_multi_run ? 1 : 0,
         description: values.description || '',
         instructions: values.instructions,
+        enable_prompt_caching: values.enable_prompt_caching ? 1 : 0,
+        context_strategy: values.context_strategy || undefined,
+        summary_ratio: values.summary_ratio !== undefined ? values.summary_ratio : undefined,
+        history_limit: values.history_limit !== undefined ? values.history_limit : undefined,
+        max_knowledge_tokens: values.max_knowledge_tokens !== undefined ? values.max_knowledge_tokens : undefined,
+        max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
+        enable_conversation_data: values.enable_conversation_data ? 1 : 0,
+        autonaming_of_conversation_title: values.autonaming_of_conversation_title ? 1 : 0,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -438,6 +469,14 @@ export function AgentFormPage() {
           enable_multi_run: newAgent.enable_multi_run === 1,
           description: newAgent.description || '',
           instructions: newAgent.instructions || '',
+          enable_prompt_caching: newAgent.enable_prompt_caching === 1,
+          context_strategy: newAgent.context_strategy || undefined,
+          summary_ratio: newAgent.summary_ratio !== undefined && newAgent.summary_ratio !== null ? newAgent.summary_ratio : undefined,
+          history_limit: newAgent.history_limit !== undefined && newAgent.history_limit !== null ? newAgent.history_limit : undefined,
+          max_knowledge_tokens: newAgent.max_knowledge_tokens !== undefined && newAgent.max_knowledge_tokens !== null ? newAgent.max_knowledge_tokens : undefined,
+          max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
+          enable_conversation_data: newAgent.enable_conversation_data === 1,
+          autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
         });
         setInitialDisabled(newAgent.disabled === 1);
         // Navigate to the edit page with the new agent's ID
@@ -460,6 +499,14 @@ export function AgentFormPage() {
           enable_multi_run: values.enable_multi_run,
           description: values.description,
           instructions: values.instructions,
+          enable_prompt_caching: values.enable_prompt_caching,
+          context_strategy: values.context_strategy,
+          summary_ratio: values.summary_ratio,
+          history_limit: values.history_limit,
+          max_knowledge_tokens: values.max_knowledge_tokens,
+          max_turns: values.max_turns,
+          enable_conversation_data: values.enable_conversation_data,
+          autonaming_of_conversation_title: values.autonaming_of_conversation_title,
         });
         // Reset tools, disabled state, and MCP servers after successful update to mark as unchanged
         setInitialTools([...selectedTools]);
@@ -800,7 +847,7 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
                     {config.label}
@@ -851,6 +898,10 @@ export function AgentFormPage() {
                   onSyncMCP={handleSyncMCPServer}
                   mcpLoading={mcpLoading}
                 />
+              </TabsContent>
+
+              <TabsContent value="advanced" className="space-y-4">
+                <AdvancedTab form={form} />
               </TabsContent>
             </Tabs>
           </form>
