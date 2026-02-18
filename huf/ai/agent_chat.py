@@ -95,7 +95,8 @@ def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
                 sdk_tools.handle_transcribe_audio(
                     file_id=file_id,
                     agent_name=chat.agent,
-                    conversation_id=conversation or chat.conversation
+                    conversation_id=conversation or chat.conversation,
+                    message_id=msg.name
                 ),
                 loop
             )
@@ -105,7 +106,8 @@ def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
                 sdk_tools.handle_transcribe_audio(
                     file_id=file_id,
                     agent_name=chat.agent,
-                    conversation_id=conversation or chat.conversation
+                    conversation_id=conversation or chat.conversation,
+                    message_id=msg.name
                 )
             )
     except Exception as e:
