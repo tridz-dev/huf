@@ -147,14 +147,14 @@ export function SelectToolsModal({
       (tool) => !selectedTools.some((st) => st.name === tool.name)
     );
 
-    if (newTools.length === 0) {
-      toast.info('No new tools selected');
-      return;
-    }
-
-    onAddTools(newTools);
-    toast.success(`Added ${newTools.length} tool${newTools.length > 1 ? 's' : ''}`);
+    // Always close the modal
     onOpenChange(false);
+
+    // Only show success message if new tools were added
+    if (newTools.length > 0) {
+      onAddTools(newTools);
+      toast.success(`Added ${newTools.length} tool${newTools.length > 1 ? 's' : ''}`);
+    }
   };
 
   const selectedCount = filteredTools.filter((tool) =>
@@ -194,10 +194,24 @@ export function SelectToolsModal({
         http_headers: data.http_headers,
       });
       
+      // Refresh the tools list to include the new tool
+      const updatedTools = await getToolFunctions();
+      setAllTools(updatedTools || []);
+      
+      // Auto-select the newly created tool
+      const newSelectedIds = new Set(selectedToolIds);
+      newSelectedIds.add(newTool.name);
+      setSelectedToolIds(newSelectedIds);
+      
       // Add the created tool to the agent
       onAddTools([newTool]);
+      
+      // Switch back to Tool Library tab and reset form view
+      setActiveTab('tool-library');
+      setCreateView('templates');
+      setSelectedTemplate(null);
+      
       toast.success('Tool created and added successfully!');
-      onOpenChange(false);
     } catch (error) {
       console.error('Error creating tool:', error);
       const errorMessage = getFrappeErrorMessage(error);
