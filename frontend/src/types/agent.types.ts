@@ -31,6 +31,10 @@ export type ToolType =
   | "GET"
   | "POST"
   | "Run Agent"
+  | "Client Side Tool"
+  | "Get Conversation Data"
+  | "Set Conversation Data"
+  | "Load Conversation Data"
   | "Speech to Text";
 
 export type AgentToolFunctionRef = {
