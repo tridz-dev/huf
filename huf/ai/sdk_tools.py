@@ -2295,10 +2295,15 @@ async def handle_transcribe_audio(
             transcription_params["language"] = language
         
         # Call LiteLLM transcription
-        response = await asyncio.to_thread(
-            litellm.transcription,
-            **transcription_params
-        )
+        def _sync_transcribe(params):
+            with open(file_path, "rb") as audio_file:
+                params["file"] = audio_file
+                return litellm.transcription(**params)
+
+        try:
+            response = await asyncio.to_thread(_sync_transcribe, transcription_params)
+        except Exception as e:
+            return {"success": False, "error": f"Transcription failed: {str(e)}"}
         
         # Extract text from response
         # LiteLLM transcription returns a dict with 'text' key
@@ -2320,29 +2325,46 @@ async def handle_transcribe_audio(
                 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
                 
-                # Create Agent Message
-                message_doc = frappe.get_doc({
-                    "doctype": "Agent Message",
-                    "conversation": conversation_id,
-                    "role": "user",
-                    "content": transcribed_text,
-                    "kind": "Text",
-                    "agent": agent_name,
-                    "provider": agent_doc.provider,
-                    "model": agent_doc.model,
-                    "agent_run": kwargs.get("agent_run_id"),
-                    "conversation_index": conversation_index,
-                    "is_agent_message": 0,
-                    "user": frappe.session.user
-                })
-                message_doc.insert(ignore_permissions=True)
+                # Create or Update Agent Message
+                if message_id and frappe.db.exists("Agent Message", message_id):
+                    message_doc = frappe.get_doc("Agent Message", message_id)
+                    message_doc.content = transcribed_text
+                    if not message_doc.kind: message_doc.kind = "Audio"
+                    message_doc.save(ignore_permissions=True)
+                    
+                else:
+                    message_doc = frappe.get_doc({
+                        "doctype": "Agent Message",
+                        "conversation": conversation_id,
+                        "role": "user",
+                        "content": transcribed_text,
+                        "kind": "Audio",
+                        "agent": agent_name,
+                        "provider": agent_doc.provider,
+                        "model": agent_doc.model,
+                        "agent_run": kwargs.get("agent_run_id"),
+                        "conversation_index": conversation_index,
+                        "is_agent_message": 0,
+                        "user": frappe.session.user
+                    })
+                    message_doc.insert(ignore_permissions=True)
                 
+                # Check if file is already attached to this message
+                if file_doc and message_doc:
+                    if not file_doc.attached_to_name:
+                        file_doc.db_set("attached_to_name", message_doc.name)
+                        file_doc.db_set("attached_to_doctype", "Agent Message")
+                        file_doc.db_set("is_private", 0)
+
                 # Update conversation total_messages
-                frappe.db.sql("""
-                    UPDATE `tabAgent Conversation`
-                    SET total_messages = %s, last_activity = NOW()
-                    WHERE name = %s
-                """, (conversation_index, conversation_id))
+                if not message_id:
+                    frappe.db.sql("""
+                        UPDATE `tabAgent Conversation`
+                        SET total_messages = %s, last_activity = NOW()
+                        WHERE name = %s
+                    """, (conversation_index, conversation_id))
+                else:
+                    frappe.db.set_value("Agent Conversation", conversation_id, "last_activity", frappe.utils.now())
                 
                 frappe.db.commit()
                 
@@ -2351,10 +2373,15 @@ async def handle_transcribe_audio(
                     frappe.publish_realtime(
                         event=f'conversation:{conversation_id}',
                         message={
-                            "type": "new_user_message",
+                            "type": "update_message" if message_id else "new_user_message",
                             "conversation_id": conversation_id,
                             "message_id": message_doc.name,
                             "content": transcribed_text,
+                            "kind": "Audio",
+                            "file": {
+                                "file_name": file_doc.file_name,
+                                "file_url": file_doc.file_url 
+                            } if file_doc else None,
                             "conversation_index": conversation_index,
                         },
                         user=frappe.session.user,
