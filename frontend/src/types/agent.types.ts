@@ -199,4 +199,12 @@ export interface AgentDoc {
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
+  enable_prompt_caching?: number; // 0 or 1
+  context_strategy?: string | null; // Summarize, FIFO, or None
+  summary_ratio?: number | null; // Ratio of history to summarize (0-1)
+  history_limit?: number | null; // Maximum number of messages to keep
+  max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
+  max_turns?: number | null; // Maximum consecutive turns/steps
+  enable_conversation_data?: number; // 0 or 1
+  autonaming_of_conversation_title?: number; // 0 or 1
 }
