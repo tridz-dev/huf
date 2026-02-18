@@ -31,6 +31,8 @@ interface ToolCreationFormProps {
   onSubmit: (data: ToolFormData) => Promise<void>;
   onBack: () => void;
   loading?: boolean;
+  initialData?: Partial<ToolFormData> | null;
+  mode?: 'create' | 'edit';
 }
 
 const createFormSchema = (availableToolTypes: ToolType[]) => {
@@ -89,26 +91,44 @@ export function ToolCreationForm({
   onSubmit,
   onBack,
   loading = false,
+  initialData = null,
+  mode = 'create',
 }: ToolCreationFormProps) {
   const formSchema = useMemo(() => createFormSchema(template.toolTypes), [template.toolTypes]);
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
   const [agents, setAgents] = useState<AgentDoc[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
+  const defaultValues = useMemo(() => ({
+    tool_name: initialData?.tool_name || '',
+    tool_type: initialData?.tool_type || '',
+    types: (initialData?.types || template.toolTypes[0]) as ToolType,
+    description: initialData?.description || '',
+    reference_doctype: initialData?.reference_doctype,
+    agent: initialData?.agent,
+    function_path: initialData?.function_path,
+    function_name: initialData?.function_name,
+    pass_parameters_as_json: initialData?.pass_parameters_as_json || false,
+    provider_app: initialData?.provider_app,
+    base_url: initialData?.base_url,
+    required_permission: initialData?.required_permission,
+    is_read_only: initialData?.is_read_only || false,
+    allowed_for_guest: initialData?.allowed_for_guest || false,
+    parameters: initialData?.parameters || [],
+    http_headers: initialData?.http_headers || [],
+  }), [initialData, template.toolTypes]);
+
   const form = useForm<ToolFormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      tool_name: '',
-      tool_type: '',
-      types: template.toolTypes[0] as ToolType,
-      description: '',
-      parameters: [],
-      http_headers: [],
-      is_read_only: false,
-      allowed_for_guest: false,
-      pass_parameters_as_json: false,
-    },
+    defaultValues,
   });
+
+  // Reset form when initialData changes (for edit mode)
+  useEffect(() => {
+    if (initialData && mode === 'edit') {
+      form.reset(defaultValues);
+    }
+  }, [initialData, mode, form, defaultValues]);
 
   // Watch the types field to conditionally show fields
   const selectedType = useWatch({ control: form.control, name: 'types' });
@@ -637,7 +657,10 @@ export function ToolCreationForm({
             disabled={loading}
             className="bg-purple-600 hover:bg-purple-700 text-white"
           >
-            {loading ? 'Creating...' : 'Create & Add Tool'}
+            {loading 
+              ? (mode === 'edit' ? 'Updating...' : 'Creating...') 
+              : (mode === 'edit' ? 'Update Tool' : 'Create & Add Tool')
+            }
           </Button>
         </div>
       </form>

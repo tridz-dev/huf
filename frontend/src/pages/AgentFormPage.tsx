@@ -8,10 +8,12 @@ import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
-import { getToolFunctions, getToolTypes } from '../services/toolApi';
+import { getToolFunctions, getToolTypes, getToolFunction, updateToolFunction } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
 import type { AgentToolType } from '../types/agent.types';
 import { SelectToolsModal, SelectMCPServersModal } from '../components/tools';
+import { ToolFormModal } from '../components/tools/ToolFormModal';
+import type { ToolFormData } from '../types/toolTemplate.types';
 import { TriggerModal } from '../components/agent/TriggerModal';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { AgentHeader } from '../components/agent/AgentHeader';
@@ -126,6 +128,8 @@ export function AgentFormPage() {
   const [triggerStatusFilter, setTriggerStatusFilter] = useState<string>('all');
   const [optimizingPrompt, setOptimizingPrompt] = useState(false);
   const [showToolsModal, setShowToolsModal] = useState(false);
+  const [showToolFormModal, setShowToolFormModal] = useState(false);
+  const [editingToolId, setEditingToolId] = useState<string | null>(null);
   const [selectedTools, setSelectedTools] = useState<AgentToolFunctionRef[]>([]);
   const [initialTools, setInitialTools] = useState<AgentToolFunctionRef[]>([]); // Track initial tools state
   const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
@@ -654,6 +658,86 @@ export function AgentFormPage() {
     toast.success('Tool removed');
   };
 
+  const [toolFormData, setToolFormData] = useState<Partial<ToolFormData> | null>(null);
+  const [loadingToolData, setLoadingToolData] = useState(false);
+
+  const handleEditTool = async (toolId: string) => {
+    setEditingToolId(toolId);
+    setLoadingToolData(true);
+    try {
+      const tool = await getToolFunction(toolId);
+      if (tool) {
+        // Convert tool data to form format
+        setToolFormData({
+          tool_name: tool.tool_name,
+          tool_type: tool.tool_type,
+          types: tool.types as any,
+          description: tool.description,
+          reference_doctype: tool.reference_doctype,
+          agent: tool.agent,
+          function_path: tool.function_path,
+          function_name: tool.function_name,
+          pass_parameters_as_json: tool.pass_parameters_as_json === 1,
+          provider_app: tool.provider_app,
+          base_url: tool.base_url,
+          required_permission: tool.required_permission,
+          is_read_only: tool.is_read_only === 1,
+          allowed_for_guest: tool.allowed_for_guest === 1,
+          parameters: tool.parameters || [],
+          http_headers: tool.http_headers || [],
+        });
+        setShowToolFormModal(true);
+      }
+    } catch (error) {
+      console.error('Error loading tool:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to load tool');
+    } finally {
+      setLoadingToolData(false);
+    }
+  };
+
+  const handleToolFormSubmit = async (data: ToolFormData) => {
+    if (!editingToolId) return;
+    
+    try {
+      // Update existing tool
+      await updateToolFunction(editingToolId, {
+        tool_name: data.tool_name,
+        tool_type: data.tool_type,
+        types: data.types,
+        description: data.description,
+        reference_doctype: data.reference_doctype,
+        agent: data.agent,
+        function_path: data.function_path,
+        function_name: data.function_name,
+        pass_parameters_as_json: data.pass_parameters_as_json,
+        provider_app: data.provider_app,
+        base_url: data.base_url,
+        required_permission: data.required_permission,
+        is_read_only: data.is_read_only,
+        allowed_for_guest: data.allowed_for_guest,
+        parameters: data.parameters,
+        http_headers: data.http_headers,
+      });
+      
+      // Update the tool in the selected tools list
+      setSelectedTools(selectedTools.map((t) => 
+        t.name === editingToolId 
+          ? { ...t, tool_name: data.tool_name, description: data.description, tool_type: data.tool_type }
+          : t
+      ));
+      toast.success('Tool updated successfully!');
+      setShowToolFormModal(false);
+      setEditingToolId(null);
+      setToolFormData(null);
+    } catch (error) {
+      console.error('Error saving tool:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to save tool');
+    }
+  };
+
   const handleAddMCPServers = (servers: MCPServerDoc[]) => {
     // Convert MCPServerDoc to MCPServerRef format for child table
     const newServers: MCPServerRef[] = servers.map((server) => ({
@@ -891,6 +975,7 @@ export function AgentFormPage() {
                   toolTypes={toolTypes}
                   onAddTools={() => setShowToolsModal(true)}
                   onRemoveTool={handleRemoveTool}
+                  onEditTool={handleEditTool}
                   mcpServers={mcpServers}
                   onAddMCP={() => setShowMCPServersModal(true)}
                   onRemoveMCP={handleRemoveMCPServer}
@@ -941,6 +1026,22 @@ export function AgentFormPage() {
           transport_type: 'http' as const,
         })) as MCPServerDoc[]}
         onAddServers={handleAddMCPServers}
+      />
+
+      {/* Tool Form Modal (for editing) */}
+      <ToolFormModal
+        open={showToolFormModal}
+        onOpenChange={(open) => {
+          setShowToolFormModal(open);
+          if (!open) {
+            setEditingToolId(null);
+            setToolFormData(null);
+          }
+        }}
+        mode="edit"
+        initialData={toolFormData}
+        onSubmit={handleToolFormSubmit}
+        loading={loadingToolData}
       />
     </div>
   );

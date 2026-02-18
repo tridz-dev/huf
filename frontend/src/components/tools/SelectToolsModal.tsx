@@ -173,7 +173,6 @@ export function SelectToolsModal({
 
   const handleFormSubmit = async (data: ToolFormData) => {
     if (!selectedTemplate) return;
-    
     setCreatingTool(true);
     try {
       const newTool = await createToolFunction({

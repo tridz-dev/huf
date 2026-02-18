@@ -42,6 +42,128 @@ export async function getToolFunctions(toolTypeFilter?: string): Promise<AgentTo
 }
 
 /**
+ * Fetch a single Agent Tool Function by name with all fields including child tables
+ */
+export async function getToolFunction(name: string): Promise<any> {
+  try {
+    const tool = await db.getDoc(doctype['Agent Tool Function'], name);
+    
+    // Convert child table data to our format (add IDs for React keys)
+    if (tool.parameters && Array.isArray(tool.parameters)) {
+      tool.parameters = tool.parameters.map((param: any, index: number) => ({
+        id: param.name || `param-${index}`, // Use Frappe name or generate ID
+        label: param.label || '',
+        fieldname: param.fieldname || '',
+        type: param.type || 'string',
+        required: param.required === 1 || param.required === true,
+        description: param.description || '',
+        options: param.options || '',
+        child_table_name: param.child_table_name || '',
+      }));
+    }
+    
+    if (tool.http_headers && Array.isArray(tool.http_headers)) {
+      tool.http_headers = tool.http_headers.map((header: any, index: number) => ({
+        id: header.name || `header-${index}`, // Use Frappe name or generate ID
+        key: header.key || '',
+        value: header.value || '',
+      }));
+    }
+    
+    return tool;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching tool function');
+  }
+}
+
+/**
+ * Update an existing Agent Tool Function document
+ */
+export async function updateToolFunction(name: string, data: {
+  tool_name?: string;
+  tool_type?: string;
+  types?: string;
+  description?: string;
+  reference_doctype?: string;
+  agent?: string;
+  function_path?: string;
+  function_name?: string;
+  pass_parameters_as_json?: boolean;
+  provider_app?: string;
+  base_url?: string;
+  required_permission?: string;
+  is_read_only?: boolean;
+  allowed_for_guest?: boolean;
+  parameters?: Array<{
+    label: string;
+    fieldname: string;
+    type: string;
+    required: boolean;
+    description?: string;
+    options?: string;
+    child_table_name?: string;
+  }>;
+  http_headers?: Array<{
+    key: string;
+    value: string;
+  }>;
+}): Promise<AgentToolFunctionRef> {
+  try {
+    // Prepare data for Frappe
+    const toolData: any = {};
+
+    // Only include fields that are provided
+    if (data.tool_name !== undefined) toolData.tool_name = data.tool_name;
+    if (data.tool_type !== undefined) toolData.tool_type = data.tool_type;
+    if (data.types !== undefined) toolData.types = data.types;
+    if (data.description !== undefined) toolData.description = data.description;
+    if (data.reference_doctype !== undefined) toolData.reference_doctype = data.reference_doctype;
+    if (data.agent !== undefined) toolData.agent = data.agent;
+    if (data.function_path !== undefined) toolData.function_path = data.function_path;
+    if (data.function_name !== undefined) toolData.function_name = data.function_name;
+    if (data.provider_app !== undefined) toolData.provider_app = data.provider_app;
+    if (data.base_url !== undefined) toolData.base_url = data.base_url;
+    if (data.required_permission !== undefined) toolData.required_permission = data.required_permission;
+    
+    // Boolean fields (convert to 0/1 for Frappe)
+    if (data.is_read_only !== undefined) toolData.is_read_only = data.is_read_only ? 1 : 0;
+    if (data.allowed_for_guest !== undefined) toolData.allowed_for_guest = data.allowed_for_guest ? 1 : 0;
+    if (data.pass_parameters_as_json !== undefined) toolData.pass_parameters_as_json = data.pass_parameters_as_json ? 1 : 0;
+
+    // Handle child tables - Frappe expects arrays
+    if (data.parameters !== undefined) {
+      toolData.parameters = data.parameters.map((param) => ({
+        label: param.label,
+        fieldname: param.fieldname,
+        type: param.type,
+        required: param.required ? 1 : 0,
+        description: param.description || '',
+        options: param.options || '',
+        child_table_name: param.child_table_name || '',
+      }));
+    }
+
+    if (data.http_headers !== undefined) {
+      toolData.http_headers = data.http_headers.map((header) => ({
+        key: header.key,
+        value: header.value,
+      }));
+    }
+
+    const updatedTool = await db.updateDoc(doctype['Agent Tool Function'], name, toolData);
+    return {
+      name: updatedTool.name,
+      tool_name: updatedTool.tool_name,
+      description: updatedTool.description,
+      types: updatedTool.types as any,
+      tool_type: updatedTool.tool_type,
+    };
+  } catch (error) {
+    handleFrappeError(error, 'Error updating tool function');
+  }
+}
+
+/**
  * Create a new Agent Tool Function document
  */
 export async function createToolFunction(data: {
