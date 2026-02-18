@@ -2224,6 +2224,9 @@ async def handle_transcribe_audio(
         }
     """
     try:
+        # Get message_id for upsert logic
+        message_id = kwargs.get("message_id")
+        
         # Get agent configuration from context
         if not agent_name:
             return {"success": False, "error": "Agent name not found in context"}
@@ -2306,8 +2309,13 @@ async def handle_transcribe_audio(
             return {"success": False, "error": f"Transcription failed: {str(e)}"}
         
         # Extract text from response
-        # LiteLLM transcription returns a dict with 'text' key
-        transcribed_text = response.get("text", "") if isinstance(response, dict) else str(response)
+        # LiteLLM transcription returns a dict with 'text' key or object
+        if hasattr(response, "text"):
+            transcribed_text = response.text
+        elif isinstance(response, dict):
+            transcribed_text = response.get("text", "")
+        else:
+             transcribed_text = str(response)
         
         if not transcribed_text:
             return {"success": False, "error": "Transcription returned empty result"}
