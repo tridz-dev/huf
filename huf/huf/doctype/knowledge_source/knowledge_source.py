@@ -9,12 +9,20 @@ from frappe import _
 class KnowledgeSource(Document):
 	def validate(self):
 		self.validate_chunk_settings()
+		self.validate_zvec_settings()
 		
 	def validate_chunk_settings(self):
 		if self.chunk_size and self.chunk_size < 100:
 			frappe.throw(_("Chunk size must be at least 100 characters"))
 		if self.chunk_overlap and self.chunk_overlap >= self.chunk_size:
 			frappe.throw(_("Chunk overlap must be less than chunk size"))
+
+	def validate_zvec_settings(self):
+		if self.knowledge_type == "zvec":
+			if not self.embedding_model:
+				frappe.throw(_("Embedding Model is required for Zvec knowledge type"))
+			if not self.vector_dimension or self.vector_dimension <= 0:
+				frappe.throw(_("Vector Dimension must be a positive integer for Zvec knowledge type"))
 	
 	def before_save(self):
 		if not self.chunk_size:

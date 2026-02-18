@@ -65,9 +65,7 @@ def get_backend(backend_type: str) -> type:
 	"""Get backend class by type."""
 	backends = {
 		"sqlite_fts": "huf.ai.knowledge.backends.sqlite_fts.SQLiteFTSBackend",
-		# Future backends:
-		# "chroma": "huf.ai.knowledge.backends.chroma.ChromaBackend",
-		# "pgvector": "huf.ai.knowledge.backends.pgvector.PgVectorBackend",
+		"zvec": "huf.ai.knowledge.backends.zvec_backend.ZvecBackend",
 	}
 	
 	if backend_type not in backends:
