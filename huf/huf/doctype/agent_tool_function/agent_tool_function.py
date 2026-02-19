@@ -107,7 +107,7 @@ class AgentToolFunction(Document):
 			for param in self.parameters:
 				properties[param.fieldname] = {
 					"type": param.type,
-					"description": param.label,
+					"description": param.description or param.label,
 				}
 
 			params = {
@@ -205,7 +205,7 @@ class AgentToolFunction(Document):
 				for param in self.parameters:
 					properties[param.fieldname] = {
 						"type": "string",
-						"description": f"File URL/Path for field '{param.label or param.fieldname}'"
+						"description": param.description or f"File URL/Path for field '{param.label or param.fieldname}'"
 					}
 			else:
 				properties["file_url"] = {
@@ -230,7 +230,7 @@ class AgentToolFunction(Document):
 			for param in self.parameters:
 				filter_properties[param.fieldname] = {
 					"type": param.type,
-					"description": param.label or f"Filter by {param.fieldname}"
+					"description": param.description or param.label or f"Filter by {param.fieldname}"
 				}
 
 			params = {
@@ -335,7 +335,7 @@ class AgentToolFunction(Document):
 			query_required = []
 
 			for param in self.parameters:
-				field_schema = {"type": param.type, "description": param.label}
+				field_schema = {"type": param.type, "description": param.description or param.label}
 				if param.type == "string" and param.options:
 					field_schema["enum"] = param.options.split("\n")
 
@@ -368,7 +368,7 @@ class AgentToolFunction(Document):
 			body_required = []
 
 			for param in self.parameters:
-				field_schema = {"type": param.type, "description": param.label}
+				field_schema = {"type": param.type, "description": param.description or param.label}
 
 				if param.type == "string" and param.options:
 					field_schema["enum"] = param.options.split("\n")
@@ -520,7 +520,7 @@ class AgentToolFunction(Document):
 		for param in self.parameters:
 			obj = {
 				"type": param.type,
-				"description": param.label,
+				"description": param.description or param.label,
 			}
 
 			# Explicitly allow any keys/values for object types
