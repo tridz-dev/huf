@@ -272,6 +272,17 @@ export async function getDocTypes(): Promise<Array<{ name: string }>> {
 }
 
 /**
+ * Fetch DocType metadata with fields (used for tool parameter auto-fill)
+ */
+export async function getDocTypeMeta(doctypeName: string): Promise<any> {
+  try {
+    return await db.getDoc('DocType', doctypeName);
+  } catch (error) {
+    handleFrappeError(error, `Error fetching DocType meta for ${doctypeName}`);
+  }
+}
+
+/**
  * Fetch agent triggers filtered by agent name (for listing)
  */
 export async function getAgentTriggers(agentName: string): Promise<AgentTriggerListItem[]> {

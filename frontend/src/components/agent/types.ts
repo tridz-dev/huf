@@ -13,6 +13,14 @@ export const agentFormSchema = z.object({
   enable_multi_run: z.boolean(),
   description: z.string().optional(),
   instructions: z.string(),
+  enable_prompt_caching: z.boolean().optional(),
+  context_strategy: z.string().optional(),
+  summary_ratio: z.number().optional(),
+  history_limit: z.number().optional(),
+  max_knowledge_tokens: z.number().optional(),
+  max_turns: z.number().optional(),
+  enable_conversation_data: z.boolean().optional(),
+  autonaming_of_conversation_title: z.boolean().optional(),
 });
 
 export type AgentFormValues = z.infer<typeof agentFormSchema>;
