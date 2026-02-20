@@ -38,4 +38,7 @@ export type ToolFormData = {
   // Child tables
   parameters?: ParameterData[];
   http_headers?: HttpHeaderData[];
+
+  // Optional UI-only metadata
+  usedBy?: string[];
 };

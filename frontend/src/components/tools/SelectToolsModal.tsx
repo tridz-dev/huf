@@ -21,6 +21,7 @@ import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import { toast } from 'sonner';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import toolTemplatesConfig from '@/config/toolTemplates.json';
+import { Badge } from '../ui/badge';
 
 interface SelectToolsModalProps {
   open: boolean;
@@ -244,9 +245,14 @@ export function SelectToolsModal({
             value="tool-library" 
             className="mt-4 data-[state=active]:flex data-[state=active]:flex-col data-[state=active]:flex-1 data-[state=active]:min-h-0 data-[state=active]:overflow-hidden"
           >
-            <DialogDescription className="pb-2 flex-shrink-0">
-              Choose tools to add to this agent. Select multiple tools at once.
-            </DialogDescription>
+            <div className="pb-2 flex items-center justify-between gap-2 flex-shrink-0">
+              <DialogDescription>
+                Choose tools to add to this agent. Select multiple tools at once.
+              </DialogDescription>
+              <Badge variant="outline" className="shrink-0">
+                {selectedCount} selected
+              </Badge>
+            </div>
 
             {/* Filters */}
             <div className="flex flex-col gap-3 mb-4 flex-shrink-0">
