@@ -1,8 +1,7 @@
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Settings, Zap, Plus } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { ArrowLeft, Settings, Zap, Plus } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 import {
   Form,
   FormControl,
@@ -21,9 +20,14 @@ import { ParameterCard, type ParameterData } from './ParameterCard';
 import { HttpHeaderCard, type HttpHeaderData } from './HttpHeaderCard';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import type { AgentToolType, ToolType } from '@/types/agent.types';
-import { getDocTypes } from '@/services/agentApi';
-import { getAgents } from '@/services/agentApi';
-import type { AgentDoc } from '@/types/agent.types';
+import { getDocTypeMeta } from '@/services/agentApi';
+import { useToolCreationOptions } from './useToolCreationOptions';
+import {
+  buildMissingMandatoryParameters,
+  createToolFormSchema,
+  getDefaultToolFormValues,
+  shouldShowField,
+} from './toolCreationForm.utils';
 
 interface ToolCreationFormProps {
   template: ToolTemplate;
@@ -35,56 +39,6 @@ interface ToolCreationFormProps {
   mode?: 'create' | 'edit';
 }
 
-const createFormSchema = (availableToolTypes: ToolType[]) => {
-  const toolTypesEnum = z.enum(availableToolTypes as [ToolType, ...ToolType[]]);
-  
-  return z.object({
-    tool_name: z.string().min(1, 'Tool name is required').max(128, 'Tool name must be at most 128 characters'),
-    tool_type: z.string().min(1, 'Tool category is required'),
-    types: toolTypesEnum,
-    description: z.string().min(1, 'Description is required'),
-    // Conditional fields
-    reference_doctype: z.string().optional(),
-    agent: z.string().optional(),
-    function_path: z.string().optional(),
-    function_name: z.string().optional(),
-    pass_parameters_as_json: z.boolean().optional(),
-    provider_app: z.string().optional(),
-    base_url: z.string().optional(),
-    // Optional fields
-    required_permission: z.enum(['read', 'write', 'create', 'delete', 'submit', 'cancel']).optional(),
-    is_read_only: z.boolean().optional(),
-    allowed_for_guest: z.boolean().optional(),
-    // Child tables
-    parameters: z.array(z.any()).optional(),
-    http_headers: z.array(z.any()).optional(),
-  });
-};
-
-// Helper to determine if field should be shown based on types
-const shouldShowField = (fieldName: string, types: ToolType): boolean => {
-  switch (fieldName) {
-    case 'reference_doctype':
-      return !['Run Agent', 'App Provided', 'Custom Function', 'Client Side Tool', 
-               'Get Conversation Data', 'Set Conversation Data', 'Load Conversation Data'].includes(types);
-    case 'agent':
-      return types === 'Run Agent';
-    case 'function_path':
-      return ['Custom Function', 'App Provided'].includes(types);
-    case 'function_name':
-      return types === 'Client Side Tool';
-    case 'pass_parameters_as_json':
-      return types === 'Custom Function' || types === 'Client Side Tool';
-    case 'provider_app':
-      return types === 'App Provided';
-    case 'base_url':
-    case 'http_headers':
-      return ['GET', 'POST'].includes(types);
-    default:
-      return true;
-  }
-};
-
 export function ToolCreationForm({
   template,
   toolTypes,
@@ -94,29 +48,13 @@ export function ToolCreationForm({
   initialData = null,
   mode = 'create',
 }: ToolCreationFormProps) {
-  const formSchema = useMemo(() => createFormSchema(template.toolTypes), [template.toolTypes]);
-  const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
-  const [agents, setAgents] = useState<AgentDoc[]>([]);
-  const [loadingData, setLoadingData] = useState(false);
+  const formSchema = useMemo(() => createToolFormSchema(template.toolTypes), [template.toolTypes]);
+  const { loadingData, docTypeOptions, agentOptions } = useToolCreationOptions();
 
-  const defaultValues = useMemo(() => ({
-    tool_name: initialData?.tool_name || '',
-    tool_type: initialData?.tool_type || '',
-    types: (initialData?.types || template.toolTypes[0]) as ToolType,
-    description: initialData?.description || '',
-    reference_doctype: initialData?.reference_doctype,
-    agent: initialData?.agent,
-    function_path: initialData?.function_path,
-    function_name: initialData?.function_name,
-    pass_parameters_as_json: initialData?.pass_parameters_as_json || false,
-    provider_app: initialData?.provider_app,
-    base_url: initialData?.base_url,
-    required_permission: initialData?.required_permission,
-    is_read_only: initialData?.is_read_only || false,
-    allowed_for_guest: initialData?.allowed_for_guest || false,
-    parameters: initialData?.parameters || [],
-    http_headers: initialData?.http_headers || [],
-  }), [initialData, template.toolTypes]);
+  const defaultValues = useMemo(
+    () => getDefaultToolFormValues(initialData, template.toolTypes[0] as ToolType),
+    [initialData, template.toolTypes]
+  );
 
   const form = useForm<ToolFormData>({
     resolver: zodResolver(formSchema),
@@ -132,26 +70,34 @@ export function ToolCreationForm({
 
   // Watch the types field to conditionally show fields
   const selectedType = useWatch({ control: form.control, name: 'types' });
+  const selectedReferenceDoctype = useWatch({ control: form.control, name: 'reference_doctype' });
 
-  // Load DocTypes and Agents when form mounts
+  // Auto-fill mandatory params for Create Document / Create Multiple Documents
   useEffect(() => {
-    const loadData = async () => {
-      setLoadingData(true);
+    const shouldAutofill =
+      selectedType === 'Create Document' || selectedType === 'Create Multiple Documents';
+    if (!shouldAutofill || !selectedReferenceDoctype) return;
+
+    const autofillMandatoryFields = async () => {
       try {
-        const [doctypes, agentsList] = await Promise.all([
-          getDocTypes(),
-          getAgents(),
-        ]);
-        setDocTypes(doctypes || []);
-        setAgents(Array.isArray(agentsList) ? agentsList : (agentsList as any)?.items || []);
+        const meta = await getDocTypeMeta(selectedReferenceDoctype);
+        const metaFields = Array.isArray(meta?.fields) ? meta.fields : [];
+        const currentParams = (form.getValues('parameters') || []) as ParameterData[];
+        const mandatoryRows = buildMissingMandatoryParameters(metaFields, currentParams);
+
+        if (mandatoryRows.length > 0) {
+          form.setValue('parameters', [...currentParams, ...mandatoryRows], {
+            shouldDirty: true,
+          });
+        }
       } catch (error) {
-        console.error('Error loading data:', error);
-      } finally {
-        setLoadingData(false);
+        // Keep silent; user can still manually add params.
+        console.error('Error auto-filling mandatory parameters:', error);
       }
     };
-    loadData();
-  }, []);
+
+    autofillMandatoryFields();
+  }, [selectedType, selectedReferenceDoctype, form]);
 
   const toolTypeOptions = toolTypes.map((type) => ({
     value: type.name,
@@ -159,16 +105,6 @@ export function ToolCreationForm({
   }));
 
   const operationTypeOptions = template.toolTypes;
-
-  const docTypeOptions = docTypes.map((dt) => ({
-    value: dt.name,
-    label: dt.name,
-  }));
-
-  const agentOptions = agents.map((agent) => ({
-    value: agent.name,
-    label: agent.agent_name || agent.name,
-  }));
 
   const handleSubmit = async (data: ToolFormData) => {
     await onSubmit(data);
@@ -226,6 +162,19 @@ export function ToolCreationForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+        <div className="flex items-center justify-start">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onBack}
+            disabled={loading}
+            className="text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back
+          </Button>
+        </div>
+
         {/* CORE CONFIGURATION Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-4">
@@ -642,16 +591,7 @@ export function ToolCreationForm({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-4 border-t">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onBack}
-            disabled={loading}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            Back
-          </Button>
+        <div className="flex items-center justify-end pt-4 border-t">
           <Button
             type="submit"
             disabled={loading}
