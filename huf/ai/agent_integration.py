@@ -216,7 +216,8 @@ class AgentManager:
         if not self.agent_doc.model:
             frappe.throw(_("Agent model is not configured"))
 
-        instructions = self.agent_doc.instructions
+        from huf.ai.prompt_resolver import resolve_prompt
+        instructions = resolve_prompt(self.agent_doc) or ""
 
         # Enhance instructions with tool descriptions
         if self.tools:
