@@ -1,7 +1,7 @@
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Settings, Zap, Plus } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Form,
   FormControl,
@@ -21,6 +21,8 @@ import { HttpHeaderCard, type HttpHeaderData } from './HttpHeaderCard';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import type { AgentToolType, ToolType } from '@/types/agent.types';
 import { getDocTypeMeta } from '@/services/agentApi';
+import { fetchToolParametersFromCode } from '@/services/toolApi';
+import { toast } from 'sonner';
 import { useToolCreationOptions } from './useToolCreationOptions';
 import {
   buildMissingMandatoryParameters,
@@ -50,6 +52,7 @@ export function ToolCreationForm({
 }: ToolCreationFormProps) {
   const formSchema = useMemo(() => createToolFormSchema(template.toolTypes), [template.toolTypes]);
   const { loadingData, docTypeOptions, agentOptions } = useToolCreationOptions();
+  const [fetchingCodeParams, setFetchingCodeParams] = useState(false);
 
   const defaultValues = useMemo(
     () => getDefaultToolFormValues(initialData, template.toolTypes[0] as ToolType),
@@ -71,6 +74,7 @@ export function ToolCreationForm({
   // Watch the types field to conditionally show fields
   const selectedType = useWatch({ control: form.control, name: 'types' });
   const selectedReferenceDoctype = useWatch({ control: form.control, name: 'reference_doctype' });
+  const functionPathValue = useWatch({ control: form.control, name: 'function_path' });
 
   // Auto-fill mandatory params for Create Document / Create Multiple Documents
   useEffect(() => {
@@ -154,6 +158,41 @@ export function ToolCreationForm({
   const handleDeleteHttpHeader = (index: number) => {
     const current = form.getValues('http_headers') || [];
     form.setValue('http_headers', current.filter((_, i) => i !== index));
+  };
+
+  const handleFetchParamsFromCode = async () => {
+    const functionPath = (form.getValues('function_path') || '').trim();
+    if (!functionPath) {
+      toast.error('Please provide a Function Path first.');
+      return;
+    }
+
+    setFetchingCodeParams(true);
+    try {
+      const response = await fetchToolParametersFromCode(functionPath);
+      const fetchedParams = (response?.parameters || []).map((param) => ({
+        label: param.label || param.fieldname,
+        fieldname: param.fieldname,
+        type: (param.type || 'string') as ParameterData['type'],
+        required: param.required === 1 || param.required === true,
+        description: '',
+        options: '',
+        child_table_name: '',
+      }));
+
+      form.setValue('parameters', fetchedParams, { shouldDirty: true });
+      form.setValue(
+        'pass_parameters_as_json',
+        response?.pass_parameters_as_json === 1 || response?.pass_parameters_as_json === true,
+        { shouldDirty: true }
+      );
+
+      toast.success('Parameters updated from function signature.');
+    } catch (error) {
+      console.error('Error fetching parameters from code:', error);
+    } finally {
+      setFetchingCodeParams(false);
+    }
   };
 
   const parameters = form.watch('parameters') || [];
@@ -481,16 +520,29 @@ export function ToolCreationForm({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-gray-900">Parameters</h3>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleAddParameter}
-              disabled={loading}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Parameter
-            </Button>
+            <div className="flex items-center gap-2">
+              {selectedType === 'Custom Function' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFetchParamsFromCode}
+                  disabled={loading || fetchingCodeParams || !functionPathValue?.trim()}
+                >
+                  {fetchingCodeParams ? 'Fetching...' : 'Fetch Params from Code'}
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddParameter}
+                disabled={loading}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Parameter
+              </Button>
+            </div>
           </div>
           {parameters.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
