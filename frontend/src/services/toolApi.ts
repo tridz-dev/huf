@@ -26,7 +26,7 @@ export async function getToolTypes(): Promise<AgentToolType[]> {
 export async function getToolFunctions(toolTypeFilter?: string): Promise<AgentToolFunctionRef[]> {
   try {
     const options = {
-      fields: ["name", "description", "tool_type"],
+      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype"],
       limit: 1000,
       filters: [] as any,
     };
