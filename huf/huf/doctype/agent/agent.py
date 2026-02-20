@@ -132,13 +132,17 @@ class Agent(Document):
 
     def on_update(self):
         clear_doc_event_agents_cache()
-        
+
         if self.flags.in_insert:
             return
 
+        prompt_changed = (
+            self.has_value_changed("instructions")
+            or self.has_value_changed("agent_prompt")
+            or self.has_value_changed("prompt_mode")
+        )
         if self.enable_multi_run and (
-            self.has_value_changed("instructions") or 
-            self.has_value_changed("enable_multi_run")
+            prompt_changed or self.has_value_changed("enable_multi_run")
         ):
             self.generate_default_plan()
         
@@ -230,16 +234,16 @@ class Agent(Document):
         self.set_default_color()
         self.flags.in_insert = True
         from huf.ai.prompt_resolver import resolve_prompt
-        has_prompt = bool(resolve_prompt(self))
-        if self.enable_multi_run and has_prompt:
+        resolved = resolve_prompt(self)
+        if self.enable_multi_run and resolved:
             try:
-                planning_run_id, steps = self.generate_default_plan()                
+                planning_run_id, steps = self.generate_default_plan()
                 if planning_run_id:
                     create_orchestration(
-                        agent_name=self.name, 
-                        user_prompt=self.instructions,
+                        agent_name=self.name,
+                        user_prompt=resolved,
                         parent_run_id=planning_run_id,
-                        override_plan=steps 
+                        override_plan=steps
                     )
                 
             except Exception as e:
