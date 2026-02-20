@@ -8,10 +8,12 @@ import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
-import { getToolFunctions, getToolTypes } from '../services/toolApi';
+import { getToolFunctions, getToolTypes, getToolFunction, updateToolFunction } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
 import type { AgentToolType } from '../types/agent.types';
 import { SelectToolsModal, SelectMCPServersModal } from '../components/tools';
+import { ToolFormModal } from '../components/tools/ToolFormModal';
+import type { ToolFormData } from '../types/toolTemplate.types';
 import { TriggerModal } from '../components/agent/TriggerModal';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { AgentHeader } from '../components/agent/AgentHeader';
@@ -19,6 +21,7 @@ import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
+import { AdvancedTab } from '../components/agent/AdvancedTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
@@ -34,7 +37,7 @@ export function AgentFormPage() {
   const tabConfig = {
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions'],
+      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions', 'enable_prompt_caching'],
       default: true,
       disabled: false,
     },
@@ -53,6 +56,12 @@ export function AgentFormPage() {
     tools: {
       label: 'Tools & MCP',
       fields: [], // Tools tab doesn't have form fields
+      default: false,
+      disabled: false,
+    },
+    advanced: {
+      label: 'Advanced Settings',
+      fields: ['context_strategy', 'summary_ratio', 'history_limit', 'max_knowledge_tokens', 'max_turns', 'enable_conversation_data', 'autonaming_of_conversation_title'],
       default: false,
       disabled: false,
     },
@@ -119,6 +128,8 @@ export function AgentFormPage() {
   const [triggerStatusFilter, setTriggerStatusFilter] = useState<string>('all');
   const [optimizingPrompt, setOptimizingPrompt] = useState(false);
   const [showToolsModal, setShowToolsModal] = useState(false);
+  const [showToolFormModal, setShowToolFormModal] = useState(false);
+  const [editingToolId, setEditingToolId] = useState<string | null>(null);
   const [selectedTools, setSelectedTools] = useState<AgentToolFunctionRef[]>([]);
   const [initialTools, setInitialTools] = useState<AgentToolFunctionRef[]>([]); // Track initial tools state
   const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
@@ -147,6 +158,14 @@ export function AgentFormPage() {
         enable_multi_run: false,
         description: '',
         instructions: '',
+        enable_prompt_caching: false,
+        context_strategy: undefined,
+        summary_ratio: undefined,
+        history_limit: undefined,
+        max_knowledge_tokens: undefined,
+        max_turns: undefined,
+        enable_conversation_data: false,
+        autonaming_of_conversation_title: false,
       },
   });
 
@@ -296,6 +315,14 @@ export function AgentFormPage() {
           enable_multi_run: data.enable_multi_run === 1,
           description: data.description || '',
           instructions: data.instructions || '',
+          enable_prompt_caching: data.enable_prompt_caching === 1,
+          context_strategy: data.context_strategy || undefined,
+          summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
+          history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
+          max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
+          max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
+          enable_conversation_data: data.enable_conversation_data === 1,
+          autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
         });
         // Track initial disabled state
         setInitialDisabled(data.disabled === 1);
@@ -409,6 +436,14 @@ export function AgentFormPage() {
         enable_multi_run: values.enable_multi_run ? 1 : 0,
         description: values.description || '',
         instructions: values.instructions,
+        enable_prompt_caching: values.enable_prompt_caching ? 1 : 0,
+        context_strategy: values.context_strategy || undefined,
+        summary_ratio: values.summary_ratio !== undefined ? values.summary_ratio : undefined,
+        history_limit: values.history_limit !== undefined ? values.history_limit : undefined,
+        max_knowledge_tokens: values.max_knowledge_tokens !== undefined ? values.max_knowledge_tokens : undefined,
+        max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
+        enable_conversation_data: values.enable_conversation_data ? 1 : 0,
+        autonaming_of_conversation_title: values.autonaming_of_conversation_title ? 1 : 0,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -438,6 +473,14 @@ export function AgentFormPage() {
           enable_multi_run: newAgent.enable_multi_run === 1,
           description: newAgent.description || '',
           instructions: newAgent.instructions || '',
+          enable_prompt_caching: newAgent.enable_prompt_caching === 1,
+          context_strategy: newAgent.context_strategy || undefined,
+          summary_ratio: newAgent.summary_ratio !== undefined && newAgent.summary_ratio !== null ? newAgent.summary_ratio : undefined,
+          history_limit: newAgent.history_limit !== undefined && newAgent.history_limit !== null ? newAgent.history_limit : undefined,
+          max_knowledge_tokens: newAgent.max_knowledge_tokens !== undefined && newAgent.max_knowledge_tokens !== null ? newAgent.max_knowledge_tokens : undefined,
+          max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
+          enable_conversation_data: newAgent.enable_conversation_data === 1,
+          autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
         });
         setInitialDisabled(newAgent.disabled === 1);
         // Navigate to the edit page with the new agent's ID
@@ -460,6 +503,14 @@ export function AgentFormPage() {
           enable_multi_run: values.enable_multi_run,
           description: values.description,
           instructions: values.instructions,
+          enable_prompt_caching: values.enable_prompt_caching,
+          context_strategy: values.context_strategy,
+          summary_ratio: values.summary_ratio,
+          history_limit: values.history_limit,
+          max_knowledge_tokens: values.max_knowledge_tokens,
+          max_turns: values.max_turns,
+          enable_conversation_data: values.enable_conversation_data,
+          autonaming_of_conversation_title: values.autonaming_of_conversation_title,
         });
         // Reset tools, disabled state, and MCP servers after successful update to mark as unchanged
         setInitialTools([...selectedTools]);
@@ -605,6 +656,86 @@ export function AgentFormPage() {
   const handleRemoveTool = (toolId: string) => {
     setSelectedTools(selectedTools.filter((t) => t.name !== toolId));
     toast.success('Tool removed');
+  };
+
+  const [toolFormData, setToolFormData] = useState<Partial<ToolFormData> | null>(null);
+  const [loadingToolData, setLoadingToolData] = useState(false);
+
+  const handleEditTool = async (toolId: string) => {
+    setEditingToolId(toolId);
+    setLoadingToolData(true);
+    try {
+      const tool = await getToolFunction(toolId);
+      if (tool) {
+        // Convert tool data to form format
+        setToolFormData({
+          tool_name: tool.tool_name,
+          tool_type: tool.tool_type,
+          types: tool.types as any,
+          description: tool.description,
+          reference_doctype: tool.reference_doctype,
+          agent: tool.agent,
+          function_path: tool.function_path,
+          function_name: tool.function_name,
+          pass_parameters_as_json: tool.pass_parameters_as_json === 1,
+          provider_app: tool.provider_app,
+          base_url: tool.base_url,
+          required_permission: tool.required_permission,
+          is_read_only: tool.is_read_only === 1,
+          allowed_for_guest: tool.allowed_for_guest === 1,
+          parameters: tool.parameters || [],
+          http_headers: tool.http_headers || [],
+        });
+        setShowToolFormModal(true);
+      }
+    } catch (error) {
+      console.error('Error loading tool:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to load tool');
+    } finally {
+      setLoadingToolData(false);
+    }
+  };
+
+  const handleToolFormSubmit = async (data: ToolFormData) => {
+    if (!editingToolId) return;
+    
+    try {
+      // Update existing tool
+      await updateToolFunction(editingToolId, {
+        tool_name: data.tool_name,
+        tool_type: data.tool_type,
+        types: data.types,
+        description: data.description,
+        reference_doctype: data.reference_doctype,
+        agent: data.agent,
+        function_path: data.function_path,
+        function_name: data.function_name,
+        pass_parameters_as_json: data.pass_parameters_as_json,
+        provider_app: data.provider_app,
+        base_url: data.base_url,
+        required_permission: data.required_permission,
+        is_read_only: data.is_read_only,
+        allowed_for_guest: data.allowed_for_guest,
+        parameters: data.parameters,
+        http_headers: data.http_headers,
+      });
+      
+      // Update the tool in the selected tools list
+      setSelectedTools(selectedTools.map((t) => 
+        t.name === editingToolId 
+          ? { ...t, tool_name: data.tool_name, description: data.description, tool_type: data.tool_type }
+          : t
+      ));
+      toast.success('Tool updated successfully!');
+      setShowToolFormModal(false);
+      setEditingToolId(null);
+      setToolFormData(null);
+    } catch (error) {
+      console.error('Error saving tool:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to save tool');
+    }
   };
 
   const handleAddMCPServers = (servers: MCPServerDoc[]) => {
@@ -800,7 +931,7 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
                     {config.label}
@@ -844,6 +975,7 @@ export function AgentFormPage() {
                   toolTypes={toolTypes}
                   onAddTools={() => setShowToolsModal(true)}
                   onRemoveTool={handleRemoveTool}
+                  onEditTool={handleEditTool}
                   mcpServers={mcpServers}
                   onAddMCP={() => setShowMCPServersModal(true)}
                   onRemoveMCP={handleRemoveMCPServer}
@@ -851,6 +983,10 @@ export function AgentFormPage() {
                   onSyncMCP={handleSyncMCPServer}
                   mcpLoading={mcpLoading}
                 />
+              </TabsContent>
+
+              <TabsContent value="advanced" className="space-y-4">
+                <AdvancedTab form={form} />
               </TabsContent>
             </Tabs>
           </form>
@@ -890,6 +1026,22 @@ export function AgentFormPage() {
           transport_type: 'http' as const,
         })) as MCPServerDoc[]}
         onAddServers={handleAddMCPServers}
+      />
+
+      {/* Tool Form Modal (for editing) */}
+      <ToolFormModal
+        open={showToolFormModal}
+        onOpenChange={(open) => {
+          setShowToolFormModal(open);
+          if (!open) {
+            setEditingToolId(null);
+            setToolFormData(null);
+          }
+        }}
+        mode="edit"
+        initialData={toolFormData}
+        onSubmit={handleToolFormSubmit}
+        loading={loadingToolData}
       />
     </div>
   );

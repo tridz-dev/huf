@@ -1,4 +1,4 @@
-import { Plus, Server, Plug, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw, Edit } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ interface ToolsTabProps {
   toolTypes: AgentToolType[];
   onAddTools: () => void;
   onRemoveTool: (toolId: string) => void;
+  onEditTool?: (toolId: string) => void;
   // MCP Server props
   mcpServers?: MCPServerRef[];
   onAddMCP?: () => void;
@@ -26,6 +27,7 @@ export function ToolsTab({
   toolTypes,
   onAddTools,
   onRemoveTool,
+  onEditTool,
   mcpServers = [],
   onAddMCP,
   onRemoveMCP,
@@ -136,14 +138,28 @@ export function ToolsTab({
                         <p className="text-xs text-muted-foreground">{tool.description}</p>
                       )}
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemoveTool(tool.name)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      {onEditTool && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEditTool(tool.name)}
+                          title="Edit tool"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveTool(tool.name)}
+                        title="Remove tool"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
