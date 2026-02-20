@@ -75,7 +75,9 @@ def recreate_orchestration_plan(orch_name):
     orch = frappe.get_doc("Agent Orchestration", orch_name)
     agent_doc = frappe.get_doc("Agent", orch.agent)
     
-    plan_output = run_planning(orch.agent, agent_doc.instructions, agent_doc.provider, agent_doc.model)
+    from huf.ai.prompt_resolver import resolve_prompt
+    resolved_instructions = resolve_prompt(agent_doc) or ""
+    plan_output = run_planning(orch.agent, resolved_instructions, agent_doc.provider, agent_doc.model)
     steps = parse_plan_steps(plan_output)
     
     if steps:

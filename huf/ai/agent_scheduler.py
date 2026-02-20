@@ -31,7 +31,8 @@ def run_scheduled_agents():
             agent_name = t.get("agent")
             agent = frappe.get_doc("Agent", agent_name)
 
-            prompt = agent.instructions or f"Run scheduled agent: {agent_name}"
+            from huf.ai.prompt_resolver import resolve_prompt
+            prompt = resolve_prompt(agent) or f"Run scheduled agent: {agent_name}"
             run_agent_sync(agent_name, prompt, agent.provider, agent.model)
 
             doc = frappe.get_doc("Agent Trigger", t["name"])
