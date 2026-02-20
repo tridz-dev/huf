@@ -359,10 +359,10 @@ export function ToolCreationForm({
       <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
         <Button
           type="button"
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={() => setEditingParameterIndex(null)}
-          className="text-gray-600 hover:text-gray-900"
+          className="bg-white"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Tool Settings
@@ -394,10 +394,10 @@ export function ToolCreationForm({
   const renderSettingsView = () => (
     <div className={editingParameterIndex === null ? 'animate-in fade-in duration-200' : ''}>
       {editingParameterIndex !== null ? renderParameterEditorView() : (
-        <>
+        <div className="space-y-8 pb-2">
       {/* CORE CONFIGURATION Section */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-3">
           <Settings className="w-5 h-5 text-gray-600" />
           <h3 className="font-semibold text-gray-900">CORE CONFIGURATION</h3>
         </div>
@@ -470,7 +470,7 @@ export function ToolCreationForm({
 
       {/* OPERATION DETAILS Section */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-3">
           <Zap className="w-5 h-5 text-gray-600" />
           <h3 className="font-semibold text-gray-900">OPERATION DETAILS</h3>
         </div>
@@ -784,7 +784,7 @@ export function ToolCreationForm({
       </div>
 
       {/* Optional Fields Section */}
-      <div className="space-y-4">
+      <div className="space-y-4 pt-1">
         <h3 className="font-semibold text-gray-900">Additional Settings</h3>
 
         <FormField
@@ -861,7 +861,7 @@ export function ToolCreationForm({
           )}
         />
       </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -885,20 +885,22 @@ export function ToolCreationForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <div className="flex items-center justify-start">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onBack}
-            disabled={loading}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-        </div>
-        {mode === 'edit' && sharedUsedBy.length > 0 && (
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-7 px-1">
+        {editingParameterIndex === null && (
+          <div className="flex items-center justify-start">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onBack}
+              disabled={loading}
+              className="bg-white"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back
+            </Button>
+          </div>
+        )}
+        {editingParameterIndex === null && mode === 'edit' && sharedUsedBy.length > 0 && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-700" />
             <p>
@@ -907,32 +909,34 @@ export function ToolCreationForm({
           </div>
         )}
 
-        <div className="flex items-center justify-between border-b pb-3">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-gray-900">{mode === 'edit' ? 'Edit Tool' : 'Configure Tool'}</h3>
-            <Badge variant="outline">{template.name}</Badge>
+        {editingParameterIndex === null && (
+          <div className="flex items-center justify-between border-b pb-3">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-gray-900">{mode === 'edit' ? 'Edit Tool' : 'Configure Tool'}</h3>
+              <Badge variant="outline">{template.name}</Badge>
+            </div>
+            <div className="flex items-center gap-1 rounded-md border p-1">
+              <Button
+                type="button"
+                variant={configView === 'settings' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setConfigView('settings')}
+              >
+                <Settings className="w-4 h-4 mr-1" />
+                Settings
+              </Button>
+              <Button
+                type="button"
+                variant={configView === 'function_definition' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setConfigView('function_definition')}
+              >
+                <Braces className="w-4 h-4 mr-1" />
+                Function Def
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-1 rounded-md border p-1">
-            <Button
-              type="button"
-              variant={configView === 'settings' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setConfigView('settings')}
-            >
-              <Settings className="w-4 h-4 mr-1" />
-              Settings
-            </Button>
-            <Button
-              type="button"
-              variant={configView === 'function_definition' ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setConfigView('function_definition')}
-            >
-              <Braces className="w-4 h-4 mr-1" />
-              Function Def
-            </Button>
-          </div>
-        </div>
+        )}
 
         {configView === 'settings' ? renderSettingsView() : renderFunctionDefinitionView()}
 

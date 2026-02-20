@@ -143,10 +143,10 @@ export function ToolFormModal({
 
             <TabsContent 
               value="form" 
-              className="mt-4 data-[state=active]:flex data-[state=active]:flex-col data-[state=active]:flex-1 data-[state=active]:min-h-0 data-[state=active]:overflow-y-auto"
+              className="mt-4 data-[state=active]:flex data-[state=active]:flex-col data-[state=active]:flex-1 data-[state=active]:min-h-0 data-[state=active]:overflow-y-auto data-[state=active]:overflow-x-hidden"
             >
               {displayTemplate && (
-                <div className="pb-4">
+                <div className="pb-4 px-1">
                   <ToolCreationForm
                     template={displayTemplate}
                     toolTypes={toolTypes}
@@ -163,8 +163,8 @@ export function ToolFormModal({
         )}
 
         {mode === 'edit' && displayTemplate && (
-          <div className="px-6 flex flex-col flex-1 min-h-0 overflow-y-auto">
-            <div className="pb-4">
+          <div className="px-6 flex flex-col flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+            <div className="pb-4 px-1">
               <ToolCreationForm
                 template={displayTemplate}
                 toolTypes={toolTypes}
