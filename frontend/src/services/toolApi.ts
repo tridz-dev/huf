@@ -1,4 +1,4 @@
-import { db } from '@/lib/frappe-sdk';
+import { call, db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -248,5 +248,36 @@ export async function createToolFunction(data: {
     };
   } catch (error) {
     handleFrappeError(error, 'Error creating tool function');
+  }
+}
+
+/**
+ * Fetch parameters from a python function path (for Custom Function tools)
+ */
+export async function fetchToolParametersFromCode(functionPath: string): Promise<{
+  parameters: Array<{
+    label: string;
+    fieldname: string;
+    type: string;
+    required: boolean | number;
+  }>;
+  pass_parameters_as_json?: boolean | number;
+}> {
+  try {
+    const result = await call.post(
+      'huf.huf.doctype.agent_tool_function.agent_tool_function.fetch_tool_parameters_from_code',
+      { function_path: functionPath }
+    );
+    return (result?.message || result) as {
+      parameters: Array<{
+        label: string;
+        fieldname: string;
+        type: string;
+        required: boolean | number;
+      }>;
+      pass_parameters_as_json?: boolean | number;
+    };
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching parameters from function code');
   }
 }
