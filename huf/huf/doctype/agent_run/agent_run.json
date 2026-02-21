@@ -28,6 +28,11 @@
   "parent_run",
   "is_child",
   "agent_orchestration",
+  "prompt_template_section",
+  "prompt_template",
+  "prompt_template_version",
+  "column_break_pt",
+  "prompt_mode_used",
   "knowledge_section",
   "knowledge_sources_used",
   "chunks_injected"
@@ -184,6 +189,37 @@
    "read_only": 1
   },
   {
+   "fieldname": "prompt_template_section",
+   "fieldtype": "Section Break",
+   "label": "Prompt Template"
+  },
+  {
+   "description": "The Agent Prompt template used for this run, if the agent was in Template mode.",
+   "fieldname": "prompt_template",
+   "fieldtype": "Link",
+   "label": "Prompt Template",
+   "options": "Agent Prompt",
+   "read_only": 1
+  },
+  {
+   "description": "The version number of the prompt template at the time of this run.",
+   "fieldname": "prompt_template_version",
+   "fieldtype": "Int",
+   "label": "Prompt Template Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_pt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Whether the agent used a Local or Template prompt for this run.",
+   "fieldname": "prompt_mode_used",
+   "fieldtype": "Data",
+   "label": "Prompt Mode",
+   "read_only": 1
+  },
+  {
    "fieldname": "knowledge_section",
    "fieldtype": "Section Break",
    "label": "Knowledge Usage"
@@ -204,7 +240,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-29 15:02:15.973547",
+ "modified": "2026-02-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",

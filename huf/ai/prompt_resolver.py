@@ -87,3 +87,35 @@ def _get_locked_version_body(prompt_name, target_version):
 
 	# Fallback: return the linked prompt body
 	return prompt_doc_data.prompt_body
+
+
+def get_prompt_run_metadata(agent_doc):
+	"""Return a dict of prompt template fields to store on Agent Run.
+
+	This captures a snapshot of which prompt source (and version) was
+	used so that every run is fully auditable even if the template is
+	later updated or the agent switches modes.
+
+	Args:
+		agent_doc: A loaded Agent document.
+
+	Returns:
+		dict with keys ``prompt_mode_used``, ``prompt_template``,
+		``prompt_template_version`` (values may be ``None``).
+	"""
+	mode = getattr(agent_doc, "prompt_mode", None) or "Local"
+	meta = {
+		"prompt_mode_used": mode,
+		"prompt_template": None,
+		"prompt_template_version": None,
+	}
+
+	if mode == "Template" and agent_doc.agent_prompt:
+		meta["prompt_template"] = agent_doc.agent_prompt
+		version = frappe.db.get_value("Agent Prompt", agent_doc.agent_prompt, "version")
+		if agent_doc.prompt_version_locked and agent_doc.template_version_at_attach:
+			meta["prompt_template_version"] = agent_doc.template_version_at_attach
+		else:
+			meta["prompt_template_version"] = version
+
+	return meta

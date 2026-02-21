@@ -571,6 +571,9 @@ def run_agent_sync(
     # Optimized history fetching with dynamic limit + buffer
     fetch_limit = (agent_doc.history_limit or 20) + 10
     history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
+    from huf.ai.prompt_resolver import get_prompt_run_metadata
+    prompt_meta = get_prompt_run_metadata(agent_doc)
+
     run_doc = frappe.get_doc({
         "doctype": "Agent Run",
         "agent": agent_name,
@@ -581,7 +584,8 @@ def run_agent_sync(
         "provider": agent_doc.provider,
         "parent_run": parent_run_id,
         "is_child": 1 if parent_run_id else 0,
-        "agent_orchestration": orchestration_id
+        "agent_orchestration": orchestration_id,
+        **prompt_meta,
     })
     run_doc.insert(ignore_permissions=True)
     conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
@@ -1039,6 +1043,9 @@ async def run_agent_stream(
         history = conv_manager.get_conversation_history(conversation.name, limit=1000)
         
         # Create Agent Run document
+        from huf.ai.prompt_resolver import get_prompt_run_metadata
+        stream_prompt_meta = get_prompt_run_metadata(agent_doc)
+
         run_doc = frappe.get_doc({
             "doctype": "Agent Run",
             "agent": agent_name,
@@ -1046,7 +1053,8 @@ async def run_agent_stream(
             "conversation": conversation.name,
             "prompt": prompt,
             "model": agent_doc.model,
-            "provider": agent_doc.provider
+            "provider": agent_doc.provider,
+            **stream_prompt_meta,
         })
         run_doc.insert(ignore_permissions=True)
         conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
