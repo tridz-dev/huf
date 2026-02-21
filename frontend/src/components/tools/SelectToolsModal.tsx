@@ -224,7 +224,7 @@ export function SelectToolsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] h-[80vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-5xl h-[80vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
           <DialogTitle>Add Tool</DialogTitle>
         </DialogHeader>

@@ -1,4 +1,4 @@
-import { Plus, Server, Plug, Trash2, RefreshCw, Edit, Globe, Bot, Code2, Braces } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw, Edit } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { MCPServerRef } from '@/services/mcpApi';
+import { getToolIconForType } from '../tools/toolIconMap';
 
 interface ToolsTabProps {
   selectedTools: AgentToolFunctionRef[];
@@ -24,7 +25,7 @@ interface ToolsTabProps {
 
 export function ToolsTab({
   selectedTools,
-  toolTypes,
+  toolTypes: _toolTypes,
   onAddTools,
   onRemoveTool,
   onEditTool,
@@ -35,12 +36,6 @@ export function ToolsTab({
   onSyncMCP,
   mcpLoading = false,
 }: ToolsTabProps) {
-  const getToolIcon = (types?: string) => {
-    if (types === 'GET' || types === 'POST') return Globe;
-    if (types === 'Run Agent') return Bot;
-    return Code2;
-  };
-
   const handleMCPAction = (action: string, serverId?: string) => {
     switch (action) {
       case 'add':
@@ -123,44 +118,21 @@ export function ToolsTab({
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {selectedTools.map((tool) => {
-                const toolType = toolTypes.find((tt) => tt.name === tool.tool_type);
-                const toolTypeDisplayName = toolType?.name1;
-                const ToolIcon = getToolIcon(tool.types);
-
+                const ToolIcon = getToolIconForType(tool.types);
                 return (
                   <div
                     key={tool.name}
-                    className="group flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                    className="group flex h-full min-h-[110px] items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex-1 min-w-0 flex items-start gap-3">
-                      <div className="mt-0.5 rounded-md border bg-muted/30 p-2 text-muted-foreground">
+                      <div className="mt-0.5 rounded-md border bg-muted/30 p-1.5 text-muted-foreground">
                         <ToolIcon className="w-4 h-4" />
                       </div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
-                            {tool.types && (
-                              <Badge variant="secondary" className="text-[10px] uppercase">
-                                {tool.types}
-                              </Badge>
-                            )}
-                            {toolTypeDisplayName && (
-                              <Badge variant="outline" className="text-xs shrink-0">
-                                {toolTypeDisplayName}
-                              </Badge>
-                            )}
-                          </div>
-                          {tool.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-2">{tool.description}</p>
-                          )}
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span className="inline-flex items-center gap-1">
-                              <Braces className="w-3 h-3" />
-                              {tool.reference_doctype || 'General Tool'}
-                            </span>
-                          </div>
-                        </div>
+                      <div className="min-w-0 space-y-1">
+                        <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {tool.description || 'No description available.'}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
