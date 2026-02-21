@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
-import { getToolFunctions, getToolTypes, getToolFunction, updateToolFunction } from '../services/toolApi';
+import { getToolTypes, getToolFunction, updateToolFunction, getToolFunctionsByName } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
 import type { AgentToolType } from '../types/agent.types';
 import { SelectToolsModal, SelectMCPServersModal } from '../components/tools';
@@ -332,9 +332,8 @@ export function AgentFormPage() {
           // Fetch full tool details for each tool reference
           const toolNames = data.agent_tool.map((item: any) => item.tool).filter(Boolean);
           if (toolNames.length > 0) {
-            getToolFunctions()
-              .then((allTools) => {
-                const tools = allTools.filter((tool) => toolNames.includes(tool.name));
+            getToolFunctionsByName(toolNames)
+              .then((tools) => {
                 setSelectedTools(tools);
                 setInitialTools(tools); // Store initial tools state for change detection
               })
@@ -1042,6 +1041,7 @@ export function AgentFormPage() {
         initialData={toolFormData}
         onSubmit={handleToolFormSubmit}
         loading={loadingToolData}
+        toolName={editingToolId || undefined}
       />
     </div>
   );
