@@ -21,6 +21,7 @@ interface ToolFormModalProps {
   initialData?: Partial<ToolFormData> | null;
   onSubmit: (data: ToolFormData) => Promise<void>;
   loading?: boolean;
+  toolName?: string; // Document name for edit mode (to fetch shared usage)
 }
 
 export function ToolFormModal({
@@ -31,6 +32,7 @@ export function ToolFormModal({
   initialData = null,
   onSubmit,
   loading = false,
+  toolName,
 }: ToolFormModalProps) {
   const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(false);
@@ -105,7 +107,7 @@ export function ToolFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] h-[80vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-5xl h-[80vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
           <DialogTitle>{mode === 'edit' ? 'Edit Tool' : 'Add Tool'}</DialogTitle>
         </DialogHeader>
@@ -143,10 +145,10 @@ export function ToolFormModal({
 
             <TabsContent 
               value="form" 
-              className="mt-4 data-[state=active]:flex data-[state=active]:flex-col data-[state=active]:flex-1 data-[state=active]:min-h-0 data-[state=active]:overflow-y-auto"
+              className="mt-4 data-[state=active]:flex data-[state=active]:flex-col data-[state=active]:flex-1 data-[state=active]:min-h-0 data-[state=active]:overflow-y-auto data-[state=active]:overflow-x-hidden"
             >
               {displayTemplate && (
-                <div className="pb-4">
+                <div className="pb-4 px-1">
                   <ToolCreationForm
                     template={displayTemplate}
                     toolTypes={toolTypes}
@@ -155,6 +157,7 @@ export function ToolFormModal({
                     loading={loading || loadingTypes}
                     initialData={initialData}
                     mode={mode}
+                    toolName={toolName}
                   />
                 </div>
               )}
@@ -163,8 +166,8 @@ export function ToolFormModal({
         )}
 
         {mode === 'edit' && displayTemplate && (
-          <div className="px-6 flex flex-col flex-1 min-h-0 overflow-y-auto">
-            <div className="pb-4">
+          <div className="px-6 flex flex-col flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+            <div className="pb-4 px-1">
               <ToolCreationForm
                 template={displayTemplate}
                 toolTypes={toolTypes}
@@ -173,6 +176,7 @@ export function ToolFormModal({
                 loading={loading || loadingTypes}
                 initialData={initialData}
                 mode={mode}
+                toolName={toolName}
               />
             </div>
           </div>

@@ -15,12 +15,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { ToolCard } from './ToolCard';
 import { ToolTemplateCard } from './ToolTemplateCard';
 import { ToolCreationForm } from './ToolCreationForm';
-import { getToolFunctions, getToolTypes, createToolFunction } from '@/services/toolApi';
+import { getToolFunctions, getToolTypes, createToolFunction, getAgentsUsingTool } from '@/services/toolApi';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import { toast } from 'sonner';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import toolTemplatesConfig from '@/config/toolTemplates.json';
+import { Badge } from '../ui/badge';
 
 interface SelectToolsModalProps {
   open: boolean;
@@ -43,6 +44,7 @@ export function SelectToolsModal({
   const [selectedToolIds, setSelectedToolIds] = useState<Set<string>>(
     new Set(selectedTools.map((t) => t.name))
   );
+  const [toolUsageMap, setToolUsageMap] = useState<Map<string, string[]>>(new Map());
   
   // Tab and view state
   const [activeTab, setActiveTab] = useState<'tool-library' | 'create-new'>('tool-library');
@@ -61,9 +63,26 @@ export function SelectToolsModal({
         getToolTypes(),
         getToolFunctions(),
       ])
-        .then(([types, tools]) => {
+        .then(async ([types, tools]) => {
           setToolTypes(types);
           setAllTools(tools);
+          
+          // Load tool usage data
+          const usageMap = new Map<string, string[]>();
+          await Promise.all(
+            tools.map(async (tool) => {
+              try {
+                const agents = await getAgentsUsingTool(tool.name);
+                if (agents.length > 0) {
+                  usageMap.set(tool.name, agents);
+                }
+              } catch (error) {
+                console.error(`Error loading usage for tool ${tool.name}:`, error);
+              }
+            })
+          );
+          setToolUsageMap(usageMap);
+          
           setLoading(false);
         })
         .catch((error) => {
@@ -223,7 +242,7 @@ export function SelectToolsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] h-[80vh] flex flex-col p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-5xl h-[80vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
           <DialogTitle>Add Tool</DialogTitle>
         </DialogHeader>
@@ -244,9 +263,14 @@ export function SelectToolsModal({
             value="tool-library" 
             className="mt-4 data-[state=active]:flex data-[state=active]:flex-col data-[state=active]:flex-1 data-[state=active]:min-h-0 data-[state=active]:overflow-hidden"
           >
-            <DialogDescription className="pb-2 flex-shrink-0">
-              Choose tools to add to this agent. Select multiple tools at once.
-            </DialogDescription>
+            <div className="pb-2 flex items-center justify-between gap-2 flex-shrink-0">
+              <DialogDescription>
+                Choose tools to add to this agent. Select multiple tools at once.
+              </DialogDescription>
+              <Badge variant="outline" className="shrink-0">
+                {selectedCount} selected
+              </Badge>
+            </div>
 
             {/* Filters */}
             <div className="flex flex-col gap-3 mb-4 flex-shrink-0">
@@ -295,6 +319,7 @@ export function SelectToolsModal({
                     onSelect={handleToolToggle}
                     compact
                     toolTypesMap={toolTypesMap}
+                    usedByAgents={toolUsageMap.get(tool.name) || []}
                   />
                 ))
               )}

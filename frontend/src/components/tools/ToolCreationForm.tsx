@@ -1,7 +1,13 @@
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Settings, Zap, Plus } from 'lucide-react';
+import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
 import {
   Form,
   FormControl,
@@ -16,12 +22,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Combobox } from '@/components/ui/combobox';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { ParameterCard, type ParameterData } from './ParameterCard';
 import { HttpHeaderCard, type HttpHeaderData } from './HttpHeaderCard';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import type { AgentToolType, ToolType } from '@/types/agent.types';
 import { getDocTypeMeta } from '@/services/agentApi';
-import { fetchToolParametersFromCode } from '@/services/toolApi';
+import { fetchToolParametersFromCode, getAgentsUsingTool } from '@/services/toolApi';
 import { toast } from 'sonner';
 import { useToolCreationOptions } from './useToolCreationOptions';
 import {
@@ -39,6 +54,7 @@ interface ToolCreationFormProps {
   loading?: boolean;
   initialData?: Partial<ToolFormData> | null;
   mode?: 'create' | 'edit';
+  toolName?: string; // Document name for edit mode (to fetch shared usage)
 }
 
 export function ToolCreationForm({
@@ -49,10 +65,15 @@ export function ToolCreationForm({
   loading = false,
   initialData = null,
   mode = 'create',
+  toolName,
 }: ToolCreationFormProps) {
   const formSchema = useMemo(() => createToolFormSchema(template.toolTypes), [template.toolTypes]);
   const { loadingData, docTypeOptions, agentOptions } = useToolCreationOptions();
   const [fetchingCodeParams, setFetchingCodeParams] = useState(false);
+  const [configView, setConfigView] = useState<'settings' | 'function_definition'>('settings');
+  const [editingParameterIndex, setEditingParameterIndex] = useState<number | null>(null);
+  const [showParamsPreview, setShowParamsPreview] = useState(false);
+  const [sharedUsedBy, setSharedUsedBy] = useState<string[]>([]);
 
   const defaultValues = useMemo(
     () => getDefaultToolFormValues(initialData, template.toolTypes[0] as ToolType),
@@ -70,6 +91,30 @@ export function ToolCreationForm({
       form.reset(defaultValues);
     }
   }, [initialData, mode, form, defaultValues]);
+
+  // Load shared tool usage data in edit mode
+  useEffect(() => {
+    if (mode === 'edit' && toolName) {
+      getAgentsUsingTool(toolName)
+        .then((agents) => {
+          setSharedUsedBy(agents);
+        })
+        .catch((error) => {
+          console.error('Error loading tool usage:', error);
+          setSharedUsedBy([]);
+        });
+    } else {
+      setSharedUsedBy([]);
+    }
+  }, [mode, toolName]);
+
+  useEffect(() => {
+    if (!loading) {
+      setConfigView('settings');
+      setEditingParameterIndex(null);
+      setShowParamsPreview(false);
+    }
+  }, [loading]);
 
   // Watch the types field to conditionally show fields
   const selectedType = useWatch({ control: form.control, name: 'types' });
@@ -141,6 +186,13 @@ export function ToolCreationForm({
   const handleDeleteParameter = (index: number) => {
     const current = form.getValues('parameters') || [];
     form.setValue('parameters', current.filter((_, i) => i !== index));
+    if (editingParameterIndex !== null) {
+      if (editingParameterIndex === index) {
+        setEditingParameterIndex(null);
+      } else if (editingParameterIndex > index) {
+        setEditingParameterIndex(editingParameterIndex - 1);
+      }
+    }
   };
 
   const handleAddHttpHeader = () => {
@@ -197,86 +249,344 @@ export function ToolCreationForm({
 
   const parameters = form.watch('parameters') || [];
   const httpHeaders = form.watch('http_headers') || [];
+  const formToolName = form.watch('tool_name');
+  const description = form.watch('description');
 
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <div className="flex items-center justify-start">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onBack}
-            disabled={loading}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
+  const { parameterSchema, functionDefinition } = useMemo(() => {
+    const properties: Record<string, Record<string, unknown>> = {};
+    const required: string[] = [];
+
+    parameters.forEach((param) => {
+      if (!param.fieldname) return;
+      const property: Record<string, unknown> = {
+        type: param.type || 'string',
+      };
+      if (param.description) {
+        property.description = param.description;
+      }
+      if (param.options?.trim()) {
+        property.enum = param.options.split(',').map((item) => item.trim()).filter(Boolean);
+      }
+      properties[param.fieldname] = property;
+      if (param.required) {
+        required.push(param.fieldname);
+      }
+    });
+
+    const schema: Record<string, unknown> = {
+      type: 'object',
+      properties,
+    };
+    if (required.length > 0) {
+      schema.required = required;
+    }
+
+    const functionDef: Record<string, unknown> = {
+      name: formToolName || 'untitled_tool',
+      description: description || 'No description provided.',
+    };
+    if (Object.keys(properties).length > 0) {
+      functionDef.parameters = schema;
+    }
+
+    return {
+      parameterSchema: schema,
+      functionDefinition: functionDef,
+    };
+  }, [parameters, formToolName, description]);
+
+  const parameterColumns = useMemo<ColumnDef<ParameterData>[]>(
+    () => [
+      {
+        id: 'no',
+        header: '#',
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.index + 1}</span>
+        ),
+      },
+      {
+        accessorKey: 'fieldname',
+        header: 'Fieldname',
+        cell: ({ row }) => (
+          <span className="font-mono text-sm">{row.original.fieldname || '-'}</span>
+        ),
+      },
+      {
+        accessorKey: 'description',
+        header: 'Description',
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.original.description || '-'}</span>
+        ),
+      },
+      {
+        accessorKey: 'type',
+        header: 'Type',
+        cell: ({ row }) => (
+          <Badge variant="outline" className="text-[10px]">
+            {row.original.type}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: 'required',
+        header: 'Req',
+        cell: ({ row }) =>
+          row.original.required ? <Check className="w-4 h-4 text-green-600" /> : '-',
+      },
+      {
+        id: 'actions',
+        header: () => <div className="text-right">Actions</div>,
+        cell: ({ row }) => (
+          <div className="flex items-center justify-end gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditingParameterIndex(row.index)}
+              title="Edit parameter"
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDeleteParameter(row.index)}
+              title="Delete parameter"
+            >
+              <Trash2 className="w-4 h-4 text-red-600" />
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
+  const parameterTable = useReactTable({
+    data: parameters,
+    columns: parameterColumns,
+    getCoreRowModel: getCoreRowModel(),
+  });
+
+  const renderParameterEditorView = () => {
+    if (editingParameterIndex === null) return null;
+    const parameter = parameters[editingParameterIndex];
+
+    return (
+      <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setEditingParameterIndex(null)}
+          className="bg-white"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back to Tool Settings
+        </Button>
+
+        <div className="rounded-md border bg-background px-3 py-2 text-sm font-medium">
+          Edit Parameter {editingParameterIndex + 1}
         </div>
 
-        {/* CORE CONFIGURATION Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Settings className="w-5 h-5 text-gray-600" />
-            <h3 className="font-semibold text-gray-900">CORE CONFIGURATION</h3>
-          </div>
-
-          <FormField
-            control={form.control}
-            name="tool_name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>
-                  Tool Name<span className="text-red-500">*</span>
-                </FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="e.g. create_sales_order"
-                    {...field}
-                    disabled={loading}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+        {parameter ? (
+          <ParameterCard
+            parameter={parameter}
+            index={editingParameterIndex}
+            onChange={handleUpdateParameter}
+            onDelete={(index) => {
+              handleDeleteParameter(index);
+              setEditingParameterIndex(null);
+            }}
           />
+        ) : (
+          <div className="text-sm text-muted-foreground rounded-md border p-4">
+            Parameter not found.
+          </div>
+        )}
+      </div>
+    );
+  };
 
+  const renderSettingsView = () => (
+    <div className={editingParameterIndex === null ? 'animate-in fade-in duration-200' : ''}>
+      {editingParameterIndex !== null ? renderParameterEditorView() : (
+        <div className="space-y-8 pb-2">
+      {/* CORE CONFIGURATION Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Settings className="w-5 h-5 text-gray-600" />
+          <h3 className="font-semibold text-gray-900">CORE CONFIGURATION</h3>
+        </div>
+
+        <FormField
+          control={form.control}
+          name="tool_name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>
+                Tool Name<span className="text-red-500">*</span>
+              </FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="e.g. create_sales_order"
+                  {...field}
+                  disabled={loading}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="tool_type"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>
+                Tool Category<span className="text-red-500">*</span>
+              </FormLabel>
+              <FormControl>
+                <Combobox
+                  options={toolTypeOptions}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select Tool Category..."
+                  searchPlaceholder="Search tool categories..."
+                  emptyText="No tool category found."
+                  disabled={loading}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>
+                Description<span className="text-red-500">*</span>
+              </FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="Describe what this tool does. The AI uses this description to decide when to call it."
+                  className="min-h-[100px]"
+                  {...field}
+                  disabled={loading}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {/* OPERATION DETAILS Section */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Zap className="w-5 h-5 text-gray-600" />
+          <h3 className="font-semibold text-gray-900">OPERATION DETAILS</h3>
+        </div>
+
+        <FormField
+          control={form.control}
+          name="types"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>
+                Operation Type<span className="text-red-500">*</span>
+              </FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                value={field.value}
+                disabled={loading}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select Operation Type..." />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {operationTypeOptions.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Conditional Fields */}
+        {selectedType && shouldShowField('reference_doctype', selectedType) && (
           <FormField
             control={form.control}
-            name="tool_type"
+            name="reference_doctype"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Tool Category<span className="text-red-500">*</span>
+                  Reference DocType<span className="text-red-500">*</span>
                 </FormLabel>
                 <FormControl>
                   <Combobox
-                    options={toolTypeOptions}
+                    options={docTypeOptions}
                     value={field.value}
                     onValueChange={field.onChange}
-                    placeholder="Select Tool Category..."
-                    searchPlaceholder="Search tool categories..."
-                    emptyText="No tool category found."
-                    disabled={loading}
+                    placeholder="Select DocType..."
+                    searchPlaceholder="Search DocTypes..."
+                    emptyText="No DocType found."
+                    disabled={loading || loadingData}
                   />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
+        )}
 
+        {selectedType && shouldShowField('agent', selectedType) && (
           <FormField
             control={form.control}
-            name="description"
+            name="agent"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Description<span className="text-red-500">*</span>
+                  Select Agent<span className="text-red-500">*</span>
                 </FormLabel>
                 <FormControl>
-                  <Textarea
-                    placeholder="Describe what this tool does. The AI uses this description to decide when to call it."
-                    className="min-h-[100px]"
+                  <Combobox
+                    options={agentOptions}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    placeholder="Select Agent..."
+                    searchPlaceholder="Search agents..."
+                    emptyText="No agent found."
+                    disabled={loading || loadingData}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {selectedType && shouldShowField('function_path', selectedType) && (
+          <FormField
+            control={form.control}
+            name="function_path"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Function Path</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="e.g., my_app.api.my_function"
                     {...field}
                     disabled={loading}
                   />
@@ -285,362 +595,361 @@ export function ToolCreationForm({
               </FormItem>
             )}
           />
-        </div>
+        )}
 
-        {/* OPERATION DETAILS Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap className="w-5 h-5 text-gray-600" />
-            <h3 className="font-semibold text-gray-900">OPERATION DETAILS</h3>
-          </div>
-
+        {selectedType && shouldShowField('function_name', selectedType) && (
           <FormField
             control={form.control}
-            name="types"
+            name="function_name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>
-                  Operation Type<span className="text-red-500">*</span>
-                </FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  disabled={loading}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Operation Type..." />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {operationTypeOptions.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormLabel>Function Name</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="e.g., myClientFunction"
+                    {...field}
+                    disabled={loading}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-
-          {/* Conditional Fields */}
-          {selectedType && shouldShowField('reference_doctype', selectedType) && (
-            <FormField
-              control={form.control}
-              name="reference_doctype"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Reference DocType<span className="text-red-500">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Combobox
-                      options={docTypeOptions}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      placeholder="Select DocType..."
-                      searchPlaceholder="Search DocTypes..."
-                      emptyText="No DocType found."
-                      disabled={loading || loadingData}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {selectedType && shouldShowField('agent', selectedType) && (
-            <FormField
-              control={form.control}
-              name="agent"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>
-                    Select Agent<span className="text-red-500">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Combobox
-                      options={agentOptions}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      placeholder="Select Agent..."
-                      searchPlaceholder="Search agents..."
-                      emptyText="No agent found."
-                      disabled={loading || loadingData}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {selectedType && shouldShowField('function_path', selectedType) && (
-            <FormField
-              control={form.control}
-              name="function_path"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Function Path</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., my_app.api.my_function"
-                      {...field}
-                      disabled={loading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {selectedType && shouldShowField('function_name', selectedType) && (
-            <FormField
-              control={form.control}
-              name="function_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Function Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., myClientFunction"
-                      {...field}
-                      disabled={loading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {selectedType && shouldShowField('provider_app', selectedType) && (
-            <FormField
-              control={form.control}
-              name="provider_app"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Provider App</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., my_app"
-                      {...field}
-                      disabled={loading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {selectedType && shouldShowField('base_url', selectedType) && (
-            <FormField
-              control={form.control}
-              name="base_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Base URL</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="e.g., https://api.example.com"
-                      {...field}
-                      disabled={loading}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {selectedType && shouldShowField('pass_parameters_as_json', selectedType) && (
-            <FormField
-              control={form.control}
-              name="pass_parameters_as_json"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel>Pass parameters as JSON</FormLabel>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={loading}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          )}
-        </div>
-
-        {/* HTTP Headers Section (for GET/POST) */}
-        {selectedType && shouldShowField('http_headers', selectedType) && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">HTTP Headers</h3>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddHttpHeader}
-                disabled={loading}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Header
-              </Button>
-            </div>
-            {httpHeaders.length === 0 ? (
-              <div className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
-                No headers added. Click "Add Header" to add one.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {httpHeaders.map((header, index) => (
-                  <HttpHeaderCard
-                    key={index}
-                    header={header}
-                    index={index}
-                    onChange={handleUpdateHttpHeader}
-                    onDelete={handleDeleteHttpHeader}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
         )}
 
-        {/* Parameters Section */}
+        {selectedType && shouldShowField('provider_app', selectedType) && (
+          <FormField
+            control={form.control}
+            name="provider_app"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Provider App</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="e.g., my_app"
+                    {...field}
+                    disabled={loading}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {selectedType && shouldShowField('base_url', selectedType) && (
+          <FormField
+            control={form.control}
+            name="base_url"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Base URL</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="e.g., https://api.example.com"
+                    {...field}
+                    disabled={loading}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        {selectedType && shouldShowField('pass_parameters_as_json', selectedType) && (
+          <FormField
+            control={form.control}
+            name="pass_parameters_as_json"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel>Pass parameters as JSON</FormLabel>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={loading}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        )}
+      </div>
+
+      {/* HTTP Headers Section (for GET/POST) */}
+      {selectedType && shouldShowField('http_headers', selectedType) && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">Parameters</h3>
-            <div className="flex items-center gap-2">
-              {selectedType === 'Custom Function' && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleFetchParamsFromCode}
-                  disabled={loading || fetchingCodeParams || !functionPathValue?.trim()}
-                >
-                  {fetchingCodeParams ? 'Fetching...' : 'Fetch Params from Code'}
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddParameter}
-                disabled={loading}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Parameter
-              </Button>
-            </div>
+            <h3 className="font-semibold text-gray-900">HTTP Headers</h3>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAddHttpHeader}
+              disabled={loading}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Header
+            </Button>
           </div>
-          {parameters.length === 0 ? (
+          {httpHeaders.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
-              No parameters added. Click "Add Parameter" to add one.
+              No headers added. Click "Add Header" to add one.
             </div>
           ) : (
             <div className="space-y-3">
-              {parameters.map((param, index) => (
-                <ParameterCard
+              {httpHeaders.map((header, index) => (
+                <HttpHeaderCard
                   key={index}
-                  parameter={param}
+                  header={header}
                   index={index}
-                  onChange={handleUpdateParameter}
-                  onDelete={handleDeleteParameter}
+                  onChange={handleUpdateHttpHeader}
+                  onDelete={handleDeleteHttpHeader}
                 />
               ))}
             </div>
           )}
         </div>
+      )}
 
-        {/* Optional Fields Section */}
-        <div className="space-y-4">
-          <h3 className="font-semibold text-gray-900">Additional Settings</h3>
-
-          <FormField
-            control={form.control}
-            name="required_permission"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Required Permission</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  disabled={loading}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select permission level..." />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="read">Read</SelectItem>
-                    <SelectItem value="write">Write</SelectItem>
-                    <SelectItem value="create">Create</SelectItem>
-                    <SelectItem value="delete">Delete</SelectItem>
-                    <SelectItem value="submit">Submit</SelectItem>
-                    <SelectItem value="cancel">Cancel</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
+      {/* Parameters Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900">Parameters</h3>
+          <div className="flex items-center gap-2">
+            {selectedType === 'Custom Function' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleFetchParamsFromCode}
+                disabled={loading || fetchingCodeParams || !functionPathValue?.trim()}
+              >
+                {fetchingCodeParams ? 'Fetching...' : 'Fetch Params from Code'}
+              </Button>
             )}
-          />
-
-          <FormField
-            control={form.control}
-            name="is_read_only"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                  <FormLabel>Read Only</FormLabel>
-                  <p className="text-sm text-muted-foreground">
-                    If checked, this tool does not modify data
-                  </p>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    disabled={loading}
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="allowed_for_guest"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                  <FormLabel>Allowed for Guest</FormLabel>
-                  <p className="text-sm text-muted-foreground">
-                    If checked, Guest users can use this tool
-                  </p>
-                </div>
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    disabled={loading}
-                  />
-                </FormControl>
-              </FormItem>
-            )}
-          />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowParamsPreview((prev) => !prev)}
+              disabled={loading}
+            >
+              <Braces className="w-4 h-4 mr-2" />
+              {showParamsPreview ? 'Hide Preview' : 'Preview JSON'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                handleAddParameter();
+                const nextIndex = parameters.length;
+                setEditingParameterIndex(nextIndex);
+              }}
+              disabled={loading}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Parameter
+            </Button>
+          </div>
         </div>
+
+        {parameters.length === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
+            No parameters added. Click "Add Parameter" to add one.
+          </div>
+        ) : (
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                {parameterTable.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id}>
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {parameterTable.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {showParamsPreview && (
+          <div className="rounded-lg border bg-black text-green-400 p-4">
+            <p className="text-xs uppercase tracking-wide text-green-300 mb-2">Parameters JSON Schema Preview</p>
+            <pre className="text-xs overflow-x-auto">{JSON.stringify(parameterSchema, null, 2)}</pre>
+          </div>
+        )}
+      </div>
+
+      {/* Optional Fields Section */}
+      <div className="space-y-4 pt-1">
+        <h3 className="font-semibold text-gray-900">Additional Settings</h3>
+
+        <FormField
+          control={form.control}
+          name="required_permission"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Required Permission</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                value={field.value}
+                disabled={loading}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select permission level..." />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="read">Read</SelectItem>
+                  <SelectItem value="write">Write</SelectItem>
+                  <SelectItem value="create">Create</SelectItem>
+                  <SelectItem value="delete">Delete</SelectItem>
+                  <SelectItem value="submit">Submit</SelectItem>
+                  <SelectItem value="cancel">Cancel</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="is_read_only"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel>Read Only</FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  If checked, this tool does not modify data
+                </p>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={loading}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="allowed_for_guest"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel>Allowed for Guest</FormLabel>
+                <p className="text-sm text-muted-foreground">
+                  If checked, Guest users can use this tool
+                </p>
+              </div>
+              <FormControl>
+                <Switch
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  disabled={loading}
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+      </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderFunctionDefinitionView = () => (
+    <div className="space-y-4">
+      <div className="rounded-lg border bg-blue-50 p-4 text-sm text-blue-900 flex items-start gap-2">
+        <Braces className="w-4 h-4 mt-0.5" />
+        <div>
+          <p className="font-medium">Function Definition Preview</p>
+          <p className="text-blue-800">
+            This JSON is generated from your current tool settings and parameter definitions.
+          </p>
+        </div>
+      </div>
+      <div className="rounded-lg border bg-black text-blue-300 p-4">
+        <pre className="text-xs overflow-x-auto">{JSON.stringify(functionDefinition, null, 2)}</pre>
+      </div>
+    </div>
+  );
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-7 px-1">
+        {editingParameterIndex === null && (
+          <div className="sticky top-0 z-10 bg-white border-b pb-3 -mx-1 px-1 mb-4">
+            <div className="flex items-center justify-between gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onBack}
+                disabled={loading}
+                className="bg-white shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+              <div className="flex items-center gap-1 rounded-md border p-1">
+                <Button
+                  type="button"
+                  variant={configView === 'settings' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setConfigView('settings')}
+                >
+                  <Settings className="w-4 h-4 mr-1" />
+                  Settings
+                </Button>
+                <Button
+                  type="button"
+                  variant={configView === 'function_definition' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setConfigView('function_definition')}
+                >
+                  <Braces className="w-4 h-4 mr-1" />
+                  Function Def
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+        {editingParameterIndex === null && mode === 'edit' && sharedUsedBy.length > 0 && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-700" />
+            <p>
+              This is a shared tool. Changes will affect other agents using it: {sharedUsedBy.join(', ')}.
+            </p>
+          </div>
+        )}
+
+        {configView === 'settings' ? renderSettingsView() : renderFunctionDefinitionView()}
 
         {/* Footer */}
         <div className="flex items-center justify-end pt-4 border-t">
