@@ -531,6 +531,17 @@ def run_agent_sync(
 
     agent_doc = frappe.get_doc("Agent", agent_name)
 
+    # Resolve effective model/provider for this specific run.
+    # Callers can pass `model` and/or `provider` to use a different LLM for
+    # this message only without changing the agent's persisted configuration.
+    # When `model` is provided without `provider`, the agent's default provider
+    # is used (fine for same-provider model swaps such as gpt-4o → gpt-4.5).
+    # For cross-provider swaps (e.g. OpenAI agent → Anthropic model) both
+    # `model` and `provider` must be supplied so the correct API key is used.
+    effective_model = model or agent_doc.model
+    effective_provider = provider or agent_doc.provider
+    is_model_overridden = effective_model != agent_doc.model or effective_provider != agent_doc.provider
+
     if frappe.session.user == "Guest" and not agent_doc.allow_guest:
         frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
 
@@ -578,6 +589,8 @@ def run_agent_sync(
         "prompt": prompt,
         "model": agent_doc.model,
         "provider": agent_doc.provider,
+        "override_model": effective_model if is_model_overridden else None,
+        "override_provider": effective_provider if is_model_overridden else None,
         "parent_run": parent_run_id,
         "is_child": 1 if parent_run_id else 0,
         "agent_orchestration": orchestration_id
@@ -719,7 +732,7 @@ def run_agent_sync(
                 "conversation_id": conversation.name,
                 "agent_run_id": run_doc.name
             }
-            run = RunProvider.run(agent, enhanced_prompt, agent_doc.provider, agent_doc.model,context)
+            run = RunProvider.run(agent, enhanced_prompt, effective_provider, effective_model, context)
 
             result = loop.run_until_complete(run)
         finally:
@@ -751,15 +764,15 @@ def run_agent_sync(
                 msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
                 
                 message_doc = conv_manager.add_message(
-                    conversation, 
-                    role="agent", 
-                    content=msg_content, 
-                    provider=agent_doc.provider, 
-                    model=agent_doc.model, 
-                    agent=agent_name, 
+                    conversation,
+                    role="agent",
+                    content=msg_content,
+                    provider=effective_provider,
+                    model=effective_model,
+                    agent=agent_name,
                     run_name=run_doc.name,
                     kind="Tool Call",
-                    tool_call_id=tool_call_id 
+                    tool_call_id=tool_call_id
                 )
                 safe_commit()
 
@@ -873,7 +886,7 @@ def run_agent_sync(
                 "cost": cost
             })
 
-        conv_manager.add_message(conversation, "agent", final_output, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
+        conv_manager.add_message(conversation, "agent", final_output, effective_provider, effective_model, agent_name, run_doc.name)
 
         frappe.db.set_value("Agent Run", run_doc.name, {
             "status": "Success",
