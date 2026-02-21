@@ -48,30 +48,29 @@ export function ToolCard({
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
-          {tool.types && (
-            <Badge variant="secondary" className="text-[10px] uppercase shrink-0">
-              {tool.types}
-            </Badge>
-          )}
-          {toolTypeDisplayName && (
-            <Badge variant="outline" className="text-xs shrink-0">
-              {toolTypeDisplayName}
-            </Badge>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
+            {tool.types && (
+              <Badge variant="secondary" className="text-[10px] uppercase shrink-0">
+                {tool.types}
+              </Badge>
+            )}
+            {toolTypeDisplayName && (
+              <Badge variant="outline" className="text-xs shrink-0">
+                {toolTypeDisplayName}
+              </Badge>
+            )}
+          </div>
+          {tool.description && (
+            <p className={cn(
+              'text-muted-foreground',
+              compact ? 'text-xs line-clamp-1' : 'text-xs line-clamp-2'
+            )}>
+              {tool.description}
+            </p>
           )}
         </div>
-        {tool.description && (
-          <p className={cn(
-            'text-muted-foreground',
-            compact ? 'text-xs line-clamp-1' : 'text-xs line-clamp-2'
-          )}>
-            {tool.description}
-          </p>
-        )}
-        {tool.reference_doctype && (
-          <p className="text-[11px] text-muted-foreground mt-1">DocType: {tool.reference_doctype}</p>
-        )}
       </div>
     </div>
   );
