@@ -996,6 +996,11 @@ async def run_agent_stream(
     try:
         agent_doc = frappe.get_doc("Agent", agent_name)
 
+        # Resolve effective model/provider (same semantics as run_agent_sync).
+        effective_model = model or agent_doc.model
+        effective_provider = provider or agent_doc.provider
+        is_model_overridden = effective_model != agent_doc.model or effective_provider != agent_doc.provider
+
         # 1. Guest Check
         if frappe.session.user == "Guest" and not agent_doc.allow_guest:
             yield {
@@ -1058,7 +1063,9 @@ async def run_agent_stream(
             "conversation": conversation.name,
             "prompt": prompt,
             "model": agent_doc.model,
-            "provider": agent_doc.provider
+            "provider": agent_doc.provider,
+            "override_model": effective_model if is_model_overridden else None,
+            "override_provider": effective_provider if is_model_overridden else None,
         })
         run_doc.insert(ignore_permissions=True)
         conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
@@ -1167,7 +1174,7 @@ async def run_agent_stream(
         # Stream from provider
         full_response = ""
         try:
-            stream = RunProvider.run_stream(agent, enhanced_prompt, agent_doc.provider, agent_doc.model, context)
+            stream = RunProvider.run_stream(agent, enhanced_prompt, effective_provider, effective_model, context)
             
             async for chunk in stream:
                 chunk_type = chunk.get("type")
@@ -1193,11 +1200,11 @@ async def run_agent_stream(
                         msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
                         
                         conv_manager.add_message(
-                            conversation, 
-                            role="agent", 
-                            content=msg_content, 
-                            provider=agent_doc.provider,
-                            model=agent_doc.model,
+                            conversation,
+                            role="agent",
+                            content=msg_content,
+                            provider=effective_provider,
+                            model=effective_model,
                             agent=agent_name,
                             run_name=run_doc.name,
                             kind="Tool Call",
@@ -1288,7 +1295,7 @@ async def run_agent_stream(
                             frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
 
                     # Save final response
-                    conv_manager.add_message(conversation, "agent", full_response, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
+                    conv_manager.add_message(conversation, "agent", full_response, effective_provider, effective_model, agent_name, run_doc.name)
                     
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Success",
