@@ -887,17 +887,39 @@ export function ToolCreationForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-7 px-1">
         {editingParameterIndex === null && (
-          <div className="flex items-center justify-start">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onBack}
-              disabled={loading}
-              className="bg-white"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
+          <div className="sticky top-0 z-10 bg-white border-b pb-3 -mx-1 px-1 mb-4">
+            <div className="flex items-center justify-between gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onBack}
+                disabled={loading}
+                className="bg-white shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+              <div className="flex items-center gap-1 rounded-md border p-1">
+                <Button
+                  type="button"
+                  variant={configView === 'settings' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setConfigView('settings')}
+                >
+                  <Settings className="w-4 h-4 mr-1" />
+                  Settings
+                </Button>
+                <Button
+                  type="button"
+                  variant={configView === 'function_definition' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setConfigView('function_definition')}
+                >
+                  <Braces className="w-4 h-4 mr-1" />
+                  Function Def
+                </Button>
+              </div>
+            </div>
           </div>
         )}
         {editingParameterIndex === null && mode === 'edit' && sharedUsedBy.length > 0 && (
@@ -906,35 +928,6 @@ export function ToolCreationForm({
             <p>
               This is a shared tool. Changes may affect other agents using it: {sharedUsedBy.join(', ')}.
             </p>
-          </div>
-        )}
-
-        {editingParameterIndex === null && (
-          <div className="flex items-center justify-between border-b pb-3">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-gray-900">{mode === 'edit' ? 'Edit Tool' : 'Configure Tool'}</h3>
-              <Badge variant="outline">{template.name}</Badge>
-            </div>
-            <div className="flex items-center gap-1 rounded-md border p-1">
-              <Button
-                type="button"
-                variant={configView === 'settings' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setConfigView('settings')}
-              >
-                <Settings className="w-4 h-4 mr-1" />
-                Settings
-              </Button>
-              <Button
-                type="button"
-                variant={configView === 'function_definition' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setConfigView('function_definition')}
-              >
-                <Braces className="w-4 h-4 mr-1" />
-                Function Def
-              </Button>
-            </div>
           </div>
         )}
 
