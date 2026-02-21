@@ -16,12 +16,14 @@
   "error_message",
   "metadata",
   "provider",
+  "override_provider",
   "start_time",
   "input_tokens",
   "cost",
   "call_recording",
   "column_break_qy3x",
   "model",
+  "override_model",
   "end_time",
   "output_tokens",
   "cached_tokens",
@@ -150,10 +152,24 @@
    "read_only": 1
   },
   {
+   "description": "Provider used for this run when overridden via API. Empty means the agent's default provider was used.",
+   "fieldname": "override_provider",
+   "fieldtype": "Data",
+   "label": "Override Provider",
+   "read_only": 1
+  },
+  {
    "fieldname": "model",
    "fieldtype": "Link",
    "label": "Model",
    "options": "AI Model",
+   "read_only": 1
+  },
+  {
+   "description": "Model used for this run when overridden via API. Empty means the agent's default model was used.",
+   "fieldname": "override_model",
+   "fieldtype": "Data",
+   "label": "Override Model",
    "read_only": 1
   },
   {
@@ -204,7 +220,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-29 15:02:15.973547",
+ "modified": "2026-02-21 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",
