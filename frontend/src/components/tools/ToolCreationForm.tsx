@@ -36,7 +36,7 @@ import { HttpHeaderCard, type HttpHeaderData } from './HttpHeaderCard';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import type { AgentToolType, ToolType } from '@/types/agent.types';
 import { getDocTypeMeta } from '@/services/agentApi';
-import { fetchToolParametersFromCode } from '@/services/toolApi';
+import { fetchToolParametersFromCode, getAgentsUsingTool } from '@/services/toolApi';
 import { toast } from 'sonner';
 import { useToolCreationOptions } from './useToolCreationOptions';
 import {
@@ -54,6 +54,7 @@ interface ToolCreationFormProps {
   loading?: boolean;
   initialData?: Partial<ToolFormData> | null;
   mode?: 'create' | 'edit';
+  toolName?: string; // Document name for edit mode (to fetch shared usage)
 }
 
 export function ToolCreationForm({
@@ -64,6 +65,7 @@ export function ToolCreationForm({
   loading = false,
   initialData = null,
   mode = 'create',
+  toolName,
 }: ToolCreationFormProps) {
   const formSchema = useMemo(() => createToolFormSchema(template.toolTypes), [template.toolTypes]);
   const { loadingData, docTypeOptions, agentOptions } = useToolCreationOptions();
@@ -71,6 +73,7 @@ export function ToolCreationForm({
   const [configView, setConfigView] = useState<'settings' | 'function_definition'>('settings');
   const [editingParameterIndex, setEditingParameterIndex] = useState<number | null>(null);
   const [showParamsPreview, setShowParamsPreview] = useState(false);
+  const [sharedUsedBy, setSharedUsedBy] = useState<string[]>([]);
 
   const defaultValues = useMemo(
     () => getDefaultToolFormValues(initialData, template.toolTypes[0] as ToolType),
@@ -88,6 +91,22 @@ export function ToolCreationForm({
       form.reset(defaultValues);
     }
   }, [initialData, mode, form, defaultValues]);
+
+  // Load shared tool usage data in edit mode
+  useEffect(() => {
+    if (mode === 'edit' && toolName) {
+      getAgentsUsingTool(toolName)
+        .then((agents) => {
+          setSharedUsedBy(agents);
+        })
+        .catch((error) => {
+          console.error('Error loading tool usage:', error);
+          setSharedUsedBy([]);
+        });
+    } else {
+      setSharedUsedBy([]);
+    }
+  }, [mode, toolName]);
 
   useEffect(() => {
     if (!loading) {
@@ -230,9 +249,8 @@ export function ToolCreationForm({
 
   const parameters = form.watch('parameters') || [];
   const httpHeaders = form.watch('http_headers') || [];
-  const toolName = form.watch('tool_name');
+  const formToolName = form.watch('tool_name');
   const description = form.watch('description');
-  const sharedUsedBy = initialData?.usedBy || [];
 
   const { parameterSchema, functionDefinition } = useMemo(() => {
     const properties: Record<string, Record<string, unknown>> = {};
@@ -264,7 +282,7 @@ export function ToolCreationForm({
     }
 
     const functionDef: Record<string, unknown> = {
-      name: toolName || 'untitled_tool',
+      name: formToolName || 'untitled_tool',
       description: description || 'No description provided.',
     };
     if (Object.keys(properties).length > 0) {
@@ -275,7 +293,7 @@ export function ToolCreationForm({
       parameterSchema: schema,
       functionDefinition: functionDef,
     };
-  }, [parameters, toolName, description]);
+  }, [parameters, formToolName, description]);
 
   const parameterColumns = useMemo<ColumnDef<ParameterData>[]>(
     () => [
@@ -926,7 +944,7 @@ export function ToolCreationForm({
           <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-700" />
             <p>
-              This is a shared tool. Changes may affect other agents using it: {sharedUsedBy.join(', ')}.
+              This is a shared tool. Changes will affect other agents using it: {sharedUsedBy.join(', ')}.
             </p>
           </div>
         )}

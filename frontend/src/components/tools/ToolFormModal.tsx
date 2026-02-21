@@ -21,6 +21,7 @@ interface ToolFormModalProps {
   initialData?: Partial<ToolFormData> | null;
   onSubmit: (data: ToolFormData) => Promise<void>;
   loading?: boolean;
+  toolName?: string; // Document name for edit mode (to fetch shared usage)
 }
 
 export function ToolFormModal({
@@ -31,6 +32,7 @@ export function ToolFormModal({
   initialData = null,
   onSubmit,
   loading = false,
+  toolName,
 }: ToolFormModalProps) {
   const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(false);
@@ -155,6 +157,7 @@ export function ToolFormModal({
                     loading={loading || loadingTypes}
                     initialData={initialData}
                     mode={mode}
+                    toolName={toolName}
                   />
                 </div>
               )}
@@ -173,6 +176,7 @@ export function ToolFormModal({
                 loading={loading || loadingTypes}
                 initialData={initialData}
                 mode={mode}
+                toolName={toolName}
               />
             </div>
           </div>

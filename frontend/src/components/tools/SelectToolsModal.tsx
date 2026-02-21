@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { ToolCard } from './ToolCard';
 import { ToolTemplateCard } from './ToolTemplateCard';
 import { ToolCreationForm } from './ToolCreationForm';
-import { getToolFunctions, getToolTypes, createToolFunction } from '@/services/toolApi';
+import { getToolFunctions, getToolTypes, createToolFunction, getAgentsUsingTool } from '@/services/toolApi';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import { toast } from 'sonner';
@@ -44,6 +44,7 @@ export function SelectToolsModal({
   const [selectedToolIds, setSelectedToolIds] = useState<Set<string>>(
     new Set(selectedTools.map((t) => t.name))
   );
+  const [toolUsageMap, setToolUsageMap] = useState<Map<string, string[]>>(new Map());
   
   // Tab and view state
   const [activeTab, setActiveTab] = useState<'tool-library' | 'create-new'>('tool-library');
@@ -62,9 +63,26 @@ export function SelectToolsModal({
         getToolTypes(),
         getToolFunctions(),
       ])
-        .then(([types, tools]) => {
+        .then(async ([types, tools]) => {
           setToolTypes(types);
           setAllTools(tools);
+          
+          // Load tool usage data
+          const usageMap = new Map<string, string[]>();
+          await Promise.all(
+            tools.map(async (tool) => {
+              try {
+                const agents = await getAgentsUsingTool(tool.name);
+                if (agents.length > 0) {
+                  usageMap.set(tool.name, agents);
+                }
+              } catch (error) {
+                console.error(`Error loading usage for tool ${tool.name}:`, error);
+              }
+            })
+          );
+          setToolUsageMap(usageMap);
+          
           setLoading(false);
         })
         .catch((error) => {
@@ -301,6 +319,7 @@ export function SelectToolsModal({
                     onSelect={handleToolToggle}
                     compact
                     toolTypesMap={toolTypesMap}
+                    usedByAgents={toolUsageMap.get(tool.name) || []}
                   />
                 ))
               )}

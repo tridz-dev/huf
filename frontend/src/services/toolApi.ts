@@ -42,6 +42,26 @@ export async function getToolFunctions(toolTypeFilter?: string): Promise<AgentTo
 }
 
 /**
+ * Fetch specific tool functions by their names
+ * More efficient than fetching all tools and filtering
+ */
+export async function getToolFunctionsByName(toolNames: string[]): Promise<AgentToolFunctionRef[]> {
+  try {
+    if (toolNames.length === 0) return [];
+    
+    const tools = await db.getDocList(doctype['Agent Tool Function'], {
+      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype"],
+      filters: [["name", "in", toolNames]],
+      limit: 1000,
+    });
+    return tools as AgentToolFunctionRef[];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching tool functions by name');
+    return [];
+  }
+}
+
+/**
  * Fetch a single Agent Tool Function by name with all fields including child tables
  */
 export async function getToolFunction(name: string): Promise<any> {
@@ -248,6 +268,26 @@ export async function createToolFunction(data: {
     };
   } catch (error) {
     handleFrappeError(error, 'Error creating tool function');
+  }
+}
+
+/**
+ * Get agents that use a specific tool
+ * @param toolName - The name of the Agent Tool Function document
+ * @returns Array of agent names that use this tool
+ */
+export async function getAgentsUsingTool(toolName: string): Promise<string[]> {
+  try {
+    // Filter by child table field using dot notation
+    const agents = await db.getDocList(doctype['Agent'], {
+      fields: ['name', 'agent_name'],
+      filters: [['agent_tool.tool', '=', toolName]],
+      limit: 1000,
+    });
+    return agents.map((agent: any) => agent.agent_name || agent.name);
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching agents using tool');
+    return [];
   }
 }
 

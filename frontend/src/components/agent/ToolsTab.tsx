@@ -1,4 +1,4 @@
-import { Plus, Server, Plug, Trash2, RefreshCw, Edit } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw, Edit, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { MCPServerRef } from '@/services/mcpApi';
 import { getToolIconForType } from '../tools/toolIconMap';
+import { getAgentsUsingTool } from '@/services/toolApi';
+import { useEffect, useState } from 'react';
 
 interface ToolsTabProps {
   selectedTools: AgentToolFunctionRef[];
@@ -36,6 +38,34 @@ export function ToolsTab({
   onSyncMCP,
   mcpLoading = false,
 }: ToolsTabProps) {
+  const [toolUsageMap, setToolUsageMap] = useState<Map<string, string[]>>(new Map());
+
+  // Load tool usage data for all selected tools
+  useEffect(() => {
+    if (selectedTools.length === 0) {
+      setToolUsageMap(new Map());
+      return;
+    }
+
+    const loadToolUsage = async () => {
+      const usageMap = new Map<string, string[]>();
+      await Promise.all(
+        selectedTools.map(async (tool) => {
+          try {
+            const agents = await getAgentsUsingTool(tool.name);
+            if (agents.length > 0) {
+              usageMap.set(tool.name, agents);
+            }
+          } catch (error) {
+            console.error(`Error loading usage for tool ${tool.name}:`, error);
+          }
+        })
+      );
+      setToolUsageMap(usageMap);
+    };
+
+    loadToolUsage();
+  }, [selectedTools]);
   const handleMCPAction = (action: string, serverId?: string) => {
     switch (action) {
       case 'add':
@@ -119,20 +149,31 @@ export function ToolsTab({
             <div className="grid gap-3 sm:grid-cols-2">
               {selectedTools.map((tool) => {
                 const ToolIcon = getToolIconForType(tool.types);
+                const usedByAgents = toolUsageMap.get(tool.name) || [];
+                const isShared = usedByAgents.length > 0;
+                
                 return (
                   <div
                     key={tool.name}
-                    className="group flex h-full min-h-[110px] items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                    className="group flex h-full items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex-1 min-w-0 flex items-start gap-3">
                       <div className="mt-0.5 rounded-md border bg-muted/30 p-1.5 text-muted-foreground">
                         <ToolIcon className="w-4 h-4" />
                       </div>
-                      <div className="min-w-0 space-y-1">
-                        <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
+                      <div className="min-w-0 space-y-1 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
+                        </div>
                         <p className="text-xs text-muted-foreground line-clamp-2">
                           {tool.description || 'No description available.'}
                         </p>
+                        {isShared && (
+                          <div className="flex w-fit items-center text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md mt-2 text-[11px] font-semibold">
+                            <Users className="w-3 h-3 mr-1.5" />
+                            <span>Used in {usedByAgents.length} agent{usedByAgents.length > 1 ? 's' : ''}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
