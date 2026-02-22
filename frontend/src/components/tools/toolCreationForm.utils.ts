@@ -44,10 +44,30 @@ export const createToolFormSchema = (availableToolTypes: ToolType[]) => {
   });
 };
 
+// Tool types that require a reference_doctype field
+const REFERENCE_DOCTYPE_ALLOWED_TYPES: ToolType[] = [
+  'Get Document',
+  'Get Multiple Documents',
+  'Get List',
+  'Create Document',
+  'Create Multiple Documents',
+  'Update Document',
+  'Update Multiple Documents',
+  'Delete Document',
+  'Delete Multiple Documents',
+  'Submit Document',
+  'Cancel Document',
+  'Get Amended Document',
+  'Attach File to Document',
+  'Get Report Result',
+  'Get Value',
+  'Set Value',
+];
+
 export const shouldShowField = (fieldName: string, types: ToolType): boolean => {
   switch (fieldName) {
     case 'reference_doctype':
-      return !['Run Agent', 'App Provided', 'Custom Function', 'Client Side Tool', 'Get Conversation Data', 'Set Conversation Data', 'Load Conversation Data'].includes(types);
+      return REFERENCE_DOCTYPE_ALLOWED_TYPES.includes(types);
     case 'agent':
       return types === 'Run Agent';
     case 'function_path':
