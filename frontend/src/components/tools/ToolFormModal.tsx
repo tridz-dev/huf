@@ -22,6 +22,7 @@ interface ToolFormModalProps {
   onSubmit: (data: ToolFormData) => Promise<void>;
   loading?: boolean;
   toolName?: string; // Document name for edit mode (to fetch shared usage)
+  currentAgentName?: string; // Current agent name to exclude from shared usage count
 }
 
 export function ToolFormModal({
@@ -33,6 +34,7 @@ export function ToolFormModal({
   onSubmit,
   loading = false,
   toolName,
+  currentAgentName,
 }: ToolFormModalProps) {
   const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(false);
@@ -158,6 +160,7 @@ export function ToolFormModal({
                     initialData={initialData}
                     mode={mode}
                     toolName={toolName}
+                    currentAgentName={currentAgentName}
                   />
                 </div>
               )}
@@ -177,6 +180,7 @@ export function ToolFormModal({
                 initialData={initialData}
                 mode={mode}
                 toolName={toolName}
+                currentAgentName={currentAgentName}
               />
             </div>
           </div>
