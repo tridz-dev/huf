@@ -55,7 +55,7 @@
    "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent\nClient Side Tool\nGet Conversation Data\nSet Conversation Data\nLoad Conversation Data"
   },
   {
-   "depends_on": "eval:doc.types != 'Run Agent' && doc.types != 'App Provided' && doc.types != 'Custom Function'&& doc.types != 'Client Side Tool' && doc.types != 'Get Conversation Data' && doc.types != 'Set Conversation Data' && doc.types != 'Load Conversation Data'",
+   "depends_on": "eval: [\n  'Get Document',\n  'Get Multiple Documents',\n  'Get List',\n  'Create Document',\n  'Create Multiple Documents',\n  'Update Document',\n  'Update Multiple Documents',\n  'Delete Document',\n  'Delete Multiple Documents',\n  'Submit Document',\n  'Cancel Document',\n  'Get Amended Document',\n  'Attach File to Document',\n  'Get Report Result',\n  'Get Value',\n  'Set Value'\n].includes(doc.types)",
    "fieldname": "reference_doctype",
    "fieldtype": "Link",
    "label": "Reference DocType",
@@ -172,7 +172,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-09 16:30:18.371944",
+ "modified": "2026-02-22 22:21:36.079707",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Function",

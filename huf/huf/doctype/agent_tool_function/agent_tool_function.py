@@ -32,18 +32,23 @@ class AgentToolFunction(Document):
 
 	def validate_reference_doctype(self):
 		if not self.reference_doctype:
-			if not self.types in [
-				"Custom Function",
-				"Send Message",
-				"Get Report Result",
-				"Run Agent",
-				"Attach File to Document",
-				"App Provided",
-				"Speech to Text",
-				"Client Side Tool",
-				"Get Conversation Data",
-				"Set Conversation Data",
-				"Load Conversation Data"
+			if self.types in [
+				'Get Document',
+				'Get Multiple Documents',
+				'Get List',
+				'Create Document',
+				'Create Multiple Documents',
+				'Update Document',
+				'Update Multiple Documents',
+				'Delete Document',
+				'Delete Multiple Documents',
+				'Submit Document',
+				'Cancel Document',
+				'Get Amended Document',
+				'Attach File to Document',
+				'Get Report Result',
+				'Get Value',
+				'Set Value'
 			]:
 				frappe.throw(_("Please select a DocType for this function."))
 

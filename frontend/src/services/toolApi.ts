@@ -274,7 +274,7 @@ export async function createToolFunction(data: {
 /**
  * Get agents that use a specific tool
  * @param toolName - The name of the Agent Tool Function document
- * @returns Array of agent names that use this tool
+ * @returns Array of agent document names (name field) that use this tool
  */
 export async function getAgentsUsingTool(toolName: string): Promise<string[]> {
   try {
@@ -284,7 +284,8 @@ export async function getAgentsUsingTool(toolName: string): Promise<string[]> {
       filters: [['agent_tool.tool', '=', toolName]],
       limit: 1000,
     });
-    return agents.map((agent: any) => agent.agent_name || agent.name);
+    // Return document names for consistent comparison
+    return agents.map((agent: any) => agent.name);
   } catch (error) {
     handleFrappeError(error, 'Error fetching agents using tool');
     return [];
