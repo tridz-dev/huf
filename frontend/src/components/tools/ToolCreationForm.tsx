@@ -55,6 +55,7 @@ interface ToolCreationFormProps {
   initialData?: Partial<ToolFormData> | null;
   mode?: 'create' | 'edit';
   toolName?: string; // Document name for edit mode (to fetch shared usage)
+  currentAgentName?: string; // Current agent name to exclude from shared usage count
 }
 
 export function ToolCreationForm({
@@ -66,6 +67,7 @@ export function ToolCreationForm({
   initialData = null,
   mode = 'create',
   toolName,
+  currentAgentName,
 }: ToolCreationFormProps) {
   const formSchema = useMemo(() => createToolFormSchema(template.toolTypes), [template.toolTypes]);
   const { loadingData, docTypeOptions, agentOptions } = useToolCreationOptions();
@@ -97,7 +99,11 @@ export function ToolCreationForm({
     if (mode === 'edit' && toolName) {
       getAgentsUsingTool(toolName)
         .then((agents) => {
-          setSharedUsedBy(agents);
+          // Filter out the current agent from the list
+          const filteredAgents = currentAgentName
+            ? agents.filter((agent) => agent !== currentAgentName)
+            : agents;
+          setSharedUsedBy(filteredAgents);
         })
         .catch((error) => {
           console.error('Error loading tool usage:', error);
@@ -106,7 +112,7 @@ export function ToolCreationForm({
     } else {
       setSharedUsedBy([]);
     }
-  }, [mode, toolName]);
+  }, [mode, toolName, currentAgentName]);
 
   useEffect(() => {
     if (!loading) {

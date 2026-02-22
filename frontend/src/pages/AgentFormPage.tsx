@@ -1042,6 +1042,7 @@ export function AgentFormPage() {
         onSubmit={handleToolFormSubmit}
         loading={loadingToolData}
         toolName={editingToolId || undefined}
+        currentAgentName={isNew ? undefined : id}
       />
     </div>
   );
