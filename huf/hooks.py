@@ -310,9 +310,6 @@ scheduler_events = {
 # Flow Engine Tools
 # -----------------
 # Register flow tools so agents can interact with flows
-huf_tools = [
-	"huf.ai.flow_tools.flow_tool_definitions",
-]
 
 fixtures = [
     {

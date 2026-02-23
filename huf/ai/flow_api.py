@@ -398,6 +398,7 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
+@frappe.whitelist()
 def handle_run_flow(flow_id: str, payload: dict | None = None, mode: str | None = None, **kwargs) -> dict:
 	"""
 	Agent tool: Start a flow from within an agent.
@@ -427,6 +428,7 @@ def handle_run_flow(flow_id: str, payload: dict | None = None, mode: str | None 
 		return {"success": False, "error": str(e)}
 
 
+@frappe.whitelist()
 def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 	"""
 	Agent tool: Get flow run status.
@@ -462,6 +464,7 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 		return {"success": False, "error": str(e)}
 
 
+@frappe.whitelist()
 def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs) -> dict:
 	"""
 	Agent tool: Resume a waiting flow run.
@@ -488,6 +491,7 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 		return {"success": False, "error": str(e)}
 
 
+@frappe.whitelist()
 def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", comment: str | None = None, **kwargs) -> dict:
 	"""
 	Agent tool: Approve or reject a flow run.
