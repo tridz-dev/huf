@@ -12,6 +12,7 @@ def after_install():
     create_demo_ai_providers()
     create_demo_ai_models()
     create_image_generation_tool()
+    create_transcribe_audio_tool()
     create_generate_audio_tool()
     create_ocr_document_tool()
     frappe.db.commit()
@@ -39,6 +40,7 @@ def after_migrate():
 	"""
 	try:
 		create_image_generation_tool()
+		create_transcribe_audio_tool()
 		create_generate_audio_tool()
 		create_ocr_document_tool()
 		from huf.ai.tool_registry import sync_discovered_tools
@@ -410,3 +412,81 @@ def create_generate_audio_tool():
         except Exception as e:
             print(f"Error creating generate_audio tool: {e}")
             frappe.log_error(f"Error creating generate_audio tool: {str(e)}", "Generate Audio Tool Creation")
+
+def create_transcribe_audio_tool():
+    """Create or update the transcribe_audio tool in Agent Tool Function DocType."""
+    tool_name = "transcribe_audio"
+    print("Creating/updating transcribe_audio tool")
+    
+    # Ensure Transcription tool type exists
+    if not frappe.db.exists("Agent Tool Type", "Transcription"):
+        tool_type_doc = frappe.new_doc("Agent Tool Type")
+        tool_type_doc.name1 = "Transcription"
+        tool_type_doc.insert()
+    
+    # Check if tool already exists
+    tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+    
+    if tool_exists:
+        # Update existing tool
+        tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+        # Update description and function path if needed
+        tool_doc.description = "Transcribe audio files to text using AI. Use this when the user uploads an audio file or asks to transcribe audio. Supports multiple providers via LiteLLM (OpenAI, Groq, Deepgram, etc.)."
+        tool_doc.function_path = "huf.ai.sdk_tools.handle_transcribe_audio"
+        tool_doc.tool_type = "Transcription"
+        try:
+            tool_doc.save()
+            print("Transcribe audio tool updated successfully")
+        except Exception as e:
+            print(f"Error updating transcribe_audio tool: {e}")
+            frappe.log_error(f"Error updating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Update")
+    else:
+        # Create new tool
+        parameters = [
+            {
+                "label": "File ID",
+                "fieldname": "file_id",
+                "type": "string",
+                "required": 0,
+                "description": "File document ID from Frappe (preferred). File must exist in the system."
+            },
+            {
+                "label": "File URL",
+                "fieldname": "file_url",
+                "type": "string",
+                "required": 0,
+                "description": "File URL/path (alternative to file_id). Example: /files/audio.mp3"
+            },
+            {
+                "label": "Language",
+                "fieldname": "language",
+                "type": "string",
+                "required": 0,
+                "description": "Optional language code in ISO 639-1 format (e.g., 'en', 'es', 'fr', 'de'). If omitted, language is auto-detected."
+            },
+            {
+                "label": "Model",
+                "fieldname": "model",
+                "type": "string",
+                "required": 0,
+                "description": "Optional transcription model. Defaults based on provider: OpenAI/Groq use 'whisper-1', Groq can use 'groq/whisper-large-v3', Deepgram uses 'deepgram/nova-2'."
+            }
+        ]
+        
+        tool_doc = frappe.get_doc({
+            "doctype": "Agent Tool Function",
+            "tool_name": tool_name,
+            "description": "Transcribe audio files to text using AI. Use this when the user uploads an audio file or asks to transcribe audio. Supports multiple providers via LiteLLM (OpenAI, Groq, Deepgram, etc.).",
+            "types": "Custom Function",
+            "function_path": "huf.ai.sdk_tools.handle_transcribe_audio",
+            "pass_parameters_as_json": 1,
+            "parameters": parameters,
+            "tool_type": "Transcription"
+        })
+        
+        try:
+            tool_doc.insert()
+            print("Transcribe audio tool created successfully")
+        except Exception as e:
+            print(f"Error creating transcribe_audio tool: {e}")
+            frappe.log_error(f"Error creating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Creation")
