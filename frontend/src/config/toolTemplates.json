@@ -1,0 +1,69 @@
+{
+  "templates": [
+    {
+      "id": "document_operation",
+      "name": "Document Operation",
+      "description": "Read, create, update, or list records from your Frappe database (e.g., Sales Orders, Customers).",
+      "icon": "database",
+      "toolTypes": [
+        "Get Document",
+        "Get Multiple Documents",
+        "Get List",
+        "Create Document",
+        "Create Multiple Documents",
+        "Update Document",
+        "Update Multiple Documents",
+        "Delete Document",
+        "Delete Multiple Documents",
+        "Submit Document",
+        "Cancel Document",
+        "Get Amended Document",
+        "Attach File to Document"
+      ]
+    },
+    {
+      "id": "external_api",
+      "name": "External API Request",
+      "description": "Connect to third-party services via HTTP/REST (e.g., Google Search, Stripe, Slack).",
+      "icon": "globe",
+      "toolTypes": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "id": "platform_utility",
+      "name": "Platform Utility",
+      "description": "Built-in capabilities like Speech-to-Text, Canvas operations, or Conversation data management.",
+      "icon": "cpu",
+      "toolTypes": [
+        "Get Report Result",
+        "Get Value",
+        "Set Value",
+        "Get Conversation Data",
+        "Set Conversation Data",
+        "Load Conversation Data"
+      ]
+    },
+    {
+      "id": "run_agent",
+      "name": "Run AI Agent",
+      "description": "Delegate a task to another specialized AI Agent in your system.",
+      "icon": "bot",
+      "toolTypes": [
+        "Run Agent"
+      ]
+    },
+    {
+      "id": "custom_function",
+      "name": "Custom Script / Function",
+      "description": "Execute a Python function or custom script for complex logic.",
+      "icon": "code",
+      "toolTypes": [
+        "Custom Function",
+        "App Provided",
+        "Client Side Tool"
+      ]
+    }
+  ]
+}
