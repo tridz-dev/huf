@@ -399,23 +399,32 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 
 
 @frappe.whitelist()
-def handle_run_flow(flow_id: str, payload: dict | None = None, mode: str | None = None, **kwargs) -> dict:
+def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str | None = None, **kwargs) -> dict:
 	"""
 	Agent tool: Start a flow from within an agent.
 
 	Args:
 	    flow_id: Flow ID to run
-	    payload: Initial payload
+	    payload: Initial payload (dict or JSON string)
 	    mode: Optional mode override
 
 	Returns:
-	    dict with flow_run_id, status, current_node_id
+	    dict with flow_run_id, status, message
 	"""
 	try:
+		if isinstance(payload, str):
+			try:
+				payload = json.loads(payload)
+			except Exception:
+				payload = {}
+				
 		from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
 
 		flow_run = create_flow_run(flow_id=flow_id, payload=payload or {}, mode=mode)
+		
+		# Execute synchronously so Chat agents can receive the result instead of just a queued message
 		engine_run_flow(flow_run.name)
+		
 		flow_run.reload()
 
 		return {
