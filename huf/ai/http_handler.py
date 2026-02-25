@@ -2,6 +2,7 @@ import frappe
 import requests
 from requests.exceptions import RequestException
 import json
+from urllib.parse import urlparse
 
 
 def validate_url(url, tool_name=None):
@@ -43,25 +44,43 @@ def validate_url(url, tool_name=None):
     return True
 
 
-@frappe.whitelist(allow_guest=False)
+@frappe.whitelist(allow_guest=True)
 def handle_http_request(method, url, headers=None, params=None, data=None, json_data=None, tool_name=None):
     """
     Generic HTTP request handler with support for tool-defined headers
     """
     try:
         tool_info = {}
+        tool_allowed_for_guest = False
+        
         if tool_name:
             try:
                 tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+                # Extract headers from tool's http_headers child table
+                tool_headers = {}
+                if hasattr(tool_doc, 'http_headers') and tool_doc.http_headers:
+                    for header in tool_doc.http_headers:
+                        if header.key and header.value:
+                            tool_headers[header.key] = header.value
+                
                 tool_info = {
                     "base_url": tool_doc.base_url,
-                    "headers": {header.key: header.value for header in tool_doc.http_headers}
+                    "headers": tool_headers
                 }
+                tool_allowed_for_guest = bool(tool_doc.allowed_for_guest)
             except frappe.DoesNotExistError:
                 return {
                     "success": False,
                     "error": f"Tool '{tool_name}' not found"
                 }
+        
+        # Check if guest user is trying to use a tool that doesn't allow guest access
+        if frappe.session.user == "Guest" and not tool_allowed_for_guest:
+            return {
+                "success": False,
+                "error": "This tool does not allow guest access. Please log in or enable 'Allowed for Guest' on the tool.",
+                "status_code": 403
+            }
         
         # Apply base URL if specified in tool
         final_url = url
@@ -71,7 +90,10 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
                 final_url = tool_info["base_url"].rstrip('/') + '/' + url.lstrip('/')
         
         # Merge tool headers with request headers
-        final_headers = {**tool_info.get("headers", {}), **(headers or {})}
+        # Tool headers come first, then request headers can override them
+        tool_headers = tool_info.get("headers", {}) or {}
+        request_headers = headers or {}
+        final_headers = {**tool_headers, **request_headers}
         
         # Prepare request parameters
         request_kwargs = {
@@ -119,7 +141,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
             "status_code": getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
         }
 
-@frappe.whitelist(allow_guest=False)
+@frappe.whitelist(allow_guest=True)
 def handle_get_request(url, headers=None, params=None, tool_name=None):
     """
     Handle GET requests with tool-defined headers
@@ -127,7 +149,7 @@ def handle_get_request(url, headers=None, params=None, tool_name=None):
     return handle_http_request('GET', url, headers=headers, params=params, tool_name=tool_name)
 
 
-@frappe.whitelist(allow_guest=False)
+@frappe.whitelist(allow_guest=True)
 def handle_post_request(url, headers=None, data=None, json_data=None, tool_name=None):
     """
     Handle POST requests with JSON data support

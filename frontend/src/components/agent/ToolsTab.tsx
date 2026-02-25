@@ -1,4 +1,4 @@
-import { Plus, Server, Plug, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw, Edit, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,12 +6,16 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { MCPServerRef } from '@/services/mcpApi';
+import { getToolIconForType } from '../tools/toolIconMap';
+import { getAgentsUsingTool } from '@/services/toolApi';
+import { useEffect, useState } from 'react';
 
 interface ToolsTabProps {
   selectedTools: AgentToolFunctionRef[];
   toolTypes: AgentToolType[];
   onAddTools: () => void;
   onRemoveTool: (toolId: string) => void;
+  onEditTool?: (toolId: string) => void;
   // MCP Server props
   mcpServers?: MCPServerRef[];
   onAddMCP?: () => void;
@@ -23,9 +27,10 @@ interface ToolsTabProps {
 
 export function ToolsTab({
   selectedTools,
-  toolTypes,
+  toolTypes: _toolTypes,
   onAddTools,
   onRemoveTool,
+  onEditTool,
   mcpServers = [],
   onAddMCP,
   onRemoveMCP,
@@ -33,7 +38,34 @@ export function ToolsTab({
   onSyncMCP,
   mcpLoading = false,
 }: ToolsTabProps) {
+  const [toolUsageMap, setToolUsageMap] = useState<Map<string, string[]>>(new Map());
 
+  // Load tool usage data for all selected tools
+  useEffect(() => {
+    if (selectedTools.length === 0) {
+      setToolUsageMap(new Map());
+      return;
+    }
+
+    const loadToolUsage = async () => {
+      const usageMap = new Map<string, string[]>();
+      await Promise.all(
+        selectedTools.map(async (tool) => {
+          try {
+            const agents = await getAgentsUsingTool(tool.name);
+            if (agents.length > 0) {
+              usageMap.set(tool.name, agents);
+            }
+          } catch (error) {
+            console.error(`Error loading usage for tool ${tool.name}:`, error);
+          }
+        })
+      );
+      setToolUsageMap(usageMap);
+    };
+
+    loadToolUsage();
+  }, [selectedTools]);
   const handleMCPAction = (action: string, serverId?: string) => {
     switch (action) {
       case 'add':
@@ -105,8 +137,9 @@ export function ToolsTab({
         </CardHeader>
         <CardContent>
           {selectedTools.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">No tools added yet.</p>
+            <div className="text-center py-12 border border-dashed rounded-lg bg-muted/20">
+              <p className="text-muted-foreground mb-2">No tools configured yet.</p>
+              <p className="text-xs text-muted-foreground mb-4">Add tools to let this agent query data, run APIs, or call other agents.</p>
               <Button onClick={onAddTools} variant="outline" type="button">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Tool
@@ -115,35 +148,56 @@ export function ToolsTab({
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {selectedTools.map((tool) => {
-                const toolType = toolTypes.find((tt) => tt.name === tool.tool_type);
-                const toolTypeDisplayName = toolType?.name1;
-
+                const ToolIcon = getToolIconForType(tool.types);
+                const usedByAgents = toolUsageMap.get(tool.name) || [];
+                const isShared = usedByAgents.length > 0;
+                
                 return (
                   <div
                     key={tool.name}
-                    className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                    className="group flex h-full items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
-                        {toolTypeDisplayName && (
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            {toolTypeDisplayName}
-                          </Badge>
+                    <div className="flex-1 min-w-0 flex items-start gap-3">
+                      <div className="mt-0.5 rounded-md border bg-muted/30 p-1.5 text-muted-foreground">
+                        <ToolIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 space-y-1 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {tool.description || 'No description available.'}
+                        </p>
+                        {isShared && (
+                          <div className="flex w-fit items-center text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md mt-2 text-[11px] font-semibold">
+                            <Users className="w-3 h-3 mr-1.5" />
+                            <span>Used in {usedByAgents.length} agent{usedByAgents.length > 1 ? 's' : ''}</span>
+                          </div>
                         )}
                       </div>
-                      {tool.description && (
-                        <p className="text-xs text-muted-foreground">{tool.description}</p>
-                      )}
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemoveTool(tool.name)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      {onEditTool && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEditTool(tool.name)}
+                          title="Edit tool"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveTool(tool.name)}
+                        title="Remove tool"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 );
               })}

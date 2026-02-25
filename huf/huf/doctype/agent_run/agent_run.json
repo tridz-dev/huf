@@ -31,7 +31,13 @@
   "agent_orchestration",
   "knowledge_section",
   "knowledge_sources_used",
-  "chunks_injected"
+  "chunks_injected",
+  "flow_section",
+  "flow_run",
+  "flow_node_id",
+  "column_break_flow1",
+  "flow_id",
+  "run_kind"
  ],
  "fields": [
   {
@@ -206,6 +212,42 @@
    "fieldname": "chunks_injected",
    "fieldtype": "Int",
    "label": "Chunks Injected",
+   "read_only": 1
+  },
+  {
+   "fieldname": "flow_section",
+   "fieldtype": "Section Break",
+   "label": "Flow"
+  },
+  {
+   "fieldname": "flow_run",
+   "fieldtype": "Link",
+   "label": "Flow Run",
+   "options": "Flow Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "flow_node_id",
+   "fieldtype": "Data",
+   "label": "Flow Node ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_flow1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "flow_id",
+   "fieldtype": "Data",
+   "label": "Flow ID",
+   "read_only": 1
+  },
+  {
+   "default": "agent",
+   "fieldname": "run_kind",
+   "fieldtype": "Select",
+   "label": "Run Kind",
+   "options": "agent\ntool\norchestrator",
    "read_only": 1
   }
  ],

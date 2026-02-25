@@ -46,8 +46,14 @@ huf/
 │   │   │   ├── backends/         # Storage backends (SQLite FTS5)
 │   │   │   ├── extractors/       # Text extraction (PDF, DOCX, HTML)
 │   │   │   └── chunkers/         # Text chunking strategies
+│   │   ├── flow_engine.py        # Flow Engine: graph orchestration
+│   │   ├── flow_api.py           # Flow whitelisted API endpoints
+│   │   ├── flow_eval.py          # Safe expression evaluator for edges
+│   │   ├── flow_tool_executor.py # Deterministic tool execution
+│   │   ├── flow_orchestrator.py  # Router/orchestrator prompt + JSON parsing
+│   │   ├── flow_tools.py         # Flow tool definitions for huf_tools hook
 │   │   └── orchestration/        # Multi-step workflow planning
-│   ├── huf/doctype/              # DocType definitions (33 total)
+│   ├── huf/doctype/              # DocType definitions (35 total)
 │   ├── hooks.py                  # Frappe integration hooks
 │   ├── install.py                # Installation/migration hooks
 │   ├── www/                      # Web routes
@@ -216,18 +222,28 @@ import type { Agent } from '@/types/agent.types';
 | **Knowledge Input** | Individual content items (files, text, URLs) |
 | **MCP Server** | Model Context Protocol server configuration |
 | **Agent Settings** | Global application settings (singleton) |
+| **Flow Definition** | Graph-based flow definition stored as JSON |
+| **Flow Run** | Single execution instance of a flow |
 
 ## Key Backend Files
 
 ### Agent Execution Flow
 1. **`agent_integration.py`**: `AgentManager` prepares agents, provides both sync and streaming execution:
-   - `run_agent_sync()` - Synchronous execution, returns complete response
+   - `run_agent_sync()` - Synchronous execution, returns complete response (supports flow tagging via `flow_run_id`, `flow_node_id`, `run_kind`)
    - `run_agent_stream()` - Async generator yielding chunks for real-time streaming
 2. **`agent_stream_renderer.py`**: SSE page renderer for `/huf/stream/<agent_name>` endpoint
 3. **`run.py`**: `RunProvider` routes to appropriate LLM provider
 4. **`providers/litellm.py`**: Unified provider handling via LiteLLM
 5. **`sdk_tools.py`**: Converts `Agent Tool Function` DocTypes to SDK tools
 6. **`tool_functions.py`**: Low-level Frappe database operations
+
+### Flow Engine
+1. **`flow_engine.py`**: Core engine - loads definitions, creates runs, executes nodes, evaluates edges
+2. **`flow_api.py`**: Whitelisted REST APIs for flow management and execution
+3. **`flow_eval.py`**: AST-based safe expression evaluator for edge conditions
+4. **`flow_tool_executor.py`**: Deterministic tool execution reusing sdk_tools handlers
+5. **`flow_orchestrator.py`**: Prompt construction and JSON parsing for router/orchestrator
+6. **`flow_tools.py`**: Tool definitions registered via `huf_tools` hook
 
 ### Streaming Support
 HUF supports Server-Sent Events (SSE) for real-time agent response streaming:
@@ -276,12 +292,29 @@ eventSource.onmessage = (event) => {
 };
 ```
 
+### Flow Engine API Calls
+```python
+# Start a flow
+result = frappe.call('huf.ai.flow_api.run_flow', flow_id='my-flow', payload={'key': 'value'})
+
+# Get flow run status
+status = frappe.call('huf.ai.flow_api.get_flow_run', flow_run_id='FR-00001')
+
+# Approve a waiting flow
+frappe.call('huf.ai.flow_api.approve_flow_run', flow_run_id='FR-00001', comment='Looks good')
+
+# Webhook trigger (external)
+# POST /api/method/huf.ai.flow_api.flow_webhook?flow_id=my-flow&webhook_key=secret
+```
+
 ## Security Considerations
 
 1. **API Keys**: Stored using Frappe's encrypted `Password` field type
 2. **SSRF Protection**: `http_handler.py` validates URLs to block private IPs
 3. **Tool Permissions**: Custom functions run with the caller's permissions
 4. **Input Validation**: Always validate inputs in custom tool functions
+5. **Flow Expressions**: AST-based restricted evaluator prevents code injection in edge conditions
+6. **Flow Router**: LLM routing decisions constrained to valid candidate edges
 
 ## Pre-commit Hooks
 
@@ -330,6 +363,8 @@ Test files are located in:
 7. **Real-time Updates**: Socket.io for live agent feedback, SSE for streaming responses
 8. **Streaming vs Sync**: Use `run_agent_stream()` for chat UIs, `run_agent_sync()` for triggers/automation
 9. **Docker Dev**: Use `docker/` for quick evaluation; use Frappe bench for full development
+10. **Flow Engine**: Graph orchestration via JSON definitions; no separate Node/Edge doctypes; Agent Run serves as node-run log
+11. **Flow Modes**: Normal (deterministic edges) vs Agentic (orchestrator-in-the-loop); both constrained to graph topology
 
 ## Related Documentation
 
