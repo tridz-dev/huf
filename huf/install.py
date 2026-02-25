@@ -15,6 +15,7 @@ def after_install():
     create_transcribe_audio_tool()
     create_generate_audio_tool()
     create_ocr_document_tool()
+    create_flow_tools()
     frappe.db.commit()
     """
 	Called after app installation.
@@ -43,6 +44,7 @@ def after_migrate():
 		create_transcribe_audio_tool()
 		create_generate_audio_tool()
 		create_ocr_document_tool()
+		create_flow_tools()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
 		frappe.log_error(
@@ -174,7 +176,6 @@ def create_demo_ai_models():
 def create_image_generation_tool():
     """Create the image generation tool in Agent Tool Function DocType."""
     tool_name = "generate_image"
-    print("Creating image generation tool")
     # Check if tool already exists
     if frappe.db.exists("Agent Tool Function", {"tool_name": tool_name}):
         return
@@ -237,16 +238,13 @@ def create_image_generation_tool():
     })
     try:
         tool_doc.insert()
-        print("Image generation tool created successfully")
     except Exception as e:
-        print(f"Error creating image generation tool: {e}")
         frappe.log_error(f"Error creating image generation tool: {str(e)}", "Image Generation Tool Creation")
 
 
 def create_ocr_document_tool():
     """Create or update the ocr_document tool in Agent Tool Function DocType."""
     tool_name = "ocr_document"
-    print("Creating/updating ocr_document tool")
     
     # Ensure OCR tool type exists
     if not frappe.db.exists("Agent Tool Type", "OCR"):
@@ -265,9 +263,7 @@ def create_ocr_document_tool():
         tool_doc.tool_type = "OCR"
         try:
             tool_doc.save()
-            print("OCR document tool updated successfully")
         except Exception as e:
-            print(f"Error updating ocr_document tool: {e}")
             frappe.log_error(f"Error updating ocr_document tool: {str(e)}", "OCR Document Tool Update")
     else:
         # Create new tool
@@ -322,15 +318,12 @@ def create_ocr_document_tool():
         
         try:
             tool_doc.insert()
-            print("OCR document tool created successfully")
         except Exception as e:
-            print(f"Error creating ocr_document tool: {e}")
             frappe.log_error(f"Error creating ocr_document tool: {str(e)}", "OCR Document Tool Creation")
 
 def create_generate_audio_tool():
     """Create or update the generate_audio tool in Agent Tool Function DocType."""
     tool_name = "generate_audio"
-    print("Creating/updating generate_audio tool")
     
     # Ensure Audio Generation tool type exists
     if not frappe.db.exists("Agent Tool Type", "Audio Generation"):
@@ -349,9 +342,7 @@ def create_generate_audio_tool():
         tool_doc.tool_type = "Audio Generation"
         try:
             tool_doc.save()
-            print("Generate audio tool updated successfully")
         except Exception as e:
-            print(f"Error updating generate_audio tool: {e}")
             frappe.log_error(f"Error updating generate_audio tool: {str(e)}", "Generate Audio Tool Update")
     else:
         # Create new tool
@@ -408,15 +399,12 @@ def create_generate_audio_tool():
         
         try:
             tool_doc.insert()
-            print("Generate audio tool created successfully")
         except Exception as e:
-            print(f"Error creating generate_audio tool: {e}")
             frappe.log_error(f"Error creating generate_audio tool: {str(e)}", "Generate Audio Tool Creation")
 
 def create_transcribe_audio_tool():
     """Create or update the transcribe_audio tool in Agent Tool Function DocType."""
     tool_name = "transcribe_audio"
-    print("Creating/updating transcribe_audio tool")
     
     # Ensure Transcription tool type exists
     if not frappe.db.exists("Agent Tool Type", "Transcription"):
@@ -436,9 +424,7 @@ def create_transcribe_audio_tool():
         tool_doc.tool_type = "Transcription"
         try:
             tool_doc.save()
-            print("Transcribe audio tool updated successfully")
         except Exception as e:
-            print(f"Error updating transcribe_audio tool: {e}")
             frappe.log_error(f"Error updating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Update")
     else:
         # Create new tool
@@ -486,7 +472,69 @@ def create_transcribe_audio_tool():
         
         try:
             tool_doc.insert()
-            print("Transcribe audio tool created successfully")
         except Exception as e:
-            print(f"Error creating transcribe_audio tool: {e}")
             frappe.log_error(f"Error creating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Creation")
+
+def create_flow_tools():
+    """Create the flow management tools in Agent Tool Function DocType."""
+    
+    # Ensure Flow Engine tool type exists
+    if not frappe.db.exists("Agent Tool Type", "Workflow Tools"):
+        tool_type_doc = frappe.new_doc("Agent Tool Type")
+        tool_type_doc.name1 = "Workflow Tools"
+        tool_type_doc.insert()
+        
+    from huf.ai.flow_tools import flow_tool_definitions
+    
+    for tool_def in flow_tool_definitions:
+        tool_name = tool_def["tool_name"]
+        
+        # Check if tool already exists
+        tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+        
+        # Structure the parameters properly
+        parameters = []
+        for p in tool_def.get("parameters", []):
+            parameters.append({
+                "label": p.get("parameter_name", "").replace("_", " ").title(),
+                "fieldname": p.get("parameter_name", ""),
+                "param_type": p.get("type", "Data"),
+                "required": int(p.get("required", False)),
+                "description": p.get("description", "")
+            })
+            
+        if tool_exists:
+            # Update existing tool
+            tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+            tool_doc.description = tool_def.get("description", "")
+            tool_doc.function_path = tool_def.get("function_path", "")
+            tool_doc.tool_type = "Workflow Tools"
+            tool_doc.types = "Custom Function"
+            tool_doc.pass_parameters_as_json = 1
+            
+            # Update parameters (clear existing and add new)
+            tool_doc.set("parameters", [])
+            for p in parameters:
+                tool_doc.append("parameters", p)
+            
+            try:
+                tool_doc.save(ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(f"Error updating {tool_name} tool: {str(e)}", "Flow Tool Update")
+        else:
+            # Create new tool
+            tool_doc = frappe.get_doc({
+                "doctype": "Agent Tool Function",
+                "tool_name": tool_name,
+                "description": tool_def.get("description", ""),
+                "types": "Custom Function",
+                "function_path": tool_def.get("function_path", ""),
+                "pass_parameters_as_json": 1,
+                "parameters": parameters,
+                "tool_type": "Workflow Tools"
+            })
+            
+            try:
+                tool_doc.insert(ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(f"Error creating {tool_name} tool: {str(e)}", "Flow Tool Creation")
