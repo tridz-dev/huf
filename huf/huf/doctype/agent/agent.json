@@ -41,6 +41,7 @@
   "prompt_version_locked",
   "template_version_at_attach",
   "copied_from_prompt",
+  "instruction_section",
   "instructions",
   "tools_and_mcp_tab",
   "agent_tool",
@@ -514,12 +515,17 @@
    "fieldname": "autonaming_of_conversation_title",
    "fieldtype": "Check",
    "label": "Autonaming of conversation title"
+  },
+  {
+   "fieldname": "instruction_section",
+   "fieldtype": "Section Break",
+   "label": "Instruction"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-20 00:00:00.000000",
+ "modified": "2026-02-25 19:41:57.703300",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",
