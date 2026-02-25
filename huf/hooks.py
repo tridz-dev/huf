@@ -307,6 +307,10 @@ scheduler_events = {
 # default_log_clearing_doctypes = {
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
+# Flow Engine Tools
+# -----------------
+# Register flow tools so agents can interact with flows
+
 fixtures = [
     {
         "dt": "Custom HTML Block",

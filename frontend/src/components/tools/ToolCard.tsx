@@ -2,6 +2,7 @@ import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { cn } from '@/lib/utils';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
+import { Users } from 'lucide-react';
 
 interface ToolCardProps {
   tool: AgentToolFunctionRef;
@@ -10,6 +11,7 @@ interface ToolCardProps {
   compact?: boolean;
   className?: string;
   toolTypesMap?: Map<string, AgentToolType>; // Map of tool_type name -> AgentToolType for lookup
+  usedByAgents?: string[]; // List of agent names using this tool
 }
 
 export function ToolCard({
@@ -19,7 +21,9 @@ export function ToolCard({
   compact = false,
   className,
   toolTypesMap,
+  usedByAgents = [],
 }: ToolCardProps) {
+  const isShared = usedByAgents.length > 0;
   const handleClick = () => {
     if (onSelect) {
       onSelect(tool);
@@ -48,22 +52,35 @@ export function ToolCard({
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
-          {toolTypeDisplayName && (
-            <Badge variant="outline" className="text-xs shrink-0">
-              {toolTypeDisplayName}
-            </Badge>
-          )}
-        </div>
-        {tool.description && (
-          <p className={cn(
-            'text-muted-foreground',
-            compact ? 'text-xs line-clamp-1' : 'text-xs line-clamp-2'
-          )}>
-            {tool.description}
-          </p>
-        )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
+              {tool.types && (
+                <Badge variant="secondary" className="text-[10px] uppercase shrink-0">
+                  {tool.types}
+                </Badge>
+              )}
+              {toolTypeDisplayName && (
+                <Badge variant="outline" className="text-xs shrink-0">
+                  {toolTypeDisplayName}
+                </Badge>
+              )}
+              {isShared && (
+                <Badge variant="secondary" className="text-[10px] flex items-center gap-1 shrink-0">
+                  <Users className="w-3 h-3" />
+                  Used by {usedByAgents.length} agent{usedByAgents.length > 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+            {tool.description && (
+              <p className={cn(
+                'text-muted-foreground',
+                compact ? 'text-xs line-clamp-1' : 'text-xs line-clamp-2'
+              )}>
+                {tool.description}
+              </p>
+            )}
+          </div>
       </div>
     </div>
   );

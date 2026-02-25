@@ -398,6 +398,51 @@ def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None,
         tool_call_id=getattr(raw_call, "id", None)
     )
 
+def _run_async_safely(coro):
+    """
+    Safely execute an asyncio coroutine in a synchronous Frappe context.
+    If an event loop is already running (e.g. nested inside a tool call), 
+    run the coroutine in a new thread, preserving Frappe's database context.
+    """
+    import asyncio
+    import concurrent.futures
+    import frappe
+
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if current_loop and current_loop.is_running():
+        site = frappe.local.site
+        user = getattr(frappe.session, "user", None)
+        
+        def _thread_worker():
+            frappe.init(site)
+            frappe.connect()
+            if user:
+                frappe.set_user(user)
+            try:
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    return new_loop.run_until_complete(coro)
+                finally:
+                    new_loop.close()
+            finally:
+                frappe.destroy()
+                
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(_thread_worker).result()
+    else:
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        try:
+            return new_loop.run_until_complete(coro)
+        finally:
+            new_loop.close()
+
+
 @frappe.whitelist()
 def run_background_summarization(conversation_name, agent_name):
     """
@@ -446,18 +491,13 @@ def run_background_summarization(conversation_name, agent_name):
         
         messages = [{"role": "user", "content": summary_prompt}]
         
-        # Run completion (sync in this background job context)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            new_summary_text = loop.run_until_complete(
-                get_simple_completion(summary_model, messages, summary_provider)
-            )
-            if new_summary_text:
-                conv_manager.update_stored_summary(conversation_name, new_summary_text)
-                frappe.db.commit()
-        finally:
-            loop.close()
+        # Run completion (sync in this background job context or safely in thread if nested)
+        new_summary_text = _run_async_safely(
+            get_simple_completion(summary_model, messages, summary_provider)
+        )
+        if new_summary_text:
+            conv_manager.update_stored_summary(conversation_name, new_summary_text)
+            frappe.db.commit()
             
     except Exception as e:
         frappe.log_error(f"Background summarization failed: {str(e)}", "Agent Background Summarization")
@@ -495,18 +535,13 @@ def generate_conversation_title(conversation_name, agent_name):
         
         messages = [{"role": "user", "content": prompt}]
         
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-             title = loop.run_until_complete(
-                get_simple_completion(model, messages, provider)
-            )
-             if title:
-                 title = title.strip().strip('"').strip("'")
-                 frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
-                 frappe.db.commit()
-        finally:
-            loop.close()
+        title = _run_async_safely(
+            get_simple_completion(model, messages, provider)
+        )
+        if title:
+            title = title.strip().strip('"').strip("'")
+            frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
+            frappe.db.commit()
             
     except Exception as e:
         frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
@@ -522,7 +557,10 @@ def run_agent_sync(
     conversation_id: str = None,
     parent_run_id: str = None,
     orchestration_id: str = None,
-    response_format = None
+    response_format = None,
+    flow_run_id: str = None,
+    flow_node_id: str = None,
+    run_kind: str = None,
 ):
 
     if not agent_name:
@@ -531,6 +569,9 @@ def run_agent_sync(
         channel_id = "api"
 
     agent_doc = frappe.get_doc("Agent", agent_name)
+    
+    resolved_provider = provider if provider else agent_doc.provider
+    resolved_model = model if model else agent_doc.model
 
     if frappe.session.user == "Guest" and not agent_doc.allow_guest:
         frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
@@ -565,7 +606,7 @@ def run_agent_sync(
     #          )
     # else:
     
-    frappe.db.set_value("Agent Conversation", conversation.name, "model", agent_doc.model)
+    frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
 
     # Optimized history fetching with dynamic limit + buffer
@@ -575,21 +616,34 @@ def run_agent_sync(
         prompt_template = None
     else:
         prompt_template = getattr(agent_doc, "agent_prompt", None),
-    run_doc = frappe.get_doc({
+    run_doc_data = {
         "doctype": "Agent Run",
         "agent": agent_name,
         "status": "Queued",
         "conversation": conversation.name,
         "prompt": prompt,
         "prompt_template": prompt_template,
-        "model": agent_doc.model,
-        "provider": agent_doc.provider,
+        "model": resolved_model,
+        "provider": resolved_provider,
         "parent_run": parent_run_id,
         "is_child": 1 if parent_run_id else 0,
         "agent_orchestration": orchestration_id
-    })
+    }
+    # Add flow linkage fields if provided
+    if flow_run_id:
+        run_doc_data["flow_run"] = flow_run_id
+    if flow_node_id:
+        run_doc_data["flow_node_id"] = flow_node_id
+    if run_kind:
+        run_doc_data["run_kind"] = run_kind
+    if flow_run_id:
+        flow_id = frappe.db.get_value("Flow Run", flow_run_id, "flow_id")
+        if flow_id:
+            run_doc_data["flow_id"] = flow_id
+
+    run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert(ignore_permissions=True)
-    conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
+    conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
 
@@ -713,23 +767,17 @@ def run_agent_sync(
         else:
             enhanced_prompt = base_prompt
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            context = {
-                "channel": channel_id,
-                "external_id": external_id,
-                "conversation_history": history,
-                "agent_name": agent_name,
-                "response_format": response_format,
-                "conversation_id": conversation.name,
-                "agent_run_id": run_doc.name
-            }
-            run = RunProvider.run(agent, enhanced_prompt, agent_doc.provider, agent_doc.model,context)
-
-            result = loop.run_until_complete(run)
-        finally:
-            loop.close()
+        context = {
+            "channel": channel_id,
+            "external_id": external_id,
+            "conversation_history": history,
+            "agent_name": agent_name,
+            "response_format": response_format,
+            "conversation_id": conversation.name,
+            "agent_run_id": run_doc.name
+        }
+        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model,context)
+        result = _run_async_safely(run)
 
         client_side_tool_calls = []
 
@@ -760,8 +808,8 @@ def run_agent_sync(
                     conversation, 
                     role="agent", 
                     content=msg_content, 
-                    provider=agent_doc.provider, 
-                    model=agent_doc.model, 
+                    provider=resolved_provider, 
+                    model=resolved_model, 
                     agent=agent_name, 
                     run_name=run_doc.name,
                     kind="Tool Call",
@@ -856,7 +904,6 @@ def run_agent_sync(
                 output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
                 cached_tokens = getattr(usage, "cached_tokens", 0)
 
-            # --- UPDATE CONVERSATION METRICS ---
             try:
                 total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
                 
@@ -871,7 +918,7 @@ def run_agent_sync(
                 """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
             except Exception as e:
                 frappe.log_error(f"Failed to update conversation metrics: {str(e)}")
-            # -----------------------------------
+            
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
@@ -879,14 +926,14 @@ def run_agent_sync(
                 "cost": cost
             })
 
-        conv_manager.add_message(conversation, "agent", final_output, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
+        conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
 
         frappe.db.set_value("Agent Run", run_doc.name, {
             "status": "Success",
             "response": final_output,
             "prompt": prompt,
-            "model": agent_doc.model,
-            "provider": agent_doc.provider,
+            "model": resolved_model,
+            "provider": resolved_provider,
             "end_time": now_datetime()
         }, update_modified=True)
         safe_commit()
@@ -923,7 +970,7 @@ def run_agent_sync(
             "response": final_output,
             "client_side_tool_calls": client_side_tool_calls,
             "structured": structured,
-            "provider": manager.agent_doc.provider,
+            "provider": resolved_provider,
             "agent_run_id": run_doc.name,
             "conversation_id": conversation.name,
             "session_id": conv_manager.session_id

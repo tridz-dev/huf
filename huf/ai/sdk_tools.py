@@ -675,6 +675,11 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
                 "permission_denied": True
             }
 
+        # Support both flat kwargs and a "doc" wrapper {"doc": {"field": "value"}}
+        if "doc" in kwargs and isinstance(kwargs["doc"], dict):
+            doc_fields = kwargs.pop("doc")
+            kwargs.update(doc_fields)
+
         doc = frappe.get_doc({"doctype": reference_doctype, **kwargs})
         doc.insert(ignore_permissions=ignore_permissions)
 
