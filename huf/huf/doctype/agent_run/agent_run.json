@@ -4,7 +4,7 @@
  "creation": "2025-08-11 19:27:48.765866",
  "doctype": "DocType",
  "engine": "InnoDB",
-  "field_order": [
+ "field_order": [
   "request_tab",
   "conversation",
   "agent",
@@ -20,6 +20,7 @@
   "input_tokens",
   "cost",
   "call_recording",
+  "prompt_template",
   "column_break_qy3x",
   "model",
   "end_time",
@@ -46,6 +47,13 @@
    "in_list_view": 1,
    "label": "Agent",
    "options": "Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "prompt_template",
+   "fieldtype": "Link",
+   "label": "Prompt Template",
+   "options": "Agent Prompt",
    "read_only": 1
   },
   {
@@ -204,7 +212,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-29 15:02:15.973547",
+ "modified": "2026-02-25 21:07:39.245567",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",
