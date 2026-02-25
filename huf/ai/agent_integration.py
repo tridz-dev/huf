@@ -568,6 +568,9 @@ def run_agent_sync(
         channel_id = "api"
 
     agent_doc = frappe.get_doc("Agent", agent_name)
+    
+    resolved_provider = provider if provider else agent_doc.provider
+    resolved_model = model if model else agent_doc.model
 
     if frappe.session.user == "Guest" and not agent_doc.allow_guest:
         frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
@@ -602,7 +605,7 @@ def run_agent_sync(
     #          )
     # else:
     
-    frappe.db.set_value("Agent Conversation", conversation.name, "model", agent_doc.model)
+    frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
 
     # Optimized history fetching with dynamic limit + buffer
@@ -614,8 +617,8 @@ def run_agent_sync(
         "status": "Queued",
         "conversation": conversation.name,
         "prompt": prompt,
-        "model": agent_doc.model,
-        "provider": agent_doc.provider,
+        "model": resolved_model,
+        "provider": resolved_provider,
         "parent_run": parent_run_id,
         "is_child": 1 if parent_run_id else 0,
         "agent_orchestration": orchestration_id
@@ -634,7 +637,7 @@ def run_agent_sync(
 
     run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert(ignore_permissions=True)
-    conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
+    conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
 
@@ -767,8 +770,7 @@ def run_agent_sync(
             "conversation_id": conversation.name,
             "agent_run_id": run_doc.name
         }
-        run = RunProvider.run(agent, enhanced_prompt, agent_doc.provider, agent_doc.model,context)
-
+        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model,context)
         result = _run_async_safely(run)
 
         client_side_tool_calls = []
@@ -800,8 +802,8 @@ def run_agent_sync(
                     conversation, 
                     role="agent", 
                     content=msg_content, 
-                    provider=agent_doc.provider, 
-                    model=agent_doc.model, 
+                    provider=resolved_provider, 
+                    model=resolved_model, 
                     agent=agent_name, 
                     run_name=run_doc.name,
                     kind="Tool Call",
@@ -896,7 +898,6 @@ def run_agent_sync(
                 output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
                 cached_tokens = getattr(usage, "cached_tokens", 0)
 
-            # --- UPDATE CONVERSATION METRICS ---
             try:
                 total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
                 
@@ -911,7 +912,7 @@ def run_agent_sync(
                 """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
             except Exception as e:
                 frappe.log_error(f"Failed to update conversation metrics: {str(e)}")
-            # -----------------------------------
+            
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
@@ -919,14 +920,14 @@ def run_agent_sync(
                 "cost": cost
             })
 
-        conv_manager.add_message(conversation, "agent", final_output, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
+        conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
 
         frappe.db.set_value("Agent Run", run_doc.name, {
             "status": "Success",
             "response": final_output,
             "prompt": prompt,
-            "model": agent_doc.model,
-            "provider": agent_doc.provider,
+            "model": resolved_model,
+            "provider": resolved_provider,
             "end_time": now_datetime()
         }, update_modified=True)
         safe_commit()
@@ -963,7 +964,7 @@ def run_agent_sync(
             "response": final_output,
             "client_side_tool_calls": client_side_tool_calls,
             "structured": structured,
-            "provider": manager.agent_doc.provider,
+            "provider": resolved_provider,
             "agent_run_id": run_doc.name,
             "conversation_id": conversation.name,
             "session_id": conv_manager.session_id
