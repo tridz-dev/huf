@@ -19,8 +19,8 @@ flow_tool_definitions = [
 			},
 			{
 				"parameter_name": "payload",
-				"type": "object",
-				"description": "Initial payload/input for the flow (JSON object)",
+				"type": "string",
+				"description": "Initial payload/input for the flow (JSON object or string)",
 				"required": 0,
 			},
 			{
