@@ -397,6 +397,51 @@ def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None,
         tool_call_id=getattr(raw_call, "id", None)
     )
 
+def _run_async_safely(coro):
+    """
+    Safely execute an asyncio coroutine in a synchronous Frappe context.
+    If an event loop is already running (e.g. nested inside a tool call), 
+    run the coroutine in a new thread, preserving Frappe's database context.
+    """
+    import asyncio
+    import concurrent.futures
+    import frappe
+
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if current_loop and current_loop.is_running():
+        site = frappe.local.site
+        user = getattr(frappe.session, "user", None)
+        
+        def _thread_worker():
+            frappe.init(site)
+            frappe.connect()
+            if user:
+                frappe.set_user(user)
+            try:
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    return new_loop.run_until_complete(coro)
+                finally:
+                    new_loop.close()
+            finally:
+                frappe.destroy()
+                
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(_thread_worker).result()
+    else:
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        try:
+            return new_loop.run_until_complete(coro)
+        finally:
+            new_loop.close()
+
+
 @frappe.whitelist()
 def run_background_summarization(conversation_name, agent_name):
     """
@@ -445,18 +490,13 @@ def run_background_summarization(conversation_name, agent_name):
         
         messages = [{"role": "user", "content": summary_prompt}]
         
-        # Run completion (sync in this background job context)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            new_summary_text = loop.run_until_complete(
-                get_simple_completion(summary_model, messages, summary_provider)
-            )
-            if new_summary_text:
-                conv_manager.update_stored_summary(conversation_name, new_summary_text)
-                frappe.db.commit()
-        finally:
-            loop.close()
+        # Run completion (sync in this background job context or safely in thread if nested)
+        new_summary_text = _run_async_safely(
+            get_simple_completion(summary_model, messages, summary_provider)
+        )
+        if new_summary_text:
+            conv_manager.update_stored_summary(conversation_name, new_summary_text)
+            frappe.db.commit()
             
     except Exception as e:
         frappe.log_error(f"Background summarization failed: {str(e)}", "Agent Background Summarization")
@@ -494,18 +534,13 @@ def generate_conversation_title(conversation_name, agent_name):
         
         messages = [{"role": "user", "content": prompt}]
         
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-             title = loop.run_until_complete(
-                get_simple_completion(model, messages, provider)
-            )
-             if title:
-                 title = title.strip().strip('"').strip("'")
-                 frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
-                 frappe.db.commit()
-        finally:
-            loop.close()
+        title = _run_async_safely(
+            get_simple_completion(model, messages, provider)
+        )
+        if title:
+            title = title.strip().strip('"').strip("'")
+            frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
+            frappe.db.commit()
             
     except Exception as e:
         frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
@@ -723,23 +758,18 @@ def run_agent_sync(
         else:
             enhanced_prompt = base_prompt
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            context = {
-                "channel": channel_id,
-                "external_id": external_id,
-                "conversation_history": history,
-                "agent_name": agent_name,
-                "response_format": response_format,
-                "conversation_id": conversation.name,
-                "agent_run_id": run_doc.name
-            }
-            run = RunProvider.run(agent, enhanced_prompt, agent_doc.provider, agent_doc.model,context)
+        context = {
+            "channel": channel_id,
+            "external_id": external_id,
+            "conversation_history": history,
+            "agent_name": agent_name,
+            "response_format": response_format,
+            "conversation_id": conversation.name,
+            "agent_run_id": run_doc.name
+        }
+        run = RunProvider.run(agent, enhanced_prompt, agent_doc.provider, agent_doc.model,context)
 
-            result = loop.run_until_complete(run)
-        finally:
-            loop.close()
+        result = _run_async_safely(run)
 
         client_side_tool_calls = []
 
