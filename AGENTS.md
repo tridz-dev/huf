@@ -1362,3 +1362,152 @@ The React frontend supports MCP server management:
 -   ❌ An MCP Server (does not expose tools via MCP)
 -   ❌ An MCP Gateway/Proxy
 -   ❌ An OAuth broker (simple header-based auth only)
+
+## Flow Engine (v0.1)
+
+The Flow Engine provides graph-based workflow orchestration that reuses existing Huf primitives (Agent Run, Conversation, Messages, Tools) and adds only what's necessary to coordinate multi-step flows.
+
+### Core Concepts
+
+1. **Flow Definition**: Stores the entire graph as a single JSON blob (React Flow compatible). No separate Node/Edge doctypes.
+2. **Flow Run**: Persists runtime state (status, context, current node, hop count).
+3. **Agent Run as Node Run**: Each node execution is logged as an existing Agent Run extended with flow linkage fields.
+
+### DocTypes
+
+#### Flow Definition
+
+Stores the complete workflow graph definition as JSON.
+
+-   **Python Class**: `FlowDefinition(Document)`
+-   **File**: `huf/huf/doctype/flow_definition/flow_definition.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Flow ID** | `flow_id` | Data | Stable unique ID used by APIs |
+| **Flow Name** | `flow_name` | Data | Human-readable name |
+| **Status** | `status` | Select | `Draft`, `Active`, `Archived` |
+| **Version** | `version` | Int | Auto-increments on save |
+| **Schema Version** | `schema_version` | Int | From JSON definition |
+| **Definition JSON** | `definition_json` | JSON | Full graph JSON |
+| **Is System** | `is_system` | Check | System-shipped vs user-created |
+| **Updated By** | `updated_by` | Link(User) | Last editor |
+| **Updated At** | `updated_at` | Datetime | Last update time |
+
+**Validation:**
+- `definition_json.id` must equal `flow_id`
+- Node IDs must be unique
+- Edges must reference valid node IDs
+- Entry node must exist
+- Only allowed node types (v0.1): `trigger.webhook`, `agent.run`, `tool.call`, `router.llm`, `human.approval`, `end`
+- Expression edges must have a condition string
+
+#### Flow Run
+
+Single execution instance of a flow.
+
+-   **Python Class**: `FlowRun(Document)`
+-   **File**: `huf/huf/doctype/flow_run/flow_run.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Flow Definition** | `flow_definition` | Link | Link to Flow Definition |
+| **Flow ID** | `flow_id` | Data | Denormalized flow ID |
+| **Flow Version** | `flow_version` | Int | Pinned at start |
+| **Mode** | `mode` | Select | `Normal`, `Agentic` |
+| **Status** | `status` | Select | `Queued`, `Running`, `Waiting Approval`, `Waiting User`, `Success`, `Failed` |
+| **Current Node ID** | `current_node_id` | Data | Current position in graph |
+| **Hop Count** | `hop_count` | Int | Steps executed |
+| **Max Hops** | `max_hops` | Int | Safety limit |
+| **Context JSON** | `context_json` | JSON | Shared flow state |
+| **Trigger Type** | `trigger_type` | Select | `Manual`, `Webhook`, `Schedule`, `Doc Event` |
+| **Trigger Payload** | `trigger_payload` | JSON | Initial input |
+| **Waiting** | `waiting` | JSON | Details when paused |
+| **Last Error** | `last_error` | Small Text | Error info |
+| **Last Agent Run** | `last_agent_run` | Link(Agent Run) | Last executed run |
+| **Conversation** | `conversation` | Link(Agent Conversation) | Shared conversation |
+
+#### Agent Run (Extended)
+
+Existing Agent Run with additional flow linkage fields.
+
+**New Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Flow Run** | `flow_run` | Link(Flow Run) | Optional link to flow |
+| **Flow Node ID** | `flow_node_id` | Data | Node ID from JSON |
+| **Flow ID** | `flow_id` | Data | Convenience field |
+| **Run Kind** | `run_kind` | Select | `agent`, `tool`, `orchestrator` |
+
+### Node Types (v0.1)
+
+| Type | Description |
+|:-----|:------------|
+| `trigger.webhook` | Creates FlowRun from webhook payload |
+| `agent.run` | Runs a Huf agent via run_agent_sync |
+| `tool.call` | Deterministic tool execution (no LLM) |
+| `router.llm` | LLM-based routing among candidate edges |
+| `human.approval` | Pause for human approve/reject |
+| `end` | Marks flow success |
+
+### Edge Types
+
+| Type | Description |
+|:-----|:------------|
+| `always` | Always follow this edge |
+| `on_success` | Follow if previous node succeeded |
+| `on_failure` | Follow if previous node failed |
+| `expression` | Evaluate expression against flow context |
+
+Edges are sorted by priority (descending); first match wins.
+
+### Execution Modes
+
+**Normal Mode**: Engine follows edges deterministically. Agents run only when `agent.run` nodes are hit.
+
+**Agentic Mode**: An orchestrator agent is invoked after each node to decide the next step. The orchestrator sees completed results, context, and candidate edges, returning a strict JSON decision.
+
+### Core Modules
+
+| Module | Purpose |
+|:-------|:--------|
+| `huf/ai/flow_engine.py` | Core engine: load, validate, execute, edge evaluation |
+| `huf/ai/flow_api.py` | Whitelisted API endpoints for UI and triggers |
+| `huf/ai/flow_eval.py` | Safe AST-based expression evaluator |
+| `huf/ai/flow_tool_executor.py` | Deterministic tool execution |
+| `huf/ai/flow_orchestrator.py` | Prompt construction and JSON parsing for router/orchestrator |
+| `huf/ai/flow_tools.py` | Tool definitions for the huf_tools hook |
+
+### Whitelisted APIs
+
+| Method | Purpose |
+|:-------|:--------|
+| `huf.ai.flow_api.get_flow_definition` | Get flow definition |
+| `huf.ai.flow_api.save_flow_definition` | Save/update flow definition |
+| `huf.ai.flow_api.run_flow` | Start a flow run |
+| `huf.ai.flow_api.get_flow_run` | Get flow run status |
+| `huf.ai.flow_api.list_flow_runs` | List flow runs |
+| `huf.ai.flow_api.resume_flow_run` | Resume waiting flow |
+| `huf.ai.flow_api.approve_flow_run` | Approve a flow |
+| `huf.ai.flow_api.reject_flow_run` | Reject a flow |
+| `huf.ai.flow_api.flow_webhook` | Webhook trigger (allow_guest) |
+
+### Agent Tools
+
+Registered via `huf_tools` hook so agents can interact with flows:
+- `run_flow`: Start a flow execution
+- `get_flow_run`: Check flow run status
+- `resume_flow_run`: Resume a waiting flow
+- `approve_flow_run`: Approve/reject a flow
+
+### Security
+
+- **Expression edges**: AST-based restricted evaluator; no imports, no function calls, no attribute access
+- **Router/orchestrator**: LLM output constrained to valid candidate edges
+- **Human approval**: User/role verification before approve/reject
+- **Hop limit**: Safety guard against infinite loops (default 100)
