@@ -571,12 +571,17 @@ def run_agent_sync(
     # Optimized history fetching with dynamic limit + buffer
     fetch_limit = (agent_doc.history_limit or 20) + 10
     history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
+    if agent_doc.prompt_mode == "Local":
+        prompt_template = None
+    else:
+        prompt_template = getattr(agent_doc, "agent_prompt", None),
     run_doc = frappe.get_doc({
         "doctype": "Agent Run",
         "agent": agent_name,
         "status": "Queued",
         "conversation": conversation.name,
         "prompt": prompt,
+        "prompt_template": prompt_template,
         "model": agent_doc.model,
         "provider": agent_doc.provider,
         "parent_run": parent_run_id,
