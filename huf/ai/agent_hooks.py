@@ -32,6 +32,9 @@ def get_doc_event_agents(event: str):
     for t in triggers:
         try:
             agent_doc = frappe.get_doc("Agent", t["agent"])
+            from huf.ai.prompt_resolver import resolve_prompt
+            prompt = resolve_prompt(agent_doc)
+            
             result.append({
                 "name": t["name"],
                 "agent": t["agent"],
@@ -39,7 +42,7 @@ def get_doc_event_agents(event: str):
                 "doc_event": t.get("doc_event"),
                 "condition": t.get("condition"),
                 "prompt_field": t.get("prompt_field"), 
-                "instructions": getattr(agent_doc, "instructions", None),
+                "instructions": prompt,
                 "provider": getattr(agent_doc, "provider", None),
                 "model": getattr(agent_doc, "model", None),
             })
