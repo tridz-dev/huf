@@ -410,11 +410,18 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	args = dict(config.get("args", {}))
 	ctx = _load_context(flow_run)
 
-	# Simple context variable substitution in string args
-	for key, value in args.items():
-		if isinstance(value, str) and value.startswith("{{") and value.endswith("}}"):
-			context_key = value[2:-2].strip()
-			args[key] = ctx.get(context_key, value)
+	# Recursive context variable substitution
+	def _substitute(data):
+		if isinstance(data, dict):
+			return {k: _substitute(v) for k, v in data.items()}
+		elif isinstance(data, list):
+			return [_substitute(v) for v in data]
+		elif isinstance(data, str) and data.startswith("{{") and data.endswith("}}"):
+			context_key = data[2:-2].strip()
+			return ctx.get(context_key, data)
+		return data
+
+	args = _substitute(args)
 
 	# Create an Agent Run for auditing
 	run_doc = _create_flow_agent_run(
