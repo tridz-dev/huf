@@ -216,7 +216,8 @@ class AgentManager:
         if not self.agent_doc.model:
             frappe.throw(_("Agent model is not configured"))
 
-        instructions = self.agent_doc.instructions
+        from huf.ai.prompt_resolver import resolve_prompt
+        instructions = resolve_prompt(self.agent_doc) or ""
 
         # Enhance instructions with tool descriptions
         if self.tools:
@@ -611,12 +612,17 @@ def run_agent_sync(
     # Optimized history fetching with dynamic limit + buffer
     fetch_limit = (agent_doc.history_limit or 20) + 10
     history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
+    if agent_doc.prompt_mode == "Local":
+        prompt_template = None
+    else:
+        prompt_template = getattr(agent_doc, "agent_prompt", None),
     run_doc_data = {
         "doctype": "Agent Run",
         "agent": agent_name,
         "status": "Queued",
         "conversation": conversation.name,
         "prompt": prompt,
+        "prompt_template": prompt_template,
         "model": resolved_model,
         "provider": resolved_provider,
         "parent_run": parent_run_id,

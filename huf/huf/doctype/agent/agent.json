@@ -35,6 +35,13 @@
   "multi_run_setting_section",
   "default_plan",
   "section_break_yyoa",
+  "prompt_mode",
+  "agent_prompt",
+  "column_break_prompt",
+  "prompt_version_locked",
+  "template_version_at_attach",
+  "copied_from_prompt",
+  "instruction_section",
   "instructions",
   "tools_and_mcp_tab",
   "agent_tool",
@@ -103,6 +110,52 @@
    "reqd": 1
   },
   {
+   "default": "Local",
+   "description": "How this agent's prompt is managed. 'Local' uses the instructions field below. 'Template' links to a reusable Agent Prompt.",
+   "fieldname": "prompt_mode",
+   "fieldtype": "Select",
+   "label": "Prompt Mode",
+   "options": "Local\nTemplate"
+  },
+  {
+   "depends_on": "eval:doc.prompt_mode=='Template'",
+   "description": "Link to a reusable prompt template from the Agent Prompt library.",
+   "fieldname": "agent_prompt",
+   "fieldtype": "Link",
+   "label": "Agent Prompt",
+   "options": "Agent Prompt"
+  },
+  {
+   "fieldname": "column_break_prompt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.prompt_mode=='Template'",
+   "description": "If checked, this agent will stay on the prompt version it was attached to, ignoring newer versions.",
+   "fieldname": "prompt_version_locked",
+   "fieldtype": "Check",
+   "label": "Lock Prompt Version"
+  },
+  {
+   "depends_on": "eval:doc.prompt_mode=='Template'",
+   "description": "The version number of the prompt template when it was attached to this agent.",
+   "fieldname": "template_version_at_attach",
+   "fieldtype": "Int",
+   "label": "Attached at Version",
+   "read_only": 1
+  },
+  {
+   "description": "If this agent was detached from a template, this tracks the original prompt for traceability.",
+   "fieldname": "copied_from_prompt",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Copied From Prompt",
+   "options": "Agent Prompt",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.prompt_mode=='Local'",
    "description": "The system prompt or instructions that define the agent's personality, goals, and constraints. This is the core logic of the agent.",
    "fieldname": "instructions",
    "fieldtype": "Code",
@@ -159,10 +212,10 @@
    "label": "Disabled"
   },
   {
-   "description": "Define system prompt, goal, and constraints",
+   "description": "Define system prompt, goal, and constraints. Use 'Local' for inline prompts or 'Template' to link a reusable prompt from the library.",
    "fieldname": "section_break_yyoa",
    "fieldtype": "Section Break",
-   "label": "Instruction"
+   "label": "Prompt"
   },
   {
    "default": "0",
@@ -462,12 +515,17 @@
    "fieldname": "autonaming_of_conversation_title",
    "fieldtype": "Check",
    "label": "Autonaming of conversation title"
+  },
+  {
+   "fieldname": "instruction_section",
+   "fieldtype": "Section Break",
+   "label": "Instruction"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-09 18:23:31.825896",
+ "modified": "2026-02-25 19:41:57.703300",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

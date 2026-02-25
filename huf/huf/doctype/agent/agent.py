@@ -58,8 +58,7 @@ def get_permission_query_conditions(user):
 
 class Agent(Document):
     def validate(self):
-        if not self.instructions:
-            frappe.throw(_("Please provide an instruction for this AI Agent."))
+        self._validate_prompt()
 
         if self.allow_chat == 1 and self.persist_conversation == 0:
             frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
@@ -104,6 +103,27 @@ class Agent(Document):
 
 
 
+    def _validate_prompt(self):
+        """Validate prompt configuration based on prompt_mode."""
+        mode = self.prompt_mode or "Local"
+
+        if mode == "Template":
+            if not self.agent_prompt:
+                frappe.throw(_("Please select an Agent Prompt when using Template mode."))
+            # Record the template version when first attached or when template changes
+            if self.has_value_changed("agent_prompt") or not self.template_version_at_attach:
+                self._record_template_version()
+        else:
+            # Local mode — require instructions (backward compatible)
+            if not self.instructions:
+                frappe.throw(_("Please provide an instruction for this AI Agent."))
+
+    def _record_template_version(self):
+        """Snapshot the current version of the linked Agent Prompt."""
+        if self.agent_prompt:
+            version = frappe.db.get_value("Agent Prompt", self.agent_prompt, "version")
+            self.template_version_at_attach = version or 1
+
     def get_indicator(doc):
         if doc.disabled:
             return _("Disabled"), "red", "disabled,=,Yes"
@@ -112,13 +132,17 @@ class Agent(Document):
 
     def on_update(self):
         clear_doc_event_agents_cache()
-        
+
         if self.flags.in_insert:
             return
 
+        prompt_changed = (
+            self.has_value_changed("instructions")
+            or self.has_value_changed("agent_prompt")
+            or self.has_value_changed("prompt_mode")
+        )
         if self.enable_multi_run and (
-            self.has_value_changed("instructions") or 
-            self.has_value_changed("enable_multi_run")
+            prompt_changed or self.has_value_changed("enable_multi_run")
         ):
             self.generate_default_plan()
         
@@ -130,7 +154,10 @@ class Agent(Document):
         Generates the default plan using run_agent_sync directly.
         Returns the agent_run_id so it can be used as a Parent Run.
         """
-        if not self.instructions:
+        from huf.ai.prompt_resolver import resolve_prompt
+
+        resolved = resolve_prompt(self)
+        if not resolved:
             return None
 
         planning_prompt = f"""You are a planning assistant. Break down the user's objective into a sequence of clear, atomic steps that can be executed one at a time.
@@ -146,7 +173,7 @@ class Agent(Document):
             2. Second action to take
 
             Now break down this objective:
-            {self.instructions}"""
+            {resolved}"""
 
         try:
             result = run_agent_sync(
@@ -206,15 +233,17 @@ class Agent(Document):
         """
         self.set_default_color()
         self.flags.in_insert = True
-        if self.enable_multi_run and self.instructions:
+        from huf.ai.prompt_resolver import resolve_prompt
+        resolved = resolve_prompt(self)
+        if self.enable_multi_run and resolved:
             try:
-                planning_run_id, steps = self.generate_default_plan()                
+                planning_run_id, steps = self.generate_default_plan()
                 if planning_run_id:
                     create_orchestration(
-                        agent_name=self.name, 
-                        user_prompt=self.instructions,
+                        agent_name=self.name,
+                        user_prompt=resolved,
                         parent_run_id=planning_run_id,
-                        override_plan=steps 
+                        override_plan=steps
                     )
                 
             except Exception as e:
