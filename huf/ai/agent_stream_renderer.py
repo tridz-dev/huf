@@ -56,12 +56,22 @@ class AgentStreamRenderer(BaseRenderer):
 		# Get prompt from query parameters or request body
 		prompt = frappe.form_dict.get("prompt") or frappe.form_dict.get("message", "")
 		
+		# Optional Overrides
+		provider = frappe.form_dict.get("provider")
+		model = frappe.form_dict.get("model")
+		prompt_template = frappe.form_dict.get("prompt_template")
+		prompt_version = frappe.form_dict.get("prompt_version")
+		
 		if not prompt:
 			# Try to get from POST body
 			try:
 				if frappe.request.method == "POST":
 					body = frappe.request.get_json(force=True) or {}
 					prompt = body.get("prompt") or body.get("message", "")
+					if not provider: provider = body.get("provider")
+					if not model: model = body.get("model")
+					if not prompt_template: prompt_template = body.get("prompt_template")
+					if not prompt_version: prompt_version = body.get("prompt_version")
 			except Exception:
 				pass
 		
@@ -83,9 +93,11 @@ class AgentStreamRenderer(BaseRenderer):
 		# Get agent configuration
 		try:
 			agent_doc = frappe.get_doc("Agent", agent_name)
-			provider = agent_doc.provider
-			model_doc = frappe.get_doc("AI Model", agent_doc.model)
-			model = model_doc.model_name
+			if not provider:
+				provider = agent_doc.provider
+			if not model:
+				model_doc = frappe.get_doc("AI Model", agent_doc.model)
+				model = model_doc.model_name
 		except frappe.DoesNotExistError:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": f"Agent '{agent_name}' not found"}
@@ -148,7 +160,9 @@ class AgentStreamRenderer(BaseRenderer):
 					model=model,
 					channel_id=channel_id,
 					external_id=external_id,
-					conversation_id=conversation_id
+					conversation_id=conversation_id,
+					prompt_template=prompt_template,
+					prompt_version=prompt_version
 				)
 				
 				# Convert async generator to sync

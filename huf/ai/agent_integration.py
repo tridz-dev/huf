@@ -1038,7 +1038,9 @@ async def run_agent_stream(
     model: str = None,
     channel_id: str = None,
     external_id: str = None,
-    conversation_id: str = None
+    conversation_id: str = None,
+    prompt_template: str = None,
+    prompt_version = None
 ):
     """
     Streaming version of run_agent_sync.
@@ -1125,8 +1127,26 @@ async def run_agent_stream(
         #          }
         #          return
         # else:
+        # Resolve prompt template
+        resolved_prompt_template = prompt_template
+        if not resolved_prompt_template:
+            if agent_doc.get("prompt_mode", "Local") == "Local":
+                resolved_prompt_template = None
+            else:
+                resolved_prompt_template = getattr(agent_doc, "agent_prompt", None)
+                
+        if resolved_prompt_template and prompt_version:
+            prompt_data = frappe.db.get_value("Agent Prompt", resolved_prompt_template, ["prompt_group", "version"], as_dict=True)
+            if prompt_data and prompt_data.prompt_group and prompt_data.version != int(prompt_version):
+                exact_match = frappe.db.get_value("Agent Prompt", {"prompt_group": prompt_data.prompt_group, "version": int(prompt_version)}, "name")
+                if exact_match:
+                    resolved_prompt_template = exact_match
+
+        resolved_provider = provider if provider else agent_doc.provider
+        resolved_model = model if model else agent_doc.model
+
         # Legacy: Lock to current model
-        frappe.db.set_value("Agent Conversation", conversation.name, "model", agent_doc.model)
+        frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
         
         history = conv_manager.get_conversation_history(conversation.name, limit=1000)
         
@@ -1137,11 +1157,12 @@ async def run_agent_stream(
             "status": "Started",
             "conversation": conversation.name,
             "prompt": prompt,
-            "model": agent_doc.model,
-            "provider": agent_doc.provider
+            "prompt_template": resolved_prompt_template,
+            "model": resolved_model,
+            "provider": resolved_provider
         })
         run_doc.insert(ignore_permissions=True)
-        conv_manager.add_message(conversation, "user", prompt, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
+        conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
         run_doc.db_set("start_time", now_datetime())
         safe_commit()
         
@@ -1156,6 +1177,14 @@ async def run_agent_stream(
         safe_commit()
         
         manager = AgentManager(agent_name)
+        
+        if (prompt_template or prompt_version) and resolved_prompt_template:
+            manager.agent_doc.update({
+                "prompt_mode": "Template",
+                "agent_prompt": resolved_prompt_template,
+                "prompt_version_locked": 0
+            })
+            
         agent = manager.create_agent()
         
         context = {
@@ -1169,7 +1198,7 @@ async def run_agent_stream(
         
         # SUMMARIZATION LOGIC
         to_summarize, remaining = conv_manager.summarize_conversation(
-            conversation.name, history, agent_doc.provider, agent_doc.model, agent_name, limit=20
+            conversation.name, history, resolved_provider, resolved_model, agent_name, limit=20
         )
 
         if to_summarize:
@@ -1186,7 +1215,7 @@ async def run_agent_stream(
                 summary_prompt = f"Summarize this conversation history:\n{summary_input}"
 
                 sum_context = {"agent_name": agent_name, "is_system_op": True} 
-                sum_result = await RunProvider.run(summary_agent, summary_prompt, agent_doc.provider, agent_doc.model, sum_context)
+                sum_result = await RunProvider.run(summary_agent, summary_prompt, resolved_provider, resolved_model, sum_context)
                 summary_text = getattr(sum_result, "final_output", "Could not generate summary.")
 
                 history = [{"role": "system", "content": f"Previous Conversation Summary: {summary_text}"}] + remaining
@@ -1247,7 +1276,7 @@ async def run_agent_stream(
         # Stream from provider
         full_response = ""
         try:
-            stream = RunProvider.run_stream(agent, enhanced_prompt, agent_doc.provider, agent_doc.model, context)
+            stream = RunProvider.run_stream(agent, enhanced_prompt, resolved_provider, resolved_model, context)
             
             async for chunk in stream:
                 chunk_type = chunk.get("type")
@@ -1276,8 +1305,8 @@ async def run_agent_stream(
                             conversation, 
                             role="agent", 
                             content=msg_content, 
-                            provider=agent_doc.provider,
-                            model=agent_doc.model,
+                            provider=resolved_provider,
+                            model=resolved_model,
                             agent=agent_name,
                             run_name=run_doc.name,
                             kind="Tool Call",
@@ -1335,12 +1364,12 @@ async def run_agent_stream(
                                     "completion_tokens": output_tokens,
                                     "total_tokens": input_tokens + output_tokens
                                 },
-                                "model": agent_doc.model
+                                "model": resolved_model
                             }
                             
-                            pricing_model = agent_doc.model
-                            if agent_doc.provider and "/" not in agent_doc.model and agent_doc.provider.lower() not in agent_doc.model.lower():
-                                pricing_model = f"{agent_doc.provider.lower()}/{agent_doc.model}"
+                            pricing_model = resolved_model
+                            if resolved_provider and "/" not in resolved_model and resolved_provider.lower() not in resolved_model.lower():
+                                pricing_model = f"{resolved_provider.lower()}/{resolved_model}"
                                
                             mock_response["model"] = pricing_model
                                 
@@ -1368,14 +1397,14 @@ async def run_agent_stream(
                             frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
 
                     # Save final response
-                    conv_manager.add_message(conversation, "agent", full_response, agent_doc.provider, agent_doc.model, agent_name, run_doc.name)
+                    conv_manager.add_message(conversation, "agent", full_response, resolved_provider, resolved_model, agent_name, run_doc.name)
                     
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Success",
                         "response": full_response,
                         "prompt": prompt,
-                        "model": agent_doc.model,
-                        "provider": agent_doc.provider,
+                        "model": resolved_model,
+                        "provider": resolved_provider,
                         "input_tokens": input_tokens,
                         "output_tokens": output_tokens,
                         "cached_tokens": cached_tokens,
@@ -1416,8 +1445,8 @@ async def run_agent_stream(
                                 conversation=conversation, 
                                 role="agent", 
                                 content=user_error_msg, 
-                                provider=agent_doc.provider, 
-                                model=agent_doc.model, 
+                                provider=resolved_provider, 
+                                model=resolved_model, 
                                 agent=agent_name, 
                                 run_name=run_doc.name,
                                 kind="Error"
@@ -1453,8 +1482,8 @@ async def run_agent_stream(
                         conversation=conversation, 
                         role="agent", 
                         content=error_msg, 
-                        provider=agent_doc.provider, 
-                        model=agent_doc.model, 
+                        provider=resolved_provider, 
+                        model=resolved_model, 
                         agent=agent_name, 
                         run_name=run_doc.name,
                         kind="Error"
