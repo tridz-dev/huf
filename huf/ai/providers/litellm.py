@@ -22,7 +22,7 @@ from types import SimpleNamespace
 
 import frappe
 import litellm
-from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, completion_cost
+from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, completion_cost, ContextWindowExceededError
 from litellm.utils import supports_prompt_caching, trim_messages
 from huf.ai.tool_serializer import serialize_tools
 
@@ -399,13 +399,11 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     full_trace = str(e)
 
                 frappe.log_error(message=full_trace, title=title)
+                raise e
 
-                msg = (
-                    f"Rate limit exceeded for model '{normalized_model}'. "
-                    f"Please try again later. Details: {str(e)}"
-                )
-                frappe.log_error(message=msg, title="LiteLLM Provider")
-                return SimpleResult(msg, total_usage, all_new_items)
+            except ContextWindowExceededError as e:
+                frappe.log_error(message=f"LiteLLM ContextWindowExceededError for model '{normalized_model}': {str(e)}", title="LiteLLM Provider")
+                raise e
 
             except APIError as e:
                 msg = f"API error for model '{normalized_model}': {str(e)}"
@@ -415,6 +413,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             except Exception as e:
                 msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
                 frappe.log_error(message=msg, title="LiteLLM Provider")
+                
+                if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
+                    raise e
+                
                 return SimpleResult(msg, total_usage, all_new_items)
 
             # Extract response
@@ -520,6 +522,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
     except Exception as e:
         frappe.log_error(message=f"LiteLLM Provider Error: {str(e)}", title="LiteLLM Provider")
+        
+        if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
+            raise e
+            
         return SimpleResult(f"LiteLLM Provider Error: {str(e)}")
 
 
@@ -949,7 +955,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 yield {"type": "error", "error": f"OpenAI API server error: {str(e)}"}
                 return
             except RateLimitError as e:
-                yield {"type": "error", "error": f"Rate limit exceeded: {str(e)}"}
+                yield {"type": "error", "error": f"RateLimitError: {str(e)}"}
+                return
+            except ContextWindowExceededError as e:
+                yield {"type": "error", "error": f"ContextWindowExceededError: {str(e)}"}
                 return
             except APIError as e:
                 yield {"type": "error", "error": f"API error: {str(e)}"}
