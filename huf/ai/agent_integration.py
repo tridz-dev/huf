@@ -561,6 +561,8 @@ def run_agent_sync(
     flow_run_id: str = None,
     flow_node_id: str = None,
     run_kind: str = None,
+    prompt_template: str = None,
+    prompt_version = None,
 ):
 
     if not agent_name:
@@ -612,17 +614,27 @@ def run_agent_sync(
     # Optimized history fetching with dynamic limit + buffer
     fetch_limit = (agent_doc.history_limit or 20) + 10
     history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
-    if agent_doc.prompt_mode == "Local":
-        prompt_template = None
-    else:
-        prompt_template = getattr(agent_doc, "agent_prompt", None),
+    resolved_prompt_template = prompt_template
+    if not resolved_prompt_template:
+        if agent_doc.prompt_mode == "Local":
+            resolved_prompt_template = None
+        else:
+            resolved_prompt_template = getattr(agent_doc, "agent_prompt", None)
+            
+    if resolved_prompt_template and prompt_version:
+        prompt_data = frappe.db.get_value("Agent Prompt", resolved_prompt_template, ["prompt_group", "version"], as_dict=True)
+        if prompt_data and prompt_data.prompt_group and prompt_data.version != int(prompt_version):
+            exact_match = frappe.db.get_value("Agent Prompt", {"prompt_group": prompt_data.prompt_group, "version": int(prompt_version)}, "name")
+            if exact_match:
+                resolved_prompt_template = exact_match
+
     run_doc_data = {
         "doctype": "Agent Run",
         "agent": agent_name,
         "status": "Queued",
         "conversation": conversation.name,
         "prompt": prompt,
-        "prompt_template": prompt_template,
+        "prompt_template": resolved_prompt_template,
         "model": resolved_model,
         "provider": resolved_provider,
         "parent_run": parent_run_id,
@@ -687,6 +699,12 @@ def run_agent_sync(
         safe_commit()
 
         manager = AgentManager(agent_name)
+        
+        if (prompt_template or prompt_version) and resolved_prompt_template:
+            manager.agent_doc.prompt_mode = "Template"
+            manager.agent_doc.agent_prompt = resolved_prompt_template
+            manager.agent_doc.prompt_version_locked = 0
+                
         agent = manager.create_agent()
 
         # Build knowledge context for mandatory sources
