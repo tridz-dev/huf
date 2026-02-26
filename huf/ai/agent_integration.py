@@ -978,6 +978,28 @@ def run_agent_sync(
 
     except Exception as e:
         error_msg = str(e)
+        
+        if "ContextWindowExceededError" in error_msg or "RateLimitError" in error_msg:
+            try:
+                frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
+                safe_commit()
+                
+                error_msg = _("This conversation has exceeded the maximum token limit or rate limit. Please start a new conversation to continue.")
+                
+                conv_manager.add_message(
+                    conversation=conversation, 
+                    role="agent", 
+                    content=error_msg, 
+                    provider=resolved_provider, 
+                    model=resolved_model, 
+                    agent=agent_name, 
+                    run_name=run_doc.name,
+                    kind="Error"
+                )
+                safe_commit()
+            except Exception as inner_e:
+                frappe.log_error(f"Failed to handle rate limit in sync: {str(inner_e)}", "Agent Integration Error")
+
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
         frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "Huf")
@@ -1365,6 +1387,29 @@ async def run_agent_stream(
                 elif chunk_type == "error":
                     error_msg = chunk.get("error", "Unknown error")
                     
+                    if "ContextWindowExceededError" in error_msg or "RateLimitError" in error_msg:
+                        try:
+                            frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
+                            safe_commit()
+                            
+                            user_error_msg = _("This conversation has exceeded the maximum token limit or rate limit. Please start a new conversation to continue.")
+                            
+                            conv_manager.add_message(
+                                conversation=conversation, 
+                                role="agent", 
+                                content=user_error_msg, 
+                                provider=agent_doc.provider, 
+                                model=agent_doc.model, 
+                                agent=agent_name, 
+                                run_name=run_doc.name,
+                                kind="Error"
+                            )
+                            safe_commit()
+                            chunk["error"] = user_error_msg # override so the client sees the same message
+                            error_msg = user_error_msg
+                        except Exception as inner_e:
+                            frappe.log_error(f"Failed to handle rate limit in stream inner block: {str(inner_e)}", "Agent Integration Error")
+                    
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Failed",
                         "error_message": error_msg,
@@ -1378,6 +1423,28 @@ async def run_agent_stream(
         except Exception as e:
             error_msg = str(e)
             frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
+            
+            if "ContextWindowExceededError" in error_msg or "RateLimitError" in error_msg:
+                try:
+                    frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
+                    safe_commit()
+                    
+                    error_msg = _("This conversation has exceeded the maximum token limit or rate limit. Please start a new conversation to continue.")
+                    
+                    conv_manager.add_message(
+                        conversation=conversation, 
+                        role="agent", 
+                        content=error_msg, 
+                        provider=agent_doc.provider, 
+                        model=agent_doc.model, 
+                        agent=agent_name, 
+                        run_name=run_doc.name,
+                        kind="Error"
+                    )
+                    safe_commit()
+                except Exception as inner_e:
+                    frappe.log_error(f"Failed to handle rate limit in stream inner block: {str(inner_e)}", "Agent Integration Error")
+
             
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "status": "Failed",
