@@ -5,6 +5,19 @@ app_description = "Build and run smart AI agents with tools, chat, and automatio
 app_email = "info@tridz.com"
 app_license = "agpl"
 source_link = "https://github.com/tridz-dev/huf.git"
+app_logo_url="/assets/huf/Images/huf.png"
+
+from huf.utils import is_frappe_16
+def get_app_url():
+    try:
+        from huf.utils import is_frappe_16
+        if is_frappe_16():
+            return "/desk/huf"
+    except Exception:
+        print("Error getting app url")
+    return "/huf"
+
+app_url = get_app_url()
 
 # Apps
 # ------------------
@@ -15,9 +28,9 @@ source_link = "https://github.com/tridz-dev/huf.git"
 add_to_apps_screen = [
 	{
 		"name": "huf",
-        "logo": "/assets/huf/Images/huf.png",
+		"logo": app_logo_url,
 		"title": "Huf",
-		"route": "huf",
+		"route": app_url,
 		"has_permission": "huf.permission.check_app_permission"
 	}
 ]
