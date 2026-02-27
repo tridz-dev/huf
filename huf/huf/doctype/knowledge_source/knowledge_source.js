@@ -52,9 +52,9 @@ frappe.ui.form.on("Knowledge Source", {
 
 	knowledge_type(frm) {
 		// Toggle visibility of vector-specific settings
-		const is_zvec = frm.doc.knowledge_type === "zvec";
-		frm.toggle_reqd("embedding_model", is_zvec);
-		frm.toggle_reqd("vector_dimension", is_zvec);
+		const uses_vectors = ["zvec", "sqlite_vec"].includes(frm.doc.knowledge_type);
+		frm.toggle_reqd("embedding_model", uses_vectors);
+		frm.toggle_reqd("vector_dimension", uses_vectors);
 	}
 });
 

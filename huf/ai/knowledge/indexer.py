@@ -22,7 +22,7 @@ def _build_backend_config(source) -> dict:
 	}
 
 	# Vector backends need embedding configuration
-	if source.knowledge_type == "zvec":
+	if source.knowledge_type in {"zvec", "sqlite_vec"}:
 		config["embedding_model"] = source.embedding_model
 		config["vector_dimension"] = source.vector_dimension
 		config["embedding_provider"] = getattr(source, "embedding_provider", None)
