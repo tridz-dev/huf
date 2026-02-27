@@ -13,6 +13,7 @@ dependencies = [
     "litellm>=1.0.0",
     "llama-index-core>=0.10.0",
     "tridz-zvec",
+    "sqlite-vec",
 ]
 
 [build-system]
