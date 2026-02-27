@@ -12,7 +12,7 @@ dependencies = [
     "openai-agents",
     "litellm>=1.0.0",
     "llama-index-core>=0.10.0",
-    "zvec",
+    "tridz-zvec",
 ]
 
 [build-system]
