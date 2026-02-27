@@ -6,19 +6,8 @@ app_email = "info@tridz.com"
 app_license = "agpl"
 source_link = "https://github.com/tridz-dev/huf.git"
 app_logo_url="/assets/huf/Images/huf.png"
-
-from huf.utils import is_frappe_16
-def get_app_url():
-    try:
-        from huf.utils import is_frappe_16
-        if is_frappe_16():
-            return "/desk/huf"
-    except Exception:
-        print("Error getting app url")
-    return "/huf"
-
-app_url = get_app_url()
-
+# for version 16+ this has to be /desk/huf, this is being updated in after_app_install hook
+app_url="huf"
 # Apps
 # ------------------
 
@@ -117,6 +106,7 @@ page_renderer = [
 
 # before_install = "huf.install.before_install"
 after_install = "huf.install.after_install"
+after_app_install = "huf.install.setup_desktop_icon_as_workspace"
 after_migrate = "huf.install.after_migrate"
 
 # Uninstallation

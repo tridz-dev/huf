@@ -6,6 +6,56 @@ Installation hooks for Huf app
 """
 
 import frappe
+from huf.utils import is_frappe_16
+
+def setup_desktop_icon_as_workspace(app_name):
+	"""
+	Replace the External App desktop icon with a Workspace Sidebar icon.
+	Runs after Frappe creates desktop icons, so we fix the Huf icon to use Workspace Sidebar.
+	Only applies on Frappe version 16 and above.
+	"""
+	if not is_frappe_16() or app_name != "huf":
+		return
+
+	# Delete the App icon (External type) - we want Workspace Sidebar instead
+	app_icons = frappe.get_all(
+		"Desktop Icon",
+		filters={"label": "Huf", "icon_type": "App", "app": "huf"},
+		pluck="name",
+	)
+	for name in app_icons:
+		frappe.delete_doc("Desktop Icon", name, force=True)
+		frappe.db.commit()
+
+	# Ensure the Huf workspace icon exists and is visible (Workspace Sidebar type)
+	workspace_icon = frappe.db.exists(
+		"Desktop Icon",
+		{"label": "Huf", "icon_type": "Link"},
+	)
+	if workspace_icon:
+		doc = frappe.get_doc("Desktop Icon", workspace_icon)
+		doc.link_type = "Workspace Sidebar"
+		doc.link_to = "Huf"
+		doc.hidden = 0
+		doc.parent_icon = None
+		doc.standard = 1
+		doc.logo_url = "/assets/huf/Images/huf.png"
+		doc.save()
+	else:
+		# Create if workspace icon doesn't exist (e.g. workspace created later)
+		workspace = frappe.db.get_value("Workspace", "Huf", ["name", "icon"], as_dict=True)
+		if workspace:
+			icon = frappe.new_doc("Desktop Icon")
+			icon.label = "Huf"
+			icon.icon_type = "Link"
+			icon.link_type = "Workspace Sidebar"
+			icon.link_to = "Huf"
+			icon.icon = workspace.get("icon") or "header"
+			icon.standard = 1
+			icon.logo_url = "/assets/huf/Images/huf.png"
+			icon.insert()
+
+	frappe.db.commit()
 
 
 def after_install():
@@ -39,6 +89,7 @@ def after_migrate():
 	Called after app migration.
 	Syncs all discovered tools from all installed apps.
 	"""
+	setup_desktop_icon_as_workspace("huf")
 	try:
 		create_image_generation_tool()
 		create_transcribe_audio_tool()
