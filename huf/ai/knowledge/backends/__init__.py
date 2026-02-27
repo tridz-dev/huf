@@ -66,6 +66,7 @@ def get_backend(backend_type: str) -> type:
 	backends = {
 		"sqlite_fts": "huf.ai.knowledge.backends.sqlite_fts.SQLiteFTSBackend",
 		"zvec": "huf.ai.knowledge.backends.zvec_backend.ZvecBackend",
+		"sqlite_vec": "huf.ai.knowledge.backends.sqlite_vec_backend.SQLiteVecBackend",
 	}
 	
 	if backend_type not in backends:
