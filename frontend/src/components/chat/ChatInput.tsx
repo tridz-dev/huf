@@ -5,7 +5,11 @@ import { CornerDownLeft, Plus } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { ShortcutKey } from "../ui/shortcut-key";
-import { newConversation, sendMessageToConversation } from "@/services/chatApi";
+import {
+  sendMessage,
+  streamingAvailable,
+  setStreamingAvailable,
+} from "@/services/streamChatApi";
 import type { MessageType } from './types';
 
 interface ChatInputProps {
@@ -17,6 +21,7 @@ interface ChatInputProps {
     newlyCreatedConversationIdRef: React.MutableRefObject<string | null>;
     setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>;
     isModelMismatch?: boolean;
+    scrollToBottomAfterPaint?: (instant?: boolean) => void;
 }
 
 export function ChatInput({ 
@@ -28,6 +33,7 @@ export function ChatInput({
     newlyCreatedConversationIdRef,
     setMessages,
     isModelMismatch = false,
+    scrollToBottomAfterPaint,
 }: ChatInputProps) {
     const navigate = useNavigate();
     const [message, setMessage] = useState('');
@@ -80,134 +86,94 @@ export function ChatInput({
             textareaRef.current.focus();
         }
 
+        const assistantMessageId = `assistant-${Date.now()}`;
+        const assistantMessage: MessageType = {
+            key: assistantMessageId,
+            from: 'assistant',
+            versions: [{ id: assistantMessageId, content: '' }],
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+
+        const updateAssistantContent = (content: string) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === assistantMessageId
+                        ? {
+                              ...msg,
+                              versions: [{ id: assistantMessageId, content }],
+                          }
+                        : msg
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
+
         try {
             if (!chatId) {
-                // New conversation
                 isCreatingConversationRef.current = true;
-                
-                // Add placeholder assistant message
-                const assistantMessageId = `assistant-${Date.now()}`;
-                const assistantMessage: MessageType = {
-                    key: assistantMessageId,
-                    from: 'assistant',
-                    versions: [
-                        {
-                            id: assistantMessageId,
-                            content: '',
-                        },
-                    ],
-                };
-                setMessages((prev) => [...prev, assistantMessage]);
+            }
 
-                const response = await newConversation({
+            const useStreaming = streamingAvailable;
+            const response = await sendMessage(
+                {
                     agent: agentName,
                     message: messageText,
-                });
-
-                const conversationId = response.message?.conversation_id;
-                const responseText = response.message?.run?.response;
-
-                if (responseText) {
-                    onStatusChange('streaming');
-                    // Update assistant message with response
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.key === assistantMessageId
-                                ? {
-                                      ...msg,
-                                      versions: [
-                                          {
-                                              id: assistantMessageId,
-                                              content: responseText,
-                                          },
-                                      ],
-                                  }
-                                : msg
-                        )
-                    );
-                    onStatusChange('ready');
-                } else {
-                    onStatusChange('ready');
+                    conversationId: chatId ?? undefined,
+                },
+                {
+                    useStreaming,
+                    onDelta:
+                        useStreaming
+                            ? (text) => updateAssistantContent(text)
+                            : undefined,
                 }
+            );
 
-                if (conversationId && onConversationCreated) {
-                    newlyCreatedConversationIdRef.current = conversationId;
-                    // Call onConversationCreated first to trigger navigation
-                    onConversationCreated(conversationId, agentName);
-                    // Clear the creating flag after navigation completes and messages are loaded
-                    // Increased timeout to ensure navigation and initial render complete
-                    setTimeout(() => {
-                        isCreatingConversationRef.current = false;
-                    }, 500);
-                } else {
-                    isCreatingConversationRef.current = false;
-                }
+            const msg = response.message as Record<string, unknown>;
+            const conversationId =
+                (msg?.conversation_id as string) ??
+                ((msg?.run as Record<string, unknown>)?.conversation_id as string);
+            const responseTextRaw =
+                (msg?.run as Record<string, unknown>)?.response ?? msg?.response;
+            const responseText =
+                typeof responseTextRaw === 'string' ? responseTextRaw : '';
 
-                // Focus input after successful message creation
-                setTimeout(() => {
-                    if (textareaRef.current) {
-                        textareaRef.current.focus();
-                    }
-                }, 200);
-            } else {
-                // Existing conversation
-                // Add placeholder assistant message
-                const assistantMessageId = `assistant-${Date.now()}`;
-                const assistantMessage: MessageType = {
-                    key: assistantMessageId,
-                    from: 'assistant',
-                    versions: [
-                        {
-                            id: assistantMessageId,
-                            content: '',
-                        },
-                    ],
-                };
-                setMessages((prev) => [...prev, assistantMessage]);
-
-                const response = await sendMessageToConversation({
-                    conversation: chatId,
-                    message: messageText,
-                });
-
-                // Update assistant message with response
-                if (response.message?.response) {
-                    onStatusChange('streaming');
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.key === assistantMessageId
-                                ? {
-                                      ...msg,
-                                      versions: [
-                                          {
-                                              id: assistantMessageId,
-                                              content: response.message.response,
-                                          },
-                                      ],
-                                  }
-                                : msg
-                        )
-                    );
-                }
-                onStatusChange('ready');
-
-                // Focus input after successful message send
-                setTimeout(() => {
-                    if (textareaRef.current) {
-                        textareaRef.current.focus();
-                    }
-                }, 100);
+            if (!useStreaming && responseText) {
+                updateAssistantContent(responseText);
             }
+            onStatusChange('ready');
+
+            if (conversationId && onConversationCreated) {
+                newlyCreatedConversationIdRef.current = conversationId;
+                onConversationCreated(conversationId, agentName);
+                setTimeout(() => {
+                    isCreatingConversationRef.current = false;
+                }, 500);
+            } else {
+                isCreatingConversationRef.current = false;
+            }
+
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.focus();
+                }
+            }, chatId ? 100 : 200);
         } catch (error) {
-            console.error('Error sending message:', error);
+            if (streamingAvailable) {
+                setStreamingAvailable(false);
+            }
+            isCreatingConversationRef.current = false;
             onStatusChange('error');
             toast.error('Failed to send message', {
                 description: error instanceof Error ? error.message : 'An error occurred',
             });
+            setMessages((prev) =>
+                prev.filter((msg) => msg.key !== assistantMessageId)
+            );
         } finally {
             setIsSubmitting(false);
         }
-    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages]);
+    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {

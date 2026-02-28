@@ -322,6 +322,7 @@ export function ChatMessageList({
                 newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
                 setMessages={setMessages}
                 isModelMismatch={isModelMismatch}
+                scrollToBottomAfterPaint={scrollToBottomAfterPaint}
             />
             </div>
         </div>
