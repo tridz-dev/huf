@@ -70,18 +70,21 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNode['type'] {
     }
 }
 
+/** Strip the `type` discriminator from a config object — backend infers type from node.type */
+function omitType<T extends { type?: string }>(obj: T): Omit<T, 'type'> {
+    const { type: _type, ...rest } = obj;
+    return rest;
+}
+
 function extractNodeConfig(node: FlowNode): Record<string, unknown> {
     const data = node.data;
     if (!data) return {};
 
     if (data.triggerConfig && data.triggerConfig.type) {
-        // Strip the frontend `type` discriminator — backend infers type from node.type
-        const { type: _type, ...config } = data.triggerConfig as Record<string, unknown>;
-        return config;
+        return omitType(data.triggerConfig) as Record<string, unknown>;
     }
     if (data.actionConfig && data.actionConfig.type) {
-        const { type: _type, ...config } = data.actionConfig as Record<string, unknown>;
-        return config;
+        return omitType(data.actionConfig) as Record<string, unknown>;
     }
     return {};
 }
