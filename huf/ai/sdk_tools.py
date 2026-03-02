@@ -2203,14 +2203,25 @@ async def handle_generate_audio(
                     "agent_run": kwargs.get("agent_run_id"),
                     "conversation_index": conversation_index,
                     "is_agent_message": 1,
-                    "user": "Agent"
+                    "user": "Agent",
+                    "tts_voice": voice
                 })
                 message_doc.insert(ignore_permissions=True)
+
+                if tts_source == "agent_config" and getattr(agent_doc, "tts_model", None):
+                    frappe.db.set_value(
+                        "Agent Message", message_doc.name,
+                        "tts_model", agent_doc.tts_model,
+                        update_modified=False
+                    )
+                    message_doc.tts_model = agent_doc.tts_model
+
             except Exception as e:
                 frappe.log_error(
                     f"Error creating Agent Message for generated audio: {str(e)}",
                     "Audio Generation Message Creation"
                 )
+                message_doc = None
         
         # Save file attached to the Agent Message
         if message_doc:
