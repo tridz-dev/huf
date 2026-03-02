@@ -2,6 +2,20 @@ import { ActionOption } from '../types/modal.types';
 
 export const actionOptions: ActionOption[] = [
   {
+    id: 'agent-run',
+    name: 'Run Agent',
+    description: 'Execute a HUF AI agent',
+    icon: 'Bot',
+    category: 'transform'
+  },
+  {
+    id: 'tool-call',
+    name: 'Call Tool',
+    description: 'Execute a tool function',
+    icon: 'Wrench',
+    category: 'transform'
+  },
+  {
     id: 'transform',
     name: 'Transform Data',
     description: 'Transform and map data fields',

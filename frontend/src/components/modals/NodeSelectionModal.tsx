@@ -31,7 +31,8 @@ import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
 import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType } from '../../types/flow.types';
 import { Agent } from '../../types/agent.types';
-import { mockApi } from '../../services/mockApi';
+import { getAgents } from '../../services/agentApi';
+import type { AgentDoc } from '../../types/agent.types';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -55,7 +56,9 @@ const iconMap: Record<string, any> = {
   GitBranch,
   RotateCw,
   Code,
-  UserCheck: Clock
+  UserCheck: Clock,
+  Bot,
+  Wrench: Code
 };
 
 type MainTab = 'triggers' | 'actions';
@@ -84,8 +87,32 @@ export function NodeSelectionModal({
   useEffect(() => {
     if (open && triggerSubTab === 'ai-agents') {
       setLoadingAgents(true);
-      mockApi.agents.list().then((data) => {
-        setAgents(data);
+      getAgents().then((result) => {
+        const agentDocs = Array.isArray(result) ? result : result.items;
+        // Map AgentDoc[] to Agent[] format expected by the component
+        const mappedAgents: Agent[] = agentDocs.map((doc: AgentDoc) => ({
+          name: doc.name,
+          agent_name: doc.agent_name || doc.name,
+          provider: '',
+          model: doc.model || '',
+          instructions: '',
+          temperature: 1,
+          top_p: 1,
+          disabled: doc.disabled === 1,
+          allow_chat: true,
+          persist_conversation: true,
+          triggers: [],
+          tags: [],
+          category: undefined,
+          visibility: 'Global',
+          environment: 'Prod',
+          status: (doc.disabled === 1 ? 'Disabled' : 'Active') as Agent['status'],
+          tools: [],
+          stats: { conversations: 0, lastRunAt: '', successRate: 0, avgCost: 0, avgLatencyMs: 0, token24h: { input: 0, output: 0, total: 0 } },
+          created_at: '',
+          updated_at: '',
+        }));
+        setAgents(mappedAgents);
         setLoadingAgents(false);
       }).catch(() => {
         setLoadingAgents(false);
@@ -432,11 +459,10 @@ export function NodeSelectionModal({
                         ).map((agent) => (
                           <button
                             key={agent.name}
-                            className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${
-                              selectedItem === agent.name
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border hover:border-primary/50 hover:bg-accent'
-                            }`}
+                            className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === agent.name
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50 hover:bg-accent'
+                              }`}
                             onClick={() => {
                               setSelectedItem(agent.name);
                               setTriggerConfig({
@@ -484,11 +510,10 @@ export function NodeSelectionModal({
                             return (
                               <button
                                 key={trigger.id}
-                                className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                                  selectedItem === trigger.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50 hover:bg-accent'
-                                }`}
+                                className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedItem === trigger.id
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border hover:border-primary/50 hover:bg-accent'
+                                  }`}
                                 onClick={() => handleSelectTrigger(trigger.id)}
                               >
                                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -515,11 +540,10 @@ export function NodeSelectionModal({
                             return (
                               <button
                                 key={trigger.id}
-                                className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${
-                                  selectedItem === trigger.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50 hover:bg-accent'
-                                }`}
+                                className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === trigger.id
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border hover:border-primary/50 hover:bg-accent'
+                                  }`}
                                 onClick={() => handleSelectTrigger(trigger.id)}
                               >
                                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">

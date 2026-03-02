@@ -11,7 +11,9 @@ import {
   Webhook,
   FileText,
   Calendar,
-  Plus
+  Plus,
+  Bot,
+  Wrench
 } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
@@ -27,7 +29,9 @@ const iconMap: Record<string, any> = {
   Mail,
   Webhook,
   FileText,
-  Calendar
+  Calendar,
+  Bot,
+  Wrench
 };
 
 interface ActionNodeProps extends NodeProps<FlowNodeData> {
@@ -45,9 +49,8 @@ export const ActionNode = memo(({ id, data, selected, onAddNode }: ActionNodePro
         className="w-3 h-3 !bg-primary border-2 border-white"
       />
       <Card
-        className={`w-64 p-4 transition-all duration-200 ${
-          selected ? 'ring-2 ring-primary shadow-lg' : 'shadow-md hover:shadow-lg'
-        } border-border bg-card`}
+        className={`w-64 p-4 transition-all duration-200 ${selected ? 'ring-2 ring-primary shadow-lg' : 'shadow-md hover:shadow-lg'
+          } border-border bg-card`}
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
