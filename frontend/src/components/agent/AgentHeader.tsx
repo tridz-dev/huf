@@ -31,6 +31,7 @@ interface AgentHeaderProps {
   onViewLogs: () => void;
   onDelete: () => void;
   agentId?: string;
+  allowChat: boolean;
 }
 
 export function AgentHeader({
@@ -49,6 +50,7 @@ export function AgentHeader({
   onViewLogs,
   // onDelete,
   agentId,
+  allowChat,
 }: AgentHeaderProps) {
   const watchProvider = form.watch('provider');
   const watchModel = form.watch('model');
@@ -91,7 +93,7 @@ export function AgentHeader({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <Button 
+        {!isNew && (<Button 
           variant="outline" 
           size="icon-sm" 
           onClick={onRunTest} 
@@ -100,11 +102,11 @@ export function AgentHeader({
           title={isNew ? 'Save agent first to run test' : runningTest ? 'Running...' : 'Run test'}
         >
           <Play className="w-4 h-4" />
-        </Button>
-        <Button variant="outline" size="sm" type="button" onClick={handleOpenChat}>
+        </Button>)}
+        {(!isNew && allowChat) && (<Button variant="outline" size="sm" type="button" onClick={handleOpenChat}>
           <MessageSquare className="w-4 h-4 mr-2" />
           Chat
-        </Button>
+        </Button>)}
         {showSaveButton && (
           <Button size="sm" onClick={onSave} disabled={saving}>
             <Save className="w-4 h-4 mr-2" />

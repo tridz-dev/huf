@@ -1039,6 +1039,7 @@ async def run_agent_stream(
     channel_id: str = None,
     external_id: str = None,
     conversation_id: str = None,
+    create_new: bool = False,
     prompt_template: str = None,
     prompt_version = None
 ):
@@ -1108,14 +1109,14 @@ async def run_agent_stream(
             external_id=external_id
         )
         
-        if agent_doc.persist_conversation:
+        if create_new or not agent_doc.persist_conversation:
+            conversation = conv_manager.create_new_conversation(
+                title=f"Streaming chat with {agent_name}"
+            )
+        else:
             conversation = conv_manager.get_or_create_conversation(
                 title=f"Streaming chat with {agent_name}",
                 conversation_id=conversation_id
-            )
-        else:
-            conversation = conv_manager.create_new_conversation(
-                title=f"Streaming chat with {agent_name}"
             )
         
         # Model Validation
@@ -1427,7 +1428,13 @@ async def run_agent_stream(
                     except Exception:
                         pass
                     
+                    # Normalize complete event to match REST run_agent_sync response shape
                     chunk["conversation_id"] = conversation.name
+                    chunk["response"] = full_response
+                    chunk["success"] = True
+                    chunk["agent_run_id"] = run_doc.name
+                    chunk["session_id"] = conv_manager.session_id
+                    chunk["provider"] = resolved_provider
                     yield chunk
                     return
                 

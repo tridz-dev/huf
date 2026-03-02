@@ -26,19 +26,26 @@ class AgentStreamRenderer(BaseRenderer):
 
 	def can_render(self) -> bool:
 		"""Determine if this renderer should handle the current path."""
-		return self.path == "huf/stream" or self.path.startswith("huf/stream/")
+		return self.path == "huf/stream" or self.path.startswith("huf/stream/") or self.path == "huf/stream/ping"
 
 	def render(self):
 		"""Render either HTML page or SSE stream based on path."""
+		# Handle ping endpoint first
+		if self.path == "huf/stream/ping":
+			return self._render_ping()
+
 		# Check if agent_name is in form_dict (from rule /huf/stream/<path:agent_name>)
 		agent_name = frappe.form_dict.get("agent_name")
-		
+
 		# Fallback: Extract from path
 		if not agent_name and self.path.startswith("huf/stream/"):
 			parts = self.path.split("/")
 			if len(parts) >= 3:
 				agent_name = parts[2]
-		
+				# Don't treat "ping" as agent name
+				if agent_name == "ping":
+					return self._render_ping()
+
 		if agent_name:
 			try:
 				agent_name = urllib.parse.unquote(agent_name)
@@ -132,13 +139,17 @@ class AgentStreamRenderer(BaseRenderer):
 		external_id = frappe.form_dict.get("external_id") or frappe.session.user
 		
 		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
-		if not conversation_id:
-			try:
-				if frappe.request.method == "POST":
-					body = frappe.request.get_json(force=True) or {}
+		create_new = frappe.form_dict.get("create_new", False)
+		try:
+			if frappe.request.method == "POST":
+				body = frappe.request.get_json(force=True) or {}
+				if not conversation_id:
 					conversation_id = body.get("conversation_id") or body.get("conversation")
-			except Exception:
-				pass
+				create_new = body.get("create_new", create_new)
+		except Exception:
+			pass
+
+		create_new = bool(create_new)
 		
 		# Create async generator wrapper
 		def stream_generator() -> Generator[str, None, None]:
@@ -160,7 +171,8 @@ class AgentStreamRenderer(BaseRenderer):
 					model=model,
 					channel_id=channel_id,
 					external_id=external_id,
-					conversation_id=conversation_id,
+					conversation_id=None if create_new else conversation_id,
+					create_new=create_new,
 					prompt_template=prompt_template,
 					prompt_version=prompt_version
 				)
@@ -202,6 +214,13 @@ class AgentStreamRenderer(BaseRenderer):
 		)
 		
 		return response
+
+	def _render_ping(self):
+		"""Render lightweight ping response for streaming availability check."""
+		response_data = {"ok": True, "status": "ok"}
+		json_response = json.dumps(response_data)
+		headers = {"Content-Type": "application/json; charset=utf-8"}
+		return self.build_response(json_response, headers=headers)
 
 	def _render_error(self, error_message: str):
 		"""Render error response."""
