@@ -42,6 +42,8 @@ export type DocEventType =
   | 'before-delete';
 
 export type ActionType =
+  | 'agent-run'
+  | 'tool-call'
   | 'transform'
   | 'router'
   | 'human-in-loop'
@@ -162,7 +164,24 @@ export interface WebhookUtilityConfig {
   body?: string;
 }
 
+export interface AgentRunActionConfig {
+  type: 'agent-run';
+  agent_name?: string;
+  prompt_template?: string;
+  save_response_to_context?: string;
+  inject_flow_context?: boolean;
+}
+
+export interface ToolCallActionConfig {
+  type: 'tool-call';
+  tool_name?: string;
+  args?: Record<string, unknown>;
+  save_result_to_context?: string;
+}
+
 export type ActionConfig =
+  | AgentRunActionConfig
+  | ToolCallActionConfig
   | TransformActionConfig
   | RouterActionConfig
   | HumanInLoopActionConfig
@@ -173,6 +192,13 @@ export type ActionConfig =
   | DateUtilityConfig
   | WebhookUtilityConfig
   | { type: undefined };
+
+export interface FlowEdgeData {
+  edgeType?: 'always' | 'on_success' | 'on_failure' | 'expression';
+  priority?: number;
+  condition?: string;
+  meta?: Record<string, unknown>;
+}
 
 export interface FlowNodeData {
   label: string;
