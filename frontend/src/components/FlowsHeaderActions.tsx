@@ -5,9 +5,10 @@ import { useFlowContext } from '../contexts/FlowContext';
 import { runFlow } from '../services/flowApi';
 import { serializeFlow } from '../services/flowSerializer';
 import { saveFlowDefinition, updateFlowDefinitionFields } from '../services/flowApi';
+import { toast } from 'sonner';
 
 export function FlowsHeaderActions() {
-  const { activeFlow, saveFlow } = useFlowContext();
+  const { activeFlow } = useFlowContext();
   const [isRunning, setIsRunning] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
@@ -16,9 +17,9 @@ export function FlowsHeaderActions() {
     setIsRunning(true);
     try {
       const result = await runFlow(activeFlow.id);
-      console.log('Flow run started:', result.flow_run_id, 'Status:', result.status);
+      toast.success('Flow run started', { description: `Run ID: ${result.flow_run_id}` });
     } catch (err) {
-      console.error('Failed to run flow:', err);
+      toast.error('Failed to run flow', { description: err instanceof Error ? err.message : 'Unknown error' });
     } finally {
       setIsRunning(false);
     }
@@ -33,9 +34,9 @@ export function FlowsHeaderActions() {
       await saveFlowDefinition(activeFlow.id, graph);
       // Mark as Active
       await updateFlowDefinitionFields(activeFlow.id, { status: 'Active' });
-      console.log('Flow published successfully:', activeFlow.id);
+      toast.success('Flow published successfully');
     } catch (err) {
-      console.error('Failed to publish flow:', err);
+      toast.error('Failed to publish flow', { description: err instanceof Error ? err.message : 'Unknown error' });
     } finally {
       setIsPublishing(false);
     }

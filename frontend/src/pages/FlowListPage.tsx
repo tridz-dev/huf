@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { getFlowDefinitions } from '../services/flowApi';
 import { mapBackendStatusToFrontend } from '../services/flowSerializer';
 import { runFlow } from '../services/flowApi';
+import { toast } from 'sonner';
 
 const statusOptions = [
   { label: 'All Status', value: 'all' },
@@ -78,9 +79,9 @@ export function FlowListPage() {
   const handleRunFlow = async (flowId: string) => {
     try {
       const result = await runFlow(flowId);
-      console.log('Flow run started:', result.flow_run_id);
+      toast.success('Flow run started', { description: `Run ID: ${result.flow_run_id}` });
     } catch (err) {
-      console.error('Failed to run flow:', err);
+      toast.error('Failed to run flow', { description: err instanceof Error ? err.message : 'Unknown error' });
     }
   };
 
