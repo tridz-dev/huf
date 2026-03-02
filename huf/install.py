@@ -340,6 +340,9 @@ def create_generate_audio_tool():
         tool_doc.description = "Generate audio (speech) from text using AI text-to-speech. Use this when the user asks to convert text to speech, create voice narration, or generate audio. Supports multiple providers via LiteLLM (OpenAI, Gemini, ElevenLabs, etc.)."
         tool_doc.function_path = "huf.ai.sdk_tools.handle_generate_audio"
         tool_doc.tool_type = "Audio Generation"
+        tool_doc.set("parameters", [])
+        for p in parameters:
+            tool_doc.append("parameters", p)
         try:
             tool_doc.save()
         except Exception as e:
@@ -359,22 +362,27 @@ def create_generate_audio_tool():
                 "fieldname": "voice",
                 "type": "string",
                 "required": 0,
-                "description": "Voice to use for speech generation. Options vary by provider. OpenAI: alloy, echo, fable, onyx, nova, shimmer. Default: 'alloy'.",
-                "options": "alloy\necho\nfable\nonyx\nnova\nshimmer"
+                "description": (
+                    "Voice identifier for the TTS provider. "
+                    "IMPORTANT: Leave this blank - the voice is automatically determined by the agent's TTS configuration (tts_voice field). Only set this if the user has explicitly asked for a specific voice AND provided the exact voice ID for the active TTS provider."
+                )
             },
             {
                 "label": "Model",
                 "fieldname": "model",
                 "type": "string",
                 "required": 0,
-                "description": "Optional TTS model override. Defaults based on provider: OpenAI (tts-1), Gemini (gemini-2.5-flash-preview-tts), ElevenLabs (eleven_multilingual_v2)."
+                "description": (
+                    "TTS model override."
+                    "IMPORTANT: Leave this blank — the model is automatically determined by the agent's TTS configuration (tts_model field). Only set this if the user has explicitly asked to use a specific TTS model."
+                )
             },
             {
                 "label": "Speed",
                 "fieldname": "speed",
                 "type": "number",
                 "required": 0,
-                "description": "Speech speed from 0.25 to 4.0. Default: 1.0. Supported by OpenAI and some other providers."
+                "description": "Speech speed from 0.25 to 4.0. Default: 1.0."
             },
             {
                 "label": "Response Format",
