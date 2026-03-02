@@ -17,6 +17,8 @@
   "generated_image",
   "generated_audio",
   "voice_message",
+  "tts_model",
+  "tts_voice",
   "column_break_asyu",
   "session_id",
   "user",
@@ -186,6 +188,22 @@
    "read_only": 1
   },
   {
+   "depends_on": "eval:doc.kind == \"Audio\";",
+   "description": "AI Model used for Text-to-Speech in this audio message.",
+   "fieldname": "tts_model",
+   "fieldtype": "Link",
+   "label": "TTS Model",
+   "options": "AI Model",
+   "read_only": 1
+  },
+  {
+   "description": "Voice to use for TTS (e.g. alloy, echo, onyx).",
+   "fieldname": "tts_voice",
+   "fieldtype": "Data",
+   "label": "TTS Voice",
+   "read_only": 1
+  },
+  {
    "fieldname": "voice_message",
    "fieldtype": "Attach",
    "label": "Voice Message",
@@ -195,7 +213,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-18 13:37:33.353103",
+ "modified": "2026-03-02 18:23:04.656369",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",
