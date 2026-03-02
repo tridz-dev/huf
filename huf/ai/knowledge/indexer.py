@@ -14,15 +14,14 @@ def _build_backend_config(source) -> dict:
 	"""Build configuration dict for backend initialization.
 
 	Includes chunking settings for all backends and adds embedding
-	configuration for vector backends (e.g. zvec).
+	configuration for the sqlite_vec vector backend.
 	"""
 	config = {
 		"chunk_size": source.chunk_size,
 		"chunk_overlap": source.chunk_overlap,
 	}
 
-	# Vector backends need embedding configuration
-	if source.knowledge_type in {"zvec", "sqlite_vec"}:
+	if source.knowledge_type == "sqlite_vec":
 		config["embedding_model"] = source.embedding_model
 		config["vector_dimension"] = source.vector_dimension
 		config["embedding_provider"] = getattr(source, "embedding_provider", None)

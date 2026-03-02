@@ -169,22 +169,22 @@
             "fieldname": "knowledge_type",
             "fieldtype": "Select",
             "label": "Knowledge Type",
-            "options": "sqlite_fts\nzvec\nsqlite_vec",
+            "options": "sqlite_fts\nsqlite_vec",
             "reqd": 1
         },
         {
             "fieldname": "vector_settings_section",
             "fieldtype": "Section Break",
             "label": "Vector Settings",
-            "depends_on": "eval:['zvec','sqlite_vec'].includes(doc.knowledge_type)"
+            "depends_on": "eval:doc.knowledge_type === 'sqlite_vec'"
         },
         {
             "fieldname": "embedding_model",
             "fieldtype": "Data",
             "label": "Embedding Model",
             "description": "LiteLLM model identifier, e.g. openai/text-embedding-3-small",
-            "depends_on": "eval:['zvec','sqlite_vec'].includes(doc.knowledge_type)",
-            "mandatory_depends_on": "eval:['zvec','sqlite_vec'].includes(doc.knowledge_type)"
+            "depends_on": "eval:doc.knowledge_type === 'sqlite_vec'",
+            "mandatory_depends_on": "eval:doc.knowledge_type === 'sqlite_vec'"
         },
         {
             "fieldname": "vector_dimension",
@@ -193,8 +193,8 @@
             "default": 1536,
             "non_negative": 1,
             "description": "Must match the embedding model output dimensionality",
-            "depends_on": "eval:['zvec','sqlite_vec'].includes(doc.knowledge_type)",
-            "mandatory_depends_on": "eval:['zvec','sqlite_vec'].includes(doc.knowledge_type)"
+            "depends_on": "eval:doc.knowledge_type === 'sqlite_vec'",
+            "mandatory_depends_on": "eval:doc.knowledge_type === 'sqlite_vec'"
         },
         {
             "fieldname": "column_break_vector",
@@ -206,7 +206,7 @@
             "label": "Embedding Provider",
             "options": "AI Provider",
             "description": "AI Provider for API key resolution",
-            "depends_on": "eval:['zvec','sqlite_vec'].includes(doc.knowledge_type)"
+            "depends_on": "eval:doc.knowledge_type === 'sqlite_vec'"
         }
     ],
     "index_web_pages_for_search": 1,
