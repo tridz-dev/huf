@@ -291,16 +291,142 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
               </>
             )}
 
-            {selectedNode.data.nodeType === 'action' && selectedNode.data.actionConfig && (
-              <div>
-                <Label className="mb-2 block">Action Configuration</Label>
-                <div className="p-3 rounded-md bg-muted/30 border border-border">
-                  <code className="text-xs text-muted-foreground font-mono block overflow-x-auto">
-                    {JSON.stringify(selectedNode.data.actionConfig, null, 2)}
-                  </code>
+            {selectedNode.data.nodeType === 'action' && selectedNode.data.actionConfig && (() => {
+              const config = selectedNode.data.actionConfig;
+              const handleUpdateActionConfig = (field: string, value: any) => {
+                if (selectedNodeId) {
+                  updateNode(selectedNodeId, {
+                    data: {
+                      ...selectedNode.data,
+                      actionConfig: {
+                        ...selectedNode.data.actionConfig!,
+                        [field]: value
+                      }
+                    }
+                  });
+                }
+              };
+
+              if (config.type === 'agent-run') {
+                return (
+                  <div className="space-y-3">
+                    <Label className="mb-2 block text-sm font-semibold">Agent Configuration</Label>
+                    <div>
+                      <Label htmlFor="agent-name" className="text-xs">Agent Name</Label>
+                      <Input
+                        id="agent-name"
+                        value={(config as any).agent_name || ''}
+                        onChange={(e) => handleUpdateActionConfig('agent_name', e.target.value)}
+                        placeholder="e.g., support-agent"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="prompt-template" className="text-xs">Prompt Template</Label>
+                      <textarea
+                        id="prompt-template"
+                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={(config as any).prompt_template || ''}
+                        onChange={(e) => handleUpdateActionConfig('prompt_template', e.target.value)}
+                        placeholder="Enter prompt template. Use {{context.key}} for variables."
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="save-key" className="text-xs">Save Response To</Label>
+                      <Input
+                        id="save-key"
+                        value={(config as any).save_response_to_context || ''}
+                        onChange={(e) => handleUpdateActionConfig('save_response_to_context', e.target.value)}
+                        placeholder="e.g., agent_response"
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              if (config.type === 'tool-call') {
+                return (
+                  <div className="space-y-3">
+                    <Label className="mb-2 block text-sm font-semibold">Tool Configuration</Label>
+                    <div>
+                      <Label htmlFor="tool-name" className="text-xs">Tool Name</Label>
+                      <Input
+                        id="tool-name"
+                        value={(config as any).tool_name || ''}
+                        onChange={(e) => handleUpdateActionConfig('tool_name', e.target.value)}
+                        placeholder="e.g., search_documents"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="tool-args" className="text-xs">Arguments (JSON)</Label>
+                      <textarea
+                        id="tool-args"
+                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={JSON.stringify((config as any).args || {}, null, 2)}
+                        onChange={(e) => {
+                          try {
+                            const parsed = JSON.parse(e.target.value);
+                            handleUpdateActionConfig('args', parsed);
+                          } catch {
+                            // ignore invalid JSON while typing
+                          }
+                        }}
+                        placeholder='{"query": "{{context.input}}"}'
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="save-result" className="text-xs">Save Result To</Label>
+                      <Input
+                        id="save-result"
+                        value={(config as any).save_result_to_context || ''}
+                        onChange={(e) => handleUpdateActionConfig('save_result_to_context', e.target.value)}
+                        placeholder="e.g., tool_result"
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              if (config.type === 'human-in-loop') {
+                return (
+                  <div className="space-y-3">
+                    <Label className="mb-2 block text-sm font-semibold">Human Approval</Label>
+                    <div>
+                      <Label htmlFor="approval-message" className="text-xs">Instructions</Label>
+                      <textarea
+                        id="approval-message"
+                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={(config as any).message || ''}
+                        onChange={(e) => handleUpdateActionConfig('message', e.target.value)}
+                        placeholder="Instructions for the approver"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="timeout" className="text-xs">Timeout (seconds)</Label>
+                      <Input
+                        id="timeout"
+                        type="number"
+                        min="0"
+                        value={(config as any).timeout || 0}
+                        onChange={(e) => handleUpdateActionConfig('timeout', parseInt(e.target.value))}
+                        placeholder="0 = no timeout"
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              // Fallback: show JSON for other action types
+              return (
+                <div>
+                  <Label className="mb-2 block">Action Configuration</Label>
+                  <div className="p-3 rounded-md bg-muted/30 border border-border">
+                    <code className="text-xs text-muted-foreground font-mono block overflow-x-auto">
+                      {JSON.stringify(config, null, 2)}
+                    </code>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </>
         )}
       </div>
@@ -329,9 +455,9 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                 data: {
                   ...selectedNode.data,
                   label: config.type === 'webhook' ? 'Webhook' :
-                         config.type === 'schedule' ? 'Schedule' :
-                         config.type === 'doc-event' ? 'Doc Event' :
-                         'App Trigger',
+                    config.type === 'schedule' ? 'Schedule' :
+                      config.type === 'doc-event' ? 'Doc Event' :
+                        'App Trigger',
                   icon: iconMap[config.type || 'webhook'],
                   configured: true,
                   triggerConfig: config
