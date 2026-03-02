@@ -142,7 +142,7 @@ export function AgentFormPage() {
   const [mcpServers, setMcpServers] = useState<MCPServerRef[]>([]);
   const [initialMcpServers, setInitialMcpServers] = useState<MCPServerRef[]>([]); // Track initial MCP servers state
   const [mcpLoading, setMcpLoading] = useState(false);
-
+  const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
       defaultValues: {
@@ -324,8 +324,9 @@ export function AgentFormPage() {
           enable_conversation_data: data.enable_conversation_data === 1,
           autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
         });
-        // Track initial disabled state
+        // Track initial disabled state and persisted allow_chat
         setInitialDisabled(data.disabled === 1);
+        setAllowChat(data.allow_chat === 1);
         // Load tools from agent_tool field
         // agent_tool is a child table with format: [{ tool: "tool-name" }, ...]
         if (data.agent_tool && Array.isArray(data.agent_tool) && data.agent_tool.length > 0) {
@@ -482,6 +483,7 @@ export function AgentFormPage() {
           autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
         });
         setInitialDisabled(newAgent.disabled === 1);
+        setAllowChat(newAgent.allow_chat === 1);
         // Navigate to the edit page with the new agent's ID
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
@@ -511,9 +513,10 @@ export function AgentFormPage() {
           enable_conversation_data: values.enable_conversation_data,
           autonaming_of_conversation_title: values.autonaming_of_conversation_title,
         });
-        // Reset tools, disabled state, and MCP servers after successful update to mark as unchanged
+        // Reset tools, disabled state, and persisted allow_chat after successful update
         setInitialTools([...selectedTools]);
         setInitialDisabled(values.disabled);
+        setAllowChat(values.allow_chat);
         // Reload agent to get updated MCP servers from the agent document
         if (id) {
           getAgent(id).then((updatedData: AgentDoc) => {
@@ -925,6 +928,7 @@ export function AgentFormPage() {
           onViewLogs={handleViewLogs}
           onDelete={handleDelete}
           agentId={!isNew && id ? id : undefined}
+          allowChat={allowChat}
         />
 
         <Form {...form}>
