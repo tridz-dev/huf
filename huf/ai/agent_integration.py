@@ -1319,7 +1319,6 @@ async def run_agent_stream(
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
                     usage = chunk.get("usage", {})
-                    frappe.log_error(f"Stream Usage Received: {usage} Type: {type(usage)}", "Debug Stream Usage")
                     
                     # Calculate metrics
                     cost = 0.0
@@ -1351,8 +1350,8 @@ async def run_agent_stream(
                         try:
                             
                             msgs_for_count = history + [{"role": "user", "content": prompt}]
-                            input_tokens = token_counter(model=model, messages=msgs_for_count)
-                            output_tokens = token_counter(model=model, text=full_response)
+                            input_tokens = token_counter(model=resolved_model, messages=msgs_for_count)
+                            output_tokens = token_counter(model=resolved_model, text=full_response)
                             total_tokens = input_tokens + output_tokens
                         except Exception as e:
                             frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
@@ -1379,7 +1378,7 @@ async def run_agent_stream(
                             )
 
                         except Exception as e:
-                            frappe.log_error(f"Cost calculation failed for {model}: {e}", "Agent Stream Cost")
+                            frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")
                             cost = 0.0
 
                         # Update Conversation Metrics
