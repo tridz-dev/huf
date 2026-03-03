@@ -23,6 +23,14 @@ class KnowledgeSource(Document):
 				frappe.throw(_("Embedding Model is required for vector knowledge types"))
 			if not self.vector_dimension or self.vector_dimension <= 0:
 				frappe.throw(_("Vector Dimension must be a positive integer for vector knowledge types"))
+			from huf.ai.knowledge.backends.sqlite_vec_backend import check_sqlite_vec_available
+
+			if not check_sqlite_vec_available():
+				frappe.throw(
+					_("sqlite_vec requires loadable SQLite extensions. "
+					  "Install pysqlite3-binary: pip install pysqlite3-binary. "
+					  "Or use sqlite_fts for keyword search.")
+				)
 	
 	def before_save(self):
 		if not self.chunk_size:
