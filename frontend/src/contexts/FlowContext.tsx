@@ -2,15 +2,21 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, Re
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 
+export type SaveState = 'saved' | 'saving' | 'unsaved' | 'error';
+
 interface FlowContextType {
   flows: FlowMetadata[];
   activeFlowId: string | null;
   activeFlow: Flow | null;
   selectedNodeId: string | null;
+  selectedEdgeId: string | null;
   loading: boolean;
   error: string | null;
+  saveState: SaveState;
+  hasUnsavedChanges: boolean;
   setActiveFlow: (flowId: string) => void;
   setSelectedNode: (nodeId: string | null) => void;
+  setSelectedEdge: (edgeId: string | null) => void;
   createFlow: (name: string, category?: string) => Promise<Flow>;
   updateFlowName: (flowId: string, name: string) => Promise<void>;
   deleteFlow: (flowId: string) => Promise<void>;
@@ -32,8 +38,11 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const [activeFlowId, setActiveFlowId] = useState<string | null>(null);
   const [activeFlow, setActiveFlowState] = useState<Flow | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const hasFetchedRef = useRef(false);
 
   const refreshFlows = useCallback(async () => {
@@ -53,6 +62,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const loadActiveFlow = useCallback(async () => {
     if (!activeFlowId) {
       setActiveFlowState(null);
+      setHasUnsavedChanges(false);
+      setSaveState('saved');
       return;
     }
 
@@ -60,6 +71,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     const cached = flowService.getCachedFlow(activeFlowId);
     if (cached) {
       setActiveFlowState(cached);
+      setHasUnsavedChanges(false);
+      setSaveState('saved');
       return;
     }
 
@@ -68,6 +81,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       const flow = await flowService.getFlow(activeFlowId);
       setActiveFlowState(flow);
+      setHasUnsavedChanges(false);
+      setSaveState('saved');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to load flow';
       setError(message);
@@ -106,9 +121,6 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     setSelectedNodeId(null);
   }, []);
 
-  const setSelectedNode = useCallback((nodeId: string | null) => {
-    setSelectedNodeId(nodeId);
-  }, []);
 
   const createFlow = useCallback(async (name: string, category?: string) => {
     const newFlow = await flowService.createFlow(name, category);
@@ -134,32 +146,60 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     }
   }, [activeFlowId, refreshFlows]);
 
+  // ─── Save Flow Logic ──────────────────────────────────────────────
+
+  const saveFlow = useCallback(async () => {
+    if (!activeFlowId || !hasUnsavedChanges) return;
+
+    setSaveState('saving');
+    try {
+      await flowService.saveFlow(activeFlowId);
+      setSaveState('saved');
+      setHasUnsavedChanges(false);
+    } catch (err: unknown) {
+      setSaveState('error');
+      console.error('Failed to save flow:', err);
+      // We don't throw here so the UI can handle the error state gracefully
+      throw err;
+    }
+  }, [activeFlowId, hasUnsavedChanges]);
+
   // ─── Synchronous node/edge mutations (cache-only, fast) ────────────
+
+  const markUnsaved = useCallback(() => {
+    setHasUnsavedChanges(true);
+    setSaveState('unsaved');
+  }, []);
 
   const updateNodes = useCallback((nodes: FlowNode[]) => {
     if (!activeFlowId) return;
     flowService.updateNodes(activeFlowId, nodes);
-  }, [activeFlowId]);
+    markUnsaved();
+  }, [activeFlowId, markUnsaved]);
 
   const updateEdges = useCallback((edges: FlowEdge[]) => {
     if (!activeFlowId) return;
     flowService.updateEdges(activeFlowId, edges);
-  }, [activeFlowId]);
+    markUnsaved();
+  }, [activeFlowId, markUnsaved]);
 
   const updateNodesAndEdges = useCallback((nodes: FlowNode[], edges: FlowEdge[]) => {
     if (!activeFlowId) return;
     flowService.updateNodesAndEdges(activeFlowId, nodes, edges);
-  }, [activeFlowId]);
+    markUnsaved();
+  }, [activeFlowId, markUnsaved]);
 
   const addNode = useCallback((node: FlowNode) => {
     if (!activeFlowId) return;
     flowService.addNode(activeFlowId, node);
-  }, [activeFlowId]);
+    markUnsaved();
+  }, [activeFlowId, markUnsaved]);
 
   const updateNode = useCallback((nodeId: string, updates: Partial<FlowNode>) => {
     if (!activeFlowId) return;
     flowService.updateNode(activeFlowId, nodeId, updates);
-  }, [activeFlowId]);
+    markUnsaved();
+  }, [activeFlowId, markUnsaved]);
 
   const deleteNode = useCallback((nodeId: string) => {
     if (!activeFlowId) return;
@@ -167,38 +207,38 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     if (selectedNodeId === nodeId) {
       setSelectedNodeId(null);
     }
-  }, [activeFlowId, selectedNodeId]);
+    markUnsaved();
+  }, [activeFlowId, selectedNodeId, markUnsaved]);
+
+  const handleSetSelectedNode = useCallback((nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+    if (nodeId) setSelectedEdgeId(null);
+  }, []);
+
+  const handleSetSelectedEdge = useCallback((edgeId: string | null) => {
+    setSelectedEdgeId(edgeId);
+    if (edgeId) setSelectedNodeId(null);
+  }, []);
 
   const addEdge = useCallback((edge: FlowEdge) => {
     if (!activeFlowId) return;
     flowService.addEdge(activeFlowId, edge);
-  }, [activeFlowId]);
-
-  // ─── Explicit save to backend ──────────────────────────────────────
-
-  const saveFlow = useCallback(async () => {
-    if (!activeFlow) return;
-    try {
-      setLoading(true);
-      await flowService.saveFlow(activeFlow);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save flow';
-      setError(message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [activeFlow]);
+    markUnsaved();
+  }, [activeFlowId, markUnsaved]);
 
   const value: FlowContextType = {
     flows,
     activeFlowId,
     activeFlow,
     selectedNodeId,
+    selectedEdgeId,
     loading,
     error,
+    saveState,
+    hasUnsavedChanges,
     setActiveFlow,
-    setSelectedNode,
+    setSelectedNode: handleSetSelectedNode,
+    setSelectedEdge: handleSetSelectedEdge,
     createFlow,
     updateFlowName,
     deleteFlow,

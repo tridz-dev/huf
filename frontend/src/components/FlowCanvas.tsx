@@ -36,7 +36,7 @@ export function FlowCanvas({
   onToggleLeftSidebar,
   onToggleRightSidebar
 }: FlowCanvasProps) {
-  const { activeFlow, updateNodesAndEdges, updateNode, setSelectedNode } = useFlowContext();
+  const { activeFlow, updateNodesAndEdges, updateNode, setSelectedNode, setSelectedEdge } = useFlowContext();
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,6 +102,18 @@ export function FlowCanvas({
     [setSelectedNode]
   );
 
+  const onEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      setSelectedEdge(edge.id);
+    },
+    [setSelectedEdge]
+  );
+
+  const onPaneClick = useCallback(() => {
+    setSelectedNode(null);
+    setSelectedEdge(null);
+  }, [setSelectedNode, setSelectedEdge]);
+
   const handleAddNode = useCallback((sourceNodeId: string) => {
     setSourceNodeForAction(sourceNodeId);
     setModalMode('action');
@@ -124,9 +136,9 @@ export function FlowCanvas({
             data: {
               ...node.data,
               label: config.type === 'webhook' ? 'Webhook' :
-                     config.type === 'schedule' ? 'Schedule' :
-                     config.type === 'doc-event' ? 'Doc Event' :
-                     'App Trigger',
+                config.type === 'schedule' ? 'Schedule' :
+                  config.type === 'doc-event' ? 'Doc Event' :
+                    'App Trigger',
               icon: iconMap[config.type || 'webhook'],
               configured: true,
               triggerConfig: config
@@ -249,6 +261,8 @@ export function FlowCanvas({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={onPaneClick}
         nodeTypes={nodeTypesWithAddButton}
         fitView
         fitViewOptions={{ padding: 0.3, maxZoom: 1 }}

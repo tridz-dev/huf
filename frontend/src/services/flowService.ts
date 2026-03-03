@@ -16,7 +16,12 @@ import {
   deleteFlowDefinition,
   updateFlowDefinitionFields,
   runFlow as apiRunFlow,
+  listFlowRuns as apiListFlowRuns,
+  getFlowRun as apiGetFlowRun,
+  approveFlowRun as apiApproveFlowRun,
+  rejectFlowRun as apiRejectFlowRun,
 } from './flowApi';
+import type { FlowRunSummary, FlowRunDetail } from './flowApi';
 import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend } from './flowSerializer';
 import type { BackendFlowGraph } from './flowApi';
 
@@ -197,6 +202,24 @@ class FlowService {
   /** Run a flow via the backend */
   async runFlow(flowId: string, payload?: Record<string, unknown>): Promise<{ flow_run_id: string; status: string }> {
     return apiRunFlow(flowId, payload);
+  }
+
+  // ─── Flow Run API Wrappers ──────────────────────────────────────────
+
+  async listFlowRuns(flowId?: string, status?: string, limit?: number): Promise<FlowRunSummary[]> {
+    return apiListFlowRuns(flowId, status, limit);
+  }
+
+  async getFlowRun(flowRunId: string): Promise<FlowRunDetail | undefined> {
+    return apiGetFlowRun(flowRunId);
+  }
+
+  async approveFlowRun(flowRunId: string, comment?: string) {
+    return apiApproveFlowRun(flowRunId, comment);
+  }
+
+  async rejectFlowRun(flowRunId: string, comment?: string) {
+    return apiRejectFlowRun(flowRunId, comment);
   }
 
   // ─── Local-only mutation helpers (update cache, notify) ────────────
