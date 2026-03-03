@@ -149,6 +149,8 @@ export function FlowCanvas({
 
       const newNodeId = `node-${Date.now()}`;
       const iconMap: Record<string, string> = {
+        'agent-run': 'Bot',
+        'tool-call': 'Wrench',
         transform: 'Repeat',
         router: 'GitBranch',
         loop: 'RotateCw',
@@ -161,6 +163,8 @@ export function FlowCanvas({
       };
 
       const labelMap: Record<string, string> = {
+        'agent-run': 'Run Agent',
+        'tool-call': 'Call Tool',
         transform: 'Transform Data',
         router: 'Router',
         loop: 'Loop',

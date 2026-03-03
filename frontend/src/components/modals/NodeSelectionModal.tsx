@@ -171,7 +171,11 @@ export function NodeSelectionModal({
   const handleSelectAction = (actionId: string) => {
     let config: ActionConfig = { type: undefined };
 
-    if (actionId === 'transform') {
+    if (actionId === 'agent-run') {
+      config = { type: 'agent-run', agent_name: '', prompt_template: '', save_response_to_context: '' };
+    } else if (actionId === 'tool-call') {
+      config = { type: 'tool-call', tool_name: '', args: {}, save_result_to_context: '' };
+    } else if (actionId === 'transform') {
       config = { type: 'transform', transformations: [] };
     } else if (actionId === 'router') {
       config = { type: 'router', branches: [] };

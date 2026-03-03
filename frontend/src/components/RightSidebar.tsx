@@ -1,50 +1,116 @@
-import { useState } from 'react';
-import { PanelRightClose, Settings, Edit } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { PanelRightClose, Settings, Edit, Trash2 } from 'lucide-react';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
+import { Combobox } from './ui/combobox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { ScheduleIntervalType, DocEventType } from '../types/flow.types';
+import { getAgents, getDocTypes } from '../services/agentApi';
+import { getToolFunctions } from '../services/toolApi';
 
 interface RightSidebarProps {
   onToggle: () => void;
 }
 
 export function RightSidebar({ onToggle }: RightSidebarProps) {
-  const { activeFlow, selectedNodeId, updateNode } = useFlowContext();
+  const { activeFlow, selectedNodeId, updateNode, deleteNode } = useFlowContext();
   const selectedNode = activeFlow?.nodes.find((n) => n.id === selectedNodeId);
   const [width, setWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [agents, setAgents] = useState<Array<{ value: string; label: string }>>([]);
+  const [tools, setTools] = useState<Array<{ value: string; label: string }>>([]);
+  const [docTypes, setDocTypes] = useState<Array<{ value: string; label: string }>>([]);
+  const [loadingAgents, setLoadingAgents] = useState(false);
+  const [loadingTools, setLoadingTools] = useState(false);
+  const [loadingDocTypes, setLoadingDocTypes] = useState(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (isResizing) {
+  useEffect(() => {
+    if (!isResizing) return;
+    const handleMouseMove = (e: MouseEvent) => {
       const newWidth = window.innerWidth - e.clientX;
       setWidth(Math.min(Math.max(320, newWidth), 600));
-    }
-  };
+    };
+    const handleMouseUp = () => setIsResizing(false);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
-  const handleMouseUp = () => {
-    setIsResizing(false);
-  };
+  // Load agents when agent-run node selected
+  useEffect(() => {
+    if (!selectedNode?.data.actionConfig || (selectedNode.data.actionConfig as any).type !== 'agent-run') return;
+    setLoadingAgents(true);
+    getAgents()
+      .then((result) => {
+        const items = Array.isArray(result) ? result : result.items;
+        setAgents(
+          (items || []).map((a: { name: string; agent_name?: string }) => ({
+            value: a.name,
+            label: a.agent_name || a.name,
+          }))
+        );
+      })
+      .catch(() => setAgents([]))
+      .finally(() => setLoadingAgents(false));
+  }, [selectedNode?.id, selectedNode?.data.actionConfig]);
 
-  useState(() => {
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  });
+  // Load tools when tool-call node selected
+  useEffect(() => {
+    if (!selectedNode?.data.actionConfig || (selectedNode.data.actionConfig as any).type !== 'tool-call') return;
+    setLoadingTools(true);
+    getToolFunctions()
+      .then((list) => {
+        setTools(
+          (list || []).map((t: { name: string; tool_name?: string }) => ({
+            value: t.tool_name || t.name,
+            label: t.tool_name || t.name,
+          }))
+        );
+      })
+      .catch(() => setTools([]))
+      .finally(() => setLoadingTools(false));
+  }, [selectedNode?.id, selectedNode?.data.actionConfig]);
+
+  // Load DocTypes when doc-event trigger selected
+  useEffect(() => {
+    if (
+      !selectedNode?.data.triggerConfig ||
+      (selectedNode.data.triggerConfig as any).type !== 'doc-event'
+    )
+      return;
+    setLoadingDocTypes(true);
+    getDocTypes()
+      .then((list) => {
+        setDocTypes(
+          (list || []).map((dt: { name: string }) => ({ value: dt.name, label: dt.name }))
+        );
+      })
+      .catch(() => setDocTypes([]))
+      .finally(() => setLoadingDocTypes(false));
+  }, [selectedNode?.id, selectedNode?.data.triggerConfig]);
 
   const handleUpdateLabel = (label: string) => {
     if (selectedNodeId) {
@@ -167,11 +233,14 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
         <>
           <div>
             <Label htmlFor="doctype">Document Type</Label>
-            <Input
-              id="doctype"
+            <Combobox
+              options={docTypes}
               value={config.doctype || ''}
-              onChange={(e) => handleUpdateTriggerConfig('doctype', e.target.value)}
-              placeholder="e.g., User, Order, Invoice"
+              onValueChange={(v) => handleUpdateTriggerConfig('doctype', v)}
+              placeholder={loadingDocTypes ? 'Loading...' : 'Select DocType...'}
+              disabled={loadingDocTypes}
+              searchPlaceholder="Search DocType..."
+              emptyText="No DocType found."
             />
           </div>
           <div>
@@ -312,12 +381,15 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                   <div className="space-y-3">
                     <Label className="mb-2 block text-sm font-semibold">Agent Configuration</Label>
                     <div>
-                      <Label htmlFor="agent-name" className="text-xs">Agent Name</Label>
-                      <Input
-                        id="agent-name"
+                      <Label htmlFor="agent-name" className="text-xs">Agent</Label>
+                      <Combobox
+                        options={agents}
                         value={(config as any).agent_name || ''}
-                        onChange={(e) => handleUpdateActionConfig('agent_name', e.target.value)}
-                        placeholder="e.g., support-agent"
+                        onValueChange={(v) => handleUpdateActionConfig('agent_name', v)}
+                        placeholder={loadingAgents ? 'Loading...' : 'Select agent...'}
+                        disabled={loadingAgents}
+                        searchPlaceholder="Search agents..."
+                        emptyText="No agent found."
                       />
                     </div>
                     <div>
@@ -348,12 +420,15 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                   <div className="space-y-3">
                     <Label className="mb-2 block text-sm font-semibold">Tool Configuration</Label>
                     <div>
-                      <Label htmlFor="tool-name" className="text-xs">Tool Name</Label>
-                      <Input
-                        id="tool-name"
+                      <Label htmlFor="tool-name" className="text-xs">Tool</Label>
+                      <Combobox
+                        options={tools}
                         value={(config as any).tool_name || ''}
-                        onChange={(e) => handleUpdateActionConfig('tool_name', e.target.value)}
-                        placeholder="e.g., search_documents"
+                        onValueChange={(v) => handleUpdateActionConfig('tool_name', v)}
+                        placeholder={loadingTools ? 'Loading...' : 'Select tool...'}
+                        disabled={loadingTools}
+                        searchPlaceholder="Search tools..."
+                        emptyText="No tool found."
                       />
                     </div>
                     <div>
@@ -431,11 +506,50 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
         )}
       </div>
 
-      <div className="border-t border-border p-3 bg-card">
+      <div className="border-t border-border p-3 bg-card flex items-center justify-between gap-2">
+        <div className="flex-1">
+          {selectedNode && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              Delete Node
+            </Button>
+          )}
+        </div>
         <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-accent" onClick={onToggle}>
           <PanelRightClose className="w-4 h-4 text-muted-foreground" />
         </Button>
       </div>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Node</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this node? Any edges connected to it will also be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (selectedNodeId) {
+                  deleteNode(selectedNodeId);
+                  setShowDeleteConfirm(false);
+                  onToggle();
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {selectedNode && (
         <NodeSelectionModal
