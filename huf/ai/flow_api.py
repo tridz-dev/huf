@@ -394,6 +394,156 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Node Schema API (for dynamic UI construction)
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def get_node_schemas() -> dict:
+	"""
+	Return JSON schema definitions for all available flow node types.
+
+	This endpoint enables schema-driven UI construction. The frontend can
+	query this to dynamically build configuration forms instead of
+	hardcoding TypeScript interfaces per node type.
+
+	Returns:
+	    dict keyed by backend node type, each containing:
+	        label (str): Display name
+	        icon (str): Default icon name
+	        category (str): Category for grouping in UI
+	        description (str): Short description
+	        has_backend (bool): Whether this node type has a backend executor
+	        config_schema (list): List of field definitions for config form
+	"""
+	return {
+		"trigger.webhook": {
+			"label": "Webhook Trigger",
+			"icon": "Webhook",
+			"category": "trigger",
+			"description": "Start flow from an incoming webhook",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "auth", "label": "Auth Key", "type": "string", "description": "Optional authentication key"},
+				{"name": "method", "label": "HTTP Method", "type": "select", "options": ["GET", "POST", "PUT", "DELETE"], "default": "POST"},
+			],
+		},
+		"agent.run": {
+			"label": "Run Agent",
+			"icon": "Bot",
+			"category": "ai",
+			"description": "Execute a HUF AI agent",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "agent_name", "label": "Agent", "type": "agent_select", "required": True},
+				{"name": "input.prompt_template", "label": "Prompt Template", "type": "text", "supports_variables": True},
+				{"name": "conversation_mode", "label": "Conversation Mode", "type": "select", "options": ["flow_shared", "isolated"], "default": "flow_shared"},
+				{"name": "input.inject_flow_context", "label": "Inject Flow Context", "type": "boolean", "default": False},
+				{"name": "output.save_response_to_context", "label": "Save Response To", "type": "string", "description": "Context key for result"},
+			],
+		},
+		"tool.call": {
+			"label": "Call Tool",
+			"icon": "Wrench",
+			"category": "ai",
+			"description": "Execute a tool function deterministically",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "tool_name", "label": "Tool", "type": "tool_select", "required": True},
+				{"name": "args", "label": "Arguments", "type": "dynamic_args", "description": "Loaded from tool definition"},
+				{"name": "output.save_result_to_context", "label": "Save Result To", "type": "string", "description": "Context key for result"},
+			],
+		},
+		"router.llm": {
+			"label": "LLM Router",
+			"icon": "GitBranch",
+			"category": "control",
+			"description": "Route flow using LLM-based decision making",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "router_agent_name", "label": "Routing Agent", "type": "agent_select", "required": True},
+				{"name": "conversation_mode", "label": "Conversation Mode", "type": "select", "options": ["flow_shared", "isolated"], "default": "flow_shared"},
+			],
+		},
+		"human.approval": {
+			"label": "Human Approval",
+			"icon": "UserCheck",
+			"category": "control",
+			"description": "Pause flow for human approval decision",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "title", "label": "Title", "type": "string", "default": "Approval Required"},
+				{"name": "instructions", "label": "Instructions", "type": "text"},
+				{"name": "approval_type", "label": "Approval Type", "type": "select", "options": ["role", "user"], "default": "role"},
+				{"name": "approver_role", "label": "Approver Role", "type": "string", "show_if": {"field": "approval_type", "value": "role"}},
+				{"name": "approver_users", "label": "Approver Users", "type": "string", "show_if": {"field": "approval_type", "value": "user"}},
+				{"name": "store_decision_in_context", "label": "Store Decision Key", "type": "string", "default": "approval"},
+			],
+		},
+		"condition": {
+			"label": "Condition (IF)",
+			"icon": "GitFork",
+			"category": "control",
+			"description": "Branch flow based on a boolean expression (True/False)",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "expression", "label": "Condition Expression", "type": "expression", "required": True, "description": "e.g., context[\"status\"] == \"approved\""},
+				{"name": "true_node", "label": "True Branch (Node ID)", "type": "node_select", "description": "Node to go to if condition is true"},
+				{"name": "false_node", "label": "False Branch (Node ID)", "type": "node_select", "description": "Node to go to if condition is false"},
+			],
+		},
+		"http_request": {
+			"label": "HTTP Request",
+			"icon": "Globe",
+			"category": "integration",
+			"description": "Make an HTTP request to an external API",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "url", "label": "URL", "type": "string", "required": True, "supports_variables": True},
+				{"name": "method", "label": "Method", "type": "select", "options": ["GET", "POST", "PUT", "PATCH", "DELETE"], "default": "GET"},
+				{"name": "headers", "label": "Headers", "type": "json", "description": "Request headers as JSON object"},
+				{"name": "body", "label": "Body", "type": "json", "description": "Request body (POST/PUT only)", "supports_variables": True},
+				{"name": "timeout", "label": "Timeout (seconds)", "type": "number", "default": 30},
+				{"name": "save_result_to_context", "label": "Save Result To", "type": "string", "description": "Context key for result"},
+			],
+		},
+		"transform": {
+			"label": "Transform Data",
+			"icon": "Repeat",
+			"category": "transform",
+			"description": "Map, copy, or template data between context variables",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "transformations", "label": "Transformations", "type": "transform_list", "description": "List of {source_field, target_field, operation}"},
+			],
+		},
+		"loop": {
+			"label": "Loop",
+			"icon": "RotateCw",
+			"category": "control",
+			"description": "Iterate over a list in context",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "iterate_over", "label": "Iterate Over", "type": "string", "required": True, "description": "Context key containing the array"},
+				{"name": "item_key", "label": "Item Variable", "type": "string", "default": "loop_item", "description": "Context key for current item"},
+				{"name": "index_key", "label": "Index Variable", "type": "string", "default": "loop_index"},
+				{"name": "loop_node", "label": "Loop Body Node", "type": "node_select", "description": "Node to execute per iteration"},
+				{"name": "done_node", "label": "Done Node", "type": "node_select", "description": "Node to go to when iteration completes"},
+				{"name": "max_iterations", "label": "Max Iterations", "type": "number", "default": 100},
+			],
+		},
+		"end": {
+			"label": "End",
+			"icon": "CheckCircle2",
+			"category": "control",
+			"description": "Mark flow as completed",
+			"has_backend": True,
+			"config_schema": [],
+		},
+	}
+
+
+# ---------------------------------------------------------------------------
 # Agent Tools (for agents to interact with flows)
 # ---------------------------------------------------------------------------
 
