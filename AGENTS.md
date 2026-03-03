@@ -41,7 +41,11 @@ This section provides a deep dive into the application's structure, including Do
 4.  **Agent**: An `Agent` is the central entity. You give it a name, instructions (prompt), temperature, top_p, and assign it a set of tools. Each agent has its own individual settings that are read directly from the Agent DocType. Agents can be configured for scheduling, doc events, or chat.
 5.  **Conversation**: When a user interacts with an agent, a `Agent Conversation` is created to track the entire interaction. Each message back-and-forth is stored as an `Agent Message`.
 6.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run` with token usage and cost tracking.
-7.  **Chat Interface**: `Agent Chat` provides a real-time chat UI for conversational agents with markdown rendering.
+7.  **Chat Interface**: `Agent Chat` provides a real-time chat UI for conversational agents with markdown rendering, interactive Artifact and JSX component rendering, and TTS audio playback.
+8.  **Prompt Management**: Manage agent instructions centrally using `Agent Prompt`. Supports immutable versions, continuous lineages, and prompt categories.
+9.  **Flow Engine**: A visual, graph-based node execution engine stored via `Flow Definition`. Orchestrates triggers, agent runs, tools, and conditions dynamically mapped to `Flow Run` states.
+10. **Data Management**: Agents can persistently manage state using the `conversation_data` JSON store linked to their sessions.
+11. **Native Capabilities**: Agents can utilize native TTS Audio Generation, advanced Image processing, and OCR documents directly through mapped capabilities.
 
 ### Doctypes
 
@@ -130,13 +134,19 @@ The main DocType for creating an AI agent.
 | **Agent Name**   | `agent_name`   | Data      | A unique name for the agent.                                                                            |
 | **Provider**     | `provider`     | Link      | Link to the `AI Provider`.                                                                              |
 | **Model**        | `model`        | Link      | Link to the `AI Model`.                                                                                 |
-| **Instructions** | `instructions` | Code      | The system prompt or instructions that define the agent's personality, goals, and constraints.          |
+| **Prompt Mode**  | `prompt_mode`  | Select    | How the prompt is managed. 'Local' uses the instructions field, 'Template' links to an `Agent Prompt`.  |
+| **Agent Prompt** | `agent_prompt` | Link      | Link to a reusable Agent Prompt (if Prompt Mode is Template).                                           |
+| **Lock Prompt Version** | `prompt_version_locked` | Check | If checked, stays on the attached prompt version, ignoring newer versions.                              |
+| **Instructions** | `instructions` | Code      | The native system prompt or instructions (Used when Prompt Mode is 'Local').                            |
 | **Agent Tool**   | `agent_tool`   | Table     | A child table (`Agent Tool`) linking to the `Agent Tool Function`s that this agent is allowed to use. |
 | **Agent Knowledge** | `agent_knowledge` | Table | A child table (`Agent Knowledge`) linking to `Knowledge Source`s. Allows "Mandatory" (auto-injected) or "Optional" (tool-based) access. |
 | **Temperature**  | `temperature`  | Float     | Controls the randomness of the AI's output.                                                             |
 | **Top P**        | `top_p`        | Float     | An alternative to temperature for controlling randomness.                                               |
 | **Allow Chat**    | `allow_chat`   | Check     | Enables the Agent Chat interface for real-time conversations.                                           |
 | **Persist Conversation** | `persist_conversation` | Check | Whether to maintain conversation history across runs. |
+| **Conversation Data** | `enable_conversation_data` | Check | If enabled, the agent can persistently manage its state (key-value pairs) in the conversation's context. |
+| **TTS Model / Voice** | `tts_model`, `tts_voice` | Link / Data| Audio Generation configuration overrides for the agent. |
+| **Image Generation Model** | `image_generation_model` | Link | Specific model target for image generation and OCR tasks. |
 | **Persist per User (Doc/Schedule)** | `persist_user_history` | Check | When checked, Doc Event and Scheduled runs create/maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used. Default: 1 (checked). |
 | **Description**   | `description`  | Small Text | A brief description of the agent's purpose. |
 | **Last Run**      | `last_run`     | Datetime  | Timestamp of the last agent execution (read-only, auto-updated). |
@@ -166,6 +176,7 @@ Tracks a continuous conversation with an agent.
 | **Session ID**   | `session_id`     | Data     | A unique ID for the session, typically combining channel and user ID.    |
 | **Is Active**    | `is_active`      | Check    | Indicates if the conversation is ongoing.                                |
 | **Total Messages** | `total_messages` | Int      | The total number of messages exchanged.                                  |
+| **Conversation Data** | `conversation_data` | JSON   | Persistently stores the state object (e.g., items, configuration, values) managed by the agent during the conversation. |
 
 #### 6. Agent Message
 
@@ -181,7 +192,9 @@ Represents a single message within a conversation.
 | **Conversation** | `conversation` | Link      | Link to the parent `Agent Conversation`.                                 |
 | **Role**         | `role`         | Select    | The role of the message sender (`user`, `agent`, or `system`).           |
 | **Content**      | `content`      | Long Text | The text content of the message.                                         |
-| **Kind**         | `kind`         | Select    | The type of message (`Message`, `Tool Call`, `Tool Result`, `Error`).    |
+| **Content Type** | `content_type` | Select    | Determines UI rendering constraints (`Text`, `Artifact`, `JSX Preview`). |
+| **Kind**         | `kind`         | Select    | The type of message (`Message`, `Tool Call`, `Tool Result`, `Error`, `Audio`). |
+| **Generated Audio** | `generated_audio` | Attach | The natively generated audio file attachment from TTS tools. |
 | **Run**          | `run`          | Link      | Link to the `Agent Run` that generated this message.                     |
 
 #### 7. Agent Run
@@ -247,6 +260,27 @@ A singleton DocType providing a simple interface for testing and debugging agent
 #### 10. Agent Trigger
 
 Defines how and when agents are triggered for execution. This DocType replaces the old `condition` field in the Agent DocType with a comprehensive trigger management system.
+
+#### 11. Agent Prompt
+
+Centrally manages prompt templates, enabling reusable and version-controlled instructions for agents. Each prompt maintains an immutable lineage to ensure safety in production environments.
+
+-   **Python Class**: `AgentPrompt(Document)`
+-   **File**: `huf/huf/doctype/agent_prompt/agent_prompt.py`
+
+**Key Features:**
+-   **Versioning**: Modifying a prompt generates a new version sequentially.
+-   **Lineage Tracking**: Uses `prompt_group` to maintain links across versions.
+-   **Locking**: Agents can be securely locked (`prompt_version_locked`) to a specific version.
+-   **Category**: Links to `Agent Prompt Category` for robust categorization.
+
+#### 12. Flow Definition & Flow Run
+
+Supports the backend structural graph mappings powering the Visual Flow Engine.
+
+-   **Classes**: `FlowDefinition(Document)`, `FlowRun(Document)`
+-   **Flow Definition**: Stores visual graph arrangements, node settings, edge constraints securely via JSON arrays in the `definition_json` representation.
+-   **Flow Run**: Represents an isolated execution runtime (`status`, `current_node_id`, `hop_count`, `context_json`). Iterates sequentially through node logic evaluators and expressions seamlessly integrating tools and agentic inferences.
 
 -   **Python Class**: `AgentTrigger(Document)`
 -   **File**: `huf/huf/doctype/agent_trigger/agent_trigger.py`
