@@ -3,6 +3,9 @@
  * and backend definition_json schema.
  *
  * Every save/load must go through serializeFlow / deserializeFlow.
+ *
+ * v0.2 — Updated to support new backend node types:
+ *   condition, http_request, transform, loop
  */
 
 import type { Flow, FlowNode, FlowEdge, FlowNodeData, FlowStatus } from '@/types/flow.types';
@@ -54,8 +57,6 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNode['type'] {
     if (nodeType === 'end') return 'end';
 
     if (nodeType === 'trigger') {
-        // All frontend triggers currently map to trigger.webhook.
-        // Extend this mapping when more backend trigger types are added.
         return 'trigger.webhook';
     }
 
@@ -66,6 +67,10 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNode['type'] {
         case 'tool-call': return 'tool.call';
         case 'router': return 'router.llm';
         case 'human-in-loop': return 'human.approval';
+        case 'condition': return 'condition';
+        case 'http-request': return 'http_request';
+        case 'transform': return 'transform';
+        case 'loop': return 'loop';
         default: return 'tool.call'; // fallback for unmapped action types
     }
 }
@@ -182,8 +187,12 @@ function getDefaultLabel(backendType: string): string {
         'trigger.webhook': 'Webhook Trigger',
         'agent.run': 'Run Agent',
         'tool.call': 'Call Tool',
-        'router.llm': 'Router',
+        'router.llm': 'LLM Router',
         'human.approval': 'Human Approval',
+        'condition': 'Condition (IF)',
+        'http_request': 'HTTP Request',
+        'transform': 'Transform Data',
+        'loop': 'Loop',
         'end': 'End',
     };
     return labels[backendType] || backendType;
@@ -196,6 +205,10 @@ function getDefaultIcon(backendType: string): string {
         'tool.call': 'Play',
         'router.llm': 'GitBranch',
         'human.approval': 'UserCheck',
+        'condition': 'GitBranch',
+        'http_request': 'Globe',
+        'transform': 'Repeat',
+        'loop': 'RotateCw',
         'end': 'CheckCircle2',
     };
     return icons[backendType] || 'Play';
@@ -207,6 +220,10 @@ function mapBackendActionType(backendType: string): string {
         'tool.call': 'tool-call',
         'router.llm': 'router',
         'human.approval': 'human-in-loop',
+        'condition': 'condition',
+        'http_request': 'http-request',
+        'transform': 'transform',
+        'loop': 'loop',
     };
     return map[backendType] || 'tool-call';
 }
