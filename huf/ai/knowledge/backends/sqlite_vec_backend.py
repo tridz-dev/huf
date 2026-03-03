@@ -8,9 +8,27 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 
 import frappe
+from frappe import _
 from frappe.utils import get_files_path
 
 from . import ChunkResult, KnowledgeBackend
+
+
+def check_sqlite_vec_available() -> bool:
+	"""Check if sqlite-vec extension can be loaded (pysqlite3 or Python with loadable extensions)."""
+	try:
+		import sqlite_vec  # type: ignore
+
+		conn = sqlite3.connect(":memory:")
+		if not hasattr(conn, "enable_load_extension"):
+			conn.close()
+			return False
+		conn.enable_load_extension(True)
+		conn.load_extension(sqlite_vec.loadable_path())
+		conn.close()
+		return True
+	except Exception:
+		return False
 
 
 class SQLiteVecBackend(KnowledgeBackend):
@@ -99,11 +117,19 @@ class SQLiteVecBackend(KnowledgeBackend):
 			sqlite_vec.load(conn)
 		except ImportError:
 			frappe.throw(
-				"sqlite-vec package is required for sqlite_vec knowledge type. "
-				"Install it with: pip install sqlite-vec"
+				_("sqlite-vec package is required for sqlite_vec knowledge type. "
+				  "Install it with: pip install sqlite-vec pysqlite3-binary")
 			)
+		except AttributeError as exc:
+			if "load_extension" in str(exc) or "enable_load_extension" in str(exc):
+				frappe.throw(
+					_("Python's sqlite3 module does not support loadable extensions. "
+					  "Install pysqlite3-binary: pip install pysqlite3-binary. "
+					  "Or use sqlite_fts for keyword search without this requirement.")
+				)
+			raise
 		except Exception as exc:
-			frappe.throw(f"Failed to load sqlite-vec extension: {exc}")
+			frappe.throw(_("Failed to load sqlite-vec extension: {0}").format(exc))
 
 	def add_chunks(self, chunks: List[Dict[str, Any]]) -> int:
 		if not chunks:

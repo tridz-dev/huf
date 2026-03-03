@@ -3,7 +3,7 @@
 import frappe
 from typing import Optional
 
-from .retriever import knowledge_search
+from .retriever import knowledge_search, get_search_diagnostics
 
 
 
@@ -111,22 +111,31 @@ def handle_knowledge_search(
 	if not knowledge_source:
 		return "Error: No knowledge sources available for this agent."
 
-	# Perform search
+	# Perform search (ignore_permissions=True: agent has explicit knowledge linkage)
 	try:
 		results = knowledge_search(
 			query=query,
 			knowledge_source=knowledge_source,
 			top_k=top_k,
+			ignore_permissions=True,
 		)
-		
+
 		if not results:
-			return f"No relevant results found for your query in '{knowledge_source}'."
-		
+			msg = f"No relevant results found for your query in '{knowledge_source}'."
+			diagnostics = get_search_diagnostics([knowledge_source])
+			if diagnostics:
+				diag = diagnostics[0]
+				if diag.get("reason"):
+					msg += f"\n\nDiagnostic: {diag['reason']}"
+					if diag.get("status"):
+						msg += f" (current status: {diag['status']})"
+			return msg
+
 		# Format results
 		output = []
 		output.append(f"Search results from '{knowledge_source}':")
 		output.append("")
-		
+
 		for i, result in enumerate(results, 1):
 			output.append(f"## Result {i}: {result.get('title', 'Untitled')}")
 			output.append(f"Source: {result['source']}")
@@ -136,17 +145,28 @@ def handle_knowledge_search(
 			output.append("")
 			output.append("---")
 			output.append("")
-		
+
 		return "\n".join(output)
-		
+
 	except Exception as e:
+		frappe.log_error(
+			f"Knowledge search tool error for source '{knowledge_source}': {e}",
+			"Knowledge Search Tool Error",
+		)
 		return f"Error searching knowledge base: {str(e)}"
 
 
 def create_get_knowledge_sources_tool(agent_name: str) -> Optional[dict]:
 	"""
 	Create a tool to list available knowledge sources.
+	Returns None if the agent has no knowledge sources (tool should not be added).
 	"""
+	try:
+		agent = frappe.get_doc("Agent", agent_name)
+	except Exception:
+		return None
+	if not agent.get("agent_knowledge"):
+		return None
 	return {
 		"tool_name": "get_knowledge_sources",
 		"description": "List all knowledge sources available to this agent.",
