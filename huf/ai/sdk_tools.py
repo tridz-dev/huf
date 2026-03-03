@@ -1928,6 +1928,147 @@ def _get_default_tts_model(provider_name: str) -> str:
     
     return defaults.get(provider_name.lower())
 
+_TTS_ENV_VAR_PROVIDERS: dict[str, str] = {
+    "google":     "GEMINI_API_KEY",
+    "gemini":     "GEMINI_API_KEY",
+    "vertex_ai":  "GEMINI_API_KEY",
+    "elevenlabs": "ELEVENLABS_API_KEY",
+    "minimax":    "MINIMAX_API_KEY",
+}
+
+
+def _resolve_tts_config(
+    agent_doc,
+    tool_model: str | None = None,
+    tool_voice: str | None = None,
+) -> dict:
+    """
+    Resolve the TTS model, voice, API key, and provider for audio generation.
+
+    Priority (highest → lowest):
+
+    1. **Tool-call parameter** - ``model`` / ``voice`` values passed by the
+       agent at runtime (highest precedence; lets individual calls override).
+    2. **Agent-level TTS configuration** - ``agent.tts_model`` / ``agent.tts_voice``
+       fields set on the Agent DocType.  The API key is fetched from the *TTS
+       model's own provider* (``AI Model → AI Provider``), which may be a
+       completely different provider from the agent's main conversational model.
+    3. **Provider default** - ``_get_default_tts_model`` / ``_get_default_voice``
+       derived from the agent's main provider (fallback when nothing else is set).
+
+    Args:
+        agent_doc:   Loaded ``Agent`` Frappe document.
+        tool_model:  Optional model name supplied by the tool call at runtime.
+        tool_voice:  Optional voice name supplied by the tool call at runtime.
+
+    Returns:
+        dict:
+            - ``tts_model``     - Normalised LiteLLM model string.
+            - ``voice``         - Voice identifier for the TTS provider.
+            - ``api_key``       - Decrypted API key for the TTS provider.
+            - ``provider_name`` - Lowercase provider name (used for env-var routing).
+            - ``provider_doc``  - Loaded ``AI Provider`` document for the TTS provider.
+            - ``source``        - How the model was resolved: ``"tool_param"``,
+                                  ``"agent_config"``, or ``"provider_default"``.
+
+    Raises:
+        ValueError: If no TTS model can be determined and the provider does not
+                    natively support TTS.
+    """
+    from huf.ai.providers.litellm import _normalize_model_name
+
+    if tool_model:
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+        if not api_key:
+            raise ValueError(
+                f"API key is not configured for provider "
+                f"'{provider_doc.provider_name}'. Please add it to the AI Provider document."
+            )
+        provider_name = provider_doc.provider_name.lower()
+        voice = tool_voice or _get_default_voice(provider_name)
+        normalized = _normalize_model_name(tool_model, agent_doc.provider)
+        return {
+            "tts_model":     normalized,
+            "voice":         voice,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  provider_doc,
+            "source":        "tool_param",
+        }
+
+    if getattr(agent_doc, "tts_model", None):
+        tts_model_doc = frappe.get_doc("AI Model", agent_doc.tts_model)
+
+        if not tts_model_doc.provider:
+            raise ValueError(
+                f"TTS model '{agent_doc.tts_model}' has no provider linked. "
+                f"Please set a provider on the AI Model document."
+            )
+
+        tts_provider_doc = frappe.get_doc("AI Provider", tts_model_doc.provider)
+        api_key = tts_provider_doc.get_password("api_key")
+
+        if not api_key:
+            raise ValueError(
+                f"API key is not configured for TTS provider "
+                f"'{tts_provider_doc.provider_name}'. "
+                f"Please add the API key to that AI Provider document."
+            )
+
+        provider_name = tts_provider_doc.provider_name.lower()
+
+        voice = (
+            getattr(agent_doc, "tts_voice", None)
+            or _get_default_voice(provider_name)
+            or tool_voice
+        )
+
+        normalized = _normalize_model_name(
+            tts_model_doc.model_name, tts_model_doc.provider
+        )
+        return {
+            "tts_model":     normalized,
+            "voice":         voice,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  tts_provider_doc,
+            "source":        "agent_config",
+        }
+
+    provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+    api_key = provider_doc.get_password("api_key")
+
+    if not api_key:
+        raise ValueError(
+            f"API key is not configured for provider "
+            f"'{provider_doc.provider_name}'. Please add it to the AI Provider document."
+        )
+
+    provider_name = provider_doc.provider_name.lower()
+    tts_model = _get_default_tts_model(provider_name)
+
+    if not tts_model:
+        raise ValueError(
+            f"Text-to-speech is not natively supported by provider "
+            f"'{provider_doc.provider_name}'. Please either:\n"
+            f"  \u2022 Set a dedicated 'TTS Model' on the Agent "
+            f"(Advanced Settings \u2192 Audio Generation), or\n"
+            f"  \u2022 Pass a 'model' parameter directly to the generate_audio tool."
+        )
+
+    voice = tool_voice or _get_default_voice(provider_name)
+    normalized = _normalize_model_name(tts_model, agent_doc.provider)
+    return {
+        "tts_model":     normalized,
+        "voice":         voice,
+        "api_key":       api_key,
+        "provider_name": provider_name,
+        "provider_doc":  provider_doc,
+        "source":        "provider_default",
+    }
+
+
 @frappe.whitelist()
 async def handle_generate_audio(
     input: str,
@@ -1967,6 +2108,8 @@ async def handle_generate_audio(
                 "speed": float,
                 "format": str,
                 "model": str
+                "model_source": str,
+                "tts_provider": str,
             },
             "message": str,
             "conversation_id": str
@@ -1976,77 +2119,42 @@ async def handle_generate_audio(
         # Get agent configuration from context
         if not agent_name:
             return {"success": False, "error": "Agent name not found in context"}
-        
-        agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-        
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
-        
-        # Determine TTS model
-        tts_model = None
-        
-        if model:
-            # Use explicitly provided model
-            tts_model = model
 
-            # If model is provided but voice isn't, determine default voice based on provider
-            if not voice:
-                voice = _get_default_voice(provider_doc.provider_name.lower())
-        else:
-            # Auto-detect suitable TTS model based on provider
-            provider_name = provider_doc.provider_name.lower()
-            tts_model = _get_default_tts_model(provider_name)
-            
-            # If voice not provided, get default for this provider
-            if not voice:
-                voice = _get_default_voice(provider_name)
-        
-        if not tts_model:
-            return {
-                "success": False,
-                "error": f"Text-to-speech not supported for provider '{provider_doc.provider_name}'. Please provide a model parameter."
-            }
-        
-        # Determine Voice if not provided
-        if not voice:
-            voice = _get_default_voice(provider_doc.provider_name.lower())
-        
-        # Normalize to LiteLLM format
-        from huf.ai.providers.litellm import _normalize_model_name
-        normalized_model = _normalize_model_name(tts_model, agent_doc.provider)
-        
-        # Call LiteLLM speech generation
+        agent_doc = frappe.get_doc("Agent", agent_name)
+
+        try:
+            tts_config = _resolve_tts_config(
+                agent_doc, tool_model=model, tool_voice=voice
+            )
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+
+        normalized_model = tts_config["tts_model"]
+        voice            = tts_config["voice"]
+        api_key          = tts_config["api_key"]
+        provider_name    = tts_config["provider_name"]
+        tts_source       = tts_config["source"]
+        tts_provider_doc = tts_config["provider_doc"]
+
         import litellm
-        
-        # Build parameters for speech generation
-        speech_params = {
+
+        speech_params: dict = {
             "model": normalized_model,
             "input": input,
-            "voice": voice
+            "voice": voice,
         }
-        
-        env_var_providers = {
-            "google": "GEMINI_API_KEY",
-            "vertex_ai": "GEMINI_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-        }
-        
-        provider_key = provider_doc.provider_name.lower()
-        if provider_key in env_var_providers:
+
+        if provider_name in _TTS_ENV_VAR_PROVIDERS:
             import os
-            os.environ[env_var_providers[provider_key]] = api_key
+            os.environ[_TTS_ENV_VAR_PROVIDERS[provider_name]] = api_key
         else:
             speech_params["api_key"] = api_key
-        
-        # Add optional parameters
-        # LiteLLM forwards provider-specific params automatically
+
         if speed != 1.0:
             speech_params["speed"] = speed
         if response_format != "mp3":
             speech_params["response_format"] = response_format
-        
+
         # Call LiteLLM speech (returns HttpxBinaryResponseContent)
         response = await asyncio.to_thread(
             litellm.speech,
@@ -2095,14 +2203,25 @@ async def handle_generate_audio(
                     "agent_run": kwargs.get("agent_run_id"),
                     "conversation_index": conversation_index,
                     "is_agent_message": 1,
-                    "user": "Agent"
+                    "user": "Agent",
+                    "tts_voice": voice
                 })
                 message_doc.insert(ignore_permissions=True)
+
+                if tts_source == "agent_config" and getattr(agent_doc, "tts_model", None):
+                    frappe.db.set_value(
+                        "Agent Message", message_doc.name,
+                        "tts_model", agent_doc.tts_model,
+                        update_modified=False
+                    )
+                    message_doc.tts_model = agent_doc.tts_model
+
             except Exception as e:
                 frappe.log_error(
                     f"Error creating Agent Message for generated audio: {str(e)}",
                     "Audio Generation Message Creation"
                 )
+                message_doc = None
         
         # Save file attached to the Agent Message
         if message_doc:
@@ -2183,7 +2302,9 @@ async def handle_generate_audio(
                 "voice": voice,
                 "speed": speed,
                 "format": response_format,
-                "model": normalized_model
+                "model": normalized_model,
+                "model_source": tts_source,
+                "tts_provider": tts_provider_doc.provider_name,
             },
             "message": "Generated audio successfully",
             "conversation_id": conversation_id
