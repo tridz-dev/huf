@@ -24,6 +24,10 @@ import Executions from './pages/Executions';
 import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
+import {
+  checkStreamingAvailable,
+  setStreamingAvailable,
+} from './services/streamChatApi';
 import { McpDetailsPageWrapper } from './pages/McpDetailsPageWrapper';
 import McpListingPage from './pages/McpListingPage';
 import { PreviewViewPage } from './pages/PreviewViewPage';
@@ -39,6 +43,20 @@ function App() {
     */
     const hasPort = !!window.location?.port
     const port = hasPort ? (window as any).frappe?.boot?.socketio_port : '';
+    
+    console.log("Checking streaming availability");
+    // Streaming ping: once at app load
+    checkStreamingAvailable().then((ok) => {
+      console.log("Streaming available:", ok);
+      setStreamingAvailable(ok);
+      if (!ok) {
+        toast.error("Streaming not working", {
+          description:
+            "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+          duration: 5000,
+        });
+      }
+    });
     
     if (!siteName) {
       toast.error("Socket connection failed", {
