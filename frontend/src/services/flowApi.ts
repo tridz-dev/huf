@@ -39,7 +39,7 @@ export interface BackendFlowGraph {
 
 export interface BackendNode {
     id: string;
-    type: 'trigger.webhook' | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval' | 'end';
+    type: 'trigger.webhook' | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval' | 'condition' | 'http_request' | 'transform' | 'loop' | 'end';
     config: Record<string, unknown>;
     /** Frontend-only: stored for visual layout, ignored by engine */
     _position?: { x: number; y: number };
@@ -171,6 +171,16 @@ export async function updateFlowDefinitionFields(
         await db.updateDoc(doctype['Flow Definition'], flowId, fields);
     } catch (error) {
         handleFrappeError(error, `Error updating flow ${flowId}`);
+    }
+}
+
+/** Get node schemas from backend for dynamic UI construction */
+export async function getNodeSchemas(): Promise<Record<string, any>> {
+    try {
+        const result = await call.get('huf.ai.flow_api.get_node_schemas');
+        return result.message as Record<string, any>;
+    } catch (error) {
+        handleFrappeError(error, 'Error fetching node schemas');
     }
 }
 

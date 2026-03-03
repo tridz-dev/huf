@@ -5,12 +5,6 @@ export type FlowStatus = 'draft' | 'active' | 'paused' | 'error';
 export type NodeType =
   | 'trigger'
   | 'action'
-  | 'transform'
-  | 'router'
-  | 'loop'
-  | 'human-in-loop'
-  | 'code'
-  | 'utility'
   | 'end';
 
 export type TriggerType =
@@ -41,31 +35,25 @@ export type DocEventType =
   | 'before-update'
   | 'before-delete';
 
+/**
+ * ActionType — only types with real backend executors.
+ * Ghost types (utility-email, utility-file, utility-date, etc.) have been removed.
+ */
 export type ActionType =
   | 'agent-run'
   | 'tool-call'
-  | 'transform'
   | 'router'
   | 'human-in-loop'
-  | 'loop'
-  | 'code'
-  | 'utility-email'
-  | 'utility-file'
-  | 'utility-date'
-  | 'utility-webhook'
-  | 'utility-http';
-
-export type UtilityType =
-  | 'email'
-  | 'file'
-  | 'date'
-  | 'webhook'
-  | 'http';
+  | 'condition'
+  | 'http-request'
+  | 'transform'
+  | 'loop';
 
 export interface WebhookTriggerConfig {
   type: 'webhook';
   url?: string;
   apiKey?: string;
+  auth?: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
 }
 
@@ -97,73 +85,6 @@ export type TriggerConfig =
   | AppTriggerConfig
   | { type: undefined };
 
-export interface TransformActionConfig {
-  type: 'transform';
-  transformations?: Array<{
-    sourceField: string;
-    targetField: string;
-    operation?: 'copy' | 'map' | 'concat' | 'split';
-  }>;
-}
-
-export interface RouterActionConfig {
-  type: 'router';
-  branches?: Array<{
-    id: string;
-    name: string;
-    condition: string;
-  }>;
-}
-
-export interface HumanInLoopActionConfig {
-  type: 'human-in-loop';
-  approvers?: string[];
-  message?: string;
-  timeout?: number;
-}
-
-export interface LoopActionConfig {
-  type: 'loop';
-  iterateOver?: string;
-  maxIterations?: number;
-}
-
-export interface CodeActionConfig {
-  type: 'code';
-  language?: 'javascript' | 'python' | 'typescript';
-  code?: string;
-}
-
-export interface EmailUtilityConfig {
-  type: 'utility-email';
-  to?: string;
-  subject?: string;
-  body?: string;
-  template?: string;
-}
-
-export interface FileUtilityConfig {
-  type: 'utility-file';
-  operation?: 'read' | 'write' | 'delete';
-  path?: string;
-  content?: string;
-}
-
-export interface DateUtilityConfig {
-  type: 'utility-date';
-  operation?: 'format' | 'add' | 'subtract' | 'compare';
-  format?: string;
-  value?: string;
-}
-
-export interface WebhookUtilityConfig {
-  type: 'utility-webhook';
-  url?: string;
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-  headers?: Record<string, string>;
-  body?: string;
-}
-
 export interface AgentRunActionConfig {
   type: 'agent-run';
   agent_name?: string;
@@ -179,18 +100,81 @@ export interface ToolCallActionConfig {
   save_result_to_context?: string;
 }
 
+export interface RouterActionConfig {
+  type: 'router';
+  router_agent_name?: string;
+  conversation_mode?: 'flow_shared' | 'isolated';
+}
+
+export interface HumanInLoopActionConfig {
+  type: 'human-in-loop';
+  title?: string;
+  instructions?: string;
+  approval_type?: 'role' | 'user';
+  approver_role?: string;
+  approver_users?: string[];
+  store_decision_in_context?: string;
+}
+
+/**
+ * Condition (IF) node — explicit branching with True/False ports.
+ * n8n-inspired: replaces opaque edge-level expression logic.
+ */
+export interface ConditionActionConfig {
+  type: 'condition';
+  expression?: string;
+  true_node?: string;
+  false_node?: string;
+}
+
+/**
+ * HTTP Request node — makes external API calls.
+ */
+export interface HttpRequestActionConfig {
+  type: 'http-request';
+  url?: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  headers?: Record<string, string>;
+  body?: string;
+  timeout?: number;
+  save_result_to_context?: string;
+}
+
+/**
+ * Transform node — data mapping between context variables.
+ */
+export interface TransformActionConfig {
+  type: 'transform';
+  transformations?: Array<{
+    source_field: string;
+    target_field: string;
+    operation?: 'copy' | 'map' | 'template';
+  }>;
+}
+
+/**
+ * Loop node — iterate over an array in context.
+ * Inspired by n8n's "Split In Batches" / "Loop Over Items".
+ */
+export interface LoopActionConfig {
+  type: 'loop';
+  iterate_over?: string;
+  item_key?: string;
+  index_key?: string;
+  loop_node?: string;
+  done_node?: string;
+  max_iterations?: number;
+}
+
 export type ActionConfig =
   | AgentRunActionConfig
   | ToolCallActionConfig
-  | TransformActionConfig
   | RouterActionConfig
   | HumanInLoopActionConfig
+  | ConditionActionConfig
+  | HttpRequestActionConfig
+  | TransformActionConfig
   | LoopActionConfig
-  | CodeActionConfig
-  | EmailUtilityConfig
-  | FileUtilityConfig
-  | DateUtilityConfig
-  | WebhookUtilityConfig
   | { type: undefined };
 
 export interface FlowEdgeData {
@@ -208,6 +192,7 @@ export interface FlowNodeData {
   configured: boolean;
   triggerConfig?: TriggerConfig;
   actionConfig?: ActionConfig;
+  /** Live execution status — updated via Frappe Realtime events */
   status?: 'idle' | 'running' | 'success' | 'error';
 }
 
