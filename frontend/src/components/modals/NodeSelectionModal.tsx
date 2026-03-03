@@ -175,24 +175,18 @@ export function NodeSelectionModal({
       config = { type: 'agent-run', agent_name: '', prompt_template: '', save_response_to_context: '' };
     } else if (actionId === 'tool-call') {
       config = { type: 'tool-call', tool_name: '', args: {}, save_result_to_context: '' };
+    } else if (actionId === 'condition') {
+      config = { type: 'condition', expression: '', true_node: '', false_node: '' };
+    } else if (actionId === 'router') {
+      config = { type: 'router', router_agent_name: '', conversation_mode: 'flow_shared' };
+    } else if (actionId === 'loop') {
+      config = { type: 'loop', iterate_over: '', item_key: 'loop_item', index_key: 'loop_index', max_iterations: 100 };
+    } else if (actionId === 'human-in-loop') {
+      config = { type: 'human-in-loop', title: 'Approval Required', instructions: '', approval_type: 'role', store_decision_in_context: 'approval' };
+    } else if (actionId === 'http-request') {
+      config = { type: 'http-request', url: '', method: 'GET', timeout: 30 };
     } else if (actionId === 'transform') {
       config = { type: 'transform', transformations: [] };
-    } else if (actionId === 'router') {
-      config = { type: 'router', branches: [] };
-    } else if (actionId === 'loop') {
-      config = { type: 'loop', maxIterations: 10 };
-    } else if (actionId === 'human-in-loop') {
-      config = { type: 'human-in-loop', approvers: [] };
-    } else if (actionId === 'code') {
-      config = { type: 'code', language: 'javascript', code: '' };
-    } else if (actionId === 'email') {
-      config = { type: 'utility-email', to: '', subject: '', body: '' };
-    } else if (actionId === 'webhook') {
-      config = { type: 'utility-webhook', url: '', method: 'POST' };
-    } else if (actionId === 'file') {
-      config = { type: 'utility-file', operation: 'read', path: '' };
-    } else if (actionId === 'date') {
-      config = { type: 'utility-date', operation: 'format', format: 'YYYY-MM-DD' };
     }
 
     onSaveAction?.(actionId, config);

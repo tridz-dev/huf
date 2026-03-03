@@ -698,6 +698,309 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                 );
               }
 
+              if (config.type === 'condition') {
+                return (
+                  <div className="space-y-3">
+                    <Label className="mb-2 block text-sm font-semibold">Condition (IF) Configuration</Label>
+                    <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
+                      Evaluates a boolean expression against context. Routes to True or False branch node.
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <Label htmlFor="condition-expr" className="text-xs">Expression</Label>
+                        <VariablePicker onSelect={(v) => {
+                          const current = (config as any).expression || '';
+                          handleUpdateActionConfig('expression', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
+                        }} />
+                      </div>
+                      <textarea
+                        id="condition-expr"
+                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={(config as any).expression || ''}
+                        onChange={(e) => handleUpdateActionConfig('expression', e.target.value)}
+                        placeholder='context["status"] == "approved"'
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="true-node" className="text-xs">True Branch (Node ID)</Label>
+                      <Input
+                        id="true-node"
+                        value={(config as any).true_node || ''}
+                        onChange={(e) => handleUpdateActionConfig('true_node', e.target.value)}
+                        placeholder="Node ID when True"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="false-node" className="text-xs">False Branch (Node ID)</Label>
+                      <Input
+                        id="false-node"
+                        value={(config as any).false_node || ''}
+                        onChange={(e) => handleUpdateActionConfig('false_node', e.target.value)}
+                        placeholder="Node ID when False"
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              if (config.type === 'http-request') {
+                return (
+                  <div className="space-y-3">
+                    <Label className="mb-2 block text-sm font-semibold">HTTP Request Configuration</Label>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <Label htmlFor="http-url" className="text-xs">URL</Label>
+                        <VariablePicker onSelect={(v) => {
+                          const current = (config as any).url || '';
+                          handleUpdateActionConfig('url', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
+                        }} />
+                      </div>
+                      <Input
+                        id="http-url"
+                        value={(config as any).url || ''}
+                        onChange={(e) => handleUpdateActionConfig('url', e.target.value)}
+                        placeholder="https://api.example.com/endpoint"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="http-method" className="text-xs">Method</Label>
+                      <Select
+                        value={(config as any).method || 'GET'}
+                        onValueChange={(value) => handleUpdateActionConfig('method', value)}
+                      >
+                        <SelectTrigger id="http-method">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="GET">GET</SelectItem>
+                          <SelectItem value="POST">POST</SelectItem>
+                          <SelectItem value="PUT">PUT</SelectItem>
+                          <SelectItem value="PATCH">PATCH</SelectItem>
+                          <SelectItem value="DELETE">DELETE</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="http-headers" className="text-xs">Headers (JSON)</Label>
+                      <textarea
+                        id="http-headers"
+                        className="flex min-h-[50px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={typeof (config as any).headers === 'object'
+                          ? JSON.stringify((config as any).headers, null, 2)
+                          : (config as any).headers || ''}
+                        onChange={(e) => {
+                          try {
+                            handleUpdateActionConfig('headers', JSON.parse(e.target.value));
+                          } catch {
+                            handleUpdateActionConfig('headers', e.target.value);
+                          }
+                        }}
+                        placeholder='{"Authorization": "Bearer {{token}}"}'
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="http-body" className="text-xs">Body</Label>
+                      <textarea
+                        id="http-body"
+                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={typeof (config as any).body === 'object'
+                          ? JSON.stringify((config as any).body, null, 2)
+                          : (config as any).body || ''}
+                        onChange={(e) => {
+                          try {
+                            handleUpdateActionConfig('body', JSON.parse(e.target.value));
+                          } catch {
+                            handleUpdateActionConfig('body', e.target.value);
+                          }
+                        }}
+                        placeholder='{"key": "{{context.value}}"}'
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="http-timeout" className="text-xs">Timeout (seconds)</Label>
+                      <Input
+                        id="http-timeout"
+                        type="number"
+                        min={1}
+                        max={300}
+                        value={(config as any).timeout || 30}
+                        onChange={(e) => handleUpdateActionConfig('timeout', parseInt(e.target.value))}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="http-save" className="text-xs">Save Result To Context</Label>
+                      <Input
+                        id="http-save"
+                        value={(config as any).save_result_to_context || ''}
+                        onChange={(e) => handleUpdateActionConfig('save_result_to_context', e.target.value)}
+                        placeholder="e.g., api_response"
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              if (config.type === 'transform') {
+                const transformations = (config as any).transformations || [];
+                return (
+                  <div className="space-y-3">
+                    <Label className="mb-2 block text-sm font-semibold">Transform Data Configuration</Label>
+                    <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
+                      Map, copy, or template data between context variables.
+                    </div>
+                    {transformations.map((t: any, i: number) => (
+                      <div key={i} className="p-3 bg-muted/20 border rounded-md space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-medium">Transformation #{i + 1}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-destructive"
+                            onClick={() => {
+                              const updated = [...transformations];
+                              updated.splice(i, 1);
+                              handleUpdateActionConfig('transformations', updated);
+                            }}
+                          >
+                            ×
+                          </Button>
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Source Field</Label>
+                          <Input
+                            value={t.source_field || ''}
+                            onChange={(e) => {
+                              const updated = [...transformations];
+                              updated[i] = { ...t, source_field: e.target.value };
+                              handleUpdateActionConfig('transformations', updated);
+                            }}
+                            placeholder="e.g., api_response.data"
+                            className="h-7 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Target Field</Label>
+                          <Input
+                            value={t.target_field || ''}
+                            onChange={(e) => {
+                              const updated = [...transformations];
+                              updated[i] = { ...t, target_field: e.target.value };
+                              handleUpdateActionConfig('transformations', updated);
+                            }}
+                            placeholder="e.g., processed_data"
+                            className="h-7 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[10px]">Operation</Label>
+                          <Select
+                            value={t.operation || 'copy'}
+                            onValueChange={(v) => {
+                              const updated = [...transformations];
+                              updated[i] = { ...t, operation: v };
+                              handleUpdateActionConfig('transformations', updated);
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="copy">Copy</SelectItem>
+                              <SelectItem value="map">Map</SelectItem>
+                              <SelectItem value="template">Template</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        handleUpdateActionConfig('transformations', [
+                          ...transformations,
+                          { source_field: '', target_field: '', operation: 'copy' }
+                        ]);
+                      }}
+                    >
+                      + Add Transformation
+                    </Button>
+                  </div>
+                );
+              }
+
+              if (config.type === 'loop') {
+                return (
+                  <div className="space-y-3">
+                    <Label className="mb-2 block text-sm font-semibold">Loop Configuration</Label>
+                    <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
+                      Iterate over an array in context. Each iteration sets the current item and index.
+                    </div>
+                    <div>
+                      <Label htmlFor="loop-iterate" className="text-xs">Iterate Over (Context Key)</Label>
+                      <Input
+                        id="loop-iterate"
+                        value={(config as any).iterate_over || ''}
+                        onChange={(e) => handleUpdateActionConfig('iterate_over', e.target.value)}
+                        placeholder="e.g., items, users"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="loop-item" className="text-xs">Item Variable</Label>
+                      <Input
+                        id="loop-item"
+                        value={(config as any).item_key || 'loop_item'}
+                        onChange={(e) => handleUpdateActionConfig('item_key', e.target.value)}
+                        placeholder="loop_item"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="loop-index" className="text-xs">Index Variable</Label>
+                      <Input
+                        id="loop-index"
+                        value={(config as any).index_key || 'loop_index'}
+                        onChange={(e) => handleUpdateActionConfig('index_key', e.target.value)}
+                        placeholder="loop_index"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="loop-body" className="text-xs">Loop Body Node (Node ID)</Label>
+                      <Input
+                        id="loop-body"
+                        value={(config as any).loop_node || ''}
+                        onChange={(e) => handleUpdateActionConfig('loop_node', e.target.value)}
+                        placeholder="Node to execute per iteration"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="loop-done" className="text-xs">Done Node (Node ID)</Label>
+                      <Input
+                        id="loop-done"
+                        value={(config as any).done_node || ''}
+                        onChange={(e) => handleUpdateActionConfig('done_node', e.target.value)}
+                        placeholder="Node to go to when done"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="loop-max" className="text-xs">Max Iterations</Label>
+                      <Input
+                        id="loop-max"
+                        type="number"
+                        min={1}
+                        max={10000}
+                        value={(config as any).max_iterations || 100}
+                        onChange={(e) => handleUpdateActionConfig('max_iterations', parseInt(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
               // Fallback: show JSON for other action types
               return (
                 <div>
