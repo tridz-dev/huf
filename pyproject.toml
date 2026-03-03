@@ -13,6 +13,7 @@ dependencies = [
     "litellm>=1.0.0",
     "llama-index-core>=0.10.0",
     "sqlite-vec",
+    "pysqlite3-binary",
 ]
 
 [build-system]
