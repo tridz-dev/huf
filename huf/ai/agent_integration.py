@@ -1349,10 +1349,12 @@ async def run_agent_stream(
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
+                            from huf.ai.providers.litellm import _normalize_model_name
+                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
                             
                             msgs_for_count = history + [{"role": "user", "content": prompt}]
-                            input_tokens = token_counter(model=resolved_model, messages=msgs_for_count)
-                            output_tokens = token_counter(model=resolved_model, text=full_response)
+                            input_tokens = token_counter(model=pricing_model, messages=msgs_for_count)
+                            output_tokens = token_counter(model=pricing_model, text=full_response)
                             total_tokens = input_tokens + output_tokens
                         except Exception as e:
                             frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
@@ -1364,13 +1366,8 @@ async def run_agent_stream(
                                     "completion_tokens": output_tokens,
                                     "total_tokens": input_tokens + output_tokens
                                 },
-                                "model": resolved_model
+                                "model": pricing_model
                             }
-                            
-                            from huf.ai.providers.litellm import _normalize_model_name
-                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
-                               
-                            mock_response["model"] = pricing_model
                                 
                             cost = litellm.completion_cost(
                                 completion_response=mock_response,
