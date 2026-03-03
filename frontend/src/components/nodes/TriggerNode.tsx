@@ -1,9 +1,10 @@
 import { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { AlertCircle, Zap, Webhook, Clock, Database, Mail, Plus } from 'lucide-react';
+import { AlertCircle, Zap, Webhook, Clock, Database, Mail, Plus, Trash2 } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
+import { useFlowContext } from '../../contexts/FlowContext';
 
 const iconMap: Record<string, any> = {
   Webhook,
@@ -18,10 +19,11 @@ interface TriggerNodeProps extends NodeProps<FlowNodeData> {
 }
 
 export const TriggerNode = memo(({ id, data, selected, onAddNode }: TriggerNodeProps) => {
+  const { deleteNode } = useFlowContext();
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Zap;
 
   return (
-    <div className="group">
+    <div className="group relative">
       <Card
         className={`w-64 p-4 transition-all duration-200 ${
           selected ? 'ring-2 ring-primary shadow-lg' : 'shadow-md'
@@ -31,7 +33,21 @@ export const TriggerNode = memo(({ id, data, selected, onAddNode }: TriggerNodeP
             : 'border-amber-500 bg-amber-50 hover:shadow-lg'
         }`}
       >
-        <div className="flex items-center gap-3">
+        {selected && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteNode(id);
+            }}
+            title="Delete node"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        <div className="flex items-center gap-3 pr-6">
           <div
             className={`w-10 h-10 rounded-lg flex items-center justify-center ${
               data.configured
@@ -68,7 +84,10 @@ export const TriggerNode = memo(({ id, data, selected, onAddNode }: TriggerNodeP
         <Button
           size="icon"
           className="h-8 w-8 rounded-full shadow-lg"
-          onClick={() => onAddNode?.(id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddNode?.(id);
+          }}
         >
           <Plus className="w-4 h-4" />
         </Button>
