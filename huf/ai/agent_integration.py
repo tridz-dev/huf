@@ -1320,7 +1320,6 @@ async def run_agent_stream(
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
                     usage = chunk.get("usage", {})
-                    frappe.log_error(f"Stream Usage Received: {usage} Type: {type(usage)}", "Debug Stream Usage")
                     
                     # Calculate metrics
                     cost = 0.0
@@ -1350,10 +1349,12 @@ async def run_agent_stream(
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
+                            from huf.ai.providers.litellm import _normalize_model_name
+                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
                             
                             msgs_for_count = history + [{"role": "user", "content": prompt}]
-                            input_tokens = token_counter(model=model, messages=msgs_for_count)
-                            output_tokens = token_counter(model=model, text=full_response)
+                            input_tokens = token_counter(model=pricing_model, messages=msgs_for_count)
+                            output_tokens = token_counter(model=pricing_model, text=full_response)
                             total_tokens = input_tokens + output_tokens
                         except Exception as e:
                             frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
@@ -1365,14 +1366,8 @@ async def run_agent_stream(
                                     "completion_tokens": output_tokens,
                                     "total_tokens": input_tokens + output_tokens
                                 },
-                                "model": resolved_model
+                                "model": pricing_model
                             }
-                            
-                            pricing_model = resolved_model
-                            if resolved_provider and "/" not in resolved_model and resolved_provider.lower() not in resolved_model.lower():
-                                pricing_model = f"{resolved_provider.lower()}/{resolved_model}"
-                               
-                            mock_response["model"] = pricing_model
                                 
                             cost = litellm.completion_cost(
                                 completion_response=mock_response,
@@ -1380,7 +1375,7 @@ async def run_agent_stream(
                             )
 
                         except Exception as e:
-                            frappe.log_error(f"Cost calculation failed for {model}: {e}", "Agent Stream Cost")
+                            frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")
                             cost = 0.0
 
                         # Update Conversation Metrics
