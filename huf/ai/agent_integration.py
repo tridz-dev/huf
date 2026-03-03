@@ -1366,9 +1366,8 @@ async def run_agent_stream(
                                 "model": resolved_model
                             }
                             
-                            pricing_model = resolved_model
-                            if resolved_provider and "/" not in resolved_model and resolved_provider.lower() not in resolved_model.lower():
-                                pricing_model = f"{resolved_provider.lower()}/{resolved_model}"
+                            from huf.ai.providers.litellm import _normalize_model_name
+                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
                                
                             mock_response["model"] = pricing_model
                                 
