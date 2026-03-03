@@ -53,13 +53,13 @@ class AgentManager:
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
         try:
             from huf.ai.knowledge.tool import (
-                create_knowledge_search_tool, 
+                create_knowledge_search_tool,
                 handle_knowledge_search,
                 create_get_knowledge_sources_tool,
                 handle_get_knowledge_sources
             )
             from agents import function_tool
-            
+
             # 1. Knowledge Search Tool
             knowledge_tool_def = create_knowledge_search_tool(self.agent_doc.agent_name)
             if knowledge_tool_def:
@@ -336,23 +336,29 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
             if existing_queued:
                 doc_id = existing_queued[0]
                 doc = frappe.get_doc("Agent Tool Call", doc_id)
-                
+
                 update_data = {}
 
                 if result is not None:
-                    update_data["tool_result"] = json.dumps(result)
-                
+                    # JSON field: store valid JSON-serializable value
+                    if isinstance(result, (dict, list)):
+                        update_data["tool_result"] = result
+                    else:
+                        val = str(result)
+                        if len(val) > 140000:
+                            val = val[:140000]
+                        update_data["tool_result"] = {"output": val}
+
                 if error:
                     update_data["status"] = "Failed"
                     update_data["error_message"] = error
                 else:
                     update_data["status"] = "Completed"
-                
+
                 doc.update(update_data)
                 doc.save(ignore_permissions=True)
-                return doc.name 
+                return doc.name
             else:
-                frappe.log_error(f"Received tool output for run {agent_run} but no Queued tool call found.", "Agent Tool Call Warning")
                 return None
 
         else:
@@ -365,6 +371,14 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                     is_mcp_tool = 1
                     mcp_server = mcp_tool_entry
 
+            result_val = result
+            if result_val is not None:
+                # JSON field: store valid JSON-serializable value
+                if not isinstance(result_val, (dict, list)):
+                    val = str(result_val)
+                    if len(val) > 140000:
+                        val = val[:140000]
+                    result_val = {"output": val}
             doc = frappe.get_doc({
                 "doctype": "Agent Tool Call",
                 "agent_run": agent_run,
@@ -373,7 +387,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "is_mcp_tool": is_mcp_tool,
                 "mcp_server": mcp_server,
                 "tool_args": json.dumps(args) if args else None,
-                "tool_result": json.dumps(result) if result else None,
+                "tool_result": result_val,
                 "error_message": error,
                 "status": "Queued",
                 "call_id": tool_call_id 
@@ -387,15 +401,18 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
         return None
 
 def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None, is_output=False):
+    name = raw_call.get("name") if isinstance(raw_call, dict) else getattr(raw_call, "name", None)
+    args = raw_call.get("arguments") if isinstance(raw_call, dict) and not is_output else (getattr(raw_call, "arguments", None) if not is_output else None)
+    call_id = raw_call.get("id") if isinstance(raw_call, dict) else getattr(raw_call, "id", None)
     return process_tool_call(
         agent_run=run_doc.name,
         conversation=conversation.name,
-        name=getattr(raw_call, "name", None),
-        args=getattr(raw_call, "arguments", None) if not is_output else None,
+        name=name,
+        args=args,
         result=tool_result,
         error=error,
         is_output=is_output,
-        tool_call_id=getattr(raw_call, "id", None)
+        tool_call_id=call_id
     )
 
 def _run_async_safely(coro):
@@ -794,12 +811,14 @@ def run_agent_sync(
             "conversation_id": conversation.name,
             "agent_run_id": run_doc.name
         }
-        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model,context)
+        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model, context)
         result = _run_async_safely(run)
+
+        new_items = getattr(result, "new_items", []) or []
 
         client_side_tool_calls = []
 
-        for item in getattr(result, "new_items", []):
+        for item in new_items:
             if item.type == "tool_call_item":
                 raw = item.raw_item  
                 tool_call_id = log_tool_call(run_doc, conversation, raw, is_output=False)
@@ -1320,7 +1339,6 @@ async def run_agent_stream(
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
                     usage = chunk.get("usage", {})
-                    frappe.log_error(f"Stream Usage Received: {usage} Type: {type(usage)}", "Debug Stream Usage")
                     
                     # Calculate metrics
                     cost = 0.0
