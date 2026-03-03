@@ -167,25 +167,19 @@ export function FlowCanvas({
         router: 'GitBranch',
         loop: 'RotateCw',
         'human-in-loop': 'UserCheck',
-        code: 'Code',
-        email: 'Mail',
-        webhook: 'Webhook',
-        file: 'FileText',
-        date: 'Calendar'
+        condition: 'GitBranch',
+        'http-request': 'Globe',
       };
 
       const labelMap: Record<string, string> = {
         'agent-run': 'Run Agent',
         'tool-call': 'Call Tool',
         transform: 'Transform Data',
-        router: 'Router',
+        router: 'LLM Router',
         loop: 'Loop',
-        'human-in-loop': 'Human in Loop',
-        code: 'Execute Code',
-        email: 'Send Email',
-        webhook: 'Call Webhook',
-        file: 'File Operations',
-        date: 'Date Utility'
+        'human-in-loop': 'Human Approval',
+        condition: 'Condition (IF)',
+        'http-request': 'HTTP Request',
       };
 
       const newNode: Node<FlowNodeData> = {
