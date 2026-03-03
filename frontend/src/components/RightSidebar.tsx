@@ -19,15 +19,17 @@ import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { ScheduleIntervalType, DocEventType } from '../types/flow.types';
 import { getAgents, getDocTypes } from '../services/agentApi';
-import { getToolFunctions } from '../services/toolApi';
+import { getToolFunctions, getToolFunction } from '../services/toolApi';
+import { VariablePicker } from './ui/VariablePicker';
 
 interface RightSidebarProps {
   onToggle: () => void;
 }
 
 export function RightSidebar({ onToggle }: RightSidebarProps) {
-  const { activeFlow, selectedNodeId, updateNode, deleteNode } = useFlowContext();
+  const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, deleteNode, updateEdges } = useFlowContext();
   const selectedNode = activeFlow?.nodes.find((n) => n.id === selectedNodeId);
+  const selectedEdge = activeFlow?.edges.find((e) => e.id === selectedEdgeId);
   const [width, setWidth] = useState(380);
   const [isResizing, setIsResizing] = useState(false);
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
@@ -38,6 +40,8 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [loadingTools, setLoadingTools] = useState(false);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+  const [selectedToolDetails, setSelectedToolDetails] = useState<any | null>(null);
+  const [loadingToolDetails, setLoadingToolDetails] = useState(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -94,6 +98,28 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
       .finally(() => setLoadingTools(false));
   }, [selectedNode?.id, selectedNode?.data.actionConfig]);
 
+  // Load specific tool details when a tool is selected
+  useEffect(() => {
+    if (!selectedNode?.data.actionConfig || (selectedNode.data.actionConfig as any).type !== 'tool-call') {
+      setSelectedToolDetails(null);
+      return;
+    }
+
+    const toolName = (selectedNode.data.actionConfig as any).tool_name;
+    if (!toolName) {
+      setSelectedToolDetails(null);
+      return;
+    }
+
+    setLoadingToolDetails(true);
+    getToolFunction(toolName)
+      .then((details) => {
+        setSelectedToolDetails(details);
+      })
+      .catch(() => setSelectedToolDetails(null))
+      .finally(() => setLoadingToolDetails(false));
+  }, [selectedNode?.id, (selectedNode?.data.actionConfig as any)?.tool_name]);
+
   // Load DocTypes when doc-event trigger selected
   useEffect(() => {
     if (
@@ -142,28 +168,43 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
     const config = selectedNode.data.triggerConfig;
 
     if (config.type === 'webhook') {
+      const webhookUrl = `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook?flow_id=${activeFlow?.id || '{flow_id}'}&webhook_key=${config.auth || '{key}'}`;
+
       return (
-        <>
+        <div className="space-y-3">
           <div>
-            <Label htmlFor="webhook-url">Webhook URL</Label>
+            <Label className="text-xs">Webhook URL (Auto-generated)</Label>
+            <div className="flex gap-2 mt-1">
+              <Input
+                readOnly
+                value={webhookUrl}
+                className="bg-muted/50 font-mono text-xs text-muted-foreground"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  navigator.clipboard.writeText(webhookUrl);
+                  toast.success('Webhook URL copied to clipboard');
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
+              </Button>
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="webhook-auth" className="text-xs">Authentication Key (Optional)</Label>
             <Input
-              id="webhook-url"
-              value={config.url || ''}
-              onChange={(e) => handleUpdateTriggerConfig('url', e.target.value)}
+              id="webhook-auth"
+              value={config.auth || ''}
+              onChange={(e) => handleUpdateTriggerConfig('auth', e.target.value)}
+              placeholder="e.g. my-secret-key-123"
             />
           </div>
           <div>
-            <Label htmlFor="api-key">API Key</Label>
-            <Input
-              id="api-key"
-              value={config.apiKey || ''}
-              onChange={(e) => handleUpdateTriggerConfig('apiKey', e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="method">HTTP Method</Label>
+            <Label htmlFor="method" className="text-xs">HTTP Method (Expected)</Label>
             <Select
-              value={config.method}
+              value={config.method || 'POST'}
               onValueChange={(value) => handleUpdateTriggerConfig('method', value)}
             >
               <SelectTrigger id="method">
@@ -177,7 +218,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
               </SelectContent>
             </Select>
           </div>
-        </>
+        </div>
       );
     }
 
@@ -305,14 +346,86 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
       />
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {!selectedNode ? (
+        {!selectedNode && !selectedEdge ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Settings className="w-12 h-12 text-muted-foreground mb-4" />
             <div className="text-sm text-muted-foreground">
-              Select a node to view configuration
+              Select a node or edge to view configuration
             </div>
           </div>
-        ) : (
+        ) : selectedEdge ? (
+          <>
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="text-sm font-semibold">Edge Configuration</div>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="edge-label">Edge Label</Label>
+              <Input
+                id="edge-label"
+                value={(selectedEdge.label as string) || ''}
+                onChange={(e) => {
+                  if (!activeFlow) return;
+                  updateEdges(
+                    activeFlow.edges.map((edge) =>
+                      edge.id === selectedEdge.id ? { ...edge, label: e.target.value } : edge
+                    )
+                  );
+                }}
+                className="font-medium"
+                placeholder="Optional label..."
+              />
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edge-type" className="text-xs">Edge Type</Label>
+                <Select
+                  value={selectedEdge.data?.type || 'always'}
+                  onValueChange={(value) => {
+                    if (!activeFlow) return;
+                    updateEdges(
+                      activeFlow.edges.map((edge) =>
+                        edge.id === selectedEdge.id ? { ...edge, data: { ...edge.data, type: value } } : edge
+                      )
+                    );
+                  }}
+                >
+                  <SelectTrigger id="edge-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="always">Always (Default)</SelectItem>
+                    <SelectItem value="on_success">On Success</SelectItem>
+                    <SelectItem value="on_failure">On Failure</SelectItem>
+                    <SelectItem value="expression">Expression</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedEdge.data?.type === 'expression' && (
+                <div>
+                  <Label htmlFor="edge-expr" className="text-xs">Condition Expression</Label>
+                  <Input
+                    id="edge-expr"
+                    value={selectedEdge.data?.expression || ''}
+                    onChange={(e) => {
+                      if (!activeFlow) return;
+                      updateEdges(
+                        activeFlow.edges.map((edge) =>
+                          edge.id === selectedEdge.id ? { ...edge, data: { ...edge.data, expression: e.target.value } } : edge
+                        )
+                      );
+                    }}
+                    placeholder="e.g., {{context.status}} == 'approved'"
+                  />
+                </div>
+              )}
+            </div>
+          </>
+        ) : selectedNode ? (
           <>
             <div>
               <div className="flex items-center gap-2 mb-4">
@@ -393,7 +506,13 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="prompt-template" className="text-xs">Prompt Template</Label>
+                      <div className="flex justify-between items-center mb-1">
+                        <Label htmlFor="prompt-template" className="text-xs">Prompt Template</Label>
+                        <VariablePicker onSelect={(v) => {
+                          const current = (config as any).prompt_template || '';
+                          handleUpdateActionConfig('prompt_template', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
+                        }} />
+                      </div>
                       <textarea
                         id="prompt-template"
                         className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -432,30 +551,103 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="tool-args" className="text-xs">Arguments (JSON)</Label>
-                      <textarea
-                        id="tool-args"
-                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        value={JSON.stringify((config as any).args || {}, null, 2)}
-                        onChange={(e) => {
-                          try {
-                            const parsed = JSON.parse(e.target.value);
-                            handleUpdateActionConfig('args', parsed);
-                          } catch {
-                            // ignore invalid JSON while typing
-                          }
-                        }}
-                        placeholder='{"query": "{{context.input}}"}'
+                      <Label className="text-xs font-semibold mb-2 block">Arguments</Label>
+                      {loadingToolDetails ? (
+                        <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md">Loading parameters...</div>
+                      ) : !selectedToolDetails ? (
+                        <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md">Select a tool to view parameters</div>
+                      ) : selectedToolDetails.parameters && selectedToolDetails.parameters.length > 0 ? (
+                        <div className="space-y-3 p-3 bg-muted/20 border rounded-md">
+                          {selectedToolDetails.parameters.map((param: any) => {
+                            const currentArgs = (config as any).args || {};
+                            return (
+                              <div key={param.fieldname}>
+                                <div className="flex justify-between items-center mb-1">
+                                  <Label htmlFor={`arg-${param.fieldname}`} className="text-xs font-medium">
+                                    {param.label || param.fieldname} {param.required ? <span className="text-destructive">*</span> : ''}
+                                  </Label>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-muted-foreground font-mono">{param.type}</span>
+                                    {['Data', 'Small Text', 'Long Text'].includes(param.type) && (
+                                      <VariablePicker onSelect={(v) => {
+                                        const current = currentArgs[param.fieldname] || '';
+                                        handleUpdateActionConfig('args', {
+                                          ...currentArgs,
+                                          [param.fieldname]: current + (current.length && !current.endsWith(' ') ? ' ' : '') + v
+                                        });
+                                      }} />
+                                    )}
+                                  </div>
+                                </div>
+                                <Input
+                                  id={`arg-${param.fieldname}`}
+                                  value={currentArgs[param.fieldname] || ''}
+                                  onChange={(e) => {
+                                    handleUpdateActionConfig('args', {
+                                      ...currentArgs,
+                                      [param.fieldname]: e.target.value
+                                    });
+                                  }}
+                                  placeholder={param.description || `Enter ${param.fieldname}...`}
+                                  className="h-8 text-xs font-mono"
+                                />
+                                {param.description && (
+                                  <p className="text-[10px] text-muted-foreground mt-1">{param.description}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md">This tool has no requested parameters.</div>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor="save-result" className="text-xs">Save Result To Context</Label>
+                      <Input
+                        id="save-result"
+                        value={((config as any).output?.save_result_to_context) || ''}
+                        onChange={(e) => handleUpdateActionConfig('output', { ...((config as any).output || {}), save_result_to_context: e.target.value })}
+                        placeholder="e.g., tool_result"
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              if (config.type === 'router') {
+                return (
+                  <div className="space-y-3">
+                    <Label className="mb-2 block text-sm font-semibold">LLM Router Configuration</Label>
+                    <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
+                      Connect edges from this node to other nodes. The LLM will use edge labels to decide where to route.
+                    </div>
+                    <div>
+                      <Label htmlFor="router-agent" className="text-xs">Routing Agent</Label>
+                      <Combobox
+                        options={agents}
+                        value={(config as any).router_agent_name || ''}
+                        onValueChange={(v) => handleUpdateActionConfig('router_agent_name', v)}
+                        placeholder={loadingAgents ? 'Loading...' : 'Select routing agent...'}
+                        disabled={loadingAgents}
+                        searchPlaceholder="Search agents..."
+                        emptyText="No agent found."
                       />
                     </div>
                     <div>
-                      <Label htmlFor="save-result" className="text-xs">Save Result To</Label>
-                      <Input
-                        id="save-result"
-                        value={(config as any).save_result_to_context || ''}
-                        onChange={(e) => handleUpdateActionConfig('save_result_to_context', e.target.value)}
-                        placeholder="e.g., tool_result"
-                      />
+                      <Label htmlFor="conv-mode" className="text-xs">Conversation Mode</Label>
+                      <Select
+                        value={(config as any).conversation_mode || 'flow_shared'}
+                        onValueChange={(value) => handleUpdateActionConfig('conversation_mode', value)}
+                      >
+                        <SelectTrigger id="conv-mode">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="flow_shared">Flow Shared (Default)</SelectItem>
+                          <SelectItem value="isolated">Isolated (No history)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 );
@@ -464,26 +656,42 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
               if (config.type === 'human-in-loop') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block text-sm font-semibold">Human Approval</Label>
+                    <Label className="mb-2 block text-sm font-semibold">Human Approval Configuration</Label>
                     <div>
-                      <Label htmlFor="approval-message" className="text-xs">Instructions</Label>
-                      <textarea
-                        id="approval-message"
-                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        value={(config as any).message || ''}
-                        onChange={(e) => handleUpdateActionConfig('message', e.target.value)}
-                        placeholder="Instructions for the approver"
+                      <Label htmlFor="approval-title" className="text-xs">Title</Label>
+                      <Input
+                        id="approval-title"
+                        value={(config as any).title || ''}
+                        onChange={(e) => handleUpdateActionConfig('title', e.target.value)}
+                        placeholder="e.g., System Access Approval"
                       />
                     </div>
                     <div>
-                      <Label htmlFor="timeout" className="text-xs">Timeout (seconds)</Label>
+                      <Label htmlFor="approval-instructions" className="text-xs">Instructions</Label>
+                      <textarea
+                        id="approval-instructions"
+                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={(config as any).instructions || ''}
+                        onChange={(e) => handleUpdateActionConfig('instructions', e.target.value)}
+                        placeholder="Detailed instructions for the approver"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="approver-role" className="text-xs">Approver Role (System Role)</Label>
                       <Input
-                        id="timeout"
-                        type="number"
-                        min="0"
-                        value={(config as any).timeout || 0}
-                        onChange={(e) => handleUpdateActionConfig('timeout', parseInt(e.target.value))}
-                        placeholder="0 = no timeout"
+                        id="approver-role"
+                        value={(config as any).approver_role || ''}
+                        onChange={(e) => handleUpdateActionConfig('approver_role', e.target.value)}
+                        placeholder="e.g., System Manager"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="save-decision" className="text-xs">Store Decision in Context Key</Label>
+                      <Input
+                        id="save-decision"
+                        value={(config as any).store_decision_in_context || ''}
+                        onChange={(e) => handleUpdateActionConfig('store_decision_in_context', e.target.value)}
+                        placeholder="e.g., approval_result"
                       />
                     </div>
                   </div>
@@ -503,7 +711,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
               );
             })()}
           </>
-        )}
+        ) : null}
       </div>
 
       <div className="border-t border-border p-3 bg-card flex items-center justify-between gap-2">
