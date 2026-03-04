@@ -32,6 +32,8 @@ import {
 import { McpDetailsPageWrapper } from './pages/McpDetailsPageWrapper';
 import McpListingPage from './pages/McpListingPage';
 import { PreviewViewPage } from './pages/PreviewViewPage';
+import { UsersPage } from './pages/UsersPage';
+import { RolesPage } from './pages/RolesPage';
 
 function App() {
   useEffect(() => {
@@ -257,6 +259,26 @@ function App() {
             element={
               <ProtectedRoute>
                 <PreviewViewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/users"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <UsersPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/roles"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <RolesPage />
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
