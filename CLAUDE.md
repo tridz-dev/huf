@@ -61,19 +61,28 @@ huf/
 │   └── templates/                # Jinja templates
 ├── frontend/                     # Frontend (React app)
 │   └── src/
-│       ├── pages/                # Page components
-│       ├── components/           # UI components
-│       │   ├── agent/            # Agent-specific components
-│       │   ├── chat/             # Chat interface
-│       │   ├── nodes/            # Flow builder nodes
-│       │   ├── tools/            # Tool management
-│       │   ├── mcp/              # MCP server UI
-│       │   └── ui/               # shadcn/ui components
-│       ├── contexts/             # React contexts (User, Flow, Modal)
-│       ├── hooks/                # Custom React hooks
-│       ├── services/             # API service layer
-│       ├── types/                # TypeScript definitions
-│       └── lib/                  # Utilities (Frappe SDK wrapper)
+│       ├── App.tsx               # Root component, routing, providers
+│       ├── main.tsx              # Entry point (React 18 createRoot)
+│       ├── pages/                # Page components (18 files)
+│       ├── layouts/              # UnifiedLayout, UnifiedHeader
+│       ├── components/           # UI components (~150 files)
+│       │   ├── agent/            # Agent form tabs (General, Behavior, Triggers, Tools, Advanced)
+│       │   ├── chat/             # Chat UI (ChatWindowV2, ChatInput, messages, listings)
+│       │   ├── ai-elements/      # AI-specific UI primitives (30 components)
+│       │   ├── dashboard/        # Dashboard cards, views, filters, layouts
+│       │   ├── nodes/            # Flow builder nodes (Trigger, Action, End)
+│       │   ├── modals/           # Flow modals (NodeSelection, ActionSelection, TriggerConfig)
+│       │   ├── tools/            # Tool management (forms, cards, modals)
+│       │   ├── mcp/              # MCP server details/connection/tools tabs
+│       │   └── ui/               # shadcn/ui primitives (54 components)
+│       ├── contexts/             # React contexts (User, Flow, Modal, Integrations)
+│       ├── hooks/                # Custom hooks (infinite scroll, debounce, chat socket)
+│       ├── services/             # API service layer (11 service files)
+│       ├── types/                # TypeScript definitions (agent, flow, artifacts, pagination)
+│       ├── lib/                  # Frappe SDK wrapper, error handling, cn()
+│       ├── data/                 # Static data (doctypes, triggers, actions, colors)
+│       ├── config/               # Tool templates JSON
+│       └── utils/                # Helpers (socket, time, status, parsers)
 ├── docker/                       # Docker quick-try environment
 │   ├── docker-compose.yml        # MariaDB, Redis, Frappe services
 │   └── init.sh                   # Automated setup script
@@ -99,11 +108,18 @@ huf/
 - **Framework**: React 18.3.1
 - **Language**: TypeScript 5.5.3
 - **Build Tool**: Vite 5.4.8
-- **Styling**: Tailwind CSS 3.4.13
-- **UI Components**: Radix UI (shadcn/ui)
-- **Flow Builder**: React Flow / XYFlow
-- **State Management**: React Context API
-- **Forms**: React Hook Form + Zod
+- **Routing**: React Router v7 (`react-router-dom ^7.9.4`, basename `/huf`)
+- **Styling**: Tailwind CSS 3.4.13 (CSS variable theming, dark mode via class)
+- **UI Components**: Radix UI (shadcn/ui) — 54 primitive components
+- **Flow Builder**: XYFlow (`@xyflow/react ^12.9.3`) + ReactFlow (`reactflow ^11.11.4`)
+- **State Management**: React Context API (User, Flow, Modal, Integrations)
+- **Forms**: React Hook Form 7 + Zod 3
+- **Tables**: TanStack React Table (`@tanstack/react-table ^8.21.3`)
+- **Chat/Streaming**: SSE via fetch + ReadableStream, Socket.io (`socket.io-client ^4.7.5`)
+- **AI SDK**: Vercel AI SDK (`ai ^5.0.106`), Shiki for code highlighting, Streamdown for markdown
+- **Icons**: Lucide React (`lucide-react ^0.563.0`)
+- **Animations**: Motion (`motion ^12.23.24`), `tailwindcss-animate`
+- **Backend SDK**: `frappe-js-sdk ^1.11.0` (auth, db, call)
 
 ## Development Commands
 
@@ -181,23 +197,38 @@ _("Translatable string")
 **Formatting**: ESLint + Prettier
 - **Strict TypeScript mode** enabled
 - **noUnusedLocals** and **noUnusedParameters** enabled
+- **Path alias**: `@/*` maps to `./src/*`
 
 **Patterns**:
 ```typescript
-// React Hooks
-const [state, setState] = useState(initialValue);
-useEffect(() => { /* side effects */ }, [dependencies]);
+// Frappe SDK — all backend calls go through these
+import { db, call, auth } from '@/lib/frappe-sdk';
 
-// API calls via service layer
-import { agentApi } from '@/services/agentApi';
-const response = await agentApi.getAgents();
+// Service layer — named exports, not default exports
+import { getAgents, createAgent } from '@/services/agentApi';
 
-// Error handling
-import { handleFrappeError } from '@/lib/error';
+// Error handling — consistent across all services
+import { handleFrappeError } from '@/lib/frappe-error';
 try { ... } catch (e) { handleFrappeError(e); }
 
 // Types in separate files
-import type { Agent } from '@/types/agent.types';
+import type { Agent, AgentDoc } from '@/types/agent.types';
+
+// DocType names from centralized constants
+import { doctype } from '@/data/doctypes';
+const agents = await db.getDocList(doctype.Agent, { ... });
+
+// Pagination pattern — fetch limit+1 to detect hasMore
+const data = await db.getDocList(doctype.Agent, { limit: pageSize + 1 });
+const hasMore = data.length > pageSize;
+
+// Tailwind class merging
+import { cn } from '@/lib/utils';
+<div className={cn("base-class", isActive && "active-class")} />
+
+// Toast notifications
+import { toast } from 'sonner';
+toast.success("Agent created");
 ```
 
 ### EditorConfig Settings
@@ -260,6 +291,135 @@ HUF supports Server-Sent Events (SSE) for real-time agent response streaming:
 - **`knowledge/retriever.py`**: BM25-based search via SQLite FTS5
 - **`knowledge/context_builder.py`**: Context assembly for prompts
 
+## Frontend Architecture
+
+### Routing and Navigation
+
+The app uses React Router v7 with `basename="/huf"`. All routes are wrapped in `UserProvider` → `Suspense` → `ProtectedRoute`.
+
+| Route | Page | Layout | Notes |
+|-------|------|--------|-------|
+| `/` | HomePage | UnifiedLayout | Dashboard with metrics, tabs for agents/flows/executions |
+| `/agents` | AgentsPage | UnifiedLayout | Agent grid with search/filter, infinite scroll |
+| `/agents/:id` | AgentFormPageWrapper | Breadcrumb layout | Agent create/edit form with tabbed sections |
+| `/chat` | ChatPageV2 | UnifiedLayout (no header) | Chat UI with collapsible sidebar |
+| `/chat/:chatId` | ChatPageV2 | UnifiedLayout (no header) | Chat with specific conversation |
+| `/executions` | Executions | UnifiedLayout | Agent runs table with TanStack Table |
+| `/executions/:runId` | AgentRunDetailPage | UnifiedLayout | Run details, child runs |
+| `/flows` | FlowListPage | UnifiedLayout + FlowProvider | Flow grid |
+| `/flows/:flowId` | FlowCanvasPageWrapper | FlowProvider + ModalProvider | Visual flow builder |
+| `/providers` | IntegrationsPageWrapper | IntegrationsContext | AI provider management |
+| `/mcp` | McpListingPage | UnifiedLayout | MCP server grid |
+| `/mcp/:mcpId` | McpDetailsPageWrapper | Breadcrumb layout | MCP server form with tabs |
+| `/data` | DataPage | UnifiedLayout | Placeholder (coming soon) |
+| `/view/:messageId` | PreviewViewPage | Standalone | Full-screen message preview |
+
+### Layout System
+
+- **`UnifiedLayout`**: Main layout wrapping most pages. Provides `SidebarProvider` → `AppSidebar` + `SidebarInset` with optional header and breadcrumbs.
+- **`UnifiedHeader`**: Renders breadcrumbs or auto-detected page title, plus slot for `headerActions`.
+- **`AppSidebar`**: Collapsible sidebar with nav items (Dashboard, Agents, Chat, Executions, Flows, Data, AI Providers, MCP Servers). Shows chat list on mobile.
+- **Page Wrapper pattern**: Detail pages use a `*Wrapper` component that adds `UnifiedLayout` with breadcrumbs, delegating content to the inner page component.
+
+### Component Architecture
+
+Components are organized by domain:
+
+| Directory | Purpose | Key Files |
+|-----------|---------|-----------|
+| `components/agent/` | Agent form tabs and triggers | `GeneralTab`, `BehaviorTab`, `TriggersTab`, `ToolsTab`, `AdvancedTab`, `TriggerModal` |
+| `components/chat/` | Full chat system | `ChatWindowV2`, `ChatInput`, `ChatMessageList`, `ChatMessage`, `ChatListing`, `ChatSidebarContent`, `AgentModelSelector` |
+| `components/ai-elements/` | AI-specific UI primitives | `message`, `code-block`, `tool`, `artifact`, `reasoning`, `chain-of-thought`, `prompt-input`, `suggestion` (30 components) |
+| `components/dashboard/` | Reusable dashboard building blocks | `PageLayout`, `PageSection`, `FilterBar`, `GridView`, `ItemCard`, `BaseCard`, `LoadMoreButton` |
+| `components/tools/` | Tool creation and management | `ToolFormModal`, `ToolCreationForm`, `SelectToolsModal`, `SelectMCPServersModal`, `ToolCard`, `ParameterCard` |
+| `components/mcp/` | MCP server management | `DetailsTab`, `ConnectionTab`, `ToolsTab`, `MCPHeader`, `MCPToolDetailModal` |
+| `components/nodes/` | Flow builder node components | `TriggerNode`, `ActionNode`, `EndNode` |
+| `components/modals/` | Flow builder modals | `NodeSelectionModal`, `ActionSelectionModal`, `TriggerConfigModal` |
+| `components/ui/` | shadcn/ui primitives | 54 Radix-based components (dialog, tabs, button, form, select, table, sidebar, etc.) |
+
+Root-level components include `FlowCanvas`, `FlowNode`, `RightSidebar`, `ProtectedRoute`, `AppSidebar`, `UserAvatar`, and per-page header actions.
+
+### Service Layer
+
+All backend communication goes through service files in `src/services/`. Services use the Frappe JS SDK (`db`, `call`, `auth` from `@/lib/frappe-sdk`).
+
+| Service | Purpose | Key Exports |
+|---------|---------|-------------|
+| `agentApi.ts` | Agent CRUD, triggers, DocTypes | `getAgents`, `getAgent`, `createAgent`, `updateAgent`, `runAgentTest`, `getAgentTriggers`, `createAgentTrigger` |
+| `agentRunApi.ts` | Agent run queries | `getAgentRuns` (with pagination, search, status, agent filters) |
+| `chatApi.ts` | Conversations and messages | `getConversations`, `getConversationMessages`, `newConversation`, `sendMessageToConversation`, `createAgentRunFeedback` |
+| `streamChatApi.ts` | SSE streaming with REST fallback | `streamAgentResponse` (async generator), `sendMessage`, `checkStreamingAvailable` |
+| `dashboardApi.ts` | Dashboard metrics | `getAgentRunsCountLast7Days`, `getAgentRunsForMetrics`, `getRecentAgentRuns` |
+| `flowService.ts` | In-memory flow management | `flowService` singleton (Map-based CRUD, subscription pattern) |
+| `mcpApi.ts` | MCP server management | `getMCPServers`, `createMCPServer`, `syncMCPTools`, `testMCPConnection` |
+| `providerApi.ts` | AI provider/model CRUD | `getProviders`, `getProvider`, `createProvider`, `getModels` |
+| `toolApi.ts` | Tool function management | `getToolFunctions`, `createToolFunction`, `updateToolFunction`, `fetchToolParametersFromCode` |
+| `utilsApi.ts` | Generic helpers | `fetchDocCount` (via `frappe.client.get_count`) |
+| `mockApi.ts` | Development mock data | `mockApi` with static providers, models, tools, agents |
+
+**Common patterns across services:**
+- Pagination uses `limit + 1` trick to detect `hasMore`, with `fetchDocCount` for totals
+- All errors handled via `handleFrappeError` from `@/lib/frappe-error`
+- DocType names referenced from `@/data/doctypes` constants
+- Return types follow `PaginatedResponse<T>` interface
+
+### State Management (Contexts)
+
+| Context | Provider | Purpose |
+|---------|----------|---------|
+| `UserContext` | `UserProvider` | Authentication state, user info, login redirect. Uses `auth.getLoggedInUser()` and `db.getDoc`. |
+| `FlowContext` | `FlowProvider` | Flow builder state. Subscribes to `flowService` for flows, active flow, selected node. |
+| `ModalContext` | `ModalProvider` | Flow builder modal state (trigger/action config dialogs). |
+| `IntegrationsContext` | `IntegrationsProvider` | Integrations page callback (`onAddProvider`). |
+
+### Custom Hooks
+
+| Hook | Purpose |
+|------|---------|
+| `useInfiniteScroll` | Pagination with Intersection Observer, debounced search/filters, forward/reverse direction |
+| `useDebounce` | Generic value debouncing |
+| `useChatSocket` | Socket.io subscription for real-time tool calls and new messages in a conversation |
+| `useIsMobile` | Viewport detection (< 768px) via `matchMedia` |
+| `usePageData` | Fetch + client-side search/filter for page data |
+
+Chat-specific hooks live in `components/chat/`: `useChatList`, `useChatAgentIdentity`, `useChatScrollToBottom`.
+
+### Type Definitions
+
+| File | Key Types |
+|------|-----------|
+| `agent.types.ts` | `Agent`, `AgentDoc`, `AIProvider`, `AIModel`, `AgentToolFunctionRef`, `AgentTrigger`, `AgentConversation`, `AgentMessage`, `AgentRun` |
+| `flow.types.ts` | `Flow`, `FlowNode`, `FlowEdge`, `FlowNodeData`, `FlowStatus`, trigger/action configs (extends React Flow types) |
+| `artifact.types.ts` | `ArtifactType`, `ParsedArtifact`, `ParsedWebPreview`, `ParsedJSXPreview` |
+| `pagination.ts` | `PaginationParams`, `PaginatedResponse<T>` |
+| `modal.types.ts` | `TriggerOption`, `ActionOption` (for node selection modal) |
+| `toolTemplate.types.ts` | `ToolTemplate`, `ToolFormData` |
+
+### Static Data
+
+The `src/data/` directory contains static configuration:
+- `doctypes.ts` — Centralized DocType name constants used across all services
+- `triggers.ts` — Trigger type options for the flow builder
+- `actions.ts` — Action type options for the flow builder
+- `color.ts` — Color palette constants
+- `mcp.ts` — MCP-related static data
+
+### Utilities
+
+| File | Purpose |
+|------|---------|
+| `lib/frappe-sdk.ts` | Frappe JS SDK initialization (`frappe`, `auth`, `db`, `call`) |
+| `lib/frappe-error.ts` | Frappe error parsing and handling (`handleFrappeError`, `getFrappeErrorMessage`) |
+| `lib/utils.ts` | `cn()` — Tailwind class merging via `clsx` + `tailwind-merge` |
+| `utils/socket.ts` | `createFrappeSocket` — Socket.io client for Frappe real-time events |
+| `utils/artifactParser.ts` | Parses AI-generated artifacts from message content |
+| `utils/jsxPreviewParser.ts` | Parses JSX preview blocks from messages |
+| `utils/webPreviewParser.ts` | Parses web preview blocks from messages |
+| `utils/formValidation.ts` | Form validation utilities |
+| `utils/status.ts` | Status label/color mapping |
+| `utils/time.ts` | Time formatting helpers |
+| `utils/getInitials.ts` | User initials extraction |
+
 ## API Patterns
 
 ### Whitelisted Methods
@@ -272,24 +432,28 @@ def run_agent_sync(agent_name, prompt, channel_id=None, external_id=None):
 
 ### Frontend API Calls
 ```typescript
-// Using Frappe JS SDK (synchronous)
-import { call } from '@/lib/frappe';
-const result = await call.get('huf.ai.agent_integration.run_agent_sync', {
+// Using Frappe JS SDK
+import { db, call } from '@/lib/frappe-sdk';
+
+// DocType operations (via db)
+const agents = await db.getDocList('Agent', {
+    fields: ['name', 'agent_name', 'model'],
+    filters: [['disabled', '=', 0]],
+    limit: 20,
+    orderBy: { field: 'modified', order: 'desc' },
+});
+const agent = await db.getDoc('Agent', agentName);
+
+// RPC calls (via call)
+const result = await call.post('huf.ai.agent_integration.run_agent_sync', {
     agent_name: 'my-agent',
     prompt: 'Hello'
 });
 
-// Using SSE for streaming
-const eventSource = new EventSource(`/huf/stream/${agentName}?prompt=${encodeURIComponent(prompt)}`);
-eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.type === 'delta') {
-        // Handle streaming chunk: data.full_response
-    } else if (data.type === 'complete') {
-        // Final response: data.full_response
-        eventSource.close();
-    }
-};
+// SSE streaming (via fetch + ReadableStream)
+const response = await fetch(`/huf/stream/${agentName}?prompt=${encodeURIComponent(prompt)}`);
+const reader = response.body.getReader();
+// Parse SSE lines: data.type is 'delta' | 'tool_call' | 'complete' | 'error'
 ```
 
 ### Flow Engine API Calls
@@ -354,17 +518,31 @@ Test files are located in:
 
 ## Important Notes for AI Assistants
 
+### Backend
 1. **Frappe Patterns**: Always follow Frappe conventions (Documents, permissions, whitelisting)
 2. **Tool Creation**: Tools must return JSON-serializable strings
-3. **Frontend State**: Use React Context/hooks, not external state libraries
-4. **LiteLLM Dependency**: Required for LLM access, auto-installed via `bench setup requirements`
-5. **Model Names**: Can be user-friendly (`gpt-4-turbo`) or LiteLLM format (`openai/gpt-4-turbo`)
-6. **MCP Protocol**: HUF is an MCP client only (not a server)
-7. **Real-time Updates**: Socket.io for live agent feedback, SSE for streaming responses
-8. **Streaming vs Sync**: Use `run_agent_stream()` for chat UIs, `run_agent_sync()` for triggers/automation
-9. **Docker Dev**: Use `docker/` for quick evaluation; use Frappe bench for full development
-10. **Flow Engine**: Graph orchestration via JSON definitions; no separate Node/Edge doctypes; Agent Run serves as node-run log
-11. **Flow Modes**: Normal (deterministic edges) vs Agentic (orchestrator-in-the-loop); both constrained to graph topology
+3. **LiteLLM Dependency**: Required for LLM access, auto-installed via `bench setup requirements`
+4. **Model Names**: Can be user-friendly (`gpt-4-turbo`) or LiteLLM format (`openai/gpt-4-turbo`)
+5. **MCP Protocol**: HUF is an MCP client only (not a server)
+6. **Streaming vs Sync**: Use `run_agent_stream()` for chat UIs, `run_agent_sync()` for triggers/automation
+7. **Flow Engine**: Graph orchestration via JSON definitions; no separate Node/Edge doctypes; Agent Run serves as node-run log
+8. **Flow Modes**: Normal (deterministic edges) vs Agentic (orchestrator-in-the-loop); both constrained to graph topology
+
+### Frontend
+9. **State Management**: Use React Context/hooks only — no Redux, Zustand, or other external state libraries
+10. **API Layer**: All backend calls go through `src/services/` files using `db`/`call` from `@/lib/frappe-sdk` — never call Frappe APIs directly from components
+11. **DocType Constants**: Always reference DocType names from `@/data/doctypes` — never use raw strings
+12. **Error Handling**: Use `handleFrappeError` from `@/lib/frappe-error` in all service catch blocks
+13. **UI Components**: Use existing shadcn/ui primitives from `components/ui/` — don't create custom low-level UI components
+14. **Page Structure**: List pages use `PageLayout` + `FilterBar` + `GridView`/`ItemCard` from `components/dashboard/`. Detail pages use the `*Wrapper` + inner page pattern with breadcrumbs.
+15. **Pagination**: Follow the `limit + 1` pattern with `PaginatedResponse<T>` — use `useInfiniteScroll` hook for infinite scroll pages
+16. **Styling**: Use Tailwind classes with `cn()` for conditional merging — no CSS modules or styled-components
+17. **Toasts**: Use `sonner` (`toast.success()`, `toast.error()`) — not native alerts or custom toast implementations
+18. **Real-time**: Socket.io for live agent feedback (tool calls, new messages), SSE via fetch ReadableStream for streaming responses
+19. **Routing**: All routes are under `/huf` basename — use React Router `Link` and `useNavigate` for navigation
+
+### General
+20. **Docker Dev**: Use `docker/` for quick evaluation; use Frappe bench for full development
 
 ## Related Documentation
 
