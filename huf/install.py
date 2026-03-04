@@ -59,6 +59,7 @@ def setup_desktop_icon_as_workspace(app_name):
 
 
 def after_install():
+    create_huf_roles()
     create_demo_ai_providers()
     create_demo_ai_models()
     create_image_generation_tool()
@@ -89,6 +90,7 @@ def after_migrate():
 	Called after app migration.
 	Syncs all discovered tools from all installed apps.
 	"""
+	create_huf_roles()
 	setup_desktop_icon_as_workspace("huf")
 	try:
 		create_image_generation_tool()
@@ -551,6 +553,211 @@ def create_transcribe_audio_tool():
             tool_doc.insert(ignore_permissions=True)
         except Exception as e:
             frappe.log_error(f"Error creating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Creation")
+
+def create_huf_roles():
+	"""
+	Idempotent: create the four default Huf Roles and their backing Frappe
+	Roles, then ensure Administrator has the Huf Admin role.
+
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.permissions import DEFAULT_ROLE_CAPABILITIES, HUF_ROLE_FRAPPE_ROLE_MAP
+
+	# 1. Ensure Frappe Role records exist for Huf-managed roles.
+	for frappe_role_name in ["Huf Manager", "Huf User", "Huf Viewer"]:
+		if not frappe.db.exists("Role", frappe_role_name):
+			frappe.get_doc({
+				"doctype": "Role",
+				"role_name": frappe_role_name,
+				"desk_access": 1,
+			}).insert(ignore_permissions=True)
+
+	# 2. Apply DocType permission rows for each Huf Frappe role.
+	_setup_doctype_permissions()
+
+	# 3. Create (or update) the four Huf Role documents.
+	role_meta = [
+		{
+			"role_name": "Huf Admin",
+			"description": "Full system control. Can manage providers, users, roles, agents, tools, flows, and knowledge.",
+			"is_system_role": 1,
+			"frappe_role": "System Manager",
+		},
+		{
+			"role_name": "Huf Manager",
+			"description": "Operational control. Can create and manage agents, flows, and knowledge. Cannot manage users or system settings.",
+			"is_system_role": 1,
+			"frappe_role": "Huf Manager",
+		},
+		{
+			"role_name": "Huf User",
+			"description": "End user. Can use agents, chat, and flows. Cannot create or configure them.",
+			"is_system_role": 1,
+			"frappe_role": "Huf User",
+		},
+		{
+			"role_name": "Huf Viewer",
+			"description": "Read-only access. Can view agents and own conversations only.",
+			"is_system_role": 1,
+			"frappe_role": "Huf Viewer",
+		},
+	]
+
+	for meta in role_meta:
+		caps = DEFAULT_ROLE_CAPABILITIES.get(meta["role_name"], [])
+		if not frappe.db.exists("Huf Role", meta["role_name"]):
+			doc = frappe.get_doc({"doctype": "Huf Role", **meta})
+			for cap in caps:
+				doc.append("permissions", {"capability": cap})
+			doc.insert(ignore_permissions=True)
+		else:
+			# Ensure capability rows are present (idempotent update).
+			doc = frappe.get_doc("Huf Role", meta["role_name"])
+			existing_caps = {row.capability for row in doc.permissions}
+			changed = False
+			for cap in caps:
+				if cap not in existing_caps:
+					doc.append("permissions", {"capability": cap})
+					changed = True
+			if changed:
+				doc.save(ignore_permissions=True)
+
+	# 4. Ensure Administrator has the Huf Admin role.
+	if not frappe.db.exists("Huf User Role", {"user": "Administrator"}):
+		frappe.get_doc({
+			"doctype": "Huf User Role",
+			"user": "Administrator",
+			"huf_role": "Huf Admin",
+			"enabled": 1,
+		}).insert(ignore_permissions=True)
+
+	# 5. Migration path: assign existing System Managers to Huf Admin if they
+	#    don't already have a Huf User Role record.
+	_migrate_existing_system_managers()
+
+	frappe.db.commit()
+
+
+def _migrate_existing_system_managers():
+	"""
+	One-time migration: give existing System Manager users the Huf Admin
+	role so they keep access after the new check_app_permission goes live.
+	"""
+	system_managers = frappe.get_all(
+		"Has Role",
+		filters={"role": "System Manager", "parenttype": "User"},
+		fields=["parent"],
+		ignore_permissions=True,
+	)
+	for row in system_managers:
+		user = row.parent
+		if user in ("Administrator", "Guest"):
+			continue
+		if not frappe.db.exists("Huf User Role", {"user": user}):
+			try:
+				frappe.get_doc({
+					"doctype": "Huf User Role",
+					"user": user,
+					"huf_role": "Huf Admin",
+					"enabled": 1,
+				}).insert(ignore_permissions=True)
+			except Exception:
+				pass  # Non-fatal; user can be assigned manually
+
+
+def _setup_doctype_permissions():
+	"""
+	Add permission rows to Huf-related DocTypes for the Huf Frappe roles.
+	Uses frappe.permissions.add_permission which is idempotent.
+	"""
+	# fmt: off
+	permission_matrix = {
+		# DocType                  role             ptype       value
+		"Agent":                  [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
+			("Huf User",     "read",   1),
+			("Huf Viewer",   "read",   1),
+		],
+		"Agent Tool Function":    [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
+			("Huf User",     "read",   1),
+		],
+		"Agent Trigger":          [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
+		],
+		"Agent Conversation":     [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
+			("Huf User",     "read",   1), ("Huf User",     "write",  1),
+			("Huf User",     "create", 1),
+			("Huf Viewer",   "read",   1),
+		],
+		"Agent Message":          [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf Manager",  "create", 1),
+			("Huf User",     "read",   1), ("Huf User",     "write",  1),
+			("Huf User",     "create", 1),
+			("Huf Viewer",   "read",   1),
+		],
+		"Agent Run":              [
+			("Huf Manager",  "read",   1),
+			("Huf User",     "read",   1),
+			("Huf Viewer",   "read",   1),
+		],
+		"Flow Definition":        [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
+			("Huf User",     "read",   1),
+			("Huf Viewer",   "read",   1),
+		],
+		"Flow Run":               [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf User",     "read",   1),
+		],
+		"Knowledge Source":       [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
+			("Huf User",     "read",   1),
+		],
+		"Knowledge Input":        [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
+			("Huf User",     "read",   1),
+		],
+		"MCP Server":             [
+			("Huf Manager",  "read",   1),
+			("Huf User",     "read",   1),
+		],
+		"AI Model":               [
+			("Huf Manager",  "read",   1),
+			("Huf User",     "read",   1),
+		],
+		"AI Provider":            [
+			("Huf Manager",  "read",   1),
+		],
+		"Huf Role":               [
+			("Huf Manager",  "read",   1),
+		],
+		"Huf User Role":          [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
+			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
+		],
+	}
+	# fmt: on
+
+	for doctype, rows in permission_matrix.items():
+		if not frappe.db.table_exists(f"tab{doctype}"):
+			continue
+		for role, ptype, value in rows:
+			try:
+				frappe.permissions.add_permission(doctype, role, 0)
+				frappe.permissions.update_permission_property(doctype, role, 0, ptype, value)
+			except Exception:
+				pass  # Already exists or table not migrated yet
+
 
 def create_flow_tools():
     """Create the flow management tools in Agent Tool Function DocType."""
