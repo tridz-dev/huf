@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
+import { PermissionsProvider } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
@@ -100,6 +101,7 @@ function App() {
   return (
     <BrowserRouter basename="/huf">
       <UserProvider>
+        <PermissionsProvider>
         <Suspense fallback={<AuthenticatingPage />}>
           <Routes>
           <Route
@@ -271,6 +273,7 @@ function App() {
           </Routes>
         </Suspense>
         <Toaster />
+        </PermissionsProvider>
       </UserProvider>
     </BrowserRouter>
   );
