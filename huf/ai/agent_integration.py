@@ -1514,3 +1514,46 @@ async def run_agent_stream(
             "type": "error",
             "error": error_msg
         }
+
+# ---------------------------------------------------------------------------
+# Permission query conditions — used by hooks.py permission_query_conditions
+# These return SQL WHERE fragments so Frappe's list view only shows rows
+# the current user is allowed to see.
+# ---------------------------------------------------------------------------
+
+
+def get_conversation_permission_conditions(user):
+	"""
+	Restrict Agent Conversation list to conversations the user owns,
+	unless the user has chat.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	from huf.permissions import has_capability
+	if has_capability(user, "chat.view_all"):
+		return None
+
+	# Only own conversations
+	return f"`tabAgent Conversation`.owner = {frappe.db.escape(user)}"
+
+
+def get_run_permission_conditions(user):
+	"""
+	Restrict Agent Run list to runs the user owns,
+	unless the user has agent.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	from huf.permissions import has_capability
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	return f"`tabAgent Run`.owner = {frappe.db.escape(user)}"
