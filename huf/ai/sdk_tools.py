@@ -2662,8 +2662,7 @@ async def handle_gemini_generate_audio(
             wav_data,
             "Agent Message" if message_doc else None,
             message_doc.name if message_doc else None,
-            is_private=1,
-            decode_base64=False
+            is_private=1
         )
         
         file_url = saved_file.file_url if hasattr(saved_file, "file_url") else saved_file.get("file_url")
