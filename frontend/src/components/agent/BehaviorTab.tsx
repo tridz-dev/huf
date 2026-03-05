@@ -1,17 +1,48 @@
-import { FormField, FormItem, FormLabel, FormControl, FormDescription } from '@/components/ui/form';
-import { Switch } from '@/components/ui/switch';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { UseFormReturn } from 'react-hook-form';
-import type { AgentFormValues } from './types';
-import { toast } from 'sonner';
+import {
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormDescription
+} from '@/components/ui/form'
+
+import { Switch } from '@/components/ui/switch'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { UseFormReturn } from 'react-hook-form'
+import type { AgentFormValues } from './types'
+import { toast } from 'sonner'
 
 interface BehaviorTabProps {
-  form: UseFormReturn<AgentFormValues>;
+  form: UseFormReturn<AgentFormValues>
 }
 
 export function BehaviorTab({ form }: BehaviorTabProps) {
-  const persistConversationEnabled = form.watch('persist_conversation');
-  const enableMultiRun = form.watch('enable_multi_run');
+  const persistConversationEnabled = form.watch('persist_conversation')
+  const enableMultiRun = form.watch('enable_multi_run')
+
+  const defaultPlan = form.watch('default_plan') || []
+
+  const addStep = () => {
+    const current = form.getValues('default_plan') || []
+
+    form.setValue('default_plan', [
+      ...current,
+      {
+        step_index: current.length + 1,
+        status: 'pending',
+        instruction: '',
+        output_ref: ''
+      }
+    ])
+  }
+
+  const removeStep = (index: number) => {
+    const current = form.getValues('default_plan') || []
+    form.setValue(
+      'default_plan',
+      current.filter((_, i) => i !== index)
+    )
+  }
 
   return (
     <>
@@ -129,7 +160,108 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
           />
         </CardContent>
       </Card>
-    </>
-  );
-}
 
+      {/* Default Plan Table */}
+      {enableMultiRun && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Default Plan</CardTitle>
+          </CardHeader>
+          <CardContent>
+
+            <table className="w-full border text-sm">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="p-2 border">Step</th>
+                  <th className="p-2 border">Status</th>
+                  <th className="p-2 border">Instruction</th>
+                  <th className="p-2 border">Output Ref</th>
+                  <th className="p-2 border"></th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {defaultPlan.map((step, index) => (
+                  <tr key={index}>
+                    <td className="border p-2">
+                      <input
+                        type="number"
+                        value={step.step_index}
+                        className="w-full border rounded px-2 py-1"
+                        onChange={(e) => {
+                          const updated = [...defaultPlan]
+                          updated[index].step_index = Number(e.target.value)
+                          form.setValue('default_plan', updated)
+                        }}
+                      />
+                    </td>
+
+                    <td className="border p-2">
+                      <select
+                        value={step.status}
+                        className="w-full border rounded px-2 py-1"
+                        onChange={(e) => {
+                          const updated = [...defaultPlan]
+                          updated[index].status = e.target.value as any
+                          form.setValue('default_plan', updated)
+                        }}
+                      >
+                        <option value="pending">pending</option>
+                        <option value="in_progress">in_progress</option>
+                        <option value="done">done</option>
+                        <option value="failed">failed</option>
+                      </select>
+                    </td>
+
+                    <td className="border p-2">
+                      <input
+                        value={step.instruction}
+                        className="w-full border rounded px-2 py-1"
+                        onChange={(e) => {
+                          const updated = [...defaultPlan]
+                          updated[index].instruction = e.target.value
+                          form.setValue('default_plan', updated)
+                        }}
+                      />
+                    </td>
+
+                    <td className="border p-2">
+                      <input
+                        value={step.output_ref}
+                        className="w-full border rounded px-2 py-1"
+                        onChange={(e) => {
+                          const updated = [...defaultPlan]
+                          updated[index].output_ref = e.target.value
+                          form.setValue('default_plan', updated)
+                        }}
+                      />
+                    </td>
+
+                    <td className="border p-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => removeStep(index)}
+                        className="text-red-500"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <button
+              type="button"
+              onClick={addStep}
+              className="mt-4 rounded bg-primary px-4 py-2 text-white"
+            >
+              Add Step
+            </button>
+
+          </CardContent>
+        </Card>
+      )}
+    </>
+  )
+}
