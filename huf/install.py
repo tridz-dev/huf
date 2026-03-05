@@ -64,6 +64,8 @@ def after_install():
     create_image_generation_tool()
     create_transcribe_audio_tool()
     create_generate_audio_tool()
+    create_gemini_transcribe_audio_tool()
+    create_gemini_generate_audio_tool()
     create_ocr_document_tool()
     create_flow_tools()
     frappe.db.commit()
@@ -94,6 +96,8 @@ def after_migrate():
 		create_image_generation_tool()
 		create_transcribe_audio_tool()
 		create_generate_audio_tool()
+		create_gemini_transcribe_audio_tool()
+		create_gemini_generate_audio_tool()
 		create_ocr_document_tool()
 		create_flow_tools()
 		from huf.ai.tool_registry import sync_discovered_tools
@@ -597,3 +601,119 @@ def create_flow_tools():
                 tool_doc.insert(ignore_permissions=True)
             except Exception as e:
                 frappe.log_error(f"Error creating {tool_name} tool: {str(e)}", "Flow Tool Creation")
+
+def create_gemini_generate_audio_tool():
+    """Create or update the gemini_generate_audio tool in Agent Tool Function DocType."""
+    tool_name = "gemini_generate_audio"
+    
+    # Ensure Audio Generation tool type exists
+    if not frappe.db.exists("Agent Tool Type", "Audio Generation"):
+        tool_type_doc = frappe.new_doc("Agent Tool Type")
+        tool_type_doc.name1 = "Audio Generation"
+        tool_type_doc.insert()
+    
+    # Check if tool already exists
+    tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+    
+    parameters = [
+        {
+            "label": "Input Text",
+            "fieldname": "input",
+            "type": "string",
+            "required": 1,
+            "description": "The text to convert to speech."
+        },
+        {
+            "label": "Voice",
+            "fieldname": "voice",
+            "type": "string",
+            "required": 0,
+            "description": "Optional voice name (e.g. 'Aoede', 'Charon', 'Fenrir', 'Kore', 'Puck'). Default: 'Kore'."
+        }
+    ]
+
+    if tool_exists:
+        tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+        tool_doc.description = "Generate audio (speech) from text using Google Gemini 2.5 Flash's native TTS. Use this when the user asks to convert text to speech."
+        tool_doc.function_path = "huf.ai.sdk_tools.handle_gemini_generate_audio"
+        tool_doc.tool_type = "Audio Generation"
+        tool_doc.set("parameters", [])
+        for p in parameters:
+            tool_doc.append("parameters", p)
+        try:
+            tool_doc.save()
+        except Exception as e:
+            frappe.log_error(f"Error updating gemini_generate_audio tool: {str(e)}", "Gemini Generate Audio Tool Update")
+    else:
+        tool_doc = frappe.get_doc({
+            "doctype": "Agent Tool Function",
+            "tool_name": tool_name,
+            "description": "Generate audio (speech) from text using Google Gemini 2.5 Flash's native TTS. Use this when the user asks to convert text to speech.",
+            "types": "Custom Function",
+            "function_path": "huf.ai.sdk_tools.handle_gemini_generate_audio",
+            "pass_parameters_as_json": 1,
+            "parameters": parameters,
+            "tool_type": "Audio Generation"
+        })
+        try:
+            tool_doc.insert()
+        except Exception as e:
+            frappe.log_error(f"Error creating gemini_generate_audio tool: {str(e)}", "Gemini Generate Audio Tool Creation")
+
+def create_gemini_transcribe_audio_tool():
+    """Create or update the gemini_transcribe_audio tool in Agent Tool Function DocType."""
+    tool_name = "gemini_transcribe_audio"
+    
+    # Ensure Transcription tool type exists
+    if not frappe.db.exists("Agent Tool Type", "Transcription"):
+        tool_type_doc = frappe.new_doc("Agent Tool Type")
+        tool_type_doc.name1 = "Transcription"
+        tool_type_doc.insert()
+    
+    # Check if tool already exists
+    tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+    
+    parameters = [
+        {
+            "label": "File ID",
+            "fieldname": "file_id",
+            "type": "string",
+            "required": 0,
+            "description": "File document ID from Frappe (preferred). File must exist in the system."
+        },
+        {
+            "label": "File URL",
+            "fieldname": "file_url",
+            "type": "string",
+            "required": 0,
+            "description": "File URL/path (alternative to file_id). Example: /files/audio.mp3"
+        }
+    ]
+    
+    if tool_exists:
+        tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+        tool_doc.description = "Transcribe audio files to text using Google Gemini 2.5 Flash native multimodality. Use this when the user uploads an audio file or asks to transcribe audio."
+        tool_doc.function_path = "huf.ai.sdk_tools.handle_gemini_transcribe_audio"
+        tool_doc.tool_type = "Transcription"
+        tool_doc.set("parameters", [])
+        for p in parameters:
+            tool_doc.append("parameters", p)
+        try:
+            tool_doc.save()
+        except Exception as e:
+            frappe.log_error(f"Error updating gemini_transcribe_audio tool: {str(e)}", "Gemini Transcribe Audio Tool Update")
+    else:
+        tool_doc = frappe.get_doc({
+            "doctype": "Agent Tool Function",
+            "tool_name": tool_name,
+            "description": "Transcribe audio files to text using Google Gemini 2.5 Flash native multimodality. Use this when the user uploads an audio file or asks to transcribe audio.",
+            "types": "Custom Function",
+            "function_path": "huf.ai.sdk_tools.handle_gemini_transcribe_audio",
+            "pass_parameters_as_json": 1,
+            "parameters": parameters,
+            "tool_type": "Transcription"
+        })
+        try:
+            tool_doc.insert()
+        except Exception as e:
+            frappe.log_error(f"Error creating gemini_transcribe_audio tool: {str(e)}", "Gemini Transcribe Audio Tool Creation")

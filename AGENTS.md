@@ -493,6 +493,24 @@ Generate audio (speech) from text using LiteLLM's `speech()` function. Supports 
 
 This enables fully cross-provider TTS: an agent using `OpenAI / gpt-4o` for conversation can use `ElevenLabs / eleven_multilingual_v2` for audio generation by simply setting `tts_model` and `tts_voice` on the Agent document (Advanced Settings → Audio Generation tab).
 
+#### 4. gemini_generate_audio
+
+Generate audio (speech) from text natively using Google Gemini 2.5 Flash's TTS capability (`google-genai` library). Bypasses LiteLLM completely.
+
+-   **Function**: `huf.ai.sdk_tools.handle_gemini_generate_audio`
+-   **Parameters**:
+    -   `input` (string, required): Text to convert to speech.
+    -   `voice` (string): Optional voice identifier (e.g. `Aoede`, `Charon`, `Fenrir`, `Kore`, `Puck`). Default: `Kore`.
+
+#### 5. gemini_transcribe_audio
+
+Transcribe audio files to text natively using Google Gemini 2.5 Flash's multimodality (`google-genai` library). Bypasses LiteLLM completely.
+
+-   **Function**: `huf.ai.sdk_tools.handle_gemini_transcribe_audio`
+-   **Parameters**:
+    -   `file_id` (string): File document ID from Frappe (preferred).
+    -   `file_url` (string): File URL/path (alternative).
+
 ### Core Classes and Methods
 
 The primary logic is located in the `huf/ai` directory.
