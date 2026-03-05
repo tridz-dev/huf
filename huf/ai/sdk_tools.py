@@ -2068,6 +2068,104 @@ def _resolve_tts_config(
         "source":        "provider_default",
     }
 
+def _get_default_stt_model(provider_name: str) -> str:
+    """
+    Get default STT model for a provider.
+    """
+    defaults = {
+        "openai": "whisper-1",
+        "azure": "whisper-1",
+        "groq": "groq/whisper-large-v3",
+        "deepgram": "deepgram/nova-2",
+    }
+    return defaults.get(provider_name.lower())
+
+def _resolve_stt_config(
+    agent_doc,
+    tool_model: str | None = None,
+) -> dict:
+    """
+    Resolve the STT model, API key, and provider for audio transcription.
+    Priority (highest → lowest):
+    1. Tool-call parameter
+    2. Agent-level STT configuration
+    3. Provider default
+    """
+    from huf.ai.providers.litellm import _normalize_model_name
+
+    if tool_model:
+        stt_provider_name = None
+        search_model = tool_model
+        if "/" in search_model:
+            search_model = search_model.split("/")[-1]
+            
+        model_doc = frappe.get_all("AI Model", filters={"name": search_model}, fields=["provider"])
+        if model_doc:
+            stt_provider_name = model_doc[0].provider
+        elif "/" in tool_model:
+            provider_slug = tool_model.split("/")[0]
+            provs = frappe.get_all("AI Provider", filters={"slug": provider_slug}, fields=["name"])
+            if provs:
+                stt_provider_name = provs[0].name
+                
+        if not stt_provider_name:
+            stt_provider_name = agent_doc.provider
+
+        provider_doc = frappe.get_doc("AI Provider", stt_provider_name)
+        api_key = provider_doc.get_password("api_key")
+        if not api_key:
+            raise ValueError(f"API key is not configured for provider '{provider_doc.provider_name}'.")
+            
+        provider_name = provider_doc.provider_name.lower()
+        normalized = _normalize_model_name(tool_model, stt_provider_name)
+        return {
+            "stt_model":     normalized,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  provider_doc,
+            "source":        "tool_param",
+        }
+
+    if getattr(agent_doc, "stt_model", None):
+        stt_model_doc = frappe.get_doc("AI Model", agent_doc.stt_model)
+        if not stt_model_doc.provider:
+            raise ValueError(f"STT model '{agent_doc.stt_model}' has no provider linked.")
+
+        stt_provider_doc = frappe.get_doc("AI Provider", stt_model_doc.provider)
+        api_key = stt_provider_doc.get_password("api_key")
+        if not api_key:
+            raise ValueError(f"API key is not configured for STT provider '{stt_provider_doc.provider_name}'.")
+
+        provider_name = stt_provider_doc.provider_name.lower()
+        normalized = _normalize_model_name(stt_model_doc.model_name, stt_model_doc.provider)
+        return {
+            "stt_model":     normalized,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  stt_provider_doc,
+            "source":        "agent_config",
+        }
+
+    provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+    api_key = provider_doc.get_password("api_key")
+    if not api_key:
+        raise ValueError(f"API key is not configured for provider '{provider_doc.provider_name}'.")
+
+    provider_name = provider_doc.provider_name.lower()
+    stt_model = _get_default_stt_model(provider_name)
+
+    if not stt_model:
+        stt_model = "whisper-1" # Safe ultimate fallback
+        
+    normalized = _normalize_model_name(stt_model, agent_doc.provider)
+    return {
+        "stt_model":     normalized,
+        "api_key":       api_key,
+        "provider_name": provider_name,
+        "provider_doc":  provider_doc,
+        "source":        "provider_default",
+    }
+
 
 @frappe.whitelist()
 async def handle_generate_audio(
@@ -2358,11 +2456,6 @@ async def handle_transcribe_audio(
             return {"success": False, "error": "Agent name not found in context"}
         
         agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-        
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
         
         # Get audio file
         file_doc = None
@@ -2393,20 +2486,16 @@ async def handle_transcribe_audio(
             return {"success": False, "error": f"Error getting file path: {str(e)}"}
         
         # Determine transcription model
-        if not model:
-            provider_name = provider_doc.provider_name.lower()
-            if provider_name in ["openai", "azure"]:
-                model = "whisper-1"
-            elif provider_name == "groq":
-                model = "groq/whisper-large-v3"
-            elif provider_name == "deepgram":
-                model = "deepgram/nova-2"
-            else:
-                model = "whisper-1"  # Default fallback
-        
-        # Normalize model name for LiteLLM
-        from huf.ai.providers.litellm import _normalize_model_name
-        normalized_model = _normalize_model_name(model, agent_doc.provider)
+        try:
+            stt_config = _resolve_stt_config(agent_doc, tool_model=model)
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+
+        normalized_model = stt_config["stt_model"]
+        api_key          = stt_config["api_key"]
+        provider_name    = stt_config["provider_name"]
+        stt_source       = stt_config["source"]
+        stt_provider_doc = stt_config["provider_doc"]
         
         # Call LiteLLM transcription
         import litellm
@@ -2464,6 +2553,8 @@ async def handle_transcribe_audio(
                     message_doc = frappe.get_doc("Agent Message", message_id)
                     message_doc.content = transcribed_text
                     if not message_doc.kind: message_doc.kind = "Audio"
+                    if stt_source == "agent_config" and getattr(agent_doc, "stt_model", None):
+                        message_doc.stt_model = agent_doc.stt_model
                     message_doc.save(ignore_permissions=True)
                     
                 else:
@@ -2481,6 +2572,8 @@ async def handle_transcribe_audio(
                         "is_agent_message": 0,
                         "user": frappe.session.user
                     })
+                    if stt_source == "agent_config" and getattr(agent_doc, "stt_model", None):
+                        message_doc.stt_model = agent_doc.stt_model
                     message_doc.insert(ignore_permissions=True)
                 
                 # Check if file is already attached to this message
