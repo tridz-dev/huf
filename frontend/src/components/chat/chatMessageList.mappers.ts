@@ -90,6 +90,9 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
       ...updated[messageIndex],
       kind: event.kind,
       generatedImage: event.generated_image,
+      generatedAudio: (event as any).generated_audio,
+      generatedAudioMp3: (event as any).generated_audio_mp3,
+      voiceMessage: (event as any).voice_message,
       versions: updated[messageIndex].versions.map((v) =>
         v.id === event.message_id ? { ...v, content: event.content || v.content } : v
       ),
@@ -102,6 +105,9 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
     from: 'assistant',
     kind: event.kind,
     generatedImage: event.generated_image,
+    generatedAudio: (event as any).generated_audio,
+    generatedAudioMp3: (event as any).generated_audio_mp3,
+    voiceMessage: (event as any).voice_message,
     versions: [
       {
         id: event.message_id,
@@ -136,6 +142,9 @@ export function mergeConversationItemsIntoMessages(
       from: item.isAgent ? 'assistant' : 'user',
       kind: item.kind,
       generatedImage: item.generatedImage,
+      generatedAudio: item.generatedAudio,
+      generatedAudioMp3: item.generatedAudioMp3,
+      voiceMessage: item.voiceMessage,
       versions: [
         {
           id: item.id,
@@ -176,14 +185,14 @@ export function mergeConversationItemsIntoMessages(
   });
 
   const apiMessageIds = new Set(conversationItems.map((item) => item.id));
-  
+
   // During transition, preserve all messages not in API response
   // Otherwise, only preserve temporary messages with tools
   const remainingTempMessages = preserveDuringTransition
     ? prev.filter((msg) => !apiMessageIds.has(msg.key))
     : prev.filter(
-        (msg) => !apiMessageIds.has(msg.key) && msg.tools && msg.tools.length > 0
-      );
+      (msg) => !apiMessageIds.has(msg.key) && msg.tools && msg.tools.length > 0
+    );
 
   return [...mapped, ...remainingTempMessages];
 }

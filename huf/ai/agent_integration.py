@@ -22,6 +22,8 @@ from .tool_functions import (
 from .conversation_manager import ConversationManager
 from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
+from huf.ai import sdk_tools
+import mimetypes
 
 
 class AgentManager:
@@ -210,7 +212,12 @@ class AgentManager:
         return None
 
 
-    def create_agent(self) -> Agent:
+    def get_agent(self) -> Agent:
+        """Returns an Agent object initialized with current settings."""
+        return self._create_agent()
+
+
+    def _create_agent(self) -> Agent:
         """Create main agent """
 
         if not self.agent_doc.model:
@@ -275,6 +282,80 @@ class AgentManager:
             agent.tools = []
 
         return agent
+
+async def _process_attachments(attachments, agent_name, conversation_id, msg_name=None):
+    """Processes attachments (OCR/Transcription) and returns concatenated text context."""
+    if not attachments:
+        return ""
+    
+    context_parts = []
+    final_attachment_urls = []
+    for file_url in attachments:
+        if not file_url:
+            continue
+            
+        # Detect type
+        mime_type, _ = mimetypes.guess_type(file_url)
+        if not mime_type:
+            mime_type = "application/octet-stream"
+            
+        try:
+            if mime_type.startswith("audio/") or file_url.lower().endswith(".webm") or file_url.lower().endswith(".wav"):
+                actual_file_url = file_url
+                if file_url.endswith(".webm") and msg_name:
+                    try:
+                        file_doc = frappe.db.get_value("File", {"file_url": file_url}, ["name", "file_name"], as_dict=True)
+                        if file_doc:
+                            from huf.ai.audio_conversion import convert_webm_to_mp3
+                            mp3_filename = file_doc.file_name.replace(".webm", ".mp3")
+                            converted = convert_webm_to_mp3(file_doc.name, mp3_filename, "Agent Message", msg_name)
+                            if converted and converted.get("file_url"):
+                                frappe.db.set_value("Agent Message", msg_name, "voice_message", file_url)
+                                frappe.db.set_value("Agent Message", msg_name, "generated_audio_mp3", converted["file_url"])
+                                actual_file_url = converted["file_url"]
+                    except Exception as e:
+                        frappe.log_error(f"WebM to MP3 conversion failed in process_attachments: {str(e)}", "AI Attachment Error")
+                elif msg_name:
+                    frappe.db.set_value("Agent Message", msg_name, "voice_message", file_url)
+                
+                final_attachment_urls.append(actual_file_url)
+                res = await sdk_tools.handle_transcribe_audio(
+                    file_url=actual_file_url,
+                    agent_name=agent_name,
+                    conversation_id=conversation_id
+                )
+                if res.get("success"):
+                    context_parts.append(f"--- Audio Transcription ({actual_file_url}) ---\n{res.get('text')}\n")
+            
+            elif mime_type.startswith("image/") or mime_type == "application/pdf":
+                final_attachment_urls.append(file_url)
+                res = await sdk_tools.handle_ocr_document(
+                    file_url=file_url,
+                    agent_name=agent_name,
+                    conversation_id=conversation_id
+                )
+                if res.get("success"):
+                    context_parts.append(f"--- Document/Image OCR ({file_url}) ---\n{res.get('text')}\n")
+            
+            else:
+                final_attachment_urls.append(file_url)
+                # Basic file mention or potential future text readers
+                context_parts.append(f"--- Attached File: {file_url} ---")
+                
+        except Exception as e:
+            final_attachment_urls.append(file_url)
+            frappe.log_error(f"Attachment processing failed for {file_url}: {str(e)}", "AI Attachment Error")
+            context_parts.append(f"--- Attachment Error ({file_url}): Could not process file ---")
+            
+    # Add a final clear list of URLs for tools/LLM reference
+    if final_attachment_urls:
+        context_parts.append("\n[All Attached Files in this Message]")
+        for file_url in final_attachment_urls:
+            if file_url:
+                context_parts.append(f"- {file_url}")
+                
+    return "\n".join(context_parts)
+
 
 def _is_user_allowed(agent_doc, user: str) -> bool:
     """Check if user is allowed to run this agent"""
@@ -563,6 +644,7 @@ def run_agent_sync(
     run_kind: str = None,
     prompt_template: str = None,
     prompt_version = None,
+    attachments: list = None
 ):
 
     if not agent_name:
@@ -655,9 +737,28 @@ def run_agent_sync(
 
     run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert(ignore_permissions=True)
-    conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+    msg_doc = conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
+
+    # Process attachments with msg_name
+    if attachments:
+        attachment_context = ""
+        try:
+            # Need to run async function in a sync context
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            attachment_context = loop.run_until_complete(_process_attachments(attachments, agent_name, conversation.name, msg_doc.name))
+        except Exception as e:
+            frappe.log_error(f"Sync attachment process failed: {e}", "AI Attachment Error")
+        finally:
+            loop.close()
+            
+        if attachment_context:
+            prompt = f"{prompt or ''}\n\n[Attached Information]\n{attachment_context}"
+            msg_doc.db_set("content", prompt)
+            run_doc.db_set("prompt", prompt)
+            safe_commit()
 
     # Check for multi-run orchestration mode
     # Skip if already called from orchestration to prevent infinite loop
@@ -705,7 +806,7 @@ def run_agent_sync(
             manager.agent_doc.agent_prompt = resolved_prompt_template
             manager.agent_doc.prompt_version_locked = 0
                 
-        agent = manager.create_agent()
+        agent = manager.get_agent()
 
         # Build knowledge context for mandatory sources
         knowledge_context = None
@@ -1059,7 +1160,8 @@ async def run_agent_stream(
     conversation_id: str = None,
     create_new: bool = False,
     prompt_template: str = None,
-    prompt_version = None
+    prompt_version = None,
+    attachments: list = None
 ):
     """
     Streaming version of run_agent_sync.
@@ -1084,10 +1186,10 @@ async def run_agent_stream(
             - tool_call: dict (for tool_call type)
             - error: str (for error type)
     """
-    if not agent_name or not prompt:
+    if not agent_name or (not prompt and not attachments):
         yield {
             "type": "error",
-            "error": "Both agent_name and prompt are required"
+            "error": "Both agent_name and prompt (or attachments) are required"
         }
         return
     
@@ -1167,8 +1269,6 @@ async def run_agent_stream(
         # Legacy: Lock to current model
         frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
         
-        history = conv_manager.get_conversation_history(conversation.name, limit=1000)
-        
         # Create Agent Run document
         run_doc = frappe.get_doc({
             "doctype": "Agent Run",
@@ -1181,9 +1281,20 @@ async def run_agent_stream(
             "provider": resolved_provider
         })
         run_doc.insert(ignore_permissions=True)
-        conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+        msg_doc = conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
         run_doc.db_set("start_time", now_datetime())
         safe_commit()
+
+        # Process attachments with msg_name
+        if attachments:
+            attachment_context = await _process_attachments(attachments, agent_name, conversation.name, msg_doc.name)
+            if attachment_context:
+                prompt = f"{prompt or ''}\n\n[Attached Information]\n{attachment_context}"
+                msg_doc.db_set("content", prompt)
+                run_doc.db_set("prompt", prompt)
+                safe_commit()
+
+        history = conv_manager.get_conversation_history(conversation.name, limit=1000)
         
         # Update agent stats
         total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
@@ -1204,7 +1315,7 @@ async def run_agent_stream(
                 "prompt_version_locked": 0
             })
             
-        agent = manager.create_agent()
+        agent = manager.get_agent()
         
         context = {
             "channel": channel_id,

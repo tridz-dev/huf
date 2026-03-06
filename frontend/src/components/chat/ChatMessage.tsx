@@ -13,6 +13,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatTime } from './utils';
 import type { MessageType } from './types';
 import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
+import {
+    AudioPlayer,
+    AudioPlayerElement,
+    AudioPlayerControlBar,
+    AudioPlayerPlayButton,
+    AudioPlayerTimeDisplay,
+    AudioPlayerTimeRange,
+    AudioPlayerDurationDisplay,
+    AudioPlayerMuteButton
+} from '@/components/ai-elements/audio-player';
 
 interface ChatMessageProps {
     message: MessageType;
@@ -23,8 +33,8 @@ interface ChatMessageProps {
     scrollToBottomAfterPaint: (instant?: boolean) => void;
 }
 
-export function ChatMessage({ 
-    message, 
+export function ChatMessage({
+    message,
     agentName,
     agentColor,
     status,
@@ -39,7 +49,7 @@ export function ChatMessage({
 
     return (
         <div className={cn("flex gap-3 group relative", isUser ? "flex-row" : "flex-row")}>
-            <ChatAvatar 
+            <ChatAvatar
                 variant={isUser ? "chat_user" : "chat_ai"}
                 color={!isUser ? (agentColor || DEFAULT_AGENT_COLOR) : undefined}
             >
@@ -56,7 +66,7 @@ export function ChatMessage({
                         </span>
                     )}
                 </div>
-                
+
                 {message.tools && message.tools.length > 0 ? (
                     message.tools.map((tool, toolIndex) => (
                         <Tool key={`${message.key}-tool-${toolIndex}`}>
@@ -78,19 +88,19 @@ export function ChatMessage({
                     <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
                         <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
                             {/* Show loading state while message is generating */}
-                            {(status === 'submitted' || status === 'streaming') && 
-                             message.from === 'assistant' && 
-                             (!message.versions[0]?.content || message.versions[0].content.trim() === '') && (
-                                <MessageLoadingState
-                                    hasTools={!!message.tools && message.tools.length > 0}
-                                    toolName={message.tools?.[0]?.name}
-                                />
-                            )}
+                            {(status === 'submitted' || status === 'streaming') &&
+                                message.from === 'assistant' &&
+                                (!message.versions[0]?.content || message.versions[0].content.trim() === '') && (
+                                    <MessageLoadingState
+                                        hasTools={!!message.tools && message.tools.length > 0}
+                                        toolName={message.tools?.[0]?.name}
+                                    />
+                                )}
                             {message.kind === 'Image' ? (
                                 <div className="flex flex-col gap-2">
                                     {message.generatedImage ? (
-                                        <Image 
-                                            src={message.generatedImage} 
+                                        <Image
+                                            src={message.generatedImage}
                                             alt={message.versions[0]?.content || 'Generated image'}
                                             className="max-w-full h-auto rounded-lg border max-h-[512px] object-contain"
                                             showDownloadButton={true}
@@ -106,10 +116,32 @@ export function ChatMessage({
                                         />
                                     )}
                                 </div>
-                            ) : !((status === 'submitted' || status === 'streaming') && 
-                                  message.from === 'assistant' && 
-                                  (!message.versions[0]?.content || message.versions[0].content.trim() === '') && 
-                                  !message.tools) && (
+                            ) : message.kind === 'Audio' ? (
+                                <div className="flex flex-col gap-2">
+                                    <AudioPlayer>
+                                        <AudioPlayerElement
+                                            src={message.generatedAudioMp3 || message.voiceMessage || message.generatedAudio || ''}
+                                            autoPlay={false}
+                                        />
+                                        <AudioPlayerControlBar>
+                                            <AudioPlayerPlayButton />
+                                            <AudioPlayerTimeDisplay />
+                                            <AudioPlayerTimeRange />
+                                            <AudioPlayerDurationDisplay />
+                                            <AudioPlayerMuteButton />
+                                        </AudioPlayerControlBar>
+                                    </AudioPlayer>
+                                    {message.versions[0]?.content && (
+                                        <MessageContentWithArtifacts
+                                            content={message.versions[0].content}
+                                            messageKey={message.key}
+                                        />
+                                    )}
+                                </div>
+                            ) : !((status === 'submitted' || status === 'streaming') &&
+                                message.from === 'assistant' &&
+                                (!message.versions[0]?.content || message.versions[0].content.trim() === '') &&
+                                !message.tools) && (
                                 <MessageContentWithArtifacts
                                     content={message.versions[0]?.content || ''}
                                     messageKey={message.key}

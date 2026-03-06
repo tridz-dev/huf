@@ -1,17 +1,24 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CornerDownLeft, Plus } from "lucide-react";
+import { CornerDownLeft, Plus, Paperclip } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { ShortcutKey } from "../ui/shortcut-key";
 import {
-  sendMessage,
-  streamingAvailable,
-  setStreamingAvailable,
+    sendMessage,
+    streamingAvailable,
+    setStreamingAvailable,
 } from "@/services/streamChatApi";
 import type { MessageType } from './types';
-
+import { SpeechInput } from "@/components/ai-elements/speech-input";
+import {
+    Attachments,
+    Attachment,
+    AttachmentPreview,
+    AttachmentRemove,
+} from "@/components/ai-elements/attachments";
+import { nanoid } from "nanoid";
 interface ChatInputProps {
     chatId: string | null;
     agentName: string;
@@ -24,8 +31,8 @@ interface ChatInputProps {
     scrollToBottomAfterPaint?: (instant?: boolean) => void;
 }
 
-export function ChatInput({ 
-    chatId, 
+export function ChatInput({
+    chatId,
     agentName,
     onConversationCreated,
     onStatusChange,
@@ -38,8 +45,10 @@ export function ChatInput({
     const navigate = useNavigate();
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [attachments, setAttachments] = useState<any[]>([]);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     const MIN_HEIGHT = 60;
     const MAX_HEIGHT = 200;
 
@@ -57,8 +66,8 @@ export function ChatInput({
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
-        
-        if (!message.trim() || !agentName || isSubmitting) {
+
+        if ((!message.trim() && attachments.length === 0) || !agentName || isSubmitting) {
             return;
         }
 
@@ -82,6 +91,9 @@ export function ChatInput({
 
         // Clear input immediately
         setMessage('');
+        const sentAttachments = [...attachments];
+        setAttachments([]);
+
         if (textareaRef.current) {
             textareaRef.current.focus();
         }
@@ -99,9 +111,9 @@ export function ChatInput({
                 prev.map((msg) =>
                     msg.key === assistantMessageId
                         ? {
-                              ...msg,
-                              versions: [{ id: assistantMessageId, content }],
-                          }
+                            ...msg,
+                            versions: [{ id: assistantMessageId, content }],
+                        }
                         : msg
                 )
             );
@@ -114,18 +126,20 @@ export function ChatInput({
             }
 
             const useStreaming = streamingAvailable;
+            const validAttachments = sentAttachments.filter(a => !a.uploading && a.url).map(a => a.url);
+
             const response = await sendMessage(
                 {
                     agent: agentName,
                     message: messageText,
                     conversationId: chatId ?? undefined,
+                    attachments: validAttachments.length > 0 ? validAttachments : undefined,
                 },
                 {
                     useStreaming,
-                    onDelta:
-                        useStreaming
-                            ? (text) => updateAssistantContent(text)
-                            : undefined,
+                    onDelta: useStreaming
+                        ? (text) => updateAssistantContent(text)
+                        : undefined,
                 }
             );
 
@@ -173,7 +187,116 @@ export function ChatInput({
         } finally {
             setIsSubmitting(false);
         }
-    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint]);
+    }, [message, attachments, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint]);
+
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const tempId = nanoid();
+            const optimisticAttachment = {
+                id: tempId,
+                filename: file.name,
+                mediaType: file.type || "application/octet-stream",
+                type: "file",
+                url: URL.createObjectURL(file),
+                uploading: true
+            };
+            setAttachments(prev => [...prev, optimisticAttachment]);
+
+            try {
+                const formData = new FormData();
+                formData.append("file", file, file.name);
+                formData.append("is_private", "0");
+
+                const res = await fetch("/api/method/upload_file", {
+                    method: "POST",
+                    headers: {
+                        "X-Frappe-CSRF-Token": (window as any).csrf_token || ''
+                    },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.message && data.message.file_url) {
+                    setAttachments(prev => prev.map(a => a.id === tempId ? {
+                        ...a,
+                        url: data.message.file_url,
+                        uploading: false,
+                        fileDoc: data.message
+                    } : a));
+                } else {
+                    throw new Error("Upload failed");
+                }
+            } catch (error) {
+                toast.error(`Failed to upload ${file.name}`);
+                setAttachments(prev => prev.filter(a => a.id !== tempId));
+            }
+        }
+
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const handleRemoveAttachment = useCallback((id: string) => {
+        setAttachments((prev) => prev.filter((a) => a.id !== id));
+    }, []);
+
+    const handleAudioRecorded = async (audioBlob: Blob): Promise<string> => {
+        const mimeType = audioBlob.type.split(";")[0];
+        const extensionMap: Record<string, string> = {
+            "audio/ogg": "ogg",
+            "audio/mp4": "mp4",
+            "audio/wav": "wav",
+            "audio/webm": "webm",
+        };
+        const ext = extensionMap[mimeType] || "webm";
+        const filename = `audio-${Date.now()}.${ext}`;
+
+        const tempId = nanoid();
+        const optimisticAttachment = {
+            id: tempId,
+            filename,
+            mediaType: audioBlob.type,
+            type: "file",
+            url: URL.createObjectURL(audioBlob),
+            uploading: true
+        };
+        setAttachments(prev => [...prev, optimisticAttachment]);
+
+        try {
+            const formData = new FormData();
+            formData.append("file", audioBlob, filename);
+            formData.append("is_private", "0");
+
+            const res = await fetch("/api/method/upload_file", {
+                method: "POST",
+                headers: {
+                    "X-Frappe-CSRF-Token": (window as any).csrf_token || ''
+                },
+                body: formData
+            });
+            const data = await res.json();
+            if (data.message && data.message.file_url) {
+                setAttachments(prev => prev.map(a => a.id === tempId ? {
+                    ...a,
+                    url: data.message.file_url,
+                    uploading: false,
+                    fileDoc: data.message
+                } : a));
+                // We're returning an empty string since we treat the audio as an attachment.
+                return "";
+            } else {
+                throw new Error("Upload failed");
+            }
+        } catch (error) {
+            toast.error("Failed to upload audio");
+            setAttachments(prev => prev.filter(a => a.id !== tempId));
+            return "";
+        }
+    };
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -191,31 +314,31 @@ export function ChatInput({
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 if (!textarea) return;
-                
+
                 // Store current min-height to restore later
                 const currentMinHeight = textarea.style.minHeight;
-                
+
                 // Reset height to get accurate scrollHeight measurement
                 // Use a very small value instead of 0 to avoid layout issues
                 textarea.style.height = '1px';
                 textarea.style.minHeight = '0';
                 textarea.style.overflowY = 'hidden';
-                
+
                 // Force a reflow to ensure accurate measurement
                 void textarea.offsetHeight;
-                
+
                 // Get the scrollHeight (this is the natural height of the content including padding)
                 const scrollHeight = textarea.scrollHeight;
-                
+
                 // Restore min-height
                 textarea.style.minHeight = currentMinHeight || '';
-                
+
                 // Calculate new height, ensuring it's within bounds
                 const newHeight = Math.min(Math.max(scrollHeight, MIN_HEIGHT), MAX_HEIGHT);
-                
+
                 // Always apply the calculated height to ensure accuracy
                 textarea.style.height = `${newHeight}px`;
-                
+
                 // Enable scrolling if content exceeds max height
                 if (scrollHeight > MAX_HEIGHT) {
                     textarea.style.overflowY = 'auto';
@@ -229,7 +352,7 @@ export function ChatInput({
     // Adjust height when message changes
     useEffect(() => {
         if (!textareaRef.current) return;
-        
+
         // If message is empty, reset to min height immediately
         if (!message) {
             const textarea = textareaRef.current;
@@ -237,7 +360,7 @@ export function ChatInput({
             textarea.style.overflowY = 'hidden';
             return;
         }
-        
+
         // Otherwise, adjust height based on content
         adjustTextareaHeight();
     }, [message, adjustTextareaHeight]);
@@ -276,7 +399,23 @@ export function ChatInput({
     return (
         <div className="px-6 pb-6 pt-2">
             <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-                <div className="w-full border border-zinc-200 rounded-xl shadow-2xl focus-within:ring-1 focus-within:ring-ring transition-all">
+                <div className="w-full border border-zinc-200 rounded-xl shadow-2xl focus-within:ring-1 focus-within:ring-ring transition-all bg-white">
+                    {attachments.length > 0 && (
+                        <div className="p-3 pb-0 px-4">
+                            <Attachments variant="inline">
+                                {attachments.map((attachment) => (
+                                    <Attachment
+                                        key={attachment.id}
+                                        data={attachment}
+                                        onRemove={!isSubmitting ? () => handleRemoveAttachment(attachment.id) : undefined}
+                                    >
+                                        <AttachmentPreview />
+                                        <AttachmentRemove />
+                                    </Attachment>
+                                ))}
+                            </Attachments>
+                        </div>
+                    )}
                     <Textarea
                         ref={textareaRef}
                         value={message}
@@ -288,26 +427,54 @@ export function ChatInput({
                         onKeyDown={handleKeyDown}
                         placeholder="Type your message..."
                         className="p-4 w-full min-h-[60px] max-h-[200px] resize-none focus-visible:ring-0 border-none shadow-none"
-                        style={{ 
+                        style={{
                             height: `${MIN_HEIGHT}px`
                         }}
                         disabled={isSubmitting || isModelMismatch}
                     />
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
-                        <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
+                        <input
+                            type="file"
+                            multiple
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            className="hidden"
+                        />
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 text-zinc-500 hover:text-zinc-900 focus:text-zinc-900"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isSubmitting || isModelMismatch}
+                        >
+                            <Paperclip className="h-4 w-4" />
+                        </Button>
+                        <span className="flex items-center gap-x-1 text-[10px] text-zinc-400 mr-auto">
                             Use
                             <ShortcutKey>
                                 Shift + Enter
                             </ShortcutKey>
                             for new line
                         </span>
+
+                        <SpeechInput
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 text-zinc-500 hover:text-zinc-900 focus:text-zinc-900"
+                            onTranscriptionChange={(text) => setMessage(prev => prev ? `${prev} ${text}` : text)}
+                            onAudioRecorded={handleAudioRecorded}
+                            forceMediaRecorder={true}
+                            disabled={isSubmitting || isModelMismatch}
+                        />
+
                         <Button
                             type="submit"
-                            disabled={!message.trim() || isSubmitting || isModelMismatch}
+                            disabled={(!message.trim() && attachments.length === 0) || isSubmitting || isModelMismatch}
                             size="icon"
                             className="shrink-0"
                         >
-                            <CornerDownLeft/>
+                            <CornerDownLeft />
                         </Button>
                     </div>
                 </div>

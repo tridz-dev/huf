@@ -69,20 +69,30 @@ class AgentStreamRenderer(BaseRenderer):
 		prompt_template = frappe.form_dict.get("prompt_template")
 		prompt_version = frappe.form_dict.get("prompt_version")
 		
-		if not prompt:
+		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
+		attachments = frappe.form_dict.get("attachments")
+		create_new = frappe.form_dict.get("create_new", False)
+
+		if not prompt or not attachments:
 			# Try to get from POST body
 			try:
 				if frappe.request.method == "POST":
 					body = frappe.request.get_json(force=True) or {}
-					prompt = body.get("prompt") or body.get("message", "")
+					if not prompt:
+						prompt = body.get("prompt") or body.get("message", "")
 					if not provider: provider = body.get("provider")
 					if not model: model = body.get("model")
 					if not prompt_template: prompt_template = body.get("prompt_template")
 					if not prompt_version: prompt_version = body.get("prompt_version")
+					if not conversation_id:
+						conversation_id = body.get("conversation_id") or body.get("conversation")
+					if not attachments:
+						attachments = body.get("attachments")
+					create_new = body.get("create_new", create_new)
 			except Exception:
 				pass
 		
-		if not prompt:
+		if not prompt and not attachments:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": "Prompt parameter required"}
 				yield f"data: {json.dumps(error_data)}\n\n"
@@ -138,16 +148,14 @@ class AgentStreamRenderer(BaseRenderer):
 		channel_id = frappe.form_dict.get("channel_id", "sse_stream")
 		external_id = frappe.form_dict.get("external_id") or frappe.session.user
 		
-		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
-		create_new = frappe.form_dict.get("create_new", False)
-		try:
-			if frappe.request.method == "POST":
-				body = frappe.request.get_json(force=True) or {}
-				if not conversation_id:
-					conversation_id = body.get("conversation_id") or body.get("conversation")
-				create_new = body.get("create_new", create_new)
-		except Exception:
-			pass
+		# Attachments and conversation_id already extracted above
+		pass
+
+		if isinstance(attachments, str):
+			try:
+				attachments = json.loads(attachments)
+			except Exception:
+				attachments = [attachments]
 
 		create_new = bool(create_new)
 		
@@ -174,7 +182,8 @@ class AgentStreamRenderer(BaseRenderer):
 					conversation_id=None if create_new else conversation_id,
 					create_new=create_new,
 					prompt_template=prompt_template,
-					prompt_version=prompt_version
+					prompt_version=prompt_version,
+					attachments=attachments
 				)
 				
 				# Convert async generator to sync

@@ -43,6 +43,9 @@ export interface AgentMessageDoc {
   is_agent_message?: 0 | 1 | string;
   kind?: string;
   generated_image?: string;
+  generated_audio?: string;
+  generated_audio_mp3?: string;
+  voice_message?: string;
   tool_name?: string;
   tool_status?: string;
   tool_args?: string | Record<string, unknown>;
@@ -60,6 +63,9 @@ export interface ChatMessage {
   toolName?: string;
   toolStatus?: string;
   toolArgs?: string | Record<string, unknown>;
+  generatedAudio?: string;
+  generatedAudioMp3?: string;
+  voiceMessage?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -89,6 +95,9 @@ function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
     toolName: doc.tool_name,
     toolStatus: doc.tool_status,
     toolArgs: doc.tool_args,
+    generatedAudio: doc.generated_audio,
+    generatedAudioMp3: doc.generated_audio_mp3,
+    voiceMessage: doc.voice_message,
     createdAt: doc.creation,
     updatedAt: doc.modified,
   };
@@ -279,7 +288,7 @@ export async function getConversationMessages(
 
   try {
     const messages = await db.getDocList(doctype['Agent Message'], {
-      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'voice_message', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
       filters: [['conversation', '=', conversation]],
       orderBy: { field: 'creation', order: 'desc' },
       limit,
@@ -304,6 +313,7 @@ export async function getConversationMessages(
 export interface NewConversationParams {
   agent: string;
   message: string;
+  attachments?: string[];
 }
 
 export interface NewConversationResponse {
@@ -328,6 +338,7 @@ export interface NewConversationResponse {
 export interface SendMessageParams {
   conversation: string;
   message: string;
+  attachments?: string[];
 }
 
 export interface SendMessageResponse {
@@ -352,6 +363,7 @@ export async function newConversation(
     const result = await call.post('huf.ai.agent_chat.new_conversation', {
       agent: params.agent,
       message: params.message,
+      attachments: params.attachments,
     });
     return result as NewConversationResponse;
   } catch (error) {
@@ -369,6 +381,7 @@ export async function sendMessageToConversation(
     const result = await call.post('huf.ai.agent_chat.send_message_to_conversation', {
       conversation: params.conversation,
       message: params.message,
+      attachments: params.attachments,
     });
     return result as SendMessageResponse;
   } catch (error) {
@@ -401,12 +414,12 @@ export async function createAgentRunFeedback(params: AgentRunFeedbackParams): Pr
   }
 }
 
-export async function updateConversationTitle(conversationId:string,title:string){
-  try{
-    await db.updateDoc(doctype['Agent Conversation'],conversationId,{
+export async function updateConversationTitle(conversationId: string, title: string) {
+  try {
+    await db.updateDoc(doctype['Agent Conversation'], conversationId, {
       title
     })
-  }catch(e){
-    handleFrappeError(e,"Error update conversation title")
+  } catch (e) {
+    handleFrappeError(e, "Error update conversation title")
   }
 }

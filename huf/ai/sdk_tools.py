@@ -2432,7 +2432,16 @@ async def handle_transcribe_audio(
         try:
             response = await asyncio.to_thread(_sync_transcribe, transcription_params)
         except Exception as e:
-            return {"success": False, "error": f"Transcription failed: {str(e)}"}
+            error_details = str(e)
+            # Try to extract more details if it's an API error
+            if hasattr(e, "llm_response"):
+                error_details += f" Response: {getattr(e, 'llm_response')}"
+            
+            frappe.log_error(
+                f"Transcription Error (File: {file_path}, Model: {normalized_model}): {error_details}\n{frappe.get_traceback()}",
+                "Transcription Error"
+            )
+            return {"success": False, "error": f"Transcription failed: {error_details}"}
         
         # Extract text from response
         # LiteLLM transcription returns a dict with 'text' key or object

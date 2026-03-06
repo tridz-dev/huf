@@ -7,6 +7,7 @@ import base64
 from frappe.utils.file_manager import save_file
 from huf.ai import sdk_tools
 from huf.ai import transcription_handler
+from huf.ai.audio_conversion import convert_webm_to_mp3
 
 
 @frappe.whitelist()
@@ -58,13 +59,14 @@ def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
     if hasattr(saved_file, "name"):
         file_id = saved_file.name
         file_url = saved_file.file_url 
-        # Link file URL to voice_message field
+        # Link file URL to voice_message field and append to message
         frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+        frappe.db.set_value("Agent Message", msg.name, "content", f"(voice message: {filename}) ({file_url})")
     elif isinstance(saved_file, dict):
-        file_id = saved_file.get("name")
         file_url = saved_file.get("file_url")
         if file_url:
              frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+             frappe.db.set_value("Agent Message", msg.name, "content", f"(voice message: {filename}) ({file_url})")
     
     if not file_id:
         file_id = frappe.db.get_value("File", {
@@ -76,9 +78,19 @@ def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
         file_url = frappe.db.get_value("File", file_id, "file_url")
         if file_url:
             frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+            frappe.db.set_value("Agent Message", msg.name, "content", f"(voice message: {filename}) ({file_url})")
 
     if not file_id:
         return {"success": False, "error": "File was saved but ID could not be retrieved."}
+
+    # MP3 Conversion
+    if file_id and filename.lower().endswith(".webm"):
+        mp3_filename = filename.rsplit(".", 1)[0] + ".mp3"
+        converted = convert_webm_to_mp3(file_id, mp3_filename, "Agent Message", msg.name)
+        if converted and converted.get("file_url"):
+            frappe.db.set_value("Agent Message", msg.name, "generated_audio_mp3", converted["file_url"])
+            # Update the context string so the LLM attempts transcription on the clean MP3 rather than the raw WebM.
+            frappe.db.set_value("Agent Message", msg.name, "content", f"(voice message: {mp3_filename}) ({converted['file_url']})")
 
     provider = frappe.db.get_value("Agent", chat.agent, "provider")
     
@@ -149,7 +161,7 @@ def get_history(conversation_id: str = None, limit: int = 200):
     messages = frappe.get_all(
         "Agent Message",
         filters={"conversation": conversation_id},
-        fields=["role", "content", "creation", "user", "conversation_index"],
+        fields=["name", "role", "content", "creation", "user", "conversation_index", "kind", "generated_image", "generated_audio", "generated_audio_mp3", "voice_message"],
         order_by="conversation_index asc",
         limit=limit
     )
@@ -167,6 +179,11 @@ def get_history(conversation_id: str = None, limit: int = 200):
             "creation": m.creation,
             "user": m.user,
             "conversation_index": m.conversation_index,
+            "kind": m.kind,
+            "generatedImage": m.generated_image,
+            "generatedAudio": m.generated_audio,
+            "generatedAudioMp3": m.generated_audio_mp3,
+            "voiceMessage": m.voice_message,
         }
 
     return [_norm(m) for m in messages]
@@ -220,7 +237,7 @@ def render_markdown(content: str = "") -> str:
         return frappe.utils.escape_html(content or "")
 
 @frappe.whitelist()
-def new_conversation(agent: str, message: str):
+def new_conversation(agent: str, message: str, attachments: list = None):
     
     if not agent:
         frappe.throw(_("agent is required"))
@@ -237,7 +254,8 @@ def new_conversation(agent: str, message: str):
             provider=frappe.db.get_value("Agent", agent, "provider"),
             model=frappe.db.get_value("Agent", agent, "model"),
             channel_id="Chat",
-            conversation_id=conversation.name
+            conversation_id=conversation.name,
+            attachments=attachments
         )
 
         if run_result.get("conversation_id"):
@@ -258,7 +276,7 @@ def new_conversation(agent: str, message: str):
 
 
 @frappe.whitelist()
-def send_message_to_conversation(conversation: str, message: str):
+def send_message_to_conversation(conversation: str, message: str, attachments: list = None):
     if not conversation:
         frappe.throw(_("conversation is required"))
     if not message:
@@ -283,7 +301,8 @@ def send_message_to_conversation(conversation: str, message: str):
             provider=frappe.db.get_value("Agent", agent_name, "provider"),
             model=frappe.db.get_value("Agent", agent_name, "model"),
             channel_id=conv_doc.channel or "Chat",
-            conversation_id=conv_doc.name
+            conversation_id=conv_doc.name,
+            attachments=attachments
         )
 
         if result.get("conversation_id") and not conv_doc.name:

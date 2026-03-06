@@ -66,6 +66,7 @@ export interface StreamAgentParams {
   agentName: string;
   message: string;
   conversationId?: string;
+  attachments?: string[];
 }
 
 /**
@@ -81,6 +82,9 @@ export async function* streamAgentResponse(
     prompt: message,
     channel_id: 'Chat',
   };
+  if (params.attachments && params.attachments.length > 0) {
+    body.attachments = params.attachments;
+  }
   if (conversationId) {
     body.conversation_id = conversationId;
   } else {
@@ -151,17 +155,18 @@ export interface SendMessageOptions {
  * Unified sendMessage: same response shape for SSE and REST.
  */
 export async function sendMessage(
-  params: { agent: string; message: string; conversationId?: string },
+  params: { agent: string; message: string; conversationId?: string; attachments?: string[] },
   options: SendMessageOptions
 ): Promise<ChatResult> {
   const { useStreaming, onDelta } = options;
 
-    if (useStreaming) {
+  if (useStreaming) {
     let lastComplete: StreamChunk | undefined;
     for await (const chunk of streamAgentResponse({
       agentName: params.agent,
       message: params.message,
       conversationId: params.conversationId,
+      attachments: params.attachments,
     })) {
       if (chunk.type === 'delta' && onDelta && chunk.full_response !== undefined) {
         onDelta(chunk.full_response);
@@ -222,11 +227,13 @@ export async function sendMessage(
     return sendMessageToConversation({
       conversation: params.conversationId,
       message: params.message,
+      attachments: params.attachments,
     }) as Promise<SendMessageResponse>;
   }
 
   return newConversation({
     agent: params.agent,
     message: params.message,
+    attachments: params.attachments,
   }) as Promise<NewConversationResponse>;
 }

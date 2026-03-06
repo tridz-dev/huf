@@ -1,239 +1,247 @@
 {
- "actions": [],
- "creation": "2025-08-11 19:48:02.779437",
- "doctype": "DocType",
- "engine": "InnoDB",
- "field_order": [
-  "content_tab",
-  "content",
-  "metadata_tab",
-  "agent_run",
-  "conversation",
-  "provider",
-  "model",
-  "agent",
-  "kind",
-  "content_type",
-  "generated_image",
-  "generated_audio",
-  "voice_message",
-  "tts_model",
-  "tts_voice",
-  "column_break_asyu",
-  "session_id",
-  "user",
-  "is_agent_message",
-  "role",
-  "conversation_index",
-  "status",
-  "tool_calll",
-  "tool_name",
-  "tool_status",
-  "tool_args"
- ],
- "fields": [
-  {
-   "fieldname": "conversation",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Conversation",
-   "options": "Agent Conversation",
-   "read_only": 1
-  },
-  {
-   "fieldname": "user",
-   "fieldtype": "Data",
-   "label": "User",
-   "read_only": 1
-  },
-  {
-   "fieldname": "conversation_index",
-   "fieldtype": "Int",
-   "label": "Index in Conversation",
-   "read_only": 1
-  },
-  {
-   "fieldname": "content",
-   "fieldtype": "Code",
-   "label": "Content",
-   "options": "Markdown",
-   "read_only": 1
-  },
-  {
-   "fieldname": "kind",
-   "fieldtype": "Select",
-   "label": "Kind",
-   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage\nAudio",
-   "read_only": 1
-  },
-  {
-   "default": "user",
-   "fieldname": "role",
-   "fieldtype": "Select",
-   "hidden": 1,
-   "label": "Role",
-   "options": "user\ntool\nagent\nsystem",
-   "read_only": 1
-  },
-  {
-   "fieldname": "session_id",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Session ID",
-   "read_only": 1
-  },
-  {
-   "default": "0",
-   "fieldname": "is_agent_message",
-   "fieldtype": "Check",
-   "label": "Is Agent Message",
-   "read_only": 1
-  },
-  {
-   "fieldname": "content_tab",
-   "fieldtype": "Tab Break",
-   "label": "Message"
-  },
-  {
-   "fieldname": "metadata_tab",
-   "fieldtype": "Tab Break",
-   "label": "Metadata"
-  },
-  {
-   "fieldname": "column_break_asyu",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "provider",
-   "fieldtype": "Link",
-   "label": "Provider",
-   "options": "AI Provider",
-   "read_only": 1
-  },
-  {
-   "fieldname": "model",
-   "fieldtype": "Link",
-   "label": "Model",
-   "options": "AI Model",
-   "read_only": 1
-  },
-  {
-   "fieldname": "agent",
-   "fieldtype": "Link",
-   "label": "Agent",
-   "options": "Agent",
-   "read_only": 1
-  },
-  {
-   "fieldname": "agent_run",
-   "fieldtype": "Link",
-   "label": "Run",
-   "options": "Agent Run",
-   "read_only": 1
-  },
-  {
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "hidden": 1,
-   "label": "Status",
-   "options": "\nStarted\nQueues\nCompleted\nFailed"
-  },
-  {
-   "fieldname": "tool_calll",
-   "fieldtype": "Link",
-   "label": "Tool Calll",
-   "options": "Agent Tool Call",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "tool_calll.tool",
-   "fieldname": "tool_name",
-   "fieldtype": "Data",
-   "label": "Tool Name",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "tool_calll.tool_args",
-   "fieldname": "tool_args",
-   "fieldtype": "JSON",
-   "label": "Tool Args",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "tool_calll.status",
-   "fieldname": "tool_status",
-   "fieldtype": "Data",
-   "label": "Tool Status",
-   "read_only": 1
-  },
-  {
-   "fieldname": "content_type",
-   "fieldtype": "Select",
-   "label": "Content Type",
-   "options": "\nText\nJSX\nMermaid\nMarkdown\nArtifact\nHTML\nImage",
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval:doc.kind == \"Image\";",
-   "fieldname": "generated_image",
-   "fieldtype": "Attach Image",
-   "label": "Generated Image",
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval:doc.kind == \"Audio\";",
-   "fieldname": "generated_audio",
-   "fieldtype": "Attach",
-   "label": "Generated Audio",
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval:doc.kind == \"Audio\";",
-   "description": "AI Model used for Text-to-Speech in this audio message.",
-   "fieldname": "tts_model",
-   "fieldtype": "Link",
-   "label": "TTS Model",
-   "options": "AI Model",
-   "read_only": 1
-  },
-  {
-   "description": "Voice to use for TTS (e.g. alloy, echo, onyx).",
-   "fieldname": "tts_voice",
-   "fieldtype": "Data",
-   "label": "TTS Voice",
-   "read_only": 1
-  },
-  {
-   "fieldname": "voice_message",
-   "fieldtype": "Attach",
-   "label": "Voice Message",
-   "read_only": 1
-  }
- ],
- "grid_page_length": 50,
- "index_web_pages_for_search": 1,
- "links": [],
- "modified": "2026-03-02 18:23:04.656369",
- "modified_by": "Administrator",
- "module": "Huf",
- "name": "Agent Message",
- "owner": "Administrator",
- "permissions": [
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "System Manager",
-   "share": 1,
-   "write": 1
-  }
- ],
- "row_format": "Dynamic",
- "sort_field": "modified",
- "sort_order": "DESC",
- "states": []
+    "actions": [],
+    "creation": "2025-08-11 19:48:02.779437",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "content_tab",
+        "content",
+        "metadata_tab",
+        "agent_run",
+        "conversation",
+        "provider",
+        "model",
+        "agent",
+        "kind",
+        "content_type",
+        "generated_image",
+        "generated_audio",
+        "generated_audio_mp3",
+        "voice_message",
+        "tts_model",
+        "tts_voice",
+        "column_break_asyu",
+        "session_id",
+        "user",
+        "is_agent_message",
+        "role",
+        "conversation_index",
+        "status",
+        "tool_calll",
+        "tool_name",
+        "tool_status",
+        "tool_args"
+    ],
+    "fields": [
+        {
+            "fieldname": "conversation",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Conversation",
+            "options": "Agent Conversation",
+            "read_only": 1
+        },
+        {
+            "fieldname": "user",
+            "fieldtype": "Data",
+            "label": "User",
+            "read_only": 1
+        },
+        {
+            "fieldname": "conversation_index",
+            "fieldtype": "Int",
+            "label": "Index in Conversation",
+            "read_only": 1
+        },
+        {
+            "fieldname": "content",
+            "fieldtype": "Code",
+            "label": "Content",
+            "options": "Markdown",
+            "read_only": 1
+        },
+        {
+            "fieldname": "kind",
+            "fieldtype": "Select",
+            "label": "Kind",
+            "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage\nAudio",
+            "read_only": 1
+        },
+        {
+            "default": "user",
+            "fieldname": "role",
+            "fieldtype": "Select",
+            "hidden": 1,
+            "label": "Role",
+            "options": "user\ntool\nagent\nsystem",
+            "read_only": 1
+        },
+        {
+            "fieldname": "session_id",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Session ID",
+            "read_only": 1
+        },
+        {
+            "default": "0",
+            "fieldname": "is_agent_message",
+            "fieldtype": "Check",
+            "label": "Is Agent Message",
+            "read_only": 1
+        },
+        {
+            "fieldname": "content_tab",
+            "fieldtype": "Tab Break",
+            "label": "Message"
+        },
+        {
+            "fieldname": "metadata_tab",
+            "fieldtype": "Tab Break",
+            "label": "Metadata"
+        },
+        {
+            "fieldname": "column_break_asyu",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "provider",
+            "fieldtype": "Link",
+            "label": "Provider",
+            "options": "AI Provider",
+            "read_only": 1
+        },
+        {
+            "fieldname": "model",
+            "fieldtype": "Link",
+            "label": "Model",
+            "options": "AI Model",
+            "read_only": 1
+        },
+        {
+            "fieldname": "agent",
+            "fieldtype": "Link",
+            "label": "Agent",
+            "options": "Agent",
+            "read_only": 1
+        },
+        {
+            "fieldname": "agent_run",
+            "fieldtype": "Link",
+            "label": "Run",
+            "options": "Agent Run",
+            "read_only": 1
+        },
+        {
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "hidden": 1,
+            "label": "Status",
+            "options": "\nStarted\nQueues\nCompleted\nFailed"
+        },
+        {
+            "fieldname": "tool_calll",
+            "fieldtype": "Link",
+            "label": "Tool Calll",
+            "options": "Agent Tool Call",
+            "read_only": 1
+        },
+        {
+            "fetch_from": "tool_calll.tool",
+            "fieldname": "tool_name",
+            "fieldtype": "Data",
+            "label": "Tool Name",
+            "read_only": 1
+        },
+        {
+            "fetch_from": "tool_calll.tool_args",
+            "fieldname": "tool_args",
+            "fieldtype": "JSON",
+            "label": "Tool Args",
+            "read_only": 1
+        },
+        {
+            "fetch_from": "tool_calll.status",
+            "fieldname": "tool_status",
+            "fieldtype": "Data",
+            "label": "Tool Status",
+            "read_only": 1
+        },
+        {
+            "fieldname": "content_type",
+            "fieldtype": "Select",
+            "label": "Content Type",
+            "options": "\nText\nJSX\nMermaid\nMarkdown\nArtifact\nHTML\nImage",
+            "read_only": 1
+        },
+        {
+            "depends_on": "eval:doc.kind == \"Image\";",
+            "fieldname": "generated_image",
+            "fieldtype": "Attach Image",
+            "label": "Generated Image",
+            "read_only": 1
+        },
+        {
+            "depends_on": "eval:doc.kind == \"Audio\";",
+            "fieldname": "generated_audio",
+            "fieldtype": "Attach",
+            "label": "Generated Audio",
+            "read_only": 1
+        },
+        {
+            "depends_on": "eval:doc.kind == \"Audio\";",
+            "fieldname": "generated_audio_mp3",
+            "fieldtype": "Attach",
+            "label": "Generated Audio MP3",
+            "read_only": 1
+        },
+        {
+            "depends_on": "eval:doc.kind == \"Audio\";",
+            "description": "AI Model used for Text-to-Speech in this audio message.",
+            "fieldname": "tts_model",
+            "fieldtype": "Link",
+            "label": "TTS Model",
+            "options": "AI Model",
+            "read_only": 1
+        },
+        {
+            "description": "Voice to use for TTS (e.g. alloy, echo, onyx).",
+            "fieldname": "tts_voice",
+            "fieldtype": "Data",
+            "label": "TTS Voice",
+            "read_only": 1
+        },
+        {
+            "fieldname": "voice_message",
+            "fieldtype": "Attach",
+            "label": "Voice Message",
+            "read_only": 1
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-03-02 18:23:04.656369",
+    "modified_by": "Administrator",
+    "module": "Huf",
+    "name": "Agent Message",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
 }
