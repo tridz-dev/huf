@@ -191,7 +191,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         model_supports_caching = False
         if enable_prompt_caching:
             try:
-                model_supports_caching = supports_prompt_caching(model=normalized_model)
+                base_model = normalized_model.split("/", 1)[-1] if "/" in normalized_model else normalized_model
+                model_supports_caching = supports_prompt_caching(model=normalized_model) or supports_prompt_caching(model=base_model)
             except Exception:
                 # If check fails, assume not supported
                 model_supports_caching = False
@@ -208,7 +209,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             if not (enable_prompt_caching and model_supports_caching and cache_system_message):
                 system_content = agent.instructions
             else:
-                if provider_name == "anthropic":
+                if provider_name == "anthropic" or "anthropic" in normalized_model:
                     # Anthropic: content array with cache_control
                     system_content = [
                         {
@@ -237,9 +238,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             messages.extend(context["conversation_history"])
         
         # Add user message with cache_control if conversation history caching is enabled
-        user_content = enhanced_prompt
-        if enable_prompt_caching and model_supports_caching and cache_conversation_history:
-            if provider_name == "anthropic":
+        if not (enable_prompt_caching and model_supports_caching and cache_conversation_history):
+            user_content = enhanced_prompt
+        else:
+            if provider_name == "anthropic" or "anthropic" in normalized_model:
                 # Anthropic: content array with cache_control
                 user_content = [
                     {
@@ -422,14 +424,17 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             choice = response.choices[0].message
 
             usage = response.usage
-            total_usage["input_tokens"] += getattr(usage, "prompt_tokens", 0) or 0
-            total_usage["output_tokens"] += getattr(usage, "completion_tokens", 0) or 0
+            total_usage["input_tokens"] += (getattr(usage, "prompt_tokens", 0) or 0)
+            total_usage["output_tokens"] += (getattr(usage, "completion_tokens", 0) or 0)
 
             # Track cached tokens if available
             if enable_prompt_caching and hasattr(usage, "prompt_tokens_details"):
                 details = usage.prompt_tokens_details
                 if details:
-                    total_usage["cached_tokens"] += getattr(details, "cached_tokens", 0) or 0
+                    if isinstance(details, dict):
+                        total_usage["cached_tokens"] += (details.get("cached_tokens") or details.get("cache_hit_tokens") or 0)
+                    else:
+                        total_usage["cached_tokens"] += (getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0)
 
             assistant_message = {
                 "role": "assistant",
@@ -629,7 +634,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         model_supports_caching = False
         if enable_prompt_caching:
             try:
-                model_supports_caching = supports_prompt_caching(model=normalized_model)
+                base_model = normalized_model.split("/", 1)[-1] if "/" in normalized_model else normalized_model
+                model_supports_caching = supports_prompt_caching(model=normalized_model) or supports_prompt_caching(model=base_model)
             except Exception:
                 model_supports_caching = False
                 frappe.log_error(
@@ -645,7 +651,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             system_content = agent.instructions
             
             if enable_prompt_caching and model_supports_caching and cache_system_message:
-                if provider_name == "anthropic":
+                if provider_name == "anthropic" or "anthropic" in normalized_model:
                     system_content = [
                         {
                             "type": "text",
@@ -669,7 +675,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         
         user_content = enhanced_prompt
         if enable_prompt_caching and model_supports_caching and cache_conversation_history:
-            if provider_name == "anthropic":
+            if provider_name == "anthropic" or "anthropic" in normalized_model:
                 user_content = [
                     {
                         "type": "text",
@@ -757,6 +763,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
                 # Process streaming chunks
                 stream_usage = None
+                is_stop = False
                 
                 for chunk in stream:
                     # Capture usage if present (often in last chunk)
@@ -938,17 +945,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                             break
 
                         if finish_reason == "stop":
-                            if stream_usage and hasattr(stream_usage, "dict"):
-                                 stream_usage = stream_usage.dict()
-                            elif stream_usage and hasattr(stream_usage, "model_dump"):
-                                 stream_usage = stream_usage.model_dump()
-                                 
-                            yield {
-                                "type": "complete",
-                                "full_response": full_response,
-                                "usage": stream_usage
-                            }
-                            return
+                            is_stop = True
+
+                if is_stop:
+                    break
 
             except InternalServerError as e:
                 yield {"type": "error", "error": f"OpenAI API server error: {str(e)}"}
