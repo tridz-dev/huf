@@ -84,6 +84,16 @@ class ConversationManager:
             """, (conversation.name,), as_dict=1)
 
             last_index = last_index[0].last_index if last_index and last_index[0].last_index is not None else 0
+            import re
+            
+            # Extract final AI response audio payload to inline the UI player natively
+            generated_audio_url = None
+            if role == "agent" and isinstance(content, str):
+                audio_match = re.search(r'(/private/files/generated_audio_[A-Za-z0-9_.]+\.wav)', content)
+                if audio_match:
+                    kind = "Audio"
+                    generated_audio_url = audio_match.group(1)
+
             message = frappe.get_doc({
                 "doctype": "Agent Message",
                 "conversation": conversation.name,
@@ -98,7 +108,8 @@ class ConversationManager:
                 "model": model,
                 "conversation_index": last_index + 1,
                 "is_agent_message": 1 if role == "agent" else 0,
-                "tool_calll": tool_call_id 
+                "tool_calll": tool_call_id,
+                "generated_audio": generated_audio_url 
             })
             message.insert(ignore_permissions=True)
 

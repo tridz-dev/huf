@@ -2182,66 +2182,14 @@ async def handle_generate_audio(
         # Generate filename
         filename = f"generated_audio_{conversation_index}.{response_format}"
         
-        # Create Agent Message first (we'll attach the file to it)
-        message_doc = None
-        if conversation_id and conversation_index is not None:
-            try:
-                # Get provider and model from agent
-                provider = agent_doc.provider
-                model_name = agent_doc.model
-                
-                # Create Agent Message with kind "Audio"
-                message_doc = frappe.get_doc({
-                    "doctype": "Agent Message",
-                    "conversation": conversation_id,
-                    "role": "agent",
-                    "content": f"Generated audio: {input[:100]}{'...' if len(input) > 100 else ''}",
-                    "kind": "Audio",
-                    "agent": agent_name,
-                    "provider": provider,
-                    "model": model_name,
-                    "agent_run": kwargs.get("agent_run_id"),
-                    "conversation_index": conversation_index,
-                    "is_agent_message": 1,
-                    "user": "Agent",
-                    "tts_voice": voice
-                })
-                message_doc.insert(ignore_permissions=True)
-
-                if tts_source == "agent_config" and getattr(agent_doc, "tts_model", None):
-                    frappe.db.set_value(
-                        "Agent Message", message_doc.name,
-                        "tts_model", agent_doc.tts_model,
-                        update_modified=False
-                    )
-                    message_doc.tts_model = agent_doc.tts_model
-
-            except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for generated audio: {str(e)}",
-                    "Audio Generation Message Creation"
-                )
-                message_doc = None
-        
-        # Save file attached to the Agent Message
-        if message_doc:
-            saved_file = save_file(
-                filename,
-                audio_bytes,
-                "Agent Message",
-                message_doc.name,
-                is_private=False,
-                df="generated_audio"
-            )
-        else:
-            # Fallback: attach to conversation if message creation failed
-            saved_file = save_file(
-                filename,
-                audio_bytes,
-                "Agent Conversation",
-                conversation_id or "Unknown",
-                is_private=False
-            )
+        # Save file attached to the conversation
+        saved_file = save_file(
+            filename,
+            audio_bytes,
+            "Agent Conversation",
+            conversation_id or "Unknown",
+            is_private=False
+        )
         
         # Get file URL
         file_url = getattr(saved_file, 'file_url', None)
@@ -2559,66 +2507,16 @@ async def handle_gemini_generate_audio(
                 
         filename = f"generated_audio_{conversation_index}.wav"
         
-        message_doc = None
-        if conversation_id:
-            try:
-                provider = agent_doc.provider
-                model_name = agent_doc.model
-                
-                message_doc = frappe.get_doc({
-                    "doctype": "Agent Message",
-                    "conversation": conversation_id,
-                    "role": "agent",
-                    "content": f"Generated audio: {input[:100]}{'...' if len(input) > 100 else ''}",
-                    "kind": "Audio",
-                    "agent": agent_name,
-                    "provider": provider,
-                    "model": model_name,
-                    "agent_run": kwargs.get("agent_run_id"),
-                    "conversation_index": conversation_index,
-                    "is_agent_message": 1,
-                    "user": "Agent",
-                    "tts_voice": voice_name
-                })
-                message_doc.flags.ignore_permissions = True
-                message_doc.insert()
-            except Exception as e:
-                pass
-                
         saved_file = save_file(
             filename,
             wav_data,
-            "Agent Message" if message_doc else None,
-            message_doc.name if message_doc else None,
+            "Agent Conversation",
+            conversation_id or "Unknown",
             is_private=1
         )
         
         file_url = saved_file.file_url if hasattr(saved_file, "file_url") else saved_file.get("file_url")
         file_id = saved_file.name if hasattr(saved_file, "name") else saved_file.get("name")
-        
-        if message_doc:
-            message_doc.db_set("generated_audio", file_url)
-            
-            try:
-                frappe.publish_realtime(
-                    event=f'conversation:{conversation_id}',
-                    message={
-                        "type": "new_agent_message",
-                        "conversation_id": conversation_id,
-                        "message": {
-                            "name": message_doc.name,
-                            "role": "agent",
-                            "content": message_doc.content,
-                            "kind": "Audio",
-                            "generated_audio": file_url,
-                            "conversation_index": conversation_index
-                        }
-                    },
-                    user=frappe.session.user,
-                    after_commit=False
-                )
-            except Exception:
-                pass
 
         return {
             "success": True,
@@ -2665,6 +2563,12 @@ async def handle_gemini_transcribe_audio(
             return {"success": False, "error": "Google API key not configured"}
             
         file_doc = None
+        
+        # LLM sometimes maliciously passes the url path as the file_id
+        if file_id and str(file_id).startswith("/files/"):
+            file_url = file_id
+            file_id = None
+            
         if file_id:
             try:
                 file_doc = frappe.get_doc("File", file_id)
@@ -2711,64 +2615,11 @@ async def handle_gemini_transcribe_audio(
         if not transcribed_text:
             return {"success": False, "error": "Failed to transcribe audio"}
             
-        message_doc = None
-        if conversation_id:
-            try:
-                if message_id:
-                    message_doc = frappe.get_doc("Agent Message", message_id)
-                    message_doc.content = transcribed_text
-                    message_doc.save(ignore_permissions=True)
-                    conversation_index = message_doc.conversation_index
-                else:
-                    last_index = frappe.db.sql("""
-                        SELECT MAX(conversation_index) as last_index
-                        FROM `tabAgent Message`
-                        WHERE conversation = %s
-                    """, (conversation_id,), as_dict=1)
-                    conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-                    
-                    message_doc = frappe.get_doc({
-                        "doctype": "Agent Message",
-                        "conversation": conversation_id,
-                        "role": "user",
-                        "content": transcribed_text,
-                        "kind": "Audio",
-                        "conversation_index": conversation_index,
-                        "user": frappe.session.user
-                    })
-                    message_doc.insert(ignore_permissions=True)
-                    
-                frappe.db.set_value("Agent Conversation", conversation_id, "last_activity", frappe.utils.now())
-                frappe.db.commit()
-                
-                try:
-                    frappe.publish_realtime(
-                        event=f'conversation:{conversation_id}',
-                        message={
-                            "type": "update_message" if message_id else "new_user_message",
-                            "conversation_id": conversation_id,
-                            "message_id": message_doc.name,
-                            "content": transcribed_text,
-                            "kind": "Audio",
-                            "file": {
-                                "file_name": file_doc.file_name,
-                                "file_url": file_doc.file_url 
-                            } if file_doc else None,
-                            "conversation_index": conversation_index,
-                        },
-                        user=frappe.session.user,
-                        after_commit=False
-                    )
-                except Exception:
-                    pass
-            except Exception as e:
-                frappe.log_error(f"Error creating Agent Message: {str(e)}", "Gemini Transcribe Meta")
-                
         return {
             "success": True,
             "text": transcribed_text,
-            "file_id": file_doc.name,
-            "message_id": message_doc.name if message_doc else None
+            "file_id": file_doc.name if file_doc else None,
+            "message_id": message_id
         }
 
     except Exception as e:
