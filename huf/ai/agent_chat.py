@@ -10,7 +10,7 @@ from huf.ai import transcription_handler
 
 
 @frappe.whitelist()
-def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
+def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None,
                                 agent: str = None, conversation: str = None):
     if not b64data or not filename:
         frappe.throw("Filename and audio data are required")
@@ -141,6 +141,151 @@ def upload_audio_and_transcribe(docname: str, filename: str, b64data: str,
 
 
 @frappe.whitelist()
+def upload_audio_and_transcribe_web(filename: str, b64data: str, agent: str, conversation: str | None = None):
+    """Web endpoint: save audio, transcribe via STT, then run the agent with the transcript as prompt."""
+    if not b64data or not filename:
+        frappe.throw(_("Filename and audio data are required"))
+
+    if "," in b64data:
+        b64data = b64data.split(",", 1)[1]
+
+    try:
+        audio_bytes = base64.b64decode(b64data)
+    except Exception:
+        frappe.throw(_("Invalid base64 audio data"))
+
+    if len(audio_bytes) == 0:
+        return {"success": False, "error": "Audio recording was empty (0 bytes)."}
+
+    if not agent:
+        frappe.throw(_("agent is required"))
+
+    # Ensure conversation exists (or create a new one)
+    conv = None
+    if conversation:
+        try:
+            conv = frappe.get_doc("Agent Conversation", conversation)
+        except frappe.DoesNotExistError:
+            conv = None
+
+    if not conv:
+        cm = ConversationManager(agent_name=agent, channel="Chat")
+        conv = cm.create_new_conversation()
+
+    conversation_id = conv.name
+
+    # Create initial Agent Message representing the raw voice message
+    msg = frappe.get_doc({
+        "doctype": "Agent Message",
+        "conversation": conversation_id,
+        "role": "user",
+        "content": f"(voice message: {filename})",
+        "kind": "Audio",
+        "user": frappe.session.user,
+    })
+    msg.insert(ignore_permissions=True)
+
+    # Save file attached to Agent Message
+    try:
+        saved_file = save_file(
+            filename,
+            audio_bytes,
+            "Agent Message",
+            msg.name,
+            is_private=False,
+        )
+    except Exception as e:
+        frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
+        return {"success": False, "error": "Could not save audio file to database."}
+
+    file_id = None
+    file_url = None
+    if hasattr(saved_file, "name"):
+        file_id = saved_file.name
+        file_url = saved_file.file_url
+        frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+    elif isinstance(saved_file, dict):
+        file_id = saved_file.get("name")
+        file_url = saved_file.get("file_url")
+        if file_url:
+            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+
+    if not file_id:
+        file_id = frappe.db.get_value(
+            "File",
+            {"attached_to_doctype": "Agent Message", "attached_to_name": msg.name},
+            "name",
+            order_by="creation desc",
+        )
+
+    if file_id and not file_url:
+        file_url = frappe.db.get_value("File", file_id, "file_url")
+        if file_url:
+            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+
+    if not file_id:
+        return {"success": False, "error": "File was saved but ID could not be retrieved."}
+
+    provider = frappe.db.get_value("Agent", agent, "provider")
+
+    # Transcribe using SDK STT tool
+    try:
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(
+                sdk_tools.handle_transcribe_audio(
+                    file_id=file_id,
+                    agent_name=agent,
+                    conversation_id=conversation_id,
+                    message_id=msg.name,
+                ),
+                loop,
+            )
+            res = future.result()
+        else:
+            res = loop.run_until_complete(
+                sdk_tools.handle_transcribe_audio(
+                    file_id=file_id,
+                    agent_name=agent,
+                    conversation_id=conversation_id,
+                    message_id=msg.name,
+                )
+            )
+    except Exception as e:
+        frappe.log_error(f"Transcription Error (web): {str(e)}")
+        return {"success": False, "error": str(e)}
+
+    if not res.get("success"):
+        return res
+
+    transcript = res.get("text")
+
+    # Run agent with transcript as prompt, within the same conversation
+    run_result = run_agent_sync(
+        agent_name=agent,
+        prompt=transcript,
+        provider=provider,
+        model=frappe.db.get_value("Agent", agent, "model"),
+        channel_id="Chat",
+        conversation_id=conversation_id,
+    )
+
+    return {
+        "success": True,
+        "conversation_id": conversation_id,
+        "transcript": transcript,
+        "run": run_result,
+    }
+
+
+@frappe.whitelist()
 def get_history(conversation_id: str = None, limit: int = 200):
     """Return conversation history for chat UI"""
     if not conversation_id:
@@ -218,6 +363,27 @@ def render_markdown(content: str = "") -> str:
         return md(content or "")
     except Exception:
         return frappe.utils.escape_html(content or "")
+
+
+@frappe.whitelist()
+def create_conversation(agent: str, channel: str = "Chat"):
+    """Create a new Agent Conversation without running the agent."""
+    if not agent:
+        frappe.throw(_("agent is required"))
+
+    try:
+        cm = ConversationManager(agent_name=agent, channel=channel)
+        conversation = cm.create_new_conversation()
+        return {
+            "success": True,
+            "conversation_id": conversation.name,
+        }
+    except Exception:
+        frappe.log_error(
+            message=f"create_conversation error: {frappe.get_traceback()}",
+            title="Huf API",
+        )
+        raise
 
 @frappe.whitelist()
 def new_conversation(agent: str, message: str):
