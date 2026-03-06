@@ -908,19 +908,25 @@ def run_agent_sync(
         if usage:
             
             if isinstance(usage, dict):
-                input_tokens = getattr(usage, "prompt_tokens", usage.get("input_tokens", 0) if isinstance(usage, dict) else 0)
-                output_tokens = getattr(usage, "completion_tokens", usage.get("output_tokens", 0) if isinstance(usage, dict) else 0)
+                input_tokens = (getattr(usage, "prompt_tokens", usage.get("input_tokens", 0)) if isinstance(usage, dict) else 0) or 0
+                output_tokens = (getattr(usage, "completion_tokens", usage.get("output_tokens", 0)) if isinstance(usage, dict) else 0) or 0
                 
                 details = getattr(usage, "prompt_tokens_details", None)
+                if not details and isinstance(usage, dict):
+                    details = usage.get("prompt_tokens_details")
+
                 if details:
-                    cached_tokens = getattr(details, "cached_tokens", 0)
+                    if isinstance(details, dict):
+                        cached_tokens = details.get("cached_tokens", details.get("cache_hit_tokens", 0))
+                    else:
+                        cached_tokens = getattr(details, "cached_tokens", getattr(details, "cache_hit_tokens", 0))
                 elif isinstance(usage, dict):
-                    cached_tokens = usage.get("cached_tokens", 0)
+                    cached_tokens = usage.get("cached_tokens", usage.get("cache_hit_tokens", 0))
                 
             else: 
-                input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
-                output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
-                cached_tokens = getattr(usage, "cached_tokens", 0)
+                input_tokens = (getattr(usage, "input_tokens", getattr(usage, "prompt_tokens", 0))) or 0
+                output_tokens = (getattr(usage, "output_tokens", getattr(usage, "completion_tokens", 0))) or 0
+                cached_tokens = getattr(usage, "cached_tokens", 0) or 0
 
             try:
                 total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
@@ -997,12 +1003,12 @@ def run_agent_sync(
     except Exception as e:
         error_msg = str(e)
         
-        if "ContextWindowExceededError" in error_msg or "RateLimitError" in error_msg:
+        if "ContextWindowExceededError" in error_msg:
             try:
                 frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
                 safe_commit()
                 
-                error_msg = _("This conversation has exceeded the maximum token limit or rate limit. Please start a new conversation to continue.")
+                error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
                 
                 conv_manager.add_message(
                     conversation=conversation, 
@@ -1016,7 +1022,25 @@ def run_agent_sync(
                 )
                 safe_commit()
             except Exception as inner_e:
-                frappe.log_error(f"Failed to handle rate limit in sync: {str(inner_e)}", "Agent Integration Error")
+                frappe.log_error(f"Failed to handle context window error in sync: {str(inner_e)}", "Agent Integration Error")
+                
+        elif "RateLimitError" in error_msg:
+            try:
+                error_msg = _("You have reached the API rate limit (requests/tokens per minute). Please wait a moment and try again.")
+                
+                conv_manager.add_message(
+                    conversation=conversation, 
+                    role="agent", 
+                    content=error_msg, 
+                    provider=resolved_provider, 
+                    model=resolved_model, 
+                    agent=agent_name, 
+                    run_name=run_doc.name,
+                    kind="Error"
+                )
+                safe_commit()
+            except Exception as inner_e:
+                frappe.log_error(f"Failed to handle rate limit error in sync: {str(inner_e)}", "Agent Integration Error")
 
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
@@ -1331,21 +1355,27 @@ async def run_agent_stream(
                     if usage:
                         
                         if isinstance(usage, dict):
-                            input_tokens = getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0) if isinstance(usage, dict) else 0)
-                            output_tokens = getattr(usage, "completion_tokens", usage.get("completion_tokens", 0) if isinstance(usage, dict) else 0)
+                            input_tokens = (getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0)) if isinstance(usage, dict) else 0) or 0
+                            output_tokens = (getattr(usage, "completion_tokens", usage.get("completion_tokens", 0)) if isinstance(usage, dict) else 0) or 0
                             
                             details = getattr(usage, "prompt_tokens_details", None)
+                            if not details and isinstance(usage, dict):
+                                details = usage.get("prompt_tokens_details")
+
                             if details:
-                                cached_tokens = getattr(details, "cached_tokens", 0)
+                                if isinstance(details, dict):
+                                    cached_tokens = details.get("cached_tokens", details.get("cache_hit_tokens", 0))
+                                else:
+                                    cached_tokens = getattr(details, "cached_tokens", getattr(details, "cache_hit_tokens", 0))
                             elif isinstance(usage, dict):
-                                cached_tokens = usage.get("cached_tokens", 0)
+                                cached_tokens = usage.get("cached_tokens", usage.get("cache_hit_tokens", 0))
                             
                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
                         else:
-                            input_tokens = getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))
-                            output_tokens = getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))
-                            cached_tokens = getattr(usage, "cached_tokens", 0)
-                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
+                            input_tokens = (getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))) or 0
+                            output_tokens = (getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))) or 0
+                            cached_tokens = getattr(usage, "cached_tokens", 0) or 0
+                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) or (input_tokens + output_tokens)
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
@@ -1358,39 +1388,45 @@ async def run_agent_stream(
                             total_tokens = input_tokens + output_tokens
                         except Exception as e:
                             frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
+                            
+                    try:
+                        from huf.ai.providers.litellm import _normalize_model_name
+                        pricing_model = _normalize_model_name(resolved_model, resolved_provider)
                         
-                        try:
-                            mock_response = {
-                                "usage": {
-                                    "prompt_tokens": input_tokens,
-                                    "completion_tokens": output_tokens,
-                                    "total_tokens": input_tokens + output_tokens
-                                },
-                                "model": pricing_model
-                            }
-                                
-                            cost = litellm.completion_cost(
-                                completion_response=mock_response,
-                                model=pricing_model
-                            )
+                        mock_response = {
+                            "usage": {
+                                "prompt_tokens": input_tokens,
+                                "completion_tokens": output_tokens,
+                                "total_tokens": input_tokens + output_tokens
+                            },
+                            "model": pricing_model
+                        }
+                        
+                        if cached_tokens > 0:
+                            mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                            
+                        cost = litellm.completion_cost(
+                            completion_response=mock_response,
+                            model=pricing_model
+                        )
 
-                        except Exception as e:
-                            frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")
-                            cost = 0.0
+                    except Exception as e:
+                        frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")
+                        cost = 0.0
 
-                        # Update Conversation Metrics
-                        try:
-                            frappe.db.sql("""
-                                UPDATE `tabAgent Conversation`
-                                SET 
-                                    total_input_tokens = total_input_tokens + %s,
-                                    total_output_tokens = total_output_tokens + %s,
-                                    total_tokens = total_tokens + %s,
-                                    total_cost = total_cost + %s
-                                WHERE name = %s
-                            """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
-                        except Exception as e:
-                            frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
+                    # Update Conversation Metrics
+                    try:
+                        frappe.db.sql("""
+                            UPDATE `tabAgent Conversation`
+                            SET 
+                                total_input_tokens = total_input_tokens + %s,
+                                total_output_tokens = total_output_tokens + %s,
+                                total_tokens = total_tokens + %s,
+                                total_cost = total_cost + %s
+                            WHERE name = %s
+                        """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
+                    except Exception as e:
+                        frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
 
                     # Save final response
                     conv_manager.add_message(conversation, "agent", full_response, resolved_provider, resolved_model, agent_name, run_doc.name)
@@ -1436,12 +1472,32 @@ async def run_agent_stream(
                 elif chunk_type == "error":
                     error_msg = chunk.get("error", "Unknown error")
                     
-                    if "ContextWindowExceededError" in error_msg or "RateLimitError" in error_msg:
+                    if "ContextWindowExceededError" in error_msg:
                         try:
                             frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
                             safe_commit()
                             
-                            user_error_msg = _("This conversation has exceeded the maximum token limit or rate limit. Please start a new conversation to continue.")
+                            user_error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
+                            
+                            conv_manager.add_message(
+                                conversation=conversation, 
+                                role="agent", 
+                                content=user_error_msg, 
+                                provider=resolved_provider, 
+                                model=resolved_model, 
+                                agent=agent_name, 
+                                run_name=run_doc.name,
+                                kind="Error"
+                            )
+                            safe_commit()
+                            chunk["error"] = user_error_msg # override so the client sees the same message
+                            error_msg = user_error_msg
+                        except Exception as inner_e:
+                            frappe.log_error(f"Failed to handle context window error in stream inner block: {str(inner_e)}", "Agent Integration Error")
+
+                    elif "RateLimitError" in error_msg:
+                        try:
+                            user_error_msg = _("You have reached the API rate limit (requests/tokens per minute). Please wait a moment and try again.")
                             
                             conv_manager.add_message(
                                 conversation=conversation, 
@@ -1473,12 +1529,30 @@ async def run_agent_stream(
             error_msg = str(e)
             frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
             
-            if "ContextWindowExceededError" in error_msg or "RateLimitError" in error_msg:
+            if "ContextWindowExceededError" in error_msg:
                 try:
                     frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
                     safe_commit()
                     
-                    error_msg = _("This conversation has exceeded the maximum token limit or rate limit. Please start a new conversation to continue.")
+                    error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
+                    
+                    conv_manager.add_message(
+                        conversation=conversation, 
+                        role="agent", 
+                        content=error_msg, 
+                        provider=resolved_provider, 
+                        model=resolved_model, 
+                        agent=agent_name, 
+                        run_name=run_doc.name,
+                        kind="Error"
+                    )
+                    safe_commit()
+                except Exception as inner_e:
+                    frappe.log_error(f"Failed to handle context window error in stream inner block: {str(inner_e)}", "Agent Integration Error")
+
+            elif "RateLimitError" in error_msg:
+                try:
+                    error_msg = _("You have reached the API rate limit (requests/tokens per minute). Please wait a moment and try again.")
                     
                     conv_manager.add_message(
                         conversation=conversation, 
