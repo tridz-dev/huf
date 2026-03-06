@@ -2500,37 +2500,79 @@ async def handle_transcribe_audio(
         # Call LiteLLM transcription
         import litellm
         
-        # Build parameters for transcription
-        # LiteLLM accepts file path (string) or file-like object
-        transcription_params = {
-            "model": normalized_model,
-            "file": file_path,  # Pass file path directly
-            "api_key": api_key
-        }
-        
-        # Add optional parameters
-        if language:
-            transcription_params["language"] = language
-        
-        # Call LiteLLM transcription
-        def _sync_transcribe(params):
+        if provider_name in ["google", "gemini", "vertex_ai"]:
+            import base64
+            import mimetypes
+            
             with open(file_path, "rb") as audio_file:
-                params["file"] = audio_file
-                return litellm.transcription(**params)
-
-        try:
-            response = await asyncio.to_thread(_sync_transcribe, transcription_params)
-        except Exception as e:
-            return {"success": False, "error": f"Transcription failed: {str(e)}"}
-        
-        # Extract text from response
-        # LiteLLM transcription returns a dict with 'text' key or object
-        if hasattr(response, "text"):
-            transcribed_text = response.text
-        elif isinstance(response, dict):
-            transcribed_text = response.get("text", "")
+                audio_data = audio_file.read()
+                
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if not mime_type:
+                mime_type = "audio/mp3"
+                
+            if file_path.lower().endswith(".webm") or mime_type == "video/webm":
+                mime_type = "audio/webm"
+                
+            base64_audio = base64.b64encode(audio_data).decode('utf-8')
+            audio_url = f"data:{mime_type};base64,{base64_audio}"
+            
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Please transcribe this audio exactly as it is spoken. Do not add any extra commentary or formatting. If there are multiple languages, transcribe them as spoken. If it is silent, just write [Silence]."},
+                        {"type": "image_url", "image_url": {"url": audio_url}}
+                    ]
+                }
+            ]
+            
+            import os
+            env_var = _TTS_ENV_VAR_PROVIDERS.get(provider_name, "GEMINI_API_KEY")
+            os.environ[env_var] = api_key
+                
+            try:
+                response = await asyncio.to_thread(
+                    litellm.completion,
+                    model=normalized_model,
+                    messages=messages,
+                    api_key=api_key 
+                )
+                transcribed_text = response.choices[0].message.content
+            except Exception as e:
+                return {"success": False, "error": f"Transcription failed: {str(e)}"}
+                
         else:
-             transcribed_text = str(response)
+            # Standard transcription handling (OpenAI, Deepgram, Groq, etc.)
+            transcription_params = {
+                "model": normalized_model,
+                "file": file_path,
+                "api_key": api_key
+            }
+            
+            # Add optional parameters
+            if language:
+                transcription_params["language"] = language
+            
+            # Call LiteLLM transcription
+            def _sync_transcribe(params):
+                with open(file_path, "rb") as audio_file:
+                    params["file"] = audio_file
+                    return litellm.transcription(**params)
+
+            try:
+                response = await asyncio.to_thread(_sync_transcribe, transcription_params)
+            except Exception as e:
+                return {"success": False, "error": f"Transcription failed: {str(e)}"}
+            
+            # Extract text from response
+            # LiteLLM transcription returns a dict with 'text' key or object
+            if hasattr(response, "text"):
+                transcribed_text = response.text
+            elif isinstance(response, dict):
+                transcribed_text = response.get("text", "")
+            else:
+                 transcribed_text = str(response)
         
         if not transcribed_text:
             return {"success": False, "error": "Transcription returned empty result"}
