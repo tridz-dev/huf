@@ -917,16 +917,18 @@ def run_agent_sync(
 
                 if details:
                     if isinstance(details, dict):
-                        cached_tokens = details.get("cached_tokens", details.get("cache_hit_tokens", 0))
+                        cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
                     else:
-                        cached_tokens = getattr(details, "cached_tokens", getattr(details, "cache_hit_tokens", 0))
+                        cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
                 elif isinstance(usage, dict):
-                    cached_tokens = usage.get("cached_tokens", usage.get("cache_hit_tokens", 0))
+                    cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
                 
             else: 
                 input_tokens = (getattr(usage, "input_tokens", getattr(usage, "prompt_tokens", 0))) or 0
                 output_tokens = (getattr(usage, "output_tokens", getattr(usage, "completion_tokens", 0))) or 0
-                cached_tokens = getattr(usage, "cached_tokens", 0) or 0
+                cached_tokens = getattr(usage, "cached_tokens", None) or 0
+            
+            cached_tokens = cached_tokens or 0
 
             try:
                 total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
@@ -1364,18 +1366,20 @@ async def run_agent_stream(
 
                             if details:
                                 if isinstance(details, dict):
-                                    cached_tokens = details.get("cached_tokens", details.get("cache_hit_tokens", 0))
+                                    cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
                                 else:
-                                    cached_tokens = getattr(details, "cached_tokens", getattr(details, "cache_hit_tokens", 0))
+                                    cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
                             elif isinstance(usage, dict):
-                                cached_tokens = usage.get("cached_tokens", usage.get("cache_hit_tokens", 0))
+                                cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
                             
                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
                         else:
                             input_tokens = (getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))) or 0
                             output_tokens = (getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))) or 0
-                            cached_tokens = getattr(usage, "cached_tokens", 0) or 0
+                            cached_tokens = getattr(usage, "cached_tokens", None) or 0
                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) or (input_tokens + output_tokens)
+                    
+                    cached_tokens = cached_tokens or 0
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
