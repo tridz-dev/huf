@@ -432,9 +432,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 details = usage.prompt_tokens_details
                 if details:
                     if isinstance(details, dict):
-                        total_usage["cached_tokens"] += details.get("cached_tokens", details.get("cache_hit_tokens", 0))
+                        total_usage["cached_tokens"] += (details.get("cached_tokens") or details.get("cache_hit_tokens") or 0)
                     else:
-                        total_usage["cached_tokens"] += (getattr(details, "cached_tokens", getattr(details, "cache_hit_tokens", 0)) or 0)
+                        total_usage["cached_tokens"] += (getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0)
 
             assistant_message = {
                 "role": "assistant",
