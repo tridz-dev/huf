@@ -78,6 +78,14 @@
 				class="flex-1 overflow-y-auto px-8 py-8 space-y-10"
 			></main>
 
+			<!-- Loading indicator -->
+			<div
+				id="loading-indicator"
+				class="hidden px-8 pb-2 text-center text-[11px] font-semibold text-indigo-400 uppercase tracking-[0.2em]"
+			>
+				Imagining a response...
+			</div>
+
 			<!-- Input area -->
 			<footer class="p-8 bg-transparent">
 				<form
@@ -125,7 +133,16 @@
 							type="button"
 							class="p-3.5 text-zinc-400 hover:text-indigo-600 transition-all rounded-2xl hover:bg-indigo-50 active:scale-90"
 						>
-							<span class="text-base font-semibold">&#9679;</span>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								class="w-4 h-4"
+								fill="currentColor"
+							>
+								<path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" />
+								<path d="M7 11a5 5 0 0 0 10 0h-2a3 3 0 0 1-6 0H7Z" />
+								<path d="M11 18.95V22h2v-3.05A7.002 7.002 0 0 0 19 12h-2a5 5 0 0 1-10 0H5a7.002 7.002 0 0 0 6 6.95Z" />
+							</svg>
 						</button>
 						<button
 							id="stop-button"
@@ -192,6 +209,8 @@
 		let animationFrame = null;
 
 		const messages = [];
+		let isSending = false;
+		const seenAgentAudioIds = new Set();
 
 		function showError(msg) {
 			errorText.textContent = msg;
@@ -283,6 +302,7 @@
 
 			const audio = document.createElement("audio");
 			audio.src = src;
+			audio.dataset.role = isAI ? "assistant" : "user";
 
 			const btn = document.createElement("button");
 			btn.type = "button";
@@ -362,6 +382,17 @@
 			return wrapper;
 		}
 
+		function setLoading(loading) {
+			isSending = loading;
+			const indicator = document.getElementById("loading-indicator");
+			if (indicator) {
+				indicator.classList.toggle("hidden", !loading);
+			}
+			// Avoid starting new actions while sending
+			textInput.disabled = loading;
+			micButton.disabled = loading;
+		}
+
 		function startRecording() {
 			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 				showError("Microphone not supported in this browser.");
@@ -384,7 +415,6 @@
 					textInput.classList.add("hidden");
 					micButton.classList.add("hidden");
 					stopButton.classList.remove("hidden");
-					sendButton.disabled = true;
 					recordingInterval = setInterval(() => {
 						recordingSeconds += 1;
 						recordingTimerEl.textContent = formatTime(recordingSeconds);
@@ -409,7 +439,6 @@
 			textInput.classList.remove("hidden");
 			micButton.classList.remove("hidden");
 			stopButton.classList.add("hidden");
-			sendButton.disabled = false;
 			stopWaveform();
 		}
 
@@ -534,6 +563,11 @@
 					.slice()
 					.reverse()
 					.forEach(m => {
+						// Only append agent audio messages we haven't rendered yet
+						if (seenAgentAudioIds.has(m.name)) {
+							return;
+						}
+
 						const audioUrl =
 							m.voice_message ||
 							m.generated_audio ||
@@ -542,6 +576,8 @@
 						if (!audioUrl) {
 							return;
 						}
+
+						seenAgentAudioIds.add(m.name);
 
 						const ts = new Date(m.creation);
 						messages.push({
@@ -556,12 +592,14 @@
 
 				renderMessages();
 
-				const lastAgentAudio = [...messages]
-					.reverse()
-					.find(m => m.role === "assistant" && m.audioUrl);
-				if (lastAgentAudio && lastAgentAudio.audioUrl) {
-					const a = new Audio(lastAgentAudio.audioUrl);
-					a.play().catch(() => {});
+				// Auto-play the latest assistant audio using the actual player element
+				const assistantPlayers = messagesContainer.querySelectorAll(
+					'audio[data-role="assistant"]'
+				);
+				const lastPlayer =
+					assistantPlayers[assistantPlayers.length - 1];
+				if (lastPlayer) {
+					lastPlayer.play().catch(() => {});
 				}
 			} catch (e) {
 				showError("Failed to load history");
@@ -570,6 +608,7 @@
 
 		async function sendAudioMessage(blob) {
 			try {
+				setLoading(true);
 				const ts = new Date();
 				messages.push({
 					role: "user",
@@ -608,20 +647,27 @@
 							conversationId = result.conversation_id;
 						}
 
-						await refreshHistory();
+						// Small delay so Agent Message is fully committed before we fetch
+						setTimeout(() => {
+							refreshHistory();
+						}, 2000);
 					} catch (e) {
 						showError("Failed to send audio message");
+					} finally {
+						setLoading(false);
 					}
 				};
 				reader.readAsDataURL(blob);
 			} catch (e) {
 				showError("Failed to send audio message");
+				setLoading(false);
 			}
 		}
 
 		async function sendTextMessage(text) {
 			if (!text.trim()) return;
 			try {
+				setLoading(true);
 				const convId = await ensureConversation();
 				await callMethod(
 					"huf.ai.agent_chat.send_message_to_conversation",
@@ -631,9 +677,14 @@
 					}
 				);
 				textInput.value = "";
-				await refreshHistory();
+				// Small delay so Agent Message is fully committed before we fetch
+				setTimeout(() => {
+					refreshHistory();
+				}, 2000);
 			} catch (e) {
 				showError("Failed to send message");
+			} finally {
+				setLoading(false);
 			}
 		}
 
@@ -646,6 +697,11 @@
 
 		chatForm.addEventListener("submit", e => {
 			e.preventDefault();
+			// If recording, treat Send as stop+send-audio-now
+			if (isRecording) {
+				stopRecording();
+				return;
+			}
 			const text = textInput.value;
 			sendTextMessage(text);
 		});
