@@ -312,11 +312,13 @@ async def _process_attachments(attachments, agent_name, conversation_id, msg_nam
                             if converted and converted.get("file_url"):
                                 frappe.db.set_value("Agent Message", msg_name, "voice_message", file_url)
                                 frappe.db.set_value("Agent Message", msg_name, "generated_audio_mp3", converted["file_url"])
+                                frappe.db.set_value("Agent Message", msg_name, "kind", "Audio")
                                 actual_file_url = converted["file_url"]
                     except Exception as e:
                         frappe.log_error(f"WebM to MP3 conversion failed in process_attachments: {str(e)}", "AI Attachment Error")
                 elif msg_name:
                     frappe.db.set_value("Agent Message", msg_name, "voice_message", file_url)
+                    frappe.db.set_value("Agent Message", msg_name, "kind", "Audio")
                 
                 final_attachment_urls.append(actual_file_url)
                 res = await sdk_tools.handle_transcribe_audio(

@@ -2366,6 +2366,12 @@ async def handle_transcribe_audio(
         
         # Get audio file
         file_doc = None
+        
+        # LLM sometimes maliciously passes the url path as the file_id
+        if file_id and str(file_id).startswith("/files/"):
+            file_url = file_id
+            file_id = None
+            
         if file_id:
             try:
                 file_doc = frappe.get_doc("File", file_id)
@@ -2455,98 +2461,11 @@ async def handle_transcribe_audio(
         if not transcribed_text:
             return {"success": False, "error": "Transcription returned empty result"}
         
-        # Create Agent Message with transcription result
-        message_doc = None
-        if conversation_id:
-            try:
-                # Get conversation_index
-                last_index = frappe.db.sql("""
-                    SELECT MAX(conversation_index) as last_index
-                    FROM `tabAgent Message`
-                    WHERE conversation = %s
-                """, (conversation_id,), as_dict=1)
-                
-                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-                
-                # Create or Update Agent Message
-                if message_id and frappe.db.exists("Agent Message", message_id):
-                    message_doc = frappe.get_doc("Agent Message", message_id)
-                    message_doc.content = transcribed_text
-                    if not message_doc.kind: message_doc.kind = "Audio"
-                    message_doc.save(ignore_permissions=True)
-                    
-                else:
-                    message_doc = frappe.get_doc({
-                        "doctype": "Agent Message",
-                        "conversation": conversation_id,
-                        "role": "user",
-                        "content": transcribed_text,
-                        "kind": "Audio",
-                        "agent": agent_name,
-                        "provider": agent_doc.provider,
-                        "model": agent_doc.model,
-                        "agent_run": kwargs.get("agent_run_id"),
-                        "conversation_index": conversation_index,
-                        "is_agent_message": 0,
-                        "user": frappe.session.user
-                    })
-                    message_doc.insert(ignore_permissions=True)
-                
-                # Check if file is already attached to this message
-                if file_doc and message_doc:
-                    if not file_doc.attached_to_name:
-                        file_doc.db_set("attached_to_name", message_doc.name)
-                        file_doc.db_set("attached_to_doctype", "Agent Message")
-                        file_doc.db_set("is_private", 0)
-
-                # Update conversation total_messages
-                if not message_id:
-                    frappe.db.sql("""
-                        UPDATE `tabAgent Conversation`
-                        SET total_messages = %s, last_activity = NOW()
-                        WHERE name = %s
-                    """, (conversation_index, conversation_id))
-                else:
-                    frappe.db.set_value("Agent Conversation", conversation_id, "last_activity", frappe.utils.now())
-                
-                frappe.db.commit()
-                
-                # Emit socket event for new message
-                try:
-                    frappe.publish_realtime(
-                        event=f'conversation:{conversation_id}',
-                        message={
-                            "type": "update_message" if message_id else "new_user_message",
-                            "conversation_id": conversation_id,
-                            "message_id": message_doc.name,
-                            "content": transcribed_text,
-                            "kind": "Audio",
-                            "file": {
-                                "file_name": file_doc.file_name,
-                                "file_url": file_doc.file_url 
-                            } if file_doc else None,
-                            "conversation_index": conversation_index,
-                        },
-                        user=frappe.session.user,
-                        after_commit=False
-                    )
-                except Exception as e:
-                    frappe.log_error(
-                        f"Error emitting new_user_message socket event: {str(e)}",
-                        "Audio Transcription Socket Event"
-                    )
-                    
-            except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for transcription: {str(e)}",
-                    "Audio Transcription Message Creation"
-                )
-        
         return {
             "success": True,
             "text": transcribed_text,
-            "file_id": file_doc.name,
-            "message_id": message_doc.name if message_doc else None,
+            "file_id": file_doc.name if file_doc else None,
+            "message_id": message_id,
             "language": language or "auto-detected",
             "model": normalized_model
         }
