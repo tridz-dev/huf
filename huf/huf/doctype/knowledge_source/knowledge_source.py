@@ -18,7 +18,7 @@ class KnowledgeSource(Document):
 			frappe.throw(_("Chunk overlap must be less than chunk size"))
 
 	def validate_vector_settings(self):
-		if self.knowledge_type in {"zvec", "sqlite_vec"}:
+		if self.knowledge_type == "sqlite_vec":
 			if not self.embedding_model:
 				frappe.throw(_("Embedding Model is required for vector knowledge types"))
 			if not self.vector_dimension or self.vector_dimension <= 0:

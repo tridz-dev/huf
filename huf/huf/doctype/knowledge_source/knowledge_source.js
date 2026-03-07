@@ -52,7 +52,7 @@ frappe.ui.form.on("Knowledge Source", {
 
 	knowledge_type(frm) {
 		// Toggle visibility of vector-specific settings
-		const uses_vectors = ["zvec", "sqlite_vec"].includes(frm.doc.knowledge_type);
+		const uses_vectors = frm.doc.knowledge_type === "sqlite_vec";
 		frm.toggle_reqd("embedding_model", uses_vectors);
 		frm.toggle_reqd("vector_dimension", uses_vectors);
 	}
