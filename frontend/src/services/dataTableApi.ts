@@ -1,29 +1,116 @@
 import { db, call } from '@/lib/frappe-sdk';
+import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { fetchDocCount } from './utilsApi';
 import type {
 	DataTableFieldDef,
 	DataTableSchema,
 	HufDataTable,
-	PaginatedDataTablesResponse,
-	GetDataTablesParams,
 } from '@/types/dataTable.types';
 
 /**
- * Fetch all data tables with pagination and search
+ * Fields needed for the data tables list page
+ */
+const DATA_TABLE_LIST_FIELDS = [
+	'name',
+	'table_name',
+	'doctype_name',
+	'description',
+	'icon',
+	'field_count',
+	'is_active',
+	'creation',
+	'modified',
+];
+
+/**
+ * Pagination params for data tables listing
+ */
+export interface GetDataTablesParams {
+	page?: number;
+	limit?: number;
+	start?: number;
+	search?: string;
+}
+
+/**
+ * Paginated response for data tables
+ */
+export interface PaginatedDataTablesResponse {
+	items: HufDataTable[];
+	hasMore: boolean;
+	total?: number;
+}
+
+/**
+ * Fetch all data tables with pagination and search (standard Frappe REST)
  */
 export async function getDataTables(
 	params?: GetDataTablesParams
 ): Promise<PaginatedDataTablesResponse> {
 	try {
-		const result = await call.get('huf.huf.doctype.huf_data_table.api.get_data_tables', {
-			search: params?.search || '',
-			limit: params?.limit || 20,
-			start: params?.start || 0,
+		const {
+			page = 1,
+			limit = 20,
+			start = (page - 1) * limit,
+			search,
+		} = params || {};
+
+		const filters: Array<[string, string, unknown]> = [];
+		if (search && search.trim()) {
+			filters.push(['table_name', 'like', `%${search.trim()}%`]);
+		}
+
+		const tables = await db.getDocList(doctype['Huf Data Table'], {
+			fields: DATA_TABLE_LIST_FIELDS,
+			filters: filters.length > 0 ? (filters as any) : undefined,
+			limit: limit + 1,
+			...(start > 0 && { limit_start: start }),
+			orderBy: { field: 'modified', order: 'desc' },
 		});
-		return result.message as PaginatedDataTablesResponse;
+
+		const hasMore = tables.length > limit;
+		const items = (hasMore ? tables.slice(0, limit) : tables) as HufDataTable[];
+
+		// Enrich with live record counts via dedicated backend API
+		if (items.length > 0) {
+			try {
+				const counts = await getTableRecordCounts(items.map((t) => t.name));
+				for (const item of items) {
+					item.record_count = counts[item.name] ?? 0;
+				}
+			} catch {
+				// Non-critical — leave record_count as-is
+			}
+		}
+
+		let total: number | undefined;
+		if (page === 1) {
+			try {
+				total = await fetchDocCount(doctype['Huf Data Table'], filters);
+			} catch {
+				// Ignore count errors
+			}
+		}
+
+		return { items, hasMore, total };
 	} catch (error) {
 		handleFrappeError(error, 'Error fetching data tables');
 	}
+}
+
+/**
+ * Get live record counts for a batch of tables (backend API, since
+ * counting records across dynamic DocTypes can't be done via standard REST).
+ */
+async function getTableRecordCounts(
+	names: string[]
+): Promise<Record<string, number>> {
+	const result = await call.get(
+		'huf.huf.doctype.huf_data_table.api.get_table_record_counts',
+		{ names: JSON.stringify(names) }
+	);
+	return (result.message ?? {}) as Record<string, number>;
 }
 
 /**
@@ -92,14 +179,19 @@ export async function deleteDataTable(name: string): Promise<{ deleted_records: 
 }
 
 /**
- * Get list of Huf table names (for Link field target selection)
+ * Get list of Huf table names for Link field target selection (standard Frappe REST)
  */
 export async function getHufTableNames(): Promise<
 	Array<{ table_name: string; doctype_name: string }>
 > {
 	try {
-		const result = await call.get('huf.huf.doctype.huf_data_table.api.get_huf_table_names');
-		return result.message;
+		const tables = await db.getDocList(doctype['Huf Data Table'], {
+			fields: ['table_name', 'doctype_name'],
+			filters: [['is_active', '=', 1]],
+			orderBy: { field: 'table_name', order: 'asc' },
+			limit: 1000,
+		});
+		return tables as Array<{ table_name: string; doctype_name: string }>;
 	} catch (error) {
 		handleFrappeError(error, 'Error fetching table names');
 	}

@@ -33,14 +33,15 @@ function DataPage() {
 	} = useInfiniteScroll<{ page?: number; limit?: number; start?: number; search?: string }, HufDataTable>({
 		fetchFn: async (params) => {
 			const response = await getDataTables({
-				search: params.search,
+				page: params.page,
 				limit: params.limit,
 				start: params.start,
+				search: params.search,
 			});
 
 			return {
 				data: response.items,
-				hasMore: response.has_more,
+				hasMore: response.hasMore,
 				total: response.total,
 			};
 		},

@@ -27,7 +27,7 @@ def create_data_table(
 	if not table_name:
 		frappe.throw("Table name is required")
 
-	doctype_name = f"HT {table_name}"
+	doctype_name = f"HF {table_name}"
 
 	if frappe.db.exists("DocType", doctype_name):
 		frappe.throw(f"Table '{table_name}' already exists")
@@ -162,52 +162,24 @@ def delete_data_table(name: str) -> dict:
 
 
 @frappe.whitelist()
-def get_data_tables(
-	search: str = "",
-	limit: int = 20,
-	start: int = 0,
-) -> dict:
-	"""List all Huf data tables with pagination."""
-	limit = int(limit)
-	start = int(start)
+def get_table_record_counts(names: str | list[str]) -> dict:
+	"""Get live record counts for a list of Huf data tables (by registry name).
 
-	filters = {}
-	if search:
-		filters["table_name"] = ["like", f"%{search}%"]
+	Standard REST can't count records across dynamic DocTypes,
+	so this helper exists for the listing page enrichment.
+	"""
+	if isinstance(names, str):
+		names = json.loads(names)
 
-	tables = frappe.get_all(
-		"Huf Data Table",
-		filters=filters,
-		fields=[
-			"name",
-			"table_name",
-			"doctype_name",
-			"description",
-			"icon",
-			"field_count",
-			"is_active",
-			"creation",
-			"modified",
-		],
-		limit_page_length=limit + 1,
-		limit_start=start,
-		order_by="modified desc",
-	)
-
-	has_more = len(tables) > limit
-	items = tables[:limit] if has_more else tables
-
-	for table in items:
+	counts = {}
+	for name in names:
 		try:
-			table["record_count"] = frappe.db.count(table["doctype_name"])
+			registry = frappe.get_doc("Huf Data Table", name)
+			counts[name] = frappe.db.count(registry.doctype_name)
 		except Exception:
-			table["record_count"] = 0
+			counts[name] = 0
 
-	return {
-		"items": items,
-		"has_more": has_more,
-		"total": frappe.db.count("Huf Data Table", filters),
-	}
+	return counts
 
 
 @frappe.whitelist()
@@ -246,14 +218,3 @@ def get_table_schema(name: str) -> dict:
 		"title_field_name": registry.title_field_name,
 		"fields": fields,
 	}
-
-
-@frappe.whitelist()
-def get_huf_table_names() -> list[dict]:
-	"""Get list of all Huf data table names (for Link field options)."""
-	return frappe.get_all(
-		"Huf Data Table",
-		filters={"is_active": 1},
-		fields=["table_name", "doctype_name"],
-		order_by="table_name asc",
-	)
