@@ -7,6 +7,38 @@ from frappe import _
 from .backends import get_backend, ChunkResult
 
 
+def get_search_diagnostics(source_names: List[str]) -> List[Dict[str, Any]]:
+	"""
+	Return diagnostic info for why sources were skipped during search.
+	Used when search returns empty to provide actionable feedback.
+	"""
+	diagnostics = []
+	for source_name in source_names:
+		try:
+			source = frappe.get_doc("Knowledge Source", source_name)
+			reason = None
+			if source.status != "Ready":
+				reason = _("status is {0} (index not ready). Run 'Rebuild Index' or ensure Knowledge Inputs are processed.").format(
+					source.status
+				)
+			elif source.disabled:
+				reason = _("knowledge source is disabled")
+			elif not frappe.has_permission("Knowledge Source", "read", source_name):
+				reason = _("permission denied (requires read access to Knowledge Source)")
+			else:
+				reason = _("index may be empty (no chunks)")
+			diagnostics.append({
+				"source": source_name,
+				"status": source.status,
+				"reason": reason,
+			})
+		except (frappe.DoesNotExistError, frappe.ValidationError):
+			diagnostics.append({"source": source_name, "status": None, "reason": _("source does not exist")})
+		except Exception as e:
+			diagnostics.append({"source": source_name, "status": None, "reason": str(e)})
+	return diagnostics
+
+
 @frappe.whitelist()
 def knowledge_search(
 	query: str,
@@ -14,25 +46,27 @@ def knowledge_search(
 	knowledge_sources: Optional[List[str]] = None,
 	top_k: int = 5,
 	filters: Optional[Dict[str, Any]] = None,
+	ignore_permissions: bool = False,
 ) -> List[Dict[str, Any]]:
 	"""
 	Search for relevant knowledge chunks.
-	
+
 	This is the main retrieval contract used by agents.
-	
+
 	Args:
 		query: The search query
 		knowledge_source: Single knowledge source to search
 		knowledge_sources: Multiple knowledge sources to search
 		top_k: Maximum results per source
 		filters: Additional filters (reserved for future use)
-	
+		ignore_permissions: When True (e.g. from agent context), skip permission check
+
 	Returns:
 		List of chunk results with text, title, score, and source
 	"""
 	if not query or not query.strip():
 		return []
-	
+
 	# Determine sources to search
 	sources = []
 	if knowledge_source:
@@ -41,23 +75,23 @@ def knowledge_search(
 		sources = knowledge_sources
 	else:
 		frappe.throw(_("Either knowledge_source or knowledge_sources is required"))
-	
+
 	# Collect results from all sources
 	all_results = []
-	
+
 	for source_name in sources:
 		try:
 			source = frappe.get_doc("Knowledge Source", source_name)
-			
+
 			# Check if source is ready
 			if source.status != "Ready":
 				continue
-			
+
 			if source.disabled:
 				continue
-			
-			#Ensure user has access to this Knowledge Source
-			if not frappe.has_permission("Knowledge Source", "read", source_name):
+
+			# Ensure user has access to this Knowledge Source (unless agent context)
+			if not ignore_permissions and not frappe.has_permission("Knowledge Source", "read", source_name):
 				continue
 			
 			# Initialize backend
