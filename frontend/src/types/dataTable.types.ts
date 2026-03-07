@@ -80,24 +80,6 @@ export interface DataTableSchema {
 }
 
 /**
- * Pagination params for data tables listing
- */
-export interface GetDataTablesParams {
-	search?: string;
-	limit?: number;
-	start?: number;
-}
-
-/**
- * Paginated response for data tables
- */
-export interface PaginatedDataTablesResponse {
-	items: HufDataTable[];
-	has_more: boolean;
-	total: number;
-}
-
-/**
  * Field type metadata for the field type selector
  */
 export interface FieldTypeInfo {

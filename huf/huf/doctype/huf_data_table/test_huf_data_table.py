@@ -26,8 +26,8 @@ class TestHufDataTable(IntegrationTestCase):
 
 		self.assertTrue(result["success"])
 		self.assertEqual(result["data"]["table_name"], "Test Products")
-		self.assertEqual(result["data"]["doctype_name"], "HT Test Products")
-		self.assertTrue(frappe.db.exists("DocType", "HT Test Products"))
+		self.assertEqual(result["data"]["doctype_name"], "HF Test Products")
+		self.assertTrue(frappe.db.exists("DocType", "HF Test Products"))
 		self.assertTrue(frappe.db.exists("Huf Data Table", {"table_name": "Test Products"}))
 
 	def test_get_table_schema(self):
@@ -56,7 +56,7 @@ class TestHufDataTable(IntegrationTestCase):
 
 		delete_result = delete_data_table(result["data"]["name"])
 		self.assertTrue(delete_result["success"])
-		self.assertFalse(frappe.db.exists("DocType", "HT Delete Test"))
+		self.assertFalse(frappe.db.exists("DocType", "HF Delete Test"))
 		self.assertFalse(frappe.db.exists("Huf Data Table", result["data"]["name"]))
 
 	def test_duplicate_table_name(self):
