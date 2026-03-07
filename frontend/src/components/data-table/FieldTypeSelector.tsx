@@ -19,9 +19,9 @@ import {
 	Columns,
 	LucideIcon,
 } from 'lucide-react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
 import type { DataTableFieldType } from '@/types/dataTable.types';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -111,10 +111,17 @@ interface FieldTypeSelectorProps {
 }
 
 export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps) {
+	const [open, setOpen] = useState(false);
+
+	const handleSelect = (type: DataTableFieldType) => {
+		setOpen(false);
+		onSelect(type);
+	};
+
 	return (
-		<Popover>
+		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>{trigger}</PopoverTrigger>
-			<PopoverContent className="w-80 p-0" align="start">
+			<PopoverContent className="w-80 p-0" align="center" side="top" collisionPadding={16}>
 				<div className="p-3 border-b">
 					<h4 className="font-medium text-sm">Choose Field Type</h4>
 				</div>
@@ -128,19 +135,16 @@ export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps)
 								{group.types.map((ft) => {
 									const Icon = ICON_MAP[ft.icon] || Type;
 									return (
-										<PopoverTrigger asChild key={ft.type}>
-											<Button
-												variant="ghost"
-												size="sm"
-												className={cn(
-													'justify-start gap-2 h-8 text-xs font-normal'
-												)}
-												onClick={() => onSelect(ft.type)}
-											>
-												<Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-												{ft.label}
-											</Button>
-										</PopoverTrigger>
+										<Button
+											key={ft.type}
+											variant="ghost"
+											size="sm"
+											className="justify-start gap-2 h-8 text-xs font-normal"
+											onClick={() => handleSelect(ft.type)}
+										>
+											<Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+											{ft.label}
+										</Button>
 									);
 								})}
 							</div>
