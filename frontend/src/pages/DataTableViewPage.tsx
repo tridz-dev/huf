@@ -10,7 +10,6 @@ import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
 import {
 	getTableSchema,
 	getTableRecords,
-	deleteTableRecord,
 	deleteDataTable,
 } from '@/services/dataTableApi';
 import type { DataTableFieldDef, DataTableSchema } from '@/types/dataTable.types';
@@ -98,17 +97,6 @@ export function DataTableViewPage() {
 	const handleAddRecord = () => {
 		setEditRecord(null);
 		setFormOpen(true);
-	};
-
-	const handleDeleteRecord = async (record: Record<string, unknown>) => {
-		if (!schema) return;
-		try {
-			await deleteTableRecord(schema.doctype_name, record.name as string);
-			toast.success('Record deleted');
-			loadRecords(true);
-		} catch (err: any) {
-			toast.error('Failed to delete record', { description: err.message });
-		}
 	};
 
 	const handleDeleteTable = async () => {
