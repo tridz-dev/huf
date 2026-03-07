@@ -15,6 +15,9 @@ import { AgentFormPageWrapper } from './pages/AgentFormPageWrapper';
 import { FlowListPage } from './pages/FlowListPage';
 import { FlowCanvasPageWrapper } from './pages/FlowCanvasPageWrapper';
 import { DataPage } from './pages/DataPage';
+import { DataHeaderActions } from './components/DataHeaderActions';
+import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
+import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { IntegrationsPageWrapper } from './pages/IntegrationsPageWrapper';
 import { ChatPage } from './pages/ChatPageV2';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -134,9 +137,33 @@ function App() {
             path="/data"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout headerActions={<DataHeaderActions />}>
                   <DataPage />
                 </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/new"
+            element={
+              <ProtectedRoute>
+                <DataTableBuilderWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/:tableId"
+            element={
+              <ProtectedRoute>
+                <DataTableViewWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/:tableId/edit"
+            element={
+              <ProtectedRoute>
+                <DataTableBuilderWrapper />
               </ProtectedRoute>
             }
           />
