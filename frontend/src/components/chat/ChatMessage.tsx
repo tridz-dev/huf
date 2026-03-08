@@ -13,12 +13,32 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatTime } from './utils';
 import type { MessageType } from './types';
 import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
+import {
+	AudioPlayer,
+	AudioPlayerElement,
+	AudioPlayerControlBar,
+	AudioPlayerPlayButton,
+	AudioPlayerTimeDisplay,
+	AudioPlayerTimeRange,
+	AudioPlayerDurationDisplay,
+	AudioPlayerMuteButton,
+	AudioPlayerVolumeRange,
+} from '@/components/ai-elements/audio-player';
+import type { LoadingType } from './ChatInput';
+
+const frappeUrl = import.meta.env.VITE_FRAPPE_URL || window.location.origin;
+
+function resolveAudioSrc(src: string): string {
+	if (src.startsWith('http://') || src.startsWith('https://')) return src;
+	return `${frappeUrl}${src.startsWith('/') ? '' : '/'}${src}`;
+}
 
 interface ChatMessageProps {
     message: MessageType;
     agentName: string;
     agentColor: string | null;
     status: 'submitted' | 'streaming' | 'ready' | 'error';
+    loadingType?: LoadingType;
     onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
     scrollToBottomAfterPaint: (instant?: boolean) => void;
 }
@@ -28,6 +48,7 @@ export function ChatMessage({
     agentName,
     agentColor,
     status,
+    loadingType = 'default',
     onFeedback,
     scrollToBottomAfterPaint,
 }: ChatMessageProps) {
@@ -82,11 +103,26 @@ export function ChatMessage({
                              message.from === 'assistant' && 
                              (!message.versions[0]?.content || message.versions[0].content.trim() === '') && (
                                 <MessageLoadingState
+                                    type={message.tools?.length ? 'tool-execution' : loadingType}
                                     hasTools={!!message.tools && message.tools.length > 0}
                                     toolName={message.tools?.[0]?.name}
                                 />
                             )}
-                            {message.kind === 'Image' ? (
+                            {message.generatedAudio && message.from === 'assistant' ? (
+                                <div className="w-full max-w-md">
+                                    <AudioPlayer>
+                                        <AudioPlayerElement src={resolveAudioSrc(message.generatedAudio)} />
+                                        <AudioPlayerControlBar>
+                                            <AudioPlayerPlayButton />
+                                            <AudioPlayerTimeDisplay />
+                                            <AudioPlayerTimeRange />
+                                            <AudioPlayerDurationDisplay />
+                                            <AudioPlayerMuteButton />
+                                            <AudioPlayerVolumeRange />
+                                        </AudioPlayerControlBar>
+                                    </AudioPlayer>
+                                </div>
+                            ) : message.kind === 'Image' ? (
                                 <div className="flex flex-col gap-2">
                                     {message.generatedImage ? (
                                         <Image 
