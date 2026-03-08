@@ -6,10 +6,12 @@ the same internal handler logic used by sdk_tools so results match
 agent tool calls.
 """
 
-import json
+import asyncio
+import inspect
 
 import frappe
-from frappe import _
+
+from huf.ai.tool_types import DOCTYPE_BOUND_TYPES, TOOL_TYPE_HANDLERS
 
 
 def execute(tool_name: str, args: dict, user: str = None) -> dict:
@@ -73,21 +75,11 @@ def _execute_tool(tool_name: str, args: dict) -> dict:
 
 	# Execute the function
 	try:
-		import inspect
+		from huf.ai.sdk_tools import _call_with_filtered_args
 
-		sig = inspect.signature(handler)
-		accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
-
-		if accepts_kwargs:
-			result = handler(**call_args)
-		else:
-			valid_params = set(sig.parameters.keys())
-			filtered_args = {k: v for k, v in call_args.items() if k in valid_params}
-			result = handler(**filtered_args)
+		result = _call_with_filtered_args(handler, call_args)
 
 		# Handle async results
-		import asyncio
-
 		if asyncio.iscoroutine(result):
 			loop = asyncio.new_event_loop()
 			asyncio.set_event_loop(loop)
@@ -106,65 +98,30 @@ def _execute_tool(tool_name: str, args: dict) -> dict:
 		return {"success": True, "result": str(result) if result is not None else None}
 
 	except Exception as e:
-		frappe.log_error(f"Flow tool execution error for '{tool_name}': {str(e)}", "Flow Tool Executor")
+		frappe.log_error(
+			title="Flow Tool Executor",
+			message=f"Flow tool execution error for '{tool_name}': {str(e)}",
+		)
 		return {"success": False, "error": str(e)}
 
 
 def _resolve_function_path(tool_doc: dict) -> str | None:
-	"""Resolve the function path for a given tool type, matching sdk_tools logic."""
+	"""Resolve the function path for a given tool type."""
 	tool_type = tool_doc.get("types")
 
 	if tool_type in ("Custom Function", "App Provided"):
 		return tool_doc.get("function_path")
 
-	# Map standard types to their handlers (same as sdk_tools.create_agent_tools)
-	type_to_handler = {
-		"Get List": "huf.ai.sdk_tools.handle_get_list",
-		"Get Document": "huf.ai.sdk_tools.handle_get_document",
-		"Update Document": "huf.ai.sdk_tools.handle_update_document",
-		"Create Document": "huf.ai.sdk_tools.handle_create_document",
-		"Delete Document": "huf.ai.sdk_tools.handle_delete_document",
-		"Get Multiple Documents": "huf.ai.sdk_tools.handle_get_documents",
-		"Create Multiple Documents": "huf.ai.sdk_tools.handle_create_documents",
-		"Update Multiple Documents": "huf.ai.sdk_tools.handle_update_documents",
-		"Delete Multiple Documents": "huf.ai.sdk_tools.handle_delete_documents",
-		"Submit Document": "huf.ai.sdk_tools.handle_submit_document",
-		"Cancel Document": "huf.ai.sdk_tools.handle_cancel_document",
-		"Get Value": "huf.ai.sdk_tools.handle_get_value",
-		"Set Value": "huf.ai.sdk_tools.handle_set_value",
-		"Get Report Result": "huf.ai.sdk_tools.handle_get_report_result",
-		"GET": "huf.ai.http_handler.handle_get_request",
-		"POST": "huf.ai.http_handler.handle_post_request",
-		"Run Agent": "huf.ai.sdk_tools.handle_run_agent",
-		"Attach File to Document": "huf.ai.sdk_tools.handle_attach_file_to_document",
-		"Get Conversation Data": "huf.ai.sdk_tools.handle_get_conversation_data",
-		"Set Conversation Data": "huf.ai.sdk_tools.handle_set_conversation_data",
-		"Load Conversation Data": "huf.ai.sdk_tools.handle_load_conversation_data",
-	}
-
-	return type_to_handler.get(tool_type)
+	# Use the centralized tool-type-to-handler mapping
+	return TOOL_TYPE_HANDLERS.get(tool_type)
 
 
 def _inject_extra_args(args: dict, tool_doc: dict):
-	"""Inject extra arguments based on tool type, matching sdk_tools logic."""
+	"""Inject extra arguments based on tool type."""
 	tool_type = tool_doc.get("types")
 
-	if tool_type == "Attach File to Document" and tool_doc.get("reference_doctype"):
+	if tool_type in DOCTYPE_BOUND_TYPES and tool_doc.get("reference_doctype"):
 		args.setdefault("reference_doctype", tool_doc["reference_doctype"])
-
-	elif tool_type in (
-		"Get Document",
-		"Get Multiple Documents",
-		"Get List",
-		"Create Document",
-		"Create Multiple Documents",
-		"Update Document",
-		"Update Multiple Documents",
-		"Delete Document",
-		"Delete Multiple Documents",
-	):
-		if tool_doc.get("reference_doctype"):
-			args.setdefault("reference_doctype", tool_doc["reference_doctype"])
 
 	elif tool_type == "Run Agent" and tool_doc.get("agent"):
 		args.setdefault("agent_name", tool_doc["agent"])
