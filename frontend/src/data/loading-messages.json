@@ -1,0 +1,30 @@
+{
+  "default": [
+    "Thinking...",
+    "Mulling this over...",
+    "Connecting the dots...",
+    "Crunching thoughts...",
+    "On it...",
+    "Putting this together...",
+    "Working on something good...",
+    "Making sense of this..."
+  ],
+  "tool-execution": [
+    "Getting things done...",
+    "Doing the heavy lifting...",
+    "Running the numbers...",
+    "Working behind the scenes..."
+  ],
+  "transcribing": [
+    "Listening carefully...",
+    "Pretending I have ears...",
+    "Speech → text in progress...",
+    "Your words are almost ready...",
+    "Decoding the spoken word...",
+    "Ears wide open...",
+    "Catching every word...",
+    "Turning sound into words...",
+    "Reading between the soundwaves...",
+    "Playing it back in my head..."
+  ]
+}
