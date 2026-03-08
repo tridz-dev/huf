@@ -282,7 +282,7 @@ def create_image_generation_tool():
         "tool_name": tool_name,
         "description": "Generate an image from a text description using AI. Use this when the user asks for image creation, visualization, or artwork generation. Do not show the image URL in the output message.",
         "types": "Custom Function",
-        "function_path": "huf.ai.sdk_tools.handle_generate_image",
+        "function_path": "huf.ai.handlers.media.handle_generate_image",
         "pass_parameters_as_json": 1,
         "parameters": parameters,
         "tool_type": "Generation"
@@ -348,7 +348,7 @@ def create_ocr_document_tool():
         # Update existing tool
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
         tool_doc.description = "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents."
-        tool_doc.function_path = "huf.ai.sdk_tools.handle_ocr_document"
+        tool_doc.function_path = "huf.ai.handlers.media.handle_ocr_document"
         tool_doc.tool_type = "OCR"
         tool_doc.types = "Custom Function"
         tool_doc.pass_parameters_as_json = 1
@@ -368,7 +368,7 @@ def create_ocr_document_tool():
             "tool_name": tool_name,
             "description": "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents.",
             "types": "Custom Function",
-            "function_path": "huf.ai.sdk_tools.handle_ocr_document",
+            "function_path": "huf.ai.handlers.media.handle_ocr_document",
             "pass_parameters_as_json": 1,
             "parameters": parameters,
             "tool_type": "OCR"
@@ -441,7 +441,7 @@ def create_generate_audio_tool():
         # Update existing tool - add missing parameters if needed
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
         tool_doc.description = "Generate audio (speech) from text using AI text-to-speech. Use this when the user asks to convert text to speech, create voice narration, or generate audio. Supports multiple providers via LiteLLM (OpenAI, Gemini, ElevenLabs, etc.)."
-        tool_doc.function_path = "huf.ai.sdk_tools.handle_generate_audio"
+        tool_doc.function_path = "huf.ai.handlers.media.handle_generate_audio"
         tool_doc.tool_type = "Audio Generation"
         tool_doc.types = "Custom Function"
         tool_doc.pass_parameters_as_json = 1
@@ -461,7 +461,7 @@ def create_generate_audio_tool():
             "tool_name": tool_name,
             "description": "Generate audio (speech) from text using AI text-to-speech. Use this when the user asks to convert text to speech, create voice narration, or generate audio. Supports multiple providers via LiteLLM (OpenAI, Gemini, ElevenLabs, etc.).",
             "types": "Custom Function",
-            "function_path": "huf.ai.sdk_tools.handle_generate_audio",
+            "function_path": "huf.ai.handlers.media.handle_generate_audio",
             "pass_parameters_as_json": 1,
             "parameters": parameters,
             "tool_type": "Audio Generation"
@@ -521,7 +521,7 @@ def create_transcribe_audio_tool():
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
         # Update description and function path if needed
         tool_doc.description = "Transcribe audio files to text using AI. Use this when the user uploads an audio file or asks to transcribe audio. Supports multiple providers via LiteLLM (OpenAI, Groq, Deepgram, etc.)."
-        tool_doc.function_path = "huf.ai.sdk_tools.handle_transcribe_audio"
+        tool_doc.function_path = "huf.ai.handlers.media.handle_transcribe_audio"
         tool_doc.tool_type = "Transcription"
         tool_doc.types = "Custom Function"
         tool_doc.pass_parameters_as_json = 1
@@ -541,7 +541,7 @@ def create_transcribe_audio_tool():
             "tool_name": tool_name,
             "description": "Transcribe audio files to text using AI. Use this when the user uploads an audio file or asks to transcribe audio. Supports multiple providers via LiteLLM (OpenAI, Groq, Deepgram, etc.).",
             "types": "Custom Function",
-            "function_path": "huf.ai.sdk_tools.handle_transcribe_audio",
+            "function_path": "huf.ai.handlers.media.handle_transcribe_audio",
             "pass_parameters_as_json": 1,
             "parameters": parameters,
             "tool_type": "Transcription"
