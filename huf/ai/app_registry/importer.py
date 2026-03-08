@@ -101,3 +101,102 @@ def import_definition(
 		payload,
 		skip_sensitive=skip_sensitive,
 	)
+
+
+def parse_version(version_str: str | None) -> tuple[int, ...]:
+	"""
+	Parse version string into comparable tuple.
+
+	Args:
+		version_str: Version string like "1.0", "1.2.3", "2.0.0-beta"
+
+	Returns:
+		Tuple of integers for comparison. Non-numeric parts are treated as 0.
+	"""
+	if not version_str:
+		return (0,)
+
+	# Remove common suffixes like -beta, -alpha, -rc
+	version_str = version_str.split("-")[0]
+
+	try:
+		parts = version_str.split(".")
+		return tuple(int(p) for p in parts if p.isdigit())
+	except (ValueError, AttributeError):
+		return (0,)
+
+
+def compare_versions(v1: str | None, v2: str | None) -> int:
+	"""
+	Compare two version strings.
+
+	Args:
+		v1: First version string
+		v2: Second version string
+
+	Returns:
+		-1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
+	"""
+	parsed1 = parse_version(v1)
+	parsed2 = parse_version(v2)
+
+	# Pad shorter tuple with zeros
+	max_len = max(len(parsed1), len(parsed2))
+	parsed1 = parsed1 + (0,) * (max_len - len(parsed1))
+	parsed2 = parsed2 + (0,) * (max_len - len(parsed2))
+
+	if parsed1 < parsed2:
+		return -1
+	elif parsed1 > parsed2:
+		return 1
+	else:
+		return 0
+
+
+def should_skip_import(
+	existing_doc: "frappe.Document",
+	new_payload: dict,
+	definition_type: str
+) -> tuple[bool, str]:
+	"""
+	Determine if import should be skipped based on version comparison.
+
+	Args:
+		existing_doc: Existing DocType document
+		new_payload: New definition payload
+		definition_type: Type of definition
+
+	Returns:
+		Tuple of (should_skip, reason)
+	"""
+	# Get versions
+	existing_version = getattr(existing_doc, "version", None)
+	new_version = new_payload.get("version")
+
+	# If no versions specified, always update (current behavior)
+	if not existing_version and not new_version:
+		return (False, "No versions specified, proceeding with update")
+
+	# If only new version specified, update
+	if not existing_version and new_version:
+		return (False, f"New version {new_version} (no existing version)")
+
+	# If only existing version specified, update (assume new is latest)
+	if existing_version and not new_version:
+		return (False, f"No new version (existing: {existing_version})")
+
+	# Compare versions
+	comparison = compare_versions(new_version, existing_version)
+
+	if comparison < 0:
+		return (True, f"New version {new_version} is older than existing {existing_version}")
+	elif comparison == 0:
+		# Same version - check if content changed by comparing key fields
+		key_field = TYPE_CONFIG.get(definition_type, (None, None))[1]
+		if key_field:
+			existing_value = getattr(existing_doc, key_field, None)
+			new_value = new_payload.get(key_field)
+			if existing_value == new_value:
+				return (True, f"Version {new_version} unchanged, skipping")
+
+	return (False, f"Updating from {existing_version} to {new_version}")

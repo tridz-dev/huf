@@ -1,0 +1,41 @@
+{
+  "type": "tool",
+  "tool_name": "weather.get_current",
+  "description": "Get current weather conditions for a location using an external API",
+  "tool_type": "HTTP",
+  "types": "GET",
+  "function_path": null,
+  "reference_doctype": null,
+  "base_url": "https://api.weather.com/v1",
+  "parameters": [
+    {
+      "label": "City",
+      "fieldname": "city",
+      "type": "string",
+      "required": true,
+      "description": "City name to get weather for"
+    },
+    {
+      "label": "Country",
+      "fieldname": "country",
+      "type": "string",
+      "required": false,
+      "description": "Country code (e.g., US, UK, CA)"
+    }
+  ],
+  "http_headers": [
+    {
+      "key": "Authorization",
+      "value": "Bearer {{api_key}}"
+    },
+    {
+      "key": "Content-Type",
+      "value": "application/json"
+    }
+  ],
+  "pass_parameters_as_json": false,
+  "is_read_only": true,
+  "allowed_for_guest": true,
+  "required_permission": null,
+  "version": "1.0"
+}

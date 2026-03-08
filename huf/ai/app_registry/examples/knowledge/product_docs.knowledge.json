@@ -1,0 +1,12 @@
+{
+  "type": "knowledge",
+  "source_name": "product_documentation",
+  "description": "Product documentation and FAQs for customer support",
+  "knowledge_type": "sqlite_fts",
+  "scope": "Global",
+  "storage_mode": "Frappe File",
+  "chunk_size": 1024,
+  "chunk_overlap": 100,
+  "disabled": false,
+  "version": "1.0"
+}

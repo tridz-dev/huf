@@ -1,0 +1,6 @@
+{
+  "type": "model",
+  "model_name": "gpt-4o-mini",
+  "provider": "openai",
+  "version": "1.0"
+}

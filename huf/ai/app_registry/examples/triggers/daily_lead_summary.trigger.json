@@ -1,0 +1,10 @@
+{
+  "type": "trigger",
+  "trigger_name": "daily_lead_summary",
+  "agent": "CRM Lead Assistant",
+  "trigger_type": "Schedule",
+  "scheduled_interval": "Daily",
+  "interval_count": 1,
+  "disabled": false,
+  "version": "1.0"
+}

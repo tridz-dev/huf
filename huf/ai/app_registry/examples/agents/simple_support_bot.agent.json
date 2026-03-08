@@ -1,0 +1,26 @@
+{
+  "type": "agent",
+  "agent_name": "Simple Support Bot",
+  "description": "A simple support agent with inline instructions",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "prompt_mode": "Local",
+  "instructions": "You are a helpful customer support assistant.\n\nYour responsibilities:\n- Answer common questions about our products\n- Help users troubleshoot issues\n- Escalate complex problems to human agents\n\nAlways be polite, professional, and concise.",
+  "agent_prompt": null,
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "allow_chat": true,
+  "persist_conversation": true,
+  "persist_user_history": true,
+  "allow_guest": true,
+  "disabled": false,
+  "tools": [
+    "support.get_faq",
+    "support.create_ticket"
+  ],
+  "knowledge": [],
+  "context_strategy": "Summarize",
+  "history_limit": 10,
+  "max_turns": 10,
+  "version": "1.0"
+}

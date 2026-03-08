@@ -1,0 +1,6 @@
+{
+  "type": "model",
+  "model_name": "claude-3-5-sonnet",
+  "provider": "anthropic",
+  "version": "1.0"
+}

@@ -1,0 +1,8 @@
+{
+  "type": "provider",
+  "provider_name": "openai",
+  "is_local_llm": false,
+  "url": null,
+  "port": null,
+  "version": "1.0"
+}

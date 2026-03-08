@@ -157,3 +157,94 @@ def validate(data: dict, definition_type: str) -> ValidationResult:
 	if fn:
 		return fn(data)
 	return ValidationResult(errors=[f"Unknown definition type: {definition_type}"])
+
+
+def detect_circular_references(
+	definitions: dict[str, dict],
+	tool_to_agent: dict[str, str]
+) -> list[list[str]]:
+	"""
+	Detect circular references between agents through tools.
+
+	Args:
+		definitions: Dict mapping agent_name -> agent definition (with 'tools' list)
+		tool_to_agent: Dict mapping tool_name -> target_agent_name
+
+	Returns:
+		List of cycles found, where each cycle is a list of agent names.
+		Example: [["agent_a", "agent_b", "agent_c"]] means agent_a -> agent_b -> agent_c -> agent_a
+	"""
+	cycles = []
+	visited = set()
+	rec_stack = set()
+
+	def dfs(agent_name: str, path: list[str]) -> None:
+		if agent_name in rec_stack:
+			# Found a cycle
+			cycle_start = path.index(agent_name)
+			cycle = path[cycle_start:] + [agent_name]
+			cycles.append(cycle)
+			return
+
+		if agent_name in visited:
+			return
+
+		visited.add(agent_name)
+		rec_stack.add(agent_name)
+
+		# Get tools for this agent
+		agent_def = definitions.get(agent_name, {})
+		tools = agent_def.get("tools", [])
+
+		for tool_name in tools:
+			# Check if this tool runs another agent
+			target_agent = tool_to_agent.get(tool_name)
+			if target_agent and target_agent in definitions:
+				dfs(target_agent, path + [agent_name])
+
+		rec_stack.remove(agent_name)
+
+	# Run DFS from each agent
+	for agent_name in definitions:
+		if agent_name not in visited:
+			dfs(agent_name, [])
+
+	return cycles
+
+
+def validate_agent_with_circular_check(
+	data: dict,
+	all_agents: dict[str, dict],
+	tool_to_agent: dict[str, str]
+) -> ValidationResult:
+	"""
+	Validate an agent definition with circular dependency checking.
+
+	Args:
+		data: The agent definition to validate
+		all_agents: Dict of all agent definitions being imported
+		tool_to_agent: Mapping of tool names to target agent names
+
+	Returns:
+		ValidationResult with errors and warnings.
+	"""
+	result = validate_agent(data)
+
+	# Check for circular references
+	agent_name = data.get("agent_name")
+	if agent_name:
+		# Add current agent to the definitions dict for checking
+		check_defs = dict(all_agents)
+		check_defs[agent_name] = data
+
+		cycles = detect_circular_references(check_defs, tool_to_agent)
+		if cycles:
+			for cycle in cycles:
+				if agent_name in cycle:
+					cycle_str = " -> ".join(cycle)
+					result.warnings.append(
+						f"Circular dependency detected: {cycle_str}. "
+						f"The cycle-causing tool reference will be omitted."
+					)
+
+	return result

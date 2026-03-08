@@ -1,0 +1,12 @@
+{
+  "type": "knowledge",
+  "source_name": "crm_sales_playbook",
+  "description": "Sales guidelines, objection handling, and qualification criteria for the CRM team",
+  "knowledge_type": "sqlite_fts",
+  "scope": "Global",
+  "storage_mode": "Frappe File",
+  "chunk_size": 512,
+  "chunk_overlap": 50,
+  "disabled": false,
+  "version": "1.0"
+}
