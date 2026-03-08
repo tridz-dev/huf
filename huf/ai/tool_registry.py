@@ -223,6 +223,27 @@ def _get_apps_to_scan():
     
     return apps_to_scan
 
+
+
+def _normalize_hook_tools(hook_value):
+    """Normalize huf_tools hook values into a flat list of tool-definition dicts."""
+    normalized = []
+
+    if isinstance(hook_value, str):
+        try:
+            hook_value = frappe.get_attr(hook_value)
+        except Exception:
+            return normalized
+
+    if isinstance(hook_value, dict):
+        return [hook_value]
+
+    if isinstance(hook_value, (list, tuple)):
+        for item in hook_value:
+            normalized.extend(_normalize_hook_tools(item))
+
+    return normalized
+
 def get_tools_by_app(apps_to_scan=None, use_cache=True):
     """
     Get tools from hooks for specified apps or all installed apps.
@@ -245,8 +266,13 @@ def get_tools_by_app(apps_to_scan=None, use_cache=True):
     
     for app in apps_to_scan:
         app_hooks = frappe.get_hooks("huf_tools", app_name=app) or []
-        if app_hooks:
-            tools_by_app[app] = app_hooks
+        app_tools = []
+
+        for hook_entry in app_hooks:
+            app_tools.extend(_normalize_hook_tools(hook_entry))
+
+        if app_tools:
+            tools_by_app[app] = app_tools
     
     # Update cache with scanned apps
     if use_cache and apps_to_scan:
