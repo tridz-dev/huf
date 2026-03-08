@@ -26,8 +26,9 @@ export function MessageLoadingState({
 	toolName,
 	className,
 }: MessageLoadingStateProps) {
-	// Tool name override: static message, no cycling
-	const toolOverride = hasTools && toolName ? `Executing ${toolName}...` : hasTools ? "Executing Tool..." : null;
+	// Tool name override: static message, no cycling (guard against undefined toolName)
+	const safeToolName = toolName && String(toolName).trim() && toolName !== 'unknown' ? toolName : null;
+	const toolOverride = hasTools && safeToolName ? `Executing ${safeToolName}...` : hasTools ? "Executing Tool..." : null;
 
 	const messages = toolOverride
 		? [toolOverride]
