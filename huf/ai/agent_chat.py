@@ -1,7 +1,7 @@
 import frappe
 import json
 from frappe import _
-from huf.ai.agent_integration import run_agent_sync
+from huf.ai.agent_integration import run_agent_sync, _run_async_safely
 from huf.ai.conversation_manager import ConversationManager
 import base64
 from frappe.utils.file_manager import save_file
@@ -81,35 +81,16 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
         return {"success": False, "error": "File was saved but ID could not be retrieved."}
 
     provider = frappe.db.get_value("Agent", chat.agent, "provider")
-    
+
     try:
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-        if loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(
-                sdk_tools.handle_transcribe_audio(
-                    file_id=file_id,
-                    agent_name=chat.agent,
-                    conversation_id=conversation or chat.conversation,
-                    message_id=msg.name
-                ),
-                loop
+        res = _run_async_safely(
+            sdk_tools.handle_transcribe_audio(
+                file_id=file_id,
+                agent_name=chat.agent,
+                conversation_id=conversation or chat.conversation,
+                message_id=msg.name,
             )
-            res = future.result()
-        else:
-            res = loop.run_until_complete(
-                sdk_tools.handle_transcribe_audio(
-                    file_id=file_id,
-                    agent_name=chat.agent,
-                    conversation_id=conversation or chat.conversation,
-                    message_id=msg.name
-                )
-            )
+        )
     except Exception as e:
          frappe.log_error(f"Transcription Error: {str(e)}")
          return {"success": False, "error": str(e)}
@@ -230,34 +211,14 @@ def upload_audio_and_transcribe_web(filename: str, b64data: str, agent: str, con
 
     # Transcribe using SDK STT tool
     try:
-        import asyncio
-
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        if loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(
-                sdk_tools.handle_transcribe_audio(
-                    file_id=file_id,
-                    agent_name=agent,
-                    conversation_id=conversation_id,
-                    message_id=msg.name,
-                ),
-                loop,
+        res = _run_async_safely(
+            sdk_tools.handle_transcribe_audio(
+                file_id=file_id,
+                agent_name=agent,
+                conversation_id=conversation_id,
+                message_id=msg.name,
             )
-            res = future.result()
-        else:
-            res = loop.run_until_complete(
-                sdk_tools.handle_transcribe_audio(
-                    file_id=file_id,
-                    agent_name=agent,
-                    conversation_id=conversation_id,
-                    message_id=msg.name,
-                )
-            )
+        )
     except Exception as e:
         frappe.log_error(f"Transcription Error (web): {str(e)}")
         return {"success": False, "error": str(e)}
@@ -516,30 +477,13 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
     file_id = saved_file.name
 
     try:
-        import asyncio
-        
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-        if loop.is_running():
-            future = asyncio.run_coroutine_threadsafe(
+        result = _run_async_safely(
             sdk_tools.handle_ocr_document(
                 file_id=file_id,
                 agent_name=chat.agent,
-                conversation_id=conversation or chat.conversation
-            ),
-            loop
+                conversation_id=conversation or chat.conversation,
             )
-            result = future.result()
-        else:
-             result = loop.run_until_complete(sdk_tools.handle_ocr_document(
-                file_id=file_id,
-                agent_name=chat.agent,
-                conversation_id=conversation or chat.conversation
-             ))
+        )
 
         if not result.get("success"):
             return result
