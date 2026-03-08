@@ -128,3 +128,31 @@ def get_credential(service: str, key: str, default: str = None) -> str:
 		return require_credential(service, key)
 	except ValueError:
 		return default
+
+
+def update_last_error(service: str, error: str):
+	"""
+	Update the last_error field in Integration Settings for a service.
+	
+	Args:
+		service: The service name
+		error: The error message (will be truncated to 140 chars)
+	"""
+	try:
+		# Find active integration settings for the service
+		settings = frappe.get_all(
+			"Integration Settings",
+			filters={"service": service, "is_active": 1},
+			fields=["name"],
+			order_by="is_default DESC, modified DESC",
+			limit=1
+		)
+		
+		if settings:
+			doc = frappe.get_doc("Integration Settings", settings[0].name)
+			doc.last_error = error[:140]  # Truncate to field length
+			doc.save(ignore_permissions=True)
+			frappe.db.commit()
+	except Exception:
+		# Silently fail - don't break tool execution for logging errors
+		pass
