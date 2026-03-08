@@ -81,7 +81,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         continue
                     function_path = function_doc.function_path
                 elif function_doc.types == "Client Side Tool":
-                    function_path = "huf.ai.cilent_side_tool.client_side_function"
+                    function_path = "huf.ai.client_side_tool.client_side_function"
                     if not function_doc.function_name:
                         continue
                 else:
