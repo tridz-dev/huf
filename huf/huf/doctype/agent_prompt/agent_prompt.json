@@ -23,7 +23,9 @@
   "column_break_version",
   "previous_version",
   "forked_from",
-  "prompt_group"
+  "prompt_group",
+  "source_app",
+  "source_file"
  ],
  "fields": [
   {
@@ -151,6 +153,22 @@
    "label": "Prompt Group",
    "read_only": 1,
    "hidden": 1
+  },
+  {
+   "description": "App that provided this definition via file-based discovery",
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source App",
+   "read_only": 1
+  },
+  {
+   "description": "Relative path to the source definition file",
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source File",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,

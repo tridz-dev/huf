@@ -32,7 +32,9 @@
         "total_inputs",
         "index_size_bytes",
         "error_message",
-        "disabled"
+        "disabled",
+        "source_app",
+        "source_file"
     ],
     "fields": [
         {
@@ -207,6 +209,22 @@
             "options": "AI Provider",
             "description": "AI Provider for API key resolution",
             "depends_on": "eval:doc.knowledge_type === 'sqlite_vec'"
+        },
+        {
+            "description": "App that provided this definition via file-based discovery",
+            "fieldname": "source_app",
+            "fieldtype": "Data",
+            "hidden": 1,
+            "label": "Source App",
+            "read_only": 1
+        },
+        {
+            "description": "Relative path to the source definition file",
+            "fieldname": "source_file",
+            "fieldtype": "Data",
+            "hidden": 1,
+            "label": "Source File",
+            "read_only": 1
         }
     ],
     "index_web_pages_for_search": 1,

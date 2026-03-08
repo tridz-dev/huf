@@ -7,7 +7,9 @@
  "engine": "InnoDB",
  "field_order": [
   "model_name",
-  "provider"
+  "provider",
+  "source_app",
+  "source_file"
  ],
  "fields": [
   {
@@ -25,6 +27,22 @@
    "label": "Model Name",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "description": "App that provided this definition via file-based discovery",
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source App",
+   "read_only": 1
+  },
+  {
+   "description": "Relative path to the source definition file",
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source File",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,

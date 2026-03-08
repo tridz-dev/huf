@@ -7,7 +7,8 @@
  "field_order": [
   "default_provider",
   "column_break_ar10",
-  "default_model"
+  "default_model",
+  "last_definition_scans"
  ],
  "fields": [
   {
@@ -25,6 +26,14 @@
   {
    "fieldname": "column_break_ar10",
    "fieldtype": "Column Break"
+  },
+  {
+   "description": "JSON cache of last definition scan timestamps and file hashes per app. Used by App Agent Discovery.",
+   "fieldname": "last_definition_scans",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Last Definition Scans",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,

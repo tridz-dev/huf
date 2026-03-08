@@ -30,7 +30,9 @@
   "source_system",
   "metadata",
   "disabled_reason",
-  "is_virtual"
+  "is_virtual",
+  "source_app",
+  "source_file"
  ],
  "fields": [
   {
@@ -146,6 +148,22 @@
    "fieldname": "is_virtual",
    "fieldtype": "Check",
    "label": "Is Virtual"
+  },
+  {
+   "description": "App that provided this definition via file-based discovery",
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source App",
+   "read_only": 1
+  },
+  {
+   "description": "Relative path to the source definition file",
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source File",
+   "read_only": 1
   },
   {
    "fieldname": "source_system",
