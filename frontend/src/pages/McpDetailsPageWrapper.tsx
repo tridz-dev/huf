@@ -4,7 +4,10 @@ import { UnifiedLayout } from '../layouts/UnifiedLayout';
 import { McpDetailsPage } from './McpDetailsPage';
 import { getMCPServer } from '../services/mcpApi';
 
-export function McpDetailsPageWrapper() {
+export { McpDetailsPageWrapper };
+export default McpDetailsPageWrapper;
+
+function McpDetailsPageWrapper() {
   const { mcpId } = useParams<{ mcpId: string }>();
   const [serverName, setServerName] = useState<string>('New MCP Server');
   const isNew = mcpId === 'new';

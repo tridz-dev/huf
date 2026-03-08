@@ -2,7 +2,10 @@ import { Database } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 
-export function DataPage() {
+export { DataPage };
+export default DataPage;
+
+function DataPage() {
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 space-y-6">

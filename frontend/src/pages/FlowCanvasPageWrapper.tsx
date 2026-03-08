@@ -6,7 +6,10 @@ import { FlowsHeaderActions } from '../components/FlowsHeaderActions';
 import { FlowsSidebarContent } from '../components/FlowsSidebarContent';
 import { useFlowContext } from '../contexts/FlowContext';
 
-export function FlowCanvasPageWrapper() {
+export { FlowCanvasPageWrapper };
+export default FlowCanvasPageWrapper;
+
+function FlowCanvasPageWrapper() {
   const { flowId } = useParams<{ flowId: string }>();
   const { activeFlow, setActiveFlow } = useFlowContext();
 
