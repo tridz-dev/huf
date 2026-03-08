@@ -6,7 +6,10 @@ import { cn } from "@/lib/utils";
 import ChatListing from "@/components/chat/ChatListing";
 import ChatWindow from "@/components/chat/ChatWindowV2";
 
-export function ChatPage(){
+export { ChatPage };
+export default ChatPage;
+
+function ChatPage(){
     const navigate = useNavigate();
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const chatId = routeChatId && routeChatId !== 'new' ? routeChatId : null;
