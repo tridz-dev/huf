@@ -1,5 +1,6 @@
 import json
-import os
+
+from huf.ai.tools.credentials import require_credential
 
 
 def handle_send_email(**kwargs):
@@ -10,11 +11,19 @@ def handle_send_email(**kwargs):
 		return json.dumps({"error": "boto3 is required. Install with: pip install boto3"})
 
 	try:
-		region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
-		client = boto3.client("ses", region_name=region)
+		region = require_credential("aws", "default_region")
+		access_key = require_credential("aws", "access_key_id")
+		secret_key = require_credential("aws", "secret_access_key")
+		
+		client = boto3.client(
+			"ses", 
+			region_name=region,
+			aws_access_key_id=access_key,
+			aws_secret_access_key=secret_key
+		)
 
 		resp = client.send_email(
-			Source=kwargs.get("sender", os.getenv("AWS_SES_SENDER", "")),
+			Source=kwargs.get("sender", ""),
 			Destination={"ToAddresses": [kwargs["receiver_email"]]},
 			Message={
 				"Subject": {"Data": kwargs["subject"]},

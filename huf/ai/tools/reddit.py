@@ -1,6 +1,6 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
@@ -8,10 +8,8 @@ BASE = "https://oauth.reddit.com"
 
 
 def _get_token():
-	client_id = os.getenv("REDDIT_CLIENT_ID")
-	client_secret = os.getenv("REDDIT_CLIENT_SECRET")
-	if not client_id or not client_secret:
-		raise ValueError("REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET are required")
+	client_id = require_credential("reddit", "client_id")
+	client_secret = require_credential("reddit", "client_secret")
 
 	resp = requests.post(
 		TOKEN_URL,

@@ -1,6 +1,6 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 BASE = "https://api.notion.com/v1"
@@ -8,9 +8,7 @@ VERSION = "2022-06-28"
 
 
 def _headers():
-	key = os.getenv("NOTION_API_KEY")
-	if not key:
-		raise ValueError("NOTION_API_KEY environment variable is not set")
+	key = require_credential("notion", "api_key")
 	return {
 		"Authorization": f"Bearer {key}",
 		"Notion-Version": VERSION,
@@ -21,7 +19,7 @@ def _headers():
 def handle_create_page(**kwargs):
 	"""Create a new page in a Notion database."""
 	try:
-		db_id = kwargs.get("database_id") or os.getenv("NOTION_DATABASE_ID")
+		db_id = kwargs.get("database_id")
 		if not db_id:
 			return json.dumps({"error": "database_id is required"})
 
@@ -76,7 +74,7 @@ def handle_update_page(**kwargs):
 def handle_search_pages(**kwargs):
 	"""Search for pages in a Notion database by tag or query."""
 	try:
-		db_id = kwargs.get("database_id") or os.getenv("NOTION_DATABASE_ID")
+		db_id = kwargs.get("database_id")
 		if not db_id:
 			return json.dumps({"error": "database_id is required"})
 

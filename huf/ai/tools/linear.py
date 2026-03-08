@@ -1,15 +1,13 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 ENDPOINT = "https://api.linear.app/graphql"
 
 
 def _headers():
-	key = os.getenv("LINEAR_API_KEY")
-	if not key:
-		raise ValueError("LINEAR_API_KEY environment variable is not set")
+	key = require_credential("linear", "api_key")
 	return {"Authorization": key, "Content-Type": "application/json"}
 
 

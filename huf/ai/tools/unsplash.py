@@ -1,15 +1,13 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 BASE = "https://api.unsplash.com"
 
 
 def _headers():
-	key = os.getenv("UNSPLASH_ACCESS_KEY")
-	if not key:
-		raise ValueError("UNSPLASH_ACCESS_KEY environment variable is not set")
+	key = require_credential("unsplash", "access_key")
 	return {"Authorization": f"Client-ID {key}"}
 
 

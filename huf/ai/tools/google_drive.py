@@ -1,6 +1,6 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 BASE = "https://www.googleapis.com/drive/v3"
@@ -8,12 +8,9 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 def _get_access_token():
-	client_id = os.getenv("GOOGLE_CLIENT_ID")
-	client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-	refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
-
-	if not all([client_id, client_secret, refresh_token]):
-		raise ValueError("GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REFRESH_TOKEN are required")
+	client_id = require_credential("google", "client_id")
+	client_secret = require_credential("google", "client_secret")
+	refresh_token = require_credential("google", "refresh_token")
 
 	resp = requests.post(TOKEN_URL, data={
 		"client_id": client_id,

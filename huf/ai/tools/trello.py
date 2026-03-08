@@ -1,16 +1,14 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 BASE = "https://api.trello.com/1"
 
 
 def _params():
-	key = os.getenv("TRELLO_API_KEY")
-	token = os.getenv("TRELLO_TOKEN")
-	if not key or not token:
-		raise ValueError("TRELLO_API_KEY and TRELLO_TOKEN environment variables are required")
+	key = require_credential("trello", "api_key")
+	token = require_credential("trello", "api_secret")
 	return {"key": key, "token": token}
 
 

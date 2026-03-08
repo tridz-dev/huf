@@ -1,15 +1,13 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 
 def handle_search_gifs(**kwargs):
 	"""Search for GIFs on Giphy."""
 	try:
-		key = os.getenv("GIPHY_API_KEY")
-		if not key:
-			return json.dumps({"error": "GIPHY_API_KEY environment variable is not set"})
+		key = require_credential("giphy", "api_key")
 
 		limit = int(kwargs.get("limit", 10))
 		resp = requests.get(
@@ -35,9 +33,7 @@ def handle_search_gifs(**kwargs):
 def handle_trending_gifs(**kwargs):
 	"""Get trending GIFs from Giphy."""
 	try:
-		key = os.getenv("GIPHY_API_KEY")
-		if not key:
-			return json.dumps({"error": "GIPHY_API_KEY environment variable is not set"})
+		key = require_credential("giphy", "api_key")
 
 		limit = int(kwargs.get("limit", 10))
 		resp = requests.get(

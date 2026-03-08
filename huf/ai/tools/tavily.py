@@ -1,15 +1,13 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 
 def handle_search(**kwargs):
 	"""Search the web using Tavily AI-optimized search."""
 	try:
-		api_key = os.getenv("TAVILY_API_KEY")
-		if not api_key:
-			return json.dumps({"error": "TAVILY_API_KEY environment variable is not set"})
+		api_key = require_credential("tavily", "api_key")
 
 		payload = {
 			"api_key": api_key,
@@ -36,9 +34,7 @@ def handle_search(**kwargs):
 def handle_extract_url(**kwargs):
 	"""Extract content from URLs using Tavily."""
 	try:
-		api_key = os.getenv("TAVILY_API_KEY")
-		if not api_key:
-			return json.dumps({"error": "TAVILY_API_KEY environment variable is not set"})
+		api_key = require_credential("tavily", "api_key")
 
 		urls = kwargs["urls"]
 		if isinstance(urls, str):

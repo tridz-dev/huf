@@ -1,15 +1,13 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 
 def handle_search(**kwargs):
 	"""Search the web using Brave Search."""
 	try:
-		key = os.getenv("BRAVE_API_KEY")
-		if not key:
-			return json.dumps({"error": "BRAVE_API_KEY environment variable is not set"})
+		key = require_credential("brave", "api_key")
 
 		params = {
 			"q": kwargs["query"],

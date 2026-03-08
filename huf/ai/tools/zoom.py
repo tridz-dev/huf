@@ -1,17 +1,14 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 
 def _get_token():
 	"""Get OAuth access token using Server-to-Server credentials."""
-	account_id = os.getenv("ZOOM_ACCOUNT_ID")
-	client_id = os.getenv("ZOOM_CLIENT_ID")
-	client_secret = os.getenv("ZOOM_CLIENT_SECRET")
-
-	if not all([account_id, client_id, client_secret]):
-		raise ValueError("ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, and ZOOM_CLIENT_SECRET are required")
+	account_id = require_credential("zoom", "account_id")
+	client_id = require_credential("zoom", "client_id")
+	client_secret = require_credential("zoom", "client_secret")
 
 	resp = requests.post(
 		"https://zoom.us/oauth/token",

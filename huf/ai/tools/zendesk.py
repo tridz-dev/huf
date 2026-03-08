@@ -1,19 +1,16 @@
 import json
-import os
 import re
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 
 def handle_search(**kwargs):
 	"""Search Zendesk Help Center articles."""
 	try:
-		username = os.getenv("ZENDESK_USERNAME")
-		password = os.getenv("ZENDESK_PASSWORD")
-		company = os.getenv("ZENDESK_COMPANY_NAME")
-
-		if not all([username, password, company]):
-			return json.dumps({"error": "ZENDESK_USERNAME, ZENDESK_PASSWORD, and ZENDESK_COMPANY_NAME are required"})
+		username = require_credential("zendesk", "email")
+		password = require_credential("zendesk", "api_token")
+		company = require_credential("zendesk", "subdomain")
 
 		url = f"https://{company}.zendesk.com/api/v2/help_center/articles/search.json"
 		resp = requests.get(url, params={"query": kwargs["query"]}, auth=(username, password), timeout=30)
