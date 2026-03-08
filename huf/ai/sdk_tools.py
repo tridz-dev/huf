@@ -433,31 +433,8 @@ from huf.ai.handlers.crud import (  # noqa: F401
 	handle_update_documents,
 )
 
-def handle_run_agent(agent_name: str, prompt: str, **kwargs):
-    """
-    Queue another agent execution instead of blocking.
-    """
-    try:
-        if not frappe.db.exists("Agent", agent_name):
-            return {"success": False, "error": f"Agent '{agent_name}' does not exist"}
-
-        target_agent = frappe.get_doc("Agent", agent_name)
-
-        job = enqueue(
-            "huf.ai.agent_integration.run_agent_sync",
-            queue="default",
-            timeout=300,
-            is_async=True,
-            agent_name=agent_name,
-            prompt=prompt,
-            provider=target_agent.provider,
-            model=target_agent.model,
-        )
-
-        return {"success": True, "queued": True, "job_id": job.id}
-    except Exception as e:
-        frappe.log_error("Run Agent Tool Error", str(e))
-        return {"success": False, "error": str(e)}
+# Backward-compatible re-exports: agent runner moved to huf.ai.handlers.agent_runner
+from huf.ai.handlers.agent_runner import handle_run_agent  # noqa: F401
 
 # Backward-compatible re-exports: conversation data handlers moved to huf.ai.handlers.conversation_data
 from huf.ai.handlers.conversation_data import (  # noqa: F401
