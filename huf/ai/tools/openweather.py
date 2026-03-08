@@ -1,16 +1,13 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 BASE = "https://api.openweathermap.org"
 
 
 def _key():
-	key = os.getenv("OPENWEATHER_API_KEY")
-	if not key:
-		raise ValueError("OPENWEATHER_API_KEY environment variable is not set")
-	return key
+	return require_credential("openweather", "api_key")
 
 
 def _geocode(location):

@@ -1,15 +1,13 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 
 def handle_search_google(**kwargs):
 	"""Search Google using SerpApi."""
 	try:
-		key = os.getenv("SERP_API_KEY")
-		if not key:
-			return json.dumps({"error": "SERP_API_KEY environment variable is not set"})
+		key = require_credential("serpapi", "api_key")
 
 		params = {"api_key": key, "q": kwargs["query"], "engine": "google"}
 		resp = requests.get("https://serpapi.com/search", params=params, timeout=30)
@@ -27,9 +25,7 @@ def handle_search_google(**kwargs):
 def handle_search_youtube(**kwargs):
 	"""Search YouTube using SerpApi."""
 	try:
-		key = os.getenv("SERP_API_KEY")
-		if not key:
-			return json.dumps({"error": "SERP_API_KEY environment variable is not set"})
+		key = require_credential("serpapi", "api_key")
 
 		params = {"api_key": key, "search_query": kwargs["query"], "engine": "youtube"}
 		resp = requests.get("https://serpapi.com/search", params=params, timeout=30)

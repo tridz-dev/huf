@@ -1,15 +1,13 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 BASE = "https://google.serper.dev"
 
 
 def _headers():
-	key = os.getenv("SERPER_API_KEY")
-	if not key:
-		raise ValueError("SERPER_API_KEY environment variable is not set")
+	key = require_credential("serper", "api_key")
 	return {"X-API-KEY": key, "Content-Type": "application/json"}
 
 

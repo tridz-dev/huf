@@ -1,6 +1,9 @@
 import json
 import re
 
+from huf.ai.tools.credentials import require_credential
+import requests
+
 
 def _extract_video_id(url):
 	patterns = [
@@ -12,6 +15,10 @@ def _extract_video_id(url):
 		if m:
 			return m.group(1)
 	return url
+
+
+def _get_api_key():
+	return require_credential("youtube", "api_key")
 
 
 def handle_get_video_data(**kwargs):

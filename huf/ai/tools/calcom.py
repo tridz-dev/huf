@@ -1,23 +1,21 @@
 import json
-import os
 from datetime import datetime, timedelta
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 BASE = "https://api.cal.com/v2"
 
 
 def _headers():
-	key = os.getenv("CALCOM_API_KEY")
-	if not key:
-		raise ValueError("CALCOM_API_KEY environment variable is not set")
+	key = require_credential("calcom", "api_key")
 	return {"Authorization": f"Bearer {key}", "Content-Type": "application/json", "cal-api-version": "2024-08-13"}
 
 
 def handle_get_available_slots(**kwargs):
 	"""Get available booking slots from Cal.com."""
 	try:
-		event_type_id = kwargs.get("event_type_id") or os.getenv("CALCOM_EVENT_TYPE_ID")
+		event_type_id = kwargs.get("event_type_id")
 		start = kwargs.get("start_date", datetime.utcnow().strftime("%Y-%m-%d"))
 		end = kwargs.get("end_date", (datetime.utcnow() + timedelta(days=7)).strftime("%Y-%m-%d"))
 
@@ -36,7 +34,7 @@ def handle_get_available_slots(**kwargs):
 def handle_create_booking(**kwargs):
 	"""Create a new booking on Cal.com."""
 	try:
-		event_type_id = kwargs.get("event_type_id") or os.getenv("CALCOM_EVENT_TYPE_ID")
+		event_type_id = kwargs.get("event_type_id")
 		payload = {
 			"eventTypeId": int(event_type_id),
 			"start": kwargs["start_time"],

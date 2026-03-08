@@ -1,16 +1,13 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 BASE = "https://maps.googleapis.com/maps/api"
 
 
 def _key():
-	key = os.getenv("GOOGLE_MAPS_API_KEY")
-	if not key:
-		raise ValueError("GOOGLE_MAPS_API_KEY environment variable is not set")
-	return key
+	return require_credential("google", "api_key")
 
 
 def handle_search_places(**kwargs):
