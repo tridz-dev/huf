@@ -9,6 +9,7 @@ import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { EmptyChatState } from './EmptyChatState';
 import type { MessageType } from './types';
+import type { LoadingType } from './ChatInput';
 import { useChatAgentIdentity } from './useChatAgentIdentity';
 import { useChatScrollToBottom } from './useChatScrollToBottom';
 import {
@@ -33,6 +34,7 @@ export function ChatMessageList({
     
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
+    const [loadingType, setLoadingType] = useState<LoadingType>('default');
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
     const [isModelMismatch, setIsModelMismatch] = useState(false);
@@ -304,6 +306,7 @@ export function ChatMessageList({
                                     agentName={agentName}
                                     agentColor={agentColor}
                                     status={status}
+                                    loadingType={loadingType}
                                     onFeedback={handleFeedback}
                                     scrollToBottomAfterPaint={scrollToBottomAfterPaint}
                                 />
@@ -318,6 +321,7 @@ export function ChatMessageList({
                 agentName={agentName}
                 onConversationCreated={onConversationCreated}
                 onStatusChange={setStatus}
+                onLoadingTypeChange={setLoadingType}
                 isCreatingConversationRef={isCreatingConversationRef}
                 newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
                 setMessages={setMessages}
