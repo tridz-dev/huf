@@ -38,6 +38,14 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
     --sidebar-background: 0 0% 98%;
+    /* Audio player / media-chrome: resolved colors for high contrast */
+    --color-background: oklch(var(--background));
+    --color-foreground: oklch(var(--foreground));
+    --color-primary: oklch(var(--primary));
+    --color-secondary: oklch(var(--secondary));
+    --color-accent: oklch(var(--accent));
+    --color-border: oklch(var(--border));
+    --color-muted-foreground: oklch(var(--muted-foreground));
   }
 
   .dark {
