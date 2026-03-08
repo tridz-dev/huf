@@ -66,6 +66,7 @@ def after_install():
     create_generate_audio_tool()
     create_ocr_document_tool()
     create_flow_tools()
+    create_integration_tools()
     frappe.db.commit()
     """
     Called after app installation.
@@ -110,6 +111,7 @@ def after_migrate():
 		create_generate_audio_tool()
 		create_ocr_document_tool()
 		create_flow_tools()
+		create_integration_tools()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
 		frappe.log_error(
@@ -629,3 +631,75 @@ def create_flow_tools():
                 tool_doc.insert(ignore_permissions=True)
             except Exception as e:
                 frappe.log_error(f"Error creating {tool_name} tool: {str(e)}", "Flow Tool Creation")
+
+
+def create_integration_tools():
+    """Create or update all third-party integration tools from the registry."""
+    from huf.ai.tools._registry import ALL_INTEGRATION_TOOLS
+
+    categories_created = set()
+
+    for tool_def in ALL_INTEGRATION_TOOLS:
+        tool_name = tool_def["tool_name"]
+        category = tool_def.get("category", "Integration Tools")
+
+        if category not in categories_created:
+            if not frappe.db.exists("Agent Tool Type", category):
+                try:
+                    doc = frappe.new_doc("Agent Tool Type")
+                    doc.name1 = category
+                    doc.insert(ignore_permissions=True)
+                except Exception:
+                    pass
+            categories_created.add(category)
+
+        parameters = [
+            {
+                "label": p.get("label", p.get("fieldname", "").replace("_", " ").title()),
+                "fieldname": p.get("fieldname", ""),
+                "type": p.get("type", "string"),
+                "required": int(p.get("required", 0)),
+                "description": p.get("description", ""),
+            }
+            for p in tool_def.get("parameters", [])
+        ]
+
+        tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+
+        if tool_exists:
+            try:
+                tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+                tool_doc.description = tool_def.get("description", "")
+                tool_doc.function_path = tool_def.get("function_path", "")
+                tool_doc.tool_type = category
+                tool_doc.types = "Custom Function"
+                tool_doc.pass_parameters_as_json = 1
+
+                tool_doc.set("parameters", [])
+                for p in parameters:
+                    tool_doc.append("parameters", p)
+
+                tool_doc.save(ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(
+                    f"Error updating integration tool {tool_name}: {str(e)}",
+                    "Integration Tool Update",
+                )
+        else:
+            try:
+                tool_doc = frappe.get_doc({
+                    "doctype": "Agent Tool Function",
+                    "tool_name": tool_name,
+                    "description": tool_def.get("description", ""),
+                    "types": "Custom Function",
+                    "function_path": tool_def.get("function_path", ""),
+                    "pass_parameters_as_json": 1,
+                    "parameters": parameters,
+                    "tool_type": category,
+                })
+                tool_doc.insert(ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(
+                    f"Error creating integration tool {tool_name}: {str(e)}",
+                    "Integration Tool Creation",
+                )
