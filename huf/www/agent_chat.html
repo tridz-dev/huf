@@ -4,175 +4,125 @@
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<title>Audio Chat</title>
+	<link rel="icon" type="image/x-icon" href="/assets/huf/frontend/assets/favicon-DVOKLumH.ico" />
 	<script src="https://cdn.tailwindcss.com"></script>
 	<style>
-		::-webkit-scrollbar {
-			width: 6px;
-		}
+		/* Frontend design tokens (radius, scrollbar) */
+		:root { --radius: 0.65rem; }
+		::-webkit-scrollbar { width: 6px; }
 		::-webkit-scrollbar-thumb {
-			background-color: rgba(148, 163, 184, 0.7);
+			background-color: rgb(161 161 170 / 0.6);
 			border-radius: 999px;
 		}
+		::-webkit-scrollbar-track { background: transparent; }
 		canvas.waveform {
 			width: 100%;
 			height: 32px;
 		}
 	</style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-violet-50 font-sans antialiased">
-	<div class="min-h-screen flex items-center justify-center p-4">
-		<div
-			class="w-full max-w-3xl bg-white/70 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.05)] overflow-hidden flex flex-col h-[90vh] border border-white/50"
-		>
+<body class="min-h-screen bg-zinc-50 font-sans antialiased">
+	<div class="min-h-screen flex items-center justify-center p-3 sm:p-4 md:p-6">
+		<div class="w-full max-w-3xl bg-white rounded-xl sm:rounded-2xl shadow-lg shadow-zinc-200/50 overflow-hidden flex flex-col h-[85vh] sm:h-[90vh] border border-zinc-200/80">
 			<!-- Header -->
-			<header
-				class="flex items-center justify-between px-8 py-5 border-b border-indigo-50/60"
-			>
-				<div class="flex items-center">
-					<div class="relative mr-4">
-						<div
-							class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-200 rotate-3 transition-transform cursor-pointer text-white text-xl font-bold"
-						>
-							AI
-						</div>
-						<div
-							class="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-4 border-white rounded-full"
-						></div>
-					</div>
-					<div>
-						<h1
-							id="agent-title"
-							class="text-xl font-bold text-zinc-900 tracking-tight"
-						>
+			<header class="flex items-center justify-between gap-3 px-4 sm:px-6 md:px-8 py-4 sm:py-5 border-b border-zinc-200 bg-white/80 backdrop-blur-sm shrink-0">
+				<div class="flex items-center gap-3 sm:gap-4 min-w-0">
+					<a href="/huf" class="shrink-0 flex items-center gap-2" title="Huf">
+						<img src="/assets/huf/Images/huf.png" alt="Huf" class="h-8 w-8 sm:h-9 sm:w-9 rounded-lg object-contain" onerror="this.style.display='none'; var s=this.nextElementSibling; if(s){s.classList.remove('hidden'); s.classList.add('flex');}" />
+						<span class="hidden h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-violet-500 text-white items-center justify-center text-xs font-bold shrink-0">H</span>
+					</a>
+					<div class="min-w-0">
+						<h1 id="agent-title" class="text-base sm:text-lg md:text-xl font-semibold text-zinc-900 truncate">
 							Audio Agent
 						</h1>
-						<p
-							class="text-[11px] text-zinc-400 font-bold uppercase tracking-widest"
-						>
+						<p class="text-[10px] sm:text-[11px] text-zinc-500 font-medium uppercase tracking-wider">
 							Audio Conversation
 						</p>
 					</div>
 				</div>
-				<div class="flex gap-2">
-					<button
-						id="reset-button"
-						class="p-2 text-zinc-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-50"
-						type="button"
-					>
-						<span class="text-lg font-semibold">&times;</span>
-					</button>
-				</div>
+				<button
+					id="reset-button"
+					type="button"
+					class="shrink-0 p-2 text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-colors rounded-lg"
+					title="New conversation"
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+						<path d="M3 3v5h5" />
+					</svg>
+				</button>
 			</header>
 
 			<!-- Error toast -->
-			<div
-				id="error-toast"
-				class="hidden mx-auto mt-4 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold flex items-center gap-2 border border-red-100"
-			>
+			<div id="error-toast" class="hidden mx-4 sm:mx-6 md:mx-8 mt-3 sm:mt-4 px-4 py-2.5 bg-red-50 text-red-600 rounded-lg text-xs font-medium flex items-center gap-2 border border-red-100 shrink-0">
+				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0">
+					<circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+				</svg>
 				<span id="error-text"></span>
 			</div>
 
 			<!-- Chat area -->
-			<main
-				id="messages-container"
-				class="flex-1 overflow-y-auto px-8 py-8 space-y-10"
-			></main>
+			<main id="messages-container" class="flex-1 overflow-y-auto px-4 sm:px-6 md:px-8 py-4 sm:py-6 md:py-8 space-y-6 sm:space-y-8 min-h-0"></main>
 
 			<!-- Loading indicator -->
-			<div
-				id="loading-indicator"
-				class="hidden px-8 pb-2 text-center text-[11px] font-semibold text-indigo-400 uppercase tracking-[0.2em]"
-			>
+			<div id="loading-indicator" class="hidden px-4 sm:px-6 md:px-8 pb-2 text-center text-[10px] sm:text-[11px] font-medium text-violet-500 uppercase tracking-widest shrink-0">
 				Imagining a response...
 			</div>
 
 			<!-- Input area -->
-			<footer class="p-8 bg-transparent">
-				<form
-					id="chat-form"
-					class="group relative flex items-center gap-2 p-2 bg-white rounded-[2rem] shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-indigo-100 focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-400/5 transition-all duration-300"
-				>
-					<div id="recording-bar" class="hidden flex-1 items-center justify-between px-6 py-3">
-						<div class="flex items-center gap-4">
+			<footer class="p-4 sm:p-6 md:p-8 bg-white border-t border-zinc-200 shrink-0">
+				<form id="chat-form" class="group flex items-center gap-2 p-2 bg-zinc-50 rounded-xl border border-zinc-200 focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-400/20 transition-all duration-200">
+					<div id="recording-bar" class="hidden flex flex-1 items-center justify-between gap-3 px-4 sm:px-6 py-3 min-w-0">
+						<div class="flex items-center gap-3 sm:gap-4 shrink-0">
 							<div class="relative">
-								<div
-									class="w-3 h-3 rounded-full bg-red-500 animate-ping absolute"
-								></div>
-								<div
-									class="w-3 h-3 rounded-full bg-red-500 relative"
-								></div>
+								<div class="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-red-500 animate-ping absolute"></div>
+								<div class="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-red-500 relative"></div>
 							</div>
-							<span
-								id="recording-timer"
-								class="text-base font-bold text-red-500 font-mono tracking-wider"
-							>0:00</span>
+							<span id="recording-timer" class="text-sm sm:text-base font-semibold text-red-500 font-mono tabular-nums">0:00</span>
 						</div>
-						<div class="flex-1 flex justify-center px-4">
-							<canvas
-								id="waveform-canvas"
-								class="waveform max-w-[200px]"
-								width="180"
-								height="32"
-							></canvas>
+						<div class="flex-1 flex justify-center min-w-0 px-2 sm:px-4">
+							<canvas id="waveform-canvas" class="waveform max-w-[120px] sm:max-w-[180px]" width="180" height="32"></canvas>
 						</div>
-						<span
-							class="text-sm font-bold text-zinc-400 uppercase tracking-widest hidden sm:inline"
-						>Live Audio</span>
+						<span class="text-xs sm:text-sm font-medium text-zinc-400 uppercase tracking-wider hidden sm:inline shrink-0">Live</span>
 					</div>
 
 					<input
 						id="text-input"
 						type="text"
 						placeholder="Ask your agent..."
-						class="flex-1 bg-transparent border-none focus:outline-none px-6 py-3 text-sm text-zinc-900 placeholder-zinc-400 font-medium"
+						class="flex-1 min-w-0 bg-transparent border-none focus:outline-none focus:ring-0 px-4 sm:px-6 py-2.5 sm:py-3 text-sm text-zinc-900 placeholder-zinc-400"
 					/>
 
-					<div class="flex items-center gap-2 pr-1">
-						<button
-							id="mic-button"
-							type="button"
-							class="p-3.5 text-zinc-400 hover:text-indigo-600 transition-all rounded-2xl hover:bg-indigo-50 active:scale-90"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 24 24"
-								class="w-4 h-4"
-								fill="currentColor"
-							>
+					<div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+						<button id="mic-button" type="button" class="p-2.5 sm:p-3 text-zinc-400 hover:text-violet-600 hover:bg-violet-50 transition-colors rounded-lg active:scale-95" title="Record">
+							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 								<path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" />
 								<path d="M7 11a5 5 0 0 0 10 0h-2a3 3 0 0 1-6 0H7Z" />
 								<path d="M11 18.95V22h2v-3.05A7.002 7.002 0 0 0 19 12h-2a5 5 0 0 1-10 0H5a7.002 7.002 0 0 0 6 6.95Z" />
 							</svg>
 						</button>
-						<button
-							id="stop-button"
-							type="button"
-							class="hidden p-3.5 bg-red-500 hover:bg-red-600 text-white transition-all rounded-2xl shadow-lg shadow-red-200 active:scale-95"
-						>
-							<span class="text-base font-semibold">&#9632;</span>
+						<button id="stop-button" type="button" class="hidden p-2.5 sm:p-3 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors active:scale-95" title="Stop">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+								<rect x="6" y="6" width="12" height="12" rx="2" />
+							</svg>
 						</button>
-						<button
-							id="send-button"
-							type="submit"
-							class="p-3.5 bg-indigo-600 hover:bg-indigo-700 text-white transition-all rounded-2xl shadow-lg shadow-indigo-200 hover:scale-105 active:scale-95"
-						>
-							<span class="text-sm font-semibold">&#10148;</span>
+						<button id="send-button" type="submit" class="p-2.5 sm:p-3 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors active:scale-95" title="Send">
+							<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<path d="m22 2-7 20-4-9-9-4Z" />
+								<path d="M22 2 11 13" />
+							</svg>
 						</button>
 					</div>
 				</form>
-				<p
-					class="text-center mt-4 text-[10px] font-bold text-zinc-300 uppercase tracking-widest"
-				>
-					Audio-only session powered by Huf
+				<p class="text-center mt-3 sm:mt-4 text-[10px] text-zinc-400 font-medium">
+					Powered by <a href="/huf" class="text-violet-600 hover:text-violet-700 hover:underline">Huf</a>
 				</p>
 			</footer>
 		</div>
 	</div>
 
 	<script>
-		// CSRF token provided from Frappe/Jinja (aligned with huf.html)
 		if (!window.csrf_token) {
-			// Fallback: try to read from cookies if not injected
 			const cookie = document.cookie.split(";").find(c => c.trim().startsWith("csrf_token="));
 			if (cookie) {
 				window.csrf_token = decodeURIComponent(cookie.split("=")[1]);
@@ -215,9 +165,7 @@
 		function showError(msg) {
 			errorText.textContent = msg;
 			errorToast.classList.remove("hidden");
-			setTimeout(() => {
-				errorToast.classList.add("hidden");
-			}, 4000);
+			setTimeout(() => errorToast.classList.add("hidden"), 4000);
 		}
 
 		function formatTime(seconds) {
@@ -230,8 +178,7 @@
 		function getCsrfToken() {
 			if (window.csrf_token) return window.csrf_token;
 			const cookie = document.cookie.split(";").find(c => c.trim().startsWith("csrf_token="));
-			if (!cookie) return "";
-			return decodeURIComponent(cookie.split("=")[1]);
+			return cookie ? decodeURIComponent(cookie.split("=")[1]) : "";
 		}
 
 		function scrollToBottom() {
@@ -248,28 +195,17 @@
 				wrapper.className = "flex " + (isAI ? "justify-start" : "justify-end");
 
 				const row = document.createElement("div");
-				row.className =
-					"flex max-w-[80%] " +
-					(isAI ? "flex-row" : "flex-row-reverse") +
-					" items-start gap-4";
+				row.className = "flex max-w-[90%] sm:max-w-[85%] md:max-w-[80%] " + (isAI ? "flex-row" : "flex-row-reverse") + " items-start gap-3 sm:gap-4";
 
 				const avatar = document.createElement("div");
-				avatar.className =
-					"flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center shadow-sm mt-1 " +
-					(isAI
-						? "bg-indigo-50 text-indigo-600"
-						: "bg-zinc-900 text-white");
+				avatar.className = "flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center shadow-sm mt-0.5 " + (isAI ? "bg-violet-100 text-violet-600" : "bg-zinc-800 text-white");
 				avatar.textContent = isAI ? "AI" : "U";
 
 				const bubbleCol = document.createElement("div");
-				bubbleCol.className = "flex flex-col " + (isAI ? "items-start" : "items-end");
+				bubbleCol.className = "flex flex-col " + (isAI ? "items-start" : "items-end") + " min-w-0";
 
 				const bubble = document.createElement("div");
-				bubble.className =
-					"relative px-6 py-4 rounded-[2rem] " +
-					(isAI
-						? "bg-white border border-indigo-50 text-zinc-800 rounded-tl-none"
-						: "bg-gradient-to-tr from-indigo-600 to-violet-600 text-white rounded-tr-none shadow-md shadow-indigo-100");
+				bubble.className = "relative px-4 sm:px-5 md:px-6 py-3 sm:py-4 rounded-xl " + (isAI ? "bg-zinc-100 border border-zinc-200 text-zinc-800 rounded-tl-md" : "bg-violet-600 text-white rounded-tr-md shadow-sm");
 
 				if (msg.audioUrl) {
 					const player = createAudioPlayer(msg.audioUrl, isAI);
@@ -279,8 +215,7 @@
 				bubbleCol.appendChild(bubble);
 
 				const ts = document.createElement("span");
-				ts.className =
-					"text-[10px] text-zinc-400 mt-2 font-bold tracking-tighter px-1 uppercase";
+				ts.className = "text-[10px] text-zinc-400 mt-1.5 font-medium px-0.5";
 				ts.textContent = msg.timeLabel || "";
 				bubbleCol.appendChild(ts);
 
@@ -294,11 +229,7 @@
 
 		function createAudioPlayer(src, isAI) {
 			const wrapper = document.createElement("div");
-			wrapper.className =
-				"flex items-center gap-3 p-3 rounded-2xl mt-3 w-72 shadow-sm border backdrop-blur-sm " +
-				(isAI
-					? "bg-white/60 border-indigo-100"
-					: "bg-indigo-500/10 border-transparent");
+			wrapper.className = "flex items-center gap-3 p-3 rounded-lg w-full max-w-[260px] sm:max-w-[288px] " + (isAI ? "bg-white/80 border border-zinc-200" : "bg-white/10");
 
 			const audio = document.createElement("audio");
 			audio.src = src;
@@ -306,30 +237,24 @@
 
 			const btn = document.createElement("button");
 			btn.type = "button";
-			btn.className =
-				"flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-90 " +
-				(isAI
-					? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
-					: "bg-white text-indigo-600 shadow-sm");
-			btn.textContent = "▶";
+			btn.className = "flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-full transition-all active:scale-90 " + (isAI ? "bg-violet-600 text-white" : "bg-white text-violet-600");
+
+			const playIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m5 3 14 9-14 9V3Z"/></svg>';
+			const pauseIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+			btn.innerHTML = playIcon;
 
 			let isPlaying = false;
 			let duration = 0;
 
 			const progressBar = document.createElement("div");
-			progressBar.className =
-				"h-1 w-full bg-indigo-100 rounded-full overflow-hidden";
+			progressBar.className = "h-1 w-full bg-zinc-200 rounded-full overflow-hidden";
 			const progressInner = document.createElement("div");
-			progressInner.className =
-				"h-full rounded-full transition-all duration-100 " +
-				(isAI ? "bg-indigo-600" : "bg-indigo-400");
+			progressInner.className = "h-full rounded-full transition-all duration-100 " + (isAI ? "bg-violet-600" : "bg-white/80");
 			progressInner.style.width = "0%";
 			progressBar.appendChild(progressInner);
 
 			const times = document.createElement("div");
-			times.className =
-				"flex justify-between text-[10px] font-bold tracking-wider uppercase " +
-				(isAI ? "text-indigo-400" : "text-indigo-300");
+			times.className = "flex justify-between text-[10px] font-medium " + (isAI ? "text-zinc-500" : "text-white/80");
 			const currentEl = document.createElement("span");
 			const totalEl = document.createElement("span");
 			currentEl.textContent = "0:00";
@@ -338,20 +263,17 @@
 			times.appendChild(totalEl);
 
 			btn.addEventListener("click", () => {
-				if (isPlaying) {
-					audio.pause();
-				} else {
-					audio.play();
-				}
+				if (isPlaying) audio.pause();
+				else audio.play();
 			});
 
 			audio.addEventListener("play", () => {
 				isPlaying = true;
-				btn.textContent = "⏸";
+				btn.innerHTML = pauseIcon;
 			});
 			audio.addEventListener("pause", () => {
 				isPlaying = false;
-				btn.textContent = "▶";
+				btn.innerHTML = playIcon;
 			});
 			audio.addEventListener("loadedmetadata", () => {
 				duration = audio.duration || 0;
@@ -360,19 +282,17 @@
 			audio.addEventListener("timeupdate", () => {
 				const t = audio.currentTime || 0;
 				currentEl.textContent = formatTime(t);
-				if (duration > 0) {
-					progressInner.style.width = (t / duration) * 100 + "%";
-				}
+				if (duration > 0) progressInner.style.width = (t / duration) * 100 + "%";
 			});
 			audio.addEventListener("ended", () => {
 				isPlaying = false;
-				btn.textContent = "▶";
+				btn.innerHTML = playIcon;
 				progressInner.style.width = "0%";
 				currentEl.textContent = "0:00";
 			});
 
 			const rightCol = document.createElement("div");
-			rightCol.className = "flex-1 flex flex-col justify-center gap-1.5";
+			rightCol.className = "flex-1 flex flex-col justify-center gap-1 min-w-0";
 			rightCol.appendChild(progressBar);
 			rightCol.appendChild(times);
 
@@ -385,28 +305,22 @@
 		function setLoading(loading) {
 			isSending = loading;
 			const indicator = document.getElementById("loading-indicator");
-			if (indicator) {
-				indicator.classList.toggle("hidden", !loading);
-			}
-			// Avoid starting new actions while sending
+			if (indicator) indicator.classList.toggle("hidden", !loading);
 			textInput.disabled = loading;
 			micButton.disabled = loading;
 		}
 
 		function startRecording() {
 			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-				showError("Microphone not supported in this browser.");
+				showError("Microphone not supported.");
 				return;
 			}
-			navigator.mediaDevices
-				.getUserMedia({ audio: true })
+			navigator.mediaDevices.getUserMedia({ audio: true })
 				.then(stream => {
 					mediaStream = stream;
 					mediaRecorder = new MediaRecorder(stream);
 					audioChunks = [];
-					mediaRecorder.ondataavailable = e => {
-						if (e.data.size > 0) audioChunks.push(e.data);
-					};
+					mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
 					mediaRecorder.onstop = handleRecordingStop;
 					mediaRecorder.start();
 					isRecording = true;
@@ -421,17 +335,13 @@
 					}, 1000);
 					startWaveform(stream);
 				})
-				.catch(() => {
-					showError("Please enable microphone access.");
-				});
+				.catch(() => showError("Please enable microphone access."));
 		}
 
 		function stopRecording() {
 			if (!isRecording || !mediaRecorder) return;
 			mediaRecorder.stop();
-			if (mediaStream) {
-				mediaStream.getTracks().forEach(t => t.stop());
-			}
+			if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 			isRecording = false;
 			clearInterval(recordingInterval);
 			recordingTimerEl.textContent = "0:00";
@@ -445,8 +355,7 @@
 		function startWaveform(stream) {
 			if (!waveformCanvas) return;
 			const ctx = waveformCanvas.getContext("2d");
-			audioContext =
-				new (window.AudioContext || window.webkitAudioContext)();
+			audioContext = new (window.AudioContext || window.webkitAudioContext)();
 			const source = audioContext.createMediaStreamSource(stream);
 			analyser = audioContext.createAnalyser();
 			analyser.fftSize = 64;
@@ -458,21 +367,15 @@
 			const draw = () => {
 				if (!analyser) return;
 				analyser.getByteFrequencyData(dataArray);
-				const width = waveformCanvas.width;
-				const height = waveformCanvas.height;
-				ctx.clearRect(0, 0, width, height);
-				const barWidth = 3;
-				const gutter = 2;
-				const totalBarWidth = barWidth + gutter;
-				const numBars = Math.floor(width / totalBarWidth);
+				const w = waveformCanvas.width, h = waveformCanvas.height;
+				ctx.clearRect(0, 0, w, h);
+				const barWidth = 3, gutter = 2, total = barWidth + gutter;
+				const numBars = Math.floor(w / total);
 				ctx.fillStyle = "#ef4444";
 				for (let i = 0; i < numBars; i++) {
 					const val = dataArray[i % bufferLength];
-					const percent = val / 255;
-					const barHeight = Math.max(4, height * percent);
-					const x = i * totalBarWidth;
-					const y = (height - barHeight) / 2;
-					ctx.fillRect(x, y, barWidth, barHeight);
+					const barHeight = Math.max(4, h * (val / 255));
+					ctx.fillRect(i * total, (h - barHeight) / 2, barWidth, barHeight);
 				}
 				animationFrame = requestAnimationFrame(draw);
 			};
@@ -488,33 +391,22 @@
 
 		function handleRecordingStop() {
 			const blob = new Blob(audioChunks, { type: "audio/webm" });
-			if (blob.size === 0) return;
-			sendAudioMessage(blob);
+			if (blob.size > 0) sendAudioMessage(blob);
 		}
 
 		async function callMethod(method, args) {
 			const res = await fetch("/api/method/" + method, {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					"X-Frappe-CSRF-Token": getCsrfToken(),
-				},
+				headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": getCsrfToken() },
 				body: JSON.stringify(args || {}),
 			});
-			if (!res.ok) {
-				const text = await res.text();
-				throw new Error(text || "Request failed");
-			}
-			const data = await res.json();
-			return data.message;
+			if (!res.ok) throw new Error((await res.text()) || "Request failed");
+			return (await res.json()).message;
 		}
 
 		async function ensureConversation() {
 			if (conversationId) return conversationId;
-			const payload = await callMethod("huf.ai.agent_chat.create_conversation", {
-				agent: agentName,
-				channel: "Chat",
-			});
+			const payload = await callMethod("huf.ai.agent_chat.create_conversation", { agent: agentName, channel: "Chat" });
 			conversationId = payload.conversation_id;
 			return conversationId;
 		}
@@ -523,84 +415,33 @@
 			if (!conversationId) return;
 			try {
 				const params = new URLSearchParams({
-					fields: JSON.stringify([
-						"name",
-						"conversation",
-						"role",
-						"kind",
-						"is_agent_message",
-						"generated_audio",
-						"voice_message",
-						"creation",
-					]),
-					filters: JSON.stringify([
-						["Agent Message", "conversation", "=", conversationId],
-						["Agent Message", "kind", "=", "Audio"],
-						["Agent Message", "is_agent_message", "=", 1],
-					]),
+					fields: JSON.stringify(["name", "conversation", "role", "kind", "is_agent_message", "generated_audio", "voice_message", "creation"]),
+					filters: JSON.stringify([["Agent Message", "conversation", "=", conversationId], ["Agent Message", "kind", "=", "Audio"], ["Agent Message", "is_agent_message", "=", 1]]),
 					order_by: "creation desc",
 					limit_page_length: "5",
 				});
-
-				const res = await fetch(
-					`/api/resource/Agent%20Message?${params.toString()}`,
-					{
-						method: "GET",
-						headers: {
-							"X-Frappe-CSRF-Token": getCsrfToken(),
-						},
-					}
-				);
-
-				if (!res.ok) {
-					throw new Error("Failed to load Agent Message history");
-				}
-
+				const res = await fetch(`/api/resource/Agent%20Message?${params}`, {
+					method: "GET",
+					headers: { "X-Frappe-CSRF-Token": getCsrfToken() },
+				});
+				if (!res.ok) throw new Error("Failed to load history");
 				const data = await res.json();
 				const docs = Array.isArray(data.data) ? data.data : [];
-
-				docs
-					.slice()
-					.reverse()
-					.forEach(m => {
-						// Only append agent audio messages we haven't rendered yet
-						if (seenAgentAudioIds.has(m.name)) {
-							return;
-						}
-
-						const audioUrl =
-							m.voice_message ||
-							m.generated_audio ||
-							null;
-
-						if (!audioUrl) {
-							return;
-						}
-
-						seenAgentAudioIds.add(m.name);
-
-						const ts = new Date(m.creation);
-						messages.push({
-							role: "assistant",
-							audioUrl,
-							timeLabel: ts.toLocaleTimeString([], {
-								hour: "2-digit",
-								minute: "2-digit",
-							}),
-						});
+				docs.slice().reverse().forEach(m => {
+					if (seenAgentAudioIds.has(m.name)) return;
+					const audioUrl = m.voice_message || m.generated_audio || null;
+					if (!audioUrl) return;
+					seenAgentAudioIds.add(m.name);
+					messages.push({
+						role: "assistant",
+						audioUrl,
+						timeLabel: new Date(m.creation).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
 					});
-
+				});
 				renderMessages();
-
-				// Auto-play the latest assistant audio using the actual player element
-				const assistantPlayers = messagesContainer.querySelectorAll(
-					'audio[data-role="assistant"]'
-				);
-				const lastPlayer =
-					assistantPlayers[assistantPlayers.length - 1];
-				if (lastPlayer) {
-					lastPlayer.play().catch(() => {});
-				}
+				const players = messagesContainer.querySelectorAll('audio[data-role="assistant"]');
+				const last = players[players.length - 1];
+				if (last) last.play().catch(() => {});
 			} catch (e) {
 				showError("Failed to load history");
 			}
@@ -609,57 +450,37 @@
 		async function sendAudioMessage(blob) {
 			try {
 				setLoading(true);
-				const ts = new Date();
 				messages.push({
 					role: "user",
 					audioUrl: URL.createObjectURL(blob),
-					timeLabel: ts.toLocaleTimeString([], {
-						hour: "2-digit",
-						minute: "2-digit",
-					}),
+					timeLabel: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
 				});
 				renderMessages();
 
 				const convId = await ensureConversation();
-
 				const reader = new FileReader();
 				reader.onload = async function (evt) {
 					try {
-						const dataUrl = evt.target && typeof evt.target.result === "string" ? evt.target.result : null;
-						if (!dataUrl) {
-							throw new Error("Failed to read audio data");
-						}
-
-						const filename = `recording_${Date.now()}.webm`;
-
+						const dataUrl = evt.target?.result;
+						if (!dataUrl || typeof dataUrl !== "string") throw new Error("Failed to read audio");
 						const result = await callMethod("huf.ai.agent_chat.upload_audio_and_transcribe_web", {
-							filename,
+							filename: "recording_" + Date.now() + ".webm",
 							b64data: dataUrl,
 							agent: agentName,
 							conversation: convId,
 						});
-
-						if (!result || !result.success) {
-							throw new Error(result?.error || "Transcription or agent run failed");
-						}
-
-						if (!conversationId && result.conversation_id) {
-							conversationId = result.conversation_id;
-						}
-
-						// Small delay so Agent Message is fully committed before we fetch
-						setTimeout(() => {
-							refreshHistory();
-						}, 2000);
+						if (!result?.success) throw new Error(result?.error || "Transcription failed");
+						if (!conversationId && result.conversation_id) conversationId = result.conversation_id;
+						setTimeout(refreshHistory, 2000);
 					} catch (e) {
-						showError("Failed to send audio message");
+						showError("Failed to send audio");
 					} finally {
 						setLoading(false);
 					}
 				};
 				reader.readAsDataURL(blob);
 			} catch (e) {
-				showError("Failed to send audio message");
+				showError("Failed to send audio");
 				setLoading(false);
 			}
 		}
@@ -669,18 +490,9 @@
 			try {
 				setLoading(true);
 				const convId = await ensureConversation();
-				await callMethod(
-					"huf.ai.agent_chat.send_message_to_conversation",
-					{
-						conversation: convId,
-						message: text,
-					}
-				);
+				await callMethod("huf.ai.agent_chat.send_message_to_conversation", { conversation: convId, message: text });
 				textInput.value = "";
-				// Small delay so Agent Message is fully committed before we fetch
-				setTimeout(() => {
-					refreshHistory();
-				}, 2000);
+				setTimeout(refreshHistory, 2000);
 			} catch (e) {
 				showError("Failed to send message");
 			} finally {
@@ -688,24 +500,13 @@
 			}
 		}
 
-		micButton.addEventListener("click", () => {
-			if (!isRecording) startRecording();
-		});
-		stopButton.addEventListener("click", () => {
-			stopRecording();
-		});
-
+		micButton.addEventListener("click", () => { if (!isRecording) startRecording(); });
+		stopButton.addEventListener("click", stopRecording);
 		chatForm.addEventListener("submit", e => {
 			e.preventDefault();
-			// If recording, treat Send as stop+send-audio-now
-			if (isRecording) {
-				stopRecording();
-				return;
-			}
-			const text = textInput.value;
-			sendTextMessage(text);
+			if (isRecording) { stopRecording(); return; }
+			sendTextMessage(textInput.value);
 		});
-
 		resetButton.addEventListener("click", () => {
 			conversationId = null;
 			messages.length = 0;
@@ -714,4 +515,3 @@
 	</script>
 </body>
 </html>
-
