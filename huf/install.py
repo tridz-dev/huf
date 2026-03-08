@@ -391,6 +391,52 @@ def create_generate_audio_tool():
     # Check if tool already exists
     tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
     
+    # Define parameters (used in both update and create paths)
+    parameters = [
+        {
+            "label": "Input Text",
+            "fieldname": "input",
+            "type": "string",
+            "required": 1,
+            "description": "The text to convert to speech. Maximum length varies by provider."
+        },
+        {
+            "label": "Voice",
+            "fieldname": "voice",
+            "type": "string",
+            "required": 0,
+            "description": (
+                "Voice identifier for the TTS provider. "
+                "IMPORTANT: Leave this blank - the voice is automatically determined by the agent's TTS configuration (tts_voice field). Only set this if the user has explicitly asked for a specific voice AND provided the exact voice ID for the active TTS provider."
+            )
+        },
+        {
+            "label": "Model",
+            "fieldname": "model",
+            "type": "string",
+            "required": 0,
+            "description": (
+                "TTS model override."
+                "IMPORTANT: Leave this blank — the model is automatically determined by the agent's TTS configuration (tts_model field). Only set this if the user has explicitly asked to use a specific TTS model."
+            )
+        },
+        {
+            "label": "Speed",
+            "fieldname": "speed",
+            "type": "number",
+            "required": 0,
+            "description": "Speech speed from 0.25 to 4.0. Default: 1.0."
+        },
+        {
+            "label": "Response Format",
+            "fieldname": "response_format",
+            "type": "string",
+            "required": 0,
+            "description": "Audio format. Default: 'mp3'. Options: mp3, opus, aac, flac, wav, pcm.",
+            "options": "mp3\nopus\naac\nflac\nwav\npcm"
+        }
+    ]
+    
     if tool_exists:
         # Update existing tool - add missing parameters if needed
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
@@ -406,51 +452,6 @@ def create_generate_audio_tool():
             frappe.log_error(f"Error updating generate_audio tool: {str(e)}", "Generate Audio Tool Update")
     else:
         # Create new tool
-        parameters = [
-            {
-                "label": "Input Text",
-                "fieldname": "input",
-                "type": "string",
-                "required": 1,
-                "description": "The text to convert to speech. Maximum length varies by provider."
-            },
-            {
-                "label": "Voice",
-                "fieldname": "voice",
-                "type": "string",
-                "required": 0,
-                "description": (
-                    "Voice identifier for the TTS provider. "
-                    "IMPORTANT: Leave this blank - the voice is automatically determined by the agent's TTS configuration (tts_voice field). Only set this if the user has explicitly asked for a specific voice AND provided the exact voice ID for the active TTS provider."
-                )
-            },
-            {
-                "label": "Model",
-                "fieldname": "model",
-                "type": "string",
-                "required": 0,
-                "description": (
-                    "TTS model override."
-                    "IMPORTANT: Leave this blank — the model is automatically determined by the agent's TTS configuration (tts_model field). Only set this if the user has explicitly asked to use a specific TTS model."
-                )
-            },
-            {
-                "label": "Speed",
-                "fieldname": "speed",
-                "type": "number",
-                "required": 0,
-                "description": "Speech speed from 0.25 to 4.0. Default: 1.0."
-            },
-            {
-                "label": "Response Format",
-                "fieldname": "response_format",
-                "type": "string",
-                "required": 0,
-                "description": "Audio format. Default: 'mp3'. Options: mp3, opus, aac, flac, wav, pcm.",
-                "options": "mp3\nopus\naac\nflac\nwav\npcm"
-            }
-        ]
-        
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
@@ -719,7 +720,6 @@ def create_gemini_transcribe_audio_tool():
             tool_doc.insert()
         except Exception as e:
             frappe.log_error(f"Error creating gemini_transcribe_audio tool: {str(e)}", "Gemini Transcribe Audio Tool Creation")
-
 
 def register_integration_services():
 	"""
