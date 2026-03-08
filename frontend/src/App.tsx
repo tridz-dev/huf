@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -9,28 +9,30 @@ import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
-import { HomePage } from './pages/HomePage';
-import { AgentsPage } from './pages/AgentsPage';
-import { AgentFormPageWrapper } from './pages/AgentFormPageWrapper';
-import { FlowListPage } from './pages/FlowListPage';
-import { FlowCanvasPageWrapper } from './pages/FlowCanvasPageWrapper';
-import { DataPage } from './pages/DataPage';
-import { IntegrationsPageWrapper } from './pages/IntegrationsPageWrapper';
-import { ChatPage } from './pages/ChatPageV2';
-import { NotFoundPage } from './pages/NotFoundPage';
+import { PageLoader } from './components/PageLoader';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
-import Executions from './pages/Executions';
-import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
+
+const HomePage = lazy(() => import('./pages/HomePage'));
+const AgentsPage = lazy(() => import('./pages/AgentsPage'));
+const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
+const FlowListPage = lazy(() => import('./pages/FlowListPage'));
+const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
+const DataPage = lazy(() => import('./pages/DataPage'));
+const IntegrationsPageWrapper = lazy(() => import('./pages/IntegrationsPageWrapper'));
+const ChatPage = lazy(() => import('./pages/ChatPageV2'));
+const Executions = lazy(() => import('./pages/Executions'));
+const AgentRunDetailPage = lazy(() => import('./pages/AgentRunDetailPage'));
+const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
+const McpListingPage = lazy(() => import('./pages/McpListingPage'));
+const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
 import {
   checkStreamingAvailable,
   setStreamingAvailable,
 } from './services/streamChatApi';
-import { McpDetailsPageWrapper } from './pages/McpDetailsPageWrapper';
-import McpListingPage from './pages/McpListingPage';
-import { PreviewViewPage } from './pages/PreviewViewPage';
 
 function App() {
   useEffect(() => {
@@ -102,7 +104,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
-                  <HomePage />
+                  <Suspense fallback={<PageLoader />}>
+                    <HomePage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -112,7 +116,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<AgentsHeaderActions />}>
-                  <AgentsPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentsPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -121,7 +127,9 @@ function App() {
             path="/agents/:id"
             element={
               <ProtectedRoute>
-                <AgentFormPageWrapper />
+                <Suspense fallback={<PageLoader />}>
+                  <AgentFormPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -130,7 +138,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <DataPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <DataPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -139,7 +149,9 @@ function App() {
             path="/providers"
             element={
               <ProtectedRoute>
-                <IntegrationsPageWrapper />
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationsPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -149,7 +161,9 @@ function App() {
               <ProtectedRoute>
                 <FlowProvider>
                   <UnifiedLayout>
-                    <FlowListPage />
+                    <Suspense fallback={<PageLoader />}>
+                      <FlowListPage />
+                    </Suspense>
                   </UnifiedLayout>
                 </FlowProvider>
               </ProtectedRoute>
@@ -161,7 +175,9 @@ function App() {
               <ProtectedRoute>
                 <FlowProvider>
                   <ModalProvider>
-                    <FlowCanvasPageWrapper />
+                    <Suspense fallback={<PageLoader />}>
+                      <FlowCanvasPageWrapper />
+                    </Suspense>
                   </ModalProvider>
                 </FlowProvider>
               </ProtectedRoute>
@@ -172,7 +188,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout hideHeader>
-                  <ChatPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -182,7 +200,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout hideHeader>
-                  <ChatPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -192,7 +212,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <Executions />
+                  <Suspense fallback={<PageLoader />}>
+                    <Executions />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -202,7 +224,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <AgentRunDetailPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentRunDetailPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -212,7 +236,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <NotFoundPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <NotFoundPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -222,7 +248,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <NotFoundPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <NotFoundPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -232,7 +260,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<McpHeaderActions />}>
-                  <McpListingPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <McpListingPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -241,7 +271,9 @@ function App() {
             path="/mcp/:mcpId"
             element={
               <ProtectedRoute>
-                <McpDetailsPageWrapper />
+                <Suspense fallback={<PageLoader />}>
+                  <McpDetailsPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -249,7 +281,9 @@ function App() {
             path="/view/:messageId"
             element={
               <ProtectedRoute>
-                <PreviewViewPage />
+                <Suspense fallback={<PageLoader />}>
+                  <PreviewViewPage />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -258,7 +292,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <NotFoundPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <NotFoundPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
