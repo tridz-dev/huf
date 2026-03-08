@@ -122,8 +122,14 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
 
 
 @frappe.whitelist()
-def upload_audio_and_transcribe_web(filename: str, b64data: str, agent: str, conversation: str | None = None):
-    """Web endpoint: save audio, transcribe via STT, then run the agent with the transcript as prompt."""
+def upload_audio_and_transcribe_web(
+    filename: str,
+    b64data: str,
+    agent: str,
+    conversation: str | None = None,
+    transcribe_only: bool = False,
+):
+    """Web endpoint: save audio, transcribe via STT, optionally run the agent with the transcript."""
     if not b64data or not filename:
         frappe.throw(_("Filename and audio data are required"))
 
@@ -227,6 +233,18 @@ def upload_audio_and_transcribe_web(filename: str, b64data: str, agent: str, con
         return res
 
     transcript = res.get("text")
+
+    # Update user message with the actual transcript
+    frappe.db.set_value("Agent Message", msg.name, "content", transcript)
+    frappe.db.commit()
+
+    if transcribe_only:
+        return {
+            "success": True,
+            "conversation_id": conversation_id,
+            "transcript": transcript,
+            "message_id": msg.name,
+        }
 
     # Run agent with transcript as prompt, within the same conversation
     run_result = run_agent_sync(
