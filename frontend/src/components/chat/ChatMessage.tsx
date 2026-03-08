@@ -142,7 +142,7 @@ export function ChatMessage({
                                         />
                                     )}
                                 </div>
-                            ) : !((status === 'submitted' || status === 'streaming') && 
+                            ) : !message.generatedAudio && !((status === 'submitted' || status === 'streaming') && 
                                   message.from === 'assistant' && 
                                   (!message.versions[0]?.content || message.versions[0].content.trim() === '') && 
                                   !message.tools) && (
