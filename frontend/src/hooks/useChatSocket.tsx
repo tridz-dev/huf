@@ -21,6 +21,7 @@ export type NewAgentMessageEvent = {
     kind?: string;
     content?: string;
     generated_image?: string;
+    generated_audio?: string;
     agent_run_id?: string;
     conversation_index?: number;
 };
