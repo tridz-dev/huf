@@ -1,0 +1,45 @@
+{
+  "type": "agent",
+  "agent_name": "CRM Lead Assistant",
+  "description": "Helps sales reps manage and qualify leads",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "prompt_mode": "Template",
+  "agent_prompt": "crm_lead_management",
+  "instructions": "",
+  "temperature": 0.3,
+  "top_p": 1.0,
+  "allow_chat": true,
+  "persist_conversation": true,
+  "persist_user_history": true,
+  "allow_guest": false,
+  "disabled": false,
+  "tools": [
+    "crm.create_lead",
+    "crm.get_recent_leads",
+    "crm.update_lead_status"
+  ],
+  "mcp_servers": [
+    "gmail"
+  ],
+  "knowledge": [
+    {
+      "source": "crm_sales_playbook",
+      "mode": "mandatory",
+      "priority": 1,
+      "max_chunks": 5,
+      "token_budget": 2000
+    }
+  ],
+  "context_strategy": "Summarize",
+  "history_limit": 20,
+  "max_turns": 20,
+  "max_knowledge_tokens": 4000,
+  "tts_model": null,
+  "tts_voice": null,
+  "image_generation_model": null,
+  "enable_prompt_caching": false,
+  "enable_conversation_data": false,
+  "autonaming_of_conversation_title": true,
+  "version": "1.0"
+}

@@ -30,6 +30,7 @@ import {
 } from './services/streamChatApi';
 import { McpDetailsPageWrapper } from './pages/McpDetailsPageWrapper';
 import McpListingPage from './pages/McpListingPage';
+import { AppDefinitionsPage } from './pages/AppDefinitionsPage';
 import { PreviewViewPage } from './pages/PreviewViewPage';
 
 function App() {
@@ -228,6 +229,16 @@ function App() {
               <ProtectedRoute>
                 <UnifiedLayout>
                   <NotFoundPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/app-definitions"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <AppDefinitionsPage />
                 </UnifiedLayout>
               </ProtectedRoute>
             }

@@ -1,0 +1,40 @@
+{
+  "type": "tool",
+  "tool_name": "crm.get_recent_leads",
+  "description": "Get the most recent leads with optional filtering. Returns a list of Lead documents.",
+  "tool_type": "App Provided",
+  "types": "Custom Function",
+  "function_path": "crm.api.leads.get_recent_leads",
+  "reference_doctype": "Lead",
+  "parameters": [
+    {
+      "label": "Limit",
+      "fieldname": "limit",
+      "type": "integer",
+      "required": false,
+      "description": "Maximum number of leads to return (default: 10)"
+    },
+    {
+      "label": "Status",
+      "fieldname": "status",
+      "type": "string",
+      "required": false,
+      "description": "Filter by lead status",
+      "options": "Open\nReplied\nConverted\nDo Not Contact"
+    },
+    {
+      "label": "Source",
+      "fieldname": "source",
+      "type": "string",
+      "required": false,
+      "description": "Filter by lead source"
+    }
+  ],
+  "base_url": null,
+  "http_headers": [],
+  "pass_parameters_as_json": false,
+  "is_read_only": true,
+  "allowed_for_guest": false,
+  "required_permission": "read",
+  "version": "1.0"
+}

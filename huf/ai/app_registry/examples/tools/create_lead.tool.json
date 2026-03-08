@@ -1,0 +1,55 @@
+{
+  "type": "tool",
+  "tool_name": "crm.create_lead",
+  "description": "Create a new CRM Lead with the specified details. Returns the created Lead document.",
+  "tool_type": "App Provided",
+  "types": "Custom Function",
+  "function_path": "crm.api.leads.create_lead",
+  "reference_doctype": "Lead",
+  "parameters": [
+    {
+      "label": "Lead Name",
+      "fieldname": "lead_name",
+      "type": "string",
+      "required": true,
+      "description": "Full name of the lead"
+    },
+    {
+      "label": "Email",
+      "fieldname": "email",
+      "type": "string",
+      "required": false,
+      "description": "Email address of the lead"
+    },
+    {
+      "label": "Company",
+      "fieldname": "company",
+      "type": "string",
+      "required": false,
+      "description": "Company name"
+    },
+    {
+      "label": "Source",
+      "fieldname": "source",
+      "type": "string",
+      "required": false,
+      "description": "Lead source (e.g. Website, Referral, Campaign)",
+      "options": "Website\nReferral\nCampaign\nOther"
+    },
+    {
+      "label": "Status",
+      "fieldname": "status",
+      "type": "string",
+      "required": false,
+      "description": "Initial lead status",
+      "options": "Open\nReplied\nConverted\nDo Not Contact"
+    }
+  ],
+  "base_url": null,
+  "http_headers": [],
+  "pass_parameters_as_json": false,
+  "is_read_only": false,
+  "allowed_for_guest": false,
+  "required_permission": "create",
+  "version": "1.0"
+}
