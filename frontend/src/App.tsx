@@ -34,33 +34,28 @@ import { PreviewViewPage } from './pages/PreviewViewPage';
 
 function App() {
   useEffect(() => {
-    // Wait for frappe.boot to be available
+    const connectionDescription =
+      'Some features may be disabled or not work as expected. Please refresh the page to retry.';
+
     const siteName = (window as any).frappe?.boot?.sitename;
-    /*
-     If in development, use the port set in window.frappe.boot.socketio_port for development server
-     for local development with build, use the port set in frappe.boot.socketio_port.
-     for production, with proper domain no port is required (think so!)
-    */
-    const hasPort = !!window.location?.port
+    const hasPort = !!window.location?.port;
     const port = hasPort ? (window as any).frappe?.boot?.socketio_port : '';
-    
+
     console.log("Checking streaming availability");
-    // Streaming ping: once at app load
     checkStreamingAvailable().then((ok) => {
       console.log("Streaming available:", ok);
       setStreamingAvailable(ok);
       if (!ok) {
         toast.error("Streaming not working", {
-          description:
-            "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+          description: connectionDescription,
           duration: 5000,
         });
       }
     });
-    
+
     if (!siteName) {
       toast.error("Socket connection failed", {
-        description: "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+        description: connectionDescription,
         duration: 5000,
       });
       console.warn("Site name not available yet, socket connection will be skipped");
@@ -69,7 +64,7 @@ function App() {
 
     console.log("Creating socket connection for site:", siteName);
     const socket = createFrappeSocket({ siteName, port });
-    
+
     socket.on("connect", () => {
       console.log("✅ Connected to Frappe websocket!");
     });
@@ -77,7 +72,7 @@ function App() {
     socket.on("connect_error", (error) => {
       console.error("❌ Socket connection error:", error);
       toast.error("Socket connection failed", {
-        description: "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+        description: connectionDescription,
         duration: 5000,
       });
     });
