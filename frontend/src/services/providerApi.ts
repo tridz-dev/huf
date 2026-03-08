@@ -2,7 +2,7 @@ import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import { handleFrappeError } from '@/lib/frappe-error';
-import { fetchDocCount } from './utilsApi';
+import { fetchPaginatedCount } from './utilsApi';
 
 /**
  * Pagination parameters for fetching providers
@@ -75,16 +75,12 @@ export async function getProviders(
     const hasMore = mappedProviders.length > limit;
     const items = hasMore ? mappedProviders.slice(0, limit) : mappedProviders;
 
-    // Only fetch count on first page to avoid unnecessary API calls
-    let total: number | undefined;
-    if (page === 1) {
-      try {
-        const countFilters = [...filters];
-        total = await fetchDocCount(doctype['AI Provider'], countFilters);
-      } catch {
-        // Ignore count errors - total is optional
-      }
-    }
+    const total = await fetchPaginatedCount(
+      page,
+      items.length,
+      doctype['AI Provider'],
+      filters
+    );
 
     return {
       items,
