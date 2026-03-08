@@ -62,6 +62,12 @@ def after_install():
     create_demo_ai_providers()
     create_demo_ai_models()
     create_image_generation_tool()
+    # App Agent Discovery: sync file-based definitions from all installed apps
+    try:
+        from huf.ai.app_registry.discovery import discover_app_definitions
+        discover_app_definitions(use_cache=False)
+    except Exception as e:
+        frappe.log_error(f"App discovery after install: {e}", "HUF App Discovery")
     create_transcribe_audio_tool()
     create_generate_audio_tool()
     create_ocr_document_tool()
@@ -115,6 +121,13 @@ def after_migrate():
 		frappe.log_error(
 			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps",
 			"Tool Sync"
+		)
+		# App Agent Discovery: file-based definitions (agents, tools, prompts, etc.)
+		from huf.ai.app_registry.discovery import discover_app_definitions
+		disc_result = discover_app_definitions(use_cache=False)
+		frappe.log_error(
+			f"App discovery after migrate: {disc_result.get('total_definitions', 0)} definitions from {disc_result.get('synced_apps', [])}",
+			"HUF App Discovery"
 		)
 	except Exception as e:
 		frappe.log_error(
