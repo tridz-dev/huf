@@ -78,7 +78,8 @@ def handle_get_emails(count: int = 10, query: str = "", **kwargs) -> str:
                     "date": headers_dict.get("Date", ""),
                     "snippet": msg_data.get("snippet", "")
                 })
-            except Exception:
+            except Exception as e:
+                frappe.log_error(f"Gmail fetch email details error for {msg['id']}: {e}")
                 detailed_messages.append({"id": msg["id"], "error": "Failed to fetch details"})
         
         return json.dumps({"success": True, "count": len(detailed_messages), "emails": detailed_messages})
