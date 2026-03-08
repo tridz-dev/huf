@@ -6,6 +6,7 @@
 
 import { db, call } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { fetchDocCount } from './utilsApi';
 import { doctype } from '@/data/doctypes';
 
 /**
@@ -139,7 +140,6 @@ export async function getMCPServers(
         let total: number | undefined;
         if (page === 1) {
             try {
-                const { fetchDocCount } = await import('./utilsApi');
                 const countFilters = [...filters];
                 total = await fetchDocCount(doctype['MCP Server'], countFilters);
             } catch {
