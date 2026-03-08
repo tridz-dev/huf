@@ -57,7 +57,11 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: Ch
             // Route to appropriate handler based on event type
             if (data.type === 'new_agent_message') {
                 onNewMessage?.(data as NewAgentMessageEvent);
-            } else {
+            } else if (
+                data.type === 'tool_call_started' ||
+                data.type === 'tool_call_completed' ||
+                data.type === 'tool_call_failed'
+            ) {
                 onToolUpdate?.(data as ToolCallEvent);
             }
         });
