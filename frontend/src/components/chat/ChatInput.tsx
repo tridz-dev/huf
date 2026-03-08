@@ -385,13 +385,15 @@ export function ChatInput({
                             </ShortcutKey>
                             for new line
                         </span>
-                        <SpeechInput
-                            onTranscriptionChange={handleTranscriptionChange}
-                            onAudioRecorded={handleAudioRecorded}
-                            disabled={isSubmitting || isModelMismatch}
-                            size="icon"
-                            className="shrink-0 rounded-full"
-                        />
+                        {!message.trim() && (
+                            <SpeechInput
+                                onTranscriptionChange={handleTranscriptionChange}
+                                onAudioRecorded={handleAudioRecorded}
+                                disabled={isSubmitting || isModelMismatch}
+                                size="icon"
+                                className="shrink-0 rounded-full"
+                            />
+                        )}
                         <Button
                             type="submit"
                             disabled={!message.trim() || isSubmitting || isModelMismatch}
