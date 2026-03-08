@@ -1,14 +1,12 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 
 def _session():
-	shop = os.getenv("SHOPIFY_SHOP_NAME")
-	token = os.getenv("SHOPIFY_ACCESS_TOKEN")
-	if not shop or not token:
-		raise ValueError("SHOPIFY_SHOP_NAME and SHOPIFY_ACCESS_TOKEN are required")
+	shop = require_credential("shopify", "shop_url")
+	token = require_credential("shopify", "access_token")
 	return shop, {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
 
 

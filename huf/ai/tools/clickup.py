@@ -1,23 +1,18 @@
 import json
-import os
 
+from huf.ai.tools.credentials import require_credential
 import requests
 
 BASE = "https://api.clickup.com/api/v2"
 
 
 def _headers():
-	key = os.getenv("CLICKUP_API_KEY")
-	if not key:
-		raise ValueError("CLICKUP_API_KEY environment variable is not set")
+	key = require_credential("clickup", "api_key")
 	return {"Authorization": key}
 
 
 def _space_id():
-	sid = os.getenv("CLICKUP_SPACE_ID")
-	if not sid:
-		raise ValueError("CLICKUP_SPACE_ID environment variable is not set")
-	return sid
+	return require_credential("clickup", "space_id")
 
 
 def _req(method, endpoint, params=None, data=None):
