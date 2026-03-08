@@ -2,7 +2,7 @@ import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AgentDoc } from '@/types/agent.types';
 import { handleFrappeError } from '@/lib/frappe-error';
-import { fetchDocCount } from './utilsApi';
+import { fetchPaginatedCount } from './utilsApi';
 
 /**
  * Trigger type from API
@@ -157,16 +157,7 @@ export async function getAgents(
     const hasMore = mappedAgents.length > limit;
     const items = hasMore ? mappedAgents.slice(0, limit) : mappedAgents;
 
-    // Only fetch count on first page to avoid unnecessary API calls
-    let total: number | undefined;
-    if (page === 1) {
-      try {
-        const countFilters = [...filters];
-        total = await fetchDocCount(doctype.Agent, countFilters);
-      } catch {
-        // Ignore count errors - total is optional
-      }
-    }
+    const total = await fetchPaginatedCount(page, items.length, doctype.Agent, filters);
 
     return {
       items,
@@ -447,16 +438,7 @@ export async function getAgentModels(
     const hasMore = mappedModels.length > limit;
     const items = hasMore ? mappedModels.slice(0, limit) : mappedModels;
 
-    // Only fetch count on first page to avoid unnecessary API calls
-    let total: number | undefined;
-    if (page === 1) {
-      try {
-        const countFilters = [...filters];
-        total = await fetchDocCount(doctype.Agent, countFilters);
-      } catch {
-        // Ignore count errors - total is optional
-      }
-    }
+    const total = await fetchPaginatedCount(page, items.length, doctype.Agent, filters);
 
     return {
       items,
