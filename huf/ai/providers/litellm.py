@@ -902,14 +902,24 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     msg_doc.kind = "Tool Result"
                                                     msg_doc.save(ignore_permissions=True)
 
+                                                tool_result_for_socket = (
+                                                    result_content
+                                                    if isinstance(result_content, (dict, list))
+                                                    else {"output": str(result_content)[:140000]}
+                                                )
                                                 frappe.publish_realtime(
                                                     event=f'conversation:{context.get("conversation_id")}',
                                                     message={
                                                         "type": "tool_call_completed",
+                                                        "conversation_id": context.get("conversation_id"),
+                                                        "agent_run_id": context.get("agent_run_id"),
+                                                        "message_id": message_name,
                                                         "tool_call_id": tool_call["id"],
                                                         "tool_name": tool_name,
+                                                        "tool_status": "Completed",
                                                         "status": "Completed",
-                                                        "result": str(result_content)[:1000]
+                                                        "tool_result": tool_result_for_socket,
+                                                        "result": json.dumps(tool_result_for_socket) if isinstance(tool_result_for_socket, (dict, list)) else str(result_content)[:1000],
                                                     },
                                                     user=frappe.session.user,
                                                     after_commit=False
