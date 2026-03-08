@@ -21,7 +21,9 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           ui: ['@radix-ui/react-dialog', '@radix-ui/react-popover', '@radix-ui/react-select', 'lucide-react'],
-          charts: ['recharts', '@xyflow/react'],
+          recharts: ['recharts'],
+          xyflow: ['@xyflow/react', 'reactflow'],
+          markdown: ['streamdown', 'mermaid'],
           highlighter: ['prismjs'],
         }
       }
