@@ -58,7 +58,12 @@ def handle_get_captions(**kwargs):
 		video_id = _extract_video_id(kwargs["url"])
 		ytt_api = YouTubeTranscriptApi()
 		transcript = ytt_api.fetch(video_id)
-		text = " ".join(snippet.text for snippet in transcript.snippets)
+		# youtube-transcript-api returns FetchedTranscript with .snippets list of Snippet objects
+		if hasattr(transcript, "snippets"):
+			text = " ".join(snippet.text for snippet in transcript.snippets)
+		else:
+			# Fallback for older API versions that return list of dicts
+			text = " ".join(item.get("text", "") for item in transcript)
 		return json.dumps({"video_id": video_id, "transcript": text[:10000]})
 	except Exception as e:
 		return json.dumps({"error": str(e)})

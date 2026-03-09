@@ -22,12 +22,19 @@ def require_credential(service: str, key: str) -> str:
 	Raises:
 		ValueError: If the credential is not found in either HUF settings or environment
 	"""
-	# First, try to get from HUF Settings DocType
+	# First, try to get from Integration Settings DocType
 	try:
-		settings = frappe.get_doc("HUF Settings")
-		if hasattr(settings, "credentials"):
-			for cred in settings.credentials:
-				if cred.service == service and cred.key == key:
+		integration = frappe.get_all(
+			"Integration Settings",
+			filters={"service": service, "is_active": 1},
+			fields=["name"],
+			order_by="is_default DESC, modified DESC",
+			limit=1,
+		)
+		if integration:
+			doc = frappe.get_doc("Integration Settings", integration[0].name)
+			for cred in doc.credentials:
+				if cred.key == key:
 					return cred.get_password("value")
 	except Exception:
 		pass
