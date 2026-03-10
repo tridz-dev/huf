@@ -1,6 +1,6 @@
 import json
-
-from huf.ai.tools.credentials import require_credential
+import frappe
+from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
 BASE = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -8,9 +8,10 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 def _get_access_token():
-	client_id = require_credential("google", "client_id")
-	client_secret = require_credential("google", "client_secret")
-	refresh_token = require_credential("google", "refresh_token")
+	service_name = "google_sheets"
+	client_id = require_credential(service_name, "client_id")
+	client_secret = require_credential(service_name, "client_secret")
+	refresh_token = require_credential(service_name, "refresh_token")
 
 	resp = requests.post(TOKEN_URL, data={
 		"client_id": client_id,
@@ -28,8 +29,12 @@ def _headers():
 
 def handle_read_sheet(**kwargs):
 	"""Read data from a Google Sheets spreadsheet."""
+	service_name = "google_sheets"
 	try:
-		sheet_id = kwargs["spreadsheet_id"]
+		sheet_id = kwargs.get("spreadsheet_id")
+		if not sheet_id:
+			return json.dumps({"success": False, "error": "spreadsheet_id is required"})
+			
 		range_name = kwargs.get("range", "Sheet1")
 
 		resp = requests.get(
@@ -39,17 +44,29 @@ def handle_read_sheet(**kwargs):
 		)
 		resp.raise_for_status()
 		data = resp.json()
-		return json.dumps({"range": data.get("range", ""), "values": data.get("values", [])})
+		return json.dumps({
+			"success": True,
+			"results": {
+				"range": data.get("range", ""), 
+				"values": data.get("values", [])
+			}
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Sheets Error (Read): {str(e)}", "Google Sheets Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_update_sheet(**kwargs):
 	"""Update data in a Google Sheets spreadsheet."""
+	service_name = "google_sheets"
 	try:
-		sheet_id = kwargs["spreadsheet_id"]
-		range_name = kwargs["range"]
-		values = kwargs["data"]
+		sheet_id = kwargs.get("spreadsheet_id")
+		range_name = kwargs.get("range")
+		values = kwargs.get("data")
+		if not all([sheet_id, range_name, values]):
+			return json.dumps({"success": False, "error": "spreadsheet_id, range, and data are required"})
+
 		if isinstance(values, str):
 			values = json.loads(values)
 
@@ -62,26 +79,44 @@ def handle_update_sheet(**kwargs):
 		)
 		resp.raise_for_status()
 		data = resp.json()
-		return json.dumps({"updated_cells": data.get("updatedCells", 0), "updated_range": data.get("updatedRange", "")})
+		return json.dumps({
+			"success": True,
+			"results": {
+				"updated_cells": data.get("updatedCells", 0), 
+				"updated_range": data.get("updatedRange", "")
+			}
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Sheets Error (Update): {str(e)}", "Google Sheets Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_create_sheet(**kwargs):
 	"""Create a new Google Sheets spreadsheet."""
+	service_name = "google_sheets"
 	try:
+		title = kwargs.get("title")
+		if not title:
+			return json.dumps({"success": False, "error": "title is required"})
+
 		resp = requests.post(
 			BASE,
 			headers=_headers(),
-			json={"properties": {"title": kwargs["title"]}},
+			json={"properties": {"title": title}},
 			timeout=30,
 		)
 		resp.raise_for_status()
 		data = resp.json()
 		return json.dumps({
-			"spreadsheet_id": data.get("spreadsheetId", ""),
-			"url": data.get("spreadsheetUrl", ""),
-			"title": kwargs["title"],
+			"success": True,
+			"results": {
+				"spreadsheet_id": data.get("spreadsheetId", ""),
+				"url": data.get("spreadsheetUrl", ""),
+				"title": title,
+			}
 		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Sheets Error (Create): {str(e)}", "Google Sheets Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
