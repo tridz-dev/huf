@@ -6,15 +6,15 @@ Uses HUF Integration Settings for Jira credentials.
 import json
 import frappe
 import httpx
-from typing import Optional, Dict, Any
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
 
 
 def _get_jira_config():
     """Get Jira configuration from Integration Settings."""
-    server_url = get_credential("jira", "server_url")
-    username = get_credential("jira", "username")
-    token = get_credential("jira", "token")
+    service_name = "jira"
+    server_url = get_credential(service_name, "server_url")
+    username = get_credential(service_name, "username")
+    token = get_credential(service_name, "token")
     
     if not all([server_url, username, token]):
         raise ValueError("Jira credentials not fully configured (server_url, username, token required)")
@@ -48,20 +48,17 @@ def _make_jira_request(method: str, endpoint: str, json_data=None, params=None):
     return response.json() if response.text else {}
 
 
-def handle_get_issue(issue_key: str, **kwargs) -> str:
-    """
-    Retrieve details of a Jira issue.
-    
-    Args:
-        issue_key: Jira issue key (e.g. PROJ-123)
-    
-    Returns:
-        JSON string with issue details
-    """
+def handle_get_issue(**kwargs) -> str:
+    """Retrieve details of a Jira issue."""
+    service_name = "jira"
     try:
+        issue_key = kwargs.get("issue_key")
+        if not issue_key:
+            return json.dumps({"success": False, "error": "issue_key is required"})
+
         data = _make_jira_request("GET", f"issue/{issue_key}")
         
-        # Extract key fields
+        server_url = _get_jira_config()[0]
         issue_data = {
             "key": data.get("key"),
             "summary": data.get("fields", {}).get("summary"),
@@ -73,31 +70,28 @@ def handle_get_issue(issue_key: str, **kwargs) -> str:
             "created": data.get("fields", {}).get("created"),
             "updated": data.get("fields", {}).get("updated"),
             "issue_type": data.get("fields", {}).get("issuetype", {}).get("name"),
-            "url": f"{_get_jira_config()[0]}/browse/{issue_key}"
+            "url": f"{server_url}/browse/{issue_key}"
         }
         
-        return json.dumps({"success": True, "issue": issue_data})
+        return json.dumps({"success": True, "results": issue_data})
     except Exception as e:
-        error_msg = f"Jira get issue error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("jira", error_msg)
-        return json.dumps({"error": str(e)})
+        frappe.log_error(f"Jira Get Issue Error: {str(e)}", "Jira Tool")
+        update_last_error(service_name, str(e))
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_create_issue(project_key: str, summary: str, description: str = None, issuetype: str = "Task", **kwargs) -> str:
-    """
-    Create a new Jira issue.
-    
-    Args:
-        project_key: Jira project key (e.g. PROJ)
-        summary: Issue summary/title
-        description: Issue description
-        issuetype: Issue type (default: Task)
-    
-    Returns:
-        JSON string with created issue details
-    """
+def handle_create_issue(**kwargs) -> str:
+    """Create a new Jira issue."""
+    service_name = "jira"
     try:
+        project_key = kwargs.get("project_key")
+        summary = kwargs.get("summary")
+        if not all([project_key, summary]):
+            return json.dumps({"success": False, "error": "project_key and summary are required"})
+
+        description = kwargs.get("description")
+        issuetype = kwargs.get("issuetype", "Task")
+
         payload = {
             "fields": {
                 "project": {"key": project_key},
@@ -111,34 +105,31 @@ def handle_create_issue(project_key: str, summary: str, description: str = None,
         
         data = _make_jira_request("POST", "issue", json_data=payload)
         
+        server_url = _get_jira_config()[0]
         issue_key = data.get("key")
-        issue_data = {
-            "key": issue_key,
-            "id": data.get("id"),
-            "self": data.get("self"),
-            "url": f"{_get_jira_config()[0]}/browse/{issue_key}"
-        }
-        
-        return json.dumps({"success": True, "issue": issue_data})
+        return json.dumps({
+            "success": True, 
+            "results": {
+                "key": issue_key,
+                "id": data.get("id"),
+                "url": f"{server_url}/browse/{issue_key}"
+            }
+        })
     except Exception as e:
-        error_msg = f"Jira create issue error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("jira", error_msg)
-        return json.dumps({"error": str(e)})
+        frappe.log_error(f"Jira Create Issue Error: {str(e)}", "Jira Tool")
+        update_last_error(service_name, str(e))
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_search_issues(jql: str, max_results: int = 50, **kwargs) -> str:
-    """
-    Search Jira issues using JQL query.
-    
-    Args:
-        jql: JQL query string
-        max_results: Max results (default 50)
-    
-    Returns:
-        JSON string with search results
-    """
+def handle_search_issues(**kwargs) -> str:
+    """Search Jira issues using JQL query."""
+    service_name = "jira"
     try:
+        jql = kwargs.get("jql")
+        if not jql:
+            return json.dumps({"success": False, "error": "jql is required"})
+
+        max_results = int(kwargs.get("max_results", 50))
         params = {
             "jql": jql,
             "maxResults": max_results,
@@ -163,43 +154,39 @@ def handle_search_issues(jql: str, max_results: int = 50, **kwargs) -> str:
         
         return json.dumps({
             "success": True,
-            "total": data.get("total"),
-            "count": len(issues),
-            "issues": issues
+            "results": {
+                "total": data.get("total"),
+                "count": len(issues),
+                "issues": issues
+            }
         })
     except Exception as e:
-        error_msg = f"Jira search error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("jira", error_msg)
-        return json.dumps({"error": str(e)})
+        frappe.log_error(f"Jira Search Error: {str(e)}", "Jira Tool")
+        update_last_error(service_name, str(e))
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_add_comment(issue_key: str, comment: str, **kwargs) -> str:
-    """
-    Add a comment to a Jira issue.
-    
-    Args:
-        issue_key: Jira issue key
-        comment: Comment text
-    
-    Returns:
-        JSON string with result
-    """
+def handle_add_comment(**kwargs) -> str:
+    """Add a comment to a Jira issue."""
+    service_name = "jira"
     try:
-        payload = {
-            "body": comment
-        }
-        
+        issue_key = kwargs.get("issue_key")
+        comment = kwargs.get("comment")
+        if not all([issue_key, comment]):
+            return json.dumps({"success": False, "error": "issue_key and comment are required"})
+
+        payload = {"body": comment}
         data = _make_jira_request("POST", f"issue/{issue_key}/comment", json_data=payload)
         
         return json.dumps({
             "success": True,
-            "comment_id": data.get("id"),
-            "created": data.get("created"),
-            "author": data.get("author", {}).get("displayName")
+            "results": {
+                "comment_id": data.get("id"),
+                "created": data.get("created"),
+                "author": data.get("author", {}).get("displayName")
+            }
         })
     except Exception as e:
-        error_msg = f"Jira add comment error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("jira", error_msg)
-        return json.dumps({"error": str(e)})
+        frappe.log_error(f"Jira Add Comment Error: {str(e)}", "Jira Tool")
+        update_last_error(service_name, str(e))
+        return json.dumps({"success": False, "error": str(e)})
