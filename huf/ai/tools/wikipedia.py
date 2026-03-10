@@ -27,8 +27,10 @@ def handle_search(**kwargs):
 			suggestions = data[1] if len(data) > 1 else []
 			return json.dumps({
 				"success": True, 
-				"found": False, 
-				"suggestions": suggestions
+				"results": {
+					"found": False, 
+					"suggestions": suggestions
+				}
 			})
 
 		resp.raise_for_status()

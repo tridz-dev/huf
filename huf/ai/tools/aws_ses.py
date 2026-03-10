@@ -31,7 +31,7 @@ def handle_send_email(**kwargs):
 				"Body": {"Html": {"Data": kwargs["body"]}},
 			},
 		)
-		return json.dumps({"success": True, "message_id": resp.get("MessageId", "")})
+		return json.dumps({"success": True, "results": {"message_id": resp.get("MessageId", "")}})
 	except Exception as e:
 		frappe.log_error(f"AWS SES Error: {str(e)}", "AWS SES Tool")
 		update_last_error(service_name, str(e))
