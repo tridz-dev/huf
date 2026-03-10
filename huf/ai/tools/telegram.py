@@ -6,26 +6,24 @@ Uses HUF Integration Settings for credential management.
 import json
 import frappe
 import httpx
-from typing import Optional
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
 
 
-def handle_send_message(chat_id: str, message: str, **kwargs) -> str:
-    """
-    Send a message via Telegram bot.
-    
-    Args:
-        chat_id: Telegram chat ID to send to
-        message: Message text
-    
-    Returns:
-        JSON string with the response from Telegram API
-    """
+def handle_send_message(**kwargs) -> str:
+    """Send a message via Telegram bot."""
+    service_name = "telegram"
     try:
+        chat_id = kwargs.get("chat_id")
+        message = kwargs.get("message")
+        if not all([chat_id, message]):
+            return json.dumps({"success": False, "error": "chat_id and message are required"})
+
         # Get token from Integration Settings
-        token = get_credential("telegram", "token")
+        token = get_credential(service_name, "token")
         if not token:
-            return json.dumps({"error": "Telegram bot token not configured. Please set up Integration Settings for telegram service with 'token' credential."})
+            error_msg = "Telegram bot token not configured"
+            update_last_error(service_name, error_msg)
+            return json.dumps({"success": False, "error": error_msg})
         
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
@@ -39,15 +37,10 @@ def handle_send_message(chat_id: str, message: str, **kwargs) -> str:
         
         return json.dumps({
             "success": True,
-            "data": response.json()
+            "results": response.json()
         })
-    except httpx.HTTPError as e:
-        error_msg = f"Telegram API error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("telegram", error_msg)
-        return json.dumps({"error": f"HTTP error: {str(e)}"})
     except Exception as e:
-        error_msg = f"Telegram send error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("telegram", error_msg)
-        return json.dumps({"error": str(e)})
+        error_msg = f"Telegram Send Message Error: {str(e)}"
+        frappe.log_error(error_msg, "Telegram Tool")
+        update_last_error(service_name, error_msg)
+        return json.dumps({"success": False, "error": str(e)})
