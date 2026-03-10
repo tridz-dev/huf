@@ -6,13 +6,13 @@ Uses HUF Integration Settings for credential management.
 import json
 import frappe
 import httpx
-from typing import List, Optional, Dict, Any
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
 
 
 def _get_slack_headers():
     """Get Slack API headers with token."""
-    token = get_credential("slack", "token")
+    service_name = "slack"
+    token = get_credential(service_name, "token")
     if not token:
         raise ValueError("Slack token not configured")
     return {
@@ -21,9 +21,15 @@ def _get_slack_headers():
     }
 
 
-def handle_send_message(channel: str, text: str, **kwargs) -> str:
+def handle_send_message(**kwargs) -> str:
     """Send a message to a Slack channel."""
+    service_name = "slack"
     try:
+        channel = kwargs.get("channel")
+        text = kwargs.get("text")
+        if not all([channel, text]):
+            return json.dumps({"success": False, "error": "channel and text are required"})
+
         headers = _get_slack_headers()
         payload = {"channel": channel, "text": text, "mrkdwn": True}
         
@@ -37,19 +43,28 @@ def handle_send_message(channel: str, text: str, **kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            return json.dumps({"error": data.get("error", "Unknown error")})
+            error_msg = data.get("error", "Unknown error")
+            update_last_error(service_name, error_msg)
+            return json.dumps({"success": False, "error": error_msg})
         
-        return json.dumps({"success": True, "data": data})
+        return json.dumps({"success": True, "results": data})
     except Exception as e:
-        error_msg = f"Slack send error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("slack", error_msg)
-        return json.dumps({"error": str(e)})
+        error_msg = f"Slack Send Message Error: {str(e)}"
+        frappe.log_error(error_msg, "Slack Tool")
+        update_last_error(service_name, error_msg)
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_send_message_thread(channel: str, text: str, thread_ts: str, **kwargs) -> str:
+def handle_send_message_thread(**kwargs) -> str:
     """Reply to a message thread in a Slack channel."""
+    service_name = "slack"
     try:
+        channel = kwargs.get("channel")
+        text = kwargs.get("text")
+        thread_ts = kwargs.get("thread_ts")
+        if not all([channel, text, thread_ts]):
+            return json.dumps({"success": False, "error": "channel, text, and thread_ts are required"})
+
         headers = _get_slack_headers()
         payload = {"channel": channel, "text": text, "thread_ts": thread_ts, "mrkdwn": True}
         
@@ -63,18 +78,21 @@ def handle_send_message_thread(channel: str, text: str, thread_ts: str, **kwargs
         
         data = response.json()
         if not data.get("ok"):
-            return json.dumps({"error": data.get("error", "Unknown error")})
+            error_msg = data.get("error", "Unknown error")
+            update_last_error(service_name, error_msg)
+            return json.dumps({"success": False, "error": error_msg})
         
-        return json.dumps({"success": True, "data": data})
+        return json.dumps({"success": True, "results": data})
     except Exception as e:
-        error_msg = f"Slack thread reply error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("slack", error_msg)
-        return json.dumps({"error": str(e)})
+        error_msg = f"Slack Thread Reply Error: {str(e)}"
+        frappe.log_error(error_msg, "Slack Tool")
+        update_last_error(service_name, error_msg)
+        return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_list_channels(**kwargs) -> str:
     """List all channels in the Slack workspace."""
+    service_name = "slack"
     try:
         headers = _get_slack_headers()
         
@@ -88,22 +106,34 @@ def handle_list_channels(**kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            return json.dumps({"error": data.get("error", "Unknown error")})
+            error_msg = data.get("error", "Unknown error")
+            update_last_error(service_name, error_msg)
+            return json.dumps({"success": False, "error": error_msg})
         
         channels = [{"id": ch.get("id"), "name": ch.get("name"), "is_private": ch.get("is_private", False)}
                     for ch in data.get("channels", [])]
         
-        return json.dumps({"success": True, "channels": channels})
+        return json.dumps({
+            "success": True, 
+            "count": len(channels), 
+            "results": channels
+        })
     except Exception as e:
-        error_msg = f"Slack list channels error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("slack", error_msg)
-        return json.dumps({"error": str(e)})
+        error_msg = f"Slack List Channels Error: {str(e)}"
+        frappe.log_error(error_msg, "Slack Tool")
+        update_last_error(service_name, error_msg)
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_get_channel_history(channel: str, limit: int = 100, **kwargs) -> str:
+def handle_get_channel_history(**kwargs) -> str:
     """Get message history of a Slack channel."""
+    service_name = "slack"
     try:
+        channel = kwargs.get("channel")
+        if not channel:
+            return json.dumps({"success": False, "error": "channel is required"})
+
+        limit = int(kwargs.get("limit", 100))
         headers = _get_slack_headers()
         
         response = httpx.get(
@@ -116,22 +146,34 @@ def handle_get_channel_history(channel: str, limit: int = 100, **kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            return json.dumps({"error": data.get("error", "Unknown error")})
+            error_msg = data.get("error", "Unknown error")
+            update_last_error(service_name, error_msg)
+            return json.dumps({"success": False, "error": error_msg})
         
         messages = [{"ts": msg.get("ts"), "text": msg.get("text", ""), "user": msg.get("user", "bot" if msg.get("bot_id") else "unknown")}
                     for msg in data.get("messages", [])]
         
-        return json.dumps({"success": True, "messages": messages})
+        return json.dumps({
+            "success": True, 
+            "count": len(messages), 
+            "results": messages
+        })
     except Exception as e:
-        error_msg = f"Slack get history error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("slack", error_msg)
-        return json.dumps({"error": str(e)})
+        error_msg = f"Slack Get History Error: {str(e)}"
+        frappe.log_error(error_msg, "Slack Tool")
+        update_last_error(service_name, error_msg)
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_search_messages(query: str, limit: int = 20, **kwargs) -> str:
+def handle_search_messages(**kwargs) -> str:
     """Search messages across the Slack workspace."""
+    service_name = "slack"
     try:
+        query = kwargs.get("query")
+        if not query:
+            return json.dumps({"success": False, "error": "query is required"})
+
+        limit = int(kwargs.get("limit", 20))
         headers = _get_slack_headers()
         
         response = httpx.get(
@@ -144,23 +186,31 @@ def handle_search_messages(query: str, limit: int = 20, **kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            return json.dumps({"error": data.get("error", "Unknown error")})
+            error_msg = data.get("error", "Unknown error")
+            update_last_error(service_name, error_msg)
+            return json.dumps({"success": False, "error": error_msg})
         
         matches = data.get("messages", {}).get("matches", [])
         results = [{"text": msg.get("text", ""), "user": msg.get("username", msg.get("user", "unknown")), "channel": msg.get("channel", {}).get("name", "unknown"), "permalink": msg.get("permalink")}
                    for msg in matches]
         
-        return json.dumps({"success": True, "count": len(results), "results": results})
+        return json.dumps({
+            "success": True, 
+            "count": len(results), 
+            "results": results
+        })
     except Exception as e:
-        error_msg = f"Slack search error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("slack", error_msg)
-        return json.dumps({"error": str(e)})
+        error_msg = f"Slack Search Error: {str(e)}"
+        frappe.log_error(error_msg, "Slack Tool")
+        update_last_error(service_name, error_msg)
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_list_users(limit: int = 100, **kwargs) -> str:
+def handle_list_users(**kwargs) -> str:
     """List all users in the Slack workspace."""
+    service_name = "slack"
     try:
+        limit = int(kwargs.get("limit", 100))
         headers = _get_slack_headers()
         
         response = httpx.get(
@@ -173,15 +223,21 @@ def handle_list_users(limit: int = 100, **kwargs) -> str:
         
         data = response.json()
         if not data.get("ok"):
-            return json.dumps({"error": data.get("error", "Unknown error")})
+            error_msg = data.get("error", "Unknown error")
+            update_last_error(service_name, error_msg)
+            return json.dumps({"success": False, "error": error_msg})
         
         users = [{"id": user.get("id"), "name": user.get("name"), "real_name": user.get("real_name", ""), "is_bot": user.get("is_bot", False)}
                  for user in data.get("members", [])
                  if not user.get("deleted", False)]
         
-        return json.dumps({"success": True, "count": len(users), "users": users})
+        return json.dumps({
+            "success": True, 
+            "count": len(users), 
+            "results": users
+        })
     except Exception as e:
-        error_msg = f"Slack list users error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("slack", error_msg)
-        return json.dumps({"error": str(e)})
+        error_msg = f"Slack List Users Error: {str(e)}"
+        frappe.log_error(error_msg, "Slack Tool")
+        update_last_error(service_name, error_msg)
+        return json.dumps({"success": False, "error": str(e)})
