@@ -1,7 +1,7 @@
 import json
-from datetime import datetime, timedelta
-
-from huf.ai.tools.credentials import require_credential
+import frappe
+from datetime import datetime
+from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
 BASE = "https://www.googleapis.com/calendar/v3"
@@ -9,9 +9,10 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 def _get_access_token():
-	client_id = require_credential("google", "client_id")
-	client_secret = require_credential("google", "client_secret")
-	refresh_token = require_credential("google", "refresh_token")
+	service_name = "google_calendar"
+	client_id = require_credential(service_name, "client_id")
+	client_secret = require_credential(service_name, "client_secret")
+	refresh_token = require_credential(service_name, "refresh_token")
 
 	resp = requests.post(TOKEN_URL, data={
 		"client_id": client_id,
@@ -29,6 +30,7 @@ def _headers():
 
 def handle_list_events(**kwargs):
 	"""List upcoming events from Google Calendar."""
+	service_name = "google_calendar"
 	try:
 		limit = int(kwargs.get("limit", 10))
 		now = datetime.utcnow().isoformat() + "Z"
@@ -47,18 +49,31 @@ def handle_list_events(**kwargs):
 			}
 			for e in resp.json().get("items", [])
 		]
-		return json.dumps({"count": len(events), "events": events})
+		return json.dumps({
+			"success": True, 
+			"count": len(events), 
+			"results": events
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Calendar Error (List): {str(e)}", "Google Calendar Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_create_event(**kwargs):
 	"""Create a new event in Google Calendar."""
+	service_name = "google_calendar"
 	try:
+		title = kwargs.get("title")
+		start_date = kwargs.get("start_date")
+		end_date = kwargs.get("end_date")
+		if not all([title, start_date, end_date]):
+			return json.dumps({"success": False, "error": "title, start_date, and end_date are required"})
+
 		event = {
-			"summary": kwargs["title"],
-			"start": {"dateTime": kwargs["start_date"], "timeZone": kwargs.get("timezone", "UTC")},
-			"end": {"dateTime": kwargs["end_date"], "timeZone": kwargs.get("timezone", "UTC")},
+			"summary": title,
+			"start": {"dateTime": start_date, "timeZone": kwargs.get("timezone", "UTC")},
+			"end": {"dateTime": end_date, "timeZone": kwargs.get("timezone", "UTC")},
 		}
 		if "description" in kwargs:
 			event["description"] = kwargs["description"]
@@ -66,14 +81,28 @@ def handle_create_event(**kwargs):
 		resp = requests.post(f"{BASE}/calendars/primary/events", headers=_headers(), json=event, timeout=30)
 		resp.raise_for_status()
 		data = resp.json()
-		return json.dumps({"id": data["id"], "summary": data.get("summary", ""), "htmlLink": data.get("htmlLink", "")})
+		return json.dumps({
+			"success": True, 
+			"results": {
+				"id": data["id"], 
+				"summary": data.get("summary", ""), 
+				"htmlLink": data.get("htmlLink", "")
+			}
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Calendar Error (Create): {str(e)}", "Google Calendar Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_update_event(**kwargs):
 	"""Update an existing Google Calendar event."""
+	service_name = "google_calendar"
 	try:
+		event_id = kwargs.get("event_id")
+		if not event_id:
+			return json.dumps({"success": False, "error": "event_id is required"})
+
 		patch = {}
 		if "title" in kwargs:
 			patch["summary"] = kwargs["title"]
@@ -81,26 +110,35 @@ def handle_update_event(**kwargs):
 			patch["description"] = kwargs["description"]
 
 		resp = requests.patch(
-			f"{BASE}/calendars/primary/events/{kwargs['event_id']}",
+			f"{BASE}/calendars/primary/events/{event_id}",
 			headers=_headers(),
 			json=patch,
 			timeout=30,
 		)
 		resp.raise_for_status()
-		return json.dumps({"ok": True, "event_id": kwargs["event_id"]})
+		return json.dumps({"success": True, "results": {"event_id": event_id}})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Calendar Error (Update): {str(e)}", "Google Calendar Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_delete_event(**kwargs):
 	"""Delete a Google Calendar event."""
+	service_name = "google_calendar"
 	try:
+		event_id = kwargs.get("event_id")
+		if not event_id:
+			return json.dumps({"success": False, "error": "event_id is required"})
+
 		resp = requests.delete(
-			f"{BASE}/calendars/primary/events/{kwargs['event_id']}",
+			f"{BASE}/calendars/primary/events/{event_id}",
 			headers=_headers(),
 			timeout=30,
 		)
 		resp.raise_for_status()
-		return json.dumps({"ok": True, "event_id": kwargs["event_id"]})
+		return json.dumps({"success": True, "results": {"event_id": event_id}})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Calendar Error (Delete): {str(e)}", "Google Calendar Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
