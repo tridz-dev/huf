@@ -1,21 +1,26 @@
 import json
-
-from huf.ai.tools.credentials import require_credential
+import frappe
+from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
 BASE = "https://maps.googleapis.com/maps/api"
 
 
 def _key():
-	return require_credential("google", "api_key")
+	return require_credential("google_maps", "api_key")
 
 
 def handle_search_places(**kwargs):
 	"""Search for places using Google Maps."""
+	service_name = "google_maps"
 	try:
+		query = kwargs.get("query")
+		if not query:
+			return json.dumps({"success": False, "error": "query is required"})
+
 		resp = requests.get(
 			f"{BASE}/place/textsearch/json",
-			params={"query": kwargs["query"], "key": _key()},
+			params={"query": query, "key": _key()},
 			timeout=15,
 		)
 		resp.raise_for_status()
@@ -28,17 +33,29 @@ def handle_search_places(**kwargs):
 			}
 			for p in resp.json().get("results", [])[:10]
 		]
-		return json.dumps({"count": len(results), "places": results})
+		return json.dumps({
+			"success": True, 
+			"count": len(results), 
+			"results": results
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Maps Error (Search): {str(e)}", "Google Maps Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_get_directions(**kwargs):
 	"""Get driving directions between two locations."""
+	service_name = "google_maps"
 	try:
+		origin = kwargs.get("origin")
+		destination = kwargs.get("destination")
+		if not all([origin, destination]):
+			return json.dumps({"success": False, "error": "origin and destination are required"})
+
 		params = {
-			"origin": kwargs["origin"],
-			"destination": kwargs["destination"],
+			"origin": origin,
+			"destination": destination,
 			"mode": kwargs.get("mode", "driving"),
 			"key": _key(),
 		}
@@ -47,55 +64,84 @@ def handle_get_directions(**kwargs):
 		data = resp.json()
 		routes = data.get("routes", [])
 		if not routes:
-			return json.dumps({"error": "No routes found"})
+			return json.dumps({"success": False, "error": "No routes found"})
 
 		leg = routes[0].get("legs", [{}])[0]
 		return json.dumps({
-			"distance": leg.get("distance", {}).get("text", ""),
-			"duration": leg.get("duration", {}).get("text", ""),
-			"start_address": leg.get("start_address", ""),
-			"end_address": leg.get("end_address", ""),
+			"success": True,
+			"results": {
+				"distance": leg.get("distance", {}).get("text", ""),
+				"duration": leg.get("duration", {}).get("text", ""),
+				"start_address": leg.get("start_address", ""),
+				"end_address": leg.get("end_address", ""),
+			}
 		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Maps Error (Directions): {str(e)}", "Google Maps Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_geocode(**kwargs):
 	"""Convert an address to coordinates."""
+	service_name = "google_maps"
 	try:
+		address = kwargs.get("address")
+		if not address:
+			return json.dumps({"success": False, "error": "address is required"})
+
 		resp = requests.get(
 			f"{BASE}/geocode/json",
-			params={"address": kwargs["address"], "key": _key()},
+			params={"address": address, "key": _key()},
 			timeout=15,
 		)
 		resp.raise_for_status()
 		results = resp.json().get("results", [])
 		if not results:
-			return json.dumps({"error": "Address not found"})
+			return json.dumps({"success": False, "error": "Address not found"})
 
 		loc = results[0].get("geometry", {}).get("location", {})
 		return json.dumps({
-			"address": results[0].get("formatted_address", ""),
-			"lat": loc.get("lat"),
-			"lng": loc.get("lng"),
+			"success": True,
+			"results": {
+				"address": results[0].get("formatted_address", ""),
+				"lat": loc.get("lat"),
+				"lng": loc.get("lng"),
+			}
 		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Maps Error (Geocode): {str(e)}", "Google Maps Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_reverse_geocode(**kwargs):
 	"""Convert coordinates to an address."""
+	service_name = "google_maps"
 	try:
+		lat = kwargs.get("lat")
+		lng = kwargs.get("lng")
+		if lat is None or lng is None:
+			return json.dumps({"success": False, "error": "lat and lng are required"})
+
 		resp = requests.get(
 			f"{BASE}/geocode/json",
-			params={"latlng": f"{kwargs['lat']},{kwargs['lng']}", "key": _key()},
+			params={"latlng": f"{lat},{lng}", "key": _key()},
 			timeout=15,
 		)
 		resp.raise_for_status()
 		results = resp.json().get("results", [])
 		if not results:
-			return json.dumps({"error": "No address found for coordinates"})
+			return json.dumps({"success": False, "error": "No address found for coordinates"})
 
-		return json.dumps({"address": results[0].get("formatted_address", ""), "place_id": results[0].get("place_id", "")})
+		return json.dumps({
+			"success": True,
+			"results": {
+				"address": results[0].get("formatted_address", ""), 
+				"place_id": results[0].get("place_id", "")
+			}
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Maps Error (Reverse Geocode): {str(e)}", "Google Maps Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
