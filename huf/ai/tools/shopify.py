@@ -1,40 +1,52 @@
 import json
-
-from huf.ai.tools.credentials import require_credential
+import frappe
+from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
 
 def _session():
-	shop = require_credential("shopify", "shop_url")
-	token = require_credential("shopify", "access_token")
-	return shop, {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
+	service_name = "shopify"
+	shop_name = require_credential(service_name, "shop_name")
+	token = require_credential(service_name, "access_token")
+	
+	# Strip .myshopify.com if provided, as we append it
+	clean_shop = shop_name.replace(".myshopify.com", "").strip()
+	return clean_shop, {"X-Shopify-Access-Token": token, "Content-Type": "application/json"}
 
 
 def _get(endpoint, params=None):
 	shop, headers = _session()
-	resp = requests.get(f"https://{shop}.myshopify.com/admin/api/2024-01/{endpoint}", headers=headers, params=params, timeout=30)
+	url = f"https://{shop}.myshopify.com/admin/api/2024-01/{endpoint}"
+	resp = requests.get(url, headers=headers, params=params, timeout=30)
 	resp.raise_for_status()
 	return resp.json()
 
 
 def handle_get_shop_info(**kwargs):
 	"""Get information about the Shopify store."""
+	service_name = "shopify"
 	try:
 		data = _get("shop.json")
 		shop = data.get("shop", {})
 		return json.dumps({
-			"name": shop.get("name", ""),
-			"email": shop.get("email", ""),
-			"domain": shop.get("domain", ""),
-			"currency": shop.get("currency", ""),
-			"plan_name": shop.get("plan_name", ""),
+			"success": True,
+			"results": {
+				"name": shop.get("name", ""),
+				"email": shop.get("email", ""),
+				"domain": shop.get("domain", ""),
+				"currency": shop.get("currency", ""),
+				"plan_name": shop.get("plan_name", ""),
+			}
 		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Shopify Error (Shop Info): {str(e)}", "Shopify Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_get_products(**kwargs):
 	"""Get products from the Shopify store."""
+	service_name = "shopify"
 	try:
 		limit = int(kwargs.get("max_results", 50))
 		data = _get("products.json", {"limit": limit})
@@ -49,13 +61,20 @@ def handle_get_products(**kwargs):
 			}
 			for p in data.get("products", [])
 		]
-		return json.dumps({"count": len(products), "products": products})
+		return json.dumps({
+			"success": True,
+			"count": len(products),
+			"results": products
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Shopify Error (Products): {str(e)}", "Shopify Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_get_orders(**kwargs):
 	"""Get recent orders from the Shopify store."""
+	service_name = "shopify"
 	try:
 		limit = int(kwargs.get("max_results", 50))
 		data = _get("orders.json", {"limit": limit, "status": "any"})
@@ -71,13 +90,20 @@ def handle_get_orders(**kwargs):
 			}
 			for o in data.get("orders", [])
 		]
-		return json.dumps({"count": len(orders), "orders": orders})
+		return json.dumps({
+			"success": True,
+			"count": len(orders),
+			"results": orders
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Shopify Error (Orders): {str(e)}", "Shopify Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_get_inventory(**kwargs):
 	"""Get inventory levels from the Shopify store."""
+	service_name = "shopify"
 	try:
 		data = _get("products.json", {"limit": 50})
 		inventory = []
@@ -90,6 +116,12 @@ def handle_get_inventory(**kwargs):
 					"quantity": v.get("inventory_quantity", 0),
 					"price": v.get("price"),
 				})
-		return json.dumps({"count": len(inventory), "inventory": inventory})
+		return json.dumps({
+			"success": True,
+			"count": len(inventory),
+			"results": inventory
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Shopify Error (Inventory): {str(e)}", "Shopify Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
