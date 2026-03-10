@@ -1,6 +1,6 @@
 import json
-
-from huf.ai.tools.credentials import require_credential
+import frappe
+from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
 BASE = "https://api.openweathermap.org"
@@ -25,10 +25,15 @@ def _geocode(location):
 
 def handle_get_current_weather(**kwargs):
 	"""Get current weather for a location."""
+	service_name = "openweather"
 	try:
-		lat, lon = _geocode(kwargs["location"])
+		location = kwargs.get("location")
+		if not location:
+			return json.dumps({"success": False, "error": "Location is required"})
+
+		lat, lon = _geocode(location)
 		if lat is None:
-			return json.dumps({"error": f"Location not found: {kwargs['location']}"})
+			return json.dumps({"success": False, "error": f"Location not found: {location}"})
 
 		resp = requests.get(
 			f"{BASE}/data/2.5/weather",
@@ -38,23 +43,33 @@ def handle_get_current_weather(**kwargs):
 		resp.raise_for_status()
 		d = resp.json()
 		return json.dumps({
-			"location": kwargs["location"],
-			"temperature_c": d["main"]["temp"],
-			"feels_like_c": d["main"]["feels_like"],
-			"humidity": d["main"]["humidity"],
-			"description": d["weather"][0]["description"] if d.get("weather") else "",
-			"wind_speed_mps": d["wind"]["speed"],
+			"success": True,
+			"results": {
+				"location": location,
+				"temperature_c": d["main"]["temp"],
+				"feels_like_c": d["main"]["feels_like"],
+				"humidity": d["main"]["humidity"],
+				"description": d["weather"][0]["description"] if d.get("weather") else "",
+				"wind_speed_mps": d["wind"]["speed"],
+			}
 		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"OpenWeather Error (Current): {str(e)}", "OpenWeather Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_get_forecast(**kwargs):
 	"""Get 5-day weather forecast for a location."""
+	service_name = "openweather"
 	try:
-		lat, lon = _geocode(kwargs["location"])
+		location = kwargs.get("location")
+		if not location:
+			return json.dumps({"success": False, "error": "Location is required"})
+
+		lat, lon = _geocode(location)
 		if lat is None:
-			return json.dumps({"error": f"Location not found: {kwargs['location']}"})
+			return json.dumps({"success": False, "error": f"Location not found: {location}"})
 
 		resp = requests.get(
 			f"{BASE}/data/2.5/forecast",
@@ -71,17 +86,30 @@ def handle_get_forecast(**kwargs):
 			}
 			for f in d.get("list", [])[:10]
 		]
-		return json.dumps({"location": kwargs["location"], "forecasts": forecasts})
+		return json.dumps({
+			"success": True,
+			"results": {
+				"location": location, 
+				"forecasts": forecasts
+			}
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"OpenWeather Error (Forecast): {str(e)}", "OpenWeather Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_get_air_pollution(**kwargs):
 	"""Get air pollution data for a location."""
+	service_name = "openweather"
 	try:
-		lat, lon = _geocode(kwargs["location"])
+		location = kwargs.get("location")
+		if not location:
+			return json.dumps({"success": False, "error": "Location is required"})
+
+		lat, lon = _geocode(location)
 		if lat is None:
-			return json.dumps({"error": f"Location not found: {kwargs['location']}"})
+			return json.dumps({"success": False, "error": f"Location not found: {location}"})
 
 		resp = requests.get(
 			f"{BASE}/data/2.5/air_pollution",
@@ -92,9 +120,14 @@ def handle_get_air_pollution(**kwargs):
 		d = resp.json()
 		item = d.get("list", [{}])[0] if d.get("list") else {}
 		return json.dumps({
-			"location": kwargs["location"],
-			"aqi": item.get("main", {}).get("aqi"),
-			"components": item.get("components", {}),
+			"success": True,
+			"results": {
+				"location": location,
+				"aqi": item.get("main", {}).get("aqi"),
+				"components": item.get("components", {}),
+			}
 		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"OpenWeather Error (Air Pollution): {str(e)}", "OpenWeather Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
