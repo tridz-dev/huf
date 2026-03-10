@@ -1,5 +1,18 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd
 # Integration credentials helper - HUF-native credential management
+#
+# TODO: Gmail OAuth2 stub - gmail.py only retrieves a static access token,
+#       no refresh-token flow is implemented yet. (gmail.py:15-19)
+# TODO: Optional deps (boto3, docker, duckduckgo-search, yfinance,
+#       pytube/pytubefix, youtube-transcript-api) are imported with
+#       ImportError fallbacks but not declared in pyproject.toml (by design).
+# TODO: Some tool handlers use explicit positional params before **kwargs
+#       (discord, github, gmail, jira, slack, telegram). Works in practice
+#       since Frappe calls with kwargs, but is inconsistent with other tools.
+# TODO: update_last_error() filters by the "service" Link field directly.
+#       This works because Integration Service is named by service_name,
+#       but could break if naming changes. Consider a lookup via
+#       service_name instead.
 
 import os
 import frappe
