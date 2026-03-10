@@ -1,12 +1,15 @@
 import json
-
+import frappe
 import requests
 
 
 def handle_search(**kwargs):
 	"""Search using Baidu (Chinese search engine)."""
 	try:
-		query = kwargs["query"]
+		query = kwargs.get("query")
+		if not query:
+			return json.dumps({"success": False, "error": "Query is required"})
+			
 		max_results = int(kwargs.get("max_results", 5))
 
 		resp = requests.get(
@@ -45,6 +48,12 @@ def handle_search(**kwargs):
 		parser = BaiduParser()
 		parser.feed(resp.text)
 
-		return json.dumps({"count": len(parser.results[:max_results]), "results": parser.results[:max_results]})
+		results = parser.results[:max_results]
+		return json.dumps({
+			"success": True, 
+			"count": len(results), 
+			"results": results
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Baidu Search Error: {str(e)}", "Baidu Search Tool")
+		return json.dumps({"success": False, "error": str(e)})
