@@ -73,8 +73,9 @@ The codex branch (`codex/review-code-implementation-for-huf-compatibility` at `4
 ### WARN-3: `credentials.py` `update_last_error()` references wrong DocType
 Uses `Integration Settings` but queries with `filters={"service": service}` — the actual field is a Link to `Integration Service`, not a plain text field.
 
-### WARN-4: `_iter_declared_tools()` in tool_registry.py is obsolete
+### WARN-4: `_iter_declared_tools()` in tool_registry.py is obsolete ✅ FIXED
 Old function at line 97 doesn't use `_normalize_hook_tools()`. It's not called anywhere in the codebase currently but could cause confusion.
+**Fix applied**: Removed `_iter_declared_tools()`, `validate_tool_def()`, and `upsert_tool_doc()` (all dead code).
 
 ---
 
@@ -115,6 +116,6 @@ Old function at line 97 doesn't use `_normalize_hook_tools()`. It's not called a
 
 1. **Gmail OAuth2 stub** - `gmail.py:15-19` only retrieves static token, no refresh flow
 2. **Optional deps not declared** - `boto3`, `docker`, `duckduckgo-search`, `yfinance`, `pytube`/`pytubefix`, `youtube-transcript-api` are used with ImportError fallbacks but not in pyproject.toml (by design - they're optional)
-3. **`_iter_declared_tools()` obsolete** - tool_registry.py:97 - old function, not called anywhere, should be cleaned up
+3. ~~**`_iter_declared_tools()` obsolete**~~ - FIXED: Removed along with `validate_tool_def()` and `upsert_tool_doc()`
 4. **Some tools use explicit params before `**kwargs`** - discord, github, gmail, jira, slack, telegram use typed positional params. Works in practice since Frappe calls with kwargs, but inconsistent
 5. **`update_last_error()` query** - filters by `service` field which is a Link field to `Integration Service`, should match by service_name lookup
