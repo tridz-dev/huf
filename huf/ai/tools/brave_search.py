@@ -1,16 +1,21 @@
 import json
-
-from huf.ai.tools.credentials import require_credential
+import frappe
+from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
 
 def handle_search(**kwargs):
 	"""Search the web using Brave Search."""
+	service_name = "brave_search"
 	try:
-		key = require_credential("brave", "api_key")
+		key = require_credential(service_name, "api_key")
+
+		query = kwargs.get("query")
+		if not query:
+			return json.dumps({"success": False, "error": "Query is required"})
 
 		params = {
-			"q": kwargs["query"],
+			"q": query,
 			"count": int(kwargs.get("max_results", 5)),
 		}
 		if "country" in kwargs:
@@ -20,7 +25,7 @@ def handle_search(**kwargs):
 			"https://api.search.brave.com/res/v1/web/search",
 			headers={"X-Subscription-Token": key, "Accept": "application/json"},
 			params=params,
-			timeout=30,
+			timeout=15,
 		)
 		resp.raise_for_status()
 		data = resp.json()
@@ -28,6 +33,8 @@ def handle_search(**kwargs):
 			{"title": r.get("title", ""), "url": r.get("url", ""), "description": r.get("description", "")}
 			for r in data.get("web", {}).get("results", [])
 		]
-		return json.dumps({"count": len(results), "results": results})
+		return json.dumps({"success": True, "count": len(results), "results": results})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Brave Search Error: {str(e)}", "Brave Search Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
