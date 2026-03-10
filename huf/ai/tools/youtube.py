@@ -75,8 +75,10 @@ def handle_get_captions(**kwargs):
 			text = " ".join(item.get("text", "") for item in transcript)
 		return json.dumps({
 			"success": True, 
-			"video_id": video_id, 
-			"results": {"transcript": text[:10000]}
+			"results": {
+				"video_id": video_id,
+				"transcript": text[:10000]
+			}
 		})
 	except Exception as e:
 		frappe.log_error(f"YouTube Get Captions Error: {str(e)}", "YouTube Tool")

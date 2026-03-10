@@ -61,7 +61,7 @@ def handle_extract_url(**kwargs):
 		)
 		resp.raise_for_status()
 		data = resp.json()
-		return json.dumps({"success": True, "data": data})
+		return json.dumps({"success": True, "results": data})
 	except Exception as e:
 		frappe.log_error(f"Tavily Extract Error: {str(e)}", "Tavily Tool")
 		update_last_error(service_name, str(e))
