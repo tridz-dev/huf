@@ -1,44 +1,63 @@
-"""
-Gmail integration tools for email management.
-Uses HUF Integration Settings with OAuth2 credentials.
-"""
-
 import json
 import base64
 from email.mime.text import MIMEText
 import frappe
 import httpx
-from typing import Optional, List
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
 
 
 def _get_gmail_access_token() -> str:
-    """Get or refresh Gmail OAuth2 access token."""
-    # This is a simplified version - in production, you'd implement proper OAuth2 refresh flow
-    # For now, we expect the access token to be stored in credentials
-    return get_credential("gmail", "access_token")
+    """Get Gmail OAuth2 access token by refreshing if possible."""
+    service_name = "gmail"
+    # Try to get existing access token first
+    access_token = get_credential(service_name, "access_token")
+    if access_token:
+        # Check if it's still valid (in a real flow you'd check expiry, but for now we try to refresh if missing)
+        return access_token
+    
+    # Try to refresh using client_id, client_secret, refresh_token
+    try:
+        client_id = require_credential(service_name, "client_id")
+        client_secret = require_credential(service_name, "client_secret")
+        refresh_token = require_credential(service_name, "refresh_token")
+        
+        response = httpx.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+            timeout=15
+        )
+        response.raise_for_status()
+        data = response.json()
+        new_token = data.get("access_token")
+        # In a real app, you might want to save this back to credentials
+        return new_token
+    except Exception as e:
+        frappe.log_error(f"Gmail token refresh error: {e}", "Gmail Tool")
+        return None
 
 
 def _get_gmail_headers():
     """Get Gmail API headers."""
     token = _get_gmail_access_token()
     if not token:
-        raise ValueError("Gmail access token not configured")
+        raise ValueError("Gmail access token or refresh token not configured/valid")
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
 
 
-def _encode_message(message_text: str) -> str:
-    """Encode message for Gmail API."""
-    message = MIMEText(message_text)
-    return base64.urlsafe_b64encode(message.as_bytes()).decode()
-
-
-def handle_get_emails(count: int = 10, query: str = "", **kwargs) -> str:
+def handle_get_emails(**kwargs) -> str:
     """Get latest emails from Gmail."""
+    service_name = "gmail"
     try:
+        count = int(kwargs.get("count", 10))
+        query = kwargs.get("query", "")
         headers = _get_gmail_headers()
         
         params = {"maxResults": count}
@@ -56,7 +75,6 @@ def handle_get_emails(count: int = 10, query: str = "", **kwargs) -> str:
         data = response.json()
         messages = data.get("messages", [])
         
-        # Get full message details for each
         detailed_messages = []
         for msg in messages[:count]:
             try:
@@ -80,19 +98,28 @@ def handle_get_emails(count: int = 10, query: str = "", **kwargs) -> str:
                 })
             except Exception as e:
                 frappe.log_error(f"Gmail fetch email details error for {msg['id']}: {e}")
-                detailed_messages.append({"id": msg["id"], "error": "Failed to fetch details"})
         
-        return json.dumps({"success": True, "count": len(detailed_messages), "emails": detailed_messages})
+        return json.dumps({
+            "success": True, 
+            "count": len(detailed_messages), 
+            "results": detailed_messages
+        })
     except Exception as e:
-        error_msg = f"Gmail get emails error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("gmail", error_msg)
-        return json.dumps({"error": str(e)})
+        frappe.log_error(f"Gmail Get Emails Error: {str(e)}", "Gmail Tool")
+        update_last_error(service_name, str(e))
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_send_email(to: str, subject: str, body: str, **kwargs) -> str:
+def handle_send_email(**kwargs) -> str:
     """Send an email via Gmail."""
+    service_name = "gmail"
     try:
+        to = kwargs.get("to")
+        subject = kwargs.get("subject")
+        body = kwargs.get("body")
+        if not all([to, subject, body]):
+            return json.dumps({"success": False, "error": "to, subject, and body are required"})
+
         headers = _get_gmail_headers()
         
         # Create email message
@@ -111,17 +138,23 @@ def handle_send_email(to: str, subject: str, body: str, **kwargs) -> str:
         )
         response.raise_for_status()
         
-        return json.dumps({"success": True, "data": response.json()})
+        return json.dumps({"success": True, "results": response.json()})
     except Exception as e:
-        error_msg = f"Gmail send error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("gmail", error_msg)
-        return json.dumps({"error": str(e)})
+        frappe.log_error(f"Gmail Send Email Error: {str(e)}", "Gmail Tool")
+        update_last_error(service_name, str(e))
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_create_draft(to: str, subject: str, body: str, **kwargs) -> str:
+def handle_create_draft(**kwargs) -> str:
     """Create a draft email in Gmail."""
+    service_name = "gmail"
     try:
+        to = kwargs.get("to")
+        subject = kwargs.get("subject")
+        body = kwargs.get("body")
+        if not all([to, subject, body]):
+            return json.dumps({"success": False, "error": "to, subject, and body are required"})
+
         headers = _get_gmail_headers()
         
         message = MIMEText(body)
@@ -139,23 +172,23 @@ def handle_create_draft(to: str, subject: str, body: str, **kwargs) -> str:
         )
         response.raise_for_status()
         
-        return json.dumps({"success": True, "data": response.json()})
+        return json.dumps({"success": True, "results": response.json()})
     except Exception as e:
-        error_msg = f"Gmail create draft error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("gmail", error_msg)
-        return json.dumps({"error": str(e)})
+        frappe.log_error(f"Gmail Create Draft Error: {str(e)}", "Gmail Tool")
+        update_last_error(service_name, str(e))
+        return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_mark_as_read(message_id: str, **kwargs) -> str:
+def handle_mark_as_read(**kwargs) -> str:
     """Mark an email as read in Gmail."""
+    service_name = "gmail"
     try:
+        message_id = kwargs.get("message_id")
+        if not message_id:
+            return json.dumps({"success": False, "error": "message_id is required"})
+
         headers = _get_gmail_headers()
-        
-        # Remove UNREAD label
-        payload = {
-            "removeLabelIds": ["UNREAD"]
-        }
+        payload = {"removeLabelIds": ["UNREAD"]}
         
         response = httpx.post(
             f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}/modify",
@@ -165,9 +198,8 @@ def handle_mark_as_read(message_id: str, **kwargs) -> str:
         )
         response.raise_for_status()
         
-        return json.dumps({"success": True, "data": response.json()})
+        return json.dumps({"success": True, "results": response.json()})
     except Exception as e:
-        error_msg = f"Gmail mark as read error: {e}"
-        frappe.log_error(error_msg)
-        update_last_error("gmail", error_msg)
-        return json.dumps({"error": str(e)})
+        frappe.log_error(f"Gmail Mark As Read Error: {str(e)}", "Gmail Tool")
+        update_last_error(service_name, str(e))
+        return json.dumps({"success": False, "error": str(e)})
