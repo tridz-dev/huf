@@ -1,6 +1,6 @@
 import json
-
-from huf.ai.tools.credentials import require_credential
+import frappe
+from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
 BASE = "https://www.googleapis.com/drive/v3"
@@ -8,9 +8,10 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 def _get_access_token():
-	client_id = require_credential("google", "client_id")
-	client_secret = require_credential("google", "client_secret")
-	refresh_token = require_credential("google", "refresh_token")
+	service_name = "google_drive"
+	client_id = require_credential(service_name, "client_id")
+	client_secret = require_credential(service_name, "client_secret")
+	refresh_token = require_credential(service_name, "refresh_token")
 
 	resp = requests.post(TOKEN_URL, data={
 		"client_id": client_id,
@@ -28,6 +29,7 @@ def _headers():
 
 def handle_list_files(**kwargs):
 	"""List files in Google Drive."""
+	service_name = "google_drive"
 	try:
 		limit = int(kwargs.get("limit", 20))
 		params = {"pageSize": limit, "fields": "files(id,name,mimeType,modifiedTime,size)"}
@@ -37,36 +39,63 @@ def handle_list_files(**kwargs):
 		resp = requests.get(f"{BASE}/files", headers=_headers(), params=params, timeout=30)
 		resp.raise_for_status()
 		files = resp.json().get("files", [])
-		return json.dumps({"count": len(files), "files": files})
+		return json.dumps({
+			"success": True, 
+			"count": len(files), 
+			"results": files
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Drive Error (List): {str(e)}", "Google Drive Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_get_file(**kwargs):
 	"""Get metadata of a Google Drive file."""
+	service_name = "google_drive"
 	try:
+		file_id = kwargs.get("file_id")
+		if not file_id:
+			return json.dumps({"success": False, "error": "file_id is required"})
+
 		resp = requests.get(
-			f"{BASE}/files/{kwargs['file_id']}",
+			f"{BASE}/files/{file_id}",
 			headers=_headers(),
 			params={"fields": "id,name,mimeType,modifiedTime,size,webViewLink"},
 			timeout=30,
 		)
 		resp.raise_for_status()
-		return json.dumps(resp.json())
+		data = resp.json()
+		return json.dumps({
+			"success": True, 
+			"results": data
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Drive Error (Get File): {str(e)}", "Google Drive Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
 
 
 def handle_search_files(**kwargs):
 	"""Search for files in Google Drive."""
+	service_name = "google_drive"
 	try:
-		query = kwargs["query"]
+		query = kwargs.get("query")
+		if not query:
+			return json.dumps({"success": False, "error": "query is required"})
+
 		q = f"fullText contains '{query}' or name contains '{query}'"
 		params = {"q": q, "pageSize": 20, "fields": "files(id,name,mimeType,modifiedTime)"}
 
 		resp = requests.get(f"{BASE}/files", headers=_headers(), params=params, timeout=30)
 		resp.raise_for_status()
 		files = resp.json().get("files", [])
-		return json.dumps({"count": len(files), "files": files})
+		return json.dumps({
+			"success": True, 
+			"count": len(files), 
+			"results": files
+		})
 	except Exception as e:
-		return json.dumps({"error": str(e)})
+		frappe.log_error(f"Google Drive Error (Search): {str(e)}", "Google Drive Tool")
+		update_last_error(service_name, str(e))
+		return json.dumps({"success": False, "error": str(e)})
