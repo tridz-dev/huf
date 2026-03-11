@@ -1,9 +1,35 @@
-import { FormField, FormItem, FormLabel, FormControl, FormDescription } from '@/components/ui/form';
-import { Switch } from '@/components/ui/switch';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { UseFormReturn } from 'react-hook-form';
-import type { AgentFormValues } from './types';
-import { toast } from 'sonner';
+import {
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormDescription
+} from '@/components/ui/form'
+
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell
+} from "@/components/ui/table"
+
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem
+} from "@/components/ui/select"
+
+import { Switch } from '@/components/ui/switch'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { UseFormReturn } from 'react-hook-form'
+import type { AgentFormValues } from './types'
+import { toast } from 'sonner'
 
 interface BehaviorTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -12,6 +38,68 @@ interface BehaviorTabProps {
 export function BehaviorTab({ form }: BehaviorTabProps) {
   const persistConversationEnabled = form.watch('persist_conversation');
   const enableMultiRun = form.watch('enable_multi_run');
+
+  const defaultPlan = form.watch('default_plan') || []
+
+  // Ensure at least one row exists
+  if (enableMultiRun && defaultPlan.length === 0) {
+    form.setValue('default_plan', [
+      {
+        step_index: 1,
+        status: 'pending',
+        instruction: '',
+        output_ref: ''
+      }
+    ])
+  }
+
+  const updateRow = (index: number, field: string, value: any) => {
+
+    const current = form.getValues('default_plan') || []
+    const updated = [...current]
+
+    updated[index] = {
+      ...updated[index],
+      [field]: value
+    }
+
+    const isLastRow = index === updated.length - 1
+
+    const hasValue =
+      updated[index].instruction ||
+      updated[index].output_ref ||
+      updated[index].status !== 'pending'
+
+    if (isLastRow && hasValue) {
+      updated.push({
+        step_index: updated.length + 1,
+        status: 'pending',
+        instruction: '',
+        output_ref: ''
+      })
+    }
+
+    const normalized = updated.map((row, i) => ({
+      ...row,
+      step_index: i + 1
+    }))
+
+    form.setValue('default_plan', normalized)
+  }
+  const removeStep = (index: number) => {
+    const current = form.getValues('default_plan') || []
+
+    if (current.length === 1) return
+
+    const filtered = current.filter((_, i) => i !== index)
+
+    const normalized = filtered.map((row, i) => ({
+      ...row,
+      step_index: i + 1
+    }))
+
+    form.setValue('default_plan', normalized)
+  }
 
   return (
     <>
@@ -87,11 +175,10 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Persist per User (Doc/Schedule)</FormLabel>
                   <FormDescription>
-                    When checked, Doc Event and Scheduled runs create / maintain conversation history per
-                    initiating user (or trigger owner). If unchecked, a single shared history is used.
+                    When checked, Doc Event and Scheduled runs create conversation history per initiating user.
                   </FormDescription>
                 </div>
-                <FormControl>
+                <FormControl className="ml-1">
                   <Switch checked={field.value} onCheckedChange={field.onChange} />
                 </FormControl>
               </FormItem>
@@ -115,10 +202,11 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
                     onCheckedChange={(checked) => {
                       field.onChange(checked);
                       if (checked) {
-                        // Disable chat when multi run is enabled
-                        const currentChatValue = form.getValues('allow_chat');
-                        if (currentChatValue) {
-                          form.setValue('allow_chat', false, { shouldDirty: true });
+
+                        const chatEnabled = form.getValues('allow_chat')
+
+                        if (chatEnabled) {
+                          form.setValue('allow_chat', false, { shouldDirty: true })
                         }
                       }
                     }}
@@ -129,7 +217,98 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
           />
         </CardContent>
       </Card>
-    </>
-  );
-}
 
+
+      {enableMultiRun && (
+        <Card className="mt-6">
+
+          <CardHeader>
+            <CardTitle>Default Plan</CardTitle>
+          </CardHeader>
+
+          <CardContent>
+
+            <Table className="border">
+
+              <TableHeader className="bg-muted">
+                <TableRow>
+                  <TableHead>Step</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Instruction</TableHead>
+                  <TableHead>Output Ref</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+
+                {defaultPlan.map((step, index) => (
+
+                  <TableRow key={index}>
+
+                    <TableCell className="font-medium">
+                      {index + 1}
+                    </TableCell>
+
+                    <TableCell>
+                      <Select
+                        value={step.status}
+                        onValueChange={(value) => updateRow(index, "status", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="done">Done</SelectItem>
+                          <SelectItem value="failed">Failed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+
+                    <TableCell>
+                      <Input
+                        value={step.instruction}
+                        onChange={(e) =>
+                          updateRow(index, "instruction", e.target.value)
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell>
+                      <Input
+                        value={step.output_ref}
+                        onChange={(e) =>
+                          updateRow(index, "output_ref", e.target.value)
+                        }
+                      />
+                    </TableCell>
+
+                    <TableCell className="text-center">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => removeStep(index)}
+                      >
+                        Remove
+                      </Button>
+                    </TableCell>
+
+                  </TableRow>
+
+                ))}
+
+              </TableBody>
+
+            </Table>
+
+          </CardContent>
+
+        </Card>
+      )}
+    </>
+  )
+}
