@@ -32,6 +32,7 @@ interface ItemCardProps {
   metadata?: MetadataItem[];
   actions?: ActionButton[];
   menuActions?: ActionButton[];
+  menuIcon?: LucideIcon;
   footer?: ReactNode;
   onClick?: () => void;
   className?: string;
@@ -44,6 +45,7 @@ export function ItemCard({
   metadata = [],
   actions = [],
   menuActions = [],
+  menuIcon: MenuIcon = MoreVertical,
   footer,
   onClick,
   className,
@@ -114,7 +116,7 @@ export function ItemCard({
                             title="More actions"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <MoreVertical className="w-4 h-4" />
+                            <MenuIcon className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
