@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Database, Settings, Table2 } from 'lucide-react';
+import { useState } from 'react';
+import { Database, Settings, Table2, Trash2, Pencil } from 'lucide-react';
 import {
 	PageLayout,
 	FilterBar,
@@ -9,8 +10,9 @@ import {
 	ItemCard,
 	LoadMoreButton,
 } from '../components/dashboard';
+import { DeleteTableDialog } from '../components/data-table/DeleteTableDialog';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getDataTables } from '../services/dataTableApi';
+import { getDataTables, deleteDataTable } from '../services/dataTableApi';
 import { formatTimeAgo } from '../utils/time';
 import type { HufDataTable } from '../types/dataTable.types';
 
@@ -19,6 +21,8 @@ export default DataPage;
 
 function DataPage() {
 	const navigate = useNavigate();
+	const [deleteTable, setDeleteTable] = useState<HufDataTable | null>(null);
+	const [deleting, setDeleting] = useState(false);
 
 	const {
 		items: tables,
@@ -59,6 +63,24 @@ function DataPage() {
 			});
 		}
 	}, [error]);
+
+	const handleDeleteConfirm = async () => {
+		if (!deleteTable) return;
+		setDeleting(true);
+		try {
+			const result = await deleteDataTable(deleteTable.name);
+			toast.success(
+				`Table deleted (${result.deleted_records} record${result.deleted_records !== 1 ? 's' : ''} removed)`
+			);
+			setDeleteTable(null);
+			// Reload the page to refresh the list since we removed a table
+			window.location.reload();
+		} catch (err: any) {
+			toast.error('Failed to delete table', { description: err.message });
+		} finally {
+			setDeleting(false);
+		}
+	};
 
 	return (
 		<PageLayout
@@ -102,11 +124,18 @@ function DataPage() {
 							},
 							{ label: 'Modified', value: formatTimeAgo(table.modified) },
 						]}
+						menuIcon={Settings}
 						menuActions={[
 							{
-								icon: Settings,
+								icon: Pencil,
 								label: 'Edit Table',
 								onClick: () => navigate(`/data/${table.name}/edit`),
+							},
+							{
+								icon: Trash2,
+								label: 'Delete Table',
+								variant: 'destructive',
+								onClick: () => setDeleteTable(table),
 							},
 						]}
 						onClick={() => navigate(`/data/${table.name}`)}
@@ -127,6 +156,15 @@ function DataPage() {
 						: 'No more tables to load'}
 				</div>
 			)}
+
+			<DeleteTableDialog
+				open={!!deleteTable}
+				onOpenChange={(open) => !open && setDeleteTable(null)}
+				tableName={deleteTable?.table_name || ''}
+				recordCount={deleteTable?.record_count || 0}
+				onConfirm={handleDeleteConfirm}
+				loading={deleting}
+			/>
 		</PageLayout>
 	);
 }
