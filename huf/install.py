@@ -732,11 +732,14 @@ def _setup_doctype_permissions():
 			("Huf User",     "read",   1),
 		],
 		"AI Model":               [
-			("Huf Manager",  "read",   1),
+			("Huf Manager",  "read",   1), ("Huf Manager",  "select", 1),
 			("Huf User",     "read",   1),
 		],
 		"AI Provider":            [
-			("Huf Manager",  "read",   1),
+			("Huf Manager",  "read",   1), ("Huf Manager",  "select", 1),
+		],
+		"Agent Tool Type":        [
+			("Huf Manager",  "read",   1), ("Huf Manager",  "select", 1),
 		],
 		"Huf Role":               [
 			("Huf Manager",  "read",   1),
