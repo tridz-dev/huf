@@ -102,7 +102,7 @@ function DataPage() {
 							},
 							{ label: 'Modified', value: formatTimeAgo(table.modified) },
 						]}
-						actions={[
+						menuActions={[
 							{
 								icon: Settings,
 								label: 'Edit Table',

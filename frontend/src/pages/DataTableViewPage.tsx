@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DataRecordList } from '@/components/data-table/DataRecordList';
 import { DataRecordForm } from '@/components/data-table/DataRecordForm';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
@@ -107,29 +108,33 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 		if (!onHeaderActionsChange) return;
 
 		onHeaderActionsChange(
-			<>
-				<Button
-					variant="outline"
-					size="sm"
-					onClick={() => navigate(`/data/${tableId}/edit`)}
-				>
-					<Pencil className="w-3.5 h-3.5 mr-1.5" />
-					Edit Table
-				</Button>
-				<Button
-					variant="outline"
-					size="sm"
-					onClick={() => setDeleteDialogOpen(true)}
-					className="text-destructive hover:text-destructive"
-				>
-					<Trash2 className="w-3.5 h-3.5 mr-1.5" />
-					Delete
-				</Button>
+			<div className="flex items-center gap-2">
 				<Button size="sm" onClick={handleAddRecord}>
 					<Plus className="w-3.5 h-3.5 mr-1.5" />
 					Add Record
 				</Button>
-			</>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button variant="outline" size="sm" className="w-8 px-0">
+							<MoreVertical className="h-4 w-4" />
+							<span className="sr-only">Open menu</span>
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem onClick={() => navigate(`/data/${tableId}/edit`)}>
+							<Pencil className="w-3.5 h-3.5 mr-2" />
+							Edit Table
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							onClick={() => setDeleteDialogOpen(true)}
+							className="text-destructive focus:text-destructive"
+						>
+							<Trash2 className="w-3.5 h-3.5 mr-2" />
+							Delete
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
 		);
 
 		return () => onHeaderActionsChange(null);
