@@ -253,23 +253,31 @@ class Agent(Document):
     def has_permission(self, permission_type=None, verbose=False):
         user = frappe.session.user
 
-        # System Manager and Owner always have access
-        if "System Manager" in frappe.get_roles(user) or self.owner == user:
-            return True
+        # System Manager always has access governed by standard RBAC
+        if "System Manager" in frappe.get_roles(user):
+            return None
+
+        # For create, we do not evaluate instance-level restrictions
+        # because the instance doesn't properly exist yet. Fallback to standard RBAC.
+        if permission_type == "create":
+            return None
 
         # Fetch the restrictions from the child tables
         allowed_users = [d.user for d in self.allowed_users]
         allowed_roles = [d.role for d in self.allowed_roles]
 
-        # If both lists are empty, anyone can access.
+        # If both lists are empty, anyone with standard RBAC can access.
         if not allowed_users and not allowed_roles:
-            return True
+            return None
+
+        if self.owner == user:
+            return None
 
         if user in allowed_users:
-            return True
+            return None
 
         my_roles = frappe.get_roles(user)
         if set(my_roles).intersection(allowed_roles):
-            return True
+            return None
 
         return False
