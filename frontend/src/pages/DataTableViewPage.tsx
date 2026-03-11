@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw } from 'lucide-react';
@@ -14,7 +14,11 @@ import {
 } from '@/services/dataTableApi';
 import type { DataTableFieldDef, DataTableSchema } from '@/types/dataTable.types';
 
-export function DataTableViewPage() {
+export interface DataTableViewPageProps {
+	onHeaderActionsChange?: (actions: ReactNode) => void;
+}
+
+export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPageProps) {
 	const { tableId } = useParams<{ tableId: string }>();
 	const navigate = useNavigate();
 
@@ -94,10 +98,42 @@ export function DataTableViewPage() {
 		setFormOpen(true);
 	};
 
-	const handleAddRecord = () => {
+	const handleAddRecord = useCallback(() => {
 		setEditRecord(null);
 		setFormOpen(true);
-	};
+	}, []);
+
+	useEffect(() => {
+		if (!onHeaderActionsChange) return;
+
+		onHeaderActionsChange(
+			<>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() => navigate(`/data/${tableId}/edit`)}
+				>
+					<Pencil className="w-3.5 h-3.5 mr-1.5" />
+					Edit Table
+				</Button>
+				<Button
+					variant="outline"
+					size="sm"
+					onClick={() => setDeleteDialogOpen(true)}
+					className="text-destructive hover:text-destructive"
+				>
+					<Trash2 className="w-3.5 h-3.5 mr-1.5" />
+					Delete
+				</Button>
+				<Button size="sm" onClick={handleAddRecord}>
+					<Plus className="w-3.5 h-3.5 mr-1.5" />
+					Add Record
+				</Button>
+			</>
+		);
+
+		return () => onHeaderActionsChange(null);
+	}, [onHeaderActionsChange, navigate, tableId, handleAddRecord]);
 
 	const handleDeleteTable = async () => {
 		if (!tableId) return;
@@ -146,29 +182,6 @@ export function DataTableViewPage() {
 							<span>{dataFields.length} fields</span>
 							<span>{recordCount} records loaded</span>
 						</div>
-					</div>
-					<div className="flex items-center gap-2 shrink-0">
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => navigate(`/data/${tableId}/edit`)}
-						>
-							<Pencil className="w-3.5 h-3.5 mr-1.5" />
-							Edit Table
-						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => setDeleteDialogOpen(true)}
-							className="text-destructive hover:text-destructive"
-						>
-							<Trash2 className="w-3.5 h-3.5 mr-1.5" />
-							Delete
-						</Button>
-						<Button size="sm" onClick={handleAddRecord}>
-							<Plus className="w-3.5 h-3.5 mr-1.5" />
-							Add Record
-						</Button>
 					</div>
 				</div>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -47,10 +47,13 @@ export function DataRecordForm({
 	);
 	const [saving, setSaving] = useState(false);
 
-	const handleOpen = (isOpen: boolean) => {
-		if (isOpen) {
+	useEffect(() => {
+		if (open) {
 			setFormData(initFormData(fields, record));
 		}
+	}, [open, record, fields]);
+
+	const handleOpen = (isOpen: boolean) => {
 		onOpenChange(isOpen);
 	};
 
@@ -184,41 +187,41 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
 			{(field.fieldtype === 'Text' ||
 				field.fieldtype === 'Small Text' ||
 				field.fieldtype === 'Long Text') && (
-				<Textarea
-					id={`field-${field.fieldname}`}
-					value={(value as string) || ''}
-					onChange={(e) => onChange(e.target.value)}
-					disabled={isReadOnly}
-					placeholder={field.description || ''}
-					rows={field.fieldtype === 'Long Text' ? 6 : 3}
-					className="text-sm"
-				/>
-			)}
+					<Textarea
+						id={`field-${field.fieldname}`}
+						value={(value as string) || ''}
+						onChange={(e) => onChange(e.target.value)}
+						disabled={isReadOnly}
+						placeholder={field.description || ''}
+						rows={field.fieldtype === 'Long Text' ? 6 : 3}
+						className="text-sm"
+					/>
+				)}
 
 			{(field.fieldtype === 'Int' ||
 				field.fieldtype === 'Float' ||
 				field.fieldtype === 'Currency' ||
 				field.fieldtype === 'Percent') && (
-				<Input
-					id={`field-${field.fieldname}`}
-					type="number"
-					value={value !== undefined && value !== null && value !== '' ? String(value) : ''}
-					onChange={(e) => {
-						const v = e.target.value;
-						if (v === '') {
-							onChange('');
-						} else if (field.fieldtype === 'Int') {
-							onChange(parseInt(v, 10) || 0);
-						} else {
-							onChange(parseFloat(v) || 0);
-						}
-					}}
-					disabled={isReadOnly}
-					min={field.non_negative === 1 ? 0 : undefined}
-					step={field.fieldtype === 'Int' ? 1 : 'any'}
-					className="h-8 text-sm"
-				/>
-			)}
+					<Input
+						id={`field-${field.fieldname}`}
+						type="number"
+						value={value !== undefined && value !== null && value !== '' ? String(value) : ''}
+						onChange={(e) => {
+							const v = e.target.value;
+							if (v === '') {
+								onChange('');
+							} else if (field.fieldtype === 'Int') {
+								onChange(parseInt(v, 10) || 0);
+							} else {
+								onChange(parseFloat(v) || 0);
+							}
+						}}
+						disabled={isReadOnly}
+						min={field.non_negative === 1 ? 0 : undefined}
+						step={field.fieldtype === 'Int' ? 1 : 'any'}
+						className="h-8 text-sm"
+					/>
+				)}
 
 			{field.fieldtype === 'Check' && (
 				<div className="flex items-center gap-2 pt-1">
