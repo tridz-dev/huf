@@ -85,6 +85,7 @@ export function DataRecordForm({
 	const dataFields = fields.filter(
 		(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
 	);
+	const sections = buildFormLayout(fields);
 
 	return (
 		<Sheet open={open} onOpenChange={handleOpen}>
@@ -93,31 +94,46 @@ export function DataRecordForm({
 					<SheetTitle>{isEdit ? 'Edit Record' : 'Add New Record'}</SheetTitle>
 				</SheetHeader>
 				<div className="space-y-4 py-4">
-					{fields.map((field, idx) => {
-						if (field.fieldtype === 'Section Break') {
-							return (
-								<div key={`${field.fieldname}-${idx}`}>
-									{idx > 0 && <Separator className="my-4" />}
-									{field.label && (
-										<p className="text-sm font-medium text-muted-foreground">
-											{field.label}
-										</p>
-									)}
+					{sections.map((section, sIdx) => (
+						<div key={sIdx}>
+							{sIdx > 0 && <Separator className="my-4" />}
+							{section.label && (
+								<p className="text-sm font-medium text-muted-foreground mb-3">
+									{section.label}
+								</p>
+							)}
+							{section.columns.length > 1 ? (
+								<div
+									className="grid gap-4"
+									style={{ gridTemplateColumns: `repeat(${section.columns.length}, minmax(0, 1fr))` }}
+								>
+									{section.columns.map((col, cIdx) => (
+										<div key={cIdx} className="space-y-4">
+											{col.map((field) => (
+												<FieldInput
+													key={field.fieldname}
+													field={field}
+													value={formData[field.fieldname]}
+													onChange={(val) => setValue(field.fieldname, val)}
+												/>
+											))}
+										</div>
+									))}
 								</div>
-							);
-						}
-						if (field.fieldtype === 'Column Break') {
-							return null;
-						}
-						return (
-							<FieldInput
-								key={field.fieldname}
-								field={field}
-								value={formData[field.fieldname]}
-								onChange={(val) => setValue(field.fieldname, val)}
-							/>
-						);
-					})}
+							) : (
+								<div className="space-y-4">
+									{section.columns[0]?.map((field) => (
+										<FieldInput
+											key={field.fieldname}
+											field={field}
+											value={formData[field.fieldname]}
+											onChange={(val) => setValue(field.fieldname, val)}
+										/>
+									))}
+								</div>
+							)}
+						</div>
+					))}
 
 					{dataFields.length === 0 && (
 						<p className="text-sm text-muted-foreground text-center py-8">
@@ -153,6 +169,30 @@ function initFormData(
 		}
 	}
 	return data;
+}
+
+interface LayoutSection {
+	label?: string;
+	columns: DataTableFieldDef[][];
+}
+
+const LAYOUT_DEFAULT_LABELS = new Set(['section break', 'column break']);
+
+function buildFormLayout(fields: DataTableFieldDef[]): LayoutSection[] {
+	const sections: LayoutSection[] = [{ columns: [[]] }];
+	for (const field of fields) {
+		if (field.fieldtype === 'Section Break') {
+			const raw = field.label?.trim();
+			const label = raw && !LAYOUT_DEFAULT_LABELS.has(raw.toLowerCase()) ? raw : undefined;
+			sections.push({ label, columns: [[]] });
+		} else if (field.fieldtype === 'Column Break') {
+			sections[sections.length - 1].columns.push([]);
+		} else {
+			const currentSection = sections[sections.length - 1];
+			currentSection.columns[currentSection.columns.length - 1].push(field);
+		}
+	}
+	return sections.filter((s) => s.columns.some((col) => col.length > 0));
 }
 
 interface FieldInputProps {
