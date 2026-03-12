@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Settings, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,9 +21,15 @@ interface FieldConfigPanelProps {
 	field: DataTableFieldDef;
 	onUpdate: (updates: Partial<DataTableFieldDef>) => void;
 	onDelete: () => void;
+	onOpenTableSettings: () => void;
 }
 
-export function FieldConfigPanel({ field, onUpdate, onDelete }: FieldConfigPanelProps) {
+export function FieldConfigPanel({
+	field,
+	onUpdate,
+	onDelete,
+	onOpenTableSettings,
+}: FieldConfigPanelProps) {
 	const [hufTables, setHufTables] = useState<Array<{ table_name: string; doctype_name: string }>>(
 		[]
 	);
@@ -39,25 +45,44 @@ export function FieldConfigPanel({ field, onUpdate, onDelete }: FieldConfigPanel
 		}
 	}, [field.fieldtype]);
 
+	const reservedFieldnames = new Set([
+		'name', 'doctype', 'owner', 'creation', 'modified',
+		'modified_by', 'docstatus', 'idx', 'parent', 'parentfield', 'parenttype',
+	]);
+
 	const handleLabelChange = (label: string) => {
-		const fieldname = label
+		let fieldname = label
 			.toLowerCase()
 			.replace(/[^a-z0-9\s]/g, '')
 			.replace(/\s+/g, '_')
 			.replace(/_+/g, '_')
 			.replace(/^_|_$/g, '');
+		if (reservedFieldnames.has(fieldname)) {
+			fieldname = `${fieldname}_field`;
+		}
 		onUpdate({ label, fieldname: fieldname || field.fieldname });
 	};
 
 	return (
 		<div className="space-y-4">
-			<div>
-				<h3 className="font-medium text-sm">
-					{isLayout ? field.fieldtype : 'Field Properties'}
-				</h3>
-				<p className="text-xs text-muted-foreground mt-1">
-					{isLayout ? 'Layout element settings' : field.fieldtype}
-				</p>
+			<div className="flex items-center justify-between">
+				<div>
+					<h3 className="font-medium text-sm">
+						{isLayout ? field.fieldtype : 'Field Properties'}
+					</h3>
+					<p className="text-xs text-muted-foreground mt-1">
+						{isLayout ? 'Layout element settings' : field.fieldtype}
+					</p>
+				</div>
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-7 w-7 text-muted-foreground"
+					onClick={onOpenTableSettings}
+					title="Open table settings"
+				>
+					<Settings className="w-3.5 h-3.5" />
+				</Button>
 			</div>
 
 			<Separator />
