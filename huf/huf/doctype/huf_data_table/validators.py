@@ -25,6 +25,20 @@ ALLOWED_FIELD_TYPES = {
 
 LAYOUT_FIELD_TYPES = {"Section Break", "Column Break"}
 
+RESERVED_FIELDNAMES = {
+	"name",
+	"doctype",
+	"owner",
+	"creation",
+	"modified",
+	"modified_by",
+	"docstatus",
+	"idx",
+	"parent",
+	"parentfield",
+	"parenttype",
+}
+
 
 def validate_and_prepare_fields(fields: list[dict]) -> list[dict]:
 	"""Validate field definitions and prepare for DocType creation."""
@@ -41,6 +55,9 @@ def validate_and_prepare_fields(fields: list[dict]) -> list[dict]:
 			frappe.throw(f"Field at position {i + 1} must have a label")
 
 		fieldname = field.get("fieldname") or frappe.scrub(label or f"field_{i}")
+
+		if fieldname in RESERVED_FIELDNAMES:
+			frappe.throw(f"Field name '{fieldname}' is reserved and cannot be used")
 
 		if fieldname in fieldnames_seen:
 			frappe.throw(f"Duplicate field name: {fieldname}")
