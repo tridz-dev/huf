@@ -13,7 +13,26 @@ export const agentFormSchema = z.object({
   enable_multi_run: z.boolean(),
   description: z.string().optional(),
   instructions: z.string(),
+
+  default_plan: z.array(
+    z.object({
+      name: z.string().optional(),
+      step_index: z.number().default(0),
+      status: z.enum(["pending", "in_progress", "done", "failed"]).default("pending"),
+      instruction: z.string().default(""),
+      output_ref: z.string().default("")
+    })
+  ).default([]),
+
+  prompt_mode: z.string().default("Local"),
+  agent_prompt: z.string().optional(),
+  prompt_version_locked: z.boolean().optional(),
+  attached_at_version: z.number().optional(),
+  copied_from_prompt: z.string().nullable().optional(),
   enable_prompt_caching: z.boolean().optional(),
+  cache_control_type: z.string().optional(),
+  cache_system_message: z.boolean().optional(),
+  cache_conversation_history: z.boolean().optional(),
   context_strategy: z.string().optional(),
   summary_ratio: z.number().optional(),
   history_limit: z.number().optional(),
