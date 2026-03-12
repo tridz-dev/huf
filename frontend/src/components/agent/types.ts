@@ -16,6 +16,7 @@ export const agentFormSchema = z.object({
 
   default_plan: z.array(
     z.object({
+      name: z.string().optional(),
       step_index: z.number().default(0),
       status: z.enum(["pending", "in_progress", "done", "failed"]).default("pending"),
       instruction: z.string().default(""),

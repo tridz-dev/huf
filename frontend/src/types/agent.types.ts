@@ -156,6 +156,7 @@ export type AgentRun = {
 };
 
 export interface AgentOrchestrationPlanRow {
+  name?: string;
   step_index: number;
   status: "pending" | "in_progress" | "done" | "failed";
   instruction: string;
@@ -226,9 +227,4 @@ export interface AgentDoc {
   max_turns?: number | null; // Maximum consecutive turns/steps
   enable_conversation_data?: number; // 0 or 1
   autonaming_of_conversation_title?: number; // 0 or 1
-}
-
-export type AgentPrompt = {
-  name: string
-  title?: string
 }

@@ -455,28 +455,3 @@ export async function getAgentModels(
   }
 }
 
-
-/**
- * Fields needed for Agent Prompt link selector
- */
-const AGENT_PROMPT_FIELDS = [
-  'name',
-  'title',
-];
-
-/**
- * Fetch Agent Prompts for link field
- */
-export async function getAgentPrompts(): Promise<{ name: string; title?: string }[]> {
-  try {
-    const prompts = await db.getDocList('Agent Prompt', {
-      fields: AGENT_PROMPT_FIELDS,
-      limit: 1000,
-      orderBy: { field: 'modified', order: 'desc' },
-    });
-
-    return prompts as { name: string; title?: string }[];
-  } catch (error) {
-    handleFrappeError(error, 'Error fetching Agent Prompts');
-  }
-}

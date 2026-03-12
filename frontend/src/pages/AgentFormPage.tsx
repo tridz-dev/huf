@@ -6,7 +6,7 @@ import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest, getAgentPrompts } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolTypes, getToolFunction, updateToolFunction, getToolFunctionsByName } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -26,11 +26,6 @@ import { agentFormSchema, type AgentFormValues } from '../components/agent/types
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
-
-type AgentPrompt = {
-  name: string;
-  title?: string;
-};
 
 export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -147,7 +142,6 @@ export function AgentFormPage() {
   const [initialMcpServers, setInitialMcpServers] = useState<MCPServerRef[]>([]); // Track initial MCP servers state
   const [mcpLoading, setMcpLoading] = useState(false);
   const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
-  const [prompts, setPrompts] = useState<AgentPrompt[]>([]);
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
       defaultValues: {
@@ -310,15 +304,6 @@ export function AgentFormPage() {
       setModels([]);
     }
   }, [watchProvider, form]);
-
-  useEffect(() => {
-    async function loadPrompts() {
-      const data = await getAgentPrompts();
-      setPrompts(data || []);
-    }
-
-    loadPrompts();
-  }, []);
 
   // Load agent data when id is available (only for edit mode)
   useEffect(() => {
@@ -1001,7 +986,6 @@ export function AgentFormPage() {
                   form={form}
                   providers={providers}
                   models={models}
-                  prompts={prompts}
                   watchProvider={watchProvider}
                   optimizingPrompt={optimizingPrompt}
                   onOptimizePrompt={handleOptimizePrompt}
