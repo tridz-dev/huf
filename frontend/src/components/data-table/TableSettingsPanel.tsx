@@ -8,6 +8,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
+import { TABLE_ICONS, TABLE_ICON_MAP } from '@/data/tableIcons';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
 interface TableSettingsPanelProps {
@@ -84,13 +85,32 @@ export function TableSettingsPanel({
 				<Label htmlFor="table-icon" className="text-xs">
 					Icon
 				</Label>
-				<Input
-					id="table-icon"
-					value={icon}
-					onChange={(e) => onIconChange(e.target.value)}
-					placeholder="e.g. box, users, file-text"
-					className="h-8 text-sm"
-				/>
+				<Select value={icon || '_none'} onValueChange={(v) => onIconChange(v === '_none' ? '' : v)}>
+					<SelectTrigger className="h-8 text-sm">
+						{icon && TABLE_ICON_MAP[icon] ? (
+							<div className="flex items-center gap-2 justify-start w-full">
+								{(() => {
+									const Icon = TABLE_ICON_MAP[icon];
+									return <Icon className="w-3.5 h-3.5" />;
+								})()}
+								{TABLE_ICONS.find((i) => i.name === icon)?.label ?? icon}
+							</div>
+						) : (
+							<SelectValue placeholder="Select an icon" />
+						)}
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="_none">No icon</SelectItem>
+						{TABLE_ICONS.map((entry) => (
+							<SelectItem key={entry.name} value={entry.name}>
+								<span className="flex items-center gap-2">
+									<entry.icon className="w-3.5 h-3.5" />
+									{entry.label}
+								</span>
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
 			</div>
 
 			<div className="space-y-1.5">
