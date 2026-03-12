@@ -1541,6 +1541,25 @@ def get_conversation_permission_conditions(user):
 	return f"`tabAgent Conversation`.owner = {frappe.db.escape(user)}"
 
 
+def get_message_permission_conditions(user):
+	"""
+	Restrict Agent Message list to messages from conversations the user owns,
+	unless the user has chat.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	from huf.permissions import has_capability
+	if has_capability(user, "chat.view_all"):
+		return None
+
+	# Filter by conversation ownership
+	return f"(`tabAgent Message`.conversation IN (SELECT name FROM `tabAgent Conversation` WHERE owner = {frappe.db.escape(user)}))"
+
+
 def get_run_permission_conditions(user):
 	"""
 	Restrict Agent Run list to runs the user owns,
