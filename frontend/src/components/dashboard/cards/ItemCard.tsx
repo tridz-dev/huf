@@ -25,6 +25,7 @@ interface ActionButton {
 interface ItemCardProps {
   title: string;
   description?: string;
+  icon?: LucideIcon;
   status?: {
     label: string;
     variant?: BadgeVariant;
@@ -41,6 +42,7 @@ interface ItemCardProps {
 export function ItemCard({
   title,
   description,
+  icon: TitleIcon,
   status,
   metadata = [],
   actions = [],
@@ -54,7 +56,10 @@ export function ItemCard({
     <BaseCard onClick={onClick} className={cn('flex flex-col', className)}>
       <div className="flex flex-col flex-1">
         <CardHeader className="pb-3">
-          <CardTitle className="text-xl font-semibold line-clamp-1">{title}</CardTitle>
+          <CardTitle className="text-xl font-semibold line-clamp-1 flex items-center gap-2">
+            {TitleIcon && <TitleIcon className="w-5 h-5 shrink-0 text-muted-foreground" />}
+            {title}
+          </CardTitle>
           {description && (
             <CardDescription className="text-sm line-clamp-2 min-h-[2.5rem]">{description}</CardDescription>
           )}
