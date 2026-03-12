@@ -572,10 +572,8 @@ def create_huf_roles():
 				"desk_access": 1,
 			}).insert(ignore_permissions=True)
 
-	# 2. Apply DocType permission rows for each Huf Frappe role.
-	_setup_doctype_permissions()
 
-	# 3. Create (or update) the four Huf Role documents.
+	# 2. Create (or update) the four Huf Role documents.
 	role_meta = [
 		{
 			"role_name": "Huf Admin",
@@ -665,101 +663,6 @@ def _migrate_existing_system_managers():
 				pass  # Non-fatal; user can be assigned manually
 
 
-def _setup_doctype_permissions():
-	"""
-	Add permission rows to Huf-related DocTypes for the Huf Frappe roles.
-	Uses frappe.permissions.add_permission which is idempotent.
-	"""
-	# fmt: off
-	permission_matrix = {
-		# DocType                  role             ptype       value
-		"Agent":                  [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
-			("Huf User",     "read",   1),
-			("Huf Viewer",   "read",   1),
-		],
-		"Agent Tool Function":    [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
-			("Huf User",     "read",   1),
-		],
-		"Agent Trigger":          [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
-		],
-		"Agent Conversation":     [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
-			("Huf User",     "read",   1), ("Huf User",     "write",  1),
-			("Huf User",     "create", 1),
-			("Huf Viewer",   "read",   1),
-		],
-		"Agent Message":          [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf Manager",  "create", 1),
-			("Huf User",     "read",   1), ("Huf User",     "write",  1),
-			("Huf User",     "create", 1),
-			("Huf Viewer",   "read",   1),
-		],
-		"Agent Run":              [
-			("Huf Manager",  "read",   1),
-			("Huf User",     "read",   1),
-			("Huf Viewer",   "read",   1),
-		],
-		"Flow Definition":        [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
-			("Huf User",     "read",   1),
-			("Huf Viewer",   "read",   1),
-		],
-		"Flow Run":               [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf User",     "read",   1),
-		],
-		"Knowledge Source":       [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
-			("Huf User",     "read",   1),
-		],
-		"Knowledge Input":        [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
-			("Huf User",     "read",   1),
-		],
-		"MCP Server":             [
-			("Huf Manager",  "read",   1),
-			("Huf User",     "read",   1),
-		],
-		"AI Model":               [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "select", 1),
-			("Huf User",     "read",   1),
-		],
-		"AI Provider":            [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "select", 1),
-		],
-		"Agent Tool Type":        [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "select", 1),
-		],
-		"Huf Role":               [
-			("Huf Manager",  "read",   1),
-		],
-		"Huf User Role":          [
-			("Huf Manager",  "read",   1), ("Huf Manager",  "write",  1),
-			("Huf Manager",  "create", 1), ("Huf Manager",  "delete", 1),
-		],
-	}
-	# fmt: on
-
-	for doctype, rows in permission_matrix.items():
-		if not frappe.db.table_exists(f"tab{doctype}"):
-			continue
-		for role, ptype, value in rows:
-			try:
-				frappe.permissions.add_permission(doctype, role, 0)
-				frappe.permissions.update_permission_property(doctype, role, 0, ptype, value)
-			except Exception:
-				pass  # Already exists or table not migrated yet
 
 
 def create_flow_tools():
