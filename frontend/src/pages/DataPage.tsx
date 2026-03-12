@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { Database, Settings, Table2, Trash2, Pencil } from 'lucide-react';
+import { TABLE_ICON_MAP } from '@/data/tableIcons';
 import {
 	PageLayout,
 	FilterBar,
@@ -110,6 +111,7 @@ function DataPage() {
 					<ItemCard
 						title={table.table_name}
 						description={table.description || 'No description'}
+						icon={table.icon ? TABLE_ICON_MAP[table.icon] ?? Table2 : Table2}
 						status={
 							table.is_active
 								? { label: 'Active', variant: 'default' }
