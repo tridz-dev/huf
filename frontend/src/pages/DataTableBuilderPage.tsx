@@ -291,6 +291,9 @@ export function DataTableBuilderPage() {
 									payload: state.selectedFieldIndex!,
 								})
 							}
+							onOpenTableSettings={() =>
+								dispatch({ type: 'SELECT_FIELD', payload: null })
+							}
 						/>
 					) : (
 						<TableSettingsPanel
