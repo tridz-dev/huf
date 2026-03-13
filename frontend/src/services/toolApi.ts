@@ -306,7 +306,7 @@ export async function fetchToolParametersFromCode(functionPath: string): Promise
 }> {
   try {
     const result = await call.post(
-      'huf.huf.doctype.agent_tool_function.agent_tool_function.fetch_tool_parameters_from_code',
+      'ivendnext_ai_agents.ivendnext_ai_agents.doctype.agent_tool_function.agent_tool_function.fetch_tool_parameters_from_code',
       { function_path: functionPath }
     );
     return (result?.message || result) as {

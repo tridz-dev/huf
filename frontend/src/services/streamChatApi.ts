@@ -45,7 +45,7 @@ export async function checkStreamingAvailable(): Promise<boolean> {
   const timeout = setTimeout(() => controller.abort(), 3000);
 
   try {
-    const res = await fetch(`${frappeUrl}/huf/stream/ping`, {
+    const res = await fetch(`${frappeUrl}/ivendnext_ai_agents/stream/ping`, {
       method: 'GET',
       credentials: 'include',
       signal: controller.signal,
@@ -75,7 +75,7 @@ export async function* streamAgentResponse(
   params: StreamAgentParams
 ): AsyncGenerator<StreamChunk, StreamChunk | undefined, unknown> {
   const { agentName, message, conversationId } = params;
-  const url = `${frappeUrl}/huf/stream/${encodeURIComponent(agentName)}`;
+  const url = `${frappeUrl}/ivendnext_ai_agents/stream/${encodeURIComponent(agentName)}`;
 
   const body: Record<string, unknown> = {
     prompt: message,

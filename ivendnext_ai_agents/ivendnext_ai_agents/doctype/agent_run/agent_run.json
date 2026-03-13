@@ -1,0 +1,280 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "creation": "2025-08-11 19:27:48.765866",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "request_tab",
+        "conversation",
+        "agent",
+        "prompt",
+        "response_tab",
+        "response",
+        "status",
+        "error_code",
+        "error_message",
+        "metadata",
+        "provider",
+        "start_time",
+        "input_tokens",
+        "cost",
+        "call_recording",
+        "prompt_template",
+        "column_break_qy3x",
+        "model",
+        "end_time",
+        "output_tokens",
+        "cached_tokens",
+        "parent_run",
+        "is_child",
+        "agent_orchestration",
+        "knowledge_section",
+        "knowledge_sources_used",
+        "chunks_injected",
+        "flow_section",
+        "flow_run",
+        "flow_node_id",
+        "column_break_flow1",
+        "flow_id",
+        "run_kind"
+    ],
+    "fields": [
+        {
+            "fieldname": "conversation",
+            "fieldtype": "Link",
+            "label": "Conversation",
+            "options": "Agent Conversation",
+            "read_only": 1
+        },
+        {
+            "fieldname": "agent",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Agent",
+            "options": "Agent",
+            "read_only": 1
+        },
+        {
+            "fieldname": "prompt_template",
+            "fieldtype": "Link",
+            "label": "Prompt Template",
+            "options": "Agent Prompt",
+            "read_only": 1
+        },
+        {
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "hidden": 1,
+            "in_list_view": 1,
+            "label": "Status",
+            "options": "\nStarted\nQueued\nSuccess\nFailed",
+            "read_only": 1
+        },
+        {
+            "fieldname": "error_code",
+            "fieldtype": "Data",
+            "label": "Error Code",
+            "read_only": 1
+        },
+        {
+            "fieldname": "error_message",
+            "fieldtype": "Long Text",
+            "label": "Error Message",
+            "read_only": 1
+        },
+        {
+            "fieldname": "response",
+            "fieldtype": "Code",
+            "label": "Response",
+            "read_only": 1
+        },
+        {
+            "fieldname": "prompt",
+            "fieldtype": "Code",
+            "label": "Prompt",
+            "read_only": 1
+        },
+        {
+            "fieldname": "request_tab",
+            "fieldtype": "Tab Break",
+            "label": "Request"
+        },
+        {
+            "fieldname": "response_tab",
+            "fieldtype": "Tab Break",
+            "label": "Response"
+        },
+        {
+            "fieldname": "metadata",
+            "fieldtype": "Tab Break",
+            "label": "Metadata"
+        },
+        {
+            "description": "Time stamp before requesting provider API.\n",
+            "fieldname": "start_time",
+            "fieldtype": "Datetime",
+            "label": "Start Time",
+            "read_only": 1
+        },
+        {
+            "description": "Time stamp after provider response is completely generated.",
+            "fieldname": "end_time",
+            "fieldtype": "Datetime",
+            "label": "End Time",
+            "read_only": 1
+        },
+        {
+            "description": "Number of tokens fed into the model for this response.\n\n",
+            "fieldname": "input_tokens",
+            "fieldtype": "Int",
+            "label": "Input Tokens",
+            "read_only": 1
+        },
+        {
+            "description": "Number of tokens in the model response.\n\n",
+            "fieldname": "output_tokens",
+            "fieldtype": "Int",
+            "label": "Output Tokens",
+            "read_only": 1
+        },
+        {
+            "description": "Number of cached tokens that were reused from prompt cache (reduces cost).",
+            "fieldname": "cached_tokens",
+            "fieldtype": "Int",
+            "label": "Cached Tokens",
+            "read_only": 1
+        },
+        {
+            "description": "Cost of generating this response. Might not be accurate.",
+            "fieldname": "cost",
+            "fieldtype": "Float",
+            "label": "Cost",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_qy3x",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "provider",
+            "fieldtype": "Link",
+            "label": "Provider",
+            "options": "AI Provider",
+            "read_only": 1
+        },
+        {
+            "fieldname": "model",
+            "fieldtype": "Link",
+            "label": "Model",
+            "options": "AI Model",
+            "read_only": 1
+        },
+        {
+            "fieldname": "parent_run",
+            "fieldtype": "Link",
+            "label": "Parent Run",
+            "options": "Agent Run",
+            "read_only": 1
+        },
+        {
+            "default": "0",
+            "fieldname": "is_child",
+            "fieldtype": "Check",
+            "label": "Is child",
+            "read_only": 1
+        },
+        {
+            "fieldname": "agent_orchestration",
+            "fieldtype": "Link",
+            "label": "Agent Orchestration",
+            "options": "Agent Orchestration",
+            "read_only": 1
+        },
+        {
+            "fieldname": "call_recording",
+            "fieldtype": "Attach",
+            "label": "Call Recording",
+            "read_only": 1
+        },
+        {
+            "fieldname": "knowledge_section",
+            "fieldtype": "Section Break",
+            "label": "Knowledge Usage"
+        },
+        {
+            "fieldname": "knowledge_sources_used",
+            "fieldtype": "JSON",
+            "label": "Knowledge Sources Used",
+            "read_only": 1
+        },
+        {
+            "fieldname": "chunks_injected",
+            "fieldtype": "Int",
+            "label": "Chunks Injected",
+            "read_only": 1
+        },
+        {
+            "fieldname": "flow_section",
+            "fieldtype": "Section Break",
+            "label": "Flow"
+        },
+        {
+            "fieldname": "flow_run",
+            "fieldtype": "Link",
+            "label": "Flow Run",
+            "options": "Flow Run",
+            "read_only": 1
+        },
+        {
+            "fieldname": "flow_node_id",
+            "fieldtype": "Data",
+            "label": "Flow Node ID",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_flow1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "flow_id",
+            "fieldtype": "Data",
+            "label": "Flow ID",
+            "read_only": 1
+        },
+        {
+            "default": "agent",
+            "fieldname": "run_kind",
+            "fieldtype": "Select",
+            "label": "Run Kind",
+            "options": "agent\ntool\norchestrator",
+            "read_only": 1
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-02-25 21:07:39.245567",
+    "modified_by": "Administrator",
+    "module": "Ivendnext Ai Agents",
+    "name": "Agent Run",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
+}

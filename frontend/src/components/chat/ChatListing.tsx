@@ -172,10 +172,10 @@ export default function ChatListing() {
     };
 
     const listener = handleNewConversation as unknown as EventListener;
-    window.addEventListener('huf:conversation-created', listener);
+    window.addEventListener('ivendnext_ai_agents:conversation-created', listener);
     
     return () => {
-      window.removeEventListener('huf:conversation-created', listener);
+      window.removeEventListener('ivendnext_ai_agents:conversation-created', listener);
     };
   }, [openAgents, activeTab]);
 

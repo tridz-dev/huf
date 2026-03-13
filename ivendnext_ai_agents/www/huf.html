@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/" href="/assets/huf/frontend/assets/favicon-DVOKLumH.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Huf AI</title>
+    <script type="module" crossorigin src="/assets/huf/frontend/assets/index-eFROEbRN.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/huf/frontend/assets/vendor-CsIv5cG4.js">
+    <link rel="modulepreload" crossorigin href="/assets/huf/frontend/assets/ui-C_bZaD0H.js">
+    <link rel="modulepreload" crossorigin href="/assets/huf/frontend/assets/xyflow-Cf6NznGc.js">
+    <link rel="modulepreload" crossorigin href="/assets/huf/frontend/assets/markdown-C2-WR1GG.js">
+    <link rel="stylesheet" crossorigin href="/assets/huf/frontend/assets/index-BF54gC3a.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      window.csrf_token = "{{ csrf_token }}";
+      if (!window.frappe) window.frappe = {};
+      window.app_name = "{{ app_name }}";
+      frappe.boot = JSON.parse({{ boot }});
+    </script>
+  </body>
+</html>

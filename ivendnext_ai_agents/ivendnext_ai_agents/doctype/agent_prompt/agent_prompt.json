@@ -1,0 +1,182 @@
+{
+    "actions": [],
+    "autoname": "hash",
+    "creation": "2026-02-20 00:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "details_section",
+        "title",
+        "slug",
+        "category",
+        "description",
+        "column_break_details",
+        "is_active",
+        "is_system",
+        "visibility",
+        "tags",
+        "prompt_section",
+        "prompt_body",
+        "version_section",
+        "version",
+        "is_latest",
+        "column_break_version",
+        "previous_version",
+        "forked_from",
+        "prompt_group"
+    ],
+    "fields": [
+        {
+            "fieldname": "details_section",
+            "fieldtype": "Section Break",
+            "label": "Details"
+        },
+        {
+            "fieldname": "title",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Title",
+            "reqd": 1
+        },
+        {
+            "description": "URL-friendly identifier for this prompt template. Auto-generated from title if left blank.",
+            "fieldname": "slug",
+            "fieldtype": "Data",
+            "label": "Slug",
+            "unique": 1
+        },
+        {
+            "fieldname": "category",
+            "fieldtype": "Link",
+            "label": "Category",
+            "options": "Agent Prompt Category"
+        },
+        {
+            "fieldname": "description",
+            "fieldtype": "Small Text",
+            "label": "Description"
+        },
+        {
+            "fieldname": "column_break_details",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "1",
+            "description": "Whether this prompt template is active and available for use.",
+            "fieldname": "is_active",
+            "fieldtype": "Check",
+            "in_list_view": 1,
+            "label": "Is Active"
+        },
+        {
+            "default": "0",
+            "description": "System prompts are managed by HUF and cannot be edited by users.",
+            "fieldname": "is_system",
+            "fieldtype": "Check",
+            "label": "Is System"
+        },
+        {
+            "default": "Private",
+            "description": "Controls who can see and use this prompt template.",
+            "fieldname": "visibility",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "label": "Visibility",
+            "options": "Public\nApp\nPrivate"
+        },
+        {
+            "fieldname": "tags",
+            "fieldtype": "Small Text",
+            "description": "Comma-separated tags for search and filtering.",
+            "label": "Tags"
+        },
+        {
+            "fieldname": "prompt_section",
+            "fieldtype": "Section Break",
+            "label": "Prompt"
+        },
+        {
+            "description": "The prompt template content. This is the system prompt or instructions text.",
+            "fieldname": "prompt_body",
+            "fieldtype": "Code",
+            "label": "Prompt Body",
+            "reqd": 1
+        },
+        {
+            "fieldname": "version_section",
+            "fieldtype": "Section Break",
+            "label": "Version History"
+        },
+        {
+            "default": "1",
+            "description": "Version number of this prompt. Incremented on each new version.",
+            "fieldname": "version",
+            "fieldtype": "Int",
+            "in_list_view": 1,
+            "label": "Version",
+            "read_only": 1
+        },
+        {
+            "default": "1",
+            "description": "Marks this as the latest version in the prompt lineage.",
+            "fieldname": "is_latest",
+            "fieldtype": "Check",
+            "label": "Is Latest",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_version",
+            "fieldtype": "Column Break"
+        },
+        {
+            "description": "Link to the previous version of this prompt template.",
+            "fieldname": "previous_version",
+            "fieldtype": "Link",
+            "label": "Previous Version",
+            "options": "Agent Prompt",
+            "read_only": 1
+        },
+        {
+            "description": "If this prompt was forked from another, link to the original prompt.",
+            "fieldname": "forked_from",
+            "fieldtype": "Link",
+            "label": "Forked From",
+            "options": "Agent Prompt",
+            "read_only": 1
+        },
+        {
+            "description": "Shared identifier across all versions of the same prompt lineage. Auto-set on creation.",
+            "fieldname": "prompt_group",
+            "fieldtype": "Data",
+            "label": "Prompt Group",
+            "read_only": 1,
+            "hidden": 1
+        }
+    ],
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-02-20 00:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Ivendnext Ai Agents",
+    "name": "Agent Prompt",
+    "naming_rule": "Random",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": [],
+    "track_changes": 1
+}

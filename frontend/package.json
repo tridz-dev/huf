@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build --base=/assets/huf/frontend/ && yarn copy-html-entry",
+    "build": "tsc -b && vite build --base=/assets/ivendnext_ai_agents/frontend/ && yarn copy-html-entry",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "copy-html-entry": "cp ../huf/public/frontend/index.html ../huf/www/huf.html"
+    "copy-html-entry": "cp ../ivendnext_ai_agents/public/frontend/index.html ../ivendnext_ai_agents/www/ivendnext_ai_agents.html"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

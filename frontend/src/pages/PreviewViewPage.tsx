@@ -1,7 +1,7 @@
 /**
  * Full-screen preview page for message content.
  *
- * Route: /huf/view/:messageId
+ * Route: /ivendnext_ai_agents/view/:messageId
  * Default: JSX only (previews + jsx/chart artifacts).
  * Query: ?preview=full — show full message (text, JSX, web, artifacts).
  *

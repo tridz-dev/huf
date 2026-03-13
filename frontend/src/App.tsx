@@ -95,7 +95,7 @@ function App() {
 
 
   return (
-    <BrowserRouter basename="/huf">
+    <BrowserRouter basename="/ivendnext_ai_agents">
       <UserProvider>
         <Suspense fallback={<AuthenticatingPage />}>
           <Routes>

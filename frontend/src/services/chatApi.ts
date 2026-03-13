@@ -326,7 +326,7 @@ export async function transcribeAudio(
   params: TranscribeAudioParams
 ): Promise<TranscribeAudioResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.upload_audio_and_transcribe_web', {
+    const result = await call.post('ivendnext_ai_agents.ai.agent_chat.upload_audio_and_transcribe_web', {
       filename: params.filename,
       b64data: params.b64data,
       agent: params.agent,
@@ -390,7 +390,7 @@ export async function newConversation(
   params: NewConversationParams
 ): Promise<NewConversationResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.new_conversation', {
+    const result = await call.post('ivendnext_ai_agents.ai.agent_chat.new_conversation', {
       agent: params.agent,
       message: params.message,
     });
@@ -407,7 +407,7 @@ export async function sendMessageToConversation(
   params: SendMessageParams
 ): Promise<SendMessageResponse> {
   try {
-    const result = await call.post('huf.ai.agent_chat.send_message_to_conversation', {
+    const result = await call.post('ivendnext_ai_agents.ai.agent_chat.send_message_to_conversation', {
       conversation: params.conversation,
       message: params.message,
     });

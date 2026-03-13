@@ -1,0 +1,1 @@
+import{a9 as a}from"./markdown-BWj_dXXt.js";import{s as o}from"./xyflow-Cf6NznGc.js";var d=a((t,e)=>{let n;return e==="sandbox"&&(n=o("#i"+t)),(e==="sandbox"?o(n.nodes()[0].contentDocument.body):o("body")).select(`[id="${t}"]`)},"getDiagramElement");export{d as g};

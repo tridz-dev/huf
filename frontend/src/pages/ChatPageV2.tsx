@@ -19,7 +19,7 @@ function ChatPage(){
 
     const handleConversationCreated = useCallback((conversationId: string, agentName?: string) => {
         // Dispatch custom event to notify ChatListing
-        const event = new CustomEvent('huf:conversation-created', {
+        const event = new CustomEvent('ivendnext_ai_agents:conversation-created', {
             detail: { conversationId, agentName }
         });
         window.dispatchEvent(event);

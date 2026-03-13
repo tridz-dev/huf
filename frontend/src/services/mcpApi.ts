@@ -211,7 +211,7 @@ export async function deleteMCPServer(name: string): Promise<void> {
  */
 export async function getAgentMCPServers(agentName: string): Promise<MCPServerRef[]> {
     try {
-        const response = await call.post('huf.ai.mcp_client.get_agent_mcp_servers', {
+        const response = await call.post('ivendnext_ai_agents.ai.mcp_client.get_agent_mcp_servers', {
             agent_name: agentName,
         });
         return (response.message || []) as MCPServerRef[];
@@ -226,7 +226,7 @@ export async function getAgentMCPServers(agentName: string): Promise<MCPServerRe
  */
 export async function getAvailableMCPServers(): Promise<MCPServerRef[]> {
     try {
-        const response = await call.post('huf.ai.mcp_client.get_available_mcp_servers', {});
+        const response = await call.post('ivendnext_ai_agents.ai.mcp_client.get_available_mcp_servers', {});
         return (response.message || []) as MCPServerRef[];
     } catch (error) {
         handleFrappeError(error);
@@ -239,7 +239,7 @@ export async function getAvailableMCPServers(): Promise<MCPServerRef[]> {
  */
 export async function testMCPConnection(serverName: string): Promise<{ success: boolean; error?: string }> {
     try {
-        const response = await call.post('huf.ai.mcp_client.test_mcp_connection', {
+        const response = await call.post('ivendnext_ai_agents.ai.mcp_client.test_mcp_connection', {
             server_name: serverName,
         });
         return response.message as { success: boolean; error?: string };
@@ -259,7 +259,7 @@ export async function syncMCPTools(serverName: string): Promise<{
     error?: string;
 }> {
     try {
-        const response = await call.post('huf.ai.mcp_client.sync_mcp_server_tools', {
+        const response = await call.post('ivendnext_ai_agents.ai.mcp_client.sync_mcp_server_tools', {
             server_name: serverName,
         });
         return response.message as { success: boolean; tool_count?: number; tools?: string[]; error?: string };

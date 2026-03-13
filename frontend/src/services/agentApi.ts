@@ -16,7 +16,7 @@ export interface TriggerTypeOption {
  */
 export async function getTriggerTypes(): Promise<TriggerTypeOption[]> {
   try {
-    const result = await call.get('huf.huf.doctype.agent_trigger.agent_trigger.get_trigger_type');
+    const result = await call.get('ivendnext_ai_agents.ivendnext_ai_agents.doctype.agent_trigger.agent_trigger.get_trigger_type');
     // Handle different response formats
     // Frappe API might return { message: [...] } or just the array directly
     return result.message as TriggerTypeOption[];
@@ -376,7 +376,7 @@ export interface RunAgentTestResponse {
  */
 export async function runAgentTest(params: RunAgentTestParams): Promise<RunAgentTestResponse> {
   try {
-    const result = await call.post('huf.ai.agent_integration.run_agent_sync', {
+    const result = await call.post('ivendnext_ai_agents.ai.agent_integration.run_agent_sync', {
       agent_name: params.agent_name,
       prompt: params.prompt,
       provider: params.provider,

@@ -1,15 +1,15 @@
 {
-    "private": true,
-    "type": "module",
-    "name": "huf",
-    "version": "0.0.1",
-    "description": "Messaging Application",
-    "main": "index.js",
-    "scripts": {
-      "dev": "cd frontend && yarn dev",
-      "install": "cd frontend && yarn install",
-      "build": "yarn build-frontend",
-      "build-frontend": "cd frontend && yarn install && yarn build",
-      "postinstall": "cd frontend && yarn install && yarn build"
-    }
+  "private": true,
+  "type": "module",
+  "name": "ivendnext_ai_agents",
+  "version": "0.0.1",
+  "description": "Messaging Application",
+  "main": "index.js",
+  "scripts": {
+    "dev": "cd frontend && yarn dev",
+    "install": "cd frontend && yarn install",
+    "build": "yarn build-frontend",
+    "build-frontend": "cd frontend && yarn install && yarn build",
+    "postinstall": "cd frontend && yarn install && yarn build"
+  }
 }

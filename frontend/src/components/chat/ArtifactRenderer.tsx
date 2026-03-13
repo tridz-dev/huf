@@ -154,7 +154,7 @@ export function ArtifactRenderer({
 
 	const handleOpenPreview = useCallback(() => {
 		if (!messageId) return;
-		window.open(`/huf/view/${messageId}`, '_blank', 'noopener');
+		window.open(`/ivendnext_ai_agents/view/${messageId}`, '_blank', 'noopener');
 	}, [messageId]);
 
 	const renderContent = () => {

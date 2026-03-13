@@ -28,7 +28,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/settings')) return 'Settings';
     if (path.startsWith('/help')) return 'Help';
     if (path.startsWith('/chat')) return 'Chat';
-    return 'HufAI';
+    return 'IvendnextAiAgentsAI';
   };
 
   return (

@@ -1,0 +1,113 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "creation": "2025-09-19 11:35:58.230526",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "agent_run",
+        "conversation",
+        "tool",
+        "is_mcp_tool",
+        "mcp_server",
+        "tool_args",
+        "tool_result",
+        "status",
+        "call_id",
+        "error_message"
+    ],
+    "fields": [
+        {
+            "fieldname": "agent_run",
+            "fieldtype": "Link",
+            "label": "Agent Run",
+            "options": "Agent Run",
+            "read_only": 1
+        },
+        {
+            "fieldname": "conversation",
+            "fieldtype": "Link",
+            "label": "Conversation",
+            "options": "Agent Conversation",
+            "read_only": 1
+        },
+        {
+            "fieldname": "tool_args",
+            "fieldtype": "JSON",
+            "label": "Tool Args",
+            "read_only": 1
+        },
+        {
+            "fieldname": "tool_result",
+            "fieldtype": "JSON",
+            "label": "Tool Result",
+            "read_only": 1
+        },
+        {
+            "fieldname": "call_id",
+            "fieldtype": "Small Text",
+            "hidden": 1,
+            "label": "Call ID"
+        },
+        {
+            "fieldname": "error_message",
+            "fieldtype": "Small Text",
+            "label": "Error Message",
+            "read_only": 1
+        },
+        {
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "hidden": 1,
+            "label": "Status",
+            "options": "Started\nQueued\nCompleted\nFailed"
+        },
+        {
+            "fieldname": "tool",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Tool Name",
+            "read_only": 1
+        },
+        {
+            "default": "0",
+            "fieldname": "is_mcp_tool",
+            "fieldtype": "Check",
+            "label": "Is MCP Tool",
+            "read_only": 1
+        },
+        {
+            "fieldname": "mcp_server",
+            "fieldtype": "Link",
+            "label": "MCP Server",
+            "options": "MCP Server",
+            "read_only": 1
+        }
+    ],
+    "grid_page_length": 50,
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-02-17 22:49:02.897342",
+    "modified_by": "Administrator",
+    "module": "Ivendnext Ai Agents",
+    "name": "Agent Tool Call",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "row_format": "Dynamic",
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
+}

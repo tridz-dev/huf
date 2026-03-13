@@ -1,0 +1,217 @@
+{
+    "actions": [],
+    "allow_rename": 1,
+    "autoname": "hash",
+    "creation": "2026-02-18 10:00:00.000000",
+    "doctype": "DocType",
+    "engine": "InnoDB",
+    "field_order": [
+        "overview_tab",
+        "flow_definition",
+        "flow_id",
+        "flow_version",
+        "column_break_ov1",
+        "mode",
+        "status",
+        "trigger_type",
+        "execution_section",
+        "current_node_id",
+        "hop_count",
+        "max_hops",
+        "column_break_ex1",
+        "last_agent_run",
+        "conversation",
+        "context_section",
+        "context_json",
+        "trigger_payload",
+        "waiting_section",
+        "waiting",
+        "last_error",
+        "timing_tab",
+        "started_at",
+        "column_break_tm1",
+        "completed_at"
+    ],
+    "fields": [
+        {
+            "fieldname": "overview_tab",
+            "fieldtype": "Tab Break",
+            "label": "Overview"
+        },
+        {
+            "fieldname": "flow_definition",
+            "fieldtype": "Link",
+            "in_list_view": 1,
+            "label": "Flow Definition",
+            "options": "Flow Definition",
+            "reqd": 1,
+            "read_only": 1
+        },
+        {
+            "fieldname": "flow_id",
+            "fieldtype": "Data",
+            "in_list_view": 1,
+            "label": "Flow ID",
+            "read_only": 1
+        },
+        {
+            "fieldname": "flow_version",
+            "fieldtype": "Int",
+            "label": "Flow Version",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_ov1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "default": "Normal",
+            "fieldname": "mode",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "label": "Mode",
+            "options": "Normal\nAgentic",
+            "read_only": 1
+        },
+        {
+            "default": "Queued",
+            "fieldname": "status",
+            "fieldtype": "Select",
+            "in_list_view": 1,
+            "label": "Status",
+            "options": "Queued\nRunning\nWaiting Approval\nWaiting User\nSuccess\nFailed",
+            "read_only": 1
+        },
+        {
+            "default": "Manual",
+            "fieldname": "trigger_type",
+            "fieldtype": "Select",
+            "label": "Trigger Type",
+            "options": "Manual\nWebhook\nSchedule\nDoc Event",
+            "read_only": 1
+        },
+        {
+            "fieldname": "execution_section",
+            "fieldtype": "Section Break",
+            "label": "Execution"
+        },
+        {
+            "fieldname": "current_node_id",
+            "fieldtype": "Data",
+            "label": "Current Node ID",
+            "read_only": 1
+        },
+        {
+            "default": "0",
+            "fieldname": "hop_count",
+            "fieldtype": "Int",
+            "label": "Hop Count",
+            "read_only": 1
+        },
+        {
+            "default": "100",
+            "fieldname": "max_hops",
+            "fieldtype": "Int",
+            "label": "Max Hops",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_ex1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "last_agent_run",
+            "fieldtype": "Link",
+            "label": "Last Agent Run",
+            "options": "Agent Run",
+            "read_only": 1
+        },
+        {
+            "fieldname": "conversation",
+            "fieldtype": "Link",
+            "label": "Conversation",
+            "options": "Agent Conversation",
+            "read_only": 1
+        },
+        {
+            "fieldname": "context_section",
+            "fieldtype": "Section Break",
+            "label": "Context"
+        },
+        {
+            "default": "{}",
+            "fieldname": "context_json",
+            "fieldtype": "JSON",
+            "label": "Context JSON",
+            "read_only": 1
+        },
+        {
+            "fieldname": "trigger_payload",
+            "fieldtype": "JSON",
+            "label": "Trigger Payload",
+            "read_only": 1
+        },
+        {
+            "fieldname": "waiting_section",
+            "fieldtype": "Section Break",
+            "label": "Waiting"
+        },
+        {
+            "fieldname": "waiting",
+            "fieldtype": "JSON",
+            "label": "Waiting",
+            "read_only": 1
+        },
+        {
+            "fieldname": "last_error",
+            "fieldtype": "Small Text",
+            "label": "Last Error",
+            "read_only": 1
+        },
+        {
+            "fieldname": "timing_tab",
+            "fieldtype": "Tab Break",
+            "label": "Timing"
+        },
+        {
+            "fieldname": "started_at",
+            "fieldtype": "Datetime",
+            "label": "Started At",
+            "read_only": 1
+        },
+        {
+            "fieldname": "column_break_tm1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "completed_at",
+            "fieldtype": "Datetime",
+            "label": "Completed At",
+            "read_only": 1
+        }
+    ],
+    "index_web_pages_for_search": 1,
+    "links": [],
+    "modified": "2026-02-18 10:00:00.000000",
+    "modified_by": "Administrator",
+    "module": "Ivendnext Ai Agents",
+    "name": "Flow Run",
+    "owner": "Administrator",
+    "permissions": [
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "System Manager",
+            "share": 1,
+            "write": 1
+        }
+    ],
+    "sort_field": "modified",
+    "sort_order": "DESC",
+    "states": []
+}

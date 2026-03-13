@@ -1,0 +1,513 @@
+import frappe
+import json
+from frappe import _
+from ivendnext_ai_agents.ai.agent_integration import run_agent_sync, _run_async_safely
+from ivendnext_ai_agents.ai.conversation_manager import ConversationManager
+import base64
+from frappe.utils.file_manager import save_file
+from ivendnext_ai_agents.ai import sdk_tools
+from ivendnext_ai_agents.ai import transcription_handler
+
+
+@frappe.whitelist()
+def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None,
+                                agent: str = None, conversation: str = None):
+    if not b64data or not filename:
+        frappe.throw("Filename and audio data are required")
+
+    if "," in b64data:
+        b64data = b64data.split(",", 1)[1]
+    
+    try:
+        audio_bytes = base64.b64decode(b64data)
+    except Exception:
+        frappe.throw("Invalid base64 audio data")
+
+    if len(audio_bytes) == 0:
+        return {"success": False, "error": "Audio recording was empty (0 bytes)."}
+
+    chat = frappe.get_doc("Agent Chat", docname)
+    if agent and chat.agent != agent:
+        chat.db_set("agent", agent)
+        chat.agent = agent
+
+    msg = frappe.get_doc({
+        "doctype": "Agent Message",
+        "conversation": conversation or chat.conversation,
+        "role": "user",
+        "content": f"(voice message: {filename})",
+        "kind": "Audio",
+        "user": frappe.session.user
+    })
+    msg.insert(ignore_permissions=True)
+
+    try:
+        saved_file = save_file(
+            filename, 
+            audio_bytes, 
+            "Agent Message", 
+            msg.name, 
+            is_private=False
+        )
+    except Exception as e:
+        frappe.log_error(message=f"Save File Failed: {e}", title="Save File Failed")
+        return {"success": False, "error": "Could not save audio file to database."}
+
+    file_id = None
+    file_url = None
+    if hasattr(saved_file, "name"):
+        file_id = saved_file.name
+        file_url = saved_file.file_url 
+        # Link file URL to voice_message field
+        frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+    elif isinstance(saved_file, dict):
+        file_id = saved_file.get("name")
+        file_url = saved_file.get("file_url")
+        if file_url:
+             frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+    
+    if not file_id:
+        file_id = frappe.db.get_value("File", {
+            "attached_to_doctype": "Agent Message", 
+            "attached_to_name": msg.name
+        }, "name", order_by="creation desc")
+        
+    if file_id and not file_url:
+        file_url = frappe.db.get_value("File", file_id, "file_url")
+        if file_url:
+            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+
+    if not file_id:
+        return {"success": False, "error": "File was saved but ID could not be retrieved."}
+
+    provider = frappe.db.get_value("Agent", chat.agent, "provider")
+
+    try:
+        res = _run_async_safely(
+            sdk_tools.handle_transcribe_audio(
+                file_id=file_id,
+                agent_name=chat.agent,
+                conversation_id=conversation or chat.conversation,
+                message_id=msg.name,
+            )
+        )
+    except Exception as e:
+         frappe.log_error(f"Transcription Error: {str(e)}")
+         return {"success": False, "error": str(e)}
+
+    if not res.get("success"):
+        return res
+
+    transcript = res.get("text")
+    if not chat.conversation: chat.reload()
+    
+    run_result = run_agent_sync(
+        agent_name=chat.agent,
+        prompt=transcript,
+        provider=provider,
+        model=frappe.db.get_value("Agent", chat.agent, "model"),
+        channel_id="chat",
+        external_id=frappe.session.user,
+        conversation_id=chat.conversation
+    )
+    
+    if run_result.get("conversation_id") and not chat.conversation:
+        chat.db_set("conversation", run_result["conversation_id"])
+
+    return {
+        "success": True, 
+        "transcript": transcript, 
+        "run": run_result
+    }
+
+
+@frappe.whitelist()
+def upload_audio_and_transcribe_web(
+    filename: str,
+    b64data: str,
+    agent: str,
+    conversation: str | None = None,
+    transcribe_only: bool = False,
+):
+    """Web endpoint: save audio, transcribe via STT, optionally run the agent with the transcript."""
+    if not b64data or not filename:
+        frappe.throw(_("Filename and audio data are required"))
+
+    if "," in b64data:
+        b64data = b64data.split(",", 1)[1]
+
+    try:
+        audio_bytes = base64.b64decode(b64data)
+    except Exception:
+        frappe.throw(_("Invalid base64 audio data"))
+
+    if len(audio_bytes) == 0:
+        return {"success": False, "error": "Audio recording was empty (0 bytes)."}
+
+    if not agent:
+        frappe.throw(_("agent is required"))
+
+    # Ensure conversation exists (or create a new one)
+    conv = None
+    if conversation:
+        try:
+            conv = frappe.get_doc("Agent Conversation", conversation)
+        except frappe.DoesNotExistError:
+            conv = None
+
+    if not conv:
+        cm = ConversationManager(agent_name=agent, channel="Chat")
+        conv = cm.create_new_conversation()
+
+    conversation_id = conv.name
+
+    # Create initial Agent Message representing the raw voice message
+    msg = frappe.get_doc({
+        "doctype": "Agent Message",
+        "conversation": conversation_id,
+        "role": "user",
+        "content": f"(voice message: {filename})",
+        "kind": "Audio",
+        "user": frappe.session.user,
+    })
+    msg.insert(ignore_permissions=True)
+
+    # Save file attached to Agent Message
+    try:
+        saved_file = save_file(
+            filename,
+            audio_bytes,
+            "Agent Message",
+            msg.name,
+            is_private=False,
+        )
+    except Exception as e:
+        frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
+        return {"success": False, "error": "Could not save audio file to database."}
+
+    file_id = None
+    file_url = None
+    if hasattr(saved_file, "name"):
+        file_id = saved_file.name
+        file_url = saved_file.file_url
+        frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+    elif isinstance(saved_file, dict):
+        file_id = saved_file.get("name")
+        file_url = saved_file.get("file_url")
+        if file_url:
+            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+
+    if not file_id:
+        file_id = frappe.db.get_value(
+            "File",
+            {"attached_to_doctype": "Agent Message", "attached_to_name": msg.name},
+            "name",
+            order_by="creation desc",
+        )
+
+    if file_id and not file_url:
+        file_url = frappe.db.get_value("File", file_id, "file_url")
+        if file_url:
+            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
+
+    if not file_id:
+        return {"success": False, "error": "File was saved but ID could not be retrieved."}
+
+    provider = frappe.db.get_value("Agent", agent, "provider")
+
+    # Transcribe using SDK STT tool
+    try:
+        res = _run_async_safely(
+            sdk_tools.handle_transcribe_audio(
+                file_id=file_id,
+                agent_name=agent,
+                conversation_id=conversation_id,
+                message_id=msg.name,
+            )
+        )
+    except Exception as e:
+        frappe.log_error(f"Transcription Error (web): {str(e)}")
+        return {"success": False, "error": str(e)}
+
+    if not res.get("success"):
+        return res
+
+    transcript = res.get("text")
+
+    # Update user message with the actual transcript
+    frappe.db.set_value("Agent Message", msg.name, "content", transcript)
+    frappe.db.commit()
+
+    if transcribe_only:
+        return {
+            "success": True,
+            "conversation_id": conversation_id,
+            "transcript": transcript,
+            "message_id": msg.name,
+        }
+
+    # Run agent with transcript as prompt, within the same conversation
+    run_result = run_agent_sync(
+        agent_name=agent,
+        prompt=transcript,
+        provider=provider,
+        model=frappe.db.get_value("Agent", agent, "model"),
+        channel_id="Chat",
+        conversation_id=conversation_id,
+    )
+
+    return {
+        "success": True,
+        "conversation_id": conversation_id,
+        "transcript": transcript,
+        "run": run_result,
+    }
+
+
+@frappe.whitelist()
+def get_history(conversation_id: str = None, limit: int = 200):
+    """Return conversation history for chat UI"""
+    if not conversation_id:
+        return []
+
+    messages = frappe.get_all(
+        "Agent Message",
+        filters={"conversation": conversation_id},
+        fields=["role", "content", "creation", "user", "conversation_index"],
+        order_by="conversation_index asc",
+        limit=limit
+    )
+
+    def _norm(m):
+        content = m.content
+        try:
+            if not isinstance(content, str):
+                content = json.dumps(content)
+        except Exception:
+            pass
+        return {
+            "role": m.role,
+            "content": content,
+            "creation": m.creation,
+            "user": m.user,
+            "conversation_index": m.conversation_index,
+        }
+
+    return [_norm(m) for m in messages]
+
+
+@frappe.whitelist()
+def send_message(docname: str, message: str, agent: str = None):
+    """Send a chat message via Agent Chat."""
+    if not docname:
+        frappe.throw(_("docname is required"))
+
+    chat = frappe.get_doc("Agent Chat", docname)
+
+    if agent:
+        if chat.agent != agent:
+            chat.db_set("agent", agent)
+            chat.agent = agent
+
+    if not chat.agent:
+        frappe.throw(_("Agent must be set before sending a message"))
+
+    result = run_agent_sync(
+        agent_name=chat.agent,
+        prompt=message,
+        provider=frappe.db.get_value("Agent", chat.agent, "provider"),
+        model=frappe.db.get_value("Agent", chat.agent, "model"),
+        channel_id="chat",
+        external_id=frappe.session.user,
+        conversation_id=chat.conversation,
+    )
+
+    if result.get("conversation_id") and not chat.conversation:
+        chat.db_set("conversation", result["conversation_id"])
+
+    return result
+
+
+@frappe.whitelist()
+def render_markdown(content: str = "") -> str:
+    """
+    Render Markdown to sanitized HTML using frappe's built-in markdown util.
+    Returns safe HTML string.
+    """
+    try:
+        if not isinstance(content, str):
+            content = json.dumps(content, indent=2)
+
+        from frappe.utils.markdown import markdown as md
+        return md(content or "")
+    except Exception:
+        return frappe.utils.escape_html(content or "")
+
+
+@frappe.whitelist()
+def create_conversation(agent: str, channel: str = "Chat"):
+    """Create a new Agent Conversation without running the agent."""
+    if not agent:
+        frappe.throw(_("agent is required"))
+
+    try:
+        cm = ConversationManager(agent_name=agent, channel=channel)
+        conversation = cm.create_new_conversation()
+        return {
+            "success": True,
+            "conversation_id": conversation.name,
+        }
+    except Exception:
+        frappe.log_error(
+            message=f"create_conversation error: {frappe.get_traceback()}",
+            title="Huf API",
+        )
+        raise
+
+@frappe.whitelist()
+def new_conversation(agent: str, message: str):
+    
+    if not agent:
+        frappe.throw(_("agent is required"))
+    if not message:
+        frappe.throw(_("message is required"))
+
+    try:
+        cm = ConversationManager(agent_name=agent, channel="Chat")
+        conversation = cm.create_new_conversation()
+
+        run_result = run_agent_sync(
+            agent_name=agent,
+            prompt=message,
+            provider=frappe.db.get_value("Agent", agent, "provider"),
+            model=frappe.db.get_value("Agent", agent, "model"),
+            channel_id="Chat",
+            conversation_id=conversation.name
+        )
+
+        if run_result.get("conversation_id"):
+            try:
+                frappe.db.set_value("Agent Conversation", conversation.name, "name", conversation.name)
+            except Exception:
+                pass
+
+        return {
+            "success": True,
+            "conversation_id": conversation.name,
+            "run": run_result
+        }
+
+    except Exception as e:
+        frappe.log_error(message=f"new_conversation error: {frappe.get_traceback()}", title="Huf API")
+        raise
+
+
+@frappe.whitelist()
+def send_message_to_conversation(conversation: str, message: str):
+    if not conversation:
+        frappe.throw(_("conversation is required"))
+    if not message:
+        frappe.throw(_("message is required"))
+
+    try:
+        try:
+            conv_doc = frappe.get_doc("Agent Conversation", conversation)
+        except frappe.DoesNotExistError:
+            frappe.throw(_("Conversation not found: {0}").format(conversation))
+
+        if not conv_doc.is_active:
+            frappe.throw(_("Conversation is not active"))
+
+        agent_name = conv_doc.agent
+        if not agent_name:
+            frappe.throw(_("Conversation has no agent set"))
+
+        result = run_agent_sync(
+            agent_name=agent_name,
+            prompt=message,
+            provider=frappe.db.get_value("Agent", agent_name, "provider"),
+            model=frappe.db.get_value("Agent", agent_name, "model"),
+            channel_id=conv_doc.channel or "Chat",
+            conversation_id=conv_doc.name
+        )
+
+        if result.get("conversation_id") and not conv_doc.name:
+            conv_doc.db_set("conversation", result["conversation_id"])
+
+        return result
+
+    except Exception as e:
+        frappe.log_error(message=f"send_message_to_conversation error: {frappe.get_traceback()}", title="Huf API")
+        raise
+
+@frappe.whitelist()
+def upload_file_and_process(docname: str, filename: str, b64data: str, agent: str = None, conversation: str = None):
+    """
+    Upload a file (PDF/Image) and process it with OCR/Vision.
+    Returns the extracted text and optionally creates an Agent Message.
+    """
+    if not b64data or not filename:
+        frappe.throw(_("Filename and file data are required"))
+
+    # Decode base64
+    if "," in b64data:
+        b64data = b64data.split(",", 1)[1]
+    
+    try:
+        file_bytes = base64.b64decode(b64data)
+    except Exception:
+        frappe.throw(_("Invalid base64 data"))
+
+    # Get Chat Doc
+    chat = frappe.get_doc("Agent Chat", docname)
+    if agent and chat.agent != agent:
+        chat.db_set("agent", agent)
+        chat.agent = agent
+
+    # select provider/model based on agent
+    if not chat.agent:
+         frappe.throw(_("Agent must be selected"))
+    
+    # Save file
+    
+    try:
+        msg = frappe.get_doc({
+            "doctype": "Agent Message",
+            "conversation": conversation or chat.conversation,
+            "role": "user",
+            "kind":"Message",
+            "content": f"Uploaded file: {filename}",
+            "user": frappe.session.user
+        })
+        msg.insert()
+
+        saved_file = save_file(
+            filename, 
+            file_bytes, 
+            "Agent Message", 
+            msg.name, 
+            is_private=False
+        )
+    except Exception as e:
+         frappe.log_error(f"File Save Error: {str(e)}")
+         frappe.throw(_("Failed to save file"))
+
+    file_id = saved_file.name
+
+    try:
+        result = _run_async_safely(
+            sdk_tools.handle_ocr_document(
+                file_id=file_id,
+                agent_name=chat.agent,
+                conversation_id=conversation or chat.conversation,
+            )
+        )
+
+        if not result.get("success"):
+            return result
+
+        return result
+
+    except Exception as e:
+        frappe.log_error(f"OCR Processing Error: {str(e)}")
+        return {"success": False, "error": str(e)}

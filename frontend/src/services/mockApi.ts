@@ -36,7 +36,7 @@ const toolFunctions: AgentToolFunctionRef[] = [
     tool_name: "Send Email",
     description: "Send an email notification",
     types: "Custom Function",
-    function_path: "huf.utils.send_email",
+    function_path: "ivendnext_ai_agents.utils.send_email",
   },
 ];
 
@@ -57,7 +57,7 @@ const mockAgents: Agent[] = [
         id: "trigger-1",
         trigger_type: "Webhook",
         active: true,
-        webhook_url: "https://api.hufai.com/agent/1/webhook/support-bot",
+        webhook_url: "https://api.ivendnext_ai_agentsai.com/agent/1/webhook/support-bot",
         webhook_slug: "support-bot",
         created_at: "2025-10-15T08:00:00Z",
       },
@@ -104,7 +104,7 @@ const mockAgents: Agent[] = [
         id: "trigger-6",
         trigger_type: "Webhook",
         active: false,
-        webhook_url: "https://api.hufai.com/agent/1/webhook/escalation",
+        webhook_url: "https://api.ivendnext_ai_agentsai.com/agent/1/webhook/escalation",
         webhook_slug: "escalation",
         created_at: "2025-10-27T10:00:00Z",
       },

@@ -18,7 +18,7 @@ interface UserContextType {
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
-const HOME_URL = '/huf';
+const HOME_URL = '/ivendnext_ai_agents';
 const LOGIN_URL = '/login?redirect-to=';
 
 interface UserProviderProps {

@@ -94,7 +94,7 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
             <Label>Webhook URL</Label>
             <div className="flex gap-2">
               <Input
-                value={`https://api.hufai.com/agent/${agentId}/webhook/${Date.now()}`}
+                value={`https://api.ivendnext_ai_agentsai.com/agent/${agentId}/webhook/${Date.now()}`}
                 readOnly
                 className="flex-1 font-mono text-sm"
               />
@@ -103,7 +103,7 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
                 variant="outline"
                 size="icon"
                 onClick={() => {
-                  const url = `https://api.hufai.com/agent/${agentId}/webhook/${Date.now()}`;
+                  const url = `https://api.ivendnext_ai_agentsai.com/agent/${agentId}/webhook/${Date.now()}`;
                   navigator.clipboard.writeText(url);
                   toast.success('Webhook URL copied to clipboard');
                 }}

@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../huf/public/frontend',
+    outDir: '../ivendnext_ai_agents/public/frontend',
     emptyOutDir: true,
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
