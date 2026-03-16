@@ -9,10 +9,7 @@ from frappe.utils import now_datetime
 from huf.ai.agent_integration import run_agent_sync 
 import random
 
-try:
-    from litellm.utils import supports_prompt_caching
-except ImportError:
-    supports_prompt_caching = None
+from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.orchestration.orchestrator import parse_plan_steps, create_orchestration
@@ -56,6 +53,57 @@ def get_permission_query_conditions(user):
     """
     return conditions
 
+
+def _check_model_supports_caching(model_name: str, provider_name: str) -> bool:
+    """Thin wrapper — delegates to the shared capabilities module."""
+    return model_supports_prompt_caching(model_name, provider_name)
+
+def _get_cacheable_models_for_provider(
+    provider_doc_name: str, provider_name: str, exclude_model: str = None
+) -> list:
+    try:
+        all_models = frappe.get_all(
+            "AI Model",
+            filters={"provider": provider_doc_name},
+            fields=["name", "model_name"],
+        )
+    except Exception:
+        return []
+
+    cacheable = []
+    for m in all_models:
+        mn = m.get("model_name") or m.get("name")
+        if exclude_model and mn == exclude_model:
+            continue
+        if _check_model_supports_caching(mn, provider_name):
+            cacheable.append(mn)
+
+    return cacheable
+
+
+@frappe.whitelist()
+def get_cacheable_models(provider: str, model: str = None) -> dict:
+    if not provider:
+        return {"supported": False, "alternatives": []}
+
+    model_name = None
+    if model:
+        model_name = frappe.db.get_value("AI Model", model, "model_name") or model
+
+    provider_name = frappe.db.get_value("AI Provider", provider, "provider_name") or provider
+
+    supported = False
+    if model_name:
+        supported = _check_model_supports_caching(model_name, provider_name)
+
+    alternatives = _get_cacheable_models_for_provider(
+        provider_doc_name=provider,
+        provider_name=provider_name,
+        exclude_model=model_name,
+    )
+
+    return {"supported": supported, "alternatives": alternatives}
+
 class Agent(Document):
     def validate(self):
         self._validate_prompt()
@@ -65,42 +113,54 @@ class Agent(Document):
         
         # Validate prompt caching configuration
         if self.enable_prompt_caching:
-            if not self.model:
-                frappe.throw(_("Model must be selected to enable prompt caching."))
-            
-            # Check if model supports prompt caching
-            if supports_prompt_caching:
-                try:
-                    model_doc = frappe.get_doc("AI Model", self.model)
-                    model_name = model_doc.model_name
-                    provider_doc = frappe.get_doc("AI Provider", self.provider)
-                    provider_name = provider_doc.provider_name or provider_doc.name
-                    
-                    # Normalize model name (add provider prefix if needed)
-                    normalized_model = model_name
-                    if "/" not in model_name:
-                        provider_prefix_map = {
-                            "openai": "openai",
-                            "anthropic": "anthropic",
-                            "google": "gemini",
-                            "gemini": "gemini",
-                            "deepseek": "deepseek",
-                        }
-                        prefix = provider_prefix_map.get(provider_name.lower(), provider_name.lower())
-                        normalized_model = f"{prefix}/{model_name}"
-                    
-                    if not supports_prompt_caching(model=normalized_model):
-                        frappe.msgprint(
-                            _("Warning: The selected model may not support prompt caching. "
-                              "Caching will be disabled for this model."),
-                            indicator="orange"
-                        )
-                except Exception as e:
-                    frappe.log_error(
-                        f"Error validating prompt caching support: {str(e)}",
-                        "Agent Prompt Caching Validation"
-                    )
+            self._validate_prompt_caching()
 
+    def _validate_prompt_caching(self):
+        if not self.model:
+            frappe.throw(_("A model must be selected before enabling prompt caching."))
+        try:
+            model_doc = frappe.get_doc("AI Model", self.model)
+            model_name = model_doc.model_name or model_doc.name
+            provider_name = (
+                frappe.db.get_value("AI Provider", self.provider, "provider_name")
+                or self.provider
+            )
+        except Exception as e:
+            frappe.log_error(
+                f"Error loading model/provider for caching validation: {e}",
+                "Agent Prompt Caching Validation",
+            )
+            return
+        if _check_model_supports_caching(model_name, provider_name):
+            return  
+        alternatives = _get_cacheable_models_for_provider(
+            provider_doc_name=self.provider,
+            provider_name=provider_name,
+            exclude_model=model_name,
+        )
+
+        msg = _(
+            "The selected model <b>{model}</b> does not support prompt caching."
+        ).format(model=model_name)
+
+        if alternatives:
+            shown = alternatives[:5]
+            alt_html = ", ".join(f"<b>{a}</b>" for a in shown)
+            msg += "<br><br>"
+            msg += _("Supported models from <b>{provider}</b>: {models}.").format(
+                provider=provider_name,
+                models=alt_html,
+            )
+            if len(alternatives) > 5:
+                msg += " " + _("(and {n} more)").format(n=len(alternatives) - 5)
+        else:
+            msg += "<br><br>"
+            msg += _(
+                "No other models from <b>{provider}</b> currently support prompt caching. "
+                "Please disable prompt caching or switch to a different provider."
+            ).format(provider=provider_name)
+
+        frappe.throw(msg, title=_("Prompt Caching Not Supported"))
 
 
     def _validate_prompt(self):
