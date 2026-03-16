@@ -23,8 +23,9 @@ from types import SimpleNamespace
 import frappe
 import litellm
 from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, completion_cost, ContextWindowExceededError
-from litellm.utils import supports_prompt_caching, trim_messages
+from litellm.utils import trim_messages
 from huf.ai.tool_serializer import serialize_tools
+from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 
 
 class SimpleResult:
@@ -194,10 +195,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         model_supports_caching = False
         if enable_prompt_caching:
             try:
-                base_model = normalized_model.split("/", 1)[-1] if "/" in normalized_model else normalized_model
-                model_supports_caching = supports_prompt_caching(model=normalized_model) or supports_prompt_caching(model=base_model)
+                model_supports_caching = model_supports_prompt_caching(model, provider)
             except Exception:
-                # If check fails, assume not supported
                 model_supports_caching = False
                 frappe.log_error(
                     f"Failed to check prompt caching support for model {normalized_model}",
@@ -637,8 +636,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         model_supports_caching = False
         if enable_prompt_caching:
             try:
-                base_model = normalized_model.split("/", 1)[-1] if "/" in normalized_model else normalized_model
-                model_supports_caching = supports_prompt_caching(model=normalized_model) or supports_prompt_caching(model=base_model)
+                model_supports_caching = model_supports_prompt_caching(model, provider)
             except Exception:
                 model_supports_caching = False
                 frappe.log_error(
