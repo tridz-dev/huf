@@ -10,6 +10,9 @@ import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
 import { PageLoader } from './components/PageLoader';
+import { DataHeaderActions } from './components/DataHeaderActions';
+import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
+import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 
@@ -27,6 +30,8 @@ const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper')
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
+
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
 import {
@@ -137,11 +142,45 @@ function App() {
             path="/data"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout headerActions={<DataHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <DataPage />
                   </Suspense>
                 </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/new"
+            element={
+              <ProtectedRoute>
+                <DataTableBuilderWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/:tableId"
+            element={
+              <ProtectedRoute>
+                <DataTableViewWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/:tableId/:recordName"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <DataRecordViewWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/:tableId/edit"
+            element={
+              <ProtectedRoute>
+                <DataTableBuilderWrapper />
               </ProtectedRoute>
             }
           />
