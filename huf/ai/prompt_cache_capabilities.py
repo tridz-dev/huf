@@ -4,37 +4,44 @@
 """
 Prompt Cache Capabilities
 =========================
+Determines LLM prompt caching support using LiteLLM pricing metadata.
 
-This module uses a data-driven approach to detect capabilities by inspecting
-LiteLLM's pricing metadata. It avoids hardcoded model lists and provider-specific
-logic to ensure future compatibility with LiteLLM updates.
+This module implements a professional, data-driven approach. It identifies 
+feature support by verifying the presence of pricing for cache operations 
+(cache hits/reads). This avoids hardcoded model lists and ensures compatibility 
+with future model releases or provider changes.
 """
 
 from __future__ import annotations
 
 
 def model_supports_prompt_caching(model_name: str, provider_name: str) -> bool:
-    
+    """
+    Return True if *model_name* from *provider_name* supports prompt caching.
+
+    Standard & Data-Driven Implementation:
+    1. Feature support is defined by the existence of pricing metadata 
+       (``cache_read_input_token_cost``) in LiteLLM's pricing database.
+    2. Pricing is the only definitive "production" indicator of feature 
+       readiness in LiteLLM. This correctly distinguishes between legacy 
+       models (without caching prices) and newer revisions (with caching 
+       prices) without hardcoding model names.
+    3. Uses a segment-aware lookup to reliably resolve model names across 
+       different key formats (Azure, Vertex, Bedrock prefixes, etc.).
+    """
     try:
         import litellm
+        import re
     except ImportError:
         return False
 
     target_model = model_name.split("/", 1)[-1].lower() if "/" in model_name else model_name.lower()
     
-    candidates = [model_name, f"{provider_name.lower()}/{model_name}"]
-    for key in candidates:
-        entry = litellm.model_cost.get(key)
-        if entry and entry.get("cache_read_input_token_cost") is not None:
-            return True
+    escaped_target = re.escape(target_model)
+    segment_pattern = re.compile(rf"(^|[/\-.:@]){escaped_target}([/\-:@]|$)")
 
     for db_key, entry in litellm.model_cost.items():
-        db_model_part = db_key.split("/", 1)[-1].lower() if "/" in db_key else db_key.lower()
-        
-        if "." in db_model_part and not db_model_part.startswith(target_model):
-            db_model_part = db_model_part.split(".", 1)[-1]
-
-        if db_model_part == target_model or db_model_part.startswith(f"{target_model}-"):
+        if segment_pattern.search(db_key.lower()):
             if entry.get("cache_read_input_token_cost") is not None:
                 return True
 
