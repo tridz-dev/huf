@@ -30,6 +30,8 @@ const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper')
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
+
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
 import {
@@ -161,6 +163,16 @@ function App() {
             element={
               <ProtectedRoute>
                 <DataTableViewWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/:tableId/:recordName"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <DataRecordViewWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
