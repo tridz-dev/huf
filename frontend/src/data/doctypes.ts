@@ -10,6 +10,7 @@ export const doctype = {
   "Agent Message": "Agent Message",
   "Agent Run": "Agent Run",
   "MCP Server": "MCP Server",
+  "Huf Data Table": "Huf Data Table",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];
