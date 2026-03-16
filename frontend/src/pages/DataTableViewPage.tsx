@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical } from 'lucide-react';
@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DataRecordList } from '@/components/data-table/DataRecordList';
-import { DataRecordForm } from '@/components/data-table/DataRecordForm';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
 import {
 	getTableSchema,
@@ -31,8 +30,6 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 	const [hasMore, setHasMore] = useState(false);
 	const [page, setPage] = useState(0);
 
-	const [formOpen, setFormOpen] = useState(false);
-	const [editRecord, setEditRecord] = useState<Record<string, unknown> | null>(null);
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [deleting, setDeleting] = useState(false);
 
@@ -90,19 +87,15 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [schema?.name]);
 
-	const handleRecordSaved = () => {
-		loadRecords(true);
-	};
-
 	const handleRowClick = (record: Record<string, unknown>) => {
-		setEditRecord(record);
-		setFormOpen(true);
+		if (!tableId || !record.name) return;
+		navigate(`/data/${tableId}/${record.name as string}`);
 	};
 
 	const handleAddRecord = useCallback(() => {
-		setEditRecord(null);
-		setFormOpen(true);
-	}, []);
+		if (!tableId) return;
+		navigate(`/data/${tableId}/new`);
+	}, [navigate, tableId]);
 
 	useEffect(() => {
 		if (!onHeaderActionsChange) return;
@@ -173,7 +166,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 	return (
 		<div className="h-full overflow-auto">
-			<div className="p-6 space-y-6">
+			<div className="p-6 space-y-6 max-w-5xl mx-auto">
 				{/* Header */}
 				<div className="flex items-start justify-between gap-4">
 					<div>
@@ -248,16 +241,6 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 					</div>
 				)}
 			</div>
-
-			{/* Record Form Sheet */}
-			<DataRecordForm
-				open={formOpen}
-				onOpenChange={setFormOpen}
-				doctypeName={schema.doctype_name}
-				fields={schema.fields}
-				record={editRecord}
-				onSaved={handleRecordSaved}
-			/>
 
 			{/* Delete Table Dialog */}
 			<DeleteTableDialog
