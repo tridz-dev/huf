@@ -75,6 +75,23 @@ frappe.ui.form.on("Agent", {
 			frm.set_query("model", () => ({}));
 		}
 	},
+	onload(frm) {
+		// Filter advanced model pickers by modality/task capability
+		frm.set_query("image_generation_model", () => ({
+			query: "huf.huf.doctype.ai_model.ai_model.get_models_by_modality",
+			filters: { modality: "Image" },
+		}));
+
+		frm.set_query("tts_model", () => ({
+			query: "huf.huf.doctype.ai_model.ai_model.get_models_by_modality",
+			filters: { modality: "Text-to-Speech" },
+		}));
+
+		frm.set_query("stt_model", () => ({
+			query: "huf.huf.doctype.ai_model.ai_model.get_models_by_modality",
+			filters: { modality: "Transcription" },
+		}));
+	},
 	enable_prompt_caching(frm) {
 		check_caching_support(frm);
 	},
