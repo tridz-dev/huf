@@ -5,12 +5,22 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { UseFormReturn } from 'react-hook-form';
 import type { AgentFormValues } from './types';
+import type { AIModel } from '@/types/agent.types';
 
 interface AdvancedTabProps {
   form: UseFormReturn<AgentFormValues>;
+  allModels: AIModel[];
 }
 
-export function AdvancedTab({ form }: AdvancedTabProps) {
+function modelSupports(model: AIModel, required: string): boolean {
+  return (model.modalities || '').trim() === required;
+}
+
+export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
+  const imageModels = allModels.filter((m) => modelSupports(m, 'Image'));
+  const ttsModels = allModels.filter((m) => modelSupports(m, 'Text-to-Speech'));
+  const sttModels = allModels.filter((m) => modelSupports(m, 'Transcription'));
+
   return (
     <div className="space-y-6">
       <Card>
@@ -215,6 +225,117 @@ export function AdvancedTab({ form }: AdvancedTabProps) {
                     onCheckedChange={field.onChange}
                   />
                 </FormControl>
+              </FormItem>
+            )}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Model Modality Settings</CardTitle>
+          <CardDescription>
+            Optional: select dedicated models for image generation, audio generation (TTS), and transcription (STT).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="image_generation_model"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Image Generation Model</FormLabel>
+                <Select
+                  onValueChange={(v) => field.onChange(v || undefined)}
+                  value={field.value || ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select image model (optional)" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {imageModels.map((m) => (
+                      <SelectItem key={m.name} value={m.name}>
+                        {m.model_name || m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>Only models tagged with modality “Image” are shown.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tts_model"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>TTS Model</FormLabel>
+                <Select
+                  onValueChange={(v) => field.onChange(v || undefined)}
+                  value={field.value || ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select TTS model (optional)" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {ttsModels.map((m) => (
+                      <SelectItem key={m.name} value={m.name}>
+                        {m.model_name || m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>Only models tagged with modality “Text-to-Speech” are shown.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tts_voice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>TTS Voice</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. alloy, nova, 21m00Tcm4TlvDq8ikWAM" {...field} value={field.value || ''} />
+                </FormControl>
+                <FormDescription>Optional voice identifier for the selected TTS provider.</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="stt_model"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>STT Model</FormLabel>
+                <Select
+                  onValueChange={(v) => field.onChange(v || undefined)}
+                  value={field.value || ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select transcription model (optional)" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {sttModels.map((m) => (
+                      <SelectItem key={m.name} value={m.name}>
+                        {m.model_name || m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>Only models tagged with modality “Transcription” are shown.</FormDescription>
+                <FormMessage />
               </FormItem>
             )}
           />
