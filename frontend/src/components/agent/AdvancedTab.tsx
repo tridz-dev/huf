@@ -6,6 +6,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { UseFormReturn } from 'react-hook-form';
 import type { AgentFormValues } from './types';
 import type { AIModel } from '@/types/agent.types';
+import {
+	MODEL_MODALITY_IMAGE,
+	MODEL_MODALITY_TTS,
+	MODEL_MODALITY_STT,
+	IMAGE_MODEL_LABEL,
+	IMAGE_MODEL_PLACEHOLDER,
+	IMAGE_MODEL_DESCRIPTION,
+	TTS_MODEL_LABEL,
+	TTS_MODEL_PLACEHOLDER,
+	TTS_MODEL_DESCRIPTION,
+	TTS_VOICE_LABEL,
+	TTS_VOICE_PLACEHOLDER,
+	TTS_VOICE_DESCRIPTION,
+	STT_MODEL_LABEL,
+	STT_MODEL_PLACEHOLDER,
+	STT_MODEL_DESCRIPTION,
+} from '@/data/ai';
 
 interface AdvancedTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -17,9 +34,9 @@ function modelSupports(model: AIModel, required: string): boolean {
 }
 
 export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
-  const imageModels = allModels.filter((m) => modelSupports(m, 'Image'));
-  const ttsModels = allModels.filter((m) => modelSupports(m, 'Text-to-Speech'));
-  const sttModels = allModels.filter((m) => modelSupports(m, 'Transcription'));
+	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
+	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
+	const sttModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_STT));
 
   return (
     <div className="space-y-6">
@@ -243,14 +260,14 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
             name="image_generation_model"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Image Generation Model</FormLabel>
+								<FormLabel>{IMAGE_MODEL_LABEL}</FormLabel>
                 <Select
                   onValueChange={(v) => field.onChange(v || undefined)}
                   value={field.value || ''}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select image model (optional)" />
+											<SelectValue placeholder={IMAGE_MODEL_PLACEHOLDER} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -261,7 +278,7 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <FormDescription>Only models tagged with modality “Image” are shown.</FormDescription>
+								<FormDescription>{IMAGE_MODEL_DESCRIPTION}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -272,14 +289,14 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
             name="tts_model"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>TTS Model</FormLabel>
+								<FormLabel>{TTS_MODEL_LABEL}</FormLabel>
                 <Select
                   onValueChange={(v) => field.onChange(v || undefined)}
                   value={field.value || ''}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select TTS model (optional)" />
+											<SelectValue placeholder={TTS_MODEL_PLACEHOLDER} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -290,7 +307,7 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <FormDescription>Only models tagged with modality “Text-to-Speech” are shown.</FormDescription>
+								<FormDescription>{TTS_MODEL_DESCRIPTION}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -301,11 +318,11 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
             name="tts_voice"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>TTS Voice</FormLabel>
+								<FormLabel>{TTS_VOICE_LABEL}</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. alloy, nova, 21m00Tcm4TlvDq8ikWAM" {...field} value={field.value || ''} />
+									<Input placeholder={TTS_VOICE_PLACEHOLDER} {...field} value={field.value || ''} />
                 </FormControl>
-                <FormDescription>Optional voice identifier for the selected TTS provider.</FormDescription>
+								<FormDescription>{TTS_VOICE_DESCRIPTION}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -316,14 +333,14 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
             name="stt_model"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>STT Model</FormLabel>
+								<FormLabel>{STT_MODEL_LABEL}</FormLabel>
                 <Select
                   onValueChange={(v) => field.onChange(v || undefined)}
                   value={field.value || ''}
                 >
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select transcription model (optional)" />
+											<SelectValue placeholder={STT_MODEL_PLACEHOLDER} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -334,7 +351,7 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <FormDescription>Only models tagged with modality “Transcription” are shown.</FormDescription>
+								<FormDescription>{STT_MODEL_DESCRIPTION}</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
