@@ -40,6 +40,12 @@ export const agentFormSchema = z.object({
   max_turns: z.number().optional(),
   enable_conversation_data: z.boolean().optional(),
   autonaming_of_conversation_title: z.boolean().optional(),
+
+  // Advanced model overrides
+  image_generation_model: z.string().optional(),
+  tts_model: z.string().optional(),
+  tts_voice: z.string().optional(),
+  stt_model: z.string().optional(),
 });
 
 export type AgentFormValues = z.infer<typeof agentFormSchema>;
