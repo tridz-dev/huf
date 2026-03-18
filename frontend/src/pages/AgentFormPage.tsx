@@ -60,7 +60,19 @@ export function AgentFormPage() {
     },
     advanced: {
       label: 'Advanced Settings',
-      fields: ['context_strategy', 'summary_ratio', 'history_limit', 'max_knowledge_tokens', 'max_turns', 'enable_conversation_data', 'autonaming_of_conversation_title'],
+      fields: [
+       'context_strategy',
+        'summary_ratio',
+        'history_limit',
+        'max_knowledge_tokens',
+        'max_turns',
+        'enable_conversation_data',
+        'autonaming_of_conversation_title',
+        'image_generation_model',
+        'tts_model',
+        'tts_voice',
+        'stt_model',
+      ],
       default: false,
       disabled: false,
     },
@@ -120,6 +132,7 @@ export function AgentFormPage() {
   const [deletingTrigger, setDeletingTrigger] = useState(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
+  const [allModels, setAllModels] = useState<AIModel[]>([]);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
@@ -173,6 +186,10 @@ export function AgentFormPage() {
         max_turns: undefined,
         enable_conversation_data: false,
         autonaming_of_conversation_title: false,
+        image_generation_model: undefined,
+        tts_model: undefined,
+        tts_voice: '',
+        stt_model: undefined,
       },
   });
 
@@ -279,7 +296,7 @@ export function AgentFormPage() {
       getToolTypes(),
     ]).then(([providersData, modelsData, toolTypesData]) => {
       setProviders(providersData as AIProvider[]);
-      setModels(modelsData);
+      setAllModels(modelsData);
       setToolTypes(toolTypesData);
     }).catch((error) => {
       console.error('Error loading providers/models/types:', error);
@@ -338,6 +355,11 @@ export function AgentFormPage() {
           max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
           enable_conversation_data: data.enable_conversation_data === 1,
           autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
+
+          image_generation_model: data.image_generation_model || undefined,
+          tts_model: data.tts_model || undefined,
+          tts_voice: data.tts_voice || '',
+          stt_model: data.stt_model || undefined,
         });
         // Track initial disabled state and persisted allow_chat
         setInitialDisabled(data.disabled === 1);
@@ -467,6 +489,11 @@ export function AgentFormPage() {
         max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
         enable_conversation_data: values.enable_conversation_data ? 1 : 0,
         autonaming_of_conversation_title: values.autonaming_of_conversation_title ? 1 : 0,
+
+        image_generation_model: values.image_generation_model || undefined,
+        tts_model: values.tts_model || undefined,
+        tts_voice: values.tts_voice || undefined,
+        stt_model: values.stt_model || undefined,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -512,6 +539,11 @@ export function AgentFormPage() {
           max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
           enable_conversation_data: newAgent.enable_conversation_data === 1,
           autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
+
+          image_generation_model: newAgent.image_generation_model || undefined,
+          tts_model: newAgent.tts_model || undefined,
+          tts_voice: newAgent.tts_voice || '',
+          stt_model: newAgent.stt_model || undefined,
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
@@ -551,6 +583,11 @@ export function AgentFormPage() {
           max_turns: values.max_turns,
           enable_conversation_data: values.enable_conversation_data,
           autonaming_of_conversation_title: values.autonaming_of_conversation_title,
+
+          image_generation_model: values.image_generation_model,
+          tts_model: values.tts_model,
+          tts_voice: values.tts_voice,
+          stt_model: values.stt_model,
         });
         // Reset tools, disabled state, and persisted allow_chat after successful update
         setInitialTools([...selectedTools]);
@@ -973,9 +1010,14 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid grid-cols-5 overflow-x-auto gap-2 md:gap-0">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
-                  <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
+                  <TabsTrigger
+                    key={tabKey}
+                    value={tabKey}
+                    disabled={config.disabled}
+                    className="shrink-0 min-w-fit"
+                  >
                     {config.label}
                   </TabsTrigger>
                 ))}
@@ -1028,7 +1070,7 @@ export function AgentFormPage() {
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-4">
-                <AdvancedTab form={form} />
+                <AdvancedTab form={form} allModels={allModels} />
               </TabsContent>
             </Tabs>
           </form>

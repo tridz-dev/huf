@@ -7,6 +7,7 @@ export type AIModel = {
   name: string;
   model_name: string;
   provider: string;
+  modalities?: string;
 };
 
 export type ToolType =
@@ -227,4 +228,10 @@ export interface AgentDoc {
   max_turns?: number | null; // Maximum consecutive turns/steps
   enable_conversation_data?: number; // 0 or 1
   autonaming_of_conversation_title?: number; // 0 or 1
+
+  // Advanced model overrides
+  image_generation_model?: string | null;
+  tts_model?: string | null;
+  tts_voice?: string | null;
+  stt_model?: string | null;
 }
