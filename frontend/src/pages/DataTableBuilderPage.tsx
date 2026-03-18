@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TableBuilderCanvas } from '@/components/data-table/TableBuilderCanvas';
 import { FieldConfigPanel } from '@/components/data-table/FieldConfigPanel';
 import { TableSettingsPanel } from '@/components/data-table/TableSettingsPanel';
 import { createDataTable, updateDataTable, getTableSchema } from '@/services/dataTableApi';
 import type { DataTableFieldDef, DataTableFieldType, DataTableSchema } from '@/types/dataTable.types';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 interface BuilderState {
 	tableName: string;
@@ -130,6 +132,8 @@ export function DataTableBuilderPage() {
 	const [state, dispatch] = useReducer(builderReducer, initialState);
 	const [saving, setSaving] = useState(false);
 	const [loading, setLoading] = useState(isEdit);
+	const isMobile = useIsMobile();
+	const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
 	useEffect(() => {
 		if (isEdit) {
@@ -245,18 +249,72 @@ export function DataTableBuilderPage() {
 	const selectedField =
 		state.selectedFieldIndex !== null ? state.fields[state.selectedFieldIndex] : null;
 
+	const sidebarContent = (
+		selectedField ? (
+			<FieldConfigPanel
+				field={selectedField}
+				onUpdate={(updates) =>
+					dispatch({
+						type: 'UPDATE_FIELD',
+						payload: {
+							index: state.selectedFieldIndex!,
+							updates,
+						},
+					})
+				}
+				onDelete={() =>
+					dispatch({
+						type: 'REMOVE_FIELD',
+						payload: state.selectedFieldIndex!,
+					})
+				}
+				onOpenTableSettings={() =>
+					dispatch({ type: 'SELECT_FIELD', payload: null })
+				}
+			/>
+		) : (
+			<TableSettingsPanel
+				tableName={state.tableName}
+				description={state.description}
+				icon={state.icon}
+				autonameMethod={state.autonameMethod}
+				titleField={state.titleField}
+				fields={state.fields}
+				isEdit={isEdit}
+				onTableNameChange={(v) =>
+					dispatch({ type: 'SET_TABLE_NAME', payload: v })
+				}
+				onDescriptionChange={(v) =>
+					dispatch({ type: 'SET_DESCRIPTION', payload: v })
+				}
+				onIconChange={(v) =>
+					dispatch({ type: 'SET_ICON', payload: v })
+				}
+				onAutonameMethodChange={(v) =>
+					dispatch({ type: 'SET_AUTONAME_METHOD', payload: v })
+				}
+				onTitleFieldChange={(v) =>
+					dispatch({ type: 'SET_TITLE_FIELD', payload: v })
+				}
+			/>
+		)
+	);
+
 	return (
 		<div className="h-full flex flex-col">
-			<div className="flex-1 flex overflow-hidden">
+			<div className="flex-1 flex overflow-hidden relative">
 				{/* Left: Builder Canvas */}
 				<div className="flex-1 overflow-y-auto p-6">
 					<div className="max-w-2xl mx-auto">
 						<TableBuilderCanvas
 							fields={state.fields}
 							selectedFieldIndex={state.selectedFieldIndex}
-							onSelectField={(index) =>
-								dispatch({ type: 'SELECT_FIELD', payload: index })
-							}
+							onSelectField={(index) => {
+								dispatch({ type: 'SELECT_FIELD', payload: index });
+								if (isMobile) {
+									setIsSidebarOpen(true);
+								}
+							}}
 							onAddField={handleAddField}
 							onRemoveField={(index) =>
 								dispatch({ type: 'REMOVE_FIELD', payload: index })
@@ -272,56 +330,35 @@ export function DataTableBuilderPage() {
 				</div>
 
 				{/* Right: Config Panel */}
-				<div className="w-80 border-l bg-muted/30 overflow-y-auto p-4">
-					{selectedField ? (
-						<FieldConfigPanel
-							field={selectedField}
-							onUpdate={(updates) =>
-								dispatch({
-									type: 'UPDATE_FIELD',
-									payload: {
-										index: state.selectedFieldIndex!,
-										updates,
-									},
-								})
-							}
-							onDelete={() =>
-								dispatch({
-									type: 'REMOVE_FIELD',
-									payload: state.selectedFieldIndex!,
-								})
-							}
-							onOpenTableSettings={() =>
-								dispatch({ type: 'SELECT_FIELD', payload: null })
-							}
-						/>
-					) : (
-						<TableSettingsPanel
-							tableName={state.tableName}
-							description={state.description}
-							icon={state.icon}
-							autonameMethod={state.autonameMethod}
-							titleField={state.titleField}
-							fields={state.fields}
-							isEdit={isEdit}
-							onTableNameChange={(v) =>
-								dispatch({ type: 'SET_TABLE_NAME', payload: v })
-							}
-							onDescriptionChange={(v) =>
-								dispatch({ type: 'SET_DESCRIPTION', payload: v })
-							}
-							onIconChange={(v) =>
-								dispatch({ type: 'SET_ICON', payload: v })
-							}
-							onAutonameMethodChange={(v) =>
-								dispatch({ type: 'SET_AUTONAME_METHOD', payload: v })
-							}
-							onTitleFieldChange={(v) =>
-								dispatch({ type: 'SET_TITLE_FIELD', payload: v })
-							}
-						/>
-					)}
-				</div>
+				{isMobile ? (
+					<>
+						<Button
+							type="button"
+							size="icon"
+							variant="outline"
+							className="fixed bottom-20 right-4 z-20 rounded-full shadow-md bg-background"
+							onClick={() => setIsSidebarOpen(true)}
+						>
+							<Settings2 className="w-4 h-4" />
+						</Button>
+						<Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+							<SheetContent side="right" className="w-full sm:max-w-sm p-4 overflow-y-auto">
+								<SheetHeader>
+									<SheetTitle>
+										{selectedField ? 'Field Settings' : 'Table Settings'}
+									</SheetTitle>
+								</SheetHeader>
+								<div className="mt-4">
+									{sidebarContent}
+								</div>
+							</SheetContent>
+						</Sheet>
+					</>
+				) : (
+					<div className="w-80 border-l bg-muted/30 overflow-y-auto p-4">
+						{sidebarContent}
+					</div>
+				)}
 			</div>
 
 			{/* Bottom action bar */}
