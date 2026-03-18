@@ -116,7 +116,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 					onClick={() => navigate(tableId ? `/data/${tableId}` : '/data')}
 				>
 					<ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
-					Back to records
+					Back
 				</Button>
 				{!isNew && (
 					<Button
