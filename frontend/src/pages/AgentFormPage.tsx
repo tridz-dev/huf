@@ -1010,13 +1010,13 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="flex justify-between w-full overflow-x-auto">
+              <TabsList className="grid grid-cols-5 overflow-x-auto gap-2 md:gap-0">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
                     value={tabKey}
                     disabled={config.disabled}
-                    className="shrink-0"
+                    className="shrink-0 min-w-fit"
                   >
                     {config.label}
                   </TabsTrigger>
