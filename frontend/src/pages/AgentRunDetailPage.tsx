@@ -224,7 +224,7 @@ function AgentRunDetailPage() {
             onClick={() => navigate('/executions')}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Executions
+            Back
           </Button>
           <Card>
             <CardHeader>
@@ -251,7 +251,7 @@ function AgentRunDetailPage() {
               onClick={() => navigate('/executions')}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Executions
+              Back
             </Button>
           </div>
         </div>
