@@ -159,7 +159,7 @@ function InviteDialog({ open, roles, onClose, onInvited }: InviteDialogProps) {
 // Main page
 // ---------------------------------------------------------------------------
 
-export function UsersPage() {
+export default function UsersPage() {
   const [users, setUsers] = useState<HufUser[]>([]);
   const [roles, setRoles] = useState<HufRole[]>([]);
   const [loading, setLoading] = useState(true);

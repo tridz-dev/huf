@@ -79,7 +79,7 @@ function RoleCard({ role }: { role: HufRole }) {
 // Page
 // ---------------------------------------------------------------------------
 
-export function RolesPage() {
+export default function RolesPage() {
   const [roles, setRoles] = useState<HufRole[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -90,26 +90,28 @@ export function RolesPage() {
   }, []);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <ShieldCheck className="h-6 w-6" />
-          Roles
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          View capability sets granted to each Huf role. System roles cannot be deleted.
-        </p>
-      </div>
-
-      {loading ? (
-        <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {roles.map((role) => (
-            <RoleCard key={role.role_name} role={role} />
-          ))}
+    <div className="h-full overflow-auto">
+      <div className="p-6 max-w-5xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6" />
+            Roles
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            View capability sets granted to each Huf role. System roles cannot be deleted.
+          </p>
         </div>
-      )}
+
+        {loading ? (
+          <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {roles.map((role) => (
+              <RoleCard key={role.role_name} role={role} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

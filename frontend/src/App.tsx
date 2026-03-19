@@ -10,6 +10,7 @@ import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
+import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
@@ -39,11 +40,8 @@ import {
   checkStreamingAvailable,
   setStreamingAvailable,
 } from './services/streamChatApi';
-import { McpDetailsPageWrapper } from './pages/McpDetailsPageWrapper';
-import McpListingPage from './pages/McpListingPage';
-import { PreviewViewPage } from './pages/PreviewViewPage';
-import { UsersPage } from './pages/UsersPage';
-import { RolesPage } from './pages/RolesPage';
+const UsersPage = lazy(() => import('./pages/UsersPage'));
+const RolesPage = lazy(() => import('./pages/RolesPage'));
 
 function App() {
   useEffect(() => {
@@ -337,7 +335,7 @@ function App() {
             path="/users"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout headerActions={<UsersHeaderActions />}>
                   <UsersPage />
                 </UnifiedLayout>
               </ProtectedRoute>
