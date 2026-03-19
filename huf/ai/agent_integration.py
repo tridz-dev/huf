@@ -50,6 +50,19 @@ class AgentManager:
                 "Agent Tool Function Error",
             )
         
+        # Add load_skill tool if agent has optional skills
+        try:
+            from huf.ai.skill_loader import create_load_skill_tool
+
+            load_skill_tool = create_load_skill_tool(self.agent_doc)
+            if load_skill_tool:
+                self.tools.append(load_skill_tool)
+        except Exception as e:
+            frappe.log_error(
+                f"Error loading skill tool: {str(e)}",
+                "Skill Loader Error",
+            )
+
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
         try:
             from huf.ai.knowledge.tool import (
@@ -237,6 +250,19 @@ class AgentManager:
     IMPORTANT: When calling tools, the SDK will handle execution automatically.
     """
             instructions += tools_instruction
+
+        # Append skill instructions (mandatory content + optional catalog)
+        try:
+            from huf.ai.skill_loader import build_skill_instructions
+
+            skill_block = build_skill_instructions(self.agent_doc)
+            if skill_block:
+                instructions += skill_block
+        except Exception as e:
+            frappe.log_error(
+                f"Error building skill instructions: {str(e)}",
+                "Skill Loader Error",
+            )
 
         if self.agent_doc.enable_conversation_data:
              instructions += """

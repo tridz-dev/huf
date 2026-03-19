@@ -1,0 +1,149 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:skill_name",
+ "creation": "2026-03-19 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "skill_name",
+  "display_name",
+  "is_active",
+  "column_break_top",
+  "scope",
+  "version",
+  "description_section",
+  "description",
+  "content_section",
+  "content",
+  "metadata_section",
+  "source_url",
+  "author",
+  "column_break_meta",
+  "author_url"
+ ],
+ "fields": [
+  {
+   "description": "Unique identifier for this skill. Use lowercase letters, numbers, and hyphens only (e.g. frappe-reporting, customer-onboarding).",
+   "fieldname": "skill_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Skill Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "Human-readable name shown in the UI.",
+   "fieldname": "display_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Display Name",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "description": "Inactive skills are not loaded by agents.",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Active"
+  },
+  {
+   "fieldname": "column_break_top",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Global",
+   "description": "Global skills are available to all agents. Project scope is for future use.",
+   "fieldname": "scope",
+   "fieldtype": "Select",
+   "label": "Scope",
+   "options": "Global\nProject"
+  },
+  {
+   "description": "Version of this skill (e.g. 1.0.0).",
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "label": "Version"
+  },
+  {
+   "fieldname": "description_section",
+   "fieldtype": "Section Break",
+   "label": "Description"
+  },
+  {
+   "description": "Concise description of what this skill does and WHEN the agent should use it. This is always injected into the agent context as discovery metadata. Write it so the agent can decide whether to load this skill.",
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "in_list_view": 1,
+   "label": "Description",
+   "reqd": 1
+  },
+  {
+   "fieldname": "content_section",
+   "fieldtype": "Section Break",
+   "label": "Skill Instructions"
+  },
+  {
+   "description": "Full markdown instructions for this skill. Written like an onboarding guide — describe the workflow, reasoning patterns, best practices, and any examples. For Mandatory mode, this is injected into the agent's system prompt. For Optional mode, the agent loads it on demand.",
+   "fieldname": "content",
+   "fieldtype": "Code",
+   "label": "Content",
+   "options": "Markdown"
+  },
+  {
+   "fieldname": "metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Metadata"
+  },
+  {
+   "description": "GitHub or other URL this skill was imported from.",
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL"
+  },
+  {
+   "description": "Name of the skill author.",
+   "fieldname": "author",
+   "fieldtype": "Data",
+   "label": "Author"
+  },
+  {
+   "fieldname": "column_break_meta",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "URL to the author's profile or website.",
+   "fieldname": "author_url",
+   "fieldtype": "Data",
+   "label": "Author URL"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-03-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Skill",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

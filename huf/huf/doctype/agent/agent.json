@@ -50,6 +50,9 @@
   "knowledge_tab",
   "knowledge_section",
   "agent_knowledge",
+  "skills_tab",
+  "skills_section",
+  "agent_skill",
   "advance_settings_tab",
   "context_settings_section",
   "context_strategy",
@@ -284,6 +287,23 @@
    "fieldtype": "Table",
    "label": "Knowledge Sources",
    "options": "Agent Knowledge"
+  },
+  {
+   "fieldname": "skills_tab",
+   "fieldtype": "Tab Break",
+   "label": "Skills"
+  },
+  {
+   "description": "Skills are reusable workflow instructions the agent can load on demand. Mandatory skills are always injected; Optional skills are listed for the agent to load when needed.",
+   "fieldname": "skills_section",
+   "fieldtype": "Section Break",
+   "label": "Agent Skills"
+  },
+  {
+   "fieldname": "agent_skill",
+   "fieldtype": "Table",
+   "label": "Skills",
+   "options": "Agent Skill"
   },
   {
    "fieldname": "advance_settings_tab",
