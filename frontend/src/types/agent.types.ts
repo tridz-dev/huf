@@ -156,6 +156,14 @@ export type AgentRun = {
   created_at: string;
 };
 
+export interface AgentPermissionUserRow {
+  user: string;
+}
+
+export interface AgentPermissionRoleRow {
+  role: string;
+}
+
 export interface AgentOrchestrationPlanRow {
   name?: string;
   step_index: number;
@@ -211,11 +219,14 @@ export interface AgentDoc {
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
+  allow_guest?: number; // 0 or 1
+  allowed_users?: AgentPermissionUserRow[];
+  allowed_roles?: AgentPermissionRoleRow[];
   default_plan: AgentOrchestrationPlanRow[];
   prompt_mode: string; // 'local' or 'template'
   agent_prompt?: string;
   prompt_version_locked?: number; // 0 or 1
-  attached_at_version?: number; // Version number when prompt was attached
+  template_version_at_attach?: number; // Version number when prompt was attached
   copied_from_prompt?: string | null; // Name of the prompt this agent was copied from, if any
   enable_prompt_caching?: number; // 0 or 1
   cache_control_type?: string | null; // ephemeral or persistent
