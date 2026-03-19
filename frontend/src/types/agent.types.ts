@@ -168,6 +168,33 @@ export interface AgentOrchestrationPlanRow {
  * Represents the raw Agent document structure from Frappe database
  * Based on the Agent doctype schema
  */
+export type KnowledgeSourceStatus = "Pending" | "Indexing" | "Ready" | "Error" | "Rebuilding";
+export type KnowledgeMode = "Mandatory" | "Optional";
+
+export interface AgentKnowledgeRow {
+  name?: string; // Frappe child table row name
+  knowledge_source: string;
+  mode: KnowledgeMode;
+  priority: number;
+  max_chunks: number;
+  token_budget: number;
+  description?: string;
+  // Display-only fields (not stored in child table):
+  source_name?: string;
+  status?: KnowledgeSourceStatus;
+}
+
+export interface KnowledgeSourceDoc {
+  name: string;
+  source_name: string;
+  status: KnowledgeSourceStatus;
+  description?: string;
+  knowledge_type?: string;
+  total_chunks?: number;
+  last_indexed_at?: string;
+  disabled?: number;
+}
+
 export interface AgentDoc {
   // Standard Frappe fields
   name: string;
@@ -234,4 +261,7 @@ export interface AgentDoc {
   tts_model?: string | null;
   tts_voice?: string | null;
   stt_model?: string | null;
+
+  // Knowledge sources (child table)
+  agent_knowledge?: AgentKnowledgeRow[];
 }

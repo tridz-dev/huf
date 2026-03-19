@@ -5,8 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
+import { AIProvider, AIModel, AgentToolFunctionRef, type AgentKnowledgeRow } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
+import { getKnowledgeSourcesByNames } from '../services/knowledgeApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolTypes, getToolFunction, updateToolFunction, getToolFunctionsByName } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -22,6 +23,7 @@ import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
 import { AdvancedTab } from '../components/agent/AdvancedTab';
+import { KnowledgeTab } from '../components/agent/KnowledgeTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
@@ -55,6 +57,12 @@ export function AgentFormPage() {
     tools: {
       label: 'Tools & MCP',
       fields: [], // Tools tab doesn't have form fields
+      default: false,
+      disabled: false,
+    },
+    knowledge: {
+      label: 'Knowledge',
+      fields: [], // Knowledge tab doesn't have form fields (managed via state)
       default: false,
       disabled: false,
     },
@@ -154,6 +162,8 @@ export function AgentFormPage() {
   const [mcpServers, setMcpServers] = useState<MCPServerRef[]>([]);
   const [initialMcpServers, setInitialMcpServers] = useState<MCPServerRef[]>([]); // Track initial MCP servers state
   const [mcpLoading, setMcpLoading] = useState(false);
+  const [knowledgeSources, setKnowledgeSources] = useState<AgentKnowledgeRow[]>([]);
+  const [initialKnowledgeSources, setInitialKnowledgeSources] = useState<AgentKnowledgeRow[]>([]);
   const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
@@ -244,8 +254,26 @@ export function AgentFormPage() {
     return false;
   }, [mcpServers, initialMcpServers, isNew]);
 
-  // Show save button for new agents, when form is dirty, when tools have changed, when disabled changed, or when MCP servers changed
-  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged;
+  // Check if knowledge sources have changed
+  const knowledgeChanged = useMemo(() => {
+    if (isNew) return knowledgeSources.length > 0;
+    if (knowledgeSources.length !== initialKnowledgeSources.length) return true;
+    return knowledgeSources.some((row, i) => {
+      const initial = initialKnowledgeSources[i];
+      return (
+        !initial ||
+        row.knowledge_source !== initial.knowledge_source ||
+        row.mode !== initial.mode ||
+        row.priority !== initial.priority ||
+        row.max_chunks !== initial.max_chunks ||
+        row.token_budget !== initial.token_budget ||
+        (row.description ?? '') !== (initial.description ?? '')
+      );
+    });
+  }, [knowledgeSources, initialKnowledgeSources, isNew]);
+
+  // Show save button for new agents, when form is dirty, when tools have changed, when disabled changed, MCP servers changed, or knowledge changed
+  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
 
   // Load trigger types on mount
   useEffect(() => {
@@ -438,6 +466,36 @@ export function AgentFormPage() {
           setMcpServers([]);
           setInitialMcpServers([]);
         }
+        // Load knowledge sources from agent_knowledge child table
+        if (data.agent_knowledge && Array.isArray(data.agent_knowledge) && data.agent_knowledge.length > 0) {
+          const sourceNames = data.agent_knowledge.map((k: any) => k.knowledge_source).filter(Boolean);
+          getKnowledgeSourcesByNames(sourceNames)
+            .then((sourceDetails) => {
+              const sourceMap = new Map(sourceDetails.map((s) => [s.name, s]));
+              const enriched: AgentKnowledgeRow[] = data.agent_knowledge!.map((row: any) => ({
+                name: row.name,
+                knowledge_source: row.knowledge_source,
+                mode: row.mode || 'Optional',
+                priority: row.priority ?? 0,
+                max_chunks: row.max_chunks ?? 5,
+                token_budget: row.token_budget ?? 2000,
+                description: row.description || '',
+                source_name: sourceMap.get(row.knowledge_source)?.source_name || row.knowledge_source,
+                status: sourceMap.get(row.knowledge_source)?.status,
+              }));
+              setKnowledgeSources(enriched);
+              setInitialKnowledgeSources(enriched);
+            })
+            .catch((error) => {
+              console.error('Error loading knowledge source details:', error);
+              setKnowledgeSources([]);
+              setInitialKnowledgeSources([]);
+            });
+        } else {
+          setKnowledgeSources([]);
+          setInitialKnowledgeSources([]);
+        }
+
         setLoading(false);
       }).catch((error) => {
         console.error('Error loading agent:', error);
@@ -452,6 +510,8 @@ export function AgentFormPage() {
       setInitialDisabled(false);
       setMcpServers([]);
       setInitialMcpServers([]);
+      setKnowledgeSources([]);
+      setInitialKnowledgeSources([]);
       setLoading(false);
     }
   }, [id, isNew, form]);
@@ -503,6 +563,15 @@ export function AgentFormPage() {
           mcp_server: server.mcp_server, // This is the link field to MCP Server DocType
           enabled: (server.enabled === true || server.enabled === 1) ? 1 : (0 as 0 | 1),
         })),
+        // Include knowledge sources - Frappe child table format
+        agent_knowledge: knowledgeSources.map((row) => ({
+          knowledge_source: row.knowledge_source,
+          mode: row.mode,
+          priority: row.priority,
+          max_chunks: row.max_chunks,
+          token_budget: row.token_budget,
+          description: row.description || '',
+        })) as any,
       };
 
       if (isNew) {
@@ -589,8 +658,9 @@ export function AgentFormPage() {
           tts_voice: values.tts_voice,
           stt_model: values.stt_model,
         });
-        // Reset tools, disabled state, and persisted allow_chat after successful update
+        // Reset tools, disabled state, knowledge, and persisted allow_chat after successful update
         setInitialTools([...selectedTools]);
+        setInitialKnowledgeSources([...knowledgeSources]);
         setInitialDisabled(values.disabled);
         setAllowChat(values.allow_chat);
         // Reload agent to get updated MCP servers from the agent document
@@ -883,6 +953,10 @@ export function AgentFormPage() {
     }
   };
 
+  const handleKnowledgeChange = (sources: AgentKnowledgeRow[]) => {
+    setKnowledgeSources(sources);
+  };
+
   const handleAddTrigger = () => {
     setEditingTrigger(null);
     setShowTriggerModal(true);
@@ -1010,7 +1084,7 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid grid-cols-5 overflow-x-auto gap-2 md:gap-0">
+              <TabsList className="flex flex-wrap h-auto gap-1 p-1 w-full justify-start">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
@@ -1066,6 +1140,13 @@ export function AgentFormPage() {
                   onToggleMCP={handleToggleMCPServer}
                   onSyncMCP={handleSyncMCPServer}
                   mcpLoading={mcpLoading}
+                />
+              </TabsContent>
+
+              <TabsContent value="knowledge" className="space-y-4">
+                <KnowledgeTab
+                  knowledgeSources={knowledgeSources}
+                  onChange={handleKnowledgeChange}
                 />
               </TabsContent>
 
