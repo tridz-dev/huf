@@ -16,12 +16,14 @@ import { ToolFormModal } from '../components/tools/ToolFormModal';
 import type { ToolFormData } from '../types/toolTemplate.types';
 import { TriggerModal } from '../components/agent/TriggerModal';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
+import { db } from '../lib/frappe-sdk';
 import { AgentHeader } from '../components/agent/AgentHeader';
 import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
 import { AdvancedTab } from '../components/agent/AdvancedTab';
+import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
@@ -36,7 +38,7 @@ export function AgentFormPage() {
   const tabConfig = {
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'attached_at_version'],
+      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
       default: true,
       disabled: false,
     },
@@ -55,6 +57,12 @@ export function AgentFormPage() {
     tools: {
       label: 'Tools & MCP',
       fields: [], // Tools tab doesn't have form fields
+      default: false,
+      disabled: false,
+    },
+    permissions: {
+      label: 'Permissions',
+      fields: ['allow_guest', 'allowed_users', 'allowed_roles'],
       default: false,
       disabled: false,
     },
@@ -155,6 +163,8 @@ export function AgentFormPage() {
   const [initialMcpServers, setInitialMcpServers] = useState<MCPServerRef[]>([]); // Track initial MCP servers state
   const [mcpLoading, setMcpLoading] = useState(false);
   const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
+  const [users, setUsers] = useState<Array<{ name: string }>>([]);
+  const [roles, setRoles] = useState<Array<{ name: string }>>([]);
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
       defaultValues: {
@@ -174,7 +184,10 @@ export function AgentFormPage() {
         prompt_mode: "Local",
         agent_prompt: '',
         prompt_version_locked: false,
-        attached_at_version: undefined,
+        template_version_at_attach: undefined,
+        allow_guest: false,
+        allowed_users: [],
+        allowed_roles: [],
         enable_prompt_caching: false,
         cache_control_type: "",
         cache_system_message: false,
@@ -294,10 +307,14 @@ export function AgentFormPage() {
       getProviders(),
       getModels(),
       getToolTypes(),
-    ]).then(([providersData, modelsData, toolTypesData]) => {
+      db.getDocList('User', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
+      db.getDocList('Role', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
+    ]).then(([providersData, modelsData, toolTypesData, usersData, rolesData]) => {
       setProviders(providersData as AIProvider[]);
       setAllModels(modelsData);
       setToolTypes(toolTypesData);
+      setUsers(usersData as Array<{ name: string }>);
+      setRoles((rolesData as Array<{ name: string }>).filter((role) => role.name !== 'Guest'));
     }).catch((error) => {
       console.error('Error loading providers/models/types:', error);
       toast.error('Failed to load providers and models');
@@ -343,7 +360,10 @@ export function AgentFormPage() {
           prompt_mode: data.prompt_mode || 'Local',
           agent_prompt: data.agent_prompt || '',
           prompt_version_locked: data.prompt_version_locked === 1,
-          attached_at_version: data.attached_at_version !== undefined ? data.attached_at_version : undefined,
+          template_version_at_attach: data.template_version_at_attach !== undefined ? data.template_version_at_attach : undefined,
+          allow_guest: data.allow_guest === 1,
+          allowed_users: (data.allowed_users || []).map((row) => row.user).filter(Boolean),
+          allowed_roles: (data.allowed_roles || []).map((row) => row.role).filter(Boolean),
           enable_prompt_caching: data.enable_prompt_caching === 1,
           cache_control_type: data.cache_control_type || '',
           cache_system_message: data.cache_system_message === 1,
@@ -477,7 +497,10 @@ export function AgentFormPage() {
         prompt_mode: values.prompt_mode || 'Local',
         agent_prompt: values.agent_prompt || '',
         prompt_version_locked: values.prompt_version_locked ? 1 : 0,
-        attached_at_version: values.attached_at_version !== undefined ? values.attached_at_version : undefined,
+        template_version_at_attach: values.template_version_at_attach !== undefined ? values.template_version_at_attach : undefined,
+        allow_guest: values.allow_guest ? 1 : 0,
+        allowed_users: (values.allowed_users || []).map((user) => ({ user })) as any,
+        allowed_roles: (values.allowed_roles || []).map((role) => ({ role })) as any,
         enable_prompt_caching: values.enable_prompt_caching ? 1 : 0,
         cache_control_type: values.cache_control_type || '',
         cache_system_message: values.cache_system_message ? 1 : 0,
@@ -527,7 +550,10 @@ export function AgentFormPage() {
           prompt_mode: newAgent.prompt_mode || 'Local',
           agent_prompt: newAgent.agent_prompt || '',
           prompt_version_locked: newAgent.prompt_version_locked === 1,
-          attached_at_version: newAgent.attached_at_version !== undefined ? newAgent.attached_at_version : undefined,
+          template_version_at_attach: newAgent.template_version_at_attach !== undefined ? newAgent.template_version_at_attach : undefined,
+          allow_guest: newAgent.allow_guest === 1,
+          allowed_users: (newAgent.allowed_users || []).map((row) => row.user).filter(Boolean),
+          allowed_roles: (newAgent.allowed_roles || []).map((row) => row.role).filter(Boolean),
           enable_prompt_caching: newAgent.enable_prompt_caching === 1,
           cache_control_type: newAgent.cache_control_type || '',
           cache_system_message: newAgent.cache_system_message === 1,
@@ -571,7 +597,10 @@ export function AgentFormPage() {
           prompt_mode: values.prompt_mode,
           agent_prompt: values.agent_prompt,
           prompt_version_locked: values.prompt_version_locked,
-          attached_at_version: values.attached_at_version,
+          template_version_at_attach: values.template_version_at_attach,
+          allow_guest: values.allow_guest,
+          allowed_users: values.allowed_users || [],
+          allowed_roles: values.allowed_roles || [],
           enable_prompt_caching: values.enable_prompt_caching,
           cache_control_type: values.cache_control_type,
           cache_system_message: values.cache_system_message,
@@ -1010,7 +1039,7 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid grid-cols-5 overflow-x-auto gap-2 md:gap-0">
+              <TabsList className="grid grid-cols-6 overflow-x-auto gap-2 md:gap-0">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
@@ -1067,6 +1096,10 @@ export function AgentFormPage() {
                   onSyncMCP={handleSyncMCPServer}
                   mcpLoading={mcpLoading}
                 />
+              </TabsContent>
+
+              <TabsContent value="permissions" className="space-y-4">
+                <PermissionsTab form={form} users={users} roles={roles} />
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-4">
