@@ -24,10 +24,10 @@ export const agentFormSchema = z.object({
     })
   ).default([]),
 
-  prompt_mode: z.string().default("Local"),
+  prompt_mode: z.enum(["Local", "Template"]).default("Local"),
   agent_prompt: z.string().optional(),
   prompt_version_locked: z.boolean().optional(),
-  attached_at_version: z.number().optional(),
+  template_version_at_attach: z.number().optional(),
   copied_from_prompt: z.string().nullable().optional(),
   enable_prompt_caching: z.boolean().optional(),
   cache_control_type: z.string().optional(),
@@ -46,7 +46,14 @@ export const agentFormSchema = z.object({
   tts_model: z.string().optional(),
   tts_voice: z.string().optional(),
   stt_model: z.string().optional(),
+}).superRefine((values, ctx) => {
+  if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["agent_prompt"],
+      message: 'Select an Agent Prompt when using Template mode',
+    });
+  }
 });
 
 export type AgentFormValues = z.infer<typeof agentFormSchema>;
-

@@ -212,10 +212,10 @@ export interface AgentDoc {
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
   default_plan: AgentOrchestrationPlanRow[];
-  prompt_mode: string; // 'local' or 'template'
+  prompt_mode: 'Local' | 'Template';
   agent_prompt?: string;
   prompt_version_locked?: number; // 0 or 1
-  attached_at_version?: number; // Version number when prompt was attached
+  template_version_at_attach?: number; // Version number when prompt was attached
   copied_from_prompt?: string | null; // Name of the prompt this agent was copied from, if any
   enable_prompt_caching?: number; // 0 or 1
   cache_control_type?: string | null; // ephemeral or persistent
