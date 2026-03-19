@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
+import { AIProvider, AIModel, AgentToolFunctionRef, AgentSkillRef } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolTypes, getToolFunction, updateToolFunction, getToolFunctionsByName } from '../services/toolApi';
@@ -21,6 +21,8 @@ import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
+import { SkillsTab } from '../components/agent/SkillsTab';
+import { SkillImportModal } from '../components/agent/SkillImportModal';
 import { AdvancedTab } from '../components/agent/AdvancedTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
@@ -55,6 +57,12 @@ export function AgentFormPage() {
     tools: {
       label: 'Tools & MCP',
       fields: [], // Tools tab doesn't have form fields
+      default: false,
+      disabled: false,
+    },
+    skills: {
+      label: 'Skills',
+      fields: [], // Skills tab doesn't have form fields
       default: false,
       disabled: false,
     },
@@ -154,6 +162,8 @@ export function AgentFormPage() {
   const [mcpServers, setMcpServers] = useState<MCPServerRef[]>([]);
   const [initialMcpServers, setInitialMcpServers] = useState<MCPServerRef[]>([]); // Track initial MCP servers state
   const [mcpLoading, setMcpLoading] = useState(false);
+  const [showSkillsModal, setShowSkillsModal] = useState(false);
+  const [selectedSkills, setSelectedSkills] = useState<AgentSkillRef[]>([]);
   const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
@@ -388,6 +398,19 @@ export function AgentFormPage() {
           setSelectedTools([]);
           setInitialTools([]);
         }
+        // Load skills from agent_skill child table
+        if (data.agent_skill && Array.isArray(data.agent_skill) && data.agent_skill.length > 0) {
+          const skills: AgentSkillRef[] = data.agent_skill.map((item: any) => ({
+            name: item.name || '',
+            skill: item.skill,
+            mode: item.mode || 'Optional',
+            priority: item.priority ?? 0,
+            description: item.description || '',
+          }));
+          setSelectedSkills(skills);
+        } else {
+          setSelectedSkills([]);
+        }
         // Load triggers from Agent Trigger doctype
         getAgentTriggers(id).then((triggersData) => {
           setTriggers(triggersData);
@@ -502,6 +525,12 @@ export function AgentFormPage() {
         agent_mcp_server: mcpServers.map((server) => ({
           mcp_server: server.mcp_server, // This is the link field to MCP Server DocType
           enabled: (server.enabled === true || server.enabled === 1) ? 1 : (0 as 0 | 1),
+        })),
+        // Include skills - Frappe child table format
+        agent_skill: selectedSkills.map((s) => ({
+          skill: s.skill,
+          mode: s.mode,
+          priority: s.priority,
         })),
       };
 
@@ -735,6 +764,47 @@ export function AgentFormPage() {
     setSelectedTools(selectedTools.filter((t) => t.name !== toolId));
     toast.success('Tool removed');
   };
+
+  // ── Skills handlers ──────────────────────────────────────────────────────────
+
+  const handleAddSkills = (skills: AgentSkillRef[]) => {
+    setSelectedSkills((prev) => {
+      const existingNames = new Set(prev.map((s) => s.skill));
+      const newOnes = skills.filter((s) => !existingNames.has(s.skill));
+      return [...prev, ...newOnes];
+    });
+  };
+
+  const handleRemoveSkill = (skillName: string) => {
+    setSelectedSkills((prev) => prev.filter((s) => s.skill !== skillName));
+  };
+
+  const handleChangeSkillMode = (skillName: string, mode: 'Mandatory' | 'Optional') => {
+    setSelectedSkills((prev) =>
+      prev.map((s) => (s.skill === skillName ? { ...s, mode } : s))
+    );
+  };
+
+  const handleChangeSkillPriority = (skillName: string, direction: 'up' | 'down') => {
+    setSelectedSkills((prev) => {
+      const sorted = [...prev].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+      const idx = sorted.findIndex((s) => s.skill === skillName);
+      if (direction === 'up' && idx > 0) {
+        const swapWith = sorted[idx - 1];
+        const tmp = swapWith.priority;
+        swapWith.priority = sorted[idx].priority;
+        sorted[idx].priority = tmp ?? 0;
+      } else if (direction === 'down' && idx < sorted.length - 1) {
+        const swapWith = sorted[idx + 1];
+        const tmp = swapWith.priority;
+        swapWith.priority = sorted[idx].priority;
+        sorted[idx].priority = tmp ?? 0;
+      }
+      return sorted;
+    });
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const [toolFormData, setToolFormData] = useState<Partial<ToolFormData> | null>(null);
   const [loadingToolData, setLoadingToolData] = useState(false);
@@ -1010,7 +1080,7 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid grid-cols-5 overflow-x-auto gap-2 md:gap-0">
+              <TabsList className="grid grid-cols-6 overflow-x-auto gap-2 md:gap-0">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
@@ -1069,6 +1139,16 @@ export function AgentFormPage() {
                 />
               </TabsContent>
 
+              <TabsContent value="skills" className="space-y-4">
+                <SkillsTab
+                  selectedSkills={selectedSkills}
+                  onAddSkills={() => setShowSkillsModal(true)}
+                  onRemoveSkill={handleRemoveSkill}
+                  onChangeMode={handleChangeSkillMode}
+                  onChangePriority={handleChangeSkillPriority}
+                />
+              </TabsContent>
+
               <TabsContent value="advanced" className="space-y-4">
                 <AdvancedTab form={form} allModels={allModels} />
               </TabsContent>
@@ -1095,6 +1175,14 @@ export function AgentFormPage() {
         onOpenChange={setShowToolsModal}
         selectedTools={selectedTools}
         onAddTools={handleAddTools}
+      />
+
+      {/* Skill Import Modal */}
+      <SkillImportModal
+        open={showSkillsModal}
+        onOpenChange={setShowSkillsModal}
+        selectedSkills={selectedSkills}
+        onAddSkills={handleAddSkills}
       />
 
       {/* Select MCP Servers Modal */}

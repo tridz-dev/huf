@@ -71,3 +71,46 @@ def get_skill_content(skill_name):
 		"version": skill.version,
 		"author": skill.author,
 	}
+
+
+@frappe.whitelist()
+def preview_github_skills(repo, github_token=None):
+	"""
+	Fetch and parse all skills from a public GitHub repo without writing to DB.
+
+	Args:
+	  repo: "owner/repo" slug (e.g. "anthropics/skills")
+	  github_token: optional PAT for higher rate limits (5000 req/hr vs 60)
+
+	Returns list of skill preview dicts.
+	"""
+	from huf.ai.skill_importer import preview_from_github
+
+	return preview_from_github(repo, github_token=github_token or None)
+
+
+@frappe.whitelist()
+def import_github_skills(repo, skill_names=None, github_token=None):
+	"""
+	Fetch skills from a GitHub repo and create/update Skill documents.
+
+	Args:
+	  repo: "owner/repo" slug
+	  skill_names: JSON list of skill_name slugs to import (None = import all)
+	  github_token: optional PAT
+
+	Returns { "created": [...], "updated": [...], "skipped": [...] }
+	"""
+	import json as _json
+
+	from huf.ai.skill_importer import import_skills, preview_from_github
+
+	all_skills = preview_from_github(repo, github_token=github_token or None)
+
+	if skill_names:
+		if isinstance(skill_names, str):
+			skill_names = _json.loads(skill_names)
+		name_set = set(skill_names)
+		all_skills = [s for s in all_skills if s["skill_name"] in name_set]
+
+	return import_skills(all_skills)
