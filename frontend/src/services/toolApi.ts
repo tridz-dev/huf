@@ -278,10 +278,10 @@ export async function createToolFunction(data: {
  */
 export async function getAgentsUsingTool(toolName: string): Promise<string[]> {
   try {
-    // Filter by child table field using dot notation
+    // Filter by child table field using the DocType and fieldname array format
     const agents = await db.getDocList(doctype['Agent'], {
       fields: ['name', 'agent_name'],
-      filters: [['agent_tool.tool', '=', toolName]],
+      filters: [['Agent Tool', 'tool', '=', toolName] as any],
       limit: 1000,
     });
     // Return document names for consistent comparison

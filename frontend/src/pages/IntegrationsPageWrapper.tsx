@@ -4,7 +4,10 @@ import { IntegrationsPage } from './IntegrationsPage';
 import { UnifiedLayout } from '../layouts/UnifiedLayout';
 import { IntegrationsHeaderActions } from '../components/IntegrationsHeaderActions';
 
-export function IntegrationsPageWrapper() {
+export { IntegrationsPageWrapper };
+export default IntegrationsPageWrapper;
+
+function IntegrationsPageWrapper() {
   const [addProviderKey, setAddProviderKey] = useState(0);
 
   const handleAddProvider = () => {

@@ -10,6 +10,25 @@ from .extractors import TextExtractor, ExtractedText
 from .chunkers.sentence import chunk_text
 
 
+def _build_backend_config(source) -> dict:
+	"""Build configuration dict for backend initialization.
+
+	Includes chunking settings for all backends and adds embedding
+	configuration for the sqlite_vec vector backend.
+	"""
+	config = {
+		"chunk_size": source.chunk_size,
+		"chunk_overlap": source.chunk_overlap,
+	}
+
+	if source.knowledge_type == "sqlite_vec":
+		config["embedding_model"] = source.embedding_model
+		config["vector_dimension"] = source.vector_dimension
+		config["embedding_provider"] = getattr(source, "embedding_provider", None)
+
+	return config
+
+
 def process_knowledge_input(knowledge_input: str) -> dict:
 	"""
 	Process a single knowledge input and add to index.
@@ -64,10 +83,7 @@ def process_knowledge_input(knowledge_input: str) -> dict:
 			# Initialize backend and add chunks
 			backend_class = get_backend(source.knowledge_type)
 			backend = backend_class()
-			backend.initialize(source.name, {
-				"chunk_size": source.chunk_size,
-				"chunk_overlap": source.chunk_overlap,
-			})
+			backend.initialize(source.name, _build_backend_config(source))
 			
 			# Delete existing chunks for this input (for reprocessing)
 			backend.delete_chunks(doc.name)
@@ -151,10 +167,7 @@ def rebuild_knowledge_index(knowledge_source: str) -> dict:
 			# Initialize backend and clear
 			backend_class = get_backend(source.knowledge_type)
 			backend = backend_class()
-			backend.initialize(source.name, {
-				"chunk_size": source.chunk_size,
-				"chunk_overlap": source.chunk_overlap,
-			})
+			backend.initialize(source.name, _build_backend_config(source))
 			backend.clear()
 			
 			# Reset all input statuses

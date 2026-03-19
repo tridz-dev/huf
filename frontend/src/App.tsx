@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
@@ -10,19 +10,29 @@ import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
-import { HomePage } from './pages/HomePage';
-import { AgentsPage } from './pages/AgentsPage';
-import { AgentFormPageWrapper } from './pages/AgentFormPageWrapper';
-import { FlowListPage } from './pages/FlowListPage';
-import { FlowCanvasPageWrapper } from './pages/FlowCanvasPageWrapper';
-import { DataPage } from './pages/DataPage';
-import { IntegrationsPageWrapper } from './pages/IntegrationsPageWrapper';
-import { ChatPage } from './pages/ChatPageV2';
-import { NotFoundPage } from './pages/NotFoundPage';
+import { PageLoader } from './components/PageLoader';
+import { DataHeaderActions } from './components/DataHeaderActions';
+import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
+import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
-import Executions from './pages/Executions';
-import { AgentRunDetailPage } from './pages/AgentRunDetailPage';
+
+const HomePage = lazy(() => import('./pages/HomePage'));
+const AgentsPage = lazy(() => import('./pages/AgentsPage'));
+const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
+const FlowListPage = lazy(() => import('./pages/FlowListPage'));
+const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
+const DataPage = lazy(() => import('./pages/DataPage'));
+const IntegrationsPageWrapper = lazy(() => import('./pages/IntegrationsPageWrapper'));
+const ChatPage = lazy(() => import('./pages/ChatPageV2'));
+const Executions = lazy(() => import('./pages/Executions'));
+const AgentRunDetailPage = lazy(() => import('./pages/AgentRunDetailPage'));
+const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
+const McpListingPage = lazy(() => import('./pages/McpListingPage'));
+const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
+
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
 import {
@@ -37,33 +47,28 @@ import { RolesPage } from './pages/RolesPage';
 
 function App() {
   useEffect(() => {
-    // Wait for frappe.boot to be available
+    const connectionDescription =
+      'Some features may be disabled or not work as expected. Please refresh the page to retry.';
+
     const siteName = (window as any).frappe?.boot?.sitename;
-    /*
-     If in development, use the port set in window.frappe.boot.socketio_port for development server
-     for local development with build, use the port set in frappe.boot.socketio_port.
-     for production, with proper domain no port is required (think so!)
-    */
-    const hasPort = !!window.location?.port
+    const hasPort = !!window.location?.port;
     const port = hasPort ? (window as any).frappe?.boot?.socketio_port : '';
-    
+
     console.log("Checking streaming availability");
-    // Streaming ping: once at app load
     checkStreamingAvailable().then((ok) => {
       console.log("Streaming available:", ok);
       setStreamingAvailable(ok);
       if (!ok) {
         toast.error("Streaming not working", {
-          description:
-            "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+          description: connectionDescription,
           duration: 5000,
         });
       }
     });
-    
+
     if (!siteName) {
       toast.error("Socket connection failed", {
-        description: "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+        description: connectionDescription,
         duration: 5000,
       });
       console.warn("Site name not available yet, socket connection will be skipped");
@@ -72,7 +77,7 @@ function App() {
 
     console.log("Creating socket connection for site:", siteName);
     const socket = createFrappeSocket({ siteName, port });
-    
+
     socket.on("connect", () => {
       console.log("✅ Connected to Frappe websocket!");
     });
@@ -80,7 +85,7 @@ function App() {
     socket.on("connect_error", (error) => {
       console.error("❌ Socket connection error:", error);
       toast.error("Socket connection failed", {
-        description: "Some features may be disabled or not work as expected. Please refresh the page to retry.",
+        description: connectionDescription,
         duration: 5000,
       });
     });
@@ -111,7 +116,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
-                  <HomePage />
+                  <Suspense fallback={<PageLoader />}>
+                    <HomePage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -121,7 +128,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<AgentsHeaderActions />}>
-                  <AgentsPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentsPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -130,7 +139,9 @@ function App() {
             path="/agents/:id"
             element={
               <ProtectedRoute>
-                <AgentFormPageWrapper />
+                <Suspense fallback={<PageLoader />}>
+                  <AgentFormPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -138,9 +149,45 @@ function App() {
             path="/data"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
-                  <DataPage />
+                <UnifiedLayout headerActions={<DataHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <DataPage />
+                  </Suspense>
                 </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/new"
+            element={
+              <ProtectedRoute>
+                <DataTableBuilderWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/:tableId"
+            element={
+              <ProtectedRoute>
+                <DataTableViewWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/:tableId/:recordName"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <DataRecordViewWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/data/:tableId/edit"
+            element={
+              <ProtectedRoute>
+                <DataTableBuilderWrapper />
               </ProtectedRoute>
             }
           />
@@ -148,7 +195,9 @@ function App() {
             path="/providers"
             element={
               <ProtectedRoute>
-                <IntegrationsPageWrapper />
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationsPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -158,7 +207,9 @@ function App() {
               <ProtectedRoute>
                 <FlowProvider>
                   <UnifiedLayout>
-                    <FlowListPage />
+                    <Suspense fallback={<PageLoader />}>
+                      <FlowListPage />
+                    </Suspense>
                   </UnifiedLayout>
                 </FlowProvider>
               </ProtectedRoute>
@@ -170,7 +221,9 @@ function App() {
               <ProtectedRoute>
                 <FlowProvider>
                   <ModalProvider>
-                    <FlowCanvasPageWrapper />
+                    <Suspense fallback={<PageLoader />}>
+                      <FlowCanvasPageWrapper />
+                    </Suspense>
                   </ModalProvider>
                 </FlowProvider>
               </ProtectedRoute>
@@ -181,7 +234,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout hideHeader>
-                  <ChatPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -191,7 +246,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout hideHeader>
-                  <ChatPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -201,7 +258,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <Executions />
+                  <Suspense fallback={<PageLoader />}>
+                    <Executions />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -211,7 +270,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <AgentRunDetailPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentRunDetailPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -221,7 +282,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <NotFoundPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <NotFoundPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -231,7 +294,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <NotFoundPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <NotFoundPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -241,7 +306,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<McpHeaderActions />}>
-                  <McpListingPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <McpListingPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
@@ -250,7 +317,9 @@ function App() {
             path="/mcp/:mcpId"
             element={
               <ProtectedRoute>
-                <McpDetailsPageWrapper />
+                <Suspense fallback={<PageLoader />}>
+                  <McpDetailsPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -258,7 +327,9 @@ function App() {
             path="/view/:messageId"
             element={
               <ProtectedRoute>
-                <PreviewViewPage />
+                <Suspense fallback={<PageLoader />}>
+                  <PreviewViewPage />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -287,7 +358,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <NotFoundPage />
+                  <Suspense fallback={<PageLoader />}>
+                    <NotFoundPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
