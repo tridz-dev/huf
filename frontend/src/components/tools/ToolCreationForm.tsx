@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/table';
 import { ParameterCard, type ParameterData } from './ParameterCard';
 import { HttpHeaderCard, type HttpHeaderData } from './HttpHeaderCard';
+import { NetworkPolicyConfig, type NetworkPolicyValue } from './NetworkPolicyConfig';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import type { AgentToolType, ToolType } from '@/types/agent.types';
 import { getDocTypeMeta } from '@/services/agentApi';
@@ -718,6 +719,26 @@ export function ToolCreationForm({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Network Policy Section (Code Interpreter only) */}
+      {selectedType === 'Code Interpreter' && (
+        <div className="space-y-2">
+          <h3 className="font-semibold text-gray-900">Network Policy</h3>
+          <NetworkPolicyConfig
+            value={{
+              network_mode: (form.watch('network_mode') || 'disabled') as NetworkPolicyValue['network_mode'],
+              network_presets: form.watch('network_presets') || '[]',
+              allowed_domains: form.watch('allowed_domains') || '',
+            }}
+            onChange={(val) => {
+              form.setValue('network_mode', val.network_mode, { shouldDirty: true });
+              form.setValue('network_presets', val.network_presets, { shouldDirty: true });
+              form.setValue('allowed_domains', val.allowed_domains, { shouldDirty: true });
+            }}
+            disabled={loading}
+          />
         </div>
       )}
 

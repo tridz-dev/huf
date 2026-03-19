@@ -64,6 +64,15 @@
         "App Provided",
         "Client Side Tool"
       ]
+    },
+    {
+      "id": "code_interpreter",
+      "name": "Code Interpreter",
+      "description": "Run code in a sandboxed environment with configurable network access — choose from no network, package-registry presets, or full open access.",
+      "icon": "terminal",
+      "toolTypes": [
+        "Code Interpreter"
+      ]
     }
   ]
 }

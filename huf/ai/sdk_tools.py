@@ -127,7 +127,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_set_conversation_data"
                     elif function_doc.types == "Load Conversation Data":
                         function_path = "huf.ai.sdk_tools.handle_load_conversation_data"
-
+                    elif function_doc.types == "Code Interpreter":
+                        function_path = "huf.ai.sdk_tools.handle_code_interpreter"
                     else:
                         continue
 
@@ -169,6 +170,11 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     elif function_doc.types == "Run Agent":
                         if function_doc.agent:
                             extra_args["agent_name"] = function_doc.agent
+
+                    elif function_doc.types == "Code Interpreter":
+                        from huf.ai.sandbox_policy import NetworkPolicy
+                        policy = NetworkPolicy.from_tool_doc(function_doc)
+                        extra_args["sandbox_config"] = policy.to_sandbox_config()
 
                     tool = create_function_tool(
                         function_doc.tool_name,
@@ -2680,3 +2686,63 @@ async def handle_transcribe_audio(
     except Exception as e:
         frappe.log_error(f"Audio transcription error: {str(e)}", "Audio Transcription Tool")
         return {"success": False, "error": str(e)}
+
+
+def handle_code_interpreter(
+	code: str,
+	language: str = "python",
+	timeout: int = 30,
+	sandbox_config: dict | None = None,
+	**kwargs,
+):
+	"""
+	Execute code inside a sandboxed environment.
+
+	The sandbox_config dict is built from the tool's NetworkPolicy and controls
+	outbound network access.  It is passed straight through to the sandbox
+	runtime when one is configured; until then this function returns a
+	structured stub response so the rest of the tool infrastructure works
+	correctly.
+
+	Args:
+	    code:           Source code to execute.
+	    language:       Programming language (python, javascript, bash, …).
+	    timeout:        Max execution time in seconds (capped at 300).
+	    sandbox_config: Network policy config built by NetworkPolicy.to_sandbox_config().
+	"""
+	timeout = min(int(timeout or 30), 300)
+
+	if not code or not code.strip():
+		return {"success": False, "error": "No code provided."}
+
+	config = sandbox_config or {"network": "block_all"}
+
+	# ------------------------------------------------------------------
+	# Sandbox runtime integration point.
+	# Replace the stub below with the actual sandbox call, e.g.:
+	#
+	#   from huf.ai.opensandbox import SandboxClient
+	#   client = SandboxClient()
+	#   result = client.run(code=code, language=language, timeout=timeout, network=config)
+	#   return {"success": True, "stdout": result.stdout, "stderr": result.stderr, ...}
+	#
+	# The sandbox_config["network"] values are:
+	#   "allow_all"  → unrestricted outbound
+	#   "block_all"  → no outbound at all
+	#   "whitelist"  → only sandbox_config["allowed_domains"] are reachable
+	# ------------------------------------------------------------------
+
+	frappe.log_error(
+		f"Code Interpreter called — sandbox not yet wired up.\n"
+		f"Language: {language}\nTimeout: {timeout}s\nNetwork: {config.get('network')}\n"
+		f"Code:\n{code[:500]}",
+		"Code Interpreter (Stub)",
+	)
+
+	return {
+		"success": False,
+		"error": "Sandbox runtime is not configured yet. Wire up a sandbox provider in handle_code_interpreter().",
+		"sandbox_config": config,
+		"language": language,
+		"timeout": timeout,
+	}

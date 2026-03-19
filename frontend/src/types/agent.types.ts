@@ -36,7 +36,8 @@ export type ToolType =
   | "Get Conversation Data"
   | "Set Conversation Data"
   | "Load Conversation Data"
-  | "Speech to Text";
+  | "Speech to Text"
+  | "Code Interpreter";
 
 export type AgentToolFunctionRef = {
   name: string;

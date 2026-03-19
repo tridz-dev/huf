@@ -797,6 +797,9 @@ export function AgentFormPage() {
         allowed_for_guest: data.allowed_for_guest,
         parameters: data.parameters,
         http_headers: data.http_headers,
+        network_mode: data.network_mode,
+        network_presets: data.network_presets,
+        allowed_domains: data.allowed_domains,
       });
 
       // Update the tool in the selected tools list

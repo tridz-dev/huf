@@ -20,6 +20,10 @@
   "function_name",
   "header_section",
   "http_headers",
+  "network_section",
+  "network_mode",
+  "network_presets",
+  "allowed_domains",
   "section_break_ajuk",
   "required_permission",
   "is_read_only",
@@ -52,7 +56,7 @@
    "fieldname": "types",
    "fieldtype": "Select",
    "label": "Types",
-   "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent\nClient Side Tool\nGet Conversation Data\nSet Conversation Data\nLoad Conversation Data"
+   "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent\nClient Side Tool\nGet Conversation Data\nSet Conversation Data\nLoad Conversation Data\nCode Interpreter"
   },
   {
    "depends_on": "eval: [\n  'Get Document',\n  'Get Multiple Documents',\n  'Get List',\n  'Create Document',\n  'Create Multiple Documents',\n  'Update Document',\n  'Update Multiple Documents',\n  'Delete Document',\n  'Delete Multiple Documents',\n  'Submit Document',\n  'Cancel Document',\n  'Get Amended Document',\n  'Attach File to Document',\n  'Get Report Result',\n  'Get Value',\n  'Set Value'\n].includes(doc.types)",
@@ -145,6 +149,35 @@
    "label": "Header"
   },
   {
+   "depends_on": "eval:doc.types == 'Code Interpreter'",
+   "fieldname": "network_section",
+   "fieldtype": "Section Break",
+   "label": "Network Policy"
+  },
+  {
+   "default": "disabled",
+   "depends_on": "eval:doc.types == 'Code Interpreter'",
+   "description": "Controls outbound network access inside the sandbox",
+   "fieldname": "network_mode",
+   "fieldtype": "Select",
+   "label": "Network Mode",
+   "options": "disabled\nwhitelist\nopen"
+  },
+  {
+   "depends_on": "eval:doc.types == 'Code Interpreter' && doc.network_mode == 'whitelist'",
+   "description": "Select package registries to allow (JSON array, e.g. [\"pip\",\"npm\"]). Stored automatically by the UI.",
+   "fieldname": "network_presets",
+   "fieldtype": "Small Text",
+   "label": "Network Presets"
+  },
+  {
+   "depends_on": "eval:doc.types == 'Code Interpreter' && doc.network_mode == 'whitelist'",
+   "description": "Additional allowed domains, one per line (e.g. api.example.com)",
+   "fieldname": "allowed_domains",
+   "fieldtype": "Text",
+   "label": "Allowed Domains"
+  },
+  {
    "depends_on": "eval:doc.types == 'Run Agent'",
    "fieldname": "agent",
    "fieldtype": "Link",
@@ -172,7 +205,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-22 22:21:36.079707",
+ "modified": "2026-03-19 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Function",

@@ -211,6 +211,9 @@ export function SelectToolsModal({
         allowed_for_guest: data.allowed_for_guest,
         parameters: data.parameters,
         http_headers: data.http_headers,
+        network_mode: data.network_mode,
+        network_presets: data.network_presets,
+        allowed_domains: data.allowed_domains,
       });
       
       // Refresh the tools list to include the new tool
