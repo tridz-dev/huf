@@ -7,6 +7,7 @@ export type AIModel = {
   name: string;
   model_name: string;
   provider: string;
+  modalities?: string;
 };
 
 export type ToolType =
@@ -155,6 +156,13 @@ export type AgentRun = {
   created_at: string;
 };
 
+export interface AgentOrchestrationPlanRow {
+  name?: string;
+  step_index: number;
+  status: "pending" | "in_progress" | "done" | "failed";
+  instruction: string;
+  output_ref: string;
+}
 /**
  * Agent document type from Frappe
  * Represents the raw Agent document structure from Frappe database
@@ -203,7 +211,16 @@ export interface AgentDoc {
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
+  default_plan: AgentOrchestrationPlanRow[];
+  prompt_mode: string; // 'local' or 'template'
+  agent_prompt?: string;
+  prompt_version_locked?: number; // 0 or 1
+  attached_at_version?: number; // Version number when prompt was attached
+  copied_from_prompt?: string | null; // Name of the prompt this agent was copied from, if any
   enable_prompt_caching?: number; // 0 or 1
+  cache_control_type?: string | null; // ephemeral or persistent
+  cache_system_message?: number; // 0 or 1
+  cache_conversation_history?: number; // 0 or 1
   context_strategy?: string | null; // Summarize, FIFO, or None
   summary_ratio?: number | null; // Ratio of history to summarize (0-1)
   history_limit?: number | null; // Maximum number of messages to keep
@@ -211,4 +228,10 @@ export interface AgentDoc {
   max_turns?: number | null; // Maximum consecutive turns/steps
   enable_conversation_data?: number; // 0 or 1
   autonaming_of_conversation_title?: number; // 0 or 1
+
+  // Advanced model overrides
+  image_generation_model?: string | null;
+  tts_model?: string | null;
+  tts_voice?: string | null;
+  stt_model?: string | null;
 }

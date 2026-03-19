@@ -21,6 +21,7 @@ interface GeneralTabProps {
 }
 
 export function GeneralTab({ form, providers, models, watchProvider, optimizingPrompt, onOptimizePrompt }: GeneralTabProps) {
+  const watchEnablePromptCaching = form.watch("enable_prompt_caching");
   return (
     <div className="space-y-6">
       <Card>
@@ -181,6 +182,45 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
             )}
           />
 
+        </CardContent>
+      </Card>
+
+      {form.watch("prompt_mode") === "Local" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Instructions</CardTitle>
+            <CardDescription>Define system prompt, goals, and constraints</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FormField
+              control={form.control}
+              name="instructions"
+              render={({ field }) => (
+                <FormItem>
+                  <InstructionsTextarea
+                    form={form}
+                    field={field}
+                    optimizingPrompt={optimizingPrompt}
+                    onOptimizePrompt={onOptimizePrompt}
+                    showOptimize={true}
+                    showExpand={true}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Prompt Caching</CardTitle>
+          <CardDescription>
+            Configure prompt caching to reduce token usage for repeated prompt content.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
           <FormField
             control={form.control}
             name="enable_prompt_caching"
@@ -189,44 +229,85 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Enable Prompt Caching</FormLabel>
                   <FormDescription>
-                    Enable prompt caching to cache repeated prompt content and reduce token costs. Only works with supported providers (OpenAI, Anthropic, Bedrock, Deepseek).
+                    Enable prompt caching to cache repeated prompt content and reduce token costs. Only
+                    works with supported providers (OpenAI, Anthropic, Bedrock, Deepseek).
                   </FormDescription>
                 </div>
                 <FormControl>
-                  <Switch
-                    checked={field.value ?? false}
-                    onCheckedChange={field.onChange}
-                  />
+                  <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
                 </FormControl>
               </FormItem>
             )}
           />
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Instructions</CardTitle>
-          <CardDescription>Define system prompt, goals, and constraints</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FormField
-            control={form.control}
-            name="instructions"
-            render={({ field }) => (
-              <FormItem>
-                <InstructionsTextarea
-                  form={form}
-                  field={field}
-                  optimizingPrompt={optimizingPrompt}
-                  onOptimizePrompt={onOptimizePrompt}
-                  showOptimize={true}
-                  showExpand={true}
-                />
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {watchEnablePromptCaching && (
+            <FormField
+              control={form.control}
+              name="cache_control_type"
+              render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                  <FormLabel>Cache Control Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select cache control type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="auto">Auto</SelectItem>
+                      <SelectItem value="ephemeral">Ephemeral</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Cache control type: &apos;ephemeral&apos; for Anthropic (charges for cache writes),
+                    &apos;auto&apos; for OpenAI/Deepseek (automatic caching).
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {watchEnablePromptCaching && (
+            <FormField
+              control={form.control}
+              name="cache_system_message"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Cache System Message</FormLabel>
+                    <FormDescription>
+                      Cache the system message/instructions to avoid re-sending them on every request.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          )}
+
+          {watchEnablePromptCaching && (
+            <FormField
+              control={form.control}
+              name="cache_conversation_history"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Cache Conversation History</FormLabel>
+                    <FormDescription>
+                      Cache conversation history messages to reduce token usage in multi-turn
+                      conversations.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

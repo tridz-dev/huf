@@ -6,30 +6,38 @@
  "field_order": [
   "content_tab",
   "content",
-  "metadata_tab",
-  "agent_run",
-  "conversation",
-  "provider",
-  "model",
-  "agent",
-  "kind",
   "content_type",
   "generated_image",
-  "generated_audio",
-  "voice_message",
-  "tts_model",
-  "tts_voice",
-  "column_break_asyu",
-  "session_id",
-  "user",
-  "is_agent_message",
-  "role",
+  "metadata_tab",
+  "conversation_details_section",
+  "conversation",
   "conversation_index",
-  "status",
+  "session_id",
+  "column_break_jcev",
+  "user",
+  "kind",
+  "role",
+  "is_agent_message",
+  "ai_context_section",
+  "agent",
+  "agent_run",
+  "column_break_nuxi",
+  "provider",
+  "model",
+  "tool_call__details_section",
   "tool_calll",
   "tool_name",
+  "column_break_agaw",
   "tool_status",
-  "tool_args"
+  "tool_args",
+  "voice_details_section",
+  "voice_message",
+  "generated_audio",
+  "tts_voice",
+  "column_break_asyu",
+  "tts_model",
+  "stt_model",
+  "status"
  ],
  "fields": [
   {
@@ -204,10 +212,50 @@
    "read_only": 1
   },
   {
+   "description": "AI model used for Speech-to-Text transcription in this audio message.",
+   "fieldname": "stt_model",
+   "fieldtype": "Link",
+   "label": "STT Model",
+   "options": "AI Model",
+   "read_only": 1
+  },
+  {
    "fieldname": "voice_message",
    "fieldtype": "Attach",
    "label": "Voice Message",
    "read_only": 1
+  },
+  {
+   "fieldname": "conversation_details_section",
+   "fieldtype": "Section Break",
+   "label": "Conversation Details"
+  },
+  {
+   "fieldname": "column_break_jcev",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ai_context_section",
+   "fieldtype": "Section Break",
+   "label": "AI Context"
+  },
+  {
+   "fieldname": "column_break_nuxi",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tool_call__details_section",
+   "fieldtype": "Section Break",
+   "label": "Tool Call  Details"
+  },
+  {
+   "fieldname": "column_break_agaw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "voice_details_section",
+   "fieldtype": "Section Break",
+   "label": "Voice Details"
   }
  ],
  "grid_page_length": 50,

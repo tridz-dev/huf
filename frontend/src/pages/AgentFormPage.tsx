@@ -27,23 +27,22 @@ import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpAp
 import type { MCPServerDoc } from '../services/mcpApi';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 
-
 export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isNew = id === 'new';
-  
+
   // Tab configuration - single source of truth
   const tabConfig = {
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions', 'enable_prompt_caching'],
+      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'attached_at_version'],
       default: true,
       disabled: false,
     },
     behavior: {
       label: 'Behavior',
-      fields: ['allow_chat', 'persist_conversation', 'persist_user_history', 'enable_multi_run'],
+      fields: ['allow_chat', 'persist_conversation', 'persist_user_history', 'enable_multi_run', 'default_plan'],
       default: false,
       disabled: false,
     },
@@ -61,7 +60,19 @@ export function AgentFormPage() {
     },
     advanced: {
       label: 'Advanced Settings',
-      fields: ['context_strategy', 'summary_ratio', 'history_limit', 'max_knowledge_tokens', 'max_turns', 'enable_conversation_data', 'autonaming_of_conversation_title'],
+      fields: [
+       'context_strategy',
+        'summary_ratio',
+        'history_limit',
+        'max_knowledge_tokens',
+        'max_turns',
+        'enable_conversation_data',
+        'autonaming_of_conversation_title',
+        'image_generation_model',
+        'tts_model',
+        'tts_voice',
+        'stt_model',
+      ],
       default: false,
       disabled: false,
     },
@@ -91,7 +102,7 @@ export function AgentFormPage() {
     const hashFromUrl = window.location.hash.slice(1); // Remove the # symbol
     return (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : defaultTab;
   });
-  
+
   // Listen for hash changes (back/forward navigation)
   useEffect(() => {
     const handleHashChange = () => {
@@ -99,7 +110,7 @@ export function AgentFormPage() {
       const tab = (hashFromUrl && validTabs.includes(hashFromUrl)) ? hashFromUrl : defaultTab;
       setActiveTab(tab);
     };
-    
+
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [defaultTab, validTabs]);
@@ -121,6 +132,7 @@ export function AgentFormPage() {
   const [deletingTrigger, setDeletingTrigger] = useState(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
+  const [allModels, setAllModels] = useState<AIModel[]>([]);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
@@ -158,7 +170,15 @@ export function AgentFormPage() {
         enable_multi_run: false,
         description: '',
         instructions: '',
+        default_plan: [],
+        prompt_mode: "Local",
+        agent_prompt: '',
+        prompt_version_locked: false,
+        attached_at_version: undefined,
         enable_prompt_caching: false,
+        cache_control_type: "",
+        cache_system_message: false,
+        cache_conversation_history:false,
         context_strategy: undefined,
         summary_ratio: undefined,
         history_limit: undefined,
@@ -166,6 +186,10 @@ export function AgentFormPage() {
         max_turns: undefined,
         enable_conversation_data: false,
         autonaming_of_conversation_title: false,
+        image_generation_model: undefined,
+        tts_model: undefined,
+        tts_voice: '',
+        stt_model: undefined,
       },
   });
 
@@ -178,31 +202,31 @@ export function AgentFormPage() {
     if (isNew) return selectedTools.length > 0; // New agent with tools selected
     const initialToolNames = new Set(initialTools.map((t) => t.name));
     const currentToolNames = new Set(selectedTools.map((t) => t.name));
-    
+
     if (initialToolNames.size !== currentToolNames.size) return true;
-    
+
     for (const name of currentToolNames) {
       if (!initialToolNames.has(name)) return true;
     }
-    
+
     return false;
   }, [selectedTools, initialTools, isNew]);
-  
+
   // Check if disabled state has changed
   const disabledChanged = useMemo(() => {
     if (isNew) return watchDisabled !== false; // New agent with disabled changed
     return watchDisabled !== initialDisabled;
   }, [watchDisabled, initialDisabled, isNew]);
-  
+
   // Check if MCP servers have changed by comparing server names and enabled states
   const mcpServersChanged = useMemo(() => {
     if (isNew) return mcpServers.length > 0; // New agent with MCP servers selected
-    
+
     // Normalize enabled state to number for comparison
     const normalizeEnabled = (enabled: boolean | number | undefined): number => {
       return enabled === true || enabled === 1 ? 1 : 0;
     };
-    
+
     // Compare by mcp_server link field (the actual server name) and enabled state
     const initialServerMap = new Map(
       initialMcpServers.map((s) => [`${s.mcp_server}:${normalizeEnabled(s.enabled)}`, s])
@@ -210,16 +234,16 @@ export function AgentFormPage() {
     const currentServerMap = new Map(
       mcpServers.map((s) => [`${s.mcp_server}:${normalizeEnabled(s.enabled)}`, s])
     );
-    
+
     if (initialServerMap.size !== currentServerMap.size) return true;
-    
+
     for (const [key] of currentServerMap) {
       if (!initialServerMap.has(key)) return true;
     }
-    
+
     return false;
   }, [mcpServers, initialMcpServers, isNew]);
-  
+
   // Show save button for new agents, when form is dirty, when tools have changed, when disabled changed, or when MCP servers changed
   const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged;
 
@@ -272,7 +296,7 @@ export function AgentFormPage() {
       getToolTypes(),
     ]).then(([providersData, modelsData, toolTypesData]) => {
       setProviders(providersData as AIProvider[]);
-      setModels(modelsData);
+      setAllModels(modelsData);
       setToolTypes(toolTypesData);
     }).catch((error) => {
       console.error('Error loading providers/models/types:', error);
@@ -315,7 +339,15 @@ export function AgentFormPage() {
           enable_multi_run: data.enable_multi_run === 1,
           description: data.description || '',
           instructions: data.instructions || '',
+          default_plan: data.default_plan || [],
+          prompt_mode: data.prompt_mode || 'Local',
+          agent_prompt: data.agent_prompt || '',
+          prompt_version_locked: data.prompt_version_locked === 1,
+          attached_at_version: data.attached_at_version !== undefined ? data.attached_at_version : undefined,
           enable_prompt_caching: data.enable_prompt_caching === 1,
+          cache_control_type: data.cache_control_type || '',
+          cache_system_message: data.cache_system_message === 1,
+          cache_conversation_history: data.cache_conversation_history === 1,
           context_strategy: data.context_strategy || undefined,
           summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
           history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
@@ -323,6 +355,11 @@ export function AgentFormPage() {
           max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
           enable_conversation_data: data.enable_conversation_data === 1,
           autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
+
+          image_generation_model: data.image_generation_model || undefined,
+          tts_model: data.tts_model || undefined,
+          tts_voice: data.tts_voice || '',
+          stt_model: data.stt_model || undefined,
         });
         // Track initial disabled state and persisted allow_chat
         setInitialDisabled(data.disabled === 1);
@@ -436,7 +473,15 @@ export function AgentFormPage() {
         enable_multi_run: values.enable_multi_run ? 1 : 0,
         description: values.description || '',
         instructions: values.instructions,
+        default_plan: values.default_plan || [],
+        prompt_mode: values.prompt_mode || 'Local',
+        agent_prompt: values.agent_prompt || '',
+        prompt_version_locked: values.prompt_version_locked ? 1 : 0,
+        attached_at_version: values.attached_at_version !== undefined ? values.attached_at_version : undefined,
         enable_prompt_caching: values.enable_prompt_caching ? 1 : 0,
+        cache_control_type: values.cache_control_type || '',
+        cache_system_message: values.cache_system_message ? 1 : 0,
+        cache_conversation_history: values.cache_conversation_history ? 1 : 0,
         context_strategy: values.context_strategy || undefined,
         summary_ratio: values.summary_ratio !== undefined ? values.summary_ratio : undefined,
         history_limit: values.history_limit !== undefined ? values.history_limit : undefined,
@@ -444,6 +489,11 @@ export function AgentFormPage() {
         max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
         enable_conversation_data: values.enable_conversation_data ? 1 : 0,
         autonaming_of_conversation_title: values.autonaming_of_conversation_title ? 1 : 0,
+
+        image_generation_model: values.image_generation_model || undefined,
+        tts_model: values.tts_model || undefined,
+        tts_voice: values.tts_voice || undefined,
+        stt_model: values.stt_model || undefined,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -473,7 +523,15 @@ export function AgentFormPage() {
           enable_multi_run: newAgent.enable_multi_run === 1,
           description: newAgent.description || '',
           instructions: newAgent.instructions || '',
+          default_plan: newAgent.default_plan || [],
+          prompt_mode: newAgent.prompt_mode || 'Local',
+          agent_prompt: newAgent.agent_prompt || '',
+          prompt_version_locked: newAgent.prompt_version_locked === 1,
+          attached_at_version: newAgent.attached_at_version !== undefined ? newAgent.attached_at_version : undefined,
           enable_prompt_caching: newAgent.enable_prompt_caching === 1,
+          cache_control_type: newAgent.cache_control_type || '',
+          cache_system_message: newAgent.cache_system_message === 1,
+          cache_conversation_history: newAgent.cache_conversation_history === 1,
           context_strategy: newAgent.context_strategy || undefined,
           summary_ratio: newAgent.summary_ratio !== undefined && newAgent.summary_ratio !== null ? newAgent.summary_ratio : undefined,
           history_limit: newAgent.history_limit !== undefined && newAgent.history_limit !== null ? newAgent.history_limit : undefined,
@@ -481,6 +539,11 @@ export function AgentFormPage() {
           max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
           enable_conversation_data: newAgent.enable_conversation_data === 1,
           autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
+
+          image_generation_model: newAgent.image_generation_model || undefined,
+          tts_model: newAgent.tts_model || undefined,
+          tts_voice: newAgent.tts_voice || '',
+          stt_model: newAgent.stt_model || undefined,
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
@@ -504,7 +567,15 @@ export function AgentFormPage() {
           enable_multi_run: values.enable_multi_run,
           description: values.description,
           instructions: values.instructions,
+          default_plan: values.default_plan || [],
+          prompt_mode: values.prompt_mode,
+          agent_prompt: values.agent_prompt,
+          prompt_version_locked: values.prompt_version_locked,
+          attached_at_version: values.attached_at_version,
           enable_prompt_caching: values.enable_prompt_caching,
+          cache_control_type: values.cache_control_type,
+          cache_system_message: values.cache_system_message,
+          cache_conversation_history: values.cache_conversation_history,
           context_strategy: values.context_strategy,
           summary_ratio: values.summary_ratio,
           history_limit: values.history_limit,
@@ -512,6 +583,11 @@ export function AgentFormPage() {
           max_turns: values.max_turns,
           enable_conversation_data: values.enable_conversation_data,
           autonaming_of_conversation_title: values.autonaming_of_conversation_title,
+
+          image_generation_model: values.image_generation_model,
+          tts_model: values.tts_model,
+          tts_voice: values.tts_voice,
+          stt_model: values.stt_model,
         });
         // Reset tools, disabled state, and persisted allow_chat after successful update
         setInitialTools([...selectedTools]);
@@ -722,10 +798,10 @@ export function AgentFormPage() {
         parameters: data.parameters,
         http_headers: data.http_headers,
       });
-      
+
       // Update the tool in the selected tools list
-      setSelectedTools(selectedTools.map((t) => 
-        t.name === editingToolId 
+      setSelectedTools(selectedTools.map((t) =>
+        t.name === editingToolId
           ? { ...t, tool_name: data.tool_name, description: data.description, tool_type: data.tool_type }
           : t
       ));
@@ -867,8 +943,8 @@ export function AgentFormPage() {
         trigger_type: values.trigger_type,
         disabled: values.active ? 0 : 1,
         scheduled_interval: values.scheduled_interval,
-        interval_count: values.interval_count && values.interval_count.trim() !== '' 
-          ? parseInt(values.interval_count, 10) 
+        interval_count: values.interval_count && values.interval_count.trim() !== ''
+          ? parseInt(values.interval_count, 10)
           : undefined,
         reference_doctype: values.reference_doctype,
         doc_event: values.doc_event,
@@ -934,19 +1010,24 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="grid grid-cols-5 overflow-x-auto gap-2 md:gap-0">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
-                  <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
+                  <TabsTrigger
+                    key={tabKey}
+                    value={tabKey}
+                    disabled={config.disabled}
+                    className="shrink-0 min-w-fit"
+                  >
                     {config.label}
                   </TabsTrigger>
                 ))}
               </TabsList>
 
               <TabsContent value="general" className="space-y-4">
-                <GeneralTab 
-                  form={form} 
-                  providers={providers} 
-                  models={models} 
+                <GeneralTab
+                  form={form}
+                  providers={providers}
+                  models={models}
                   watchProvider={watchProvider}
                   optimizingPrompt={optimizingPrompt}
                   onOptimizePrompt={handleOptimizePrompt}
@@ -989,7 +1070,7 @@ export function AgentFormPage() {
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-4">
-                <AdvancedTab form={form} />
+                <AdvancedTab form={form} allModels={allModels} />
               </TabsContent>
             </Tabs>
           </form>

@@ -69,20 +69,34 @@ def after_install():
     create_flow_tools()
     frappe.db.commit()
     """
-	Called after app installation.
-	Checks if litellm is installed and provides helpful message if not.
-	"""
+    Called after app installation.
+    Checks if litellm is installed and provides helpful message if not.
+    """
     try:
         import litellm
         frappe.msgprint("✅ LiteLLM is installed and ready to use.")
     except ImportError:
-    	frappe.msgprint(
-			"⚠️ LiteLLM package not found. "
-			"Please run 'bench setup requirements' to install dependencies, "
-			"then restart your site with 'bench restart'.",
-			indicator="orange",
-			title="Dependency Missing"
-		)
+        frappe.msgprint(
+            "⚠️ LiteLLM package not found. "
+            "Please run 'bench setup requirements' to install dependencies, "
+            "then restart your site with 'bench restart'.",
+            indicator="orange",
+            title="Dependency Missing",
+        )
+
+    try:
+        from huf.ai.knowledge.backends.sqlite_vec_backend import check_sqlite_vec_available
+
+        if check_sqlite_vec_available():
+            frappe.msgprint("✅ sqlite_vec (vector search) is ready.")
+        else:
+            frappe.msgprint(
+                "⚠️ sqlite_vec (vector search) is not available. Install pysqlite3-binary: pip install pysqlite3-binary. Use sqlite_fts for keyword search.",
+                indicator="orange",
+                title="Vector Search",
+            )
+    except Exception:
+        pass  # Non-fatal; sqlite_vec may not be used
 
 
 def after_migrate():

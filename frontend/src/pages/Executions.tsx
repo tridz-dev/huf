@@ -280,7 +280,7 @@ export default function Executions() {
             },
           ]}
           actions={
-            <div className="w-48">
+            <div className="w-full sm:w-48">
               <Combobox
                 options={agentOptions}
                 value={selectedAgentValue}

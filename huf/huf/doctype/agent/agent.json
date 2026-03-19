@@ -66,6 +66,8 @@
   "audio_generation_section",
   "tts_model",
   "tts_voice",
+  "audio_transcription_section",
+  "stt_model",
   "huf_ui_section",
   "agent_color",
   "permissions_tab",
@@ -541,6 +543,18 @@
    "fieldname": "audio_generation_section",
    "fieldtype": "Section Break",
    "label": "Audio Generation"
+  },
+  {
+   "description": "Specific model for Speech-to-Text (Audio Transcription). If unset, defaults to the provider's default STT model.",
+   "fieldname": "stt_model",
+   "fieldtype": "Link",
+   "label": "STT Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "audio_transcription_section",
+   "fieldtype": "Section Break",
+   "label": "Audio Transcription"
   }
  ],
  "grid_page_length": 50,
