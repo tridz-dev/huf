@@ -9,6 +9,7 @@ export const doctype = {
   "Agent Conversation": "Agent Conversation",
   "Agent Message": "Agent Message",
   "Agent Run": "Agent Run",
+  "Agent Prompt": "Agent Prompt",
   "MCP Server": "MCP Server",
   "Huf Data Table": "Huf Data Table",
 } as const;
