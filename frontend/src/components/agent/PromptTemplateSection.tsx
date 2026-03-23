@@ -3,8 +3,11 @@ import { Combobox } from '@/components/ui/combobox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
 import type { AgentFormValues } from './types';
 import type { UseFormReturn } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 
 export interface AgentPromptOption {
   value: string;
@@ -18,13 +21,16 @@ interface PromptTemplateSectionProps {
   form: UseFormReturn<AgentFormValues>;
   promptOptions: AgentPromptOption[];
   loadingPrompts?: boolean;
+  showAddNew?: boolean;
 }
 
 export function PromptTemplateSection({
   form,
   promptOptions,
   loadingPrompts = false,
+  showAddNew = true,
 }: PromptTemplateSectionProps) {
+  const navigate = useNavigate();
   const selectedPrompt = promptOptions.find((option) => option.value === form.watch('agent_prompt'));
   const attachedVersion = form.watch('template_version_at_attach');
   const isLocked = form.watch('prompt_version_locked');
@@ -45,17 +51,25 @@ export function PromptTemplateSection({
           render={({ field }) => (
             <FormItem className="sm:col-span-2">
               <FormLabel>Agent Prompt</FormLabel>
-              <FormControl>
-                <Combobox
-                  options={promptOptions}
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  placeholder={loadingPrompts ? 'Loading templates...' : 'Select an Agent Prompt'}
-                  disabled={loadingPrompts}
-                  searchPlaceholder="Search templates..."
-                  emptyText="No active prompt templates found."
-                />
-              </FormControl>
+              <div className="flex items-center gap-2">
+                <FormControl>
+                  <Combobox
+                    options={promptOptions}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    placeholder={loadingPrompts ? 'Loading templates...' : 'Select an Agent Prompt'}
+                    disabled={loadingPrompts}
+                    searchPlaceholder="Search templates..."
+                    emptyText="No active prompt templates found."
+                  />
+                </FormControl>
+                {showAddNew ? (
+                  <Button type="button" variant="secondary" onClick={() => navigate('/prompts/new')}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    New
+                  </Button>
+                ) : null}
+              </div>
               <FormDescription>
                 Pick an active prompt from the shared template library. The backend records the current
                 version when you attach it.
