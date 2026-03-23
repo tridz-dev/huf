@@ -21,6 +21,7 @@ interface GeneralTabProps {
   onOptimizePrompt: () => void;
   promptOptions: AgentPromptOption[];
   loadingPrompts: boolean;
+  showAddNewPrompt?: boolean;
 }
 
 export function GeneralTab({
@@ -32,6 +33,7 @@ export function GeneralTab({
   onOptimizePrompt,
   promptOptions,
   loadingPrompts,
+  showAddNewPrompt = true,
 }: GeneralTabProps) {
   const watchEnablePromptCaching = form.watch('enable_prompt_caching');
   const promptMode = form.watch('prompt_mode');
@@ -238,7 +240,12 @@ export function GeneralTab({
           </CardContent>
         </Card>
       ) : (
-        <PromptTemplateSection form={form} promptOptions={promptOptions} loadingPrompts={loadingPrompts} />
+        <PromptTemplateSection
+          form={form}
+          promptOptions={promptOptions}
+          loadingPrompts={loadingPrompts}
+          showAddNew={showAddNewPrompt}
+        />
       )}
 
       <Card>
