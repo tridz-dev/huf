@@ -51,6 +51,10 @@ type AgentMcpServerRow = {
   description?: string | null;
 };
 
+type AgentUpdatePayload = Omit<Partial<AgentDoc>, "agent_tool"> & {
+  agent_tool: Array<{ tool: string }>;
+};
+
 function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
   return {
     agent_name: agent.agent_name || '',
@@ -491,8 +495,8 @@ export function AgentFormPage() {
             server_url: item.server_url || '',
             enabled: item.enabled === 1 || item.enabled === true ? 1 : 0,
             tool_count: item.tool_count || 0,
-            server_name: item.server_name, // May be included from Frappe's serialization
-            description: item.description, // May be included from Frappe's serialization
+            server_name: item.server_name ?? undefined, // May be included from Frappe's serialization
+            description: item.description ?? undefined, // May be included from Frappe's serialization
           }));
 
           // Fetch MCP Server documents to get the enabled status and other details
@@ -546,7 +550,7 @@ export function AgentFormPage() {
     setSaving(true);
     try {
       // Convert form values (booleans) to AgentDoc format (numbers 0/1)
-      const agentData: Partial<AgentDoc> = {
+      const agentData: AgentUpdatePayload = {
         agent_name: values.agent_name,
         provider: values.provider,
         model: values.model,
@@ -593,7 +597,7 @@ export function AgentFormPage() {
 
       if (isNew) {
         // Create new agent
-        const newAgent = await createAgent(agentData);
+        const newAgent = await createAgent(agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent created successfully!');
         // Reset form state with the created agent's values
         form.reset(mapAgentDocToFormValues(newAgent));
@@ -603,7 +607,7 @@ export function AgentFormPage() {
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
         // Update existing agent
-        await updateAgent(id, agentData);
+        await updateAgent(id, agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent updated successfully!');
         if (id) {
           getAgent(id).then((updatedData: AgentDoc) => {
@@ -620,8 +624,8 @@ export function AgentFormPage() {
                 server_url: item.server_url || '',
                 enabled: item.enabled === 1 || item.enabled === true ? 1 : 0,
                 tool_count: item.tool_count || 0,
-                server_name: item.server_name,
-                description: item.description,
+                server_name: item.server_name ?? undefined,
+                description: item.description ?? undefined,
               }));
 
               // Fetch MCP Server documents to get the enabled status
