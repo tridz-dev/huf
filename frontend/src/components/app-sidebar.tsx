@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -55,6 +55,11 @@ const navItems = [
     title: "MCP Servers",
     url: "/mcp",
     icon: Server,
+  },
+  {
+    title: "Agent Prompts",
+    url: "/prompts",
+    icon: ScrollText,
   },
 ]
 
