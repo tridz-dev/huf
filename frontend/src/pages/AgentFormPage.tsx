@@ -1053,6 +1053,7 @@ export function AgentFormPage() {
                   onOptimizePrompt={handleOptimizePrompt}
                   promptOptions={promptOptions}
                   loadingPrompts={loadingPrompts}
+                  showAddNewPrompt
                 />
               </TabsContent>
 
