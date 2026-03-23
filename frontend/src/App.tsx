@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
+import { PermissionsProvider } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
@@ -10,6 +11,7 @@ import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
+import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
@@ -41,6 +43,8 @@ import {
   checkStreamingAvailable,
   setStreamingAvailable,
 } from './services/streamChatApi';
+const UsersPage = lazy(() => import('./pages/UsersPage'));
+const RolesPage = lazy(() => import('./pages/RolesPage'));
 
 function App() {
   useEffect(() => {
@@ -105,6 +109,7 @@ function App() {
   return (
     <BrowserRouter basename="/huf">
       <UserProvider>
+        <PermissionsProvider>
         <Suspense fallback={<AuthenticatingPage />}>
           <Routes>
           <Route
@@ -352,6 +357,26 @@ function App() {
             }
           />
           <Route
+            path="/users"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<UsersHeaderActions />}>
+                  <UsersPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/roles"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <RolesPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="*"
             element={
               <ProtectedRoute>
@@ -366,6 +391,7 @@ function App() {
           </Routes>
         </Suspense>
         <Toaster />
+        </PermissionsProvider>
       </UserProvider>
     </BrowserRouter>
   );
