@@ -346,17 +346,32 @@ class Agent(Document):
 
     
     def has_permission(self, permission_type=None, verbose=False):
+        from huf.permissions import has_capability
         user = frappe.session.user
 
-        # System Manager and Owner always have access
-        if "System Manager" in frappe.get_roles(user) or self.owner == user:
+        # System Manager always has full access
+        if "System Manager" in frappe.get_roles(user):
+            return True
+
+        # Strict Capability Checks for Mutating Actions
+        if permission_type == "create":
+            return has_capability(user, "agent.create")
+        
+        if permission_type in ("write", "save"):
+            return has_capability(user, "agent.edit")
+
+        if permission_type == "delete":
+            return has_capability(user, "agent.delete")
+
+        # Access/Read Permissions
+        if self.owner == user:
             return True
 
         # Fetch the restrictions from the child tables
         allowed_users = [d.user for d in self.allowed_users]
         allowed_roles = [d.role for d in self.allowed_roles]
 
-        # If both lists are empty, anyone can access.
+        # If both lists are empty, anyone can access (standard Huf behavior)
         if not allowed_users and not allowed_roles:
             return True
 

@@ -1,5 +1,6 @@
 export const doctype = {
   User: "User",
+  Role: "Role",
   Agent: "Agent",
   "AI Provider": "AI Provider",
   "AI Model": "AI Model",

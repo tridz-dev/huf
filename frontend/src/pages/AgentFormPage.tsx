@@ -16,6 +16,7 @@ import { ToolFormModal } from '../components/tools/ToolFormModal';
 import type { ToolFormData } from '../types/toolTemplate.types';
 import { TriggerModal } from '../components/agent/TriggerModal';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
+import { db } from '../lib/frappe-sdk';
 import { AgentHeader } from '../components/agent/AgentHeader';
 import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
@@ -23,11 +24,11 @@ import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
 import { AdvancedTab } from '../components/agent/AdvancedTab';
 import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
+import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
-import { db } from '../lib/frappe-sdk';
 
 type PromptListRow = {
   name: string;
@@ -75,6 +76,9 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     prompt_version_locked: agent.prompt_version_locked === 1,
     template_version_at_attach:
       agent.template_version_at_attach !== undefined ? agent.template_version_at_attach : undefined,
+    allow_guest: agent.allow_guest === 1,
+    allowed_users: (agent.allowed_users || []).map((row) => row.user).filter(Boolean),
+    allowed_roles: (agent.allowed_roles || []).map((row) => row.role).filter(Boolean),
     copied_from_prompt: agent.copied_from_prompt ?? undefined,
     enable_prompt_caching: agent.enable_prompt_caching === 1,
     cache_control_type: agent.cache_control_type || '',
@@ -123,6 +127,12 @@ export function AgentFormPage() {
     tools: {
       label: 'Tools & MCP',
       fields: [], // Tools tab doesn't have form fields
+      default: false,
+      disabled: false,
+    },
+    permissions: {
+      label: 'Permissions',
+      fields: ['allow_guest', 'allowed_users', 'allowed_roles'],
       default: false,
       disabled: false,
     },
@@ -216,6 +226,8 @@ export function AgentFormPage() {
   const [initialMcpServers, setInitialMcpServers] = useState<MCPServerRef[]>([]); // Track initial MCP servers state
   const [mcpLoading, setMcpLoading] = useState(false);
   const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
+  const [users, setUsers] = useState<Array<{ name: string }>>([]);
+  const [roles, setRoles] = useState<Array<{ name: string }>>([]);
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
       defaultValues: {
@@ -236,6 +248,9 @@ export function AgentFormPage() {
         agent_prompt: '',
         prompt_version_locked: false,
         template_version_at_attach: undefined,
+        allow_guest: false,
+        allowed_users: [],
+        allowed_roles: [],
         enable_prompt_caching: false,
         cache_control_type: "",
         cache_system_message: false,
@@ -355,10 +370,14 @@ export function AgentFormPage() {
       getProviders(),
       getModels(),
       getToolTypes(),
-    ]).then(([providersData, modelsData, toolTypesData]) => {
+      db.getDocList('User', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
+      db.getDocList('Role', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
+    ]).then(([providersData, modelsData, toolTypesData, usersData, rolesData]) => {
       setProviders(providersData as AIProvider[]);
       setAllModels(modelsData);
       setToolTypes(toolTypesData);
+      setUsers(usersData as Array<{ name: string }>);
+      setRoles((rolesData as Array<{ name: string }>).filter((role) => role.name !== 'Guest'));
     }).catch((error) => {
       console.error('Error loading providers/models/types:', error);
       toast.error('Failed to load providers and models');
@@ -450,7 +469,49 @@ export function AgentFormPage() {
   useEffect(() => {
     if (id && !isNew) {
       getAgent(id).then((data: AgentDoc) => {
-        form.reset(mapAgentDocToFormValues(data));
+        // Resolved merge conflict: prefer using the utility function when available, fallback to explicit mapping if not.
+        if (typeof mapAgentDocToFormValues === 'function') {
+          form.reset(mapAgentDocToFormValues(data));
+        } else {
+          form.reset({
+            agent_name: data.agent_name || '',
+            provider: data.provider || '',
+            model: data.model || '',
+            temperature: data.temperature ?? 1,
+            top_p: data.top_p ?? 1,
+            disabled: data.disabled === 1,
+            allow_chat: data.allow_chat === 1,
+            persist_conversation: data.persist_conversation === 1,
+            persist_user_history: data.persist_user_history === 1,
+            enable_multi_run: data.enable_multi_run === 1,
+            description: data.description || '',
+            instructions: data.instructions || '',
+            default_plan: data.default_plan || [],
+            prompt_mode: data.prompt_mode || 'Local',
+            agent_prompt: data.agent_prompt || '',
+            prompt_version_locked: data.prompt_version_locked === 1,
+            template_version_at_attach: data.template_version_at_attach !== undefined ? data.template_version_at_attach : undefined,
+            allow_guest: data.allow_guest === 1,
+            allowed_users: (data.allowed_users || []).map((row) => row.user).filter(Boolean),
+            allowed_roles: (data.allowed_roles || []).map((row) => row.role).filter(Boolean),
+            enable_prompt_caching: data.enable_prompt_caching === 1,
+            cache_control_type: data.cache_control_type || '',
+            cache_system_message: data.cache_system_message === 1,
+            cache_conversation_history: data.cache_conversation_history === 1,
+            context_strategy: data.context_strategy || undefined,
+            summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
+            history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
+            max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
+            max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
+            enable_conversation_data: data.enable_conversation_data === 1,
+            autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
+  
+            image_generation_model: data.image_generation_model || undefined,
+            tts_model: data.tts_model || undefined,
+            tts_voice: data.tts_voice || '',
+            stt_model: data.stt_model || undefined,
+          });
+        }
         // Track initial disabled state and persisted allow_chat
         setInitialDisabled(data.disabled === 1);
         setAllowChat(data.allow_chat === 1);
@@ -568,6 +629,9 @@ export function AgentFormPage() {
         agent_prompt: values.agent_prompt || '',
         prompt_version_locked: values.prompt_version_locked ? 1 : 0,
         template_version_at_attach: values.template_version_at_attach !== undefined ? values.template_version_at_attach : undefined,
+        allow_guest: values.allow_guest ? 1 : 0,
+        allowed_users: (values.allowed_users || []).map((user) => ({ user })) as any,
+        allowed_roles: (values.allowed_roles || []).map((role) => ({ role })) as any,
         enable_prompt_caching: values.enable_prompt_caching ? 1 : 0,
         cache_control_type: values.cache_control_type || '',
         cache_system_message: values.cache_system_message ? 1 : 0,
@@ -600,7 +664,44 @@ export function AgentFormPage() {
         const newAgent = await createAgent(agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent created successfully!');
         // Reset form state with the created agent's values
-        form.reset(mapAgentDocToFormValues(newAgent));
+        form.reset({
+          agent_name: newAgent.agent_name || '',
+          provider: newAgent.provider || '',
+          model: newAgent.model || '',
+          temperature: newAgent.temperature ?? 1,
+          top_p: newAgent.top_p ?? 1,
+          disabled: newAgent.disabled === 1,
+          allow_chat: newAgent.allow_chat === 1,
+          persist_conversation: newAgent.persist_conversation === 1,
+          persist_user_history: newAgent.persist_user_history === 1,
+          enable_multi_run: newAgent.enable_multi_run === 1,
+          description: newAgent.description || '',
+          instructions: newAgent.instructions || '',
+          default_plan: newAgent.default_plan || [],
+          prompt_mode: newAgent.prompt_mode || 'Local',
+          agent_prompt: newAgent.agent_prompt || '',
+          prompt_version_locked: newAgent.prompt_version_locked === 1,
+          template_version_at_attach: newAgent.template_version_at_attach !== undefined ? newAgent.template_version_at_attach : undefined,
+          allow_guest: newAgent.allow_guest === 1,
+          allowed_users: (newAgent.allowed_users || []).map((row) => row.user).filter(Boolean),
+          allowed_roles: (newAgent.allowed_roles || []).map((row) => row.role).filter(Boolean),
+          enable_prompt_caching: newAgent.enable_prompt_caching === 1,
+          cache_control_type: newAgent.cache_control_type || '',
+          cache_system_message: newAgent.cache_system_message === 1,
+          cache_conversation_history: newAgent.cache_conversation_history === 1,
+          context_strategy: newAgent.context_strategy || undefined,
+          summary_ratio: newAgent.summary_ratio !== undefined && newAgent.summary_ratio !== null ? newAgent.summary_ratio : undefined,
+          history_limit: newAgent.history_limit !== undefined && newAgent.history_limit !== null ? newAgent.history_limit : undefined,
+          max_knowledge_tokens: newAgent.max_knowledge_tokens !== undefined && newAgent.max_knowledge_tokens !== null ? newAgent.max_knowledge_tokens : undefined,
+          max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
+          enable_conversation_data: newAgent.enable_conversation_data === 1,
+          autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
+
+          image_generation_model: newAgent.image_generation_model || undefined,
+          tts_model: newAgent.tts_model || undefined,
+          tts_voice: newAgent.tts_voice || '',
+          stt_model: newAgent.stt_model || undefined,
+        });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
         // Navigate to the edit page with the new agent's ID
@@ -609,6 +710,49 @@ export function AgentFormPage() {
         // Update existing agent
         await updateAgent(id, agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent updated successfully!');
+// Reset form state with the updated values to mark form as clean
+form.reset({
+  agent_name: values.agent_name,
+  provider: values.provider,
+  model: values.model,
+  temperature: values.temperature,
+  top_p: values.top_p,
+  disabled: values.disabled,
+  allow_chat: values.allow_chat,
+  persist_conversation: values.persist_conversation,
+  persist_user_history: values.persist_user_history,
+  enable_multi_run: values.enable_multi_run,
+  description: values.description,
+  instructions: values.instructions,
+  default_plan: values.default_plan || [],
+  prompt_mode: values.prompt_mode,
+  agent_prompt: values.agent_prompt,
+  prompt_version_locked: values.prompt_version_locked,
+  template_version_at_attach: values.template_version_at_attach,
+  allow_guest: values.allow_guest,
+  allowed_users: values.allowed_users || [],
+  allowed_roles: values.allowed_roles || [],
+  enable_prompt_caching: values.enable_prompt_caching,
+  cache_control_type: values.cache_control_type,
+  cache_system_message: values.cache_system_message,
+  cache_conversation_history: values.cache_conversation_history,
+  context_strategy: values.context_strategy,
+  summary_ratio: values.summary_ratio,
+  history_limit: values.history_limit,
+  max_knowledge_tokens: values.max_knowledge_tokens,
+  max_turns: values.max_turns,
+  enable_conversation_data: values.enable_conversation_data,
+  autonaming_of_conversation_title: values.autonaming_of_conversation_title,
+
+  image_generation_model: values.image_generation_model,
+  tts_model: values.tts_model,
+  tts_voice: values.tts_voice,
+  stt_model: values.stt_model,
+});
+// Reset tools, disabled state, and persisted allow_chat after successful update
+setInitialTools([...selectedTools]);
+setInitialDisabled(values.disabled);
+setAllowChat(values.allow_chat);
         if (id) {
           getAgent(id).then((updatedData: AgentDoc) => {
             form.reset(mapAgentDocToFormValues(updatedData));
@@ -1030,13 +1174,13 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid grid-cols-5 overflow-x-auto gap-2 md:gap-0">
+              <TabsList className="flex h-auto w-full justify-start overflow-x-auto overflow-y-hidden p-1">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
                     value={tabKey}
                     disabled={config.disabled}
-                    className="shrink-0 min-w-fit"
+                    className="flex-1 shrink-0"
                   >
                     {config.label}
                   </TabsTrigger>
@@ -1090,6 +1234,10 @@ export function AgentFormPage() {
                   onSyncMCP={handleSyncMCPServer}
                   mcpLoading={mcpLoading}
                 />
+              </TabsContent>
+
+              <TabsContent value="permissions" className="space-y-4">
+                <PermissionsTab form={form} users={users} roles={roles} />
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-4">
