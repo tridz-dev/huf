@@ -223,7 +223,7 @@ export interface AgentDoc {
   allowed_users?: AgentPermissionUserRow[];
   allowed_roles?: AgentPermissionRoleRow[];
   default_plan: AgentOrchestrationPlanRow[];
-  prompt_mode: string; // 'local' or 'template'
+  prompt_mode: 'Local' | 'Template';
   agent_prompt?: string;
   prompt_version_locked?: number; // 0 or 1
   template_version_at_attach?: number; // Version number when prompt was attached
