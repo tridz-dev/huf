@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, Users } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -76,6 +76,12 @@ const allNavItems = [
     icon: Users,
     capability: "users.manage",
   },
+  {
+    title: "Agent Prompts",
+    url: "/prompts",
+    icon: ScrollText,
+    capability: "agent.use",
+  },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -92,7 +98,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navItems = isLoading
     ? allNavItems.filter((item) => item.capability === null)
     : allNavItems.filter(
-        (item) => item.capability === null || hasCapability(item.capability),
+        (item) => item.capability === null || (item.capability && hasCapability(item.capability)),
       )
 
   return (

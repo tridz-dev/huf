@@ -1,11 +1,11 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
+import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolTypes, getToolFunction, updateToolFunction, getToolFunctionsByName } from '../services/toolApi';
@@ -23,11 +23,81 @@ import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
 import { AdvancedTab } from '../components/agent/AdvancedTab';
+import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
+
+type PromptListRow = {
+  name: string;
+  title?: string | null;
+  version?: number | null;
+  is_latest?: 0 | 1;
+  description?: string | null;
+};
+
+type AgentToolRow = {
+  tool?: string | null;
+};
+
+type AgentMcpServerRow = {
+  name?: string | null;
+  mcp_server: string;
+  server_url?: string | null;
+  enabled?: 0 | 1 | boolean;
+  tool_count?: number | null;
+  server_name?: string | null;
+  description?: string | null;
+};
+
+type AgentUpdatePayload = Omit<Partial<AgentDoc>, "agent_tool"> & {
+  agent_tool: Array<{ tool: string }>;
+};
+
+function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
+  return {
+    agent_name: agent.agent_name || '',
+    provider: agent.provider || '',
+    model: agent.model || '',
+    temperature: agent.temperature ?? 1,
+    top_p: agent.top_p ?? 1,
+    disabled: agent.disabled === 1,
+    allow_chat: agent.allow_chat === 1,
+    persist_conversation: agent.persist_conversation === 1,
+    persist_user_history: agent.persist_user_history === 1,
+    enable_multi_run: agent.enable_multi_run === 1,
+    description: agent.description || '',
+    instructions: agent.instructions || '',
+    default_plan: agent.default_plan || [],
+    prompt_mode: agent.prompt_mode || 'Local',
+    agent_prompt: agent.agent_prompt || '',
+    prompt_version_locked: agent.prompt_version_locked === 1,
+    template_version_at_attach:
+      agent.template_version_at_attach !== undefined ? agent.template_version_at_attach : undefined,
+    allow_guest: agent.allow_guest === 1,
+    allowed_users: (agent.allowed_users || []).map((row) => row.user).filter(Boolean),
+    allowed_roles: (agent.allowed_roles || []).map((row) => row.role).filter(Boolean),
+    copied_from_prompt: agent.copied_from_prompt ?? undefined,
+    enable_prompt_caching: agent.enable_prompt_caching === 1,
+    cache_control_type: agent.cache_control_type || '',
+    cache_system_message: agent.cache_system_message === 1,
+    cache_conversation_history: agent.cache_conversation_history === 1,
+    context_strategy: agent.context_strategy || undefined,
+    summary_ratio: agent.summary_ratio !== undefined && agent.summary_ratio !== null ? agent.summary_ratio : undefined,
+    history_limit: agent.history_limit !== undefined && agent.history_limit !== null ? agent.history_limit : undefined,
+    max_knowledge_tokens:
+      agent.max_knowledge_tokens !== undefined && agent.max_knowledge_tokens !== null ? agent.max_knowledge_tokens : undefined,
+    max_turns: agent.max_turns !== undefined && agent.max_turns !== null ? agent.max_turns : undefined,
+    enable_conversation_data: agent.enable_conversation_data === 1,
+    autonaming_of_conversation_title: agent.autonaming_of_conversation_title === 1,
+    image_generation_model: agent.image_generation_model || undefined,
+    tts_model: agent.tts_model || undefined,
+    tts_voice: agent.tts_voice || '',
+    stt_model: agent.stt_model || undefined,
+  };
+}
 
 export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
@@ -87,22 +157,13 @@ export function AgentFormPage() {
   } as const;
 
   // Extract derived values from tab config (memoized to avoid recreating on every render)
-  const validTabs = useMemo(() => Object.keys(tabConfig), []);
-  const defaultTab = useMemo(
-    () => Object.entries(tabConfig).find(([_, config]) => config.default)?.[0] || validTabs[0],
-    [validTabs]
+  const validTabs = Object.keys(tabConfig);
+  const defaultTab = Object.entries(tabConfig).find(([, config]) => config.default)?.[0] || validTabs[0];
+  const tabFieldMapping: TabFieldMapping = Object.fromEntries(
+    Object.entries(tabConfig).map(([key, config]) => [key, [...config.fields]])
   );
-  const tabFieldMapping: TabFieldMapping = useMemo(
-    () => Object.fromEntries(
-      Object.entries(tabConfig).map(([key, config]) => [key, [...config.fields]])
-    ),
-    []
-  );
-  const tabLabels = useMemo(
-    () => Object.fromEntries(
-      Object.entries(tabConfig).map(([key, config]) => [key, config.label])
-    ),
-    []
+  const tabLabels = Object.fromEntries(
+    Object.entries(tabConfig).map(([key, config]) => [key, config.label])
   );
   
   // State to track active tab from URL hash
@@ -141,6 +202,8 @@ export function AgentFormPage() {
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [allModels, setAllModels] = useState<AIModel[]>([]);
+  const [promptOptions, setPromptOptions] = useState<AgentPromptOption[]>([]);
+  const [loadingPrompts, setLoadingPrompts] = useState(false);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
@@ -321,6 +384,52 @@ export function AgentFormPage() {
     });
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPromptOptions = async () => {
+      setLoadingPrompts(true);
+      try {
+        const prompts = await db.getDocList('Agent Prompt', {
+          fields: ['name', 'title', 'version', 'is_latest', 'description'],
+          filters: [['is_active', '=', 1]],
+          limit: 500,
+          orderBy: { field: 'modified', order: 'desc' },
+        }) as PromptListRow[];
+
+        if (cancelled) {
+          return;
+        }
+
+        setPromptOptions(
+          prompts.map((prompt) => ({
+            value: prompt.name,
+            label: prompt.title || prompt.name,
+            description: prompt.description || undefined,
+            version: typeof prompt.version === 'number' ? prompt.version : undefined,
+            isLatest: prompt.is_latest === 1,
+          }))
+        );
+      } catch (error) {
+        console.error('Error loading prompt templates:', error);
+        if (!cancelled) {
+          setPromptOptions([]);
+          toast.error('Failed to load Agent Prompt templates');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingPrompts(false);
+        }
+      }
+    };
+
+    loadPromptOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Load models when provider changes
   useEffect(() => {
     if (watchProvider) {
@@ -339,48 +448,70 @@ export function AgentFormPage() {
     }
   }, [watchProvider, form]);
 
+  const watchPromptMode = form.watch('prompt_mode');
+  const watchAgentPrompt = form.watch('agent_prompt');
+
+  useEffect(() => {
+    if (watchPromptMode === 'Local') {
+      form.setValue('agent_prompt', '', { shouldDirty: false });
+      form.setValue('prompt_version_locked', false, { shouldDirty: false });
+      form.setValue('template_version_at_attach', undefined, { shouldDirty: false });
+      return;
+    }
+
+    if (watchPromptMode === 'Template' && !watchAgentPrompt) {
+      form.setValue('prompt_version_locked', false, { shouldDirty: false });
+      form.setValue('template_version_at_attach', undefined, { shouldDirty: false });
+    }
+  }, [watchPromptMode, watchAgentPrompt, form]);
+
   // Load agent data when id is available (only for edit mode)
   useEffect(() => {
     if (id && !isNew) {
       getAgent(id).then((data: AgentDoc) => {
-        form.reset({
-          agent_name: data.agent_name || '',
-          provider: data.provider || '',
-          model: data.model || '',
-          temperature: data.temperature ?? 1,
-          top_p: data.top_p ?? 1,
-          disabled: data.disabled === 1,
-          allow_chat: data.allow_chat === 1,
-          persist_conversation: data.persist_conversation === 1,
-          persist_user_history: data.persist_user_history === 1,
-          enable_multi_run: data.enable_multi_run === 1,
-          description: data.description || '',
-          instructions: data.instructions || '',
-          default_plan: data.default_plan || [],
-          prompt_mode: data.prompt_mode || 'Local',
-          agent_prompt: data.agent_prompt || '',
-          prompt_version_locked: data.prompt_version_locked === 1,
-          template_version_at_attach: data.template_version_at_attach !== undefined ? data.template_version_at_attach : undefined,
-          allow_guest: data.allow_guest === 1,
-          allowed_users: (data.allowed_users || []).map((row) => row.user).filter(Boolean),
-          allowed_roles: (data.allowed_roles || []).map((row) => row.role).filter(Boolean),
-          enable_prompt_caching: data.enable_prompt_caching === 1,
-          cache_control_type: data.cache_control_type || '',
-          cache_system_message: data.cache_system_message === 1,
-          cache_conversation_history: data.cache_conversation_history === 1,
-          context_strategy: data.context_strategy || undefined,
-          summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
-          history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
-          max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
-          max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
-          enable_conversation_data: data.enable_conversation_data === 1,
-          autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
-
-          image_generation_model: data.image_generation_model || undefined,
-          tts_model: data.tts_model || undefined,
-          tts_voice: data.tts_voice || '',
-          stt_model: data.stt_model || undefined,
-        });
+        // Resolved merge conflict: prefer using the utility function when available, fallback to explicit mapping if not.
+        if (typeof mapAgentDocToFormValues === 'function') {
+          form.reset(mapAgentDocToFormValues(data));
+        } else {
+          form.reset({
+            agent_name: data.agent_name || '',
+            provider: data.provider || '',
+            model: data.model || '',
+            temperature: data.temperature ?? 1,
+            top_p: data.top_p ?? 1,
+            disabled: data.disabled === 1,
+            allow_chat: data.allow_chat === 1,
+            persist_conversation: data.persist_conversation === 1,
+            persist_user_history: data.persist_user_history === 1,
+            enable_multi_run: data.enable_multi_run === 1,
+            description: data.description || '',
+            instructions: data.instructions || '',
+            default_plan: data.default_plan || [],
+            prompt_mode: data.prompt_mode || 'Local',
+            agent_prompt: data.agent_prompt || '',
+            prompt_version_locked: data.prompt_version_locked === 1,
+            template_version_at_attach: data.template_version_at_attach !== undefined ? data.template_version_at_attach : undefined,
+            allow_guest: data.allow_guest === 1,
+            allowed_users: (data.allowed_users || []).map((row) => row.user).filter(Boolean),
+            allowed_roles: (data.allowed_roles || []).map((row) => row.role).filter(Boolean),
+            enable_prompt_caching: data.enable_prompt_caching === 1,
+            cache_control_type: data.cache_control_type || '',
+            cache_system_message: data.cache_system_message === 1,
+            cache_conversation_history: data.cache_conversation_history === 1,
+            context_strategy: data.context_strategy || undefined,
+            summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
+            history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
+            max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
+            max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
+            enable_conversation_data: data.enable_conversation_data === 1,
+            autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
+  
+            image_generation_model: data.image_generation_model || undefined,
+            tts_model: data.tts_model || undefined,
+            tts_voice: data.tts_voice || '',
+            stt_model: data.stt_model || undefined,
+          });
+        }
         // Track initial disabled state and persisted allow_chat
         setInitialDisabled(data.disabled === 1);
         setAllowChat(data.allow_chat === 1);
@@ -388,7 +519,7 @@ export function AgentFormPage() {
         // agent_tool is a child table with format: [{ tool: "tool-name" }, ...]
         if (data.agent_tool && Array.isArray(data.agent_tool) && data.agent_tool.length > 0) {
           // Fetch full tool details for each tool reference
-          const toolNames = data.agent_tool.map((item: any) => item.tool).filter(Boolean);
+          const toolNames = (data.agent_tool as AgentToolRow[]).map((item) => item.tool).filter(Boolean) as string[];
           if (toolNames.length > 0) {
             getToolFunctionsByName(toolNames)
               .then((tools) => {
@@ -419,14 +550,14 @@ export function AgentFormPage() {
         // Load MCP servers from agent_mcp_server child table (already in agent document)
         if (data.agent_mcp_server && Array.isArray(data.agent_mcp_server) && data.agent_mcp_server.length > 0) {
           // First, map child table data to MCPServerRef format
-          const childTableServers: MCPServerRef[] = data.agent_mcp_server.map((item: any) => ({
+          const childTableServers: MCPServerRef[] = (data.agent_mcp_server as AgentMcpServerRow[]).map((item) => ({
             name: item.name || '', // Child table row name
             mcp_server: item.mcp_server, // Link to MCP Server DocType
             server_url: item.server_url || '',
             enabled: item.enabled === 1 || item.enabled === true ? 1 : 0,
             tool_count: item.tool_count || 0,
-            server_name: item.server_name, // May be included from Frappe's serialization
-            description: item.description, // May be included from Frappe's serialization
+            server_name: item.server_name ?? undefined, // May be included from Frappe's serialization
+            description: item.description ?? undefined, // May be included from Frappe's serialization
           }));
 
           // Fetch MCP Server documents to get the enabled status and other details
@@ -476,11 +607,11 @@ export function AgentFormPage() {
     }
   }, [id, isNew, form]);
 
-  const onSubmit = async (values: AgentFormValues) => {
+  const onSubmit = useCallback(async (values: AgentFormValues) => {
     setSaving(true);
     try {
       // Convert form values (booleans) to AgentDoc format (numbers 0/1)
-      const agentData: Partial<AgentDoc> = {
+      const agentData: AgentUpdatePayload = {
         agent_name: values.agent_name,
         provider: values.provider,
         model: values.model,
@@ -520,7 +651,7 @@ export function AgentFormPage() {
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
-        })) as any,
+        })),
         // Include MCP servers - Frappe child table format: array of objects with 'mcp_server' field and 'enabled' field
         agent_mcp_server: mcpServers.map((server) => ({
           mcp_server: server.mcp_server, // This is the link field to MCP Server DocType
@@ -530,7 +661,7 @@ export function AgentFormPage() {
 
       if (isNew) {
         // Create new agent
-        const newAgent = await createAgent(agentData);
+        const newAgent = await createAgent(agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent created successfully!');
         // Reset form state with the created agent's values
         form.reset({
@@ -577,64 +708,68 @@ export function AgentFormPage() {
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
         // Update existing agent
-        await updateAgent(id, agentData);
+        await updateAgent(id, agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent updated successfully!');
-        // Reset form state with the updated values to mark form as clean
-        form.reset({
-          agent_name: values.agent_name,
-          provider: values.provider,
-          model: values.model,
-          temperature: values.temperature,
-          top_p: values.top_p,
-          disabled: values.disabled,
-          allow_chat: values.allow_chat,
-          persist_conversation: values.persist_conversation,
-          persist_user_history: values.persist_user_history,
-          enable_multi_run: values.enable_multi_run,
-          description: values.description,
-          instructions: values.instructions,
-          default_plan: values.default_plan || [],
-          prompt_mode: values.prompt_mode,
-          agent_prompt: values.agent_prompt,
-          prompt_version_locked: values.prompt_version_locked,
-          template_version_at_attach: values.template_version_at_attach,
-          allow_guest: values.allow_guest,
-          allowed_users: values.allowed_users || [],
-          allowed_roles: values.allowed_roles || [],
-          enable_prompt_caching: values.enable_prompt_caching,
-          cache_control_type: values.cache_control_type,
-          cache_system_message: values.cache_system_message,
-          cache_conversation_history: values.cache_conversation_history,
-          context_strategy: values.context_strategy,
-          summary_ratio: values.summary_ratio,
-          history_limit: values.history_limit,
-          max_knowledge_tokens: values.max_knowledge_tokens,
-          max_turns: values.max_turns,
-          enable_conversation_data: values.enable_conversation_data,
-          autonaming_of_conversation_title: values.autonaming_of_conversation_title,
+// Reset form state with the updated values to mark form as clean
+form.reset({
+  agent_name: values.agent_name,
+  provider: values.provider,
+  model: values.model,
+  temperature: values.temperature,
+  top_p: values.top_p,
+  disabled: values.disabled,
+  allow_chat: values.allow_chat,
+  persist_conversation: values.persist_conversation,
+  persist_user_history: values.persist_user_history,
+  enable_multi_run: values.enable_multi_run,
+  description: values.description,
+  instructions: values.instructions,
+  default_plan: values.default_plan || [],
+  prompt_mode: values.prompt_mode,
+  agent_prompt: values.agent_prompt,
+  prompt_version_locked: values.prompt_version_locked,
+  template_version_at_attach: values.template_version_at_attach,
+  allow_guest: values.allow_guest,
+  allowed_users: values.allowed_users || [],
+  allowed_roles: values.allowed_roles || [],
+  enable_prompt_caching: values.enable_prompt_caching,
+  cache_control_type: values.cache_control_type,
+  cache_system_message: values.cache_system_message,
+  cache_conversation_history: values.cache_conversation_history,
+  context_strategy: values.context_strategy,
+  summary_ratio: values.summary_ratio,
+  history_limit: values.history_limit,
+  max_knowledge_tokens: values.max_knowledge_tokens,
+  max_turns: values.max_turns,
+  enable_conversation_data: values.enable_conversation_data,
+  autonaming_of_conversation_title: values.autonaming_of_conversation_title,
 
-          image_generation_model: values.image_generation_model,
-          tts_model: values.tts_model,
-          tts_voice: values.tts_voice,
-          stt_model: values.stt_model,
-        });
-        // Reset tools, disabled state, and persisted allow_chat after successful update
-        setInitialTools([...selectedTools]);
-        setInitialDisabled(values.disabled);
-        setAllowChat(values.allow_chat);
-        // Reload agent to get updated MCP servers from the agent document
+  image_generation_model: values.image_generation_model,
+  tts_model: values.tts_model,
+  tts_voice: values.tts_voice,
+  stt_model: values.stt_model,
+});
+// Reset tools, disabled state, and persisted allow_chat after successful update
+setInitialTools([...selectedTools]);
+setInitialDisabled(values.disabled);
+setAllowChat(values.allow_chat);
         if (id) {
           getAgent(id).then((updatedData: AgentDoc) => {
+            form.reset(mapAgentDocToFormValues(updatedData));
+            // Reset tools, disabled state, and persisted allow_chat after successful update
+            setInitialTools([...selectedTools]);
+            setInitialDisabled(updatedData.disabled === 1);
+            setAllowChat(updatedData.allow_chat === 1);
             // Reload MCP servers from updated agent document
             if (updatedData.agent_mcp_server && Array.isArray(updatedData.agent_mcp_server) && updatedData.agent_mcp_server.length > 0) {
-              const childTableServers: MCPServerRef[] = updatedData.agent_mcp_server.map((item: any) => ({
+              const childTableServers: MCPServerRef[] = (updatedData.agent_mcp_server as AgentMcpServerRow[]).map((item) => ({
                 name: item.name || '',
                 mcp_server: item.mcp_server,
                 server_url: item.server_url || '',
                 enabled: item.enabled === 1 || item.enabled === true ? 1 : 0,
                 tool_count: item.tool_count || 0,
-                server_name: item.server_name,
-                description: item.description,
+                server_name: item.server_name ?? undefined,
+                description: item.description ?? undefined,
               }));
 
               // Fetch MCP Server documents to get the enabled status
@@ -677,7 +812,7 @@ export function AgentFormPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [form, id, isNew, mcpServers, navigate, selectedTools]);
 
   // Memoize the form submit handler to avoid recreating it on every render
   const handleFormSubmit = useMemo(
@@ -778,7 +913,7 @@ export function AgentFormPage() {
         setToolFormData({
           tool_name: tool.tool_name,
           tool_type: tool.tool_type,
-          types: tool.types as any,
+          types: tool.types as ToolType,
           description: tool.description,
           reference_doctype: tool.reference_doctype,
           agent: tool.agent,
@@ -1060,6 +1195,9 @@ export function AgentFormPage() {
                   watchProvider={watchProvider}
                   optimizingPrompt={optimizingPrompt}
                   onOptimizePrompt={handleOptimizePrompt}
+                  promptOptions={promptOptions}
+                  loadingPrompts={loadingPrompts}
+                  showAddNewPrompt
                 />
               </TabsContent>
 

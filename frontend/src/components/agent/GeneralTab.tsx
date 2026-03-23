@@ -10,6 +10,7 @@ import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
 import { InstructionsTextarea } from './InstructionsTextarea';
+import { PromptTemplateSection, type AgentPromptOption } from './PromptTemplateSection';
 
 interface GeneralTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -18,10 +19,25 @@ interface GeneralTabProps {
   watchProvider: string;
   optimizingPrompt: boolean;
   onOptimizePrompt: () => void;
+  promptOptions: AgentPromptOption[];
+  loadingPrompts: boolean;
+  showAddNewPrompt?: boolean;
 }
 
-export function GeneralTab({ form, providers, models, watchProvider, optimizingPrompt, onOptimizePrompt }: GeneralTabProps) {
-  const watchEnablePromptCaching = form.watch("enable_prompt_caching");
+export function GeneralTab({
+  form,
+  providers,
+  models,
+  watchProvider,
+  optimizingPrompt,
+  onOptimizePrompt,
+  promptOptions,
+  loadingPrompts,
+  showAddNewPrompt = true,
+}: GeneralTabProps) {
+  const watchEnablePromptCaching = form.watch('enable_prompt_caching');
+  const promptMode = form.watch('prompt_mode');
+
   return (
     <div className="space-y-6">
       <Card>
@@ -110,11 +126,7 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Model</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  disabled={!watchProvider}
-                >
+                <Select onValueChange={field.onChange} value={field.value} disabled={!watchProvider}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select model" />
@@ -143,17 +155,9 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
               <FormItem>
                 <FormLabel>Temperature: {field.value}</FormLabel>
                 <FormControl>
-                  <Slider
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={[field.value]}
-                    onValueChange={(vals) => field.onChange(vals[0])}
-                  />
+                  <Slider min={0} max={2} step={0.1} value={[field.value]} onValueChange={(vals) => field.onChange(vals[0])} />
                 </FormControl>
-                <FormDescription>
-                  Lower = focused, higher = creative
-                </FormDescription>
+                <FormDescription>Lower = focused, higher = creative</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -166,26 +170,50 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
               <FormItem>
                 <FormLabel>Top P: {field.value}</FormLabel>
                 <FormControl>
-                  <Slider
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={[field.value]}
-                    onValueChange={(vals) => field.onChange(vals[0])}
-                  />
+                  <Slider min={0} max={1} step={0.05} value={[field.value]} onValueChange={(vals) => field.onChange(vals[0])} />
                 </FormControl>
+                <FormDescription>Nucleus sampling parameter</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Prompt Source</CardTitle>
+          <CardDescription>Choose whether this agent uses inline instructions or a reusable prompt template.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="prompt_mode"
+            render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel>Prompt Mode</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select prompt mode" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Local">Local</SelectItem>
+                    <SelectItem value="Template">Template</SelectItem>
+                  </SelectContent>
+                </Select>
                 <FormDescription>
-                  Nucleus sampling parameter
+                  Local mode stores instructions directly on the agent. Template mode links to a reusable Agent Prompt from the library.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
-
         </CardContent>
       </Card>
 
-      {form.watch("prompt_mode") === "Local" && (
+      {promptMode === 'Local' ? (
         <Card>
           <CardHeader>
             <CardTitle>Instructions</CardTitle>
@@ -211,6 +239,13 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
             />
           </CardContent>
         </Card>
+      ) : (
+        <PromptTemplateSection
+          form={form}
+          promptOptions={promptOptions}
+          loadingPrompts={loadingPrompts}
+          showAddNew={showAddNewPrompt}
+        />
       )}
 
       <Card>
@@ -229,8 +264,7 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Enable Prompt Caching</FormLabel>
                   <FormDescription>
-                    Enable prompt caching to cache repeated prompt content and reduce token costs. Only
-                    works with supported providers (OpenAI, Anthropic, Bedrock, Deepseek).
+                    Enable prompt caching to cache repeated prompt content and reduce token costs. Only works with supported providers (OpenAI, Anthropic, Bedrock, Deepseek).
                   </FormDescription>
                 </div>
                 <FormControl>
@@ -259,8 +293,7 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    Cache control type: &apos;ephemeral&apos; for Anthropic (charges for cache writes),
-                    &apos;auto&apos; for OpenAI/Deepseek (automatic caching).
+                    Cache control type: &apos;ephemeral&apos; for Anthropic (charges for cache writes), &apos;auto&apos; for OpenAI/Deepseek (automatic caching).
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -297,8 +330,7 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
                   <div className="space-y-0.5">
                     <FormLabel className="text-base">Cache Conversation History</FormLabel>
                     <FormDescription>
-                      Cache conversation history messages to reduce token usage in multi-turn
-                      conversations.
+                      Cache conversation history messages to reduce token usage in multi-turn conversations.
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -313,4 +345,3 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
     </div>
   );
 }
-
