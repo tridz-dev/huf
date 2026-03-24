@@ -74,7 +74,20 @@ def after_install():
     """
     try:
         import litellm
-        frappe.msgprint("✅ LiteLLM is installed and ready to use.")
+        from importlib.metadata import version as get_installed_version
+
+        litellm_version = get_installed_version("litellm")
+        compromised_versions = {"1.82.7", "1.82.8"}
+
+        if litellm_version in compromised_versions:
+            frappe.msgprint(
+                "🚨 Compromised LiteLLM version detected "
+                f"({litellm_version}). Rotate credentials and reinstall a safe version immediately.",
+                indicator="red",
+                title="Critical Security Alert",
+            )
+        else:
+            frappe.msgprint(f"✅ LiteLLM is installed and ready to use (v{litellm_version}).")
     except ImportError:
         frappe.msgprint(
             "⚠️ LiteLLM package not found. "
