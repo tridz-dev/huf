@@ -1,25 +1,26 @@
 import frappe
 import json
 from functools import wraps
+import odoo_client_lib as odoo_lib
 from .connector import OdooConnector
-from .exceptions import OdooAuthError, OdooRateLimitError, OdooRPCError, OdooJSON2Error
+from .exceptions import OdooAuthError, OdooRateLimitError
 
 
 def odoo_safe_invoke(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except OdooAuthError:
-            return {"success": False, "error": "Authentication Failed", "suggestion": "Check Odoo credentials and user permissions."}
-        except OdooRateLimitError:
-            return {"success": False, "error": "Rate Limit Exceeded", "suggestion": "Odoo SaaS limits reached. Please slow down migrations or high-frequency tasks."}
-        except (OdooRPCError, OdooJSON2Error) as e:
-            return {"success": False, "error": str(e), "suggestion": "Verify model name, fields, and search domains."}
-        except Exception as e:
-            frappe.log_error(frappe.get_traceback(), "Odoo Tool Error")
-            return {"success": False, "error": str(e)}
-    return wrapper
+	@wraps(f)
+	def wrapper(*args, **kwargs):
+		try:
+			return f(*args, **kwargs)
+		except OdooAuthError:
+			return {"success": False, "error": "Authentication Failed", "suggestion": "Check Odoo credentials and user permissions."}
+		except OdooRateLimitError:
+			return {"success": False, "error": "Rate Limit Exceeded", "suggestion": "Odoo SaaS limits reached. Please slow down migrations or high-frequency tasks."}
+		except odoo_lib.Error as e:
+			return {"success": False, "error": str(e), "suggestion": "Verify model name, fields, and search domains."}
+		except Exception as e:
+			frappe.log_error(frappe.get_traceback(), "Odoo Tool Error")
+			return {"success": False, "error": str(e)}
+	return wrapper
 
 
 @odoo_safe_invoke
