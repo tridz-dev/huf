@@ -2,19 +2,43 @@
 
 ## Why This Exists
 
-**Odoo has no native webhook system.** There is no built-in event bus, no pub/sub, no outgoing webhook configuration UI. The closest thing is `base.automation` (Automated Actions), which can run server code on record events — but it requires:
+### Odoo Webhook Capability by Version
 
-1. Manual per-model configuration inside Odoo's Settings → Technical → Automated Actions
-2. Writing Python snippets in "Execute Code" actions to construct and send HTTP requests
-3. The `base_automation` module to be installed (it is in Enterprise, not always in Community)
-4. Admin-level access to Odoo to set this up
+Odoo's webhook story has evolved significantly across versions:
 
-This means **no Odoo customer gets real-time event-driven integration out of the box**. HUF currently compensates with:
+| Odoo Version | Outbound Webhook Capability |
+|---|---|
+| **15–16** | **None.** Only `base.automation` → "Execute Code" (write raw Python to construct and POST HTTP requests manually). |
+| **17** | `base.automation` adds **"External trigger"** — an inbound webhook URL that triggers an automation rule. No native *outbound* webhook action. Outbound still requires "Execute Code" with hand-written Python. |
+| **18** | Dedicated **Webhooks** documentation + **"Send Webhook Notification"** as a first-class automation action type. This is the first version with true native outbound webhooks. |
+| **19+** | Same as 18, more explicitly documented. |
+
+### What This Means for HUF
+
+**For Odoo 18+**: Customers *can* use native "Send Webhook Notification" automation rules to push events to HUF's webhook receiver. However, this still requires:
+1. One automation rule per model × event type (e.g., `sale.order` on create, `sale.order` on write = 2 rules)
+2. Manual configuration for each model the customer wants to monitor
+3. Admin-level access to Odoo's Settings → Technical → Automated Actions
+
+**For Odoo 15–17**: No native outbound webhooks at all. The only options are:
+- Hand-written Python in "Execute Code" automation actions (fragile, per-model)
+- Polling from HUF's side (`write_date > last_sync` every 5 minutes)
+
+**For all versions**: No Odoo customer gets event-driven integration "out of the box." HUF currently compensates with:
 
 - **Polling** (`write_date > last_sync` every 5 minutes) — works everywhere, but laggy
-- **Webhook receiver** — works if the customer manually wires up `base.automation` actions to POST to HUF's endpoint
+- **Webhook receiver** — works if the customer manually configures automation rules (native on 18+, code snippets on 15–17)
 
-Neither is ideal. A thin companion Odoo module eliminates both problems.
+### Why a Companion Module Is Still Valuable
+
+Even with Odoo 18+'s native webhooks, the companion module provides:
+
+1. **One-click setup** vs. creating N automation rules manually
+2. **Consistent payload format** — native webhook payloads vary; the module ensures HUF gets exactly what it expects
+3. **Bulk model coverage** — monitor 20 models with one wizard, not 40+ manual rules
+4. **Odoo 15–17 support** — the only zero-config option for older versions
+5. **Batched events** — deduplicates rapid successive writes before pushing to HUF
+6. **Future-proof** — module handles version differences internally
 
 ---
 
@@ -481,21 +505,85 @@ The setup wizard pre-populates common models, but the user can add **any model**
 
 ---
 
+## Integration Strategy by Odoo Version
+
+There are **three** paths to get events from Odoo to HUF, and the right one depends on the customer's Odoo version and hosting:
+
+### Path A: Native Webhooks (Odoo 18+)
+Odoo 18 introduced **"Send Webhook Notification"** as a first-class automation action. Customers can:
+1. Go to Settings → Technical → Automated Actions
+2. Create a rule: "When sale.order is created → Send Webhook Notification to HUF URL"
+3. Repeat for each model × event combination
+
+**Pros**: Zero custom code, works on Odoo.com SaaS (Custom plan), officially supported.
+**Cons**: Manual setup per model × event (20 models × 2 events = 40 rules), payload format is Odoo's native format (may need normalization on HUF side).
+
+### Path B: Companion Module (Odoo 15+, self-hosted / Odoo.sh)
+The `huf_connector` module described in this document.
+
+**Pros**: One-click setup, consistent payload format, works on 15-19+, batching, bulk coverage.
+**Cons**: Requires ability to install custom modules (not possible on Odoo.com SaaS Standard).
+
+### Path C: Polling Fallback (All versions, all hosting)
+HUF's built-in `write_date > last_sync` polling every 5 minutes.
+
+**Pros**: Works everywhere, zero Odoo-side configuration.
+**Cons**: 5-minute latency, can't detect deletes, wastes queries when nothing changed.
+
+### Decision Matrix
+
+| Customer Setup | Recommended Path | Fallback |
+|---|---|---|
+| **Odoo 18+ on Odoo.com (Custom plan)** | A (Native Webhooks) | C (Polling) |
+| **Odoo 18+ on Odoo.com (Standard plan)** | C (Polling only) | — |
+| **Odoo 18+ on Odoo.sh / self-hosted** | B (Companion Module) | A (Native Webhooks) |
+| **Odoo 15–17 on Odoo.sh / self-hosted** | B (Companion Module) | C (Polling) |
+| **Odoo 15–17 on Odoo.com** | C (Polling only) | — |
+
 ## Current HUF Approach vs. Companion Module
 
-| Aspect | Current (Polling + Manual Webhooks) | With Companion Module |
-|--------|-------------------------------------|----------------------|
-| **Latency** | 5 min (polling) or real-time (if manually configured) | Real-time (sub-second) |
-| **Setup effort** | User must configure `base.automation` per model | Install module → run wizard → done |
-| **Module coverage** | Whatever the user manually wires up | All models, one click |
-| **Odoo SaaS compatibility** | Polling works; webhooks need `base.automation` access | Needs custom module install (Odoo.sh or self-hosted only) |
-| **Odoo Community** | Works (polling) | Works (module installs normally) |
-| **Odoo Enterprise SaaS (Standard)** | Polling only (no custom code) | **Not supported** — can't install custom modules |
-| **Odoo.sh / Self-hosted** | Full support | Full support |
-| **Reliability** | Polling can miss rapid changes within 5-min window | Every ORM event is captured |
-| **Load on Odoo** | Polling queries every 5 min even with no changes | Zero overhead when idle; only fires on actual events |
+| Aspect | Polling | Native Webhooks (18+) | Companion Module |
+|--------|---------|----------------------|-----------------|
+| **Latency** | 5 min | Real-time | Real-time (sub-second) |
+| **Setup effort** | Zero | 1 rule per model × event | Install module → run wizard → done |
+| **Module coverage** | All (via write_date) | Manual per model | All models, one click |
+| **Odoo SaaS** | Works | Works (Custom plan, 18+) | **Not supported** |
+| **Odoo Community** | Works | No (base_automation is Enterprise) | Works |
+| **Odoo.sh / Self-hosted** | Works | Works (18+) | Works |
+| **Detect deletes** | No | Yes (if configured) | Yes |
+| **Payload consistency** | N/A | Odoo's native format | HUF-optimized format |
+| **Reliability** | Can miss rapid changes | Per-event | Every ORM event captured |
+| **Load on Odoo** | Queries every 5 min | Zero when idle | Zero when idle |
 
-**Conclusion**: The companion module is the right path for Odoo.sh and self-hosted customers. Polling remains necessary as a fallback for Odoo SaaS Standard customers who cannot install custom modules.
+**Conclusion**: The companion module is the best path for Odoo.sh and self-hosted customers (any version). Native webhooks are a good alternative for Odoo 18+ customers who prefer no custom modules. Polling remains the universal fallback.
+
+---
+
+## Transport Layer: `odoo-client-lib` Evaluation
+
+HUF currently uses a hand-rolled transport layer (~107 lines across `protocols/xmlrpc.py`, `jsonrpc.py`, `json2.py`) plus a ~95-line connector class. [`odoo-client-lib`](https://github.com/OCA/odoo-client-lib) is a Python client that wraps XML-RPC, JSON-RPC, and JSON-2 with model-style API and version auto-detection (6.1+ for XML-RPC, 8.0+ for JSON-RPC, 19.0+ for JSON-2).
+
+### Current state: NOT using `odoo-client-lib`
+
+It is not in `pyproject.toml`. All transport code is ours.
+
+### Should we adopt it?
+
+| | Hand-rolled (current) | `odoo-client-lib` |
+|---|---|---|
+| Code to maintain | ~200 lines (protocols + connector) | ~50 lines of adapter |
+| Version coverage | 15-19+ (manually tested) | 6.1-19+ (community-tested) |
+| Protocol auto-detect | Our own logic | Built-in |
+| Secure variants (xmlrpcs, jsonrpcs) | Not implemented | Supported |
+| Dependency risk | Zero | One more PyPI dep |
+| Control over transport | Full | Can still call raw methods |
+
+**Recommendation**: Consider adopting for Phase 2 of the integration. Our current layer works but `odoo-client-lib` would give us secure transport variants (TLS-wrapped RPC) for free and reduce maintenance. The library's author notes that for JSON-2 (Odoo 19+) it's "less useful" since the REST API is simpler — which aligns with our `json2.py` being only 42 lines.
+
+If adopted, the migration path would be:
+1. Add `odoo-client-lib` to `pyproject.toml`
+2. Replace `protocols/` directory with a thin adapter using `odoo_client_lib.get_connection()`
+3. Keep `OdooConnector` as the HUF-facing interface — only the transport changes
 
 ---
 
