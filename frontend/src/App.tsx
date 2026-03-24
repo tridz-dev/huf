@@ -10,6 +10,7 @@ import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
+import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
@@ -33,6 +34,8 @@ const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPage = lazy(() => import('./pages/AgentRunDetailPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
+const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
+const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourceFormPageWrapper'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
@@ -321,6 +324,28 @@ function App() {
                     <NotFoundPage />
                   </Suspense>
                 </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/knowledge"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<KnowledgeHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <KnowledgeSourcesPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/knowledge/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <KnowledgeSourceFormPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
