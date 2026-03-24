@@ -227,20 +227,18 @@ scheduler_events = {
 	"cron": {
 		"*/5 * * * *": [
 			"huf.ai.odoo.polling.run_polling_sync"
+		],
+		"*/1 * * * *": [
+			"huf.ai.orchestration.scheduler.process_orchestrations"
 		]
 	},
 	"daily": [
 		"huf.ai.knowledge.maintenance.cleanup_orphaned_files",
 		"huf.ai.knowledge.maintenance.optimize_indexes",
 	],
-    "cron": {
-        "*/1 * * * *": [
-            "huf.ai.orchestration.scheduler.process_orchestrations"
-        ]
-    },
-    "hourly": [
-        "huf.ai.mcp_client.auto_sync_mcp_server_tools"
-    ]
+	"hourly": [
+		"huf.ai.mcp_client.auto_sync_mcp_server_tools"
+	]
 }
 
 
