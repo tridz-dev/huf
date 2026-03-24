@@ -8,10 +8,11 @@ Odoo's webhook story has evolved significantly across versions:
 
 | Odoo Version | Outbound Webhook Capability |
 |---|---|
-| **15–16** | **None.** Only `base.automation` → "Execute Code" (write raw Python to construct and POST HTTP requests manually). |
 | **17** | `base.automation` adds **"External trigger"** — an inbound webhook URL that triggers an automation rule. No native *outbound* webhook action. Outbound still requires "Execute Code" with hand-written Python. |
 | **18** | Dedicated **Webhooks** documentation + **"Send Webhook Notification"** as a first-class automation action type. This is the first version with true native outbound webhooks. |
 | **19+** | Same as 18, more explicitly documented. |
+
+> **HUF supports Odoo 17+ only.** Versions 15–16 are out of scope.
 
 ### What This Means for HUF
 
@@ -20,14 +21,14 @@ Odoo's webhook story has evolved significantly across versions:
 2. Manual configuration for each model the customer wants to monitor
 3. Admin-level access to Odoo's Settings → Technical → Automated Actions
 
-**For Odoo 15–17**: No native outbound webhooks at all. The only options are:
+**For Odoo 17**: No native outbound webhooks. The only options are:
 - Hand-written Python in "Execute Code" automation actions (fragile, per-model)
 - Polling from HUF's side (`write_date > last_sync` every 5 minutes)
 
-**For all versions**: No Odoo customer gets event-driven integration "out of the box." HUF currently compensates with:
+**For all supported versions (17+)**: No Odoo customer gets event-driven integration "out of the box." HUF currently compensates with:
 
 - **Polling** (`write_date > last_sync` every 5 minutes) — works everywhere, but laggy
-- **Webhook receiver** — works if the customer manually configures automation rules (native on 18+, code snippets on 15–17)
+- **Webhook receiver** — works if the customer manually configures automation rules (native on 18+, code snippets on 17)
 
 ### Why a Companion Module Is Still Valuable
 
@@ -36,7 +37,7 @@ Even with Odoo 18+'s native webhooks, the companion module provides:
 1. **One-click setup** vs. creating N automation rules manually
 2. **Consistent payload format** — native webhook payloads vary; the module ensures HUF gets exactly what it expects
 3. **Bulk model coverage** — monitor 20 models with one wizard, not 40+ manual rules
-4. **Odoo 15–17 support** — the only zero-config option for older versions
+4. **Odoo 17 support** — the only zero-config option for pre-18 versions
 5. **Batched events** — deduplicates rapid successive writes before pushing to HUF
 6. **Future-proof** — module handles version differences internally
 
@@ -455,7 +456,7 @@ class HufSetupWizard(models.TransientModel):
 # __manifest__.py
 {
     "name": "HUF Connector",
-    "version": "17.0.1.0.0",
+    "version": "1.0.0",  # Version per Odoo target in separate branches (17.0, 18.0, 19.0)
     "category": "Technical",
     "summary": "Real-time event bridge between Odoo and HUF AI platform",
     "description": """
@@ -518,10 +519,10 @@ Odoo 18 introduced **"Send Webhook Notification"** as a first-class automation a
 **Pros**: Zero custom code, works on Odoo.com SaaS (Custom plan), officially supported.
 **Cons**: Manual setup per model × event (20 models × 2 events = 40 rules), payload format is Odoo's native format (may need normalization on HUF side).
 
-### Path B: Companion Module (Odoo 15+, self-hosted / Odoo.sh)
+### Path B: Companion Module (Odoo 17+, self-hosted / Odoo.sh)
 The `huf_connector` module described in this document.
 
-**Pros**: One-click setup, consistent payload format, works on 15-19+, batching, bulk coverage.
+**Pros**: One-click setup, consistent payload format, works on 17-19+, batching, bulk coverage.
 **Cons**: Requires ability to install custom modules (not possible on Odoo.com SaaS Standard).
 
 ### Path C: Polling Fallback (All versions, all hosting)
@@ -537,8 +538,8 @@ HUF's built-in `write_date > last_sync` polling every 5 minutes.
 | **Odoo 18+ on Odoo.com (Custom plan)** | A (Native Webhooks) | C (Polling) |
 | **Odoo 18+ on Odoo.com (Standard plan)** | C (Polling only) | — |
 | **Odoo 18+ on Odoo.sh / self-hosted** | B (Companion Module) | A (Native Webhooks) |
-| **Odoo 15–17 on Odoo.sh / self-hosted** | B (Companion Module) | C (Polling) |
-| **Odoo 15–17 on Odoo.com** | C (Polling only) | — |
+| **Odoo 17 on Odoo.sh / self-hosted** | B (Companion Module) | C (Polling) |
+| **Odoo 17 on Odoo.com** | C (Polling only) | — |
 
 ## Current HUF Approach vs. Companion Module
 
@@ -559,31 +560,195 @@ HUF's built-in `write_date > last_sync` polling every 5 minutes.
 
 ---
 
-## Transport Layer: `odoo-client-lib` Evaluation
+## Migrating to `odoo-client-lib`
 
-HUF currently uses a hand-rolled transport layer (~107 lines across `protocols/xmlrpc.py`, `jsonrpc.py`, `json2.py`) plus a ~95-line connector class. [`odoo-client-lib`](https://github.com/OCA/odoo-client-lib) is a Python client that wraps XML-RPC, JSON-RPC, and JSON-2 with model-style API and version auto-detection (6.1+ for XML-RPC, 8.0+ for JSON-RPC, 19.0+ for JSON-2).
+HUF currently hand-rolls the transport layer (~200 lines across `protocols/` + `connector.py`). `odoo-client-lib` wraps XML-RPC, JSON-RPC, and JSON-2 with protocol auto-detection, secure variants (TLS), and community-tested version coverage (8.0+ JSON-RPC, 19.0+ JSON-2). Since we target 17+ only, this is a clean fit.
 
-### Current state: NOT using `odoo-client-lib`
-
-It is not in `pyproject.toml`. All transport code is ours.
-
-### Should we adopt it?
+### Why adopt it
 
 | | Hand-rolled (current) | `odoo-client-lib` |
 |---|---|---|
 | Code to maintain | ~200 lines (protocols + connector) | ~50 lines of adapter |
-| Version coverage | 15-19+ (manually tested) | 6.1-19+ (community-tested) |
-| Protocol auto-detect | Our own logic | Built-in |
-| Secure variants (xmlrpcs, jsonrpcs) | Not implemented | Supported |
-| Dependency risk | Zero | One more PyPI dep |
-| Control over transport | Full | Can still call raw methods |
+| Protocol auto-detect | Our own logic in `_resolve_protocol()` | Built-in from version info |
+| Secure transport (TLS) | Not implemented | `jsonrpcs://`, `json2s://` for free |
+| Error normalization | Manual per-protocol exception handling | Consistent across transports |
+| Dependency | Zero | One PyPI package |
 
-**Recommendation**: Consider adopting for Phase 2 of the integration. Our current layer works but `odoo-client-lib` would give us secure transport variants (TLS-wrapped RPC) for free and reduce maintenance. The library's author notes that for JSON-2 (Odoo 19+) it's "less useful" since the REST API is simpler — which aligns with our `json2.py` being only 42 lines.
+### Migration Steps
 
-If adopted, the migration path would be:
-1. Add `odoo-client-lib` to `pyproject.toml`
-2. Replace `protocols/` directory with a thin adapter using `odoo_client_lib.get_connection()`
-3. Keep `OdooConnector` as the HUF-facing interface — only the transport changes
+**Step 1 — Add dependency**
+
+```diff
+# pyproject.toml
+dependencies = [
+    "openai-agents",
+    "litellm>=1.0.0",
+    "llama-index-core>=0.10.0",
+    "sqlite-vec",
+    "pysqlite3-binary",
++   "odoo-client-lib",
+]
+```
+
+Then `bench setup requirements`.
+
+**Step 2 — Rewrite `connector.py` (the only file that changes its internals)**
+
+Replace `_resolve_protocol()` + `_init_transport()` with `odoo_client_lib.get_connection()`. The public API of `OdooConnector` stays identical — all callers (`tool_handlers.py`, `webhook.py`, `polling.py`, `schema.py`) are untouched.
+
+```python
+# huf/ai/odoo/connector.py — after migration
+import frappe
+from typing import Any, List, Dict, Optional
+from .rate_limiter import RateLimiter
+from .exceptions import OdooAuthError, OdooConnectionError
+
+import odoo_client_lib as odoo_lib
+
+
+class OdooConnector:
+	"""
+	Protocol-agnostic connector to Odoo instances.
+	Uses odoo-client-lib for transport; handles rate limiting.
+	"""
+
+	def __init__(self, connection_name: str):
+		self.connection = frappe.get_doc("Odoo Connection", connection_name)
+		self.url = self.connection.odoo_url
+		self.db = self.connection.database_name
+		self.username = self.connection.username
+		self.api_key = self.connection.get_password("api_key")
+		self.uid = self.connection.user_id
+
+		# Let odoo-client-lib pick the right protocol
+		protocol = self._resolve_protocol_string()
+		try:
+			self._conn = odoo_lib.get_connection(
+				hostname=self.url.rstrip("/"),
+				protocol=protocol,
+				database=self.db,
+				login=self.username,
+				password=self.api_key,
+			)
+			self._conn.check_login(force=False)
+		except Exception as e:
+			raise OdooConnectionError(f"Failed to connect: {e}") from e
+
+		self.rate_limiter = RateLimiter(connection_name, self.connection.rate_limit_rpm or 60)
+
+	def _resolve_protocol_string(self) -> str:
+		"""Map our DocType field values to odoo-client-lib protocol strings."""
+		explicit = self.connection.protocol
+		if explicit and explicit != "Auto":
+			return {
+				"JSON-RPC": "jsonrpc",
+				"XML-RPC": "xmlrpc",
+				"JSON-2": "json2",
+			}.get(explicit, "jsonrpc")
+
+		version = self.connection.odoo_version
+		try:
+			if version and version != "Auto Detect" and int(version) >= 19:
+				return "json2"
+		except (ValueError, TypeError):
+			pass
+		return "jsonrpc"
+
+	def execute(self, model: str, method: str, *args, **kwargs) -> Any:
+		self.rate_limiter.wait()
+		model_proxy = self._conn.get_model(model)
+		return getattr(model_proxy, method)(*args, **kwargs)
+
+	# --- Public helpers (unchanged signatures) ---
+
+	def search_read(self, model: str, domain: Optional[List] = None,
+	                fields: Optional[List] = None, limit: int = 80,
+	                offset: int = 0, order: Optional[str] = None) -> List[Dict]:
+		return self.execute(
+			model, "search_read",
+			domain or [],
+			fields=fields, limit=limit, offset=offset, order=order,
+		)
+
+	def create(self, model: str, values: Dict) -> int:
+		return self.execute(model, "create", [values])
+
+	def write(self, model: str, ids: List[int], values: Dict) -> bool:
+		return self.execute(model, "write", [ids, values])
+
+	def unlink(self, model: str, ids: List[int]) -> bool:
+		return self.execute(model, "unlink", [ids])
+
+	def fields_get(self, model: str, attributes: Optional[List] = None) -> Dict:
+		return self.execute(
+			model, "fields_get", [],
+			attributes=attributes or ["string", "type", "required", "help", "relation"],
+		)
+
+	def get_models(self) -> List[Dict]:
+		return self.search_read("ir.model", fields=["model", "name"])
+```
+
+**Step 3 — Delete the `protocols/` directory**
+
+These files become dead code:
+- `huf/ai/odoo/protocols/__init__.py`
+- `huf/ai/odoo/protocols/xmlrpc.py` (25 lines)
+- `huf/ai/odoo/protocols/jsonrpc.py` (40 lines)
+- `huf/ai/odoo/protocols/json2.py` (42 lines)
+
+Remove the entire `protocols/` directory.
+
+**Step 4 — Clean up `exceptions.py`**
+
+`OdooRPCError` and `OdooJSON2Error` were only raised inside `protocols/`. After deletion:
+- Keep: `OdooConnectionError`, `OdooAuthError`, `OdooRateLimitError`, `OdooModelNotFoundError`
+- Remove: `OdooRPCError`, `OdooJSON2Error`
+
+`odoo-client-lib` raises its own transport errors; catch those in `tool_handlers.py`'s `odoo_safe_invoke` decorator.
+
+**Step 5 — Update `odoo_safe_invoke` in `tool_handlers.py`**
+
+```diff
+  @wraps(fn)
+  def wrapper(*args, **kwargs):
+      try:
+          return fn(*args, **kwargs)
+      except OdooAuthError as e:
+          return {"success": False, "error": str(e), "suggestion": "Check credentials"}
+      except OdooRateLimitError as e:
+          return {"success": False, "error": str(e), "suggestion": "Wait and retry"}
+-     except OdooRPCError as e:
+-         return {"success": False, "error": str(e), "suggestion": "Check parameters"}
+-     except OdooJSON2Error as e:
+-         return {"success": False, "error": str(e), "suggestion": "Check parameters"}
++     except odoo_lib.Error as e:
++         return {"success": False, "error": str(e), "suggestion": "Check parameters"}
+      except Exception as e:
+          return {"success": False, "error": str(e), "suggestion": "Unexpected error"}
+```
+
+**Step 6 — Update `odoo_connection.py` test_connection()**
+
+The `test_connection()` method in the DocType controller currently uses raw `xmlrpc.client` directly. Replace with `odoo_client_lib.get_connection()` so it uses the same transport path.
+
+**Step 7 — Verify**
+
+- Zero callers change: `tool_handlers.py`, `webhook.py`, `polling.py`, `schema.py` all call `OdooConnector` methods (`search_read`, `create`, `write`, `execute`, etc.) which keep the same signatures.
+- Run `bench --site <site> run-tests --app huf` to confirm.
+
+### Files touched (summary)
+
+| File | Action |
+|---|---|
+| `pyproject.toml` | Add `odoo-client-lib` |
+| `huf/ai/odoo/connector.py` | Rewrite internals, same public API |
+| `huf/ai/odoo/protocols/` | **Delete entire directory** (4 files) |
+| `huf/ai/odoo/exceptions.py` | Remove `OdooRPCError`, `OdooJSON2Error` |
+| `huf/ai/odoo/tool_handlers.py` | Update `odoo_safe_invoke` catch clause |
+| `huf/huf/doctype/odoo_connection/odoo_connection.py` | Update `test_connection()` |
+
+**Zero changes needed** in: `webhook.py`, `polling.py`, `schema.py`, `agents_seed.py`, `rate_limiter.py`, `install.py`, any frontend code.
 
 ---
 
