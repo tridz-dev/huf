@@ -244,6 +244,19 @@ bench restart
 
 ---
 
+## Security Notice (LiteLLM)
+
+LiteLLM is a core dependency of Huf. On **March 24, 2026**, the LiteLLM team reported a supply-chain compromise affecting published releases (`1.82.7` and `1.82.8`) that included a malicious `.pth` startup payload.
+
+What Huf has done:
+- Blocked compromised versions in dependency constraints (`litellm>=1.0.0,!=1.82.7,!=1.82.8`).
+- Added install-time detection in `huf/install.py` to show a critical alert if a compromised LiteLLM version is already present in the environment.
+
+Upstream incident thread:
+- https://github.com/BerriAI/litellm/issues/24518
+
+---
+
 ## Documentation
 
 - [**Full Documentation**](https://docs.huf.ai/) — Guides, tutorials, and API reference
