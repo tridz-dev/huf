@@ -53,7 +53,7 @@
    "fieldname": "trigger_type",
    "fieldtype": "Select",
    "label": "Trigger Type",
-   "options": "\nSchedule\nDoc Event\nWebhook\nApp Event\nManual"
+   "options": "\nSchedule\nDoc Event\nWebhook\nApp Event\nOdoo Event\nManual"
   },
   {
    "default": "0",
@@ -158,6 +158,13 @@
    "fieldtype": "Select",
    "label": "Scheduled Interval",
    "options": "\nHourly\nDaily\nWeekly\nMonthly\nYearly"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Odoo Event\"",
+   "fieldname": "odoo_connection",
+   "fieldtype": "Link",
+   "label": "Odoo Connection",
+   "options": "Odoo Connection"
   },
   {
    "fieldname": "section_break_ypqu",

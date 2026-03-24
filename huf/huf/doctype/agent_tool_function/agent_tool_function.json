@@ -52,7 +52,7 @@
    "fieldname": "types",
    "fieldtype": "Select",
    "label": "Types",
-   "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent\nClient Side Tool\nGet Conversation Data\nSet Conversation Data\nLoad Conversation Data"
+   "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent\nClient Side Tool\nGet Conversation Data\nSet Conversation Data\nLoad Conversation Data\nOdoo Search Read\nOdoo Read\nOdoo Create\nOdoo Write\nOdoo Delete\nOdoo Execute\nOdoo Fields Get\nOdoo List Models\nOdoo Search Count\nOdoo Read Group"
   },
   {
    "depends_on": "eval: [\n  'Get Document',\n  'Get Multiple Documents',\n  'Get List',\n  'Create Document',\n  'Create Multiple Documents',\n  'Update Document',\n  'Update Multiple Documents',\n  'Delete Document',\n  'Delete Multiple Documents',\n  'Submit Document',\n  'Cancel Document',\n  'Get Amended Document',\n  'Attach File to Document',\n  'Get Report Result',\n  'Get Value',\n  'Set Value'\n].includes(doc.types)",
@@ -143,6 +143,13 @@
    "fieldname": "header_section",
    "fieldtype": "Section Break",
    "label": "Header"
+  },
+  {
+   "depends_on": "eval:doc.types.startsWith('Odoo')",
+   "fieldname": "odoo_connection",
+   "fieldtype": "Link",
+   "label": "Odoo Connection",
+   "options": "Odoo Connection"
   },
   {
    "depends_on": "eval:doc.types == 'Run Agent'",

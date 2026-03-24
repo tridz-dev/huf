@@ -23,7 +23,17 @@ class PermissionAwareToolRegistry:
         "Delete Multiple Documents": {"permission": "delete"},
         "Submit Document": {"permission": "submit"},
         "Cancel Document": {"permission": "cancel"},
-        "Attach File to Document": {"permission": "create"} 
+        "Attach File to Document": {"permission": "create"},
+        "Odoo Search Read": {"permission": "read"},
+        "Odoo Read": {"permission": "read"},
+        "Odoo Create": {"permission": "create"},
+        "Odoo Write": {"permission": "write"},
+        "Odoo Delete": {"permission": "delete"},
+        "Odoo Execute": {"permission": "write"},
+        "Odoo Fields Get": {"permission": "read"},
+        "Odoo List Models": {"permission": "read"},
+        "Odoo Search Count": {"permission": "read"},
+        "Odoo Read Group": {"permission": "read"}
     }
     
     MUTATING_TOOL_TYPES = {
@@ -32,7 +42,8 @@ class PermissionAwareToolRegistry:
         "Delete Document", "Delete Multiple Documents",
         "Submit Document", "Cancel Document",
         "Set Value", "POST", "Run Agent",
-        "Attach File to Document"
+        "Attach File to Document",
+        "Odoo Create", "Odoo Write", "Odoo Delete", "Odoo Execute"
     }
 
     @classmethod

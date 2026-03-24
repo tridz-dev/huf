@@ -1537,6 +1537,58 @@ Registered via `huf_tools` hook so agents can interact with flows:
 - **Human approval**: User/role verification before approve/reject
 - **Hop limit**: Safety guard against infinite loops (default 100)
 
+#### 18. Odoo Connection
+
+Stores credentials and configuration for Odoo ERP integration. Supports XML-RPC, JSON-RPC, and JSON-2 (Odoo 19+).
+
+-   **Python Class**: `OdooConnection(Document)`
+-   **File**: `huf/huf/doctype/odoo_connection/odoo_connection.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **URL** | `url` | Data | Base URL of the Odoo instance. |
+| **Database** | `database` | Data | Odoo database name. |
+| **Username** | `username` | Data | Odoo username/login. |
+| **API Key / password** | `password` | Password | API Key or password. |
+| **Protocol** | `protocol` | Select | `XML-RPC`, `JSON-RPC`, `JSON-2` (Odoo 19+). |
+| **Webhook Key** | `webhook_key` | Data | Secret key for inbound Odoo webhooks (auto-generated). |
+
+---
+
+#### 19. Odoo Schema Cache
+
+Caches Odoo model and field metadata to provide the AI with context without high-latency RPC calls.
+
+-   **Fields**: `connection`, `model_name`, `model_label`, `fields_json`, `last_synced`.
+
+---
+
+### Odoo Tools (Specific)
+
+Registered via the Odoo RPC engine with standardized error handling and rate limiting.
+
+-   **odoo_search_read**: Search and read records from Odoo using domains.
+-   **odoo_read**: Read specific records by ID.
+-   **odoo_create**: Create a new record in Odoo.
+-   **odoo_write**: Update existing records in Odoo.
+-   **odoo_unlink**: Delete records from Odoo.
+-   **odoo_execute**: Run ORM methods (e.g., `action_confirm`).
+-   **odoo_fields_get**: Introspect field metadata.
+-   **odoo_list_models**: List all models in the Odoo instance.
+
+### Odoo Compound Engineering Patterns
+
+When working with Odoo, always follow these patterns:
+
+1.  **Safe Invoke**: All Odoo RPC calls must be wrapped in `odoo_safe_invoke` to ensure that Odoo-specific exceptions (e.g., `AccessError`, `ValidationError`) are normalized into HUF-standard error messages with actionable suggestions for the LLM.
+2.  **Schema-First Reasoning**: Use `Odoo Schema Cache` or `odoo_fields_get` before trying to write or search a model you haven't seen before to verify field names and types.
+3.  **O2M Command Arrays**: For `one2many` or `many2many` fields (like Sale Order Lines), use Odoo's command list format: `(0, 0, {values})` for create, `(1, id, {values})` for update, `(2, id, 0)` for delete.
+4.  **Domain Optimization**: Always use `limit` in `search_read` to prevent large payload timeouts.
+
+---
+
 ## Development and Coding Guidelines
 
 ### Frontend TypeScript Strictness
