@@ -37,6 +37,7 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
 	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
 	const sttModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_STT));
+	const contextStrategy = form.watch('context_strategy');
 
   return (
     <div className="space-y-6">
@@ -104,6 +105,39 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
               </FormItem>
             )}
           />
+
+          {contextStrategy === 'Summarize' && (
+            <FormField
+              control={form.control}
+              name="summary_model"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Summary Model</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v || undefined)}
+                    value={field.value || ''}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Default (main agent model)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {allModels.map((m) => (
+                        <SelectItem key={m.name} value={m.name}>
+                          {m.model_name || m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Optional lightweight model used only when compressing older messages (Summarize strategy).
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}
@@ -247,6 +281,46 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
           />
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Huf UI</CardTitle>
+          <CardDescription>Chat avatar styling in the agent chat interface</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="agent_color"
+            render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel>Agent color</FormLabel>
+                <div className="flex flex-wrap items-center gap-3">
+                  <FormControl>
+                    <Input
+                      placeholder="#6366F1"
+                      className="max-w-[11rem] font-mono"
+                      {...field}
+                      value={field.value || ''}
+                    />
+                  </FormControl>
+                  <input
+                    type="color"
+                    className="h-9 w-12 cursor-pointer rounded border bg-background p-0.5"
+                    value={/^#[0-9A-Fa-f]{6}$/.test(field.value || '') ? field.value : '#6366f1'}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    aria-label="Pick agent color"
+                  />
+                </div>
+                <FormDescription>
+                  Background color for the agent avatar in chat. Include the # prefix.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Model Modality Settings</CardTitle>
