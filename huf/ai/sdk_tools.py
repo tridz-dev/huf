@@ -27,6 +27,17 @@ from datetime import datetime, timedelta
 from .tool_registry import PermissionAwareToolRegistry
 MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
 
+
+def _frappe_run_context_dict(ctx) -> dict:
+    """Huf run context may be a dict or an Agents SDK ToolContext wrapping that dict."""
+    if ctx is None:
+        return {}
+    if isinstance(ctx, dict):
+        return ctx
+    inner = getattr(ctx, "context", None)
+    return inner if isinstance(inner, dict) else {}
+
+
 def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_guest: bool = False):
     """Guard function to block dangerous tools for Guest users"""
     user = frappe.session.user
@@ -292,13 +303,13 @@ def create_function_tool(
 
                 args_dict = json.loads(args_json or "{}")
 
-                if isinstance(ctx, dict):
-                    if "conversation_id" in ctx:
-                        args_dict["conversation_id"] = ctx["conversation_id"]
-                    if "agent_run_id" in ctx:
-                        args_dict["agent_run_id"] = ctx["agent_run_id"]
-                    if "agent_name" in ctx:
-                        args_dict["agent_name"] = ctx["agent_name"]
+                huf_ctx = _frappe_run_context_dict(ctx)
+                if "conversation_id" in huf_ctx:
+                    args_dict["conversation_id"] = huf_ctx["conversation_id"]
+                if "agent_run_id" in huf_ctx:
+                    args_dict["agent_run_id"] = huf_ctx["agent_run_id"]
+                if "agent_name" in huf_ctx:
+                    args_dict["agent_name"] = huf_ctx["agent_name"]
 
                 if _extra_args:
                     args_dict.update(_extra_args)

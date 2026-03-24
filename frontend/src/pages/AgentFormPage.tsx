@@ -25,9 +25,12 @@ import { ToolsTab } from '../components/agent/ToolsTab';
 import { AdvancedTab } from '../components/agent/AdvancedTab';
 import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
 import { PermissionsTab } from '../components/agent/PermissionsTab';
+import { KnowledgeTab } from '../components/agent/KnowledgeTab';
+import { AgentKnowledgeModal } from '../components/agent/AgentKnowledgeModal';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
+import type { AgentKnowledgeRow } from '../types/agent.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 
 type PromptListRow = {
@@ -85,6 +88,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     cache_system_message: agent.cache_system_message === 1,
     cache_conversation_history: agent.cache_conversation_history === 1,
     context_strategy: agent.context_strategy || undefined,
+    summary_model: agent.summary_model || undefined,
     summary_ratio: agent.summary_ratio !== undefined && agent.summary_ratio !== null ? agent.summary_ratio : undefined,
     history_limit: agent.history_limit !== undefined && agent.history_limit !== null ? agent.history_limit : undefined,
     max_knowledge_tokens:
@@ -92,6 +96,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     max_turns: agent.max_turns !== undefined && agent.max_turns !== null ? agent.max_turns : undefined,
     enable_conversation_data: agent.enable_conversation_data === 1,
     autonaming_of_conversation_title: agent.autonaming_of_conversation_title === 1,
+    agent_color: agent.agent_color?.trim() || '',
     image_generation_model: agent.image_generation_model || undefined,
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
@@ -126,7 +131,13 @@ export function AgentFormPage() {
     },
     tools: {
       label: 'Tools & MCP',
-      fields: [], // Tools tab doesn't have form fields
+      fields: [],
+      default: false,
+      disabled: false,
+    },
+    knowledge: {
+      label: 'Knowledge',
+      fields: [],
       default: false,
       disabled: false,
     },
@@ -140,12 +151,14 @@ export function AgentFormPage() {
       label: 'Advanced Settings',
       fields: [
        'context_strategy',
+        'summary_model',
         'summary_ratio',
         'history_limit',
         'max_knowledge_tokens',
         'max_turns',
         'enable_conversation_data',
         'autonaming_of_conversation_title',
+        'agent_color',
         'image_generation_model',
         'tts_model',
         'tts_voice',
@@ -225,6 +238,11 @@ export function AgentFormPage() {
   const [mcpServers, setMcpServers] = useState<MCPServerRef[]>([]);
   const [initialMcpServers, setInitialMcpServers] = useState<MCPServerRef[]>([]); // Track initial MCP servers state
   const [mcpLoading, setMcpLoading] = useState(false);
+  const [knowledgeSources, setKnowledgeSources] = useState<AgentKnowledgeRow[]>([]);
+  const [initialKnowledgeSources, setInitialKnowledgeSources] = useState<AgentKnowledgeRow[]>([]);
+  const [agentStats, setAgentStats] = useState<{ last_run?: string | null; total_run?: number | null }>({});
+  const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
+  const [editingKnowledgeIndex, setEditingKnowledgeIndex] = useState<number | null>(null);
   const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
   const [users, setUsers] = useState<Array<{ name: string }>>([]);
   const [roles, setRoles] = useState<Array<{ name: string }>>([]);
@@ -256,12 +274,14 @@ export function AgentFormPage() {
         cache_system_message: false,
         cache_conversation_history:false,
         context_strategy: undefined,
+        summary_model: undefined,
         summary_ratio: undefined,
         history_limit: undefined,
         max_knowledge_tokens: undefined,
         max_turns: undefined,
         enable_conversation_data: false,
         autonaming_of_conversation_title: false,
+        agent_color: '',
         image_generation_model: undefined,
         tts_model: undefined,
         tts_voice: '',
@@ -320,8 +340,23 @@ export function AgentFormPage() {
     return false;
   }, [mcpServers, initialMcpServers, isNew]);
 
-  // Show save button for new agents, when form is dirty, when tools have changed, when disabled changed, or when MCP servers changed
-  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged;
+  const knowledgeChanged = useMemo(() => {
+    if (isNew) return knowledgeSources.length > 0;
+    if (knowledgeSources.length !== initialKnowledgeSources.length) return true;
+    return knowledgeSources.some((ks, i) => {
+      const init = initialKnowledgeSources[i];
+      return (
+        ks.knowledge_source !== init.knowledge_source ||
+        ks.mode !== init.mode ||
+        ks.priority !== init.priority ||
+        ks.max_chunks !== init.max_chunks ||
+        ks.token_budget !== init.token_budget ||
+        (ks.description || '') !== (init.description || '')
+      );
+    });
+  }, [knowledgeSources, initialKnowledgeSources, isNew]);
+
+  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
 
   // Load trigger types on mount
   useEffect(() => {
@@ -499,12 +534,14 @@ export function AgentFormPage() {
             cache_system_message: data.cache_system_message === 1,
             cache_conversation_history: data.cache_conversation_history === 1,
             context_strategy: data.context_strategy || undefined,
+            summary_model: data.summary_model || undefined,
             summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
             history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
             max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
             max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
             enable_conversation_data: data.enable_conversation_data === 1,
             autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
+            agent_color: data.agent_color?.trim() || '',
   
             image_generation_model: data.image_generation_model || undefined,
             tts_model: data.tts_model || undefined,
@@ -515,6 +552,7 @@ export function AgentFormPage() {
         // Track initial disabled state and persisted allow_chat
         setInitialDisabled(data.disabled === 1);
         setAllowChat(data.allow_chat === 1);
+        setAgentStats({ last_run: data.last_run ?? null, total_run: data.total_run ?? null });
         // Load tools from agent_tool field
         // agent_tool is a child table with format: [{ tool: "tool-name" }, ...]
         if (data.agent_tool && Array.isArray(data.agent_tool) && data.agent_tool.length > 0) {
@@ -589,6 +627,23 @@ export function AgentFormPage() {
           setMcpServers([]);
           setInitialMcpServers([]);
         }
+        // Load knowledge sources from agent_knowledge child table
+        if (data.agent_knowledge && Array.isArray(data.agent_knowledge) && data.agent_knowledge.length > 0) {
+          const ksRows: AgentKnowledgeRow[] = data.agent_knowledge.map((item) => ({
+            name: item.name,
+            knowledge_source: item.knowledge_source,
+            mode: item.mode || 'Optional',
+            priority: item.priority ?? 0,
+            max_chunks: item.max_chunks ?? 5,
+            token_budget: item.token_budget ?? 2000,
+            description: item.description || undefined,
+          }));
+          setKnowledgeSources(ksRows);
+          setInitialKnowledgeSources(ksRows);
+        } else {
+          setKnowledgeSources([]);
+          setInitialKnowledgeSources([]);
+        }
         setLoading(false);
       }).catch((error) => {
         console.error('Error loading agent:', error);
@@ -603,6 +658,9 @@ export function AgentFormPage() {
       setInitialDisabled(false);
       setMcpServers([]);
       setInitialMcpServers([]);
+      setKnowledgeSources([]);
+      setInitialKnowledgeSources([]);
+      setAgentStats({});
       setLoading(false);
     }
   }, [id, isNew, form]);
@@ -637,12 +695,14 @@ export function AgentFormPage() {
         cache_system_message: values.cache_system_message ? 1 : 0,
         cache_conversation_history: values.cache_conversation_history ? 1 : 0,
         context_strategy: values.context_strategy || undefined,
+        summary_model: values.summary_model || undefined,
         summary_ratio: values.summary_ratio !== undefined ? values.summary_ratio : undefined,
         history_limit: values.history_limit !== undefined ? values.history_limit : undefined,
         max_knowledge_tokens: values.max_knowledge_tokens !== undefined ? values.max_knowledge_tokens : undefined,
         max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
         enable_conversation_data: values.enable_conversation_data ? 1 : 0,
         autonaming_of_conversation_title: values.autonaming_of_conversation_title ? 1 : 0,
+        agent_color: values.agent_color?.trim() || undefined,
 
         image_generation_model: values.image_generation_model || undefined,
         tts_model: values.tts_model || undefined,
@@ -654,10 +714,19 @@ export function AgentFormPage() {
         })),
         // Include MCP servers - Frappe child table format: array of objects with 'mcp_server' field and 'enabled' field
         agent_mcp_server: mcpServers.map((server) => ({
-          mcp_server: server.mcp_server, // This is the link field to MCP Server DocType
+          mcp_server: server.mcp_server,
           enabled: (server.enabled === true || server.enabled === 1) ? 1 : (0 as 0 | 1),
         })),
-      };
+        agent_knowledge: knowledgeSources.map((ks) => ({
+          ...(ks.name ? { name: ks.name } : {}),
+          knowledge_source: ks.knowledge_source,
+          mode: ks.mode,
+          priority: ks.priority,
+          max_chunks: ks.max_chunks,
+          token_budget: ks.token_budget,
+          description: ks.description || '',
+        })),
+      } as any;
 
       if (isNew) {
         // Create new agent
@@ -690,12 +759,14 @@ export function AgentFormPage() {
           cache_system_message: newAgent.cache_system_message === 1,
           cache_conversation_history: newAgent.cache_conversation_history === 1,
           context_strategy: newAgent.context_strategy || undefined,
+          summary_model: newAgent.summary_model || undefined,
           summary_ratio: newAgent.summary_ratio !== undefined && newAgent.summary_ratio !== null ? newAgent.summary_ratio : undefined,
           history_limit: newAgent.history_limit !== undefined && newAgent.history_limit !== null ? newAgent.history_limit : undefined,
           max_knowledge_tokens: newAgent.max_knowledge_tokens !== undefined && newAgent.max_knowledge_tokens !== null ? newAgent.max_knowledge_tokens : undefined,
           max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
           enable_conversation_data: newAgent.enable_conversation_data === 1,
           autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
+          agent_color: newAgent.agent_color?.trim() || '',
 
           image_generation_model: newAgent.image_generation_model || undefined,
           tts_model: newAgent.tts_model || undefined,
@@ -704,6 +775,8 @@ export function AgentFormPage() {
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
+        setInitialKnowledgeSources([...knowledgeSources]);
+        setAgentStats({ last_run: newAgent.last_run ?? null, total_run: newAgent.total_run ?? null });
         // Navigate to the edit page with the new agent's ID
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
@@ -737,12 +810,14 @@ form.reset({
   cache_system_message: values.cache_system_message,
   cache_conversation_history: values.cache_conversation_history,
   context_strategy: values.context_strategy,
+  summary_model: values.summary_model,
   summary_ratio: values.summary_ratio,
   history_limit: values.history_limit,
   max_knowledge_tokens: values.max_knowledge_tokens,
   max_turns: values.max_turns,
   enable_conversation_data: values.enable_conversation_data,
   autonaming_of_conversation_title: values.autonaming_of_conversation_title,
+  agent_color: values.agent_color,
 
   image_generation_model: values.image_generation_model,
   tts_model: values.tts_model,
@@ -756,6 +831,10 @@ setAllowChat(values.allow_chat);
         if (id) {
           getAgent(id).then((updatedData: AgentDoc) => {
             form.reset(mapAgentDocToFormValues(updatedData));
+            setAgentStats({
+              last_run: updatedData.last_run ?? null,
+              total_run: updatedData.total_run ?? null,
+            });
             // Reset tools, disabled state, and persisted allow_chat after successful update
             setInitialTools([...selectedTools]);
             setInitialDisabled(updatedData.disabled === 1);
@@ -800,6 +879,23 @@ setAllowChat(values.allow_chat);
               setMcpServers([]);
               setInitialMcpServers([]);
             }
+            // Reload knowledge sources from updated agent document
+            if (updatedData.agent_knowledge && Array.isArray(updatedData.agent_knowledge) && updatedData.agent_knowledge.length > 0) {
+              const ksRows: AgentKnowledgeRow[] = updatedData.agent_knowledge.map((item) => ({
+                name: item.name,
+                knowledge_source: item.knowledge_source,
+                mode: item.mode || 'Optional',
+                priority: item.priority ?? 0,
+                max_chunks: item.max_chunks ?? 5,
+                token_budget: item.token_budget ?? 2000,
+                description: item.description || undefined,
+              }));
+              setKnowledgeSources(ksRows);
+              setInitialKnowledgeSources(ksRows);
+            } else {
+              setKnowledgeSources([]);
+              setInitialKnowledgeSources([]);
+            }
           }).catch((error) => {
             console.error('Error reloading agent:', error);
           });
@@ -812,7 +908,7 @@ setAllowChat(values.allow_chat);
     } finally {
       setSaving(false);
     }
-  }, [form, id, isNew, mcpServers, navigate, selectedTools]);
+  }, [form, id, isNew, mcpServers, navigate, selectedTools, knowledgeSources]);
 
   // Memoize the form submit handler to avoid recreating it on every render
   const handleFormSubmit = useMemo(
@@ -1047,6 +1143,29 @@ setAllowChat(values.allow_chat);
     }
   };
 
+  const handleAddKnowledge = () => {
+    setEditingKnowledgeIndex(null);
+    setShowKnowledgeModal(true);
+  };
+
+  const handleEditKnowledge = (index: number) => {
+    setEditingKnowledgeIndex(index);
+    setShowKnowledgeModal(true);
+  };
+
+  const handleRemoveKnowledge = (index: number) => {
+    setKnowledgeSources(knowledgeSources.filter((_, i) => i !== index));
+    toast.success('Knowledge source removed');
+  };
+
+  const handleSaveKnowledge = (row: AgentKnowledgeRow) => {
+    if (editingKnowledgeIndex !== null) {
+      setKnowledgeSources(knowledgeSources.map((ks, i) => (i === editingKnowledgeIndex ? row : ks)));
+    } else {
+      setKnowledgeSources([...knowledgeSources, row]);
+    }
+  };
+
   const handleAddTrigger = () => {
     setEditingTrigger(null);
     setShowTriggerModal(true);
@@ -1089,6 +1208,8 @@ setAllowChat(values.allow_chat);
     condition?: string;
     app_name?: string;
     event_name?: string;
+    webhook_slug?: string;
+    webhook_key?: string;
   }) => {
     if (!id || id === 'new') {
       toast.error('Please save the agent first before adding triggers');
@@ -1113,6 +1234,10 @@ setAllowChat(values.allow_chat);
         reference_doctype: values.reference_doctype,
         doc_event: values.doc_event,
         condition: values.condition,
+        app_name: values.app_name,
+        event_name: values.event_name,
+        webhook_slug: values.webhook_slug,
+        webhook_key: values.webhook_key,
       };
 
       if (editingTrigger) {
@@ -1169,6 +1294,8 @@ setAllowChat(values.allow_chat);
           onDelete={handleDelete}
           agentId={!isNew && id ? id : undefined}
           allowChat={allowChat}
+          lastRun={agentStats.last_run}
+          totalRun={agentStats.total_run}
         />
 
         <Form {...form}>
@@ -1236,6 +1363,15 @@ setAllowChat(values.allow_chat);
                 />
               </TabsContent>
 
+              <TabsContent value="knowledge" className="space-y-4">
+                <KnowledgeTab
+                  knowledgeSources={knowledgeSources}
+                  onAdd={handleAddKnowledge}
+                  onEdit={handleEditKnowledge}
+                  onRemove={handleRemoveKnowledge}
+                />
+              </TabsContent>
+
               <TabsContent value="permissions" className="space-y-4">
                 <PermissionsTab form={form} users={users} roles={roles} />
               </TabsContent>
@@ -1281,6 +1417,14 @@ setAllowChat(values.allow_chat);
           transport_type: 'http' as const,
         })) as MCPServerDoc[]}
         onAddServers={handleAddMCPServers}
+      />
+
+      {/* Agent Knowledge Modal */}
+      <AgentKnowledgeModal
+        open={showKnowledgeModal}
+        onOpenChange={setShowKnowledgeModal}
+        onSave={handleSaveKnowledge}
+        initialData={editingKnowledgeIndex !== null ? knowledgeSources[editingKnowledgeIndex] : null}
       />
 
       {/* Tool Form Modal (for editing) */}
