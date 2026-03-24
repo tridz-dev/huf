@@ -183,7 +183,7 @@
    "fieldtype": "Section Break"
   },
   {
-   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "depends_on": "eval: [\"Doc Event\", \"Odoo Event\"].includes(doc.trigger_type)",
    "description": "Enter the fieldname from the Reference DocType that contains the user's instructions.",
    "fieldname": "prompt_field",
    "fieldtype": "Select",

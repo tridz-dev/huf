@@ -190,8 +190,11 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         if function_doc.agent:
                             extra_args["agent_name"] = function_doc.agent
                     
-                    elif function_doc.types.startswith("Odoo") and function_doc.odoo_connection:
-                        extra_args["connection"] = function_doc.odoo_connection
+                    elif function_doc.types.startswith("Odoo"):
+                        if function_doc.odoo_connection:
+                            extra_args["connection"] = function_doc.odoo_connection
+                        elif hasattr(agent, "odoo_connection") and agent.odoo_connection:
+                            extra_args["connection"] = agent.odoo_connection
 
                     tool = create_function_tool(
                         function_doc.tool_name,

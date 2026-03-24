@@ -147,7 +147,7 @@
   },
   {
    "fieldname": "webhook_key",
-   "fieldtype": "Data",
+   "fieldtype": "Password",
    "label": "Webhook Key",
    "read_only": 1
   },

@@ -176,3 +176,47 @@ def handle_odoo_list_models(connection: str, **kwargs) -> dict:
         "models": models,
         "count": len(models)
     }
+
+
+@odoo_safe_invoke
+def handle_odoo_search_count(connection: str, model: str, domain: str = None, **kwargs) -> dict:
+    """Count records matching a domain in an Odoo model."""
+    connector = OdooConnector(connection)
+    parsed_domain = json.loads(domain) if domain else []
+    count = connector.execute(model, "search_count", parsed_domain)
+    return {
+        "success": True,
+        "model": model,
+        "count": count
+    }
+
+
+@odoo_safe_invoke
+def handle_odoo_read_group(connection: str, model: str, domain: str = None,
+                           fields: str = None, groupby: str = None,
+                           limit: int = 80, offset: int = 0,
+                           orderby: str = None, **kwargs) -> dict:
+    """Read grouped/aggregated data from an Odoo model."""
+    connector = OdooConnector(connection)
+    parsed_domain = json.loads(domain) if domain else []
+    parsed_fields = [f.strip() for f in fields.split(",")] if fields else []
+    parsed_groupby = [g.strip() for g in groupby.split(",")] if groupby else []
+
+    if not parsed_fields or not parsed_groupby:
+        return {"success": False, "error": "Both 'fields' and 'groupby' are required."}
+
+    result = connector.execute(
+        model, "read_group",
+        parsed_domain,
+        fields=parsed_fields,
+        groupby=parsed_groupby,
+        limit=limit,
+        offset=offset,
+        orderby=orderby
+    )
+    return {
+        "success": True,
+        "model": model,
+        "groups": result,
+        "count": len(result)
+    }

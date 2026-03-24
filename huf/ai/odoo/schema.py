@@ -25,12 +25,20 @@ def run_discovery(connection_name: str):
         # 1. Get all models
         models = connector.get_models()
         
-        for model_info in models:
+        for idx, model_info in enumerate(models):
             model_name = model_info["model"]
             model_label = model_info["name"]
             
-            # 2. Get fields for this model
-            fields = connector.fields_get(model_name)
+            try:
+                # 2. Get fields for this model
+                fields = connector.fields_get(model_name)
+            except Exception:
+                # Some models (abstract, transient) may not support fields_get
+                frappe.log_error(
+                    f"Schema discovery skipped for {model_name}",
+                    "Odoo Schema Discovery"
+                )
+                continue
             
             # 3. Cache the results
             cache_name = f"{connection_name}-{model_name}"
@@ -48,7 +56,7 @@ def run_discovery(connection_name: str):
             doc.save(ignore_permissions=True)
             
             # Commit every 10 models to avoid long-running transaction issues
-            if models.index(model_info) % 10 == 0:
+            if (idx + 1) % 10 == 0:
                 frappe.db.commit()
 
         frappe.db.commit()

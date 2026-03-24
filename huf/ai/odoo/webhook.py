@@ -11,13 +11,18 @@ def receive_webhook():
     Expected Payload: { "model": "sale.order", "ids": [1], "event": "on_create" }
     """
     key = frappe.request.args.get("key")
-    if not key:
-        frappe.throw("Missing webhook key", frappe.PermissionError)
+    connection_name = frappe.request.args.get("connection")
 
-    # 1. Identify the connection
-    connection = frappe.db.get_value("Odoo Connection", {"webhook_key": key}, "name")
-    if not connection:
+    if not connection_name or not key:
+        frappe.throw("Missing connection or key", frappe.PermissionError)
+
+    # Verify key using get_password (not a plain DB lookup)
+    conn_doc = frappe.get_doc("Odoo Connection", connection_name)
+    stored_key = conn_doc.get_password("webhook_key", raise_exception=False)
+    if not stored_key or stored_key != key:
         frappe.throw("Invalid webhook key", frappe.PermissionError)
+
+    connection = connection_name
 
     # 2. Extract data (Odoo sends JSON by default if using base.automation 'Execute Code')
     try:

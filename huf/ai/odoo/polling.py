@@ -44,9 +44,9 @@ def sync_connection(connection_name: str, last_sync: str = None):
     connector = OdooConnector(connection_name)
     new_sync_time = now_datetime()
     
-    # If no last_sync, only look for things in the last 10 minutes to avoid a flood
+    # If no last_sync, only look for things in the last 5 minutes to avoid a flood
     if not last_sync:
-        last_sync = add_minutes(new_sync_time, -10)
+        last_sync = add_minutes(new_sync_time, -5)
 
     for model in models_to_poll:
         try:
@@ -56,17 +56,19 @@ def sync_connection(connection_name: str, last_sync: str = None):
             records = connector.search_read(model, domain=domain, fields=["id"], limit=50)
             
             if records:
-                # 3. Trigger webhook logic (reuse existing logic)
+                # 3. Trigger agents via background job
                 from .webhook import run_odoo_triggered_agents
                 ids = [r["id"] for r in records]
                 
-                # We limit IDs to avoid overwhelming the background queue
-                run_odoo_triggered_agents(
+                # Enqueue instead of direct call to avoid blocking the worker
+                frappe.enqueue(
+                    "huf.ai.odoo.webhook.run_odoo_triggered_agents",
                     connection=connection_name,
                     model=model,
-                    ids=ids,
+                    ids=ids[:50],  # Cap to avoid overwhelming the queue
                     event="polling_update",
-                    payload={"source": "polling", "records": records}
+                    payload={"source": "polling"},
+                    queue="long",
                 )
         except Exception as e:
             frappe.log_error(f"Polling failed for {model} on {connection_name}: {str(e)}")

@@ -13,11 +13,11 @@ class OdooConnection(Document):
             if not self.odoo_url.startswith(("http://", "https://")):
                 frappe.throw("Odoo URL must start with http:// or https://")
 
-        if not self.webhook_key:
+        if self.is_new() or not self.get_password("webhook_key", raise_exception=False):
             self.webhook_key = frappe.generate_hash(length=32)
         
-        # Set webhook URL
-        self.webhook_url = f"{get_url()}/api/method/huf.ai.odoo.webhook.receive_webhook?key={self.webhook_key}"
+        # Set webhook URL (without key in URL for better security, now handled in receiver)
+        self.webhook_url = f"{get_url()}/api/method/huf.ai.odoo.webhook.receive_webhook?connection={self.name}"
 
     @frappe.whitelist()
     def test_connection(self):

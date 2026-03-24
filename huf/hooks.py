@@ -222,9 +222,13 @@ doc_events = {
 # }
 scheduler_events = {
 	"all": [
-		"huf.ai.agent_scheduler.run_scheduled_agents",
-		"huf.ai.odoo.polling.run_polling_sync"
+		"huf.ai.agent_scheduler.run_scheduled_agents"
 	],
+	"cron": {
+		"*/5 * * * *": [
+			"huf.ai.odoo.polling.run_polling_sync"
+		]
+	},
 	"daily": [
 		"huf.ai.knowledge.maintenance.cleanup_orphaned_files",
 		"huf.ai.knowledge.maintenance.optimize_indexes",

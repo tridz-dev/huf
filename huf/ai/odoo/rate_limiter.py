@@ -1,24 +1,30 @@
 import time
+import frappe
+
 
 class RateLimiter:
     """
-    Token-bucket rate limiter for Odoo API calls.
-    Respects SaaS rate limits (~1 req/sec for Odoo.com by default).
+    Connection-scoped rate limiter using Frappe cache.
+    Shared across all OdooConnector instances for the same connection.
     """
-    
-    def __init__(self, max_rpm: int = 60):
-        self.max_rpm = max_rpm
-        self.interval = 60.0 / max_rpm  # seconds between requests
-        self.last_request = 0.0
+
+    def __init__(self, connection_name: str, max_rpm: int = 60):
+        self.cache_key = f"odoo_rate_limit:{connection_name}"
+        self.interval = 60.0 / max_rpm
 
     def wait(self):
         """Block until the next request is allowed."""
-        now = time.time()
-        elapsed = now - self.last_request
-        if elapsed < self.interval:
+        cache = frappe.cache()
+        while True:
+            last = float(cache.get(self.cache_key) or 0)
+            now = time.time()
+            elapsed = now - last
+            if elapsed >= self.interval:
+                cache.set(self.cache_key, str(now), ex=120)
+                return
             time.sleep(self.interval - elapsed)
-        self.last_request = time.time()
 
     def check(self) -> bool:
         """Non-blocking check if a request is allowed."""
-        return (time.time() - self.last_request) >= self.interval
+        last = float(frappe.cache().get(self.cache_key) or 0)
+        return (time.time() - last) >= self.interval

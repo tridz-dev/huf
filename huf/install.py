@@ -461,6 +461,29 @@ def create_odoo_tools():
             "description": "List all available models in Odoo.",
             "types": "Odoo List Models",
             "parameters": []
+        },
+        {
+            "tool_name": "odoo_search_count",
+            "description": "Count records matching a domain in an Odoo model.",
+            "types": "Odoo Search Count",
+            "parameters": [
+                {"parameter_name": "connection", "type": "Data", "required": 1, "description": "Odoo Connection name"},
+                {"parameter_name": "model", "type": "Data", "required": 1, "description": "Odoo model name (e.g., res.partner)"},
+                {"parameter_name": "domain", "type": "Data", "required": 0, "description": "JSON-encoded Odoo domain filter"},
+            ]
+        },
+        {
+            "tool_name": "odoo_read_group",
+            "description": "Read grouped/aggregated data from an Odoo model (e.g., total revenue per salesperson).",
+            "types": "Odoo Read Group",
+            "parameters": [
+                {"parameter_name": "connection", "type": "Data", "required": 1, "description": "Odoo Connection name"},
+                {"parameter_name": "model", "type": "Data", "required": 1, "description": "Odoo model name"},
+                {"parameter_name": "domain", "type": "Data", "required": 0, "description": "JSON-encoded Odoo domain filter"},
+                {"parameter_name": "fields", "type": "Data", "required": 1, "description": "Comma-separated field names to aggregate"},
+                {"parameter_name": "groupby", "type": "Data", "required": 1, "description": "Comma-separated field names to group by"},
+                {"parameter_name": "limit", "type": "Int", "required": 0, "description": "Max groups to return (default 80)"},
+            ]
         }
     ]
     

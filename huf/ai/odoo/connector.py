@@ -26,15 +26,24 @@ class OdooConnector:
         self.transport = self._init_transport()
         
         # Rate limiting
-        self.rate_limiter = RateLimiter(self.connection.rate_limit_rpm or 60)
+        self.rate_limiter = RateLimiter(connection_name, self.connection.rate_limit_rpm or 60)
 
     def _resolve_protocol(self) -> str:
         if self.connection.protocol != "Auto":
             return self.connection.protocol
         
-        # Default logic: JSON-2 for v19+, otherwise JSON-RPC
-        if self.connection.odoo_version == "19":
-            return "JSON-2"
+        version = self.connection.odoo_version
+        if version == "Auto Detect" or not version:
+            # Can't auto-detect protocol without a known version; default to JSON-RPC
+            return "JSON-RPC"
+
+        # JSON-2 for Odoo 19+
+        try:
+            if int(version) >= 19:
+                return "JSON-2"
+        except (ValueError, TypeError):
+            pass
+
         return "JSON-RPC"
 
     def _init_transport(self):
