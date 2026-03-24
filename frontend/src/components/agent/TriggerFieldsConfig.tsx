@@ -1,9 +1,4 @@
 import React from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Copy } from 'lucide-react';
-import { toast } from 'sonner';
 
 /**
  * Configuration for trigger type fields
@@ -85,36 +80,20 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
   ],
   'Webhook': [
     {
-      field: 'webhook_url',
-      type: 'custom',
-      label: 'Webhook URL',
-      render: (_control, _field, _formState, agentId?: string) => {
-        return (
-          <div className="space-y-2">
-            <Label>Webhook URL</Label>
-            <div className="flex gap-2">
-              <Input
-                value={`https://api.hufai.com/agent/${agentId}/webhook/${Date.now()}`}
-                readOnly
-                className="flex-1 font-mono text-sm"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  const url = `https://api.hufai.com/agent/${agentId}/webhook/${Date.now()}`;
-                  navigator.clipboard.writeText(url);
-                  toast.success('Webhook URL copied to clipboard');
-                }}
-              >
-                <Copy className="w-4 h-4" />
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground">Auto-generated webhook endpoint</p>
-          </div>
-        );
-      },
+      field: 'webhook_slug',
+      type: 'input',
+      label: 'Webhook Slug',
+      placeholder: 'e.g. inbound-leads',
+      description: 'Identifier for this webhook trigger (stored on the document).',
+      required: true,
+    },
+    {
+      field: 'webhook_key',
+      type: 'input',
+      label: 'Webhook Key',
+      placeholder: 'Secret key',
+      description: 'Secret credential for this webhook (stored on the document).',
+      required: true,
     },
   ],
   'App Event': [
@@ -146,4 +125,3 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
     },
   ],
 };
-
