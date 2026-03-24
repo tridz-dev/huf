@@ -3,17 +3,30 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Combobox } from '@/components/ui/combobox';
 import { UseFormReturn } from 'react-hook-form';
+import { useMemo } from 'react';
 import { knowledgeTypes, knowledgeScopes, knowledgeStorageModes } from '@/data/knowledge';
 import type { KnowledgeSourceFormValues } from './types';
+
+interface ProviderOption {
+  name: string;
+  provider_name?: string;
+}
 
 interface GeneralTabProps {
   form: UseFormReturn<KnowledgeSourceFormValues>;
   isNew: boolean;
+  providers?: ProviderOption[];
 }
 
-export function GeneralTab({ form, isNew }: GeneralTabProps) {
+export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
   const watchKnowledgeType = form.watch('knowledge_type');
+
+  const providerOptions = useMemo(
+    () => providers.map((p) => ({ value: p.name, label: p.provider_name || p.name })),
+    [providers],
+  );
 
   return (
     <div className="space-y-6">
@@ -193,10 +206,13 @@ export function GeneralTab({ form, isNew }: GeneralTabProps) {
                 <FormItem className="sm:col-span-2">
                   <FormLabel>Embedding Provider</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="AI Provider name for API key resolution"
-                      {...field}
+                    <Combobox
+                      options={providerOptions}
                       value={field.value ?? ''}
+                      onValueChange={field.onChange}
+                      placeholder="Select AI Provider..."
+                      searchPlaceholder="Search providers..."
+                      emptyText="No providers found."
                     />
                   </FormControl>
                   <FormDescription>AI Provider used for API key resolution (optional)</FormDescription>
