@@ -196,6 +196,10 @@ export interface AgentTriggerDoc {
   reference_doctype?: string;
   doc_event?: string;
   condition?: string;
+  webhook_key?: string;
+  webhook_slug?: string;
+  app_name?: string;
+  event_name?: string;
 }
 
 /**

@@ -240,10 +240,11 @@ export interface AgentDoc {
   template_version_at_attach?: number; // Version number when prompt was attached
   copied_from_prompt?: string | null; // Name of the prompt this agent was copied from, if any
   enable_prompt_caching?: number; // 0 or 1
-  cache_control_type?: string | null; // ephemeral or persistent
+  cache_control_type?: string | null; // ephemeral or auto (DocType)
   cache_system_message?: number; // 0 or 1
   cache_conversation_history?: number; // 0 or 1
   context_strategy?: string | null; // Summarize, FIFO, or None
+  summary_model?: string | null; // AI Model name for summarization when strategy is Summarize
   summary_ratio?: number | null; // Ratio of history to summarize (0-1)
   history_limit?: number | null; // Maximum number of messages to keep
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
