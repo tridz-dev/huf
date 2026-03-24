@@ -43,12 +43,30 @@ class SimpleResult:
 _L1_CAPABILITY_CACHE = {}
 
 
-async def _execute_tool_call(tool, args_json, context=None):
+async def _execute_tool_call(tool, args_json, context=None, tool_call_id=None):
     """Execute a tool call and return the result.
-    Uses positional args so both HUF tools (args_json) and agents @function_tool (input) work.
+
+    Huf passes a plain dict as ``context`` (conversation_id, agent_run_id, …). Tools built with
+    the Agents SDK ``@function_tool`` expect a ``ToolContext`` with ``tool_name``; passing a dict
+    causes 'dict' object has no attribute 'tool_name'. Wrap dicts in ``ToolContext`` while keeping
+    the Huf payload on ``ToolContext.context`` so ``sdk_tools`` can still merge it into args.
     """
     args_str = args_json if isinstance(args_json, str) else json.dumps(args_json or {})
-    return await tool.on_invoke_tool(context, args_str)
+
+    invoke_ctx = context
+    if isinstance(context, dict):
+        from agents.tool_context import ToolContext
+        from agents.usage import Usage
+
+        invoke_ctx = ToolContext(
+            context,
+            usage=Usage(),
+            tool_name=tool.name,
+            tool_call_id=tool_call_id if tool_call_id is not None else "",
+            tool_arguments=args_str,
+        )
+
+    return await tool.on_invoke_tool(invoke_ctx, args_str)
 
 
 def _find_tool(agent, tool_name):
@@ -494,7 +512,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                             frappe.db.commit()
                         
                         result_content = await _execute_tool_call(
-                            tool_to_run, tool_args, context
+                            tool_to_run, tool_args, context, tool_call.id
                         )
                     except Exception as e:
                         result_content = f"Error executing tool {tool_name}: {str(e)}"
@@ -866,7 +884,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
                                     try:
                                         result_content = await _execute_tool_call(
-                                            tool_to_run, tool_args, context
+                                            tool_to_run, tool_args, context, tool_call.get("id")
                                         )
                                     except Exception as e:
                                         result_content = f"Error executing tool {tool_name}: {str(e)}"
