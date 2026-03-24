@@ -146,7 +146,7 @@ export function KnowledgeInputsModal({
         },
       );
       const res = response as any;
-      const fileUrl = res?.message?.file_url ?? res?.file_url;
+      const fileUrl = res?.data?.message?.file_url;
       if (fileUrl) {
         setUploadedFileUrl(fileUrl);
         toast.success('File uploaded');
