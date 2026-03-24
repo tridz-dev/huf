@@ -37,12 +37,21 @@ export const agentFormSchema = z.object({
   cache_system_message: z.boolean().optional(),
   cache_conversation_history: z.boolean().optional(),
   context_strategy: z.string().optional(),
+  summary_model: z.string().optional(),
   summary_ratio: z.number().optional(),
   history_limit: z.number().optional(),
   max_knowledge_tokens: z.number().optional(),
   max_turns: z.number().optional(),
   enable_conversation_data: z.boolean().optional(),
   autonaming_of_conversation_title: z.boolean().optional(),
+
+  agent_color: z
+    .string()
+    .optional()
+    .refine(
+      (v) => v === undefined || v === '' || /^#[0-9A-Fa-f]{6}$/.test(v),
+      { message: 'Use a hex color including #, e.g. #6366F1' },
+    ),
 
   // Advanced model overrides
   image_generation_model: z.string().optional(),
