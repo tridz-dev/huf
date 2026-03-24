@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -57,6 +57,12 @@ const allNavItems = [
     url: "/data",
     icon: Database,
     capability: "agent.view_all",
+  },
+  {
+    title: "Knowledge",
+    url: "/knowledge",
+    icon: BookOpen,
+    capability: "agent.use",
   },
   {
     title: "AI Providers",
