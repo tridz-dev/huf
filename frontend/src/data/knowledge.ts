@@ -53,6 +53,16 @@ export const knowledgeInputStatuses = [
 export type KnowledgeInputStatusOption = (typeof knowledgeInputStatuses)[number]['value'];
 
 /**
+ * Mode options for Agent Knowledge child table (how the knowledge source is used).
+ */
+export const knowledgeModes = [
+  { label: 'Mandatory', value: 'Mandatory' },
+  { label: 'Optional', value: 'Optional' },
+] as const;
+
+export type KnowledgeModeOption = (typeof knowledgeModes)[number]['value'];
+
+/**
  * Status filter options for the Knowledge Sources listing page.
  * Includes an "All" option plus source-level statuses and disabled.
  */

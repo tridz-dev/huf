@@ -11,6 +11,8 @@ import {
   updateKnowledgeSource,
   rebuildIndex,
 } from '../services/knowledgeApi';
+import { getProviders } from '../services/providerApi';
+import type { AIProvider } from '../types/agent.types';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { KnowledgeSourceHeader } from '../components/knowledge/KnowledgeSourceHeader';
 import { GeneralTab } from '../components/knowledge/GeneralTab';
@@ -123,6 +125,7 @@ function KnowledgeSourceFormPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [inputsModalOpen, setInputsModalOpen] = useState(false);
   const [sourceDoc, setSourceDoc] = useState<KnowledgeSourceDoc | null>(null);
+  const [providers, setProviders] = useState<AIProvider[]>([]);
 
   const form = useForm<KnowledgeSourceFormValues>({
     resolver: zodResolver(knowledgeSourceFormSchema),
@@ -151,6 +154,12 @@ function KnowledgeSourceFormPage() {
     },
     [form],
   );
+
+  useEffect(() => {
+    getProviders()
+      .then((data) => setProviders(data as AIProvider[]))
+      .catch((err) => console.error('Error loading providers:', err));
+  }, []);
 
   useEffect(() => {
     if (id && !isNew) {
@@ -279,7 +288,7 @@ function KnowledgeSourceFormPage() {
               </TabsList>
 
               <TabsContent value="general" className="space-y-4">
-                <GeneralTab form={form} isNew={isNew} />
+                <GeneralTab form={form} isNew={isNew} providers={providers} />
               </TabsContent>
 
               <TabsContent value="status" className="space-y-4">

@@ -164,6 +164,16 @@ export interface AgentPermissionRoleRow {
   role: string;
 }
 
+export interface AgentKnowledgeRow {
+  name?: string;
+  knowledge_source: string;
+  mode: 'Mandatory' | 'Optional';
+  priority: number;
+  max_chunks: number;
+  token_budget: number;
+  description?: string;
+}
+
 export interface AgentOrchestrationPlanRow {
   name?: string;
   step_index: number;
@@ -212,10 +222,11 @@ export interface AgentDoc {
   description?: string | null;
   instructions: string;
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
+  agent_knowledge?: AgentKnowledgeRow[];
   agent_mcp_server?: Array<{
     mcp_server: string;
     enabled: 0 | 1;
-  }>; // Array of MCP server references
+  }>;
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
