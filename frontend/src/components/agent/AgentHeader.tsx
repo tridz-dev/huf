@@ -14,6 +14,7 @@ import {
 import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
+import { formatTimeAgo } from '@/utils/time';
 
 interface AgentHeaderProps {
   form: UseFormReturn<AgentFormValues>;
@@ -32,6 +33,8 @@ interface AgentHeaderProps {
   onDelete: () => void;
   agentId?: string;
   allowChat: boolean;
+  lastRun?: string | null;
+  totalRun?: number | null;
 }
 
 export function AgentHeader({
@@ -51,6 +54,8 @@ export function AgentHeader({
   // onDelete,
   agentId,
   allowChat,
+  lastRun,
+  totalRun,
 }: AgentHeaderProps) {
   const watchProvider = form.watch('provider');
   const watchModel = form.watch('model');
@@ -85,12 +90,22 @@ export function AgentHeader({
             {models.find(m => m.name === watchModel)?.model_name || watchModel || 'Model'}
           </Badge>
         </div>
-        {activeTriggerCount > 0 && (
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            {activeTriggerCount} active {activeTriggerCount === 1 ? 'trigger' : 'triggers'}
-          </div>
-        )}
+        <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+          {activeTriggerCount > 0 && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 shrink-0" />
+              <span>
+                {activeTriggerCount} active {activeTriggerCount === 1 ? 'trigger' : 'triggers'}
+              </span>
+            </div>
+          )}
+          {!isNew && (lastRun !== undefined || totalRun !== undefined) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-0 sm:pl-6">
+              <span>Last run: {lastRun ? formatTimeAgo(lastRun) : 'Never'}</span>
+              <span>Total runs: {totalRun ?? 0}</span>
+            </div>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-2">
         {!isNew && (<Button 
