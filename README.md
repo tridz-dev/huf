@@ -268,6 +268,33 @@ Upstream incident thread:
 
 ---
 
+## Skills
+
+This project includes a machine-readable skill directory at `skills/` that documents features, UI patterns, architecture, and developer workflows in a structured format.
+
+### Available Skills
+
+| Skill | Category | Description |
+|-------|----------|-------------|
+| [agent-system](skills/agent-system/SKILL.md) | features | Core Agent System - Agent management, execution, conversation handling |
+| [knowledge-system](skills/knowledge-system/SKILL.md) | features | Knowledge System - RAG implementation with SQLite FTS5 |
+| [tool-system](skills/tool-system/SKILL.md) | features | Tool System - Agent tools, MCP client, function calling |
+| [provider-system](skills/provider-system/SKILL.md) | integrations | Provider & LiteLLM - Multi-provider LLM integration |
+| [trigger-system](skills/trigger-system/SKILL.md) | features | Trigger System - Event-based agent execution |
+| [flow-engine](skills/flow-engine/SKILL.md) | features | Flow Engine - Graph-based workflow orchestration |
+| [frontend-core](skills/frontend-core/SKILL.md) | ui | Frontend Core - React app architecture |
+| [frontend-chat](skills/frontend-chat/SKILL.md) | ui | Frontend Chat - Real-time chat interface |
+| [frontend-flow-builder](skills/frontend-flow-builder/SKILL.md) | ui | Frontend Flow Builder - Visual workflow designer |
+| [security](skills/security/SKILL.md) | patterns | Security & Permissions - SSRF, RBAC, tool permissions |
+| [observability](skills/observability/SKILL.md) | patterns | Observability - Logging, monitoring, cost tracking |
+
+See `skills/_index.json` for the complete catalog with dependencies and tags.
+
+Skills are designed to be consumed by both developers and AI agents working on this codebase. They provide structured context about how specific features work, where the code lives, and what to watch out for.
+
+
+---
+
 ## License
 
 MIT License — see [LICENSE](./LICENSE) for details.
