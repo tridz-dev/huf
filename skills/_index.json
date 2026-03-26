@@ -1,0 +1,158 @@
+{
+  "version": "1.0.0",
+  "description": "Skills index for the HUF Frappe application - AI Agent platform with workflow automation",
+  "skills": [
+    {
+      "id": "agent-system",
+      "name": "Core Agent System",
+      "description": "Agent management, execution, conversation handling",
+      "path": "skills/agent-system/SKILL.md",
+      "category": "features",
+      "key_files": [
+        "huf/ai/agent_integration.py",
+        "huf/ai/conversation_manager.py",
+        "huf/huf/doctype/agent/"
+      ],
+      "depends_on": ["tool-system", "provider-system"],
+      "tags": ["agent", "conversation", "execution", "chat"]
+    },
+    {
+      "id": "knowledge-system",
+      "name": "Knowledge System",
+      "description": "RAG implementation with SQLite FTS5 for agent knowledge retrieval",
+      "path": "skills/knowledge-system/SKILL.md",
+      "category": "features",
+      "key_files": [
+        "huf/ai/knowledge/",
+        "huf/huf/doctype/knowledge_source/"
+      ],
+      "depends_on": ["agent-system"],
+      "tags": ["rag", "knowledge", "fts5", "chunking", "search"]
+    },
+    {
+      "id": "tool-system",
+      "name": "Tool System",
+      "description": "Agent tools, MCP client, function calling capabilities",
+      "path": "skills/tool-system/SKILL.md",
+      "category": "features",
+      "key_files": [
+        "huf/ai/sdk_tools.py",
+        "huf/ai/mcp_client.py",
+        "huf/ai/tool_registry.py"
+      ],
+      "depends_on": ["security"],
+      "tags": ["tools", "mcp", "functions", "crud", "http"]
+    },
+    {
+      "id": "provider-system",
+      "name": "Provider & LiteLLM",
+      "description": "Multi-provider LLM integration via LiteLLM",
+      "path": "skills/provider-system/SKILL.md",
+      "category": "integrations",
+      "key_files": [
+        "huf/ai/providers/litellm.py",
+        "huf/ai/run.py",
+        "huf/huf/doctype/ai_provider/"
+      ],
+      "depends_on": [],
+      "tags": ["litellm", "openai", "anthropic", "gemini", "llm"]
+    },
+    {
+      "id": "trigger-system",
+      "name": "Trigger System",
+      "description": "Event-based agent execution with schedulers and webhooks",
+      "path": "skills/trigger-system/SKILL.md",
+      "category": "features",
+      "key_files": [
+        "huf/ai/agent_hooks.py",
+        "huf/ai/agent_scheduler.py",
+        "huf/huf/doctype/agent_trigger/"
+      ],
+      "depends_on": ["agent-system"],
+      "tags": ["triggers", "scheduler", "webhooks", "doc-events"]
+    },
+    {
+      "id": "flow-engine",
+      "name": "Flow Engine",
+      "description": "Graph-based workflow orchestration with visual flow designer",
+      "path": "skills/flow-engine/SKILL.md",
+      "category": "features",
+      "key_files": [
+        "huf/ai/flow_engine.py",
+        "huf/huf/doctype/flow_definition/",
+        "huf/huf/doctype/flow_run/"
+      ],
+      "depends_on": ["agent-system", "tool-system"],
+      "tags": ["workflow", "flow", "orchestration", "nodes"]
+    },
+    {
+      "id": "frontend-core",
+      "name": "Frontend Core",
+      "description": "React app architecture and core UI components",
+      "path": "skills/frontend-core/SKILL.md",
+      "category": "ui",
+      "key_files": [
+        "frontend/src/App.tsx",
+        "frontend/src/contexts/",
+        "frontend/src/components/ui/"
+      ],
+      "depends_on": [],
+      "tags": ["react", "typescript", "frappe", "ui"]
+    },
+    {
+      "id": "frontend-chat",
+      "name": "Frontend Chat",
+      "description": "Real-time chat interface with streaming and artifacts",
+      "path": "skills/frontend-chat/SKILL.md",
+      "category": "ui",
+      "key_files": [
+        "frontend/src/components/chat/",
+        "frontend/src/components/ai-elements/"
+      ],
+      "depends_on": ["frontend-core"],
+      "tags": ["chat", "messaging", "streaming", "artifacts"]
+    },
+    {
+      "id": "frontend-flow-builder",
+      "name": "Frontend Flow Builder",
+      "description": "Visual workflow designer with React Flow",
+      "path": "skills/frontend-flow-builder/SKILL.md",
+      "category": "ui",
+      "key_files": [
+        "frontend/src/components/FlowCanvas.tsx",
+        "frontend/src/components/nodes/",
+        "frontend/src/services/flowService.ts"
+      ],
+      "depends_on": ["frontend-core", "flow-engine"],
+      "tags": ["flow-builder", "react-flow", "canvas", "nodes"]
+    },
+    {
+      "id": "security",
+      "name": "Security & Permissions",
+      "description": "SSRF protection, RBAC, tool permissions, and safe evaluation",
+      "path": "skills/security/SKILL.md",
+      "category": "patterns",
+      "key_files": [
+        "huf/ai/http_handler.py",
+        "huf/permissions.py",
+        "huf/ai/flow_eval.py"
+      ],
+      "depends_on": [],
+      "tags": ["security", "permissions", "ssrf", "rbac"]
+    },
+    {
+      "id": "observability",
+      "name": "Observability",
+      "description": "Logging, monitoring, cost tracking and usage analytics",
+      "path": "skills/observability/SKILL.md",
+      "category": "patterns",
+      "key_files": [
+        "huf/huf/doctype/agent_run/",
+        "huf/huf/doctype/agent_conversation/",
+        "frontend/src/components/dashboard/"
+      ],
+      "depends_on": ["agent-system"],
+      "tags": ["observability", "monitoring", "logging", "costs"]
+    }
+  ]
+}
