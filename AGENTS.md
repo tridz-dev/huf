@@ -1537,6 +1537,43 @@ Registered via `huf_tools` hook so agents can interact with flows:
 - **Human approval**: User/role verification before approve/reject
 - **Hop limit**: Safety guard against infinite loops (default 100)
 
+## Skills Directory
+
+This repository includes a `skills/` directory containing structured knowledge about features, UI patterns, architecture, and developer workflows. These skills are designed to help AI agents and developers quickly understand specific areas of the codebase.
+
+### Available Skills
+
+| Skill | Category | Description |
+|-------|----------|-------------|
+| [agent-system](skills/agent-system/SKILL.md) | features | Core Agent System - Agent management, execution, conversation handling |
+| [knowledge-system](skills/knowledge-system/SKILL.md) | features | Knowledge System - RAG implementation with SQLite FTS5 |
+| [tool-system](skills/tool-system/SKILL.md) | features | Tool System - Agent tools, MCP client, function calling |
+| [provider-system](skills/provider-system/SKILL.md) | integrations | Provider & LiteLLM - Multi-provider LLM integration |
+| [trigger-system](skills/trigger-system/SKILL.md) | features | Trigger System - Event-based agent execution |
+| [flow-engine](skills/flow-engine/SKILL.md) | features | Flow Engine - Graph-based workflow orchestration |
+| [frontend-core](skills/frontend-core/SKILL.md) | ui | Frontend Core - React app architecture |
+| [frontend-chat](skills/frontend-chat/SKILL.md) | ui | Frontend Chat - Real-time chat interface |
+| [frontend-flow-builder](skills/frontend-flow-builder/SKILL.md) | ui | Frontend Flow Builder - Visual workflow designer |
+| [security](skills/security/SKILL.md) | patterns | Security & Permissions - SSRF, RBAC, tool permissions |
+| [observability](skills/observability/SKILL.md) | patterns | Observability - Logging, monitoring, cost tracking |
+
+### Using Skills
+
+Before working on any area of the codebase, check if a relevant skill exists:
+
+1. Read `skills/_index.json` for the full catalog with dependencies
+2. Open the relevant `skills/<name>/SKILL.md` for detailed context
+3. Check `references/` subdirectories for supplementary detail
+
+Skills help you understand *how* things work here, *where* the code lives, and *what to watch out for* — consult them before making changes.
+
+### Skill Categories
+
+- **features**: User-facing functionality (agent, knowledge, tools, triggers, flows)
+- **ui**: Frontend components and interfaces (core, chat, flow-builder)
+- **integrations**: External service integrations (providers)
+- **patterns**: Developer patterns and cross-cutting concerns (security, observability)
+
 ## Development and Coding Guidelines
 
 ### Frontend TypeScript Strictness
