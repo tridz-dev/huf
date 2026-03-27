@@ -23,8 +23,9 @@ from types import SimpleNamespace
 import frappe
 import litellm
 from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, completion_cost, ContextWindowExceededError
-from litellm.utils import supports_prompt_caching, trim_messages
+from litellm.utils import trim_messages
 from huf.ai.tool_serializer import serialize_tools
+from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 
 
 class SimpleResult:
@@ -42,9 +43,30 @@ class SimpleResult:
 _L1_CAPABILITY_CACHE = {}
 
 
-async def _execute_tool_call(tool, args_json, context=None):
-    """Execute a tool call and return the result"""
-    return await tool.on_invoke_tool(ctx=context, args_json=args_json)
+async def _execute_tool_call(tool, args_json, context=None, tool_call_id=None):
+    """Execute a tool call and return the result.
+
+    Huf passes a plain dict as ``context`` (conversation_id, agent_run_id, …). Tools built with
+    the Agents SDK ``@function_tool`` expect a ``ToolContext`` with ``tool_name``; passing a dict
+    causes 'dict' object has no attribute 'tool_name'. Wrap dicts in ``ToolContext`` while keeping
+    the Huf payload on ``ToolContext.context`` so ``sdk_tools`` can still merge it into args.
+    """
+    args_str = args_json if isinstance(args_json, str) else json.dumps(args_json or {})
+
+    invoke_ctx = context
+    if isinstance(context, dict):
+        from agents.tool_context import ToolContext
+        from agents.usage import Usage
+
+        invoke_ctx = ToolContext(
+            context,
+            usage=Usage(),
+            tool_name=tool.name,
+            tool_call_id=tool_call_id if tool_call_id is not None else "",
+            tool_arguments=args_str,
+        )
+
+    return await tool.on_invoke_tool(invoke_ctx, args_str)
 
 
 def _find_tool(agent, tool_name):
@@ -191,10 +213,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         model_supports_caching = False
         if enable_prompt_caching:
             try:
-                base_model = normalized_model.split("/", 1)[-1] if "/" in normalized_model else normalized_model
-                model_supports_caching = supports_prompt_caching(model=normalized_model) or supports_prompt_caching(model=base_model)
+                model_supports_caching = model_supports_prompt_caching(model, provider)
             except Exception:
-                # If check fails, assume not supported
                 model_supports_caching = False
                 frappe.log_error(
                     f"Failed to check prompt caching support for model {normalized_model}",
@@ -492,7 +512,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                             frappe.db.commit()
                         
                         result_content = await _execute_tool_call(
-                            tool_to_run, tool_args, context
+                            tool_to_run, tool_args, context, tool_call.id
                         )
                     except Exception as e:
                         result_content = f"Error executing tool {tool_name}: {str(e)}"
@@ -502,7 +522,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 all_new_items.append(
                     SimpleNamespace(
                         type="tool_call_output_item",
-                        raw_item={"name": tool_name, "output": result_content},
+                        raw_item={"name": tool_name, "output": result_content, "id": tool_call.id},
                     )
                 )
 
@@ -634,8 +654,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         model_supports_caching = False
         if enable_prompt_caching:
             try:
-                base_model = normalized_model.split("/", 1)[-1] if "/" in normalized_model else normalized_model
-                model_supports_caching = supports_prompt_caching(model=normalized_model) or supports_prompt_caching(model=base_model)
+                model_supports_caching = model_supports_prompt_caching(model, provider)
             except Exception:
                 model_supports_caching = False
                 frappe.log_error(
@@ -844,79 +863,88 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                 result_content = ""
 
                                 if tool_to_run:
-                                    try:
-                                        # Emit socket event for tool execution start BEFORE executing
-                                        if context and context.get("conversation_id"):
-                                            frappe.publish_realtime(
-                                                event=f'conversation:{context.get("conversation_id")}',
-                                                message={
-                                                    "type": "tool_call_started",
-                                                    "conversation_id": context.get("conversation_id"),
-                                                    "agent_run_id": context.get("agent_run_id"),
-                                                    "tool_call_id": tool_call["id"],  # Use LLM's tool_call.id as temporary ID
-                                                    "message_id": tool_call["id"],  # Temporary ID, will be updated after message creation
-                                                    "tool_name": tool_name,
-                                                    "tool_status": "Queued",
-                                                    "tool_args": tool_args if isinstance(tool_args, dict) else json.loads(tool_args) if isinstance(tool_args, str) else {},
-                                                },
-                                                user=frappe.session.user,
-                                                after_commit=False
-                                            )
-                                            frappe.db.commit()
-                                        
-                                        result_content = await _execute_tool_call(
-                                            tool_to_run, tool_args, context
+                                    # Emit tool_call_started before execution
+                                    if context and context.get("conversation_id"):
+                                        frappe.publish_realtime(
+                                            event=f'conversation:{context.get("conversation_id")}',
+                                            message={
+                                                "type": "tool_call_started",
+                                                "conversation_id": context.get("conversation_id"),
+                                                "agent_run_id": context.get("agent_run_id"),
+                                                "tool_call_id": tool_call["id"],
+                                                "message_id": tool_call["id"],
+                                                "tool_name": tool_name,
+                                                "tool_status": "Queued",
+                                                "tool_args": tool_args if isinstance(tool_args, dict) else json.loads(tool_args) if isinstance(tool_args, str) else {},
+                                            },
+                                            user=frappe.session.user,
+                                            after_commit=False
                                         )
-                                        
-                                        # Update Tool Status in DB and Emit Event
-                                        if context and context.get("conversation_id"):
-                                            try:
-                                                tool_call_doc = frappe.db.get_value("Agent Tool Call", {
-                                                    "conversation": context.get("conversation_id"),
-                                                    "call_id": tool_call["id"]
-                                                }, "name")
-                                                
-                                                if tool_call_doc:
-                                                    frappe.db.set_value("Agent Tool Call", tool_call_doc, {
-                                                        "status": "Completed",
-                                                        "tool_result": str(result_content)[:140000],
-                                                    }, update_modified=False)
-                                                    
-                                                    message_name = frappe.db.get_value("Agent Message", {"tool_calll": tool_call_doc}, "name")
-                                                    if message_name:
-                                                        msg_doc = frappe.get_doc("Agent Message", message_name)
-                                                        result_str = json.dumps(result_content) if not isinstance(result_content, str) else str(result_content)
-                                                        
-                                                        new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
-                                                        
-                                                        msg_doc.content = new_content
-                                                        msg_doc.kind = "Tool Result"
-                                                        msg_doc.save(ignore_permissions=True)
-                                                    else:
-                                                        frappe.log_error(f"LiteLLM Stream: Could not find message for tool_calll='{tool_call_doc}'", "Debug Stream")
-                                                    
-                                                    frappe.publish_realtime(
-                                                        event=f'conversation:{context.get("conversation_id")}',
-                                                        message={
-                                                            "type": "tool_call_completed",
-                                                            "tool_call_id": tool_call["id"],
-                                                            "tool_name": tool_name,
-                                                            "status": "Completed",
-                                                            "result": str(result_content)[:1000]
-                                                        },
-                                                        user=frappe.session.user,
-                                                        after_commit=False
-                                                    )
-                                                    
-                                                    if getattr(frappe.local, "_realtime_log", None) is None:
-                                                        frappe.local._realtime_log = []
-                                                    frappe.db.commit()
-                                            except AttributeError:
-                                                pass
-                                            except Exception as e:
-                                                print(f"Error updating tool status: {e}")
+                                        frappe.db.commit()
+
+                                    try:
+                                        result_content = await _execute_tool_call(
+                                            tool_to_run, tool_args, context, tool_call.get("id")
+                                        )
                                     except Exception as e:
                                         result_content = f"Error executing tool {tool_name}: {str(e)}"
+
+                                    # Update Agent Tool Call with result (runs even if tool raised)
+                                    if context and context.get("conversation_id"):
+                                        conv_id = context.get("conversation_id")
+                                        call_id = tool_call.get("id")
+                                        try:
+                                            tool_call_doc = frappe.db.get_value("Agent Tool Call", {
+                                                "conversation": conv_id,
+                                                "call_id": call_id
+                                            }, "name")
+
+                                            if tool_call_doc:
+                                                tc_doc = frappe.get_doc("Agent Tool Call", tool_call_doc)
+                                                tc_doc.status = "Completed"
+                                                # JSON field: store valid JSON (dict)
+                                                if isinstance(result_content, (dict, list)):
+                                                    tc_doc.tool_result = result_content
+                                                else:
+                                                    tc_doc.tool_result = {"output": str(result_content)[:140000]}
+                                                tc_doc.save(ignore_permissions=True)
+
+                                                message_name = frappe.db.get_value("Agent Message", {"tool_calll": tool_call_doc}, "name")
+                                                if message_name:
+                                                    msg_doc = frappe.get_doc("Agent Message", message_name)
+                                                    result_str = json.dumps(result_content) if not isinstance(result_content, str) else str(result_content)
+                                                    new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
+                                                    msg_doc.content = new_content
+                                                    msg_doc.kind = "Tool Result"
+                                                    msg_doc.save(ignore_permissions=True)
+
+                                                tool_result_for_socket = (
+                                                    result_content
+                                                    if isinstance(result_content, (dict, list))
+                                                    else {"output": str(result_content)[:140000]}
+                                                )
+                                                frappe.publish_realtime(
+                                                    event=f'conversation:{context.get("conversation_id")}',
+                                                    message={
+                                                        "type": "tool_call_completed",
+                                                        "conversation_id": context.get("conversation_id"),
+                                                        "agent_run_id": context.get("agent_run_id"),
+                                                        "message_id": message_name,
+                                                        "tool_call_id": tool_call["id"],
+                                                        "tool_name": tool_name,
+                                                        "tool_status": "Completed",
+                                                        "status": "Completed",
+                                                        "tool_result": tool_result_for_socket,
+                                                        "result": json.dumps(tool_result_for_socket) if isinstance(tool_result_for_socket, (dict, list)) else str(result_content)[:1000],
+                                                    },
+                                                    user=frappe.session.user,
+                                                    after_commit=False
+                                                )
+                                                if getattr(frappe.local, "_realtime_log", None) is None:
+                                                    frappe.local._realtime_log = []
+                                                frappe.db.commit()
+                                        except Exception:
+                                            pass
                                 else:
                                     result_content = f"Tool '{tool_name}' not found."
 

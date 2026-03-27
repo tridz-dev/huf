@@ -2,7 +2,10 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Home, AlertCircle } from 'lucide-react';
 
-export function NotFoundPage() {
+export { NotFoundPage };
+export default NotFoundPage;
+
+function NotFoundPage() {
   const navigate = useNavigate();
 
   return (

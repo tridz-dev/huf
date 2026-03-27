@@ -13,15 +13,59 @@ export const agentFormSchema = z.object({
   enable_multi_run: z.boolean(),
   description: z.string().optional(),
   instructions: z.string(),
+
+  default_plan: z.array(
+    z.object({
+      name: z.string().optional(),
+      step_index: z.number().default(0),
+      status: z.enum(["pending", "in_progress", "done", "failed"]).default("pending"),
+      instruction: z.string().default(""),
+      output_ref: z.string().default("")
+    })
+  ).default([]),
+
+  prompt_mode: z.enum(["Local", "Template"]).default("Local"),
+  agent_prompt: z.string().optional(),
+  prompt_version_locked: z.boolean().optional(),
+  template_version_at_attach: z.number().optional(),
+  allow_guest: z.boolean().default(false),
+  allowed_users: z.array(z.string()).default([]),
+  allowed_roles: z.array(z.string()).default([]),
+  copied_from_prompt: z.string().nullable().optional(),
   enable_prompt_caching: z.boolean().optional(),
+  cache_control_type: z.string().optional(),
+  cache_system_message: z.boolean().optional(),
+  cache_conversation_history: z.boolean().optional(),
   context_strategy: z.string().optional(),
+  summary_model: z.string().optional(),
   summary_ratio: z.number().optional(),
   history_limit: z.number().optional(),
   max_knowledge_tokens: z.number().optional(),
   max_turns: z.number().optional(),
   enable_conversation_data: z.boolean().optional(),
   autonaming_of_conversation_title: z.boolean().optional(),
+
+  agent_color: z
+    .string()
+    .optional()
+    .refine(
+      (v) => v === undefined || v === '' || /^#[0-9A-Fa-f]{6}$/.test(v),
+      { message: 'Use a hex color including #, e.g. #6366F1' },
+    ),
+
+  // Advanced model overrides
+  image_generation_model: z.string().optional(),
+  tts_model: z.string().optional(),
+  tts_voice: z.string().optional(),
+  stt_model: z.string().optional(),
+}).superRefine((values, ctx) => {
+  if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["agent_prompt"],
+      message: 'Select an Agent Prompt when using Template mode',
+    });
+  }
 });
 
 export type AgentFormValues = z.infer<typeof agentFormSchema>;
-

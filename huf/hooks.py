@@ -20,7 +20,7 @@ add_to_apps_screen = [
 		"logo": app_logo_url,
 		"title": "Huf",
 		"route": app_url,
-		"has_permission": "huf.permission.check_app_permission"
+		"has_permission": "huf.permissions.check_app_permission"
 	}
 ]
 
@@ -147,6 +147,9 @@ after_uninstall = "huf.ai.tool_registry.sync_app_tools"
 # }
 permission_query_conditions = {
     "Agent": "huf.huf.doctype.agent.agent.get_permission_query_conditions",
+    "Agent Conversation": "huf.ai.agent_integration.get_conversation_permission_conditions",
+    "Agent Message": "huf.ai.agent_integration.get_message_permission_conditions",
+    "Agent Run": "huf.ai.agent_integration.get_run_permission_conditions",
 }
 #
 # has_permission = {

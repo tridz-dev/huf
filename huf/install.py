@@ -59,6 +59,7 @@ def setup_desktop_icon_as_workspace(app_name):
 
 
 def after_install():
+    create_huf_roles()
     create_demo_ai_providers()
     create_demo_ai_models()
     create_image_generation_tool()
@@ -68,20 +69,47 @@ def after_install():
     create_flow_tools()
     frappe.db.commit()
     """
-	Called after app installation.
-	Checks if litellm is installed and provides helpful message if not.
-	"""
+    Called after app installation.
+    Checks if litellm is installed and provides helpful message if not.
+    """
     try:
         import litellm
-        frappe.msgprint("✅ LiteLLM is installed and ready to use.")
+        from importlib.metadata import version as get_installed_version
+
+        litellm_version = get_installed_version("litellm")
+        compromised_versions = {"1.82.7", "1.82.8"}
+
+        if litellm_version in compromised_versions:
+            frappe.msgprint(
+                "🚨 Compromised LiteLLM version detected "
+                f"({litellm_version}). Rotate credentials and reinstall a safe version immediately.",
+                indicator="red",
+                title="Critical Security Alert",
+            )
+        else:
+            frappe.msgprint(f"✅ LiteLLM is installed and ready to use (v{litellm_version}).")
     except ImportError:
-    	frappe.msgprint(
-			"⚠️ LiteLLM package not found. "
-			"Please run 'bench setup requirements' to install dependencies, "
-			"then restart your site with 'bench restart'.",
-			indicator="orange",
-			title="Dependency Missing"
-		)
+        frappe.msgprint(
+            "⚠️ LiteLLM package not found. "
+            "Please run 'bench setup requirements' to install dependencies, "
+            "then restart your site with 'bench restart'.",
+            indicator="orange",
+            title="Dependency Missing",
+        )
+
+    try:
+        from huf.ai.knowledge.backends.sqlite_vec_backend import check_sqlite_vec_available
+
+        if check_sqlite_vec_available():
+            frappe.msgprint("✅ sqlite_vec (vector search) is ready.")
+        else:
+            frappe.msgprint(
+                "⚠️ sqlite_vec (vector search) is not available. Install pysqlite3-binary: pip install pysqlite3-binary. Use sqlite_fts for keyword search.",
+                indicator="orange",
+                title="Vector Search",
+            )
+    except Exception:
+        pass  # Non-fatal; sqlite_vec may not be used
 
 
 def after_migrate():
@@ -89,6 +117,7 @@ def after_migrate():
 	Called after app migration.
 	Syncs all discovered tools from all installed apps.
 	"""
+	create_huf_roles()
 	setup_desktop_icon_as_workspace("huf")
 	try:
 		create_image_generation_tool()
@@ -551,6 +580,117 @@ def create_transcribe_audio_tool():
             tool_doc.insert(ignore_permissions=True)
         except Exception as e:
             frappe.log_error(f"Error creating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Creation")
+
+def create_huf_roles():
+	"""
+	Idempotent: create the four default Huf Roles and their backing Frappe
+	Roles, then ensure Administrator has the Huf Admin role.
+
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.permissions import DEFAULT_ROLE_CAPABILITIES, HUF_ROLE_FRAPPE_ROLE_MAP
+
+	# 1. Ensure Frappe Role records exist for Huf-managed roles.
+	for frappe_role_name in ["Huf Manager", "Huf User", "Huf Viewer"]:
+		if not frappe.db.exists("Role", frappe_role_name):
+			frappe.get_doc({
+				"doctype": "Role",
+				"role_name": frappe_role_name,
+				"desk_access": 1,
+			}).insert(ignore_permissions=True)
+
+
+	# 2. Create (or update) the four Huf Role documents.
+	role_meta = [
+		{
+			"role_name": "Huf Admin",
+			"description": "Full system control. Can manage providers, users, roles, agents, tools, flows, and knowledge.",
+			"is_system_role": 1,
+			"frappe_role": "System Manager",
+		},
+		{
+			"role_name": "Huf Manager",
+			"description": "Operational control. Can create and manage agents, flows, and knowledge. Cannot manage users or system settings.",
+			"is_system_role": 1,
+			"frappe_role": "Huf Manager",
+		},
+		{
+			"role_name": "Huf User",
+			"description": "End user. Can use agents, chat, and flows. Cannot create or configure them.",
+			"is_system_role": 1,
+			"frappe_role": "Huf User",
+		},
+		{
+			"role_name": "Huf Viewer",
+			"description": "Read-only access. Can view agents and own conversations only.",
+			"is_system_role": 1,
+			"frappe_role": "Huf Viewer",
+		},
+	]
+
+	for meta in role_meta:
+		caps = DEFAULT_ROLE_CAPABILITIES.get(meta["role_name"], [])
+		if not frappe.db.exists("Huf Role", meta["role_name"]):
+			doc = frappe.get_doc({"doctype": "Huf Role", **meta})
+			for cap in caps:
+				doc.append("permissions", {"capability": cap})
+			doc.insert(ignore_permissions=True)
+		else:
+			# Ensure capability rows are present (idempotent update).
+			doc = frappe.get_doc("Huf Role", meta["role_name"])
+			existing_caps = {row.capability for row in doc.permissions}
+			changed = False
+			for cap in caps:
+				if cap not in existing_caps:
+					doc.append("permissions", {"capability": cap})
+					changed = True
+			if changed:
+				doc.save(ignore_permissions=True)
+
+	# 4. Ensure Administrator has the Huf Admin role.
+	if not frappe.db.exists("Huf User Role", {"user": "Administrator"}):
+		frappe.get_doc({
+			"doctype": "Huf User Role",
+			"user": "Administrator",
+			"huf_role": "Huf Admin",
+			"enabled": 1,
+		}).insert(ignore_permissions=True)
+
+	# 5. Migration path: assign existing System Managers to Huf Admin if they
+	#    don't already have a Huf User Role record.
+	_migrate_existing_system_managers()
+
+	frappe.db.commit()
+
+
+def _migrate_existing_system_managers():
+	"""
+	One-time migration: give existing System Manager users the Huf Admin
+	role so they keep access after the new check_app_permission goes live.
+	"""
+	system_managers = frappe.get_all(
+		"Has Role",
+		filters={"role": "System Manager", "parenttype": "User"},
+		fields=["parent"],
+		ignore_permissions=True,
+	)
+	for row in system_managers:
+		user = row.parent
+		if user in ("Administrator", "Guest"):
+			continue
+		if not frappe.db.exists("Huf User Role", {"user": user}):
+			try:
+				frappe.get_doc({
+					"doctype": "Huf User Role",
+					"user": user,
+					"huf_role": "Huf Admin",
+					"enabled": 1,
+				}).insert(ignore_permissions=True)
+			except Exception:
+				pass  # Non-fatal; user can be assigned manually
+
+
+
 
 def create_flow_tools():
     """Create the flow management tools in Agent Tool Function DocType."""

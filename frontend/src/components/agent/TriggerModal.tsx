@@ -29,6 +29,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { TriggerFieldsRenderer } from './TriggerFieldsRenderer';
 import { triggerFieldsConfig } from './TriggerFieldsConfig';
 import type { AgentTriggerDoc, TriggerTypeOption } from '@/services/agentApi';
@@ -83,6 +84,8 @@ const triggerFormSchema = z.object({
   condition: z.string().optional(),
   app_name: z.string().optional(),
   event_name: z.string().optional(),
+  webhook_slug: z.string().optional(),
+  webhook_key: z.string().optional(),
 }).refine(
   (data) => validateTriggerFields(data).valid,
   (data) => {
@@ -144,6 +147,10 @@ export function TriggerModal({
           reference_doctype: editingTrigger.reference_doctype,
           doc_event: editingTrigger.doc_event,
           condition: editingTrigger.condition,
+          app_name: editingTrigger.app_name,
+          event_name: editingTrigger.event_name,
+          webhook_slug: editingTrigger.webhook_slug,
+          webhook_key: editingTrigger.webhook_key,
         });
       } else {
         triggerForm.reset({
@@ -155,19 +162,21 @@ export function TriggerModal({
           reference_doctype: undefined,
           doc_event: undefined,
           condition: undefined,
+          app_name: undefined,
+          event_name: undefined,
+          webhook_slug: undefined,
+          webhook_key: undefined,
         });
       }
     }
   }, [open, editingTrigger, triggerForm]);
 
   const handleSubmit = async (values: TriggerFormValues) => {
-    console.log('handleSubmit', values);
     await onSave(values);
   };
 
-  // Add error handler to see validation errors
-  const handleFormError = (errors: any) => {
-    console.error('Form validation errors:', errors);
+  const handleFormError = (_errors: unknown) => {
+    toast.error('Please fix the highlighted fields');
   };
 
   return (
