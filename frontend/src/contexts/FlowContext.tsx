@@ -153,7 +153,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
     setSaveState('saving');
     try {
-      await flowService.saveFlow(activeFlowId);
+      if (!activeFlow) return;
+      await flowService.saveFlow(activeFlow);
       setSaveState('saved');
       setHasUnsavedChanges(false);
     } catch (err: unknown) {
