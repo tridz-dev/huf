@@ -11,6 +11,7 @@ export const doctype = {
   "Agent Message": "Agent Message",
   "Agent Run": "Agent Run",
   "Agent Prompt": "Agent Prompt",
+  "Agent Prompt Category": "Agent Prompt Category",
   "MCP Server": "MCP Server",
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",

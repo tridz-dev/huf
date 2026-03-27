@@ -19,6 +19,7 @@ export interface AgentPromptDoc {
   forked_from?: string;
   prompt_group?: string;
   modified?: string;
+  categories?: string[]; // Assuming categories are stored as an array of category names
 }
 
 export interface GetAgentPromptsParams {

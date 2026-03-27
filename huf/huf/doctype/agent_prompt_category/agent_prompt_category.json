@@ -4,6 +4,7 @@
  "creation": "2026-02-20 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
+ "allow_rename": 1,
  "field_order": [
   "category_name",
   "description",

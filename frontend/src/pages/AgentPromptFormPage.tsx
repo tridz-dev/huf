@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,6 +27,9 @@ import {
   type AgentPromptDoc,
   type AgentPromptUsageAgent,
 } from '@/services/agentPromptApi';
+import { CategoryTab } from '@/components/category/CategoryTab';
+import { CategoryModal } from '@/components/category/CategoryModal';
+import { getCategories } from '@/services/categoryApi';
 
 const agentPromptFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -55,6 +58,7 @@ function mapDocToFormValues(doc: AgentPromptDoc): AgentPromptFormValues {
 export function AgentPromptFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const isNew = id === 'new';
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -62,8 +66,12 @@ export function AgentPromptFormPage() {
   const [usageAgents, setUsageAgents] = useState<AgentPromptUsageAgent[]>([]);
   const [docMeta, setDocMeta] = useState<Pick<
     AgentPromptDoc,
-    'name' | 'version' | 'is_latest' | 'previous_version'
+    'name' | 'version' | 'is_latest' | 'previous_version' | 'categories'
   > | null>(null);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<any | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<any[]>([]);
+  const [allCategories, setAllCategories] = useState<any[]>([]);
 
   const form = useForm<AgentPromptFormValues>({
     resolver: zodResolver(agentPromptFormSchema),
@@ -122,6 +130,52 @@ export function AgentPromptFormPage() {
     };
   }, [id, isNew, form]);
 
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const data = await getCategories();
+        setAllCategories(data);
+      } catch {
+        toast.error('Failed to load categories');
+      }
+    };
+
+    loadCategories();
+  }, []);
+
+  // Auto-generate slug from title for new prompts
+  useEffect(() => {
+    if (isNew && form.watch('title')) {
+      const slug = form.watch('title')
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      form.setValue('slug', slug, { shouldDirty: true });
+    }
+  }, [form.watch('title'), isNew, form]);
+
+  // Auto-save categories when they change
+  useEffect(() => {
+    if (!docMeta?.name || loading) return;
+
+    const saveCategories = async () => {
+      try {
+        await updateAgentPrompt(docMeta.name, {
+          categories: selectedCategories.map(c => c.name),
+        });
+      } catch (error) {
+        console.error('Failed to save categories:', error);
+        toast.error('Failed to save category changes');
+      }
+    };
+
+    // Debounce the save to avoid too many API calls
+    const timeoutId = setTimeout(saveCategories, 500);
+    return () => clearTimeout(timeoutId);
+  }, [selectedCategories, docMeta?.name, loading]);
+
   const handleSave = form.handleSubmit(async (values) => {
     setSaving(true);
     try {
@@ -133,11 +187,45 @@ export function AgentPromptFormPage() {
         visibility: values.visibility,
         tags: values.tags || undefined,
         prompt_body: values.prompt_body,
+        categories: selectedCategories.map(c => c.name),
       };
 
       if (isNew) {
         const created = await createAgentPrompt(payload);
         toast.success('Agent Prompt created');
+
+        const state = location.state as { returnTo?: string; selectedPromptField?: string } | null;
+        const fallbackRaw = (() => {
+          try {
+            return localStorage.getItem('agentPromptCreateReturnTo');
+          } catch {
+            return null;
+          }
+        })();
+        const fallback =
+          fallbackRaw ? (JSON.parse(fallbackRaw) as { returnTo?: string; selectedPromptField?: string }) : null;
+
+        const returnTo = state?.returnTo || fallback?.returnTo;
+        const selectedPromptField = state?.selectedPromptField || fallback?.selectedPromptField;
+
+        if (returnTo) {
+          navigate(returnTo, {
+            state: {
+              selectedPrompt: created.name,
+              showTab: 'general',
+              selectedPromptField,
+            },
+            replace: true,
+          });
+
+          try {
+            localStorage.removeItem('agentPromptCreateReturnTo');
+          } catch {
+            // ignore
+          }
+          return;
+        }
+
         navigate(`/prompts/${created.name}`);
         return;
       }
@@ -152,6 +240,38 @@ export function AgentPromptFormPage() {
         previous_version: updated.previous_version,
       });
       toast.success('Agent Prompt saved');
+
+      const state = location.state as { returnTo?: string; selectedPromptField?: string } | null;
+      const fallbackRaw = (() => {
+        try {
+          return localStorage.getItem('agentPromptCreateReturnTo');
+        } catch {
+          return null;
+        }
+      })();
+      const fallback =
+        fallbackRaw ? (JSON.parse(fallbackRaw) as { returnTo?: string; selectedPromptField?: string }) : null;
+
+      const returnTo = state?.returnTo || fallback?.returnTo;
+      const selectedPromptField = state?.selectedPromptField || fallback?.selectedPromptField;
+
+      if (returnTo) {
+        navigate(returnTo, {
+          state: {
+            selectedPrompt: updated.name,
+            showTab: 'general',
+            selectedPromptField,
+          },
+          replace: true,
+        });
+
+        try {
+          localStorage.removeItem('agentPromptCreateReturnTo');
+        } catch {
+          // ignore
+        }
+        return;
+      }
     } catch (error) {
       toast.error('Failed to save Agent Prompt', {
         description: getFrappeErrorMessage(error),
@@ -183,6 +303,7 @@ export function AgentPromptFormPage() {
       </div>
     );
   }
+
 
   return (
     <div className="h-full overflow-auto">
@@ -258,6 +379,15 @@ export function AgentPromptFormPage() {
                 <CardTitle>Prompt Details</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    value={form.watch('title') || ''}
+                    onChange={(event) => form.setValue('title', event.target.value, { shouldDirty: true })}
+                    placeholder="Prompt title"
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="slug">Slug</Label>
                   <Input
@@ -319,6 +449,23 @@ export function AgentPromptFormPage() {
               </CardContent>
             </Card>
 
+            <CategoryTab
+              selectedCategories={selectedCategories}
+              onAddCategories={() => {
+                setEditingCategory(null);
+                setCategoryModalOpen(true);
+              }}
+              onRemoveCategory={(name) =>
+                setSelectedCategories((prev) =>
+                  prev.filter((c) => c.name !== name)
+                )
+              }
+              onEditCategory={(category) => {
+                setEditingCategory(category);
+                setCategoryModalOpen(true);
+              }}
+            />
+
             <Card>
               <CardHeader>
                 <CardTitle>Prompt Body</CardTitle>
@@ -356,6 +503,22 @@ export function AgentPromptFormPage() {
               </Card>
             ) : null}
           </form>
+          <CategoryModal
+            open={categoryModalOpen}
+            onOpenChange={(open) => {
+              setCategoryModalOpen(open);
+              if (!open) setEditingCategory(null);
+            }}
+            categories={allCategories}
+            selected={selectedCategories}
+            onSave={setSelectedCategories}
+            refreshCategories={async () => {
+              const data = await getCategories();
+              setAllCategories(data);
+            }}
+            editCategory={editingCategory}
+            onEditComplete={() => setEditingCategory(null)}
+          />
         </Form>
       </div>
     </div>
