@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { PanelRightClose, Settings, Edit, Trash2 } from 'lucide-react';
 import { Input } from './ui/input';
