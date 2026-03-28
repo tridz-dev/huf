@@ -1,0 +1,337 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:MREC-{YYYY}-{MM}-{DD}-{#####}",
+ "creation": "2025-03-28 11:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "agent",
+  "conversation",
+  "run",
+  "source_type",
+  "producer_mode",
+  "memory_type",
+  "schema_name",
+  "profile_name",
+  "content_section",
+  "data_json",
+  "summary_text",
+  "raw_context_excerpt",
+  "scope_section",
+  "scope_type",
+  "scope_key",
+  "visibility",
+  "status_section",
+  "status",
+  "confidence",
+  "importance_score",
+  "ttl_days",
+  "effective_from",
+  "effective_until",
+  "supersedes_memory_record",
+  "created_from_turn_count",
+  "metadata_section",
+  "tags",
+  "metadata_json",
+  "indexing_section",
+  "fts_indexed",
+  "vector_indexed",
+  "index_backend",
+  "last_indexed_at",
+  "retrieval_section",
+  "last_retrieved_at",
+  "retrieval_count"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Agent",
+   "options": "Agent",
+   "reqd": 1
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "Agent Conversation"
+  },
+  {
+   "fieldname": "run",
+   "fieldtype": "Link",
+   "label": "Run",
+   "options": "Agent Run"
+  },
+  {
+   "default": "conversation",
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Source Type",
+   "options": "conversation\nrun\nmanual\nevent\nscheduled\nimported",
+   "reqd": 1
+  },
+  {
+   "default": "main_agent",
+   "fieldname": "producer_mode",
+   "fieldtype": "Select",
+   "label": "Producer Mode",
+   "options": "main_agent\nmemory_agent\npost_run_llm\nrules_only\nmanual",
+   "reqd": 1
+  },
+  {
+   "fieldname": "memory_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Memory Type",
+   "options": "profile\nsession_state\npreference\nfact\nplan\nobservation\ninsight\ndomain_object\ncustom",
+   "reqd": 1
+  },
+  {
+   "fieldname": "schema_name",
+   "fieldtype": "Data",
+   "label": "Schema Name"
+  },
+  {
+   "fieldname": "profile_name",
+   "fieldtype": "Link",
+   "label": "Memory Profile",
+   "options": "Memory Profile"
+  },
+  {
+   "fieldname": "content_section",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "data_json",
+   "fieldtype": "Code",
+   "label": "Data (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "summary_text",
+   "fieldtype": "Text",
+   "label": "Summary Text"
+  },
+  {
+   "fieldname": "raw_context_excerpt",
+   "fieldtype": "Long Text",
+   "label": "Raw Context Excerpt"
+  },
+  {
+   "fieldname": "scope_section",
+   "fieldtype": "Section Break",
+   "label": "Scope & Visibility"
+  },
+  {
+   "default": "conversation",
+   "fieldname": "scope_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Scope Type",
+   "options": "conversation\nuser\nagent\nnamespace\nglobal",
+   "reqd": 1
+  },
+  {
+   "description": "e.g. conversation id, user id, agent name, namespace value",
+   "fieldname": "scope_key",
+   "fieldtype": "Data",
+   "label": "Scope Key"
+  },
+  {
+   "default": "private",
+   "fieldname": "visibility",
+   "fieldtype": "Select",
+   "label": "Visibility",
+   "options": "private\nshared_with_agent\nshared_with_namespace\nglobal",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Status & Lifecycle"
+  },
+  {
+   "default": "active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "active\nsuperseded\narchived\nexpired\nerror",
+   "reqd": 1
+  },
+  {
+   "default": "1.0",
+   "fieldname": "confidence",
+   "fieldtype": "Float",
+   "label": "Confidence",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "importance_score",
+   "fieldtype": "Float",
+   "label": "Importance Score",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "ttl_days",
+   "fieldtype": "Int",
+   "label": "TTL (Days)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "effective_from",
+   "fieldtype": "Datetime",
+   "label": "Effective From"
+  },
+  {
+   "fieldname": "effective_until",
+   "fieldtype": "Datetime",
+   "label": "Effective Until"
+  },
+  {
+   "fieldname": "supersedes_memory_record",
+   "fieldtype": "Link",
+   "label": "Supersedes Memory Record",
+   "options": "Memory Record"
+  },
+  {
+   "fieldname": "created_from_turn_count",
+   "fieldtype": "Int",
+   "label": "Created From Turn Count",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Metadata & Tags"
+  },
+  {
+   "fieldname": "tags",
+   "fieldtype": "Table",
+   "label": "Tags",
+   "options": "Memory Record Tag"
+  },
+  {
+   "fieldname": "metadata_json",
+   "fieldtype": "Code",
+   "label": "Metadata (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "indexing_section",
+   "fieldtype": "Section Break",
+   "label": "Indexing"
+  },
+  {
+   "default": "0",
+   "fieldname": "fts_indexed",
+   "fieldtype": "Check",
+   "label": "FTS Indexed",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "vector_indexed",
+   "fieldtype": "Check",
+   "label": "Vector Indexed",
+   "read_only": 1
+  },
+  {
+   "default": "none",
+   "fieldname": "index_backend",
+   "fieldtype": "Select",
+   "label": "Index Backend",
+   "options": "none\nsqlite_fts\nsqlite_vec\npgvector\ncustom"
+  },
+  {
+   "fieldname": "last_indexed_at",
+   "fieldtype": "Datetime",
+   "label": "Last Indexed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "retrieval_section",
+   "fieldtype": "Section Break",
+   "label": "Retrieval Stats"
+  },
+  {
+   "fieldname": "last_retrieved_at",
+   "fieldtype": "Datetime",
+   "label": "Last Retrieved At",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "retrieval_count",
+   "fieldtype": "Int",
+   "label": "Retrieval Count",
+   "non_negative": 1,
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-03-28 11:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Memory Record",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "select": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "title,memory_type,status",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title"
+}
