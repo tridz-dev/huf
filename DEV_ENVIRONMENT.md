@@ -16,7 +16,7 @@ docker compose up
 ```
 
 **Access**: http://localhost:8000  
-**Credentials**: `admin` / `admin`
+**Credentials**: `Administrator` / `admin`
 
 > ⚠️ **First run takes 5-8 minutes** for initial setup
 
@@ -117,7 +117,37 @@ yarn build
 | `test_authenticated_flows.py` | Auth + Flow API tests | Root |
 | Playwright scripts | UI automation | `/tmp/test_*.py` |
 
-### Browser Testing with Playwright
+### Browser automation (Docker Chrome, Browserless, or host Chrome)
+
+You can drive the UI with **Playwright**, **Puppeteer**, **Browserless**, or **IDE browser MCP** (e.g. Cursor). Pick either a **headless/browser service in Docker** (reachable from the host via a published port) or **Chrome/Chromium on the host**.
+
+#### Option A — Containerized browser (Browserless, Playwright Docker, etc.)
+
+- Run an image that exposes Chrome or a CDP/WebSocket endpoint, and **publish a port** to the host (for example `3000` for Browserless, or the port your stack documents).
+- Automation that runs **on the host** connects to `localhost` on that port (e.g. `ws://127.0.0.1:<port>/...` or the provider’s HTTP API).
+- In tests, open the app using the same URLs you use in a normal browser: Frappe on Docker is usually `http://localhost:8000` or `http://huf.localhost:8000` (see site name); Vite-only dev is `http://localhost:8080`.
+
+Example (Browserless-style; adjust image and flags to match your version):
+
+```bash
+docker run -p 3000:3000 ghcr.io/browserless/chromium
+# Host automation connects to localhost:3000 per Browserless docs
+```
+
+#### Option B — Host Chrome / Chromium
+
+- **Playwright**: install browsers with `python -m playwright install chromium` (bundled Chromium) or use a system/Chrome install where supported (`channel: "chrome"`).
+- **IDE tools**: browser MCP typically drives **Chrome on the host** against those same `localhost` / `huf.localhost` URLs.
+
+#### Networking quick reference
+
+| Where the test runs | Where Frappe runs | Base URL to use |
+|---------------------|-------------------|-----------------|
+| Host | Docker, port mapped | `http://localhost:8000` or `http://huf.localhost:8000` |
+| Linux container | Frappe on host | `http://host.docker.internal:8000` (or host gateway IP) |
+| Same Docker network as Frappe | Frappe container | Service name + internal port (e.g. `http://frappe:8000`) |
+
+### Browser Testing with Playwright (host install)
 
 ```bash
 # Install Playwright
@@ -140,6 +170,7 @@ python /tmp/test_flow_ui.py
 | **Dev Container** | http://localhost:8101 | 8101 | VS Code devcontainer |
 | **Frontend Dev** | http://localhost:8080 | 8080 | Vite dev server |
 | **Socket.io** | ws://localhost:9000 | 9000 | Real-time chat |
+| **Browserless / CDP** | `localhost` | *varies* | Publish when using Docker Chrome; connect from host or containers per table above |
 
 ### Backend API Endpoints
 
@@ -192,6 +223,46 @@ bench start
 2. Click "Reopen in Container"
 3. Wait for container setup
 4. Access at http://localhost:8101
+
+### Option 4: Bench inside Docker / devcontainer (edge16)
+
+The Flow UI is also tested **from Frappe** while `bench start` runs inside the container. In that layout the bench root and app path are fixed:
+
+| Item | Path (inside container) |
+|------|-------------------------|
+| Bench root | `/workspace/development/edge16` |
+| HUF app | `/workspace/development/edge16/apps/huf` |
+
+```bash
+cd /workspace/development/edge16
+bench start
+```
+
+Use the site URL and credentials for that environment (often the devcontainer row in [Access Credentials](#-access-credentials)). Socket.io and API follow that host/port, not Vite’s 8080.
+
+#### Host clone vs `apps/huf` (git sync)
+
+Edits in a **host checkout** of this repo (for example opened in Cursor on your Mac) are **not** the same working tree as `/workspace/development/edge16/apps/huf` unless that directory is a bind mount of your clone. If they are separate clones, you must **push from the host and pull in the bench app** (or the reverse) to see changes where `bench` runs.
+
+**Workflow**
+
+1. On the host: commit, `git push` your branch.
+2. Where bench runs (devcontainer shell or `docker exec`):
+   ```bash
+   cd /workspace/development/edge16/apps/huf
+   git fetch origin
+   git checkout <your-branch>
+   git pull
+   ```
+3. After **frontend** changes, rebuild assets so Frappe serves the new UI:
+   ```bash
+   cd /workspace/development/edge16/apps/huf/frontend
+   yarn install   # if dependencies changed
+   yarn build
+   ```
+   Or from the bench root: `bench build --app huf` (builds app assets per Frappe).
+
+4. For **Python** changes, restart workers if needed (`bench restart` or restart the relevant processes).
 
 ---
 
@@ -262,8 +333,9 @@ yarn dev
 
 | Path | Purpose |
 |------|---------|
-| `/workspace/development/edge16/apps/huf/` | Devcontainer app path |
-| `/workspace/development/edge16/sites/huf.localhost/` | Site data |
+| `/workspace/development/edge16/` | Bench root (`bench start` here) |
+| `/workspace/development/edge16/apps/huf/` | HUF app inside that bench (pull after host push) |
+| `/workspace/development/edge16/sites/huf.localhost/` | Site data (name may differ per site) |
 | `huf/huf/doctype/` | Backend DocTypes |
 | `frontend/src/` | Frontend source |
 | `screenshots/` | Test screenshots |

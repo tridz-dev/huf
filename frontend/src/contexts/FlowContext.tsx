@@ -33,6 +33,20 @@ interface FlowContextType {
 
 const FlowContext = createContext<FlowContextType | undefined>(undefined);
 
+// Deep equality check for flows to prevent unnecessary updates
+function flowsEqual(a: Flow | null, b: Flow | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.status === b.status &&
+    a.version === b.version &&
+    a.nodes.length === b.nodes.length &&
+    a.edges.length === b.edges.length
+  );
+}
+
 export function FlowProvider({ children }: { children: ReactNode }) {
   const [flows, setFlows] = useState<FlowMetadata[]>([]);
   const [activeFlowId, setActiveFlowId] = useState<string | null>(null);
@@ -44,6 +58,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const hasFetchedRef = useRef(false);
+  // Ref to track last synced flow to prevent circular updates
+  const lastSyncedFlowRef = useRef<Flow | null>(null);
 
   const refreshFlows = useCallback(async () => {
     try {
@@ -99,22 +115,31 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshFlows]);
 
-  // Listen for flowService changes
+  // Listen for flowService changes - only sync from other sources, not from our own updates
   useEffect(() => {
     const unsubscribe = flowService.subscribe(() => {
-      // Reload active flow from cache when nodes/edges change
       if (activeFlowId) {
         const cached = flowService.getCachedFlow(activeFlowId);
-        if (cached) setActiveFlowState(cached);
+        // Only update if the cached flow is different from what we last synced
+        // and different from current active flow
+        if (cached && !flowsEqual(cached, lastSyncedFlowRef.current) && !flowsEqual(cached, activeFlow)) {
+          lastSyncedFlowRef.current = cached;
+          setActiveFlowState(cached);
+        }
       }
     });
     return unsubscribe;
-  }, [activeFlowId]);
+  }, [activeFlowId, activeFlow]);
 
-  // Load active flow when it changes
+  // Load active flow when ID changes (not when loadActiveFlow function changes)
   useEffect(() => {
+    // Skip if we're already showing the correct flow
+    if (activeFlow?.id === activeFlowId && activeFlowId) {
+      return;
+    }
     loadActiveFlow();
-  }, [loadActiveFlow]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFlowId]);
 
   const setActiveFlow = useCallback((flowId: string) => {
     setActiveFlowId(flowId);
@@ -149,11 +174,10 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   // ─── Save Flow Logic ──────────────────────────────────────────────
 
   const saveFlow = useCallback(async () => {
-    if (!activeFlowId || !hasUnsavedChanges) return;
+    if (!activeFlowId || !activeFlow || !hasUnsavedChanges) return;
 
     setSaveState('saving');
     try {
-      if (!activeFlow) return;
       await flowService.saveFlow(activeFlow);
       setSaveState('saved');
       setHasUnsavedChanges(false);
@@ -163,7 +187,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       // We don't throw here so the UI can handle the error state gracefully
       throw err;
     }
-  }, [activeFlowId, hasUnsavedChanges]);
+  }, [activeFlowId, activeFlow, hasUnsavedChanges]);
 
   // ─── Synchronous node/edge mutations (cache-only, fast) ────────────
 
@@ -172,38 +196,83 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     setSaveState('unsaved');
   }, []);
 
+  // Update local state immediately and track what we synced
   const updateNodes = useCallback((nodes: FlowNode[]) => {
     if (!activeFlowId) return;
+    // Update local state first to avoid flicker
+    setActiveFlowState(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, nodes };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
     flowService.updateNodes(activeFlowId, nodes);
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
   const updateEdges = useCallback((edges: FlowEdge[]) => {
     if (!activeFlowId) return;
+    setActiveFlowState(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, edges };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
     flowService.updateEdges(activeFlowId, edges);
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
   const updateNodesAndEdges = useCallback((nodes: FlowNode[], edges: FlowEdge[]) => {
     if (!activeFlowId) return;
+    setActiveFlowState(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, nodes, edges };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
     flowService.updateNodesAndEdges(activeFlowId, nodes, edges);
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
   const addNode = useCallback((node: FlowNode) => {
     if (!activeFlowId) return;
+    setActiveFlowState(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, nodes: [...prev.nodes, node] };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
     flowService.addNode(activeFlowId, node);
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
   const updateNode = useCallback((nodeId: string, updates: Partial<FlowNode>) => {
     if (!activeFlowId) return;
+    setActiveFlowState(prev => {
+      if (!prev) return prev;
+      const updatedNodes = prev.nodes.map(n =>
+        n.id === nodeId ? { ...n, ...updates } : n
+      );
+      const updated = { ...prev, nodes: updatedNodes };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
     flowService.updateNode(activeFlowId, nodeId, updates);
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
   const deleteNode = useCallback((nodeId: string) => {
     if (!activeFlowId) return;
+    setActiveFlowState(prev => {
+      if (!prev) return prev;
+      const updatedNodes = prev.nodes.filter(n => n.id !== nodeId);
+      const updatedEdges = prev.edges.filter(
+        e => e.source !== nodeId && e.target !== nodeId
+      );
+      const updated = { ...prev, nodes: updatedNodes, edges: updatedEdges };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
     flowService.deleteNode(activeFlowId, nodeId);
     if (selectedNodeId === nodeId) {
       setSelectedNodeId(null);
@@ -223,6 +292,12 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const addEdge = useCallback((edge: FlowEdge) => {
     if (!activeFlowId) return;
+    setActiveFlowState(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, edges: [...prev.edges, edge] };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
     flowService.addEdge(activeFlowId, edge);
     markUnsaved();
   }, [activeFlowId, markUnsaved]);

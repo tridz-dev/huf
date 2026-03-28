@@ -13,6 +13,7 @@
 | Task | Command/Info |
 |------|--------------|
 | **Start Docker** | `cd docker && docker compose up` |
+| **Bench in devcontainer** | `cd /workspace/development/edge16 && bench start` — app at `apps/huf`; sync host edits via git push/pull ([DEV_ENVIRONMENT.md](DEV_ENVIRONMENT.md) Option 4) |
 | **Access App** | http://localhost:8000 (admin/admin) |
 | **Frontend Dev** | `cd frontend && yarn dev` (port 8080) |
 | **Build Frontend** | `cd frontend && yarn build` |
@@ -27,11 +28,48 @@
 | Issue | Error | Status | Tracker |
 |-------|-------|--------|---------|
 | Actions Tab Crash | React #130 | 🔴 Open | [FLOW_NODE_MODAL_TRACKER.md](FLOW_NODE_MODAL_TRACKER.md) |
-| Infinite Loop | React #185 | 🔴 Open | [FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md) |
+| Infinite Loop | React #185 | 🟡 Partial | [FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md) |
+| DocType field UX | Plain text | 🟡 Open | Below (BUG-003) |
 
 ---
 
-## 📚 Documentation Index
+## What we know
+
+Facts to anchor debugging (verify after any fix with `yarn dev` + Flows page).
+
+| ID | Symptom | Likely cause | Where |
+|----|---------|--------------|--------|
+| **BUG-001** | White screen / React **#130** when opening **Actions** tab | Invalid React element: **undefined component** (often wrong or missing **icon** in `iconMap`) | [`NodeSelectionModal.tsx`](frontend/src/components/modals/NodeSelectionModal.tsx) `iconMap`, [`actions.ts`](frontend/src/data/actions.ts) |
+| **BUG-001 (data)** | Run Agent / Call Tool appear under **Transform**; **AI & Agents** / **Tools** sections empty | **`actions.ts` categories** use `'transform'` for those two actions, but the modal filters **`agent`** and **`tool`** buckets separately — buckets stay empty | [`NodeSelectionModal.tsx`](frontend/src/components/modals/NodeSelectionModal.tsx) `agentActions` / `toolActions` vs [`actions.ts`](frontend/src/data/actions.ts) `category` |
+| **BUG-002** | React **#185** (max update depth) on Flows load / node click | **Circular or unstable state**: parent props ↔ `FlowContext` ↔ canvas, or `useEffect` deps that keep firing | [`FlowContext.tsx`](frontend/src/contexts/FlowContext.tsx), [`FlowCanvas.tsx`](frontend/src/components/FlowCanvas.tsx), [`usePageData.ts`](frontend/src/hooks/usePageData.ts) |
+| **BUG-003** | Doc Event trigger: DocType is free text | No combobox; agent flow already has pattern | [`NodeSelectionModal.tsx`](frontend/src/components/modals/NodeSelectionModal.tsx) `doc-event` form; reference [`TriggerFieldsRenderer.tsx`](frontend/src/components/agent/TriggerFieldsRenderer.tsx) + `getDocTypes()` |
+
+**Environment**: Backend APIs for core flow types are largely OK; problems are mostly **frontend state and UI**. See [DEV_ENVIRONMENT.md](DEV_ENVIRONMENT.md) for host vs Docker bench and git sync.
+
+---
+
+## Fix plan (do in order)
+
+1. **Unblock Actions tab (BUG-001)**  
+   - Reproduce with **dev build** (not only minified prod) to get the real component name in the stack.  
+   - **Audit**: every `action.icon` / `trigger.icon` string must resolve in `iconMap` (or use a typed map + fallback).  
+   - **Align data**: set `category` in [`actions.ts`](frontend/src/data/actions.ts) to match modal sections (`agent`, `tool`, `control`, `transform`, …) so filtering matches product intent (Run Agent → AI & Agents, Call Tool → Tools).  
+   - Confirm Actions tab renders all categories without #130; add a short manual checklist to the modal tracker when done.
+
+2. **Stop update loops (BUG-002)**  
+   - Trace **who sets** `nodes` / `edges` / `activeFlow` and **who listens** (props vs context).  
+   - Goal: **one direction of truth** (e.g. page owns server data, context owns editor draft, or the reverse — but not both rewriting each other every render).  
+   - Stabilize callbacks (`useCallback`) and **narrow `useEffect` deps**; avoid `loadActiveFlow`-style calls inside effects that depend on the same state they update.  
+   - Verify: open Flows, click nodes, no #185 in console.
+
+3. **DocType combobox (BUG-003)**  
+   - Mirror agent form: `Combobox` + `getDocTypes()` in doc-event config in `NodeSelectionModal` (loading + empty states).
+
+4. **Config forms for backend-supported nodes**  
+   - Run Agent, Call Tool, LLM Router, Human Approval in modal + [`RightSidebar.tsx`](frontend/src/components/RightSidebar.tsx) per [FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md).
+
+5. **Trackers**  
+   - Update [FLOW_NODE_MODAL_TRACKER.md](FLOW_NODE_MODAL_TRACKER.md) and [FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md) when each phase closes.
 
 ---
 
@@ -42,6 +80,7 @@
 | Document | Purpose | Last Updated |
 |----------|---------|--------------|
 | **[INDEX.md](INDEX.md)** | **This file** - Master navigation and quick links | 2026-03-28 |
+| **[FIX_PLAN.md](FIX_PLAN.md)** | **Root cause analysis & fix plan for BUG-001 + BUG-002** | 2026-03-28 |
 | **[DEV_ENVIRONMENT.md](DEV_ENVIRONMENT.md)** | **Docker, credentials, testing, ports** | 2026-03-28 |
 
 ### Primary Trackers (Active Work)
@@ -78,28 +117,13 @@
 
 ---
 
-## 🔴 Critical Issues
+## 🔴 Critical Issues (detail)
 
-### BUG-001: Actions Tab Crash
-- **Error**: React Error #130 (Element type is invalid)
-- **Status**: 🔴 **OPEN**
-- **Impact**: Complete UI crash (white screen)
-- **Details**: [FLOW_NODE_MODAL_TRACKER.md](FLOW_NODE_MODAL_TRACKER.md) → Issues → Issue #1
-- **File**: `frontend/src/components/modals/NodeSelectionModal.tsx`
+Summary and ordered work: see **What we know** and **Fix plan** above. Deep dive:
 
-### BUG-002: Infinite Loop
-- **Error**: React Error #185 (Maximum update depth exceeded)
-- **Status**: 🔴 **OPEN**
-- **Impact**: Browser freeze on Flows page
-- **Details**: [FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md) → Bugs
-- **Files**: `FlowContext.tsx`, `FlowCanvas.tsx`, `usePageData.ts`
-
-### BUG-003: DocType No Auto-Suggestion
-- **Error**: Document Type field shows plain text input
-- **Status**: 🟡 **NEW**
-- **Impact**: Poor UX - no auto-complete for DocType selection
-- **Details**: See below
-- **Comparison**: Agent form has Combobox with `getDocTypes()` API
+- **BUG-001**: [FLOW_NODE_MODAL_TRACKER.md](FLOW_NODE_MODAL_TRACKER.md) → Issue #1  
+- **BUG-002**: [FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md) → Critical Bugs  
+- **BUG-003**: DocType combobox — same doc + **Implementation References** below
 
 ---
 
@@ -190,13 +214,15 @@ NodeSelectionModal.tsx
 
 **Overall**: ~35% Complete
 
+**P0 blockers** for Flow UI: **Fix plan** phases 1–2 (Actions tab #130, Flows page #185). The bug counts in the row above mix resolved and open items from the trackers.
+
 ---
 
 ## 🚀 Quick Actions
 
 ### For Bug Fixes
-1. Check [FLOW_NODE_MODAL_TRACKER.md](FLOW_NODE_MODAL_TRACKER.md) for detailed bug info
-2. Check [FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md) for system-wide status
+1. Read **What we know** and **Fix plan** at the top of this file
+2. Check [FLOW_NODE_MODAL_TRACKER.md](FLOW_NODE_MODAL_TRACKER.md) and [FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md) for test notes and history
 
 ### For New Features
 1. Check **Implementation References** above for similar working code
@@ -206,6 +232,7 @@ NodeSelectionModal.tsx
 1. Check `screenshots/` folder for visual evidence
 2. Run `test_backend_core.py` for API tests
 3. Use browser console to check for React errors
+4. UI automation: Docker Browserless / CDP vs host Chrome — see [DEV_ENVIRONMENT.md](DEV_ENVIRONMENT.md) → *Browser automation*
 
 ---
 
@@ -213,7 +240,9 @@ NodeSelectionModal.tsx
 
 | Date | Change | Commit |
 |------|--------|--------|
+| 2026-03-28 | Created FIX_PLAN.md with root cause analysis | - |
 | 2026-03-28 | Created INDEX.md | - |
+| 2026-03-28 | Added What we know + Fix plan, aligned BUG-002 partial | - |
 | 2026-03-28 | Added DocType issue to trackers | - |
 | 2026-03-27 | Fixed icon imports and safety checks | c03eaf8 |
 | 2026-03-27 | Created feature trackers | c03eaf8 |
