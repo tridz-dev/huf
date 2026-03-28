@@ -55,7 +55,19 @@ The NodeSelectionModal is the primary interface for adding/configuring nodes in 
 | Webhook | Webhook | ✅ **Working** | ✅ `trigger.webhook` | 🟡 Basic | URL, Method, API Key fields |
 | Schedule | Clock | ✅ **Working** | ❌ No | 🟡 Basic | Interval, Cron fields |
 | Human Input | UserCheck | ✅ **Working** | ❌ No | 🔴 None | Placeholder - no config |
-| Data | Database | ✅ **Working** | ❌ No | 🟡 Basic | DocType, Event fields |
+| Data | Database | ✅ **Working** | ❌ No | 🟡 Basic | DocType field needs auto-suggestion |
+
+**Config Form Issues**:
+
+| Field | Current | Expected | Status | Notes |
+|-------|---------|----------|--------|-------|
+| DocType | Plain text input | Combobox with auto-suggestion | 🔴 **Missing** | Agent form uses `Combobox` + `getDocTypes()` |
+| Event | Select dropdown | Select dropdown | ✅ **Working** | save/update/delete options |
+
+**Reference Implementation**:
+- Agent form: `TriggerFieldsRenderer.tsx` lines 65-94
+- Uses: `Combobox` from `@/components/ui/combobox`
+- API: `getDocTypes()` from `agentApi.ts`
 
 **Test Results**:
 - ✅ Tab opens without errors
@@ -370,10 +382,56 @@ integrationActions  → category === 'integration'
 
 ---
 
+## 🔍 Similar Missing Features (Compared to Agent Form)
+
+The Agent form has several features that the Flow modal is missing. Here's a comparison:
+
+| Feature | Agent Form | Flow Modal | Status |
+|---------|------------|------------|--------|
+| **DocType Auto-suggestion** | ✅ `Combobox` with `getDocTypes()` | 🔴 Plain text input | **Missing** |
+| **Agent Selection** | ✅ Searchable dropdown | 🔴 Not implemented | **Missing** |
+| **Tool Selection** | ✅ `SelectToolsModal` | 🔴 Not implemented | **Missing** |
+| **Field Validation** | ✅ React Hook Form + Zod | 🔴 No validation | **Missing** |
+| **Help Text/Descriptions** | ✅ FormDescription component | 🔴 No descriptions | **Missing** |
+| **Conditional Fields** | ✅ Field visibility logic | 🔴 Static forms | **Missing** |
+| **Advanced Options** | ✅ Collapsible sections | 🔴 All fields visible | **Missing** |
+
+### Implementation References
+
+**DocType Auto-Suggestion** (from AgentForm):
+```typescript
+// 1. Import Combobox
+import { Combobox } from '@/components/ui/combobox';
+
+// 2. Fetch docTypes
+const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
+useEffect(() => {
+  getDocTypes().then(setDocTypes);
+}, []);
+
+// 3. Render Combobox
+<Combobox
+  options={docTypes.map(dt => ({ value: dt.name, label: dt.name }))}
+  value={config.doctype}
+  onValueChange={(value) => setTriggerConfig({ ...config, doctype: value })}
+  placeholder="Select DocType..."
+  searchPlaceholder="Search DocType..."
+/>
+```
+
+**Agent Selection** (reference from `SelectToolsModal.tsx`):
+- Uses searchable list with cards
+- Shows agent details (model, tools, status)
+- Multi-select capability
+
+---
+
 ## 📝 Change Log
 
 | Date | Change | Commit |
 |------|--------|--------|
+| 2026-03-28 | Added DocType issue and missing features section | - |
+| 2026-03-28 | Created INDEX.md master document | - |
 | 2026-03-27 | Added UserCheck, Wrench imports | 102fb29 |
 | 2026-03-27 | Fixed iconMap mappings | 102fb29 |
 | 2026-03-27 | Added icon safety checks | 102fb29 |
