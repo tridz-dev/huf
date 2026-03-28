@@ -1,23 +1,9 @@
-/**
- * HUF Memory System - Component exports
- * 
- * This module provides UI components for the HUF Agent Memory system
- * as specified in PRD Section 20: UI/UX Changes
- */
+// Memory System Components
+// Main exports for the HUF Memory System UI
 
-// Main components
-export { MemoryPanel } from './MemoryPanel';
 export { MemoryExplorer } from './MemoryExplorer';
-export { ConversationMemory } from './ConversationMemory';
-
-// Conversation memory sub-components
-export {
-  MemoryCaptureButton,
-  ConversationMemoryPanel,
-  MemorySidebar,
-  ConversationMemoryIndicator,
-  MemoryRecordMini,
-} from './ConversationMemory';
+export { MemoryPanel } from './MemoryPanel';
+export { MemoryInspector, MemoryInspectorCompact } from './MemoryInspector';
 
 // Hooks
 export {
@@ -31,7 +17,25 @@ export {
   useMemorySearch,
 } from './hooks/useMemory';
 
-// Types (re-exported from types module)
+// Types (re-export from types package)
 export type {
+  MemoryRecord,
+  MemoryRecordRow,
+  MemoryPolicy,
+  MemoryProfile,
+  MemoryFilters,
+  MemoryStats,
+  MemoryCaptureResult,
+  MemoryRetrievalResult,
   MemoryFormValues,
+  MemorySourceType,
+  MemoryProducerMode,
+  MemoryType,
+  MemoryScopeType,
+  MemoryVisibility,
+  MemoryStatus,
+  MemoryIndexBackend,
+  MemoryCaptureStage,
+  MemoryCaptureFrequency,
+  MemoryRetrievalMode,
 } from '@/types/memory.types';

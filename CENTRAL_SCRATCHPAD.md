@@ -14,7 +14,7 @@
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
 | A1 | Memory Record DocType | impl-01 | 🟢 COMPLETE | None | `huf/huf/doctype/memory_record/` |
-| A2 | Memory Policy DocType | impl-01 | 🟡 IN PROGRESS | None | - |
+| A2 | Memory Policy DocType | impl-01 | 🟢 COMPLETE | None | `huf/huf/doctype/memory_policy/` |
 | A3 | Memory Profile DocType | - | 🔲 NOT STARTED | None | - |
 | A4 | Agent DocType Memory Section | - | 🔲 NOT STARTED | A2, A3 | - |
 
@@ -46,16 +46,16 @@
 |----|------|-------|--------|--------------|---------------|
 | E1 | Memory Retrieval Service | impl-05 | 🟢 COMPLETE | A1, D1 | `huf/huf/memory/retrieval/retrieval_service.py` |
 | E2 | Prompt Injection | - | 🔲 NOT STARTED | E1 | - |
-| E3 | Memory Search Tool | - | 🔲 NOT STARTED | E1 | - |
+| E3 | Memory Search Tool | impl-05 | 🟢 COMPLETE | E1 | `huf/huf/memory/retrieval/memory_search_tool.py` |
 | E4 | Memory Write Tool | impl-05 | 🟢 COMPLETE | A1 | `huf/huf/memory/retrieval/memory_write_tool.py` |
 
 ### Phase 6: Profiles & UI (Priority: LOW)
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
 | F1 | 5 Opinionated Profiles | impl-06 | 🟢 COMPLETE | A3 | `huf/huf/doctype/memory_profile/default_profiles.py` |
-| F2 | Memory Explorer Desk Page | - | 🔲 NOT STARTED | A1 | - |
-| F3 | Agent Memory Tab UI | - | 🔲 NOT STARTED | A4 | - |
-| F4 | Conversation Memory Inspector | - | 🔲 NOT STARTED | B1 | - |
+| F2 | Memory Explorer Desk Page | impl-06 | 🟢 COMPLETE | A1, E1 | `frontend/src/components/memory/MemoryExplorer.tsx` |
+| F3 | Agent Memory Tab UI | impl-06 | 🟢 COMPLETE | A4 | `frontend/src/components/memory/MemoryPanel.tsx` |
+| F4 | Conversation Memory Inspector | impl-06 | 🟢 COMPLETE | B1 | `frontend/src/components/memory/MemoryInspector.tsx` |
 
 ---
 
@@ -100,8 +100,9 @@ F1-F4 (UI/Profiles) ← A3, E1-E4
 | 2026-03-28 11:35 | impl-02 | COMPLETED | B3 | Renamed "Conversation Data Management" to "Memory" in all UI files |
 | 2026-03-28 11:35 | impl-02 | COMPLETED | A4,B1,B2 | Verified memory sections already implemented in Agent, Conversation, Run DocTypes |
 | 2026-03-28 11:20 | impl-06 | COMMIT | F1 | Created 5 default profiles, committed |
+| 2026-03-28 11:25 | impl-06 | COMPLETE | F2-F4 | UI components created: MemoryExplorer, MemoryPanel, MemoryInspector |
 | 2026-03-28 11:20 | impl-05 | COMPLETED | E4 | Memory write tool implemented, committed |
-| 2026-03-28 11:22 | impl-05 | COMPLETED | E1 | Memory retrieval service implemented, committed |
+| 2026-03-28 11:24 | impl-05 | COMPLETED | E3 | Memory search tool implemented, committed |
 | 2026-03-28 11:30 | impl-03 | COMPLETED | C4 | Rule-only capture mode with 7 rule types |
 
 ---
