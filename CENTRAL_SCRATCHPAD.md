@@ -44,7 +44,7 @@
 ### Phase 5: Retrieval & Tools (Priority: MEDIUM)
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
-| E1 | Memory Retrieval Service | - | 🔲 NOT STARTED | A1, D1 | - |
+| E1 | Memory Retrieval Service | impl-05 | 🟢 COMPLETE | A1, D1 | `huf/huf/memory/retrieval/retrieval_service.py` |
 | E2 | Prompt Injection | - | 🔲 NOT STARTED | E1 | - |
 | E3 | Memory Search Tool | - | 🔲 NOT STARTED | E1 | - |
 | E4 | Memory Write Tool | impl-05 | 🟢 COMPLETE | A1 | `huf/huf/memory/retrieval/memory_write_tool.py` |
