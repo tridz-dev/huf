@@ -8,15 +8,48 @@
 
 ---
 
+## 🚀 Quick Start
+
+| Task | Command/Info |
+|------|--------------|
+| **Start Docker** | `cd docker && docker compose up` |
+| **Access App** | http://localhost:8000 (admin/admin) |
+| **Frontend Dev** | `cd frontend && yarn dev` (port 8080) |
+| **Build Frontend** | `cd frontend && yarn build` |
+| **Run Tests** | `python test_backend_core.py` |
+
+📖 **Full Environment Guide**: [DEV_ENVIRONMENT.md](DEV_ENVIRONMENT.md)
+
+---
+
+## 🔴 Critical Issues (Being Fixed)
+
+| Issue | Error | Status | Tracker |
+|-------|-------|--------|---------|
+| Actions Tab Crash | React #130 | 🔴 Open | [FLOW_NODE_MODAL_TRACKER.md](FLOW_NODE_MODAL_TRACKER.md) |
+| Infinite Loop | React #185 | 🔴 Open | [FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md) |
+
+---
+
 ## 📚 Documentation Index
+
+---
+
+## 📚 Documentation Index
+
+### Essential References
+
+| Document | Purpose | Last Updated |
+|----------|---------|--------------|
+| **[INDEX.md](INDEX.md)** | **This file** - Master navigation and quick links | 2026-03-28 |
+| **[DEV_ENVIRONMENT.md](DEV_ENVIRONMENT.md)** | **Docker, credentials, testing, ports** | 2026-03-28 |
 
 ### Primary Trackers (Active Work)
 
 | Document | Purpose | Last Updated |
 |----------|---------|--------------|
-| **[FLOW_NODE_MODAL_TRACKER.md](FLOW_NODE_MODAL_TRACKER.md)** | NodeSelectionModal status, triggers, actions, known issues | 2026-03-28 |
-| **[FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md)** | Overall Flow UI status, backend integration, canvas features | 2026-03-28 |
-| **[INDEX.md](INDEX.md)** | This file - master navigation index | 2026-03-28 |
+| **[FLOW_NODE_MODAL_TRACKER.md](FLOW_NODE_MODAL_TRACKER.md)** | NodeSelectionModal status, triggers, actions, bugs | 2026-03-28 |
+| **[FLOW_UI_FEATURE_TRACKER.md](FLOW_UI_FEATURE_TRACKER.md)** | Overall Flow UI status, backend integration, canvas | 2026-03-28 |
 
 ### Architecture & Design
 
