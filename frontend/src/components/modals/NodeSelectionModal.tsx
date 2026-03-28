@@ -25,13 +25,17 @@ import {
   GitBranch,
   RotateCw,
   Code,
-  Bot
+  Bot,
+  UserCheck,
+  Wrench
 } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
 import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType } from '../../types/flow.types';
 import { Agent } from '../../types/agent.types';
-import { mockApi } from '../../services/mockApi';
+import { getAgents, getDocTypes } from '../../services/agentApi';
+import type { AgentDoc } from '../../types/agent.types';
+import { Combobox } from '../ui/combobox';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -55,7 +59,9 @@ const iconMap: Record<string, any> = {
   GitBranch,
   RotateCw,
   Code,
-  UserCheck: Clock
+  UserCheck,
+  Bot,
+  Wrench
 };
 
 type MainTab = 'triggers' | 'actions';
@@ -80,12 +86,53 @@ export function NodeSelectionModal({
   );
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
+  const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
+  const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+
+  useEffect(() => {
+    if (open && docTypes.length === 0 && !loadingDocTypes) {
+      setLoadingDocTypes(true);
+      getDocTypes()
+        .then((data) => {
+          setDocTypes(data);
+          setLoadingDocTypes(false);
+        })
+        .catch((error) => {
+          console.error('Error loading DocTypes:', error);
+          setLoadingDocTypes(false);
+        });
+    }
+  }, [open, docTypes.length, loadingDocTypes]);
 
   useEffect(() => {
     if (open && triggerSubTab === 'ai-agents') {
       setLoadingAgents(true);
-      mockApi.agents.list().then((data) => {
-        setAgents(data);
+      getAgents().then((result) => {
+        const agentDocs = Array.isArray(result) ? result : result.items;
+        // Map AgentDoc[] to Agent[] format expected by the component
+        const mappedAgents: Agent[] = agentDocs.map((doc: AgentDoc) => ({
+          name: doc.name,
+          agent_name: doc.agent_name || doc.name,
+          provider: '',
+          model: doc.model || '',
+          instructions: '',
+          temperature: 1,
+          top_p: 1,
+          disabled: doc.disabled === 1,
+          allow_chat: true,
+          persist_conversation: true,
+          triggers: [],
+          tags: [],
+          category: undefined,
+          visibility: 'Global',
+          environment: 'Prod',
+          status: (doc.disabled === 1 ? 'Disabled' : 'Active') as Agent['status'],
+          tools: [],
+          stats: { conversations: 0, lastRunAt: '', successRate: 0, avgCost: 0, avgLatencyMs: 0, token24h: { input: 0, output: 0, total: 0 } },
+          created_at: '',
+          updated_at: '',
+        }));
+        setAgents(mappedAgents);
         setLoadingAgents(false);
       }).catch(() => {
         setLoadingAgents(false);
@@ -106,6 +153,8 @@ export function NodeSelectionModal({
   const highlightTriggers = filteredTriggers.filter((t) => t.category === 'highlight');
   const popularTriggers = filteredTriggers.filter((t) => t.category === 'popular');
 
+  const agentActions = filteredActions.filter((a) => a.category === 'agent');
+  const toolActions = filteredActions.filter((a) => a.category === 'tool');
   const transformActions = filteredActions.filter((a) => a.category === 'transform');
   const controlActions = filteredActions.filter((a) => a.category === 'control');
   const utilityActions = filteredActions.filter((a) => a.category === 'utility');
@@ -144,24 +193,22 @@ export function NodeSelectionModal({
   const handleSelectAction = (actionId: string) => {
     let config: ActionConfig = { type: undefined };
 
-    if (actionId === 'transform') {
-      config = { type: 'transform', transformations: [] };
+    if (actionId === 'agent-run') {
+      config = { type: 'agent-run', agent_name: '', prompt_template: '', save_response_to_context: '' };
+    } else if (actionId === 'tool-call') {
+      config = { type: 'tool-call', tool_name: '', args: {}, save_result_to_context: '' };
+    } else if (actionId === 'condition') {
+      config = { type: 'condition', expression: '', true_node: '', false_node: '' };
     } else if (actionId === 'router') {
-      config = { type: 'router', branches: [] };
+      config = { type: 'router', router_agent_name: '', conversation_mode: 'flow_shared' };
     } else if (actionId === 'loop') {
-      config = { type: 'loop', maxIterations: 10 };
+      config = { type: 'loop', iterate_over: '', item_key: 'loop_item', index_key: 'loop_index', max_iterations: 100 };
     } else if (actionId === 'human-in-loop') {
-      config = { type: 'human-in-loop', approvers: [] };
-    } else if (actionId === 'code') {
-      config = { type: 'code', language: 'javascript', code: '' };
-    } else if (actionId === 'email') {
-      config = { type: 'utility-email', to: '', subject: '', body: '' };
-    } else if (actionId === 'webhook') {
-      config = { type: 'utility-webhook', url: '', method: 'POST' };
-    } else if (actionId === 'file') {
-      config = { type: 'utility-file', operation: 'read', path: '' };
-    } else if (actionId === 'date') {
-      config = { type: 'utility-date', operation: 'format', format: 'YYYY-MM-DD' };
+      config = { type: 'human-in-loop', title: 'Approval Required', instructions: '', approval_type: 'role', store_decision_in_context: 'approval' };
+    } else if (actionId === 'http-request') {
+      config = { type: 'http-request', url: '', method: 'GET', timeout: 30 };
+    } else if (actionId === 'transform') {
+      config = { type: 'transform', transformations: [] };
     }
 
     onSaveAction?.(actionId, config);
@@ -275,15 +322,23 @@ export function NodeSelectionModal({
     }
 
     if (config.type === 'doc-event') {
+      const comboboxOptions = docTypes.map((dt) => ({
+        value: dt.name,
+        label: dt.name,
+      }));
+
       return (
         <div className="space-y-4 mt-4">
           <div>
             <Label htmlFor="doctype">Document Type</Label>
-            <Input
-              id="doctype"
+            <Combobox
+              options={comboboxOptions}
               value={config.doctype || ''}
-              onChange={(e) => setTriggerConfig({ ...config, doctype: e.target.value })}
-              placeholder="e.g., User, Order, Invoice"
+              onValueChange={(value) => setTriggerConfig({ ...config, doctype: value })}
+              placeholder={loadingDocTypes ? 'Loading...' : 'Select DocType...'}
+              disabled={loadingDocTypes}
+              searchPlaceholder="Search DocType..."
+              emptyText="No DocType found."
             />
           </div>
           <div>
@@ -347,7 +402,11 @@ export function NodeSelectionModal({
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">{title}</h3>
         <div className="grid grid-cols-2 gap-3">
           {actions.map((action) => {
+            // Safely get icon component with fallback
             const Icon = iconMap[action.icon || 'FileText'];
+            if (!Icon) {
+              console.warn(`Icon not found for action: ${action.id}, icon: ${action.icon}`);
+            }
             return (
               <button
                 key={action.id}
@@ -355,7 +414,7 @@ export function NodeSelectionModal({
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Icon className="w-4 h-4 text-primary" />
+                  {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
                 </div>
                 <div className="text-left flex-1 min-w-0">
                   <div className="text-sm font-medium">{action.name}</div>
@@ -432,11 +491,10 @@ export function NodeSelectionModal({
                         ).map((agent) => (
                           <button
                             key={agent.name}
-                            className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${
-                              selectedItem === agent.name
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border hover:border-primary/50 hover:bg-accent'
-                            }`}
+                            className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === agent.name
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50 hover:bg-accent'
+                              }`}
                             onClick={() => {
                               setSelectedItem(agent.name);
                               setTriggerConfig({
@@ -484,15 +542,14 @@ export function NodeSelectionModal({
                             return (
                               <button
                                 key={trigger.id}
-                                className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                                  selectedItem === trigger.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50 hover:bg-accent'
-                                }`}
+                                className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedItem === trigger.id
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border hover:border-primary/50 hover:bg-accent'
+                                  }`}
                                 onClick={() => handleSelectTrigger(trigger.id)}
                               >
                                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                  <Icon className="w-4 h-4 text-primary" />
+                                  {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
                                 </div>
                                 <div className="text-left flex-1 min-w-0">
                                   <div className="text-sm font-medium">{trigger.name}</div>
@@ -515,15 +572,14 @@ export function NodeSelectionModal({
                             return (
                               <button
                                 key={trigger.id}
-                                className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${
-                                  selectedItem === trigger.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50 hover:bg-accent'
-                                }`}
+                                className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === trigger.id
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border hover:border-primary/50 hover:bg-accent'
+                                  }`}
                                 onClick={() => handleSelectTrigger(trigger.id)}
                               >
                                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                  <Icon className="w-4 h-4 text-primary" />
+                                  {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
                                 </div>
                                 <div className="text-left flex-1 min-w-0">
                                   <div className="text-sm font-medium">{trigger.name}</div>
@@ -548,8 +604,10 @@ export function NodeSelectionModal({
           </TabsContent>
 
           <TabsContent value="actions" className="flex-1 overflow-y-auto mt-4">
-            {renderActionCategory('Transform', transformActions)}
+            {renderActionCategory('AI & Agents', agentActions)}
+            {renderActionCategory('Tools', toolActions)}
             {renderActionCategory('Control Flow', controlActions)}
+            {renderActionCategory('Transform', transformActions)}
             {renderActionCategory('Utilities', utilityActions)}
             {renderActionCategory('Integrations', integrationActions)}
           </TabsContent>

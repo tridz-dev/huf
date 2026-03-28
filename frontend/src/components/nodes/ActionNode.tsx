@@ -11,11 +11,15 @@ import {
   Webhook,
   FileText,
   Calendar,
-  Plus
+  Plus,
+  Bot,
+  Wrench,
+  Trash2,
 } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
+import { useFlowContext } from '../../contexts/FlowContext';
 
 const iconMap: Record<string, any> = {
   Play,
@@ -27,7 +31,9 @@ const iconMap: Record<string, any> = {
   Mail,
   Webhook,
   FileText,
-  Calendar
+  Calendar,
+  Bot,
+  Wrench
 };
 
 interface ActionNodeProps extends NodeProps<FlowNodeData> {
@@ -35,6 +41,7 @@ interface ActionNodeProps extends NodeProps<FlowNodeData> {
 }
 
 export const ActionNode = memo(({ id, data, selected, onAddNode }: ActionNodeProps) => {
+  const { deleteNode } = useFlowContext();
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Play;
 
   return (
@@ -45,11 +52,24 @@ export const ActionNode = memo(({ id, data, selected, onAddNode }: ActionNodePro
         className="w-3 h-3 !bg-primary border-2 border-white"
       />
       <Card
-        className={`w-64 p-4 transition-all duration-200 ${
-          selected ? 'ring-2 ring-primary shadow-lg' : 'shadow-md hover:shadow-lg'
-        } border-border bg-card`}
+        className={`w-64 p-4 transition-all duration-200 ${selected ? 'ring-2 ring-primary shadow-lg' : 'shadow-md hover:shadow-lg'
+          } border-border bg-card`}
       >
-        <div className="flex items-center gap-3">
+        {selected && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteNode(id);
+            }}
+            title="Delete node"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        <div className="flex items-center gap-3 pr-6">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
             <Icon className="w-5 h-5" />
           </div>
@@ -72,7 +92,10 @@ export const ActionNode = memo(({ id, data, selected, onAddNode }: ActionNodePro
         <Button
           size="icon"
           className="h-8 w-8 rounded-full shadow-lg"
-          onClick={() => onAddNode?.(id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddNode?.(id);
+          }}
         >
           <Plus className="w-4 h-4" />
         </Button>

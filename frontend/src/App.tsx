@@ -10,6 +10,7 @@ import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
+import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
 import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
@@ -232,7 +233,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlowProvider>
-                  <UnifiedLayout>
+                  <UnifiedLayout headerActions={<FlowsListHeaderActions />}>
                     <Suspense fallback={<PageLoader />}>
                       <FlowListPage />
                     </Suspense>

@@ -1,12 +1,14 @@
 """
-Huf Flow Engine v0.1
+Huf Flow Engine v0.2
 
 Core graph orchestration engine that:
 - Loads and validates FlowDefinition JSON
 - Creates FlowRun instances
-- Executes nodes (agent.run, tool.call, router.llm, human.approval, end)
+- Executes nodes (agent.run, tool.call, router.llm, human.approval,
+  http_request, condition, transform, loop, end)
 - Evaluates edges (always, on_success, on_failure, expression)
 - Persists FlowRun state after each step
+- Publishes Frappe Realtime events for live UI tracking
 - Supports normal and agentic execution modes
 """
 
@@ -240,20 +242,41 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		node = nodes_map.get(node_id)
 
 		if not node:
+			_publish_flow_event(flow_run, "flow_error", {"error": f"Node '{node_id}' not found"})
 			_fail_flow_run(flow_run, f"Node '{node_id}' not found in definition")
 			return
 
 		# Check hop limit
 		if (flow_run.hop_count or 0) >= (flow_run.max_hops or DEFAULT_MAX_HOPS):
+			_publish_flow_event(flow_run, "flow_error", {"error": f"Hop limit reached ({flow_run.max_hops})"})
 			_fail_flow_run(flow_run, f"Hop limit reached ({flow_run.max_hops})")
 			return
+
+		# Publish node start event for live UI tracking
+		_publish_flow_event(flow_run, "flow_node_start", {
+			"node_id": node_id,
+			"node_type": node.get("type"),
+			"node_label": node.get("_label", node_id),
+		})
 
 		# Execute the node
 		node_result = _execute_node(flow_run, node, settings)
 
+		# Publish node end event
+		result_status = node_result.get("status", "success") if isinstance(node_result, dict) else "success"
+		_publish_flow_event(flow_run, "flow_node_end", {
+			"node_id": node_id,
+			"node_type": node.get("type"),
+			"status": result_status,
+		})
+
 		# Check if flow was paused (approval/user wait)
 		flow_run.reload()
 		if flow_run.status in ("Waiting Approval", "Waiting User"):
+			_publish_flow_event(flow_run, "flow_paused", {
+				"node_id": node_id,
+				"status": flow_run.status,
+			})
 			return
 
 		# Update hop count and completed list
@@ -264,6 +287,10 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		# Check for end node
 		if node.get("type") == "end":
 			_complete_flow_run(flow_run)
+			_publish_flow_event(flow_run, "flow_completed", {
+				"node_id": node_id,
+				"status": "Success",
+			})
 			return
 
 		# Determine next node
@@ -274,6 +301,14 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
 			if not next_node_id:
 				_fail_flow_run(flow_run, "Router node did not return a next_node_id")
+				_publish_flow_event(flow_run, "flow_error", {"error": "Router did not return next_node_id"})
+				return
+
+		elif node.get("type") == "condition":
+			# Condition node already evaluated and returns next_node_id
+			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
+			if not next_node_id:
+				_fail_flow_run(flow_run, "Condition node did not resolve a branch")
 				return
 
 		elif node.get("type") == "human.approval":
@@ -300,6 +335,7 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		if not next_node_id:
 			# No outgoing edges matched - flow is done
 			_complete_flow_run(flow_run)
+			_publish_flow_event(flow_run, "flow_completed", {"status": "Success"})
 			return
 
 		# Move to next node
@@ -328,6 +364,10 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 		"tool.call": _exec_tool_call,
 		"router.llm": _exec_router_llm,
 		"human.approval": _exec_human_approval,
+		"http_request": _exec_http_request,
+		"condition": _exec_condition,
+		"transform": _exec_transform,
+		"loop": _exec_loop_node,
 		"end": _exec_end,
 	}
 
@@ -553,6 +593,229 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	frappe.db.commit()
 
 	return {"status": "waiting_approval"}
+
+
+def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute http_request node - makes an HTTP request.
+
+	Config keys:
+	    url (str): Target URL (supports {{ }} variable interpolation)
+	    method (str): GET, POST, PUT, DELETE (default: GET)
+	    headers (dict): Optional request headers
+	    body (dict|str): Optional request body for POST/PUT
+	    timeout (int): Request timeout in seconds (default: 30)
+	    save_result_to_context (str): Context key to store result
+	"""
+	import requests as http_lib
+
+	url = config.get("url")
+	if not url:
+		return {"status": "failed", "error": "http_request node missing 'url' in config"}
+
+	ctx = _load_context(flow_run)
+
+	# Interpolate variables in url, headers, and body
+	url = _interpolate_string(url, ctx)
+	method = (config.get("method") or "GET").upper()
+	headers = config.get("headers", {})
+	if isinstance(headers, dict):
+		headers = {k: _interpolate_string(str(v), ctx) for k, v in headers.items()}
+
+	body = config.get("body")
+	if isinstance(body, dict):
+		body = _substitute_dict(body, ctx)
+	elif isinstance(body, str):
+		body = _interpolate_string(body, ctx)
+
+	timeout = config.get("timeout", 30)
+
+	try:
+		kwargs = {"headers": headers, "timeout": timeout}
+		if method in ("POST", "PUT", "PATCH") and body:
+			if isinstance(body, dict):
+				kwargs["json"] = body
+			else:
+				kwargs["data"] = body
+
+		resp = http_lib.request(method, url, **kwargs)
+
+		try:
+			result_data = resp.json()
+		except Exception:
+			result_data = resp.text
+
+		result = {
+			"status_code": resp.status_code,
+			"data": result_data,
+			"headers": dict(resp.headers),
+		}
+
+		# Save to context if configured
+		save_key = config.get("save_result_to_context")
+		if save_key:
+			ctx[save_key] = result
+			flow_run.db_set("context_json", json.dumps(ctx, default=str))
+
+		frappe.db.commit()
+
+		is_success = 200 <= resp.status_code < 400
+		return {
+			"status": "success" if is_success else "failed",
+			"result": result,
+		}
+	except Exception as e:
+		return {"status": "failed", "error": str(e)}
+
+
+def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute condition node - evaluates a boolean expression and routes
+	to true_branch or false_branch.
+
+	This is HUF's equivalent to n8n's IF node with explicit branch ports.
+
+	Config keys:
+	    expression (str): Boolean expression to evaluate against context
+	    true_node (str): Node ID to go to if expression is true
+	    false_node (str): Node ID to go to if expression is false
+	"""
+	expression = config.get("expression", "")
+	true_node = config.get("true_node")
+	false_node = config.get("false_node")
+
+	if not expression:
+		return {"status": "failed", "error": "condition node missing 'expression' in config"}
+
+	if not true_node and not false_node:
+		return {"status": "failed", "error": "condition node needs at least one of 'true_node' or 'false_node'"}
+
+	ctx = _load_context(flow_run)
+
+	try:
+		result = safe_eval_expression(expression, ctx)
+		chosen_node = true_node if result else false_node
+
+		if not chosen_node:
+			# If we evaluated to a branch that has no target, consider it done
+			return {"status": "success", "result": result, "next_node_id": None}
+
+		return {
+			"status": "success",
+			"result": result,
+			"branch": "true" if result else "false",
+			"next_node_id": chosen_node,
+		}
+	except Exception as e:
+		return {"status": "failed", "error": f"Condition evaluation failed: {str(e)}"}
+
+
+def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute transform node - applies data transformations to context.
+
+	Config keys:
+	    transformations (list): List of transformation operations
+	        Each with: source_field, target_field, operation (copy|map|template)
+	    save_result_to_context (str): Optional key to store result
+	"""
+	ctx = _load_context(flow_run)
+	transformations = config.get("transformations", [])
+
+	results = {}
+	for t in transformations:
+		source = t.get("source_field", "")
+		target = t.get("target_field", "")
+		operation = t.get("operation", "copy")
+
+		if not source or not target:
+			continue
+
+		try:
+			if operation == "copy":
+				# Direct copy from context
+				value = _resolve_context_path(ctx, source)
+				ctx[target] = value
+				results[target] = value
+			elif operation == "template":
+				# Interpolate a template string
+				value = _interpolate_string(source, ctx)
+				ctx[target] = value
+				results[target] = value
+			elif operation == "map":
+				# Map/rename: get source data and store under target
+				value = _resolve_context_path(ctx, source)
+				ctx[target] = value
+				results[target] = value
+		except Exception as e:
+			results[target] = f"Error: {str(e)}"
+
+	flow_run.db_set("context_json", json.dumps(ctx, default=str))
+	frappe.db.commit()
+
+	return {"status": "success", "result": results}
+
+
+def _exec_loop_node(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute loop node - iterates over an array in context.
+
+	The loop node works by checking if there are remaining items to iterate.
+	If yes, it sets the current item in context and returns the loop_node (body).
+	If no, it returns the done_node.
+
+	Config keys:
+	    iterate_over (str): Context key containing the array to iterate
+	    item_key (str): Context key to store current item (default: 'loop_item')
+	    index_key (str): Context key to store current index (default: 'loop_index')
+	    loop_node (str): Node ID to execute for each iteration (loop body)
+	    done_node (str): Node ID to go to when iteration is complete
+	    max_iterations (int): Safety limit (default: 100)
+	"""
+	ctx = _load_context(flow_run)
+
+	iterate_over = config.get("iterate_over", "")
+	item_key = config.get("item_key", "loop_item")
+	index_key = config.get("index_key", "loop_index")
+	loop_node = config.get("loop_node")
+	done_node = config.get("done_node")
+	max_iter = config.get("max_iterations", 100)
+
+	if not iterate_over:
+		return {"status": "failed", "error": "loop node missing 'iterate_over' in config"}
+
+	# Get the array to iterate over
+	items = _resolve_context_path(ctx, iterate_over)
+	if not isinstance(items, list):
+		return {"status": "failed", "error": f"'{iterate_over}' is not a list in context"}
+
+	# Get current iteration index
+	current_index = ctx.get(index_key, 0)
+	if not isinstance(current_index, int):
+		current_index = 0
+
+	# Safety check
+	if current_index >= max_iter:
+		ctx.pop(item_key, None)
+		ctx.pop(index_key, None)
+		flow_run.db_set("context_json", json.dumps(ctx, default=str))
+		frappe.db.commit()
+		return {"status": "success", "result": "max_iterations reached", "next_node_id": done_node}
+
+	if current_index < len(items):
+		# Set current item and advance index
+		ctx[item_key] = items[current_index]
+		ctx[index_key] = current_index + 1
+		flow_run.db_set("context_json", json.dumps(ctx, default=str))
+		frappe.db.commit()
+		return {"status": "success", "result": items[current_index], "next_node_id": loop_node}
+	else:
+		# Iteration complete - clean up loop variables
+		ctx.pop(item_key, None)
+		ctx.pop(index_key, None)
+		flow_run.db_set("context_json", json.dumps(ctx, default=str))
+		frappe.db.commit()
+		return {"status": "success", "result": "iteration_complete", "next_node_id": done_node}
 
 
 def _exec_end(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -810,3 +1073,66 @@ def _fail_flow_run(flow_run, error_msg: str):
 		}
 	)
 	frappe.db.commit()
+	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
+
+
+# ---------------------------------------------------------------------------
+# Realtime event publishing
+# ---------------------------------------------------------------------------
+
+
+def _publish_flow_event(flow_run, event_type: str, data: dict):
+	"""Publish a Frappe Realtime event for live flow UI tracking."""
+	try:
+		frappe.publish_realtime(
+			event=event_type,
+			message={
+				"flow_run_id": flow_run.name,
+				"flow_id": flow_run.flow_id,
+				**data,
+			},
+			after_commit=False,
+		)
+	except Exception:
+		# Realtime is best-effort; don't break execution if it fails
+		pass
+
+
+# ---------------------------------------------------------------------------
+# Additional string/context helpers
+# ---------------------------------------------------------------------------
+
+
+def _interpolate_string(template: str, ctx: dict) -> str:
+	"""Replace {{ key }} placeholders in a string with values from context."""
+	import re
+
+	def replacer(match):
+		key = match.group(1).strip()
+		value = _resolve_context_path(ctx, key)
+		return str(value) if value is not None else match.group(0)
+
+	return re.sub(r"\{\{\s*(.+?)\s*\}\}", replacer, template)
+
+
+def _substitute_dict(data, ctx: dict):
+	"""Recursively substitute {{ key }} in dict/list/str values."""
+	if isinstance(data, dict):
+		return {k: _substitute_dict(v, ctx) for k, v in data.items()}
+	elif isinstance(data, list):
+		return [_substitute_dict(v, ctx) for v in data]
+	elif isinstance(data, str) and "{{" in data and "}}" in data:
+		return _interpolate_string(data, ctx)
+	return data
+
+
+def _resolve_context_path(ctx: dict, path: str):
+	"""Resolve a dotted path like 'user_data.email' from context dict."""
+	parts = path.split(".")
+	current = ctx
+	for part in parts:
+		if isinstance(current, dict):
+			current = current.get(part)
+		else:
+			return None
+	return current

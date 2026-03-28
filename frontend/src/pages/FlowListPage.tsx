@@ -4,6 +4,10 @@ import { usePageData } from '../hooks/dashboard/usePageData';
 import { useFlowContext } from '../contexts/FlowContext';
 import { FlowMetadata } from '../types/flow.types';
 import { useNavigate } from 'react-router-dom';
+import { getFlowDefinitions } from '../services/flowApi';
+import { mapBackendStatusToFrontend } from '../services/flowSerializer';
+import { runFlow } from '../services/flowApi';
+import { toast } from 'sonner';
 
 const statusOptions = [
   { label: 'All Status', value: 'all' },
@@ -41,7 +45,24 @@ function FlowListPage() {
   const navigate = useNavigate();
 
   const { data, loading, search, setSearch, filters, setFilters } = usePageData<FlowMetadata>({
-    initialData: flows,
+    fetchFn: async () => {
+      try {
+        const items = await getFlowDefinitions();
+        return items.map(item => ({
+          id: item.flow_id,
+          name: item.flow_name,
+          description: undefined,
+          status: mapBackendStatusToFrontend(item.status),
+          category: undefined,
+          nodeCount: 0,
+          createdAt: new Date(item.modified),
+          updatedAt: new Date(item.modified),
+        }));
+      } catch {
+        // Fallback to context flows if API fails
+        return flows;
+      }
+    },
     searchFields: ['name', 'description'],
     filterFn: (flow, filters) => {
       if (filters.status && filters.status !== 'all' && flow.status !== filters.status) {
@@ -56,6 +77,15 @@ function FlowListPage() {
 
   const handleFlowClick = (flowId: string) => {
     navigate(`/flows/${flowId}`);
+  };
+
+  const handleRunFlow = async (flowId: string) => {
+    try {
+      const result = await runFlow(flowId);
+      toast.success('Flow run started', { description: `Run ID: ${result.flow_run_id}` });
+    } catch (err) {
+      toast.error('Failed to run flow', { description: err instanceof Error ? err.message : 'Unknown error' });
+    }
   };
 
   return (
@@ -108,7 +138,7 @@ function FlowListPage() {
               {
                 icon: Play,
                 label: 'Run Flow',
-                onClick: () => console.log('Run flow', flow.id),
+                onClick: () => handleRunFlow(flow.id),
               },
               {
                 icon: Settings,

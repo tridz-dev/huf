@@ -12,6 +12,8 @@ export const doctype = {
   "Agent Run": "Agent Run",
   "Agent Prompt": "Agent Prompt",
   "MCP Server": "MCP Server",
+  "Flow Definition": "Flow Definition",
+  "Flow Run": "Flow Run",
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",
   "Huf Data Table": "Huf Data Table",
