@@ -17,7 +17,7 @@ class MemoryPolicy(Document):
     def _validate_memory_agent(self):
         """Validate memory agent is specified when capture_owner is memory_agent."""
         if self.capture_owner == "memory_agent" and not self.memory_agent:
-            frappe.throw(_("Memory Agent is required when Capture Owner is set to 'memory_agent'")))
+            frappe.throw(_("Memory Agent is required when Capture Owner is set to 'memory_agent'"))
     
     def _validate_frequency_value(self):
         """Validate frequency value is provided for n-based frequency types."""
