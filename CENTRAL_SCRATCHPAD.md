@@ -103,11 +103,15 @@ F1-F4 (UI/Profiles) ← A3, E1-E4
 | 2026-03-28 11:25 | impl-06 | COMPLETE | F2-F4 | UI components created: MemoryExplorer, MemoryPanel, MemoryInspector |
 | 2026-03-28 11:20 | impl-05 | COMPLETED | E4 | Memory write tool implemented, committed |
 | 2026-03-28 11:26 | impl-05 | COMPLETED | E2 | Prompt injection implemented, committed |
-| 2026-03-28 11:26 | impl-05 | COMPLETED | ALL_E | All Phase 5 tasks complete (E1, E2, E3, E4) |
+| 2026-03-28 11:28 | impl-05 | COMPLETED | Agent Tools | Added tool registration methods to Agent DocType |
 | 2026-03-28 11:30 | impl-03 | COMPLETED | C4 | Rule-only capture mode with 7 rule types |
 | 2026-03-28 11:40 | impl-01 | COMPLETED | A1 | Memory Record DocType with 27 fields, tests |
 | 2026-03-28 11:42 | impl-01 | COMPLETED | A2 | Memory Policy DocType with 36 fields, validation |
 | 2026-03-28 11:45 | impl-01 | COMPLETED | A3 | Memory Profile DocType with 5 default profiles |
+| 2026-03-28 11:50 | impl-04 | COMPLETED | D1 | Canonical storage service: MemoryRecord, MemoryStorage classes |
+| 2026-03-28 11:52 | impl-04 | COMPLETED | D2 | FTS indexing pipeline: FTSIndexer, FTSIndexPipeline classes |
+| 2026-03-28 11:54 | impl-04 | COMPLETED | D3 | Vector indexing pipeline: VectorIndexer, VectorIndexPipeline classes |
+| 2026-03-28 11:56 | impl-04 | COMPLETED | D4 | Index backend abstraction: MemoryIndexBackend, SQLiteFTSBackend, SqliteVecBackend, HybridBackend |
 
 ---
 
