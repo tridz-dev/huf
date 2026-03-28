@@ -13,6 +13,16 @@
   "session_id",
   "created_at",
   "last_activity",
+  "memory_section",
+  "memory_scope_override",
+  "memory_scope_key_override",
+  "memory_capture_enabled_override",
+  "column_break_memory",
+  "memory_turn_count",
+  "memory_last_capture_at",
+  "conversation_end_state",
+  "ended_at",
+  "idle_expires_at",
   "details_tab",
   "summary",
   "conversation_data",
@@ -76,6 +86,75 @@
    "fieldname": "last_activity",
    "fieldtype": "Datetime",
    "label": "Last Activity",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "description": "Memory and learning configuration for this conversation",
+   "fieldname": "memory_section",
+   "fieldtype": "Section Break",
+   "label": "Memory Settings"
+  },
+  {
+   "description": "Override the default memory scope type for this conversation",
+   "fieldname": "memory_scope_override",
+   "fieldtype": "Select",
+   "label": "Memory Scope Override",
+   "options": "\nconversation\nuser\nagent\nnamespace\nglobal"
+  },
+  {
+   "description": "Override the scope key for memory records",
+   "fieldname": "memory_scope_key_override",
+   "fieldtype": "Data",
+   "label": "Scope Key Override"
+  },
+  {
+   "default": "0",
+   "description": "Force enable or disable memory capture for this conversation",
+   "fieldname": "memory_capture_enabled_override",
+   "fieldtype": "Check",
+   "label": "Memory Capture Override"
+  },
+  {
+   "fieldname": "column_break_memory",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Number of turns since last memory capture",
+   "fieldname": "memory_turn_count",
+   "fieldtype": "Int",
+   "label": "Turns Since Capture",
+   "read_only": 1
+  },
+  {
+   "description": "Timestamp of last memory capture",
+   "fieldname": "memory_last_capture_at",
+   "fieldtype": "Datetime",
+   "label": "Last Memory Capture",
+   "read_only": 1
+  },
+  {
+   "default": "open",
+   "description": "Current state of the conversation lifecycle",
+   "fieldname": "conversation_end_state",
+   "fieldtype": "Select",
+   "label": "Conversation State",
+   "options": "open\nclosing\nclosed",
+   "read_only": 1
+  },
+  {
+   "description": "Timestamp when conversation was marked as ended",
+   "fieldname": "ended_at",
+   "fieldtype": "Datetime",
+   "label": "Ended At",
+   "read_only": 1
+  },
+  {
+   "description": "Timestamp when conversation will expire due to idle timeout",
+   "fieldname": "idle_expires_at",
+   "fieldtype": "Datetime",
+   "label": "Idle Expires At",
    "read_only": 1
   },
   {
@@ -193,7 +272,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-21 19:13:42.068454",
+ "modified": "2026-03-28 11:15:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Conversation",
