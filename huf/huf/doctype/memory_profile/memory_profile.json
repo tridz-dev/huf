@@ -1,0 +1,239 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:profile_name",
+ "creation": "2025-03-28 11:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "profile_name",
+  "description",
+  "category",
+  "appearance_section",
+  "icon",
+  "is_system_profile",
+  "schema_section",
+  "default_schema_json",
+  "default_capture_prompt",
+  "default_memory_type_mapping",
+  "model_section",
+  "recommended_model",
+  "recommended_provider",
+  "defaults_section",
+  "default_capture_stage",
+  "default_frequency",
+  "default_scope_type",
+  "default_indexing_mode",
+  "default_retrieval_mode",
+  "ui_section",
+  "ui_labels_json",
+  "examples_section",
+  "example_memories_json",
+  "documentation_url"
+ ],
+ "fields": [
+  {
+   "fieldname": "profile_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Profile Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Category",
+   "options": "Programming\nScience/Research\nLanguage Learning\nReasoning/Mathematics\nGeneral Knowledge\nTravel Planning\nCRM/Customer Context\nSupport Ticket\nDocumentation\nCustom",
+   "reqd": 1
+  },
+  {
+   "fieldname": "appearance_section",
+   "fieldtype": "Section Break",
+   "label": "Appearance"
+  },
+  {
+   "description": "Icon class or emoji for the profile",
+   "fieldname": "icon",
+   "fieldtype": "Data",
+   "label": "Icon"
+  },
+  {
+   "default": "0",
+   "description": "System profiles cannot be deleted or modified by users",
+   "fieldname": "is_system_profile",
+   "fieldtype": "Check",
+   "label": "Is System Profile"
+  },
+  {
+   "fieldname": "schema_section",
+   "fieldtype": "Section Break",
+   "label": "Default Schema"
+  },
+  {
+   "description": "JSON Schema defining the structure of captured memory data",
+   "fieldname": "default_schema_json",
+   "fieldtype": "Code",
+   "label": "Default Schema (JSON)",
+   "options": "JSON"
+  },
+  {
+   "description": "Prompt template used when capturing memory with this profile",
+   "fieldname": "default_capture_prompt",
+   "fieldtype": "Text Editor",
+   "label": "Default Capture Prompt"
+  },
+  {
+   "description": "JSON mapping of source types to memory types for this profile",
+   "fieldname": "default_memory_type_mapping",
+   "fieldtype": "Code",
+   "label": "Default Memory Type Mapping",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "model_section",
+   "fieldtype": "Section Break",
+   "label": "Recommended Model"
+  },
+  {
+   "description": "e.g. gpt-4, claude-3-sonnet, llama-3",
+   "fieldname": "recommended_model",
+   "fieldtype": "Data",
+   "label": "Recommended Model"
+  },
+  {
+   "fieldname": "recommended_provider",
+   "fieldtype": "Select",
+   "label": "Recommended Provider",
+   "options": "openai\nanthropic\ncohere\ngoogle\nazure\nlocal\ncustom"
+  },
+  {
+   "fieldname": "defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Default Settings"
+  },
+  {
+   "default": "post_response_async",
+   "fieldname": "default_capture_stage",
+   "fieldtype": "Select",
+   "label": "Default Capture Stage",
+   "options": "in_prompt\npost_response_sync\npost_response_async\nconversation_end\nscheduled"
+  },
+  {
+   "default": "every_run",
+   "fieldname": "default_frequency",
+   "fieldtype": "Select",
+   "label": "Default Frequency",
+   "options": "every_run\nevery_n_runs\nevery_n_turns\nconversation_end\nmanual\nscheduled"
+  },
+  {
+   "default": "user",
+   "fieldname": "default_scope_type",
+   "fieldtype": "Select",
+   "label": "Default Scope Type",
+   "options": "conversation\nuser\nagent\nnamespace\nglobal"
+  },
+  {
+   "default": "fts_only",
+   "fieldname": "default_indexing_mode",
+   "fieldtype": "Select",
+   "label": "Default Indexing Mode",
+   "options": "none\nfts_only\nvector_only\nfts_and_vector"
+  },
+  {
+   "default": "hybrid",
+   "fieldname": "default_retrieval_mode",
+   "fieldtype": "Select",
+   "label": "Default Retrieval Mode",
+   "options": "inject\ntool_only\nhybrid"
+  },
+  {
+   "fieldname": "ui_section",
+   "fieldtype": "Section Break",
+   "label": "UI Configuration"
+  },
+  {
+   "description": "Custom labels and help text for form fields",
+   "fieldname": "ui_labels_json",
+   "fieldtype": "Code",
+   "label": "UI Labels (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "examples_section",
+   "fieldtype": "Section Break",
+   "label": "Examples & Documentation"
+  },
+  {
+   "description": "Example memory records for documentation and testing",
+   "fieldname": "example_memories_json",
+   "fieldtype": "Code",
+   "label": "Example Memories (JSON)",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "documentation_url",
+   "fieldtype": "Data",
+   "label": "Documentation URL"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-03-28 11:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Memory Profile",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "select": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "search_fields": "profile_name,category,description",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "profile_name"
+}
