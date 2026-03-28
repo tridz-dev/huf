@@ -19,6 +19,7 @@ import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
+import { MemoryTab } from '../components/agent/MemoryTab';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
@@ -56,12 +57,18 @@ export function AgentFormPage() {
       default: false,
       disabled: false,
     },
+    memory: {
+      label: 'Memory',
+      fields: [], // Placeholder tab until memory feature is merged
+      default: false,
+      disabled: false,
+    },
   } as const;
 
   // Extract derived values from tab config (memoized to avoid recreating on every render)
   const validTabs = useMemo(() => Object.keys(tabConfig), []);
   const defaultTab = useMemo(
-    () => Object.entries(tabConfig).find(([_, config]) => config.default)?.[0] || validTabs[0],
+    () => Object.entries(tabConfig).find(([, config]) => config.default)?.[0] || validTabs[0],
     [validTabs]
   );
   const tabFieldMapping: TabFieldMapping = useMemo(
@@ -800,7 +807,7 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-5">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
                     {config.label}
@@ -851,6 +858,10 @@ export function AgentFormPage() {
                   onSyncMCP={handleSyncMCPServer}
                   mcpLoading={mcpLoading}
                 />
+              </TabsContent>
+
+              <TabsContent value="memory" className="space-y-4">
+                <MemoryTab />
               </TabsContent>
             </Tabs>
           </form>
