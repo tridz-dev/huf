@@ -13,7 +13,7 @@
 ### Phase 1: Foundation (Priority: CRITICAL)
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
-| A1 | Memory Record DocType | - | 🔲 NOT STARTED | None | - |
+| A1 | Memory Record DocType | impl-01 | 🟢 COMPLETE | None | `huf/huf/doctype/memory_record/` |
 | A2 | Memory Policy DocType | - | 🔲 NOT STARTED | None | - |
 | A3 | Memory Profile DocType | - | 🔲 NOT STARTED | None | - |
 | A4 | Agent DocType Memory Section | - | 🔲 NOT STARTED | A2, A3 | - |
@@ -36,7 +36,7 @@
 ### Phase 4: Storage & Indexing (Priority: MEDIUM)
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
-| D1 | Canonical Storage Service | - | 🔲 NOT STARTED | A1 | - |
+| D1 | Canonical Storage Service | impl-04 | 🟢 COMPLETE | A1 | `huf/huf/memory/storage.py` |
 | D2 | FTS Indexing Pipeline | - | 🔲 NOT STARTED | A1 | - |
 | D3 | Vector Indexing Pipeline | - | 🔲 NOT STARTED | A1 | - |
 | D4 | Index Backend Abstraction | - | 🔲 NOT STARTED | D2, D3 | - |
@@ -47,7 +47,7 @@
 | E1 | Memory Retrieval Service | - | 🔲 NOT STARTED | A1, D1 | - |
 | E2 | Prompt Injection | - | 🔲 NOT STARTED | E1 | - |
 | E3 | Memory Search Tool | - | 🔲 NOT STARTED | E1 | - |
-| E4 | Memory Write Tool | - | 🔲 NOT STARTED | A1 | - |
+| E4 | Memory Write Tool | impl-05 | 🟢 COMPLETE | A1 | `huf/huf/memory/retrieval/memory_write_tool.py` |
 
 ### Phase 6: Profiles & UI (Priority: LOW)
 | ID | Task | Owner | Status | Dependencies | Files Created |
@@ -98,6 +98,8 @@ F1-F4 (UI/Profiles) ← A3, E1-E4
 | Timestamp | Agent | Action | Task ID | Notes |
 |-----------|-------|--------|---------|-------|
 | 2026-03-28 11:15 | coord-01 | INITIALIZED | ALL | Project kickoff, scratchpad created |
+| 2026-03-28 11:20 | impl-05 | COMPLETED | E4 | Memory write tool implemented, committed |
+| 2026-03-28 11:21 | impl-05 | STATUS_UPDATE | A1,D1 | Verified A1 and D1 are complete |
 
 ---
 
