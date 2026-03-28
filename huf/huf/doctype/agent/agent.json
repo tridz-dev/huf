@@ -63,6 +63,11 @@
   "max_turns",
   "image_generation_section",
   "image_generation_model",
+  "audio_generation_section",
+  "tts_model",
+  "tts_voice",
+  "audio_transcription_section",
+  "stt_model",
   "huf_ui_section",
   "agent_color",
   "permissions_tab",
@@ -108,6 +113,19 @@
    "label": "Model",
    "options": "AI Model",
    "reqd": 1
+  },
+  {
+   "description": "Specific model for Text-to-Speech (Audio Generation). If unset, defaults to the provider's default TTS model.",
+   "fieldname": "tts_model",
+   "fieldtype": "Link",
+   "label": "TTS Model",
+   "options": "AI Model"
+  },
+  {
+   "description": "Voice to use for TTS (e.g. alloy, echo, onyx).",
+   "fieldname": "tts_voice",
+   "fieldtype": "Data",
+   "label": "TTS Voice"
   },
   {
    "default": "Local",
@@ -520,12 +538,29 @@
    "fieldname": "instruction_section",
    "fieldtype": "Section Break",
    "label": "Instruction"
+  },
+  {
+   "fieldname": "audio_generation_section",
+   "fieldtype": "Section Break",
+   "label": "Audio Generation"
+  },
+  {
+   "description": "Specific model for Speech-to-Text (Audio Transcription). If unset, defaults to the provider's default STT model.",
+   "fieldname": "stt_model",
+   "fieldtype": "Link",
+   "label": "STT Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "audio_transcription_section",
+   "fieldtype": "Section Break",
+   "label": "Audio Transcription"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-25 19:41:57.703300",
+ "modified": "2026-03-11 12:59:21.085509",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",
@@ -541,8 +576,42 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
+   "select": 1,
    "share": 1,
    "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "select": 1,
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Viewer",
+   "select": 1,
+   "share": 1
   }
  ],
  "row_format": "Dynamic",
