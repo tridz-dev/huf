@@ -383,3 +383,182 @@ class Agent(Document):
             return True
 
         return False
+
+    # Memory System Methods
+    def has_memory_enabled(self) -> bool:
+        """Check if memory system is enabled for this agent."""
+        return bool(self.enable_memory)
+
+    def get_memory_policy(self):
+        """Get the memory policy document if configured."""
+        if not self.memory_policy:
+            return None
+        try:
+            return frappe.get_doc("Memory Policy", self.memory_policy)
+        except frappe.DoesNotExistError:
+            return None
+
+    def get_memory_profile(self):
+        """Get the memory profile document if configured."""
+        if not self.memory_profile:
+            return None
+        try:
+            return frappe.get_doc("Memory Profile", self.memory_profile)
+        except frappe.DoesNotExistError:
+            return None
+
+    def get_memory_agent(self):
+        """Get the specialized memory agent if configured."""
+        if not self.memory_agent:
+            return None
+        try:
+            return frappe.get_doc("Agent", self.memory_agent)
+        except frappe.DoesNotExistError:
+            return None
+
+    def get_default_memory_scope(self, context: dict = None) -> tuple:
+        """
+        Get the default memory scope type and key for this agent.
+        Returns: (scope_type, scope_key)
+        """
+        scope_type = self.default_memory_scope_type or "conversation"
+        
+        if self.default_memory_scope_key_template and context:
+            try:
+                from frappe.utils.jinja import render_template
+                scope_key = render_template(self.default_memory_scope_key_template, context)
+            except Exception:
+                scope_key = context.get("conversation", {}).get("name", "default")
+        else:
+            scope_key = "default"
+        
+        return scope_type, scope_key
+
+    def get_memory_for_conversation(self, conversation_id: str = None, 
+                                   user_id: str = None,
+                                   memory_type: str = None,
+                                   limit: int = None) -> list:
+        """
+        Retrieve memory records for a given conversation or user context.
+        
+        Args:
+            conversation_id: Optional conversation to scope memory
+            user_id: Optional user to scope memory
+            memory_type: Optional filter by memory type
+            limit: Max records to return (defaults to memory_max_items)
+        
+        Returns:
+            List of memory record documents
+        """
+        if not self.has_memory_enabled():
+            return []
+        
+        limit = limit or self.memory_max_items or 10
+        
+        filters = {
+            "agent": self.name,
+            "status": "active"
+        }
+        
+        # Apply scope filtering
+        if conversation_id:
+            filters["conversation"] = conversation_id
+        
+        if memory_type:
+            filters["memory_type"] = memory_type
+        
+        # Build scope-based query
+        scope_filters = []
+        if conversation_id:
+            scope_filters.append(["scope_type", "=", "conversation"])
+            scope_filters.append(["scope_key", "=", conversation_id])
+        
+        if user_id:
+            scope_filters.append(["scope_type", "=", "user"])
+            scope_filters.append(["scope_key", "=", user_id])
+        
+        # Query memory records
+        try:
+            records = frappe.get_all(
+                "Memory Record",
+                filters=filters,
+                fields=["name", "title", "memory_type", "data_json", "summary_text", 
+                       "scope_type", "scope_key", "confidence", "importance_score", "modified"],
+                order_by="importance_score desc, modified desc",
+                limit=limit
+            )
+            return records
+        except Exception as e:
+            frappe.log_error(f"Memory retrieval failed for agent {self.name}: {str(e)}", "Memory Error")
+            return []
+
+    def capture_memory(self, data: dict, conversation_id: str = None,
+                      run_id: str = None, memory_type: str = "custom",
+                      scope_type: str = None, scope_key: str = None) -> str:
+        """
+        Capture a memory record from structured data.
+        
+        Args:
+            data: Structured data to store (will be JSON-serialized)
+            conversation_id: Source conversation
+            run_id: Source agent run
+            memory_type: Type of memory (profile, preference, fact, etc.)
+            scope_type: Override scope type (conversation/user/agent/namespace/global)
+            scope_key: Override scope key
+        
+        Returns:
+            Name of created Memory Record or None if failed
+        """
+        if not self.has_memory_enabled():
+            return None
+        
+        try:
+            # Resolve scope
+            if not scope_type:
+                scope_type = self.default_memory_scope_type or "conversation"
+            if not scope_key and conversation_id:
+                scope_key = conversation_id
+            elif not scope_key:
+                scope_key = "default"
+            
+            # Create memory record
+            memory_record = frappe.get_doc({
+                "doctype": "Memory Record",
+                "agent": self.name,
+                "conversation": conversation_id,
+                "run": run_id,
+                "source_type": "run" if run_id else "conversation",
+                "producer_mode": "main_agent",
+                "memory_type": memory_type,
+                "data_json": frappe.as_json(data),
+                "scope_type": scope_type,
+                "scope_key": scope_key,
+                "visibility": self.memory_visibility_default or "private",
+                "status": "active",
+                "confidence": data.get("confidence", 1.0),
+                "importance_score": data.get("importance", 0.5)
+            })
+            
+            memory_record.insert()
+            
+            frappe.logger().debug(f"Memory captured: {memory_record.name} for agent {self.name}")
+            return memory_record.name
+            
+        except Exception as e:
+            frappe.log_error(f"Memory capture failed for agent {self.name}: {str(e)}", "Memory Error")
+            return None
+
+    def should_inject_memory(self) -> bool:
+        """Check if memory should be auto-injected into prompts."""
+        if not self.has_memory_enabled():
+            return False
+        return self.memory_retrieval_mode in ("inject", "hybrid")
+
+    def get_memory_tools(self) -> list:
+        """Get list of memory tool names enabled for this agent."""
+        tools = []
+        if self.enable_memory_search_tool:
+            tools.append("memory_search")
+        if self.enable_memory_write_tool:
+            tools.append("memory_write")
+        return tools
