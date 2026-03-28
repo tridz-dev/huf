@@ -29,8 +29,8 @@
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
 | C1 | In-prompt Capture Mode | impl-03 | 🟢 COMPLETE | A1, A4 | `huf/huf/memory/capture/in_prompt_capture.py` |
-| C2 | Post-run Async Capture | impl-03 | 🟡 IN PROGRESS | A1, A4, B2 | `huf/huf/memory/capture/post_run_capture.py` |
-| C3 | Specialized Memory Agent | impl-03 | 🟡 IN PROGRESS | A2, A4 | `huf/huf/memory/capture/memory_agent_capture.py` |
+| C2 | Post-run Async Capture | impl-03 | 🟢 COMPLETE | A1, A4, B2 | `huf/huf/memory/capture/post_run_capture.py` |
+| C3 | Specialized Memory Agent | impl-03 | 🟢 COMPLETE | A2, A4 | `huf/huf/memory/capture/memory_agent_capture.py` |
 | C4 | Rule-only Capture Mode | impl-03 | 🟢 COMPLETE | A1 | `huf/huf/memory/capture/rule_capture.py` |
 
 ### Phase 4: Storage & Indexing (Priority: MEDIUM)
@@ -67,7 +67,7 @@
 | qc-01 | Quality Control | Verification of all completed work | 🔲 STANDBY |
 | impl-01 | Foundation Lead | A1, A2, A3 | 🟡 ACTIVE |
 | impl-02 | Integration Lead | A4, B1, B2, B3 | 🔲 STANDBY |
-| impl-03 | Capture Lead | C1, C2, C3, C4 | 🟡 ACTIVE |
+| impl-03 | Capture Lead | C1, C2, C3, C4 | 🟢 COMPLETE |
 | impl-04 | Storage Lead | D1, D2, D3, D4 | 🟢 COMPLETE |
 | impl-05 | Retrieval Lead | E1, E2, E3, E4 | 🟢 COMPLETE |
 | impl-06 | UI/Profiles Lead | F1, F2, F3, F4 | 🔲 STANDBY |
@@ -105,6 +105,10 @@ F1-F4 (UI/Profiles) ← A3, E1-E4
 | 2026-03-28 11:26 | impl-05 | COMPLETED | E2 | Prompt injection implemented, committed |
 | 2026-03-28 11:28 | impl-05 | COMPLETED | Agent Tools | Added tool registration methods to Agent DocType |
 | 2026-03-28 11:30 | impl-03 | COMPLETED | C4 | Rule-only capture mode with 7 rule types |
+| 2026-03-28 11:45 | impl-03 | COMPLETED | C1 | In-prompt capture mode with zero latency |
+| 2026-03-28 11:48 | impl-03 | COMPLETED | C3 | Specialized memory agent capture mode |
+| 2026-03-28 11:52 | impl-03 | COMPLETED | C2 | Post-run async capture with background workers |
+| 2026-03-28 11:55 | impl-03 | COMPLETED | CaptureService | Main orchestrator with policy-based config |
 | 2026-03-28 11:40 | impl-01 | COMPLETED | A1 | Memory Record DocType with 27 fields, tests |
 | 2026-03-28 11:42 | impl-01 | COMPLETED | A2 | Memory Policy DocType with 36 fields, validation |
 | 2026-03-28 11:45 | impl-01 | COMPLETED | A3 | Memory Profile DocType with 5 default profiles |
