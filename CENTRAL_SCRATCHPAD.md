@@ -28,9 +28,9 @@
 ### Phase 3: Capture Infrastructure (Priority: HIGH)
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
-| C1 | In-prompt Capture Mode | impl-03 | 🟡 IN PROGRESS | A1, A4 | `huf/huf/memory/capture/in_prompt_capture.py` |
-| C2 | Post-run Async Capture | - | 🔲 NOT STARTED | A1, A4, B2 | - |
-| C3 | Specialized Memory Agent | - | 🔲 NOT STARTED | A2, A4 | - |
+| C1 | In-prompt Capture Mode | impl-03 | 🟢 COMPLETE | A1, A4 | `huf/huf/memory/capture/in_prompt_capture.py` |
+| C2 | Post-run Async Capture | impl-03 | 🟡 IN PROGRESS | A1, A4, B2 | `huf/huf/memory/capture/post_run_capture.py` |
+| C3 | Specialized Memory Agent | impl-03 | 🟡 IN PROGRESS | A2, A4 | `huf/huf/memory/capture/memory_agent_capture.py` |
 | C4 | Rule-only Capture Mode | impl-03 | 🟢 COMPLETE | A1 | `huf/huf/memory/capture/rule_capture.py` |
 
 ### Phase 4: Storage & Indexing (Priority: MEDIUM)
