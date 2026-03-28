@@ -100,6 +100,7 @@ F1-F4 (UI/Profiles) ← A3, E1-E4
 | 2026-03-28 11:20 | impl-06 | COMMIT | F1 | Created 5 default profiles, committed |
 | 2026-03-28 11:20 | impl-05 | COMPLETED | E4 | Memory write tool implemented, committed |
 | 2026-03-28 11:21 | impl-05 | STATUS_UPDATE | A1,D1 | Verified A1 and D1 are complete |
+| 2026-03-28 11:30 | impl-03 | COMPLETED | C4 | Rule-only capture mode with 7 rule types |
 
 ---
 
