@@ -478,7 +478,7 @@ class AgentToolFunction(Document):
 				"required": ["name", "value"],
 				"additionalProperties": False
 			}
-		elif self.types == "Load Conversation Data":
+		elif self.types == "Load Memory":
 			params = {
 				"type": "object",
 				"properties": {},

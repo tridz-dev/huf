@@ -675,10 +675,10 @@
   },
   {
    "default": "0",
-   "description": "If enabled, the agent can store key-value pairs in the conversation context.",
+   "description": "If enabled, the agent can store key-value pairs in the conversation context via Memory system.",
    "fieldname": "enable_conversation_data",
    "fieldtype": "Check",
-   "label": "Allow Conversation Data Management"
+   "label": "Allow Memory"
   },
   {
    "fieldname": "image_generation_section",

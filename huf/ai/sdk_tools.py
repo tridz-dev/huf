@@ -134,7 +134,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_attach_file_to_document"
                     elif function_doc.types == "Get Conversation Data":
                         function_path = "huf.ai.sdk_tools.handle_get_conversation_data"
-                    elif function_doc.types == "Set Conversation Data":
+                    elif function_doc.types == "Set Memory":
                         function_path = "huf.ai.sdk_tools.handle_set_conversation_data"
                     elif function_doc.types == "Load Conversation Data":
                         function_path = "huf.ai.sdk_tools.handle_load_conversation_data"

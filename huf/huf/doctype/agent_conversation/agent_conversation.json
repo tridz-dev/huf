@@ -233,10 +233,10 @@
   },
   {
    "default": "{\"version\": 1, \"items\": []}",
-   "description": "Persistent memory store for the agent. Contains structured key-value pairs (user preferences, constraints, etc.) that survive summarization.",
+   "description": "Persistent memory store for the agent. Contains structured key-value pairs (user preferences, constraints, etc.) that survive summarization. Deprecated: Use Memory Record instead.",
    "fieldname": "conversation_data",
    "fieldtype": "JSON",
-   "label": "Conversation Data",
+   "label": "Legacy Conversation Data",
    "read_only": 1
   },
   {
