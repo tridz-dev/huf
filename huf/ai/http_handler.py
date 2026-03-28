@@ -127,7 +127,16 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		# Make the request
 		response = requests.request(method, final_url, **request_kwargs)
 
-		# Check response size before parsing
+		# Check response size — pre-check via Content-Length header, then verify actual content
+		content_length = response.headers.get("Content-Length")
+		if content_length and content_length.isdigit() and int(content_length) > MAX_RESPONSE_SIZE:
+			return {
+				"success": False,
+				"error": "Response too large (Content-Length exceeds 10MB limit)",
+				"status_code": response.status_code,
+				"suggestion": "The API indicates a response larger than 10MB. Try requesting less data.",
+			}
+
 		if len(response.content) > MAX_RESPONSE_SIZE:
 			return {
 				"success": False,
