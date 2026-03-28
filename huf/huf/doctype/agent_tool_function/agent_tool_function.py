@@ -454,7 +454,7 @@ class AgentToolFunction(Document):
 				"required": ["name"],
 				"additionalProperties": False
 			}
-		elif self.types == "Set Conversation Data":
+		elif self.types == "Set Memory":
 			params = {
 				"type": "object",
 				"properties": {

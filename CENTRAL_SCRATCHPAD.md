@@ -14,7 +14,7 @@
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
 | A1 | Memory Record DocType | impl-01 | 🟢 COMPLETE | None | `huf/huf/doctype/memory_record/` |
-| A2 | Memory Policy DocType | - | 🔲 NOT STARTED | None | - |
+| A2 | Memory Policy DocType | impl-01 | 🟡 IN PROGRESS | None | - |
 | A3 | Memory Profile DocType | - | 🔲 NOT STARTED | None | - |
 | A4 | Agent DocType Memory Section | - | 🔲 NOT STARTED | A2, A3 | - |
 
@@ -28,7 +28,7 @@
 ### Phase 3: Capture Infrastructure (Priority: HIGH)
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
-| C1 | In-prompt Capture Mode | - | 🔲 NOT STARTED | A1, A4 | - |
+| C1 | In-prompt Capture Mode | impl-03 | 🟡 IN PROGRESS | A1, A4 | `huf/huf/memory/capture/in_prompt_capture.py` |
 | C2 | Post-run Async Capture | - | 🔲 NOT STARTED | A1, A4, B2 | - |
 | C3 | Specialized Memory Agent | - | 🔲 NOT STARTED | A2, A4 | - |
 | C4 | Rule-only Capture Mode | impl-03 | 🟢 COMPLETE | A1 | `huf/huf/memory/capture/rule_capture.py` |
@@ -67,7 +67,7 @@
 | qc-01 | Quality Control | Verification of all completed work | 🔲 STANDBY |
 | impl-01 | Foundation Lead | A1, A2, A3 | 🟡 ACTIVE |
 | impl-02 | Integration Lead | A4, B1, B2, B3 | 🔲 STANDBY |
-| impl-03 | Capture Lead | C1, C2, C3, C4 | 🔲 STANDBY |
+| impl-03 | Capture Lead | C1, C2, C3, C4 | 🟡 ACTIVE |
 | impl-04 | Storage Lead | D1, D2, D3, D4 | 🔲 STANDBY |
 | impl-05 | Retrieval Lead | E1, E2, E3, E4 | 🔲 STANDBY |
 | impl-06 | UI/Profiles Lead | F1, F2, F3, F4 | 🔲 STANDBY |
@@ -97,7 +97,7 @@ F1-F4 (UI/Profiles) ← A3, E1-E4
 
 | Timestamp | Agent | Action | Task ID | Notes |
 |-----------|-------|--------|---------|-------|
-| 2026-03-28 11:15 | coord-01 | INITIALIZED | ALL | Project kickoff, scratchpad created |
+| 2026-03-28 11:20 | impl-06 | COMMIT | F1 | Created 5 default profiles, committed |
 | 2026-03-28 11:20 | impl-05 | COMPLETED | E4 | Memory write tool implemented, committed |
 | 2026-03-28 11:21 | impl-05 | STATUS_UPDATE | A1,D1 | Verified A1 and D1 are complete |
 
