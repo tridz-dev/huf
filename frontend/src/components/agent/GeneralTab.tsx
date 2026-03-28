@@ -1,14 +1,13 @@
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { UseFormReturn } from 'react-hook-form';
+import { Badge } from '@/components/ui/badge';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
 import { InstructionsTextarea } from './InstructionsTextarea';
+import { SectionRailLayout, SectionBlock, type RailSection } from './form-base/SectionRailLayout';
 
 interface GeneralTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -20,57 +19,72 @@ interface GeneralTabProps {
 }
 
 export function GeneralTab({ form, providers, models, watchProvider, optimizingPrompt, onOptimizePrompt }: GeneralTabProps) {
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>LLM Configuration</CardTitle>
-          <CardDescription>Configure language model settings</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <FormField
-              control={form.control}
-              name="agent_name"
-              render={({ field }) => (
-                <FormItem className="sm:col-span-2">
-                  <FormLabel>Agent Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="my-agent" {...field} />
-                  </FormControl>
-                  <FormDescription>Unique agent name</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+  const agentName = form.watch('agent_name');
+  const provider = form.watch('provider');
+  const model = form.watch('model');
+  const instructions = form.watch('instructions');
 
-            <div className="sm:col-span-2">
-              <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="description">
-                  <AccordionTrigger>Description</AccordionTrigger>
-                  <AccordionContent>
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <Textarea
-                              placeholder="A short summary describing what this agent does or is designed for."
-                              className="min-h-[80px] resize-y"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>A brief description of the agent's purpose</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </div>
-          </div>
+  const sections: RailSection[] = [
+    {
+      id: 'identity',
+      label: 'Identity',
+      status: agentName ? 'complete' : 'empty',
+      meta: agentName || 'Name required',
+    },
+    {
+      id: 'model',
+      label: 'Model',
+      status: provider && model ? 'complete' : provider ? 'partial' : 'empty',
+      meta: model || provider || 'Pick provider + model',
+    },
+    {
+      id: 'instructions',
+      label: 'Instructions',
+      status: instructions ? 'complete' : 'partial',
+      meta: instructions ? `${instructions.length} chars` : 'Add system prompt',
+    },
+  ];
+
+  return (
+    <SectionRailLayout sections={sections}>
+      <SectionBlock id="identity" title="Identity" description="Name and describe the agent's purpose.">
+        <FormField
+          control={form.control}
+          name="agent_name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Agent Name</FormLabel>
+              <FormControl>
+                <Input placeholder="my-agent" {...field} />
+              </FormControl>
+              <FormDescription>Unique agent name</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="A short summary describing what this agent does."
+                  {...field}
+                  value={field.value ?? ''}
+                />
+              </FormControl>
+              <FormDescription>A concise summary shown in listings and docs.</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </SectionBlock>
+
+      <SectionBlock id="model" title="Model" description="Provider, model, and response randomness.">
+        <div className="grid gap-4 sm:grid-cols-2">
           <FormField
             control={form.control}
             name="provider"
@@ -90,9 +104,9 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {providers.map((provider) => (
-                      <SelectItem key={provider.name} value={provider.name}>
-                        {provider.provider_name || provider.name}
+                    {providers.map((item) => (
+                      <SelectItem key={item.name} value={item.name}>
+                        {item.provider_name || item.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -108,11 +122,7 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Model</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  disabled={!watchProvider}
-                >
+                <Select onValueChange={field.onChange} value={field.value} disabled={!watchProvider}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select model" />
@@ -120,10 +130,10 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
                   </FormControl>
                   <SelectContent>
                     {models
-                      .filter((model) => model.provider === watchProvider)
-                      .map((model) => (
-                        <SelectItem key={model.name} value={model.name}>
-                          {model.model_name || model.name}
+                      .filter((item) => item.provider === watchProvider)
+                      .map((item) => (
+                        <SelectItem key={item.name} value={item.name}>
+                          {item.model_name || item.name}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -139,19 +149,14 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
             name="temperature"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Temperature: {field.value}</FormLabel>
+                <div className="flex items-center justify-between">
+                  <FormLabel>Temperature</FormLabel>
+                  <Badge variant="outline">{field.value}</Badge>
+                </div>
                 <FormControl>
-                  <Slider
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={[field.value]}
-                    onValueChange={(vals) => field.onChange(vals[0])}
-                  />
+                  <Slider min={0} max={2} step={0.1} value={[field.value]} onValueChange={(vals) => field.onChange(vals[0])} />
                 </FormControl>
-                <FormDescription>
-                  Lower = focused, higher = creative
-                </FormDescription>
+                <FormDescription>Lower = focused, higher = creative</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -162,52 +167,40 @@ export function GeneralTab({ form, providers, models, watchProvider, optimizingP
             name="top_p"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Top P: {field.value}</FormLabel>
+                <div className="flex items-center justify-between">
+                  <FormLabel>Top P</FormLabel>
+                  <Badge variant="outline">{field.value}</Badge>
+                </div>
                 <FormControl>
-                  <Slider
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={[field.value]}
-                    onValueChange={(vals) => field.onChange(vals[0])}
-                  />
+                  <Slider min={0} max={1} step={0.05} value={[field.value]} onValueChange={(vals) => field.onChange(vals[0])} />
                 </FormControl>
-                <FormDescription>
-                  Nucleus sampling parameter
-                </FormDescription>
+                <FormDescription>Nucleus sampling parameter</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </SectionBlock>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Instructions</CardTitle>
-          <CardDescription>Define system prompt, goals, and constraints</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FormField
-            control={form.control}
-            name="instructions"
-            render={({ field }) => (
-              <FormItem>
-                <InstructionsTextarea
-                  form={form}
-                  field={field}
-                  optimizingPrompt={optimizingPrompt}
-                  onOptimizePrompt={onOptimizePrompt}
-                  showOptimize={true}
-                  showExpand={true}
-                />
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </CardContent>
-      </Card>
-    </div>
+      <SectionBlock id="instructions" title="Instructions" description="System prompt, goals, and constraints.">
+        <FormField
+          control={form.control}
+          name="instructions"
+          render={({ field }) => (
+            <FormItem>
+              <InstructionsTextarea
+                form={form}
+                field={field}
+                optimizingPrompt={optimizingPrompt}
+                onOptimizePrompt={onOptimizePrompt}
+                showOptimize={true}
+                showExpand={true}
+              />
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </SectionBlock>
+    </SectionRailLayout>
   );
 }
-
