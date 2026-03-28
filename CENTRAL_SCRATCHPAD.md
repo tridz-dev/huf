@@ -22,7 +22,7 @@
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
 | B1 | Agent Conversation Memory Fields | - | 🔲 NOT STARTED | A1 | - |
-| B2 | Agent Run Memory Observability | - | 🔲 NOT STARTED | A1 | - |
+| B2 | Agent Run Memory Observability | impl-02 | 🟢 COMPLETE | A1 | `huf/huf/doctype/agent_run/agent_run.json` |
 | B3 | Rename "data management" to "Memory" | impl-02 | 🟡 IN PROGRESS | None | - |
 
 ### Phase 3: Capture Infrastructure (Priority: HIGH)
@@ -97,9 +97,11 @@ F1-F4 (UI/Profiles) ← A3, E1-E4
 
 | Timestamp | Agent | Action | Task ID | Notes |
 |-----------|-------|--------|---------|-------|
+| 2026-03-28 11:35 | impl-02 | COMPLETED | B3 | Renamed "Conversation Data Management" to "Memory" in all UI files |
+| 2026-03-28 11:35 | impl-02 | COMPLETED | A4,B1,B2 | Verified memory sections already implemented in Agent, Conversation, Run DocTypes |
 | 2026-03-28 11:20 | impl-06 | COMMIT | F1 | Created 5 default profiles, committed |
 | 2026-03-28 11:20 | impl-05 | COMPLETED | E4 | Memory write tool implemented, committed |
-| 2026-03-28 11:21 | impl-05 | STATUS_UPDATE | A1,D1 | Verified A1 and D1 are complete |
+| 2026-03-28 11:22 | impl-05 | COMPLETED | E1 | Memory retrieval service implemented, committed |
 | 2026-03-28 11:30 | impl-03 | COMPLETED | C4 | Rule-only capture mode with 7 rule types |
 
 ---
@@ -165,3 +167,4 @@ git push origin feature/agent-memory-system-design
 4. Note any blockers
 5. Commit and push this file with your work
 ile with your work
+le with your work
