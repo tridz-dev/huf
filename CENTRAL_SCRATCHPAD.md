@@ -31,7 +31,7 @@
 | C1 | In-prompt Capture Mode | - | 🔲 NOT STARTED | A1, A4 | - |
 | C2 | Post-run Async Capture | - | 🔲 NOT STARTED | A1, A4, B2 | - |
 | C3 | Specialized Memory Agent | - | 🔲 NOT STARTED | A2, A4 | - |
-| C4 | Rule-only Capture Mode | - | 🔲 NOT STARTED | A1 | - |
+| C4 | Rule-only Capture Mode | impl-03 | 🟢 COMPLETE | A1 | `huf/huf/memory/capture/rule_capture.py` |
 
 ### Phase 4: Storage & Indexing (Priority: MEDIUM)
 | ID | Task | Owner | Status | Dependencies | Files Created |
@@ -52,7 +52,7 @@
 ### Phase 6: Profiles & UI (Priority: LOW)
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
-| F1 | 5 Opinionated Profiles | - | 🔲 NOT STARTED | A3 | - |
+| F1 | 5 Opinionated Profiles | impl-06 | 🟢 COMPLETE | A3 | `huf/huf/doctype/memory_profile/default_profiles.py` |
 | F2 | Memory Explorer Desk Page | - | 🔲 NOT STARTED | A1 | - |
 | F3 | Agent Memory Tab UI | - | 🔲 NOT STARTED | A4 | - |
 | F4 | Conversation Memory Inspector | - | 🔲 NOT STARTED | B1 | - |
