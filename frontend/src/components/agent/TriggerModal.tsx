@@ -1,5 +1,5 @@
 import React from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -184,7 +184,7 @@ export function TriggerModal({
             {/* Trigger Name Field - Only editable when adding */}
             {!editingTrigger && (
               <FormField
-                control={triggerForm.control}
+                control={triggerForm.control as unknown as Control<any>}
                 name="trigger_name"
                 render={({ field }) => (
                   <FormItem>
@@ -255,6 +255,7 @@ export function TriggerModal({
             {watchTriggerType && (
               <TriggerFieldsRenderer
                 triggerType={watchTriggerType}
+                // @ts-ignore - Control type incompatibility between strict form type and generic component
                 control={triggerForm.control}
                 docTypes={docTypes}
                 loadingDocTypes={loadingDocTypes}

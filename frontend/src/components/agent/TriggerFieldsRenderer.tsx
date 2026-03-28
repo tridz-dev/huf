@@ -21,6 +21,7 @@ import { triggerFieldsConfig } from './TriggerFieldsConfig';
 
 interface TriggerFieldsRendererProps {
   triggerType: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   control: Control<any>;
   docTypes: Array<{ name: string }>;
   loadingDocTypes: boolean;
