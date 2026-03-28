@@ -562,3 +562,158 @@ class Agent(Document):
         if self.enable_memory_write_tool:
             tools.append("memory_write")
         return tools
+
+    def get_memory_tool_definitions(self) -> list:
+        """Get full tool definitions for memory tools enabled for this agent.
+
+        Returns list of tool definition dicts compatible with Agent Tool Function format.
+        These can be registered dynamically when the agent runs.
+        """
+        tools = []
+
+        if not self.has_memory_enabled():
+            return tools
+
+        if self.enable_memory_search_tool:
+            tools.append({
+                "tool_name": "memory_search",
+                "tool_type": "Memory",
+                "description": "Search for previously captured memories. Use this to recall user preferences, facts, plans, or any information stored in the memory system. Supports filtering by type, scope, and relevance.",
+                "types": "Custom Function",
+                "function_path": "huf.memory.retrieval.memory_search_tool.memory_search",
+                "is_read_only": 1,
+                "parameters": [
+                    {
+                        "fieldname": "query",
+                        "label": "Search Query",
+                        "type": "string",
+                        "required": 0,
+                        "description": "Keywords to search for in memory content"
+                    },
+                    {
+                        "fieldname": "memory_type",
+                        "label": "Memory Type",
+                        "type": "string",
+                        "required": 0,
+                        "description": "Filter by type: profile, preference, fact, plan, observation, insight, domain_object, custom"
+                    },
+                    {
+                        "fieldname": "scope_type",
+                        "label": "Scope Type",
+                        "type": "string",
+                        "required": 0,
+                        "description": "Filter by scope: conversation, user, agent, namespace, global"
+                    },
+                    {
+                        "fieldname": "limit",
+                        "label": "Limit",
+                        "type": "integer",
+                        "required": 0,
+                        "description": "Maximum number of results (default: 10, max: 100)"
+                    }
+                ]
+            })
+
+        if self.enable_memory_write_tool:
+            tools.append({
+                "tool_name": "memory_write",
+                "tool_type": "Memory",
+                "description": "Capture a new memory to the memory system. Use this to save important information, user preferences, facts, or insights for future retrieval. Memories can be scoped to conversation, user, agent, or global.",
+                "types": "Custom Function",
+                "function_path": "huf.memory.retrieval.memory_write_tool.memory_write",
+                "is_read_only": 0,
+                "parameters": [
+                    {
+                        "fieldname": "title",
+                        "label": "Title",
+                        "type": "string",
+                        "required": 1,
+                        "description": "Human-readable title for the memory"
+                    },
+                    {
+                        "fieldname": "memory_type",
+                        "label": "Memory Type",
+                        "type": "string",
+                        "required": 1,
+                        "description": "Type: profile, preference, fact, plan, observation, insight, domain_object, custom"
+                    },
+                    {
+                        "fieldname": "data",
+                        "label": "Data",
+                        "type": "object",
+                        "required": 1,
+                        "description": "Structured data payload as JSON object"
+                    },
+                    {
+                        "fieldname": "scope_type",
+                        "label": "Scope Type",
+                        "type": "string",
+                        "required": 0,
+                        "description": "Scope: conversation, user, agent, namespace, global (default: conversation)"
+                    },
+                    {
+                        "fieldname": "summary",
+                        "label": "Summary",
+                        "type": "string",
+                        "required": 0,
+                        "description": "Optional human-readable summary"
+                    },
+                    {
+                        "fieldname": "importance",
+                        "label": "Importance",
+                        "type": "number",
+                        "required": 0,
+                        "description": "Importance score 0.0-1.0 (default: 0.5)"
+                    },
+                    {
+                        "fieldname": "tags",
+                        "label": "Tags",
+                        "type": "array",
+                        "required": 0,
+                        "description": "Optional list of tags for categorization"
+                    }
+                ]
+            })
+
+        return tools
+
+    def register_memory_tools(self) -> list:
+        """Register memory tools for this agent if not already registered.
+
+        Ensures that Agent Tool Function documents exist for enabled memory tools.
+        Called during agent initialization or when memory settings change.
+
+        Returns:
+            List of registered tool names
+        """
+        registered = []
+
+        if not self.has_memory_enabled():
+            return registered
+
+        tool_definitions = self.get_memory_tool_definitions()
+
+        for tool_def in tool_definitions:
+            tool_name = tool_def["tool_name"]
+
+            # Check if tool already exists
+            existing = frappe.db.exists("Agent Tool Function", tool_name)
+
+            if not existing:
+                try:
+                    doc = frappe.get_doc({
+                        "doctype": "Agent Tool Function",
+                        **tool_def
+                    })
+                    doc.insert()
+                    registered.append(tool_name)
+                    frappe.logger().info(f"Registered memory tool: {tool_name}")
+                except Exception as e:
+                    frappe.log_error(
+                        f"Failed to register memory tool {tool_name}: {str(e)}",
+                        "Memory Tool Registration"
+                    )
+            else:
+                registered.append(tool_name)
+
+        return registered

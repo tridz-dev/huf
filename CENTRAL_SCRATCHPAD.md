@@ -36,10 +36,10 @@
 ### Phase 4: Storage & Indexing (Priority: MEDIUM)
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
-| D1 | Canonical Storage Service | impl-04 | 🟢 COMPLETE | A1 | `huf/huf/memory/storage.py` |
-| D2 | FTS Indexing Pipeline | - | 🔲 NOT STARTED | A1 | - |
-| D3 | Vector Indexing Pipeline | - | 🔲 NOT STARTED | A1 | - |
-| D4 | Index Backend Abstraction | - | 🔲 NOT STARTED | D2, D3 | - |
+| D1 | Canonical Storage Service | impl-04 | 🟢 COMPLETE | A1 | `huf/huf/memory/storage/` |
+| D2 | FTS Indexing Pipeline | impl-04 | 🟢 COMPLETE | A1 | `huf/huf/memory/storage/fts_indexer.py` |
+| D3 | Vector Indexing Pipeline | impl-04 | 🟢 COMPLETE | A1 | `huf/huf/memory/storage/vector_indexer.py` |
+| D4 | Index Backend Abstraction | impl-04 | 🟢 COMPLETE | D2, D3 | `huf/huf/memory/storage/index_backend.py`, `backends/` |
 
 ### Phase 5: Retrieval & Tools (Priority: MEDIUM)
 | ID | Task | Owner | Status | Dependencies | Files Created |
@@ -68,7 +68,7 @@
 | impl-01 | Foundation Lead | A1, A2, A3 | 🟡 ACTIVE |
 | impl-02 | Integration Lead | A4, B1, B2, B3 | 🔲 STANDBY |
 | impl-03 | Capture Lead | C1, C2, C3, C4 | 🟡 ACTIVE |
-| impl-04 | Storage Lead | D1, D2, D3, D4 | 🔲 STANDBY |
+| impl-04 | Storage Lead | D1, D2, D3, D4 | 🟢 COMPLETE |
 | impl-05 | Retrieval Lead | E1, E2, E3, E4 | 🟢 COMPLETE |
 | impl-06 | UI/Profiles Lead | F1, F2, F3, F4 | 🔲 STANDBY |
 
