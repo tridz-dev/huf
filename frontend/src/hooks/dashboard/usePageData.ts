@@ -13,14 +13,35 @@ export function usePageData<T>({
   searchFields = [],
   filterFn,
 }: UsePageDataOptions<T>) {
-  const [data, setData] = useState<T[]>(initialData);
+  // Use a ref for initialData to avoid effect re-runs when array reference changes
+  const initialDataRef = useRef(initialData);
+  // Update ref if initialData actually has different content (not just reference)
+  const initialDataString = JSON.stringify(initialData);
+  const prevInitialDataStringRef = useRef(initialDataString);
+  
+  if (initialDataString !== prevInitialDataStringRef.current) {
+    initialDataRef.current = initialData;
+    prevInitialDataStringRef.current = initialDataString;
+  }
+
+  const [data, setData] = useState<T[]>(initialDataRef.current);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
+  // Track fetchFn by reference to detect changes
+  const fetchFnRef = useRef(fetchFn);
   const hasFetchedRef = useRef(false);
 
   useEffect(() => {
+    const fetchFnChanged = fetchFnRef.current !== fetchFn;
+    fetchFnRef.current = fetchFn;
+
+    // Reset hasFetched if fetchFn changes
+    if (fetchFnChanged) {
+      hasFetchedRef.current = false;
+    }
+
     if (fetchFn && !hasFetchedRef.current) {
       hasFetchedRef.current = true;
       setLoading(true);
@@ -36,9 +57,12 @@ export function usePageData<T>({
           setLoading(false);
         });
     } else if (!fetchFn) {
-      setData(initialData);
+      // Only update data from initialData if we haven't fetched yet
+      if (!hasFetchedRef.current) {
+        setData(initialDataRef.current);
+      }
     }
-  }, [fetchFn, initialData]);
+  }, [fetchFn]); // Only depend on fetchFn, not initialData
 
   const filteredData = useMemo(() => {
     let result = [...data];

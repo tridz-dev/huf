@@ -1,20 +1,25 @@
 import { ActionOption } from "../types/modal.types";
 
 export const actionOptions: ActionOption[] = [
+  // ─── AI & Agents ────────────────────────────────────────────────────
   {
-    id: "transform",
-    name: "Transform Data",
-    description: "Transform and map data fields",
-    icon: "Repeat",
-    category: "transform",
+    id: 'agent-run',
+    name: 'Run Agent',
+    description: 'Execute a HUF AI agent',
+    icon: 'Bot',
+    category: 'agent'
   },
+
+  // ─── Tools ──────────────────────────────────────────────────────────
   {
-    id: "router",
-    name: "Router",
-    description: "Split flow into branches with conditions",
-    icon: "GitBranch",
-    category: "control",
+    id: 'tool-call',
+    name: 'Call Tool',
+    description: 'Execute a tool function',
+    icon: 'Wrench',
+    category: 'tool'
   },
+
+  // ─── Control Flow ───────────────────────────────────────────────────
   {
     id: "loop",
     name: "Loop",
@@ -23,38 +28,79 @@ export const actionOptions: ActionOption[] = [
     category: "control",
   },
   {
-    id: "human-in-loop",
-    name: "Human in Loop",
-    description: "Request human approval",
-    icon: "UserCheck",
-    category: "control",
+    id: 'human-in-loop',
+    name: 'Human in Loop',
+    description: 'Request human approval',
+    icon: 'UserCheck',
+    category: 'control'
+  },
+
+  // ─── Transform ──────────────────────────────────────────────────────
+  {
+    id: 'transform',
+    name: 'Transform Data',
+    description: 'Map and transform data fields',
+    icon: 'Repeat',
+    category: 'transform'
   },
   {
-    id: "agent-run",
-    name: "Run Agent",
-    description: "Execute an AI agent",
-    icon: "Bot",
-    category: "control",
+    id: 'code',
+    name: 'Execute Code',
+    description: 'Run custom code snippet',
+    icon: 'Code',
+    category: 'transform'
+  },
+
+  // ─── Utilities ──────────────────────────────────────────────────────
+  {
+    id: 'email',
+    name: 'Send Email',
+    description: 'Send an email notification',
+    icon: 'Mail',
+    category: 'utility'
   },
   {
-    id: "tool-call",
-    name: "Call Tool",
-    description: "Execute a tool function",
-    icon: "Wrench",
-    category: "control",
+    id: 'webhook',
+    name: 'Call Webhook',
+    description: 'Make an HTTP request',
+    icon: 'Webhook',
+    category: 'utility'
   },
   {
-    id: "condition",
-    name: "Condition",
-    description: "Branch based on condition",
-    icon: "GitCommitHorizontal",
-    category: "control",
+    id: 'file',
+    name: 'File Operations',
+    description: 'Read, write, or delete files',
+    icon: 'FileText',
+    category: 'utility'
   },
   {
-    id: "http-request",
-    name: "HTTP Request",
-    description: "Make HTTP API calls",
-    icon: "Globe",
-    category: "utility",
+    id: 'date',
+    name: 'Date Utility',
+    description: 'Format and manipulate dates',
+    icon: 'Calendar',
+    category: 'utility'
+  },
+
+  // ─── Integrations ──────────────────────────────────────────────────
+  {
+    id: 'slack',
+    name: 'Slack',
+    description: 'Send messages to Slack',
+    icon: 'MessageSquare',
+    category: 'integration'
+  },
+  {
+    id: 'sheets',
+    name: 'Google Sheets',
+    description: 'Read or write spreadsheet data',
+    icon: 'Sheet',
+    category: 'integration'
+  },
+  {
+    id: 'notion',
+    name: 'Notion',
+    description: 'Create or update Notion pages',
+    icon: 'FileText',
+    category: 'integration'
   },
 ];

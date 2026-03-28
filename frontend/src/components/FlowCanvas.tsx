@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -44,50 +44,102 @@ export function FlowCanvas({
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [sourceNodeForAction, setSourceNodeForAction] = useState<string | null>(null);
 
+  // Track if we're currently syncing from props to prevent feedback loops
+  const isSyncingFromProps = useRef(false);
+  // Track pending updates to batch them
+  const pendingUpdateRef = useRef<{ nodes?: Node<FlowNodeData>[]; edges?: Edge[] } | null>(null);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync from activeFlow to local state when flow changes (not on every node/edge update)
   useEffect(() => {
     if (activeFlow) {
+      isSyncingFromProps.current = true;
       setNodes(activeFlow.nodes);
       setEdges(activeFlow.edges);
+      // Clear the guard after React has processed the batched state updates
+      requestAnimationFrame(() => {
+        isSyncingFromProps.current = false;
+      });
     }
-  }, [activeFlow]);
+  }, [activeFlow?.id, activeFlow?.version]); // Only re-sync when flow ID or version changes, not on every node/edge change
+
+  // Debounced update to context to batch rapid changes
+  const scheduleContextUpdate = useCallback((newNodes?: Node<FlowNodeData>[], newEdges?: Edge[]) => {
+    if (isSyncingFromProps.current) return;
+
+    // Accumulate pending updates
+    pendingUpdateRef.current = {
+      nodes: newNodes ?? pendingUpdateRef.current?.nodes,
+      edges: newEdges ?? pendingUpdateRef.current?.edges,
+    };
+
+    // Clear existing timeout
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+
+    // Schedule update
+    updateTimeoutRef.current = setTimeout(() => {
+      if (pendingUpdateRef.current && activeFlow) {
+        const { nodes: pendingNodes, edges: pendingEdges } = pendingUpdateRef.current;
+        updateNodesAndEdges(
+          pendingNodes ?? nodes,
+          pendingEdges ?? edges
+        );
+        pendingUpdateRef.current = null;
+      }
+    }, 50); // 50ms debounce
+  }, [activeFlow, nodes, edges, updateNodesAndEdges]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       setNodes((nds) => {
         const updatedNodes = applyNodeChanges(changes, nds);
-        if (activeFlow) {
-          updateNodesAndEdges(updatedNodes, edges);
+        // Schedule context update (debounced)
+        if (!isSyncingFromProps.current) {
+          scheduleContextUpdate(updatedNodes, undefined);
         }
         return updatedNodes;
       });
     },
-    [edges, activeFlow, updateNodesAndEdges]
+    [scheduleContextUpdate]
   );
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       setEdges((eds) => {
         const updatedEdges = applyEdgeChanges(changes, eds);
-        if (activeFlow) {
-          updateNodesAndEdges(nodes, updatedEdges);
+        // Schedule context update (debounced)
+        if (!isSyncingFromProps.current) {
+          scheduleContextUpdate(undefined, updatedEdges);
         }
         return updatedEdges;
       });
     },
-    [nodes, activeFlow, updateNodesAndEdges]
+    [scheduleContextUpdate]
   );
 
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((eds) => {
         const newEdges = addEdge(connection, eds);
-        if (activeFlow) {
-          updateNodesAndEdges(nodes, newEdges);
+        // Schedule context update (debounced)
+        if (!isSyncingFromProps.current) {
+          scheduleContextUpdate(undefined, newEdges);
         }
         return newEdges;
       });
     },
-    [nodes, activeFlow, updateNodesAndEdges]
+    [scheduleContextUpdate]
   );
 
   const onNodeClick = useCallback(
@@ -154,74 +206,92 @@ export function FlowCanvas({
 
   const handleSelectAction = useCallback(
     (actionType: string, config: ActionConfig) => {
-      if (!sourceNodeForAction || !activeFlow) return;
+      if (!sourceNodeForAction) return;
 
-      const sourceNode = nodes.find((n) => n.id === sourceNodeForAction);
-      if (!sourceNode) return;
+      setNodes((currentNodes) => {
+        setEdges((currentEdges) => {
+          const sourceNode = currentNodes.find((n) => n.id === sourceNodeForAction);
+          if (!sourceNode) return currentEdges;
 
-      const newNodeId = `node-${Date.now()}`;
-      const iconMap: Record<string, string> = {
-        'agent-run': 'Bot',
-        'tool-call': 'Wrench',
-        transform: 'Repeat',
-        router: 'GitBranch',
-        loop: 'RotateCw',
-        'human-in-loop': 'UserCheck',
-        condition: 'GitBranch',
-        'http-request': 'Globe',
-      };
+          const newNodeId = `node-${Date.now()}`;
+          const iconMap: Record<string, string> = {
+            'agent-run': 'Bot',
+            'tool-call': 'Wrench',
+            transform: 'Repeat',
+            router: 'GitBranch',
+            loop: 'RotateCw',
+            'human-in-loop': 'UserCheck',
+            code: 'Code',
+            email: 'Mail',
+            webhook: 'Webhook',
+            file: 'FileText',
+            date: 'Calendar'
+          };
 
-      const labelMap: Record<string, string> = {
-        'agent-run': 'Run Agent',
-        'tool-call': 'Call Tool',
-        transform: 'Transform Data',
-        router: 'LLM Router',
-        loop: 'Loop',
-        'human-in-loop': 'Human Approval',
-        condition: 'Condition (IF)',
-        'http-request': 'HTTP Request',
-      };
+          const labelMap: Record<string, string> = {
+            'agent-run': 'Run Agent',
+            'tool-call': 'Call Tool',
+            transform: 'Transform Data',
+            router: 'Router',
+            loop: 'Loop',
+            'human-in-loop': 'Human in Loop',
+            code: 'Execute Code',
+            email: 'Send Email',
+            webhook: 'Call Webhook',
+            file: 'File Operations',
+            date: 'Date Utility'
+          };
 
-      const newNode: Node<FlowNodeData> = {
-        id: newNodeId,
-        type: 'action',
-        position: {
-          x: sourceNode.position.x,
-          y: sourceNode.position.y + 150
-        },
-        data: {
-          label: labelMap[actionType] || 'Action',
-          nodeType: 'action',
-          icon: iconMap[actionType] || 'Play',
-          configured: true,
-          actionConfig: config
-        }
-      };
+          const newNode: Node<FlowNodeData> = {
+            id: newNodeId,
+            type: 'action',
+            position: {
+              x: sourceNode.position.x,
+              y: sourceNode.position.y + 150
+            },
+            data: {
+              label: labelMap[actionType] || 'Action',
+              nodeType: 'action',
+              icon: iconMap[actionType] || 'Play',
+              configured: true,
+              actionConfig: config
+            }
+          };
 
-      const targetEdges = edges.filter((e) => e.source === sourceNodeForAction);
-      const newEdges = edges.filter((e) => e.source !== sourceNodeForAction);
+          const targetEdges = currentEdges.filter((e) => e.source === sourceNodeForAction);
+          const newEdges = currentEdges.filter((e) => e.source !== sourceNodeForAction);
 
-      newEdges.push({
-        id: `edge-${Date.now()}`,
-        source: sourceNodeForAction,
-        target: newNodeId,
-        type: 'default'
-      });
+          newEdges.push({
+            id: `edge-${Date.now()}`,
+            source: sourceNodeForAction,
+            target: newNodeId,
+            type: 'default'
+          });
 
-      targetEdges.forEach((edge) => {
-        newEdges.push({
-          ...edge,
-          id: `edge-${Date.now()}-${Math.random()}`,
-          source: newNodeId
+          targetEdges.forEach((edge) => {
+            newEdges.push({
+              ...edge,
+              id: `edge-${Date.now()}-${Math.random()}`,
+              source: newNodeId
+            });
+          });
+
+          const updatedNodes = [...currentNodes, newNode];
+          
+          // Direct update to context (not debounced) for explicit user actions
+          if (!isSyncingFromProps.current) {
+            updateNodesAndEdges(updatedNodes, newEdges);
+          }
+          
+          setIsModalOpen(false);
+          setSourceNodeForAction(null);
+          
+          return newEdges;
         });
+        return currentNodes;
       });
-
-      const updatedNodes = [...nodes, newNode];
-      updateNodesAndEdges(updatedNodes, newEdges);
-      setIsModalOpen(false);
-      setSourceNodeForAction(null);
     },
-    [sourceNodeForAction, activeFlow, nodes, edges, updateNodesAndEdges]
+    [sourceNodeForAction, updateNodesAndEdges]
   );
 
   const nodeTypesWithAddButton = useMemo(

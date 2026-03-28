@@ -25,14 +25,17 @@ import {
   GitBranch,
   RotateCw,
   Code,
-  Bot
+  Bot,
+  UserCheck,
+  Wrench
 } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
 import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType } from '../../types/flow.types';
 import { Agent } from '../../types/agent.types';
-import { getAgents } from '../../services/agentApi';
+import { getAgents, getDocTypes } from '../../services/agentApi';
 import type { AgentDoc } from '../../types/agent.types';
+import { Combobox } from '../ui/combobox';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -56,9 +59,9 @@ const iconMap: Record<string, any> = {
   GitBranch,
   RotateCw,
   Code,
-  UserCheck: Clock,
+  UserCheck,
   Bot,
-  Wrench: Code
+  Wrench
 };
 
 type MainTab = 'triggers' | 'actions';
@@ -83,6 +86,23 @@ export function NodeSelectionModal({
   );
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
+  const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
+  const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+
+  useEffect(() => {
+    if (open && docTypes.length === 0 && !loadingDocTypes) {
+      setLoadingDocTypes(true);
+      getDocTypes()
+        .then((data) => {
+          setDocTypes(data);
+          setLoadingDocTypes(false);
+        })
+        .catch((error) => {
+          console.error('Error loading DocTypes:', error);
+          setLoadingDocTypes(false);
+        });
+    }
+  }, [open, docTypes.length, loadingDocTypes]);
 
   useEffect(() => {
     if (open && triggerSubTab === 'ai-agents') {
@@ -133,6 +153,8 @@ export function NodeSelectionModal({
   const highlightTriggers = filteredTriggers.filter((t) => t.category === 'highlight');
   const popularTriggers = filteredTriggers.filter((t) => t.category === 'popular');
 
+  const agentActions = filteredActions.filter((a) => a.category === 'agent');
+  const toolActions = filteredActions.filter((a) => a.category === 'tool');
   const transformActions = filteredActions.filter((a) => a.category === 'transform');
   const controlActions = filteredActions.filter((a) => a.category === 'control');
   const utilityActions = filteredActions.filter((a) => a.category === 'utility');
@@ -300,15 +322,23 @@ export function NodeSelectionModal({
     }
 
     if (config.type === 'doc-event') {
+      const comboboxOptions = docTypes.map((dt) => ({
+        value: dt.name,
+        label: dt.name,
+      }));
+
       return (
         <div className="space-y-4 mt-4">
           <div>
             <Label htmlFor="doctype">Document Type</Label>
-            <Input
-              id="doctype"
+            <Combobox
+              options={comboboxOptions}
               value={config.doctype || ''}
-              onChange={(e) => setTriggerConfig({ ...config, doctype: e.target.value })}
-              placeholder="e.g., User, Order, Invoice"
+              onValueChange={(value) => setTriggerConfig({ ...config, doctype: value })}
+              placeholder={loadingDocTypes ? 'Loading...' : 'Select DocType...'}
+              disabled={loadingDocTypes}
+              searchPlaceholder="Search DocType..."
+              emptyText="No DocType found."
             />
           </div>
           <div>
@@ -372,7 +402,11 @@ export function NodeSelectionModal({
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">{title}</h3>
         <div className="grid grid-cols-2 gap-3">
           {actions.map((action) => {
+            // Safely get icon component with fallback
             const Icon = iconMap[action.icon || 'FileText'];
+            if (!Icon) {
+              console.warn(`Icon not found for action: ${action.id}, icon: ${action.icon}`);
+            }
             return (
               <button
                 key={action.id}
@@ -380,7 +414,7 @@ export function NodeSelectionModal({
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Icon className="w-4 h-4 text-primary" />
+                  {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
                 </div>
                 <div className="text-left flex-1 min-w-0">
                   <div className="text-sm font-medium">{action.name}</div>
@@ -515,7 +549,7 @@ export function NodeSelectionModal({
                                 onClick={() => handleSelectTrigger(trigger.id)}
                               >
                                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                  <Icon className="w-4 h-4 text-primary" />
+                                  {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
                                 </div>
                                 <div className="text-left flex-1 min-w-0">
                                   <div className="text-sm font-medium">{trigger.name}</div>
@@ -545,7 +579,7 @@ export function NodeSelectionModal({
                                 onClick={() => handleSelectTrigger(trigger.id)}
                               >
                                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                  <Icon className="w-4 h-4 text-primary" />
+                                  {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
                                 </div>
                                 <div className="text-left flex-1 min-w-0">
                                   <div className="text-sm font-medium">{trigger.name}</div>
@@ -570,8 +604,10 @@ export function NodeSelectionModal({
           </TabsContent>
 
           <TabsContent value="actions" className="flex-1 overflow-y-auto mt-4">
-            {renderActionCategory('Transform', transformActions)}
+            {renderActionCategory('AI & Agents', agentActions)}
+            {renderActionCategory('Tools', toolActions)}
             {renderActionCategory('Control Flow', controlActions)}
+            {renderActionCategory('Transform', transformActions)}
             {renderActionCategory('Utilities', utilityActions)}
             {renderActionCategory('Integrations', integrationActions)}
           </TabsContent>
