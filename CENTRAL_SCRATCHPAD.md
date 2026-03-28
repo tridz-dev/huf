@@ -15,7 +15,7 @@
 |----|------|-------|--------|--------------|---------------|
 | A1 | Memory Record DocType | impl-01 | 🟢 COMPLETE | None | `huf/huf/doctype/memory_record/` |
 | A2 | Memory Policy DocType | impl-01 | 🟢 COMPLETE | None | `huf/huf/doctype/memory_policy/` |
-| A3 | Memory Profile DocType | - | 🔲 NOT STARTED | None | - |
+| A3 | Memory Profile DocType | impl-01 | 🟢 COMPLETE | None | `huf/huf/doctype/memory_profile/` |
 | A4 | Agent DocType Memory Section | - | 🔲 NOT STARTED | A2, A3 | - |
 
 ### Phase 2: Conversation & Run Integration (Priority: HIGH)
@@ -45,7 +45,7 @@
 | ID | Task | Owner | Status | Dependencies | Files Created |
 |----|------|-------|--------|--------------|---------------|
 | E1 | Memory Retrieval Service | impl-05 | 🟢 COMPLETE | A1, D1 | `huf/huf/memory/retrieval/retrieval_service.py` |
-| E2 | Prompt Injection | - | 🔲 NOT STARTED | E1 | - |
+| E2 | Prompt Injection | impl-05 | 🟢 COMPLETE | E1 | `huf/huf/memory/retrieval/prompt_injector.py` |
 | E3 | Memory Search Tool | impl-05 | 🟢 COMPLETE | E1 | `huf/huf/memory/retrieval/memory_search_tool.py` |
 | E4 | Memory Write Tool | impl-05 | 🟢 COMPLETE | A1 | `huf/huf/memory/retrieval/memory_write_tool.py` |
 
@@ -69,7 +69,7 @@
 | impl-02 | Integration Lead | A4, B1, B2, B3 | 🔲 STANDBY |
 | impl-03 | Capture Lead | C1, C2, C3, C4 | 🟡 ACTIVE |
 | impl-04 | Storage Lead | D1, D2, D3, D4 | 🔲 STANDBY |
-| impl-05 | Retrieval Lead | E1, E2, E3, E4 | 🔲 STANDBY |
+| impl-05 | Retrieval Lead | E1, E2, E3, E4 | 🟢 COMPLETE |
 | impl-06 | UI/Profiles Lead | F1, F2, F3, F4 | 🔲 STANDBY |
 
 ---
@@ -102,8 +102,12 @@ F1-F4 (UI/Profiles) ← A3, E1-E4
 | 2026-03-28 11:20 | impl-06 | COMMIT | F1 | Created 5 default profiles, committed |
 | 2026-03-28 11:25 | impl-06 | COMPLETE | F2-F4 | UI components created: MemoryExplorer, MemoryPanel, MemoryInspector |
 | 2026-03-28 11:20 | impl-05 | COMPLETED | E4 | Memory write tool implemented, committed |
-| 2026-03-28 11:24 | impl-05 | COMPLETED | E3 | Memory search tool implemented, committed |
+| 2026-03-28 11:26 | impl-05 | COMPLETED | E2 | Prompt injection implemented, committed |
+| 2026-03-28 11:26 | impl-05 | COMPLETED | ALL_E | All Phase 5 tasks complete (E1, E2, E3, E4) |
 | 2026-03-28 11:30 | impl-03 | COMPLETED | C4 | Rule-only capture mode with 7 rule types |
+| 2026-03-28 11:40 | impl-01 | COMPLETED | A1 | Memory Record DocType with 27 fields, tests |
+| 2026-03-28 11:42 | impl-01 | COMPLETED | A2 | Memory Policy DocType with 36 fields, validation |
+| 2026-03-28 11:45 | impl-01 | COMPLETED | A3 | Memory Profile DocType with 5 default profiles |
 
 ---
 
