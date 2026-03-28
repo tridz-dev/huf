@@ -2,66 +2,80 @@
  "actions": [],
  "allow_rename": 1,
  "autoname": "field:policy_name",
- "creation": "2025-03-28 11:00:00.000000",
+ "creation": "2026-03-28 11:25:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "basic_section",
   "policy_name",
   "enabled",
-  "basic_section",
+  "description",
+  "column_break_basic",
   "agent",
   "memory_profile",
-  "capture_configuration",
+  "capture_section",
   "capture_owner",
   "memory_agent",
   "capture_stage",
-  "frequency_section",
+  "column_break_capture",
   "capture_frequency_type",
   "capture_frequency_value",
   "conversation_end_strategy",
   "idle_timeout_minutes",
-  "schema_section",
+  "prompt_section",
   "capture_prompt",
+  "schema_section",
   "capture_schema_json",
   "allow_open_schema",
+  "column_break_schema",
   "require_json_schema_match",
-  "merge_section",
   "allow_update_existing",
   "allow_merge",
   "allow_append",
+  "quality_section",
   "min_confidence",
-  "storage_section",
   "store_raw_payload",
   "store_summary",
+  "column_break_quality",
+  "indexing_section",
   "enable_fts_index",
   "enable_vector_index",
+  "column_break_indexing",
   "vector_backend",
   "fts_backend",
   "retrieval_section",
   "retrieval_mode_default",
   "max_items_to_inject",
+  "column_break_retrieval",
   "max_tokens_to_inject"
  ],
  "fields": [
   {
+   "fieldname": "basic_section",
+   "fieldtype": "Section Break",
+   "label": "Basic Information"
+  },
+  {
    "fieldname": "policy_name",
    "fieldtype": "Data",
-   "in_list_view": 1,
    "label": "Policy Name",
    "reqd": 1,
    "unique": 1
   },
   {
-   "default": "1",
    "fieldname": "enabled",
    "fieldtype": "Check",
-   "in_list_view": 1,
-   "label": "Enabled"
+   "label": "Enabled",
+   "default": "1"
   },
   {
-   "fieldname": "basic_section",
-   "fieldtype": "Section Break",
-   "label": "Basic Configuration"
+   "fieldname": "description",
+   "fieldtype": "Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_basic",
+   "fieldtype": "Column Break"
   },
   {
    "fieldname": "agent",
@@ -76,170 +90,178 @@
    "options": "Memory Profile"
   },
   {
-   "fieldname": "capture_configuration",
+   "fieldname": "capture_section",
    "fieldtype": "Section Break",
    "label": "Capture Configuration"
   },
   {
-   "default": "main_agent",
    "fieldname": "capture_owner",
    "fieldtype": "Select",
    "label": "Capture Owner",
-   "options": "main_agent\nmemory_agent\npost_run_llm\nrules_only",
+   "options": "\nmain_agent\nmemory_agent\npost_run_llm\nrules_only",
    "reqd": 1
   },
   {
-   "depends_on": "eval:doc.capture_owner=='memory_agent'",
    "fieldname": "memory_agent",
    "fieldtype": "Link",
    "label": "Memory Agent",
-   "options": "Agent"
+   "options": "Agent",
+   "depends_on": "eval:doc.capture_owner=='memory_agent'"
   },
   {
-   "default": "post_response_async",
    "fieldname": "capture_stage",
    "fieldtype": "Select",
    "label": "Capture Stage",
-   "options": "in_prompt\npost_response_sync\npost_response_async\nconversation_end\nscheduled",
+   "options": "\nin_prompt\npost_response_sync\npost_response_async\nconversation_end\nscheduled",
    "reqd": 1
   },
   {
-   "fieldname": "frequency_section",
-   "fieldtype": "Section Break",
-   "label": "Capture Frequency"
+   "fieldname": "column_break_capture",
+   "fieldtype": "Column Break"
   },
   {
-   "default": "every_run",
    "fieldname": "capture_frequency_type",
    "fieldtype": "Select",
-   "in_list_view": 1,
    "label": "Capture Frequency Type",
-   "options": "every_run\nevery_n_runs\nevery_n_turns\nconversation_end\nmanual\nscheduled",
+   "options": "\nevery_run\nevery_n_runs\nevery_n_turns\nconversation_end\nmanual\nscheduled",
    "reqd": 1
   },
   {
-   "depends_on": "eval:doc.capture_frequency_type in ['every_n_runs', 'every_n_turns']",
    "fieldname": "capture_frequency_value",
    "fieldtype": "Int",
    "label": "Capture Frequency Value",
-   "description": "N value for every_n_runs or every_n_turns"
+   "depends_on": "eval:['every_n_runs','every_n_turns'].includes(doc.capture_frequency_type)"
   },
   {
-   "default": "manual_close",
    "fieldname": "conversation_end_strategy",
    "fieldtype": "Select",
    "label": "Conversation End Strategy",
-   "options": "manual_close\nidle_timeout\nheuristic\nnever"
+   "options": "\nmanual_close\nidle_timeout\nheuristic\nnever",
+   "depends_on": "eval:doc.capture_frequency_type=='conversation_end'"
   },
   {
-   "depends_on": "eval:doc.conversation_end_strategy=='idle_timeout'",
    "fieldname": "idle_timeout_minutes",
    "fieldtype": "Int",
    "label": "Idle Timeout (Minutes)",
+   "depends_on": "eval:doc.conversation_end_strategy=='idle_timeout'",
    "non_negative": 1
+  },
+  {
+   "fieldname": "prompt_section",
+   "fieldtype": "Section Break",
+   "label": "Capture Prompt"
+  },
+  {
+   "fieldname": "capture_prompt",
+   "fieldtype": "Text",
+   "label": "Capture Prompt"
   },
   {
    "fieldname": "schema_section",
    "fieldtype": "Section Break",
-   "label": "Schema & Validation"
-  },
-  {
-   "fieldname": "capture_prompt",
-   "fieldtype": "Text Editor",
-   "label": "Capture Prompt"
+   "label": "Schema Configuration"
   },
   {
    "fieldname": "capture_schema_json",
-   "fieldtype": "Code",
-   "label": "Capture Schema (JSON)",
-   "options": "JSON"
+   "fieldtype": "JSON",
+   "label": "Capture Schema (JSON)"
   },
   {
-   "default": "0",
    "fieldname": "allow_open_schema",
    "fieldtype": "Check",
-   "label": "Allow Open Schema"
+   "label": "Allow Open Schema",
+   "default": "0"
   },
   {
-   "default": "1",
+   "fieldname": "column_break_schema",
+   "fieldtype": "Column Break"
+  },
+  {
    "fieldname": "require_json_schema_match",
    "fieldtype": "Check",
-   "label": "Require JSON Schema Match"
+   "label": "Require JSON Schema Match",
+   "default": "0"
   },
   {
-   "fieldname": "merge_section",
-   "fieldtype": "Section Break",
-   "label": "Merge & Update Behavior"
-  },
-  {
-   "default": "1",
    "fieldname": "allow_update_existing",
    "fieldtype": "Check",
-   "label": "Allow Update Existing"
+   "label": "Allow Update Existing",
+   "default": "1"
   },
   {
-   "default": "0",
    "fieldname": "allow_merge",
    "fieldtype": "Check",
-   "label": "Allow Merge"
+   "label": "Allow Merge",
+   "default": "0"
   },
   {
-   "default": "1",
    "fieldname": "allow_append",
    "fieldtype": "Check",
-   "label": "Allow Append"
+   "label": "Allow Append",
+   "default": "0"
   },
   {
-   "default": "0.5",
+   "fieldname": "quality_section",
+   "fieldtype": "Section Break",
+   "label": "Quality Control"
+  },
+  {
    "fieldname": "min_confidence",
    "fieldtype": "Float",
    "label": "Minimum Confidence",
+   "precision": "2",
    "non_negative": 1
   },
   {
-   "fieldname": "storage_section",
-   "fieldtype": "Section Break",
-   "label": "Storage Configuration"
-  },
-  {
-   "default": "1",
    "fieldname": "store_raw_payload",
    "fieldtype": "Check",
-   "label": "Store Raw Payload"
+   "label": "Store Raw Payload",
+   "default": "0"
   },
   {
-   "default": "1",
    "fieldname": "store_summary",
    "fieldtype": "Check",
-   "label": "Store Summary"
+   "label": "Store Summary",
+   "default": "1"
   },
   {
-   "default": "1",
+   "fieldname": "column_break_quality",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "indexing_section",
+   "fieldtype": "Section Break",
+   "label": "Indexing Configuration"
+  },
+  {
    "fieldname": "enable_fts_index",
    "fieldtype": "Check",
-   "label": "Enable FTS Index"
+   "label": "Enable FTS Index",
+   "default": "0"
   },
   {
-   "default": "0",
    "fieldname": "enable_vector_index",
    "fieldtype": "Check",
-   "label": "Enable Vector Index"
+   "label": "Enable Vector Index",
+   "default": "0"
   },
   {
-   "default": "sqlite_vec",
-   "depends_on": "eval:doc.enable_vector_index==1",
+   "fieldname": "column_break_indexing",
+   "fieldtype": "Column Break"
+  },
+  {
    "fieldname": "vector_backend",
    "fieldtype": "Select",
    "label": "Vector Backend",
-   "options": "none\nsqlite_vec\npgvector\ncustom"
+   "options": "\nsqlite_vec\npgvector\ncustom",
+   "depends_on": "eval:doc.enable_vector_index==1"
   },
   {
-   "default": "sqlite_fts",
-   "depends_on": "eval:doc.enable_fts_index==1",
    "fieldname": "fts_backend",
    "fieldtype": "Select",
    "label": "FTS Backend",
-   "options": "sqlite_fts\ncustom"
+   "options": "\nsqlite_fts\ncustom",
+   "depends_on": "eval:doc.enable_fts_index==1"
   },
   {
    "fieldname": "retrieval_section",
@@ -247,34 +269,35 @@
    "label": "Retrieval Configuration"
   },
   {
-   "default": "hybrid",
    "fieldname": "retrieval_mode_default",
    "fieldtype": "Select",
    "label": "Default Retrieval Mode",
-   "options": "inject\ntool_only\nhybrid",
-   "reqd": 1
+   "options": "\ninject\ntool_only\nhybrid",
+   "reqd": 1,
+   "default": "inject"
   },
   {
-   "default": "5",
    "fieldname": "max_items_to_inject",
    "fieldtype": "Int",
    "label": "Max Items to Inject",
    "non_negative": 1
   },
   {
-   "default": "2000",
+   "fieldname": "column_break_retrieval",
+   "fieldtype": "Column Break"
+  },
+  {
    "fieldname": "max_tokens_to_inject",
    "fieldtype": "Int",
    "label": "Max Tokens to Inject",
    "non_negative": 1
   }
  ],
- "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-03-28 11:00:00.000000",
+ "modified": "2026-03-28 11:25:00.000000",
  "modified_by": "Administrator",
- "module": "Huf",
+ "module": "HUF",
  "name": "Memory Policy",
  "naming_rule": "By fieldname",
  "owner": "Administrator",
@@ -288,7 +311,6 @@
    "read": 1,
    "report": 1,
    "role": "System Manager",
-   "select": 1,
    "share": 1,
    "write": 1
   },
@@ -300,26 +322,14 @@
    "print": 1,
    "read": 1,
    "report": 1,
-   "role": "Huf Manager",
-   "select": 1,
+   "role": "HUF Agent User",
    "share": 1,
    "write": 1
-  },
-  {
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "Huf User",
-   "select": 1,
-   "share": 1
   }
  ],
- "row_format": "Dynamic",
- "search_fields": "policy_name,agent,capture_owner",
- "sort_field": "creation",
+ "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],
- "title_field": "policy_name"
+ "title_field": "policy_name",
+ "track_changes": 1
 }
