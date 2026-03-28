@@ -33,8 +33,9 @@ import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
 import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType } from '../../types/flow.types';
 import { Agent } from '../../types/agent.types';
-import { getAgents } from '../../services/agentApi';
+import { getAgents, getDocTypes } from '../../services/agentApi';
 import type { AgentDoc } from '../../types/agent.types';
+import { Combobox } from '../ui/combobox';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -85,6 +86,23 @@ export function NodeSelectionModal({
   );
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
+  const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
+  const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+
+  useEffect(() => {
+    if (open && docTypes.length === 0 && !loadingDocTypes) {
+      setLoadingDocTypes(true);
+      getDocTypes()
+        .then((data) => {
+          setDocTypes(data);
+          setLoadingDocTypes(false);
+        })
+        .catch((error) => {
+          console.error('Error loading DocTypes:', error);
+          setLoadingDocTypes(false);
+        });
+    }
+  }, [open, docTypes.length, loadingDocTypes]);
 
   useEffect(() => {
     if (open && triggerSubTab === 'ai-agents') {
@@ -304,15 +322,23 @@ export function NodeSelectionModal({
     }
 
     if (config.type === 'doc-event') {
+      const comboboxOptions = docTypes.map((dt) => ({
+        value: dt.name,
+        label: dt.name,
+      }));
+
       return (
         <div className="space-y-4 mt-4">
           <div>
             <Label htmlFor="doctype">Document Type</Label>
-            <Input
-              id="doctype"
+            <Combobox
+              options={comboboxOptions}
               value={config.doctype || ''}
-              onChange={(e) => setTriggerConfig({ ...config, doctype: e.target.value })}
-              placeholder="e.g., User, Order, Invoice"
+              onValueChange={(value) => setTriggerConfig({ ...config, doctype: value })}
+              placeholder={loadingDocTypes ? 'Loading...' : 'Select DocType...'}
+              disabled={loadingDocTypes}
+              searchPlaceholder="Search DocType..."
+              emptyText="No DocType found."
             />
           </div>
           <div>
