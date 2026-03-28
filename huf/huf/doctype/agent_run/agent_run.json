@@ -29,6 +29,18 @@
   "parent_run",
   "is_child",
   "agent_orchestration",
+  "memory_section",
+  "memory_capture_triggered",
+  "memory_capture_mode",
+  "memory_records_created",
+  "column_break_memory",
+  "memory_records_updated",
+  "memory_records_skipped",
+  "memory_index_jobs_started",
+  "memory_metrics_section",
+  "memory_capture_latency_ms",
+  "memory_capture_cost",
+  "memory_error_log",
   "knowledge_section",
   "knowledge_sources_used",
   "chunks_injected",
@@ -198,6 +210,90 @@
    "read_only": 1
   },
   {
+   "fieldname": "memory_section",
+   "fieldtype": "Section Break",
+   "label": "Memory Capture"
+  },
+  {
+   "default": "0",
+   "description": "Whether memory capture was triggered for this run",
+   "fieldname": "memory_capture_triggered",
+   "fieldtype": "Check",
+   "label": "Memory Capture Triggered",
+   "read_only": 1
+  },
+  {
+   "description": "The capture mode used (main_agent, memory_agent, post_run_llm, rules_only)",
+   "fieldname": "memory_capture_mode",
+   "fieldtype": "Select",
+   "label": "Memory Capture Mode",
+   "options": "\nmain_agent\nmemory_agent\npost_run_llm\nrules_only\nmanual",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Number of new memory records created",
+   "fieldname": "memory_records_created",
+   "fieldtype": "Int",
+   "label": "Memory Records Created",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_memory",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Number of existing memory records updated",
+   "fieldname": "memory_records_updated",
+   "fieldtype": "Int",
+   "label": "Memory Records Updated",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Number of memory capture attempts skipped",
+   "fieldname": "memory_records_skipped",
+   "fieldtype": "Int",
+   "label": "Memory Records Skipped",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Number of index jobs queued for memory records",
+   "fieldname": "memory_index_jobs_started",
+   "fieldtype": "Int",
+   "label": "Index Jobs Started",
+   "read_only": 1
+  },
+  {
+   "fieldname": "memory_metrics_section",
+   "fieldtype": "Section Break",
+   "label": "Memory Metrics"
+  },
+  {
+   "description": "Time spent on memory capture in milliseconds",
+   "fieldname": "memory_capture_latency_ms",
+   "fieldtype": "Int",
+   "label": "Capture Latency (ms)",
+   "read_only": 1
+  },
+  {
+   "description": "Estimated cost of memory capture operation",
+   "fieldname": "memory_capture_cost",
+   "fieldtype": "Float",
+   "label": "Memory Capture Cost",
+   "precision": "6",
+   "read_only": 1
+  },
+  {
+   "description": "Error log for memory capture failures",
+   "fieldname": "memory_error_log",
+   "fieldtype": "Long Text",
+   "label": "Memory Error Log",
+   "read_only": 1
+  },
+  {
    "fieldname": "knowledge_section",
    "fieldtype": "Section Break",
    "label": "Knowledge Usage"
@@ -254,7 +350,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-25 21:07:39.245567",
+ "modified": "2026-03-28 11:20:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",
