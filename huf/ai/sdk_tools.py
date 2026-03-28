@@ -240,7 +240,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             )
             if tool: tools.append(tool)
 
-        # Load Conversation Data
+        # Load Memory
         if "load_conversation_data" not in existing_types:
             tool = create_function_tool(
                 name="load_conversation_data",
@@ -1163,7 +1163,7 @@ def handle_get_conversation_data(name: str, default: Any = None, conversation_id
                 
         return {"success": True, "value": value}
     except Exception as e:
-        frappe.log_error(f"Error getting conversation data: {str(e)}", "Conversation Data")
+        frappe.log_error(f"Error getting memory: {str(e)}", "Memory")
         return {"success": False, "error": str(e)}
 
 def handle_set_conversation_data(
@@ -1180,7 +1180,7 @@ def handle_set_conversation_data(
     
     try:
         # Debug Log
-        frappe.logger().info(f"[Conversation Data] Setting {name} for {conversation_id}")
+        frappe.logger().info(f"[Memory] Setting {name} for {conversation_id}")
 
         # Load fresh state
         data_json = frappe.db.get_value("Agent Conversation", conversation_id, "conversation_data")
@@ -1224,7 +1224,7 @@ def handle_set_conversation_data(
         return {"success": True, "message": f"Set '{name}' match successfully"}
     
     except Exception as e:
-        frappe.log_error(f"Error setting conversation data: {str(e)}", "Conversation Data")
+        frappe.log_error(f"Error setting memory: {str(e)}", "Memory")
         return {"success": False, "error": str(e)}
 
 def handle_load_conversation_data(conversation_id: str = None, **kwargs):
@@ -2691,3 +2691,4 @@ async def handle_transcribe_audio(
     except Exception as e:
         frappe.log_error(f"Audio transcription error: {str(e)}", "Audio Transcription Tool")
         return {"success": False, "error": str(e)}
+n {"success": False, "error": str(e)}

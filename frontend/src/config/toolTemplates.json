@@ -40,9 +40,9 @@
         "Get Report Result",
         "Get Value",
         "Set Value",
-        "Get Conversation Data",
-        "Set Conversation Data",
-        "Load Conversation Data"
+        "Get Memory",
+        "Set Memory",
+        "Load Memory"
       ]
     },
     {

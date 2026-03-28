@@ -45,7 +45,7 @@ def handle_get_conversation_data(name: str, default: Any = None, conversation_id
                 
         return {"success": True, "value": value}
     except Exception as e:
-        frappe.log_error(f"Error getting conversation data: {str(e)}", "Conversation Data")
+        frappe.log_error(f"Error getting memory: {str(e)}", "Memory")
         return {"success": False, "error": str(e)}
 
 def handle_set_conversation_data(
@@ -118,4 +118,4 @@ def handle_load_conversation_data(conversation_id: str = None, **kwargs):
         state = _load_state(data_json)
         return {"success": True, "data": state}
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": str(e)}r": str(e)}

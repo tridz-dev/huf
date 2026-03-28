@@ -438,7 +438,7 @@ class AgentToolFunction(Document):
 				"additionalProperties": False
 			}
 
-		elif self.types == "Get Conversation Data":
+		elif self.types == "Get Memory":
 			params = {
 				"type": "object",
 				"properties": {

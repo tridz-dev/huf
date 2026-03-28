@@ -6,6 +6,8 @@ from frappe import _
 from frappe.model.document import Document
 import json
 
+from .default_profiles import create_system_profiles
+
 
 class MemoryProfile(Document):
     def validate(self):
