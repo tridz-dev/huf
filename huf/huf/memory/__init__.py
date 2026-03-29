@@ -7,6 +7,7 @@ Modules:
     retrieval: Retrieval modes (inject, tool_only, hybrid)
     search: Memory search with filters and ranking
     injection: Prompt injection for memory context
+    integration: Agent runner integration
 
 Based on:
     - PRD Section 15: Retrieval Model
@@ -41,6 +42,15 @@ from .injection import (
     inject_memory_into_prompt,
 )
 
+from .integration import (
+    MemoryAgentIntegration,
+    inject_memory_for_agent,
+    capture_memory_after_run,
+    get_memory_context_for_agent,
+    pre_run_memory_hook,
+    post_run_memory_hook,
+)
+
 __all__ = [
     # Retrieval
     "RetrievalMode",
@@ -64,4 +74,11 @@ __all__ = [
     "MemoryPromptInjector",
     "build_memory_context_for_agent",
     "inject_memory_into_prompt",
+    # Integration
+    "MemoryAgentIntegration",
+    "inject_memory_for_agent",
+    "capture_memory_after_run",
+    "get_memory_context_for_agent",
+    "pre_run_memory_hook",
+    "post_run_memory_hook",
 ]
