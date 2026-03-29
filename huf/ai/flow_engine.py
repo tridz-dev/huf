@@ -579,6 +579,15 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute human.approval node - pause for human decision."""
+	# Interpolate context_summary, reference_name if they contain {{variables}}
+	ctx = _load_context(flow_run)
+	context_summary = config.get("context_summary", "")
+	reference_name = config.get("reference_name", "")
+	if context_summary:
+		context_summary = _interpolate_string(context_summary, ctx)
+	if reference_name:
+		reference_name = _interpolate_string(reference_name, ctx)
+
 	waiting_data = {
 		"type": "approval",
 		"node_id": node.get("id"),
@@ -587,6 +596,9 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 		"approver_users": config.get("approver_users", []),
 		"title": config.get("title", "Approval Required"),
 		"instructions": config.get("instructions", ""),
+		"context_summary": context_summary,
+		"reference_doctype": config.get("reference_doctype", ""),
+		"reference_name": reference_name,
 		"store_decision_in_context": config.get("store_decision_in_context", "approval"),
 	}
 
