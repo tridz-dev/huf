@@ -58,6 +58,22 @@ export const agentFormSchema = z.object({
   tts_model: z.string().optional(),
   tts_voice: z.string().optional(),
   stt_model: z.string().optional(),
+
+  // Memory System fields
+  enable_memory: z.boolean().default(false),
+  memory_policy: z.string().optional(),
+  default_memory_scope_type: z.enum(['conversation', 'user', 'agent', 'namespace', 'global']).default('conversation'),
+  default_memory_scope_key_template: z.string().optional(),
+  memory_retrieval_mode: z.enum(['inject', 'tool_only', 'hybrid']).default('tool_only'),
+  memory_in_prompt_budget: z.number().optional(),
+  enable_memory_search_tool: z.boolean().default(true),
+  enable_memory_write_tool: z.boolean().default(false),
+  memory_profile: z.string().optional(),
+  memory_agent: z.string().optional(),
+  memory_run_order: z.enum(['before_main_response', 'after_main_response', 'background']).default('after_main_response'),
+  memory_max_items: z.number().optional(),
+  memory_index_backend_default: z.enum(['none', 'sqlite_fts', 'sqlite_vec', 'pgvector', 'custom']).default('sqlite_fts'),
+  memory_visibility_default: z.enum(['private', 'shared_with_agent', 'shared_with_namespace', 'global']).default('private'),
 }).superRefine((values, ctx) => {
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({
