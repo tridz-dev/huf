@@ -169,18 +169,31 @@ doc_events = {
     "*": {
         "validate": "huf.ai.agent_hooks.run_hooked_agents",
         "before_insert": "huf.ai.agent_hooks.run_hooked_agents",
-        "after_insert": "huf.ai.agent_hooks.run_hooked_agents",
+        "after_insert": [
+            "huf.ai.agent_hooks.run_hooked_agents",
+            "huf.ai.flow_hooks.on_doc_insert",
+        ],
         "before_save": "huf.ai.agent_hooks.run_hooked_agents",
         "after_save": "huf.ai.agent_hooks.run_hooked_agents",
         "before_submit": "huf.ai.agent_hooks.run_hooked_agents",
         "after_submit": "huf.ai.agent_hooks.run_hooked_agents",
         "before_cancel": "huf.ai.agent_hooks.run_hooked_agents",
-        "on_submit": "huf.ai.agent_hooks.run_hooked_agents",
-        "on_update": "huf.ai.agent_hooks.run_hooked_agents",
+        "on_submit": [
+            "huf.ai.agent_hooks.run_hooked_agents",
+            "huf.ai.flow_hooks.on_doc_submit",
+        ],
+        "on_update": [
+            "huf.ai.agent_hooks.run_hooked_agents",
+            "huf.ai.flow_hooks.on_doc_update",
+        ],
         "before_rename": "huf.ai.agent_hooks.run_hooked_agents",
         "after_rename": "huf.ai.agent_hooks.run_hooked_agents",
-        "on_trash": "huf.ai.agent_hooks.run_hooked_agents",
+        "on_trash": [
+            "huf.ai.agent_hooks.run_hooked_agents",
+            "huf.ai.flow_hooks.on_doc_delete",
+        ],
         "after_delete": "huf.ai.agent_hooks.run_hooked_agents",
+        "on_cancel": "huf.ai.flow_hooks.on_doc_cancel",
     },
     "Agent Trigger": {
         "after_insert": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
@@ -314,6 +327,11 @@ scheduler_events = {
 # Flow Engine Tools
 # -----------------
 # Register flow tools so agents can interact with flows
+
+# Register tools via huf_tools hook for dynamic discovery by tool_registry
+huf_tools = [
+    "huf.ai.flow_tools.flow_tool_definitions",
+]
 
 fixtures = [
     {

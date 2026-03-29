@@ -98,6 +98,9 @@ export interface ToolCallActionConfig {
   tool_name?: string;
   args?: Record<string, unknown>;
   save_result_to_context?: string;
+  output?: {
+    save_result_to_context?: string;
+  };
 }
 
 export interface RouterActionConfig {

@@ -8,6 +8,8 @@ from frappe.utils import now_datetime
 
 ALLOWED_NODE_TYPES = {
 	"trigger.webhook",
+	"trigger.schedule",
+	"trigger.doc-event",
 	"agent.run",
 	"tool.call",
 	"router.llm",
@@ -27,6 +29,55 @@ class FlowDefinition(Document):
 	def before_save(self):
 		if not self.is_new():
 			self.version = (self.version or 0) + 1
+
+	def on_update(self):
+		"""Register/unregister doc event triggers when flow definition is saved."""
+		self._manage_doc_event_registration()
+
+	def on_trash(self):
+		"""Unregister doc event triggers when flow definition is deleted."""
+		self._unregister_doc_events()
+
+	def _manage_doc_event_registration(self):
+		"""Register or unregister doc event triggers based on flow status."""
+		try:
+			from huf.ai.flow_hooks import register_doc_event_flow, unregister_doc_event_flow
+			
+			# Parse definition to check if entry node is a doc-event trigger
+			definition = json.loads(self.definition_json) if isinstance(self.definition_json, str) else self.definition_json
+			entry_node = next(
+				(n for n in definition.get("nodes", []) if n["id"] == definition.get("entry")),
+				None
+			)
+			
+			# Unregister first to handle changes in configuration
+			self._unregister_doc_events()
+			
+			# Register if active and has doc-event trigger
+			if self.status == "Active" and entry_node and entry_node.get("type") == "trigger.doc-event":
+				config = entry_node.get("config", {})
+				doctype = config.get("doctype")
+				event = config.get("event")
+				
+				if doctype and event:
+					register_doc_event_flow(
+						flow_id=self.flow_id,
+						doctype=doctype,
+						event=event,
+						config=config
+					)
+					frappe.logger().debug(f"Registered doc event flow '{self.flow_id}' for {doctype}:{event}")
+					
+		except Exception as e:
+			frappe.log_error(f"Failed to manage doc event registration for flow {self.flow_id}: {str(e)}", "Flow Definition")
+
+	def _unregister_doc_events(self):
+		"""Unregister this flow from all doc events."""
+		try:
+			from huf.ai.flow_hooks import unregister_doc_event_flow
+			unregister_doc_event_flow(flow_id=self.flow_id)
+		except Exception as e:
+			frappe.log_error(f"Failed to unregister doc events for flow {self.flow_id}: {str(e)}", "Flow Definition")
 
 	def _validate_definition_json(self):
 		"""Validate the flow definition JSON against v0.1 schema rules."""

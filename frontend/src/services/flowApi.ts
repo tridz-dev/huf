@@ -265,3 +265,29 @@ export async function rejectFlowRun(
         handleFrappeError(error, `Error rejecting flow run ${flowRunId}`);
     }
 }
+
+// ─── Approval Inbox APIs ─────────────────────────────────────────────
+
+/** Pending Approval item */
+export interface PendingApproval {
+    flow_run_id: string;
+    flow_id: string;
+    flow_name: string;
+    title: string;
+    instructions: string;
+    created_at: string;
+    approver_role?: string;
+    can_approve: boolean;
+}
+
+/** Get pending approvals for the current user */
+export async function getPendingApprovals(limit: number = 50): Promise<PendingApproval[]> {
+    try {
+        const result = await call.get('huf.ai.flow_api.get_pending_approvals', {
+            limit,
+        });
+        return (result.message || []) as PendingApproval[];
+    } catch (error) {
+        handleFrappeError(error, 'Error fetching pending approvals');
+    }
+}

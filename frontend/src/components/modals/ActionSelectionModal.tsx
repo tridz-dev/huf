@@ -91,7 +91,7 @@ export function ActionSelectionModal({
         config = { type: "agent-run" };
         break;
       case "tool-call":
-        config = { type: "tool-call" };
+        config = { type: "tool-call", tool_name: '', args: {}, output: { save_result_to_context: '' } };
         break;
       case "condition":
         config = { type: "condition" };

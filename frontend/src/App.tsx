@@ -19,6 +19,7 @@ import { DataPage } from './pages/DataPage';
 import { IntegrationsPageWrapper } from './pages/IntegrationsPageWrapper';
 import { ChatPage } from './pages/ChatPageV2';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ApprovalInbox } from './pages/ApprovalInbox';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import Executions from './pages/Executions';
@@ -256,6 +257,16 @@ function App() {
             element={
               <ProtectedRoute>
                 <PreviewViewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/approvals"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <ApprovalInbox />
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />

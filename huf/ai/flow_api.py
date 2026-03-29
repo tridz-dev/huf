@@ -394,6 +394,199 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Schedule Management APIs
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def schedule_flow(flow_id: str, cron: str, schedule_name: str | None = None, timezone: str = "UTC") -> dict:
+	"""
+	Schedule a flow to run periodically via Frappe Scheduler.
+	
+	Creates a Scheduled Job Type that will trigger the flow execution
+	at the specified cron interval.
+	
+	Args:
+	    flow_id: Flow ID to schedule
+	    cron: Cron expression (e.g., "*/5 * * * *" for every 5 minutes)
+	    schedule_name: Optional name for the schedule (defaults to flow_id)
+	    timezone: Timezone for schedule execution (default: UTC)
+	
+	Returns:
+	    dict with schedule_id, status, and next_execution
+	"""
+	if not frappe.has_permission("Flow Definition", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	
+	if not frappe.db.exists("Flow Definition", flow_id):
+		frappe.throw(_("Flow '{0}' not found").format(flow_id), frappe.DoesNotExistError)
+	
+	# Validate cron expression format (basic validation)
+	cron_parts = cron.split()
+	if len(cron_parts) != 5:
+		frappe.throw(
+			_("Invalid cron expression. Expected 5 parts (minute hour day month day_of_week), got {0}").format(len(cron_parts))
+		)
+	
+	schedule_name = schedule_name or f"Flow Schedule: {flow_id}"
+	job_id = f"huf.flow.schedule.{flow_id}"
+	
+	# Check if schedule already exists
+	existing = frappe.db.get_value("Scheduled Job Type", {"name": job_id}, "name")
+	
+	if existing:
+		# Update existing schedule
+		doc = frappe.get_doc("Scheduled Job Type", existing)
+		doc.cron_format = cron
+		doc.save()
+	else:
+		# Create new Scheduled Job Type
+		doc = frappe.get_doc({
+			"doctype": "Scheduled Job Type",
+			"name": job_id,
+			"method": "huf.ai.flow_api.execute_scheduled_flow",
+			"kwargs": json.dumps({"flow_id": flow_id}),
+			"cron_format": cron,
+			"frequency": "Cron",
+			"create_log": 1,
+		})
+		doc.insert()
+	
+	frappe.db.commit()
+	
+	return {
+		"schedule_id": doc.name,
+		"flow_id": flow_id,
+		"cron": cron,
+		"status": "scheduled",
+		"message": _("Flow '{0}' scheduled successfully with cron: {1}").format(flow_id, cron),
+	}
+
+
+@frappe.whitelist()
+def unschedule_flow(flow_id: str) -> dict:
+	"""
+	Remove schedule for a flow.
+	
+	Args:
+	    flow_id: Flow ID to unschedule
+
+	Returns:
+	    dict with status and message
+	"""
+	if not frappe.has_permission("Flow Definition", "write"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	
+	job_id = f"huf.flow.schedule.{flow_id}"
+	existing = frappe.db.get_value("Scheduled Job Type", {"name": job_id}, "name")
+	
+	if not existing:
+		return {
+			"status": "not_found",
+			"message": _("No schedule found for flow '{0}'").format(flow_id),
+		}
+	
+	frappe.delete_doc("Scheduled Job Type", existing, ignore_missing=True)
+	frappe.db.commit()
+	
+	return {
+		"status": "unscheduled",
+		"message": _("Schedule removed for flow '{0}'").format(flow_id),
+	}
+
+
+@frappe.whitelist()
+def get_flow_schedule(flow_id: str) -> dict | None:
+	"""
+	Get schedule details for a flow.
+	
+	Args:
+	    flow_id: Flow ID to get schedule for
+
+	Returns:
+	    dict with schedule details or None if not scheduled
+	"""
+	if not frappe.has_permission("Flow Definition", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	
+	job_id = f"huf.flow.schedule.{flow_id}"
+	existing = frappe.db.get_value(
+		"Scheduled Job Type",
+		{"name": job_id},
+		["name", "cron_format", "last_execution", "next_execution", "disabled"],
+		as_dict=True,
+	)
+	
+	if not existing:
+		return None
+	
+	return {
+		"schedule_id": existing.name,
+		"flow_id": flow_id,
+		"cron": existing.cron_format,
+		"last_execution": str(existing.last_execution) if existing.last_execution else None,
+		"next_execution": str(existing.next_execution) if existing.next_execution else None,
+		"disabled": existing.disabled,
+		"status": "disabled" if existing.disabled else "active",
+	}
+
+
+@frappe.whitelist()
+def execute_scheduled_flow(flow_id: str) -> dict:
+	"""
+	Execute a scheduled flow run.
+	
+	This method is called by the Frappe Scheduler when a scheduled
+	job triggers. It creates and runs a flow run with schedule context.
+	
+	Args:
+	    flow_id: Flow ID to execute
+
+	Returns:
+	    dict with flow_run_id and status
+	"""
+	from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
+	
+	if not frappe.db.exists("Flow Definition", flow_id):
+		frappe.log_error(f"Scheduled flow '{flow_id}' not found", "Flow Scheduler")
+		return {"status": "error", "error": f"Flow '{flow_id}' not found"}
+	
+	# Check if flow is active
+	defn_doc = frappe.get_doc("Flow Definition", flow_id)
+	if defn_doc.status != "Active":
+		msg = f"Flow '{flow_id}' is not active (status: {defn_doc.status})"
+		frappe.log_error(msg, "Flow Scheduler")
+		return {"status": "error", "error": msg}
+	
+	# Create flow run with schedule trigger type
+	payload = {
+		"_triggered_by": "schedule",
+		"_timestamp": str(now_datetime()),
+	}
+	
+	try:
+		flow_run = create_flow_run(
+			flow_id=flow_id,
+			payload=payload,
+			trigger_type="Schedule",
+		)
+		
+		# Run the flow
+		engine_run_flow(flow_run.name)
+		
+		flow_run.reload()
+		return {
+			"flow_run_id": flow_run.name,
+			"status": flow_run.status,
+			"flow_id": flow_id,
+		}
+	except Exception as e:
+		error_msg = str(e)
+		frappe.log_error(f"Error executing scheduled flow '{flow_id}': {error_msg}", "Flow Scheduler")
+		return {"status": "error", "error": error_msg, "flow_id": flow_id}
+
+
+# ---------------------------------------------------------------------------
 # Node Schema API (for dynamic UI construction)
 # ---------------------------------------------------------------------------
 
@@ -426,6 +619,30 @@ def get_node_schemas() -> dict:
 			"config_schema": [
 				{"name": "auth", "label": "Auth Key", "type": "string", "description": "Optional authentication key"},
 				{"name": "method", "label": "HTTP Method", "type": "select", "options": ["GET", "POST", "PUT", "DELETE"], "default": "POST"},
+			],
+		},
+		"trigger.schedule": {
+			"label": "Schedule Trigger",
+			"icon": "Clock",
+			"category": "trigger",
+			"description": "Start flow on a scheduled interval (cron)",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "cron", "label": "Cron Expression", "type": "string", "required": True, "description": "Cron expression e.g., */5 * * * * for every 5 minutes"},
+				{"name": "schedule_name", "label": "Schedule Name", "type": "string", "description": "Optional name for this schedule"},
+				{"name": "timezone", "label": "Timezone", "type": "string", "default": "UTC", "description": "Timezone for schedule execution"},
+			],
+		},
+		"trigger.doc-event": {
+			"label": "Doc Event Trigger",
+			"icon": "FileText",
+			"category": "trigger",
+			"description": "Start flow when a document event occurs (create, update, delete)",
+			"has_backend": True,
+			"config_schema": [
+				{"name": "doctype", "label": "DocType", "type": "doctype_select", "required": True, "description": "DocType to listen on (e.g., Sales Invoice, ToDo)"},
+				{"name": "event", "label": "Event", "type": "select", "options": ["after_insert", "on_update", "on_submit", "on_cancel", "on_delete"], "required": True, "description": "Document event to trigger on"},
+				{"name": "filters", "label": "Filters", "type": "json", "description": "Optional JSON filters to match documents (e.g., {\"status\": \"Draft\"})"},
 			],
 		},
 		"agent.run": {
@@ -676,3 +893,88 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 		}
 	except Exception as e:
 		return {"success": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Pending Approvals API (for Approval Inbox)
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def get_pending_approvals(limit: int = 50) -> list:
+	"""
+	Get list of flow runs waiting for approval that the current user can approve.
+	
+	This endpoint is used by the Approval Inbox feature to show users
+	all pending approvals that require their attention.
+	
+	Args:
+	    limit: Maximum number of results (default 50)
+	
+	Returns:
+	    list of pending approval items with flow details
+	"""
+	if not frappe.has_permission("Flow Run", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	
+	user = frappe.session.user
+	user_roles = set(frappe.get_roles(user))
+	
+	# Get all flow runs waiting for approval
+	pending_runs = frappe.get_all(
+		"Flow Run",
+		filters={"status": "Waiting Approval"},
+		fields=[
+			"name",
+			"flow_id",
+			"flow_version",
+			"current_node_id",
+			"status",
+			"waiting",
+			"started_at",
+			"modified",
+		],
+		order_by="modified desc",
+		limit_page_length=limit,
+	)
+	
+	results = []
+	
+	for run in pending_runs:
+		try:
+			waiting = json.loads(run.waiting) if run.waiting else {}
+		except (json.JSONDecodeError, TypeError):
+			waiting = {}
+		
+		approval_type = waiting.get("approval_type", "role")
+		can_approve = False
+		
+		# Check if current user can approve this flow run
+		if approval_type == "role":
+			approver_role = waiting.get("approver_role")
+			if approver_role and approver_role in user_roles:
+				can_approve = True
+		elif approval_type == "users":
+			approver_users = waiting.get("approver_users", [])
+			if isinstance(approver_users, str):
+				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
+			if user in approver_users:
+				can_approve = True
+		
+		if can_approve:
+			results.append({
+				"flow_run_id": run.name,
+				"flow_id": run.flow_id,
+				"flow_version": run.flow_version,
+				"current_node_id": run.current_node_id,
+				"title": waiting.get("title", "Approval Required"),
+				"instructions": waiting.get("instructions", ""),
+				"approval_type": approval_type,
+				"approver_role": waiting.get("approver_role"),
+				"approver_users": waiting.get("approver_users", []),
+				"started_at": str(run.started_at) if run.started_at else None,
+				"waiting_since": str(run.modified) if run.modified else None,
+				"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
+			})
+	
+	return results

@@ -19,7 +19,7 @@ import {
 import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { ScheduleIntervalType, DocEventType } from '../types/flow.types';
-import { getAgents, getDocTypes } from '../services/agentApi';
+import { getAgents, getDocTypes, getRoles } from '../services/agentApi';
 import { getToolFunctions, getToolFunction } from '../services/toolApi';
 import { VariablePicker } from './ui/VariablePicker';
 
@@ -43,6 +43,8 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
   const [selectedToolDetails, setSelectedToolDetails] = useState<any | null>(null);
   const [loadingToolDetails, setLoadingToolDetails] = useState(false);
+  const [roles, setRoles] = useState<Array<{ value: string; label: string }>>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -138,6 +140,24 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
       .catch(() => setDocTypes([]))
       .finally(() => setLoadingDocTypes(false));
   }, [selectedNode?.id, selectedNode?.data.triggerConfig]);
+
+  // Load Roles when human-in-loop node selected
+  useEffect(() => {
+    if (
+      !selectedNode?.data.actionConfig ||
+      (selectedNode.data.actionConfig as any).type !== 'human-in-loop'
+    )
+      return;
+    setLoadingRoles(true);
+    getRoles()
+      .then((list) => {
+        setRoles(
+          (list || []).map((r: { name: string }) => ({ value: r.name, label: r.name }))
+        );
+      })
+      .catch(() => setRoles([]))
+      .finally(() => setLoadingRoles(false));
+  }, [selectedNode?.id, selectedNode?.data.actionConfig]);
 
   const handleUpdateLabel = (label: string) => {
     if (selectedNodeId) {
@@ -607,8 +627,11 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                       <Label htmlFor="save-result" className="text-xs">Save Result To Context</Label>
                       <Input
                         id="save-result"
-                        value={((config as any).output?.save_result_to_context) || ''}
-                        onChange={(e) => handleUpdateActionConfig('output', { ...((config as any).output || {}), save_result_to_context: e.target.value })}
+                        value={(config as any).output?.save_result_to_context || ''}
+                        onChange={(e) => handleUpdateActionConfig('output', {
+                          ...(config as any).output,
+                          save_result_to_context: e.target.value
+                        })}
                         placeholder="e.g., tool_result"
                       />
                     </div>
@@ -679,11 +702,15 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                     </div>
                     <div>
                       <Label htmlFor="approver-role" className="text-xs">Approver Role (System Role)</Label>
-                      <Input
-                        id="approver-role"
+                      <Combobox
+                        options={roles}
                         value={(config as any).approver_role || ''}
-                        onChange={(e) => handleUpdateActionConfig('approver_role', e.target.value)}
-                        placeholder="e.g., System Manager"
+                        onValueChange={(v) => handleUpdateActionConfig('approver_role', v)}
+                        placeholder={loadingRoles ? 'Loading...' : 'Select or type role...'}
+                        disabled={loadingRoles}
+                        searchPlaceholder="Search roles..."
+                        emptyText="No role found. Type to enter custom role."
+                        allowCustomValue={true}
                       />
                     </div>
                     <div>
@@ -833,8 +860,11 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                       <Label htmlFor="http-save" className="text-xs">Save Result To Context</Label>
                       <Input
                         id="http-save"
-                        value={(config as any).save_result_to_context || ''}
-                        onChange={(e) => handleUpdateActionConfig('save_result_to_context', e.target.value)}
+                        value={(config as any).output?.save_result_to_context || ''}
+                        onChange={(e) => handleUpdateActionConfig('output', {
+                          ...(config as any).output,
+                          save_result_to_context: e.target.value
+                        })}
                         placeholder="e.g., api_response"
                       />
                     </div>

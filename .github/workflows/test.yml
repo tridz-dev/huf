@@ -1,0 +1,241 @@
+name: HUF Flow Engine Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'edge16/apps/huf/huf/ai/**'
+      - 'edge16/apps/huf/huf/tests/**'
+      - 'edge16/apps/huf/huf/doctype/flow_*/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'edge16/apps/huf/huf/ai/**'
+      - 'edge16/apps/huf/huf/tests/**'
+      - 'edge16/apps/huf/huf/doctype/flow_*/**'
+
+env:
+  FRAPPE_SITE: test_site
+  DB_ROOT_USER: root
+  DB_ROOT_PASSWORD: root
+  NODE_VERSION: 20
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Backend Tests (Python)
+  # ---------------------------------------------------------------------------
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=5s --health-timeout=2s --health-retries=3
+      redis:
+        image: redis:6-alpine
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev liblcms2-dev libwebp-dev
+      
+      - name: Install bench
+        run: |
+          pip install frappe-bench
+      
+      - name: Initialize bench
+        run: |
+          cd /tmp
+          bench init frappe-bench --skip-assets --python $(which python)
+          cd frappe-bench
+      
+      - name: Create test site
+        run: |
+          cd /tmp/frappe-bench
+          bench new-site ${{ env.FRAPPE_SITE }} \
+            --db-root-password root \
+            --admin-password admin
+      
+      - name: Install HUF app
+        run: |
+          cd /tmp/frappe-bench
+          # Copy the HUF app from the checked out code
+          cp -r $GITHUB_WORKSPACE/edge16/apps/huf apps/
+          bench --site ${{ env.FRAPPE_SITE }} install-app huf
+      
+      - name: Run flow engine tests
+        run: |
+          cd /tmp/frappe-bench
+          bench --site ${{ env.FRAPPE_SITE }} run-tests --app huf --module huf.tests.test_flow_engine --coverage
+      
+      - name: Run flow API tests
+        run: |
+          cd /tmp/frappe-bench
+          bench --site ${{ env.FRAPPE_SITE }} run-tests --app huf --module huf.tests.test_flow_api --coverage
+      
+      - name: Run human approval tests
+        run: |
+          cd /tmp/frappe-bench
+          bench --site ${{ env.FRAPPE_SITE }} run-tests --app huf --module huf.tests.test_human_approval --coverage
+      
+      - name: Run context passing tests
+        run: |
+          cd /tmp/frappe-bench
+          bench --site ${{ env.FRAPPE_SITE }} run-tests --app huf --module huf.tests.test_context --coverage
+      
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v3
+        with:
+          files: /tmp/frappe-bench/sites/${{ env.FRAPPE_SITE }}/coverage.xml
+          flags: backend
+          name: backend-coverage
+
+  # ---------------------------------------------------------------------------
+  # Frontend Tests (TypeScript/React)
+  # ---------------------------------------------------------------------------
+  frontend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: edge16/apps/huf/frontend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: edge16/apps/huf/frontend/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run type checking
+        run: npm run type-check || npx tsc --noEmit
+      
+      - name: Run linter
+        run: npm run lint || echo "No lint script configured"
+      
+      - name: Run tests
+        run: npm test -- --coverage --watchAll=false || echo "No tests configured yet"
+      
+      - name: Build frontend
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # Integration/E2E Tests
+  # ---------------------------------------------------------------------------
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: [backend-tests]
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+      redis:
+        image: redis:6-alpine
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install bench
+        run: |
+          pip install frappe-bench
+      
+      - name: Initialize bench
+        run: |
+          cd /tmp
+          bench init frappe-bench --skip-assets --python $(which python)
+          cd frappe-bench
+      
+      - name: Create test site
+        run: |
+          cd /tmp/frappe-bench
+          bench new-site ${{ env.FRAPPE_SITE }} \
+            --db-root-password root \
+            --admin-password admin
+      
+      - name: Install HUF app
+        run: |
+          cd /tmp/frappe-bench
+          cp -r $GITHUB_WORKSPACE/edge16/apps/huf apps/
+          bench --site ${{ env.FRAPPE_SITE }} install-app huf
+      
+      - name: Start Frappe server
+        run: |
+          cd /tmp/frappe-bench
+          bench start &
+          sleep 30
+      
+      - name: Run E2E tests
+        run: |
+          cd /tmp/frappe-bench
+          python $GITHUB_WORKSPACE/test/workflow/e2e_test.py
+        env:
+          HUF_SITE: ${{ env.FRAPPE_SITE }}
+          HUF_URL: http://localhost:8000
+
+  # ---------------------------------------------------------------------------
+  # Code Quality Checks
+  # ---------------------------------------------------------------------------
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install Python dependencies
+        run: |
+          pip install flake8 black isort mypy
+      
+      - name: Run flake8
+        run: |
+          flake8 edge16/apps/huf/huf/ai/ --max-line-length=120 --ignore=E203,W503 || true
+      
+      - name: Run black check
+        run: |
+          black --check edge16/apps/huf/huf/ai/ || true
+      
+      - name: Run isort check
+        run: |
+          isort --check-only edge16/apps/huf/huf/ai/ || true

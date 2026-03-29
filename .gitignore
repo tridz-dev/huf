@@ -18,3 +18,5 @@ docs/yarn.lock
 
 huf/public/_next
 huf/www/huf/docs
+# Local development scratchpad (symlink to workspace root)
+SCRATCHPAD.md

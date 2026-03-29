@@ -29,6 +29,7 @@ export interface ComboboxProps {
   disabled?: boolean;
   emptyText?: string;
   searchPlaceholder?: string;
+  allowCustomValue?: boolean;
 }
 
 export function Combobox({
@@ -39,10 +40,16 @@ export function Combobox({
   disabled = false,
   emptyText = 'No option found.',
   searchPlaceholder = 'Search...',
+  allowCustomValue = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
+  const [inputValue, setInputValue] = React.useState('');
 
   const selectedOption = options.find((option) => option.value === value);
+  const isExistingOption = options.some((option) => 
+    option.value.toLowerCase() === inputValue.toLowerCase()
+  );
+  const showCustomOption = allowCustomValue && inputValue && !isExistingOption;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -60,9 +67,13 @@ export function Combobox({
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput 
+            placeholder={searchPlaceholder} 
+            value={inputValue}
+            onValueChange={setInputValue}
+          />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            {!showCustomOption && <CommandEmpty>{emptyText}</CommandEmpty>}
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem
@@ -71,6 +82,7 @@ export function Combobox({
                   onSelect={() => {
                     onValueChange?.(option.value === value ? '' : option.value);
                     setOpen(false);
+                    setInputValue('');
                   }}
                 >
                   <Check
@@ -82,6 +94,20 @@ export function Combobox({
                   {option.label}
                 </CommandItem>
               ))}
+              {showCustomOption && (
+                <CommandItem
+                  key="__custom__"
+                  value={inputValue}
+                  onSelect={() => {
+                    onValueChange?.(inputValue);
+                    setOpen(false);
+                    setInputValue('');
+                  }}
+                >
+                  <Check className="mr-2 h-4 w-4 opacity-0" />
+                  Use &quot;{inputValue}&quot;
+                </CommandItem>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>
