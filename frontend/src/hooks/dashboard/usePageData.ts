@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 interface UsePageDataOptions<T> {
   fetchFn?: () => Promise<T[]>;
@@ -13,57 +13,52 @@ export function usePageData<T>({
   searchFields = [],
   filterFn,
 }: UsePageDataOptions<T>) {
-  // Use a ref for initialData to avoid effect re-runs when array reference changes
-  const initialDataRef = useRef(initialData);
-  // Update ref if initialData actually has different content (not just reference)
-  const initialDataString = JSON.stringify(initialData);
-  const prevInitialDataStringRef = useRef(initialDataString);
-  
-  if (initialDataString !== prevInitialDataStringRef.current) {
-    initialDataRef.current = initialData;
-    prevInitialDataStringRef.current = initialDataString;
-  }
-
-  const [data, setData] = useState<T[]>(initialDataRef.current);
+  // State
+  const [data, setData] = useState<T[]>(initialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
-  // Track fetchFn by reference to detect changes
-  const fetchFnRef = useRef(fetchFn);
-  const hasFetchedRef = useRef(false);
+  const hasFetched = useRef(false);
 
+  // Fetch data on mount only
   useEffect(() => {
-    const fetchFnChanged = fetchFnRef.current !== fetchFn;
-    fetchFnRef.current = fetchFn;
-
-    // Reset hasFetched if fetchFn changes
-    if (fetchFnChanged) {
-      hasFetchedRef.current = false;
+    if (!fetchFn || hasFetched.current) {
+      setLoading(false);
+      return;
     }
 
-    if (fetchFn && !hasFetchedRef.current) {
-      hasFetchedRef.current = true;
+    hasFetched.current = true;
+    let cancelled = false;
+
+    const doFetch = async () => {
       setLoading(true);
-      fetchFn()
-        .then((result) => {
+      setError(null);
+      
+      try {
+        const result = await fetchFn();
+        if (!cancelled) {
           setData(result);
-          setError(null);
-        })
-        .catch((err) => {
-          setError(err);
-        })
-        .finally(() => {
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+        }
+      } finally {
+        if (!cancelled) {
           setLoading(false);
-        });
-    } else if (!fetchFn) {
-      // Only update data from initialData if we haven't fetched yet
-      if (!hasFetchedRef.current) {
-        setData(initialDataRef.current);
+        }
       }
-    }
-  }, [fetchFn]); // Only depend on fetchFn, not initialData
+    };
 
+    doFetch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []); // Empty deps - only run once on mount
+
+  // Filter and search logic
   const filteredData = useMemo(() => {
     let result = [...data];
 
@@ -87,6 +82,23 @@ export function usePageData<T>({
     return result;
   }, [data, search, searchFields, filters, filterFn]);
 
+  // Manual refresh function
+  const refresh = useCallback(async () => {
+    if (!fetchFn) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await fetchFn();
+      setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchFn]);
+
   return {
     data: filteredData,
     allData: data,
@@ -97,5 +109,6 @@ export function usePageData<T>({
     filters,
     setFilters,
     setData,
+    refresh,
   };
 }

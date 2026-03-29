@@ -1,7 +1,8 @@
+import { useCallback } from 'react';
 import { Calendar, Play, Activity, Settings } from 'lucide-react';
 import { PageLayout, FilterBar, GridView, ItemCard } from '../components/dashboard';
 import { usePageData } from '../hooks/dashboard/usePageData';
-import { useFlowContext } from '../contexts/FlowContext';
+
 import { FlowMetadata } from '../types/flow.types';
 import { useNavigate } from 'react-router-dom';
 import { getFlowDefinitions } from '../services/flowApi';
@@ -38,30 +39,27 @@ function getStatusVariant(status: FlowMetadata['status']) {
 }
 
 export function FlowListPage() {
-  const { flows } = useFlowContext();
   const navigate = useNavigate();
 
+  // Memoize fetchFn with NO dependencies to prevent ANY re-renders
+  const fetchFn = useCallback(async () => {
+    const items = await getFlowDefinitions();
+    return items.map(item => ({
+      id: item.flow_id,
+      name: item.flow_name,
+      description: undefined,
+      status: mapBackendStatusToFrontend(item.status),
+      category: undefined,
+      nodeCount: 0,
+      createdAt: new Date(item.modified),
+      updatedAt: new Date(item.modified),
+    }));
+  }, []);
+
   const { data, loading, search, setSearch, filters, setFilters } = usePageData<FlowMetadata>({
-    fetchFn: async () => {
-      try {
-        const items = await getFlowDefinitions();
-        return items.map(item => ({
-          id: item.flow_id,
-          name: item.flow_name,
-          description: undefined,
-          status: mapBackendStatusToFrontend(item.status),
-          category: undefined,
-          nodeCount: 0,
-          createdAt: new Date(item.modified),
-          updatedAt: new Date(item.modified),
-        }));
-      } catch {
-        // Fallback to context flows if API fails
-        return flows;
-      }
-    },
+    fetchFn,
     searchFields: ['name', 'description'],
-    filterFn: (flow, filters) => {
+    filterFn: useCallback((flow: FlowMetadata, filters: Record<string, string>) => {
       if (filters.status && filters.status !== 'all' && flow.status !== filters.status) {
         return false;
       }
@@ -69,7 +67,7 @@ export function FlowListPage() {
         return false;
       }
       return true;
-    },
+    }, []),
   });
 
   const handleFlowClick = (flowId: string) => {

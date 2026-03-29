@@ -42,15 +42,57 @@ def execute(tool_name: str, args: dict, user: str = None) -> dict:
 			frappe.set_user(original_user)
 
 
+def _resolve_standard_tool(tool_name: str) -> dict | None:
+	"""
+	Resolve standard tool names (like 'create_document') to their handlers
+	without requiring an Agent Tool Function document.
+	
+	These are built-in tools that should work out of the box.
+	"""
+	# Map of standard tool names to their types
+	standard_tools = {
+		"create_document": "Create Document",
+		"get_document": "Get Document",
+		"update_document": "Update Document",
+		"delete_document": "Delete Document",
+		"get_list": "Get List",
+		"get_documents": "Get Multiple Documents",
+		"create_documents": "Create Multiple Documents",
+		"update_documents": "Update Multiple Documents",
+		"delete_documents": "Delete Multiple Documents",
+		"submit_document": "Submit Document",
+		"cancel_document": "Cancel Document",
+		"get_value": "Get Value",
+		"set_value": "Set Value",
+		"get_report_result": "Get Report Result",
+		"attach_file_to_document": "Attach File to Document",
+	}
+	
+	if tool_name in standard_tools:
+		return {
+			"name": tool_name,
+			"types": standard_tools[tool_name],
+			"function_path": None,  # Will be resolved by _resolve_function_path
+			"reference_doctype": None,
+			"agent": None,
+			"base_url": None,
+		}
+	return None
+
+
 def _execute_tool(tool_name: str, args: dict) -> dict:
 	"""Internal tool execution logic."""
-	# Find the Agent Tool Function doc
-	tool_doc = frappe.db.get_value(
-		"Agent Tool Function",
-		{"tool_name": tool_name},
-		["name", "types", "function_path", "reference_doctype", "agent", "base_url"],
-		as_dict=True,
-	)
+	# First, check if this is a standard tool type that doesn't need a document
+	tool_doc = _resolve_standard_tool(tool_name)
+	
+	# If not a standard tool, look up the Agent Tool Function doc
+	if not tool_doc:
+		tool_doc = frappe.db.get_value(
+			"Agent Tool Function",
+			{"tool_name": tool_name},
+			["name", "types", "function_path", "reference_doctype", "agent", "base_url"],
+			as_dict=True,
+		)
 
 	if not tool_doc:
 		return {"success": False, "error": f"Tool '{tool_name}' not found in Agent Tool Function"}

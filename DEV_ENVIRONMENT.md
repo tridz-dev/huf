@@ -11,14 +11,28 @@
 ### Quick Start
 
 ```bash
-cd docker
-docker compose up
+Check if dev container is running by name fdocker_devcontainer-frappe-1 or id 54de6991a349e8bdf93c0fc69b10f4e4bdd89bc98ff1ab55f05fd9e6b737a132 this is part of dev container and located boot from  /Users/safwan/Code/docker/fdocker/ using config /Users/safwan/Code/docker/fdocker/.devcontainer/docker-compose.yml
+
+the bench in it is located in /Users/safwan/Code/docker/fdocker/development/edge16/
+
+And app is at /Users/safwan/Code/docker/fdocker/development/edge16/apps/huf
+
+You need to connect to this container to and run the following commands :
+bench use huf.localhost
+bench start 
+bench migrate
+
+etc.. 
+
+However code you can edit in the host and it is same as on the container.
+
 ```
 
+Site credentials:
 **Access**: http://localhost:8000  
 **Credentials**: `Administrator` / `admin`
 
-> ⚠️ **First run takes 5-8 minutes** for initial setup
+
 
 ### Services
 
@@ -33,31 +47,15 @@ docker compose up
 | Variable | Value | Description |
 |----------|-------|-------------|
 | `MYSQL_ROOT_PASSWORD` | 123 | MariaDB root password |
-| `HUF_BRANCH` | develop | Git branch to checkout |
+| `HUF_BRANCH` | develop | Git branch to checkout  or whaever you are working on|
 | `UV_HTTP_TIMEOUT` | 300 | UV package manager timeout |
 
-### Useful Docker Commands
-
-```bash
-# Start services
-docker compose up -d
-
-# View logs
-docker compose logs -f frappe
-
-# Restart service
-docker compose restart frappe
-
-# Shell into container
-docker exec -it huf-frappe-1 bash
-
-# Stop all
-docker compose down
-```
-
----
 
 ## 🔑 Access Credentials
+**Access**: http://localhost:8000  
+**Credentials**: `Administrator` / `admin`
+
+
 
 ### Default Login
 
@@ -65,6 +63,9 @@ docker compose down
 |-------------|-----|----------|----------|
 | **Docker** | http://localhost:8000 | `admin` | `admin` |
 | **Dev Container** | http://localhost:8101 | `Administrator` | `admin` |
+
+Note: port can change based on bench start response and could be localhost:8000, or localhost:8001 or localhost:8002 etc.
+
 
 ### API Authentication
 
@@ -182,47 +183,6 @@ python /tmp/test_flow_ui.py
 | Save Flow | `/api/method/huf.ai.flow_api.save_flow_definition` | POST |
 | Run Flow | `/api/method/huf.ai.flow_api.run_flow` | POST |
 
----
-
-## 💻 Development Setup
-
-### Option 1: Docker (Recommended for Quick Start)
-
-```bash
-cd docker
-docker compose up
-# Access: http://localhost:8000 (admin/admin)
-```
-
-### Option 2: Frappe Bench (Full Development)
-
-```bash
-# 1. Install Frappe bench
-pip install frappe-bench
-
-# 2. Create bench
-bench init frappe-bench
-
-# 3. Get HUF app
-cd frappe-bench
-bench get-app huf <repo-path>
-
-# 4. Create site
-bench new-site huf.localhost
-
-# 5. Install app
-bench --site huf.localhost install-app huf
-
-# 6. Start services
-bench start
-```
-
-### Option 3: VS Code Dev Container
-
-1. Open project in VS Code
-2. Click "Reopen in Container"
-3. Wait for container setup
-4. Access at http://localhost:8101
 
 ### Option 4: Bench inside Docker / devcontainer (edge16)
 
