@@ -272,6 +272,22 @@ export async function getDocTypes(): Promise<Array<{ name: string }>> {
 }
 
 /**
+ * Fetch all Frappe roles (for approval role selection, etc.)
+ */
+export async function getRoles(): Promise<Array<{ name: string }>> {
+  try {
+    const roles = await db.getDocList('Role', {
+      fields: ['name'],
+      filters: [['disabled', '=', 0]],
+      limit: 500,
+    });
+    return (roles as Array<{ name: string }>).sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching roles');
+  }
+}
+
+/**
  * Fetch DocType metadata with fields (used for tool parameter auto-fill)
  */
 export async function getDocTypeMeta(doctypeName: string): Promise<any> {

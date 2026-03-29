@@ -98,6 +98,9 @@ export interface ToolCallActionConfig {
   tool_name?: string;
   args?: Record<string, unknown>;
   save_result_to_context?: string;
+  output?: {
+    save_result_to_context?: string;
+  };
 }
 
 export interface RouterActionConfig {
@@ -110,9 +113,12 @@ export interface HumanInLoopActionConfig {
   type: 'human-in-loop';
   title?: string;
   instructions?: string;
+  context_summary?: string;
   approval_type?: 'role' | 'user';
   approver_role?: string;
   approver_users?: string[];
+  reference_doctype?: string;
+  reference_name?: string;
   store_decision_in_context?: string;
 }
 
