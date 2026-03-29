@@ -1,0 +1,367 @@
+{
+  "profile_name": "CRM/Customer Context Memory",
+  "description": "Captures customer information, interaction history, preferences, needs, and relationship context for personalized customer relationship management and support",
+  "category": "CRM",
+  "version": "1.0.0",
+  "is_system_profile": true,
+  "icon": "👥",
+  "schema_version": "1.0",
+  "default_schema_json": {
+    "type": "object",
+    "required": ["memory_type", "customer_identifier"],
+    "properties": {
+      "memory_type": {
+        "type": "string",
+        "enum": ["customer_profile", "interaction", "preference", "need", "feedback", "opportunity", "issue", "relationship_event", "decision_maker"],
+        "description": "Type of CRM memory being captured"
+      },
+      "customer_identifier": {
+        "type": "string",
+        "description": "Unique customer ID, email, or name"
+      },
+      "organization": {
+        "type": "string",
+        "description": "Company or organization name if B2B"
+      },
+      "customer_profile": {
+        "type": "object",
+        "properties": {
+          "contact_info": {
+            "type": "object",
+            "properties": {
+              "email": { "type": "string" },
+              "phone": { "type": "string" },
+              "address": { "type": "string" },
+              "preferred_contact_method": {
+                "type": "string",
+                "enum": ["email", "phone", "sms", "chat", "video_call", "in_person"]
+              },
+              "best_time_to_contact": { "type": "string" }
+            }
+          },
+          "demographics": {
+            "type": "object",
+            "properties": {
+              "industry": { "type": "string" },
+              "company_size": { "type": "string" },
+              "job_title": { "type": "string" },
+              "seniority": {
+                "type": "string",
+                "enum": ["entry", "mid", "senior", "executive", "c_suite"]
+              },
+              "location": { "type": "string" },
+              "timezone": { "type": "string" }
+            }
+          },
+          "account_tier": {
+            "type": "string",
+            "enum": ["prospect", "trial", "starter", "professional", "enterprise", "vip", "churned"]
+          },
+          "lifetime_value": { "type": "number", "description": "Estimated or actual LTV" },
+          "acquisition_source": { "type": "string", "description": "How they became a customer" },
+          "first_contact_date": { "type": "string", "format": "date" },
+          "customer_since": { "type": "string", "format": "date" }
+        }
+      },
+      "interaction": {
+        "type": "object",
+        "properties": {
+          "interaction_type": {
+            "type": "string",
+            "enum": ["call", "email", "meeting", "chat", "video_call", "demo", "support_ticket", "social_media", "event", "webinar"]
+          },
+          "date": { "type": "string", "format": "date-time" },
+          "duration_minutes": { "type": "integer" },
+          "participants": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "People involved in the interaction"
+          },
+          "summary": { "type": "string", "description": "Brief summary of what was discussed" },
+          "key_points": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Key takeaways from the interaction"
+          },
+          "commitments_made": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "who": { "type": "string", "description": "Who made the commitment" },
+                "what": { "type": "string", "description": "What was promised" },
+                "by_when": { "type": "string", "format": "date" },
+                "status": { "type": "string", "enum": ["pending", "in_progress", "completed", "blocked"] }
+              }
+            }
+          },
+          "follow_up_required": { "type": "boolean" },
+          "follow_up_date": { "type": "string", "format": "date" },
+          "follow_up_action": { "type": "string", "description": "What needs to be done" },
+          "sentiment": {
+            "type": "string",
+            "enum": ["very_negative", "negative", "neutral", "positive", "very_positive"]
+          },
+          "outcome": { "type": "string", "description": "Result of the interaction" }
+        }
+      },
+      "preference": {
+        "type": "object",
+        "properties": {
+          "category": { "type": "string", "description": "Type of preference (communication, product, service, etc.)" },
+          "preference": { "type": "string", "description": "The specific preference" },
+          "context": { "type": "string", "description": "When/why this preference applies" },
+          "strength": {
+            "type": "string",
+            "enum": ["weak", "moderate", "strong", "dealbreaker"],
+            "description": "How strongly they feel about this"
+          },
+          "learned_from": { "type": "string", "description": "Source of this knowledge" }
+        }
+      },
+      "need": {
+        "type": "object",
+        "properties": {
+          "need_description": { "type": "string", "description": "What they need" },
+          "urgency": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"]
+          },
+          "business_impact": { "type": "string", "description": "Impact on their business" },
+          "current_solution": { "type": "string", "description": "What they use now" },
+          "pain_points": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Problems with current solution"
+          },
+          "success_criteria": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "What success looks like"
+          },
+          "budget_indication": { "type": "string", "description": "Budget hints or constraints" },
+          "decision_timeline": { "type": "string", "description": "When they plan to decide" },
+          "status": {
+            "type": "string",
+            "enum": ["identified", "qualified", "proposed", "pilot", "implemented", "satisfied", "changed"]
+          }
+        }
+      },
+      "feedback": {
+        "type": "object",
+        "properties": {
+          "feedback_type": {
+            "type": "string",
+            "enum": ["feature_request", "bug_report", "complaint", "compliment", "suggestion", "general"]
+          },
+          "subject": { "type": "string", "description": "What the feedback is about" },
+          "details": { "type": "string", "description": "Full feedback content" },
+          "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "sentiment": {
+            "type": "string",
+            "enum": ["very_negative", "negative", "neutral", "positive", "very_positive"]
+          },
+          "action_taken": { "type": "string", "description": "Response or action" },
+          "resolution_status": {
+            "type": "string",
+            "enum": ["open", "acknowledged", "in_progress", "resolved", "closed"]
+          },
+          "impact_score": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Impact on customer satisfaction"
+          }
+        }
+      },
+      "opportunity": {
+        "type": "object",
+        "properties": {
+          "opportunity_name": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["upsell", "cross_sell", "renewal", "expansion", "new_business", "partnership", "referral"]
+          },
+          "value_estimate": { "type": "number", "description": "Estimated deal value" },
+          "probability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Win probability percentage"
+          },
+          "expected_close_date": { "type": "string", "format": "date" },
+          "stage": {
+            "type": "string",
+            "enum": ["prospecting", "qualification", "proposal", "negotiation", "closing", "won", "lost"]
+          },
+          "competitors": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Competing vendors/solutions"
+          },
+          "decision_criteria": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "What they're evaluating on"
+          },
+          "next_steps": { "type": "string", "description": "Required actions" },
+          "blockers": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Obstacles to closing"
+          }
+        }
+      },
+      "issue": {
+        "type": "object",
+        "properties": {
+          "issue_summary": { "type": "string", "description": "Brief description of the problem" },
+          "severity": {
+            "type": "string",
+            "enum": ["minor", "moderate", "major", "critical", "blocking"]
+          },
+          "category": {
+            "type": "string",
+            "enum": ["technical", "billing", "service", "product", "support", "integration", "training"]
+          },
+          "impact": { "type": "string", "description": "Business impact" },
+          "reported_date": { "type": "string", "format": "date-time" },
+          "resolution_date": { "type": "string", "format": "date-time" },
+          "resolution": { "type": "string", "description": "How it was resolved" },
+          "status": {
+            "type": "string",
+            "enum": ["open", "investigating", "escalated", "resolved", "closed"]
+          },
+          "escalation_required": { "type": "boolean" },
+          "escalated_to": { "type": "string" },
+          "satisfaction_post_resolution": {
+            "type": "string",
+            "enum": ["very_dissatisfied", "dissatisfied", "neutral", "satisfied", "very_satisfied"]
+          }
+        }
+      },
+      "relationship_event": {
+        "type": "object",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "enum": ["anniversary", "birthday", "promotion", "company_milestone", "product_launch", "reorganization", "location_change", "contract_renewal"]
+          },
+          "description": { "type": "string", "description": "Details of the event" },
+          "date": { "type": "string", "format": "date" },
+          "significance": { "type": "string", "description": "Why it matters for the relationship" },
+          "engagement_opportunity": { "type": "string", "description": "How to engage around this event" }
+        }
+      },
+      "decision_maker": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": "string", "description": "Job title/role" },
+          "influence_level": {
+            "type": "string",
+            "enum": ["influencer", "consulted", "recommender", "decision_maker", "economic_buyer"]
+          },
+          "priorities": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "What they care about"
+          },
+          "concerns": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Potential objections"
+          },
+          "relationship_quality": {
+            "type": "string",
+            "enum": ["unknown", "cold", "warm", "strong", "champion"]
+          },
+          "engagement_history": { "type": "string", "description": "Past interactions with this person" }
+        }
+      },
+      "importance": {
+        "type": "string",
+        "enum": ["critical", "high", "medium", "low"],
+        "description": "How important this information is"
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Confidence in the accuracy of this information"
+      },
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Tags for categorization"
+      },
+      "owner": {
+        "type": "string",
+        "description": "Account owner or assigned rep"
+      },
+      "related_records": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Related CRM records"
+      },
+      "privacy_level": {
+        "type": "string",
+        "enum": ["public", "internal", "confidential", "restricted"],
+        "description": "Who can see this information"
+      },
+      "retention_requirement": {
+        "type": "string",
+        "description": "Legal/compliance retention period"
+      }
+    }
+  },
+  "recommended_model": "gpt-4o-mini",
+  "recommended_provider": "openai",
+  "default_capture_stage": "post_response_async",
+  "default_frequency": "conversation_end",
+  "default_scope_type": "namespace",
+  "default_indexing_mode": "fts_and_vector",
+  "default_retrieval_mode": "hybrid",
+  "default_memory_type_mapping": {
+    "customer_profile": "domain_object",
+    "interaction": "observation",
+    "preference": "preference",
+    "need": "insight",
+    "feedback": "observation",
+    "opportunity": "insight",
+    "issue": "observation",
+    "relationship_event": "observation",
+    "decision_maker": "domain_object"
+  },
+  "ui_config": {
+    "display_fields": ["memory_type", "customer_identifier", "organization"],
+    "filter_fields": ["memory_type", "account_tier", "importance", "tags"],
+    "sort_default": "-modified",
+    "icon_map": {
+      "customer_profile": "user-circle",
+      "interaction": "message-circle",
+      "preference": "heart",
+      "need": "target",
+      "feedback": "message-square",
+      "opportunity": "trending-up",
+      "issue": "alert-triangle",
+      "relationship_event": "calendar-heart",
+      "decision_maker": "user-check"
+    },
+    "color_map": {
+      "customer_profile": "blue",
+      "interaction": "indigo",
+      "preference": "pink",
+      "need": "amber",
+      "feedback": "orange",
+      "opportunity": "green",
+      "issue": "red",
+      "relationship_event": "purple",
+      "decision_maker": "cyan"
+    }
+  },
+  "help_text": {
+    "short": "Capture customer information, interactions, and relationship context",
+    "long": "This profile captures structured customer relationship data including contact profiles, interaction history, preferences, needs, feedback, sales opportunities, support issues, and key relationship events. Use it to build comprehensive customer context for personalized service, sales, and support experiences."
+  }
+}

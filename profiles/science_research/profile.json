@@ -1,0 +1,272 @@
+{
+  "profile_name": "Science/Research Memory",
+  "description": "Captures scientific concepts, research findings, experimental data, hypotheses, and academic references for research assistance and knowledge building",
+  "category": "Science",
+  "version": "1.0.0",
+  "is_system_profile": true,
+  "icon": "🔬",
+  "schema_version": "1.0",
+  "default_schema_json": {
+    "type": "object",
+    "required": ["memory_type", "topic"],
+    "properties": {
+      "memory_type": {
+        "type": "string",
+        "enum": ["concept", "finding", "hypothesis", "experiment", "reference", "methodology", "data_point", "literature_review", "collaboration"],
+        "description": "Type of scientific memory being captured"
+      },
+      "topic": {
+        "type": "string",
+        "description": "Primary scientific topic or subject area"
+      },
+      "sub_topics": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Related sub-topics or specific areas within the main topic"
+      },
+      "field": {
+        "type": "string",
+        "enum": ["physics", "chemistry", "biology", "mathematics", "computer_science", "medicine", "psychology", "environmental_science", "materials_science", "engineering", "social_science", "interdisciplinary"],
+        "description": "Scientific field or discipline"
+      },
+      "concept": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Name of the concept" },
+          "definition": { "type": "string", "description": "Clear definition of the concept" },
+          "key_principles": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Key principles or rules associated with this concept"
+          },
+          "related_concepts": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Related scientific concepts"
+          },
+          "difficulty_level": {
+            "type": "string",
+            "enum": ["introductory", "intermediate", "advanced", "expert"],
+            "description": "Complexity level of the concept"
+          },
+          "common_misconceptions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Common misunderstandings about this concept"
+          }
+        }
+      },
+      "finding": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "Brief title of the finding" },
+          "summary": { "type": "string", "description": "Summary of the research finding" },
+          "significance": { "type": "string", "description": "Why this finding matters" },
+          "confidence_level": {
+            "type": "string",
+            "enum": ["preliminary", "suggestive", "moderate", "strong", "confirmed"],
+            "description": "Level of confidence in the finding"
+          },
+          "sample_size": { "type": "string", "description": "Size of study or sample if applicable" },
+          "limitations": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Limitations or caveats of the finding"
+          }
+        }
+      },
+      "hypothesis": {
+        "type": "object",
+        "properties": {
+          "statement": { "type": "string", "description": "The hypothesis statement" },
+          "rationale": { "type": "string", "description": "Reasoning behind this hypothesis" },
+          "testability": {
+            "type": "string",
+            "enum": ["untestable", "theoretically_testable", "testable_with_current_methods", "tested"],
+            "description": "Current testability status"
+          },
+          "test_results": { "type": "string", "description": "Results if tested" },
+          "supporting_evidence": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Evidence supporting this hypothesis"
+          },
+          "contradicting_evidence": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Evidence contradicting this hypothesis"
+          }
+        }
+      },
+      "experiment": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "Name or title of the experiment" },
+          "objective": { "type": "string", "description": "What the experiment aims to test or demonstrate" },
+          "methods": { "type": "string", "description": "Experimental methods and procedures" },
+          "materials": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Materials and equipment used"
+          },
+          "variables": {
+            "type": "object",
+            "properties": {
+              "independent": { "type": "array", "items": { "type": "string" } },
+              "dependent": { "type": "array", "items": { "type": "string" } },
+              "controlled": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "results_summary": { "type": "string", "description": "Summary of experimental results" },
+          "conclusions": { "type": "string", "description": "Conclusions drawn from the experiment" },
+          "reproducibility_notes": { "type": "string", "description": "Notes on reproducing the experiment" }
+        }
+      },
+      "reference": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "Title of the paper, book, or resource" },
+          "authors": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of authors"
+          },
+          "publication_year": { "type": "integer", "description": "Year of publication" },
+          "source_type": {
+            "type": "string",
+            "enum": ["journal_article", "book", "conference_paper", "preprint", "website", "dataset", "patent", "technical_report", "thesis", "review"]
+          },
+          "journal_or_publisher": { "type": "string" },
+          "doi_or_url": { "type": "string", "description": "DOI or URL to access the resource" },
+          "key_takeaways": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Key points from this reference"
+          },
+          "citation_count": { "type": "integer", "description": "Number of citations if known" },
+          "relevance_score": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Personal relevance rating (1-10)"
+          }
+        }
+      },
+      "methodology": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Name of the method or technique" },
+          "description": { "type": "string", "description": "Detailed description of the methodology" },
+          "applications": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Use cases and applications"
+          },
+          "pros": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Advantages of this method"
+          },
+          "cons": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Limitations or disadvantages"
+          },
+          "required_tools": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tools, software, or equipment needed"
+          }
+        }
+      },
+      "data_point": {
+        "type": "object",
+        "properties": {
+          "metric_name": { "type": "string", "description": "Name of the metric or measurement" },
+          "value": { "type": "string", "description": "The data value" },
+          "unit": { "type": "string", "description": "Unit of measurement" },
+          "context": { "type": "string", "description": "Context or conditions under which measured" },
+          "uncertainty": { "type": "string", "description": "Margin of error or uncertainty" },
+          "measurement_method": { "type": "string", "description": "How the measurement was taken" }
+        }
+      },
+      "importance": {
+        "type": "string",
+        "enum": ["critical", "high", "medium", "low"],
+        "description": "How important this memory is for future research"
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Confidence in the accuracy of this memory"
+      },
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "related_memories": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "IDs or names of related memory records"
+      },
+      "research_project": {
+        "type": "string",
+        "description": "Associated research project or study name"
+      },
+      "notes": {
+        "type": "string",
+        "description": "Additional notes or observations"
+      }
+    }
+  },
+  "recommended_model": "claude-3-5-sonnet",
+  "recommended_provider": "anthropic",
+  "default_capture_stage": "post_response_async",
+  "default_frequency": "conversation_end",
+  "default_scope_type": "user",
+  "default_indexing_mode": "fts_and_vector",
+  "default_retrieval_mode": "hybrid",
+  "default_memory_type_mapping": {
+    "concept": "domain_object",
+    "finding": "insight",
+    "hypothesis": "insight",
+    "experiment": "observation",
+    "reference": "domain_object",
+    "methodology": "domain_object",
+    "data_point": "fact",
+    "literature_review": "insight",
+    "collaboration": "observation"
+  },
+  "ui_config": {
+    "display_fields": ["memory_type", "topic", "field"],
+    "filter_fields": ["memory_type", "field", "importance", "tags"],
+    "sort_default": "-created_at",
+    "icon_map": {
+      "concept": "lightbulb",
+      "finding": "microscope",
+      "hypothesis": "help-circle",
+      "experiment": "flask-conical",
+      "reference": "book-open",
+      "methodology": "settings-2",
+      "data_point": "bar-chart-3",
+      "literature_review": "library",
+      "collaboration": "users"
+    },
+    "color_map": {
+      "concept": "amber",
+      "finding": "blue",
+      "hypothesis": "purple",
+      "experiment": "green",
+      "reference": "indigo",
+      "methodology": "slate",
+      "data_point": "cyan",
+      "literature_review": "orange",
+      "collaboration": "pink"
+    }
+  },
+  "help_text": {
+    "short": "Capture scientific knowledge, research findings, and academic references",
+    "long": "This profile captures structured scientific and research knowledge including concepts, findings, hypotheses, experimental data, methodologies, and academic references. Use it to build a persistent research memory that helps track scientific knowledge, research progress, and academic sources."
+  }
+}

@@ -1,0 +1,369 @@
+{
+  "profile_name": "Language Learning Memory",
+  "description": "Captures vocabulary, grammar rules, learning progress, mistakes, cultural notes, and language proficiency milestones for personalized language acquisition support",
+  "category": "Language",
+  "version": "1.0.0",
+  "is_system_profile": true,
+  "icon": "🌐",
+  "schema_version": "1.0",
+  "default_schema_json": {
+    "type": "object",
+    "required": ["memory_type", "target_language"],
+    "properties": {
+      "memory_type": {
+        "type": "string",
+        "enum": ["vocabulary", "grammar_rule", "phrase", "correction", "progress_milestone", "cultural_note", "pronunciation_tip", "learning_resource", "difficulty_area"],
+        "description": "Type of language learning memory being captured"
+      },
+      "target_language": {
+        "type": "string",
+        "description": "The language being learned (e.g., Japanese, Spanish, French)"
+      },
+      "native_language": {
+        "type": "string",
+        "description": "Learner's native language for reference"
+      },
+      "proficiency_level": {
+        "type": "string",
+        "enum": ["beginner", "elementary", "intermediate", "upper_intermediate", "advanced", "proficient", "native"],
+        "description": "Current CEFR or equivalent proficiency level"
+      },
+      "vocabulary": {
+        "type": "object",
+        "properties": {
+          "word": { "type": "string", "description": "The word or phrase" },
+          "reading": { "type": "string", "description": "Pronunciation guide or reading (e.g., furigana, IPA)" },
+          "translation": { "type": "string", "description": "Translation in native language" },
+          "part_of_speech": {
+            "type": "string",
+            "enum": ["noun", "verb", "adjective", "adverb", "pronoun", "preposition", "conjunction", "interjection", "particle", "auxiliary", "classifier"]
+          },
+          "definitions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Multiple meanings or definitions"
+          },
+          "example_sentences": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "target": { "type": "string", "description": "Sentence in target language" },
+                "translation": { "type": "string", "description": "Translation" },
+                "context": { "type": "string", "description": "Situation or context for usage" }
+              }
+            }
+          },
+          "synonyms": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "antonyms": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "register": {
+            "type": "string",
+            "enum": ["formal", "neutral", "informal", "slang", "literary", "archaic"],
+            "description": "Level of formality"
+          },
+          "frequency": {
+            "type": "string",
+            "enum": ["very_common", "common", "moderate", "rare", "specialized"],
+            "description": "How commonly used"
+          },
+          "jlpt_level": { "type": "string", "description": "JLPT level if applicable (N5-N1)" },
+          "hsk_level": { "type": "string", "description": "HSK level if applicable (1-6)" },
+          "difficulty_rating": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Personal difficulty rating"
+          },
+          "memory_aids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Mnemonics or memory tricks"
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Categories like 'food', 'business', 'emotions'"
+          }
+        }
+      },
+      "grammar_rule": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Name of the grammar rule" },
+          "explanation": { "type": "string", "description": "Clear explanation of the rule" },
+          "pattern": { "type": "string", "description": "Structural pattern or formula" },
+          "usage_conditions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "When to use this grammar"
+          },
+          "common_mistakes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Common errors with this rule"
+          },
+          "example_sentences": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "correct": { "type": "string" },
+                "incorrect": { "type": "string" },
+                "explanation": { "type": "string" }
+              }
+            }
+          },
+          "related_grammar": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Related grammar points"
+          },
+          "difficulty_level": {
+            "type": "string",
+            "enum": ["beginner", "intermediate", "advanced"]
+          }
+        }
+      },
+      "phrase": {
+        "type": "object",
+        "properties": {
+          "phrase": { "type": "string", "description": "The phrase or expression" },
+          "literal_translation": { "type": "string", "description": "Word-for-word translation" },
+          "meaning": { "type": "string", "description": "Actual meaning/usage" },
+          "usage_contexts": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Situations where used"
+          },
+          "formality": {
+            "type": "string",
+            "enum": ["very_formal", "formal", "neutral", "casual", "very_casual"]
+          },
+          "equivalent_expressions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Similar phrases with nuance differences"
+          },
+          "cultural_notes": { "type": "string", "description": "Cultural context" }
+        }
+      },
+      "correction": {
+        "type": "object",
+        "properties": {
+          "original": { "type": "string", "description": "Original incorrect text" },
+          "corrected": { "type": "string", "description": "Corrected version" },
+          "error_type": {
+            "type": "string",
+            "enum": ["grammar", "vocabulary", "spelling", "pronunciation", "register", "word_order", "particle", "conjugation", "article", "preposition"]
+          },
+          "explanation": { "type": "string", "description": "Why it was wrong and how to fix" },
+          "rule_reference": { "type": "string", "description": "Related grammar rule" },
+          "frequency_of_error": {
+            "type": "string",
+            "enum": ["one_time", "occasional", "frequent", "persistent"]
+          },
+          "practice_exercises": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Suggested practice items"
+          }
+        }
+      },
+      "progress_milestone": {
+        "type": "object",
+        "properties": {
+          "milestone": { "type": "string", "description": "What was achieved" },
+          "test_scores": {
+            "type": "object",
+            "properties": {
+              "test_name": { "type": "string" },
+              "score": { "type": "string" },
+              "max_score": { "type": "string" },
+              "date": { "type": "string" }
+            }
+          },
+          "skills_improved": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Specific skills that improved"
+          },
+          "next_goals": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Goals for next milestone"
+          },
+          "study_hours": { "type": "number", "description": "Cumulative study hours" },
+          "resources_used": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Books, apps, courses used"
+          }
+        }
+      },
+      "cultural_note": {
+        "type": "object",
+        "properties": {
+          "topic": { "type": "string", "description": "Cultural topic" },
+          "description": { "type": "string", "description": "Detailed explanation" },
+          "language_connection": { "type": "string", "description": "How it relates to language use" },
+          "do_and_dont": {
+            "type": "object",
+            "properties": {
+              "do": { "type": "array", "items": { "type": "string" } },
+              "dont": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "regional_variations": { "type": "string", "description": "Differences by region" }
+        }
+      },
+      "pronunciation_tip": {
+        "type": "object",
+        "properties": {
+          "sound": { "type": "string", "description": "The sound or phoneme" },
+          "ipa_symbol": { "type": "string", "description": "IPA notation" },
+          "description": { "type": "string", "description": "How to produce the sound" },
+          "similar_sounds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Similar sounds in other languages"
+          },
+          "common_difficulties": { "type": "string", "description": "Why learners struggle" },
+          "practice_words": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Words to practice with"
+          },
+          "audio_reference": { "type": "string", "description": "Reference to audio resource" }
+        }
+      },
+      "learning_resource": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Name of resource" },
+          "type": {
+            "type": "string",
+            "enum": ["app", "textbook", "website", "podcast", "video_channel", "course", "dictionary", "flashcards", "tutor", "language_exchange"]
+          },
+          "url": { "type": "string" },
+          "cost": { "type": "string", "description": "Free, paid, subscription info" },
+          "strengths": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "weaknesses": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "best_for": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "What it teaches best"
+          },
+          "personal_rating": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10
+          }
+        }
+      },
+      "difficulty_area": {
+        "type": "object",
+        "properties": {
+          "area": { "type": "string", "description": "Specific difficulty" },
+          "description": { "type": "string", "description": "Why it's difficult" },
+          "strategies_tried": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "What has been attempted"
+          },
+          "effective_strategies": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "What has worked"
+          },
+          "targeted_practice": { "type": "string", "description": "Recommended exercises" }
+        }
+      },
+      "importance": {
+        "type": "string",
+        "enum": ["critical", "high", "medium", "low"],
+        "description": "How important for continued learning"
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Confidence in this knowledge"
+      },
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "review_schedule": {
+        "type": "object",
+        "properties": {
+          "last_reviewed": { "type": "string", "format": "date" },
+          "next_review": { "type": "string", "format": "date" },
+          "review_count": { "type": "integer" },
+          "easiness_factor": { "type": "number", "description": "SM-2 algorithm factor" }
+        }
+      },
+      "notes": { "type": "string", "description": "Additional notes" }
+    }
+  },
+  "recommended_model": "gpt-4o-mini",
+  "recommended_provider": "openai",
+  "default_capture_stage": "post_response_async",
+  "default_frequency": "conversation_end",
+  "default_scope_type": "user",
+  "default_indexing_mode": "fts_and_vector",
+  "default_retrieval_mode": "hybrid",
+  "default_memory_type_mapping": {
+    "vocabulary": "domain_object",
+    "grammar_rule": "domain_object",
+    "phrase": "domain_object",
+    "correction": "insight",
+    "progress_milestone": "observation",
+    "cultural_note": "domain_object",
+    "pronunciation_tip": "domain_object",
+    "learning_resource": "preference",
+    "difficulty_area": "insight"
+  },
+  "ui_config": {
+    "display_fields": ["memory_type", "target_language", "proficiency_level"],
+    "filter_fields": ["memory_type", "target_language", "proficiency_level", "importance", "tags"],
+    "sort_default": "-created_at",
+    "icon_map": {
+      "vocabulary": "book-marked",
+      "grammar_rule": "text-quote",
+      "phrase": "message-square-quote",
+      "correction": "edit-3",
+      "progress_milestone": "trophy",
+      "cultural_note": "globe",
+      "pronunciation_tip": "volume-2",
+      "learning_resource": "graduation-cap",
+      "difficulty_area": "alert-circle"
+    },
+    "color_map": {
+      "vocabulary": "blue",
+      "grammar_rule": "indigo",
+      "phrase": "violet",
+      "correction": "orange",
+      "progress_milestone": "yellow",
+      "cultural_note": "green",
+      "pronunciation_tip": "pink",
+      "learning_resource": "cyan",
+      "difficulty_area": "red"
+    }
+  },
+  "help_text": {
+    "short": "Capture vocabulary, grammar, progress, and cultural knowledge for language learning",
+    "long": "This profile captures structured language learning data including vocabulary with example sentences, grammar rules, common mistakes and corrections, cultural notes, pronunciation tips, and learning progress. Use it to build a personalized language learning companion that remembers your struggles, tracks progress, and helps reinforce knowledge."
+  }
+}
