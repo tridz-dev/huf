@@ -65,7 +65,7 @@ const iconMap: Record<string, any> = {
 };
 
 type MainTab = 'triggers' | 'actions';
-type TriggerSubTab = 'explore' | 'ai-agents' | 'apps' | 'utility';
+type TriggerSubTab = 'explore' | 'ai-agents';
 
 export function NodeSelectionModal({
   open,
@@ -196,7 +196,7 @@ export function NodeSelectionModal({
     if (actionId === 'agent-run') {
       config = { type: 'agent-run', agent_name: '', prompt_template: '', save_response_to_context: '' };
     } else if (actionId === 'tool-call') {
-      config = { type: 'tool-call', tool_name: '', args: {}, save_result_to_context: '' };
+      config = { type: 'tool-call', tool_name: '', args: {}, output: { save_result_to_context: '' } };
     } else if (actionId === 'condition') {
       config = { type: 'condition', expression: '', true_node: '', false_node: '' };
     } else if (actionId === 'router') {
@@ -452,18 +452,22 @@ export function NodeSelectionModal({
         </div>
 
         <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="triggers">Triggers</TabsTrigger>
-            <TabsTrigger value="actions">Actions</TabsTrigger>
-          </TabsList>
+          {mode !== 'trigger' ? (
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="triggers">Triggers</TabsTrigger>
+              <TabsTrigger value="actions">Actions</TabsTrigger>
+            </TabsList>
+          ) : (
+            <TabsList className="grid w-full grid-cols-1">
+              <TabsTrigger value="triggers">Triggers</TabsTrigger>
+            </TabsList>
+          )}
 
           <TabsContent value="triggers" className="flex-1 overflow-hidden flex flex-col mt-4">
             <Tabs value={triggerSubTab} onValueChange={(v) => setTriggerSubTab(v as TriggerSubTab)}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="explore">Explore</TabsTrigger>
                 <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
-                <TabsTrigger value="apps">Apps</TabsTrigger>
-                <TabsTrigger value="utility">Utility</TabsTrigger>
               </TabsList>
 
               <TabsContent value={triggerSubTab} className="flex-1 overflow-y-auto mt-4">

@@ -19,7 +19,7 @@ import {
 import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { ScheduleIntervalType, DocEventType } from '../types/flow.types';
-import { getAgents, getDocTypes } from '../services/agentApi';
+import { getAgents, getDocTypes, getRoles } from '../services/agentApi';
 import { getToolFunctions, getToolFunction } from '../services/toolApi';
 import { VariablePicker } from './ui/VariablePicker';
 
@@ -43,6 +43,8 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
   const [selectedToolDetails, setSelectedToolDetails] = useState<any | null>(null);
   const [loadingToolDetails, setLoadingToolDetails] = useState(false);
+  const [roles, setRoles] = useState<Array<{ value: string; label: string }>>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -121,13 +123,12 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
       .finally(() => setLoadingToolDetails(false));
   }, [selectedNode?.id, (selectedNode?.data.actionConfig as any)?.tool_name]);
 
-  // Load DocTypes when doc-event trigger selected
+  // Load DocTypes when doc-event trigger or human-in-loop node selected
   useEffect(() => {
-    if (
-      !selectedNode?.data.triggerConfig ||
-      (selectedNode.data.triggerConfig as any).type !== 'doc-event'
-    )
-      return;
+    const isDocEvent = selectedNode?.data.triggerConfig && (selectedNode.data.triggerConfig as any).type === 'doc-event';
+    const isHumanInLoop = selectedNode?.data.actionConfig && (selectedNode.data.actionConfig as any).type === 'human-in-loop';
+    if (!isDocEvent && !isHumanInLoop) return;
+    if (docTypes.length > 0) return; // already loaded
     setLoadingDocTypes(true);
     getDocTypes()
       .then((list) => {
@@ -137,7 +138,22 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
       })
       .catch(() => setDocTypes([]))
       .finally(() => setLoadingDocTypes(false));
-  }, [selectedNode?.id, selectedNode?.data.triggerConfig]);
+  }, [selectedNode?.id, selectedNode?.data.triggerConfig, selectedNode?.data.actionConfig]);
+
+  // Load roles when human-in-loop node selected
+  useEffect(() => {
+    if (!selectedNode?.data.actionConfig || (selectedNode.data.actionConfig as any).type !== 'human-in-loop') return;
+    if (roles.length > 0) return; // already loaded
+    setLoadingRoles(true);
+    getRoles()
+      .then((list) => {
+        setRoles(
+          (list || []).map((r: { name: string }) => ({ value: r.name, label: r.name }))
+        );
+      })
+      .catch(() => setRoles([]))
+      .finally(() => setLoadingRoles(false));
+  }, [selectedNode?.id, selectedNode?.data.actionConfig]);
 
   const handleUpdateLabel = (label: string) => {
     if (selectedNodeId) {
@@ -655,6 +671,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
               }
 
               if (config.type === 'human-in-loop') {
+                const approvalType = (config as any).approval_type || 'role';
                 return (
                   <div className="space-y-3">
                     <Label className="mb-2 block text-sm font-semibold">Human Approval Configuration</Label>
@@ -664,7 +681,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                         id="approval-title"
                         value={(config as any).title || ''}
                         onChange={(e) => handleUpdateActionConfig('title', e.target.value)}
-                        placeholder="e.g., System Access Approval"
+                        placeholder="e.g., Approve Invoice #INV-001"
                       />
                     </div>
                     <div>
@@ -678,12 +695,90 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="approver-role" className="text-xs">Approver Role (System Role)</Label>
+                      <div className="flex justify-between items-center mb-1">
+                        <Label htmlFor="context-summary" className="text-xs">Context Summary</Label>
+                        <VariablePicker onSelect={(v) => {
+                          const current = (config as any).context_summary || '';
+                          handleUpdateActionConfig('context_summary', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
+                        }} />
+                      </div>
+                      <textarea
+                        id="context-summary"
+                        className="flex min-h-[50px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={(config as any).context_summary || ''}
+                        onChange={(e) => handleUpdateActionConfig('context_summary', e.target.value)}
+                        placeholder="e.g., Please review invoice for {{customer}} worth {{amount}}"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="approval-type" className="text-xs">Approval Type</Label>
+                      <Select
+                        value={approvalType}
+                        onValueChange={(value) => handleUpdateActionConfig('approval_type', value)}
+                      >
+                        <SelectTrigger id="approval-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="role">By Role</SelectItem>
+                          <SelectItem value="user">By User</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {approvalType === 'role' && (
+                      <div>
+                        <Label htmlFor="approver-role" className="text-xs">Approver Role</Label>
+                        <Combobox
+                          options={roles}
+                          value={(config as any).approver_role || ''}
+                          onValueChange={(v) => handleUpdateActionConfig('approver_role', v)}
+                          placeholder={loadingRoles ? 'Loading roles...' : 'Select role...'}
+                          disabled={loadingRoles}
+                          searchPlaceholder="Search roles..."
+                          emptyText="No role found."
+                        />
+                      </div>
+                    )}
+                    {approvalType === 'user' && (
+                      <div>
+                        <Label htmlFor="approver-users" className="text-xs">Approver Users (comma-separated emails)</Label>
+                        <Input
+                          id="approver-users"
+                          value={Array.isArray((config as any).approver_users)
+                            ? (config as any).approver_users.join(', ')
+                            : (config as any).approver_users || ''}
+                          onChange={(e) => handleUpdateActionConfig('approver_users',
+                            e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean)
+                          )}
+                          placeholder="e.g., manager@company.com, cfo@company.com"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <Label htmlFor="ref-doctype" className="text-xs">Reference DocType (Optional)</Label>
+                      <Combobox
+                        options={docTypes}
+                        value={(config as any).reference_doctype || ''}
+                        onValueChange={(v) => handleUpdateActionConfig('reference_doctype', v)}
+                        placeholder="e.g., Sales Invoice"
+                        searchPlaceholder="Search DocType..."
+                        emptyText="No DocType found."
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <Label htmlFor="ref-name" className="text-xs">Reference Document Name</Label>
+                        <VariablePicker onSelect={(v) => {
+                          const current = (config as any).reference_name || '';
+                          handleUpdateActionConfig('reference_name', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
+                        }} />
+                      </div>
                       <Input
-                        id="approver-role"
-                        value={(config as any).approver_role || ''}
-                        onChange={(e) => handleUpdateActionConfig('approver_role', e.target.value)}
-                        placeholder="e.g., System Manager"
+                        id="ref-name"
+                        value={(config as any).reference_name || ''}
+                        onChange={(e) => handleUpdateActionConfig('reference_name', e.target.value)}
+                        placeholder="e.g., {{invoice.name}}"
+                        className="font-mono text-xs"
                       />
                     </div>
                     <div>
