@@ -39,19 +39,22 @@
    "fieldtype": "Data",
    "label": "Profile Name",
    "reqd": 1,
-   "unique": 1
+   "unique": 1,
+   "description": "A unique name for this memory profile. Use descriptive names like 'Customer Support' or 'Code Review Assistant'."
   },
   {
    "fieldname": "description",
    "fieldtype": "Text",
-   "label": "Description"
+   "label": "Description",
+   "description": "Describe what this profile is for and when it should be used. This helps users choose the right profile."
   },
   {
    "fieldname": "category",
    "fieldtype": "Select",
    "label": "Category",
    "options": "\nprogramming\nscience\nlanguage\nreasoning\ngeneral\ntravel\ncrm\nsupport\ndocumentation\ncustom",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The domain category for this profile. Used for filtering and organization."
   },
   {
    "fieldname": "column_break_basic",
@@ -61,12 +64,14 @@
    "fieldname": "is_system_profile",
    "fieldtype": "Check",
    "label": "Is System Profile",
-   "default": "0"
+   "default": "0",
+   "description": "System profiles are managed by the platform and may be updated automatically. User-created profiles should not be marked as system profiles."
   },
   {
    "fieldname": "icon",
    "fieldtype": "Attach Image",
-   "label": "Icon"
+   "label": "Icon",
+   "description": "Optional icon or image to visually identify this profile in the UI."
   },
   {
    "fieldname": "defaults_section",
@@ -77,13 +82,15 @@
    "fieldname": "default_schema_json",
    "fieldtype": "JSON",
    "label": "Default Schema (JSON)",
-   "reqd": 1
+   "reqd": 1,
+   "description": "JSON Schema defining the structure of memories captured with this profile. This ensures consistency and enables validation. See documentation for schema examples."
   },
   {
    "fieldname": "default_capture_prompt",
    "fieldtype": "Text",
    "label": "Default Capture Prompt",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The prompt used to guide the LLM when extracting memories. Be specific about what information to capture and how to structure it."
   },
   {
    "fieldname": "column_break_defaults",
@@ -93,31 +100,36 @@
    "fieldname": "default_capture_stage",
    "fieldtype": "Select",
    "label": "Default Capture Stage",
-   "options": "\nin_prompt\npost_response_sync\npost_response_async\nconversation_end\nscheduled"
+   "options": "\nin_prompt\npost_response_sync\npost_response_async\nconversation_end\nscheduled",
+   "description": "When memories should be captured: in_prompt (during generation), post_response (after response), conversation_end (when conversation closes), or scheduled (at specific times)."
   },
   {
    "fieldname": "default_frequency",
    "fieldtype": "Select",
    "label": "Default Frequency",
-   "options": "\nevery_run\nevery_n_runs\nevery_n_turns\nconversation_end\nmanual\nscheduled"
+   "options": "\nevery_run\nevery_n_runs\nevery_n_turns\nconversation_end\nmanual\nscheduled",
+   "description": "How often to capture memories: every_run (each execution), every_n_runs (periodic), every_n_turns (after N messages), conversation_end, manual (explicit only), or scheduled."
   },
   {
    "fieldname": "default_scope_type",
    "fieldtype": "Select",
    "label": "Default Scope Type",
-   "options": "\nconversation\nuser\nagent\nnamespace\nglobal"
+   "options": "\nconversation\nuser\nagent\nnamespace\nglobal",
+   "description": "The visibility scope of memories: conversation (isolated to this chat), user (shared across user's conversations), agent (global for this agent), namespace (shared group), or global (all agents)."
   },
   {
    "fieldname": "default_indexing_mode",
    "fieldtype": "Select",
    "label": "Default Indexing Mode",
-   "options": "\nfts\nvector\nboth\nnone"
+   "options": "\nfts\nvector\nboth\nnone",
+   "description": "How memories should be indexed: fts (full-text search only), vector (semantic search only), both (hybrid), or none (no indexing, retrieval by ID only)."
   },
   {
    "fieldname": "default_retrieval_mode",
    "fieldtype": "Select",
    "label": "Default Retrieval Mode",
-   "options": "\ninject\ntool_only\nhybrid"
+   "options": "\ninject\ntool_only\nhybrid",
+   "description": "How memories are provided to the agent: inject (auto-include in prompt), tool_only (agent must request via tool), or hybrid (both methods)."
   },
   {
    "fieldname": "mapping_section",
@@ -128,7 +140,7 @@
    "fieldname": "default_memory_type_mapping",
    "fieldtype": "JSON",
    "label": "Default Memory Type Mapping",
-   "description": "JSON mapping of input patterns to memory types"
+   "description": "JSON object mapping input patterns or keywords to memory types. Example: {'bug': 'observation', 'preference': 'preference'}. Used for automatic categorization."
   },
   {
    "fieldname": "recommendation_section",
@@ -138,12 +150,14 @@
   {
    "fieldname": "recommended_model",
    "fieldtype": "Data",
-   "label": "Recommended Model"
+   "label": "Recommended Model",
+   "description": "The AI model recommended for capture with this profile. Serves as guidance when configuring memory agents."
   },
   {
    "fieldname": "recommended_provider",
    "fieldtype": "Data",
-   "label": "Recommended Provider"
+   "label": "Recommended Provider",
+   "description": "The AI provider recommended for capture with this profile. E.g., 'OpenAI', 'Anthropic', 'Google'."
   }
  ],
  "index_web_pages_for_search": 1,

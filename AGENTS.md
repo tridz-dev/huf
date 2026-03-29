@@ -1537,6 +1537,367 @@ Registered via `huf_tools` hook so agents can interact with flows:
 - **Human approval**: User/role verification before approve/reject
 - **Hop limit**: Safety guard against infinite loops (default 100)
 
+## Memory System
+
+The HUF Memory System provides persistent memory capabilities for agents, allowing them to remember information across conversations and sessions. It implements a complete memory lifecycle: capture, storage, indexing, retrieval, and injection.
+
+### Overview
+
+```
+Conversation → Capture → Storage → Index → Retrieve → Inject
+```
+
+**Key Features:**
+- **Structured Memory Capture**: Extract memories using schemas and prompts
+- **Multiple Capture Strategies**: In-prompt, post-response sync/async, conversation end
+- **Flexible Storage**: MariaDB with optional FTS and vector indexing
+- **Hybrid Retrieval**: Full-text search + semantic search with ranking
+- **Scope Control**: Memory visibility from conversation-isolated to global
+- **Data Quality**: Confidence thresholds, schema validation, deduplication
+
+### Architecture
+
+#### High-Level Components
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Memory System                             │
+├─────────────┬─────────────┬─────────────┬─────────────┬─────────┤
+│   Capture   │   Storage   │  Indexing   │  Retrieval  │ Injection│
+├─────────────┼─────────────┼─────────────┼─────────────┼─────────┤
+│ • Producers │ • MariaDB   │ • FTS       │ • Search    │ • Prompt│
+│ • Stages    │ • Records   │ • Vector    │ • Rank      │   Format│
+│ • Frequency │ • Profiles  │ • Backends  │ • Filter    │ • Budget│
+│ • Policies  │ • Policies  │ • Rebuild   │ • Hybrid    │ • Tools │
+└─────────────┴─────────────┴─────────────┴─────────────┴─────────┘
+```
+
+### Directory Structure
+
+```
+huf/huf/memory/
+├── setup.py              # Installation hooks, data seeding
+├── capture.py            # Capture pipeline (producers, stages, frequency)
+├── storage.py            # Storage abstraction and CRUD operations
+├── retrieval.py          # Memory injection and context building
+├── search.py             # Search and ranking algorithms
+├── indexing.py           # Index management (FTS, vector)
+├── schemas.py            # JSON Schema utilities
+├── exceptions.py         # Custom exceptions
+└── README.md             # Module documentation
+
+huf/huf/doctype/memory_record/      # Memory storage DocType
+huf/huf/doctype/memory_profile/     # Schema/profile DocType
+huf/huf/doctype/memory_policy/      # Capture policy DocType
+```
+
+### Core DocTypes
+
+#### Memory Record
+
+The fundamental unit of memory storage.
+
+-   **Python Class**: `MemoryRecord(Document)`
+-   **File**: `huf/huf/doctype/memory_record/memory_record.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Title** | `title` | Data | Human-readable memory summary |
+| **Memory Type** | `memory_type` | Select | Semantic type: `profile`, `preference`, `fact`, `plan`, `observation`, `insight`, `domain_object`, `session_state` |
+| **Data (JSON)** | `data_json` | JSON | Structured memory content |
+| **Summary** | `summary_text` | Text | Text summary for search and display |
+| **Agent** | `agent` | Link(Agent) | Agent that created the memory |
+| **Conversation** | `conversation` | Link(Agent Conversation) | Source conversation |
+| **Scope Type** | `scope_type` | Select | Visibility: `conversation`, `user`, `agent`, `namespace`, `global` |
+| **Scope Key** | `scope_key` | Data | Unique identifier for scope instance |
+| **Visibility** | `visibility` | Select | Access control: `private`, `shared_with_agent`, `shared_with_namespace`, `global` |
+| **Confidence** | `confidence` | Float | AI-assigned confidence (0-1) |
+| **Importance** | `importance_score` | Float | AI-assigned importance (0-1) |
+| **Status** | `status` | Select | `active`, `superseded`, `archived`, `expired`, `error` |
+| **FTS Indexed** | `fts_indexed` | Check | Full-text search index status |
+| **Vector Indexed** | `vector_indexed` | Check | Vector/semantic index status |
+| **Last Retrieved** | `last_retrieved_at` | Datetime | For LRU caching and analytics |
+| **Retrieval Count** | `retrieval_count` | Int | Popularity tracking |
+
+#### Memory Profile
+
+Defines the structure and default behavior for memories in a specific domain.
+
+-   **Python Class**: `MemoryProfile(Document)`
+-   **File**: `huf/huf/doctype/memory_profile/memory_profile.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Profile Name** | `profile_name` | Data | Unique name (e.g., "Programming", "CRM") |
+| **Category** | `category` | Select | Domain: `programming`, `science`, `language`, `general`, `travel`, `crm`, `support`, `documentation` |
+| **Is System Profile** | `is_system_profile` | Check | Managed by platform, auto-updated |
+| **Default Schema** | `default_schema_json` | JSON | JSON Schema for memory validation |
+| **Default Capture Prompt** | `default_capture_prompt` | Text | Prompt to guide memory extraction |
+| **Default Capture Stage** | `default_capture_stage` | Select | `in_prompt`, `post_response_sync`, `post_response_async`, `conversation_end`, `scheduled` |
+| **Default Frequency** | `default_frequency` | Select | `every_run`, `every_n_runs`, `every_n_turns`, `conversation_end`, `manual`, `scheduled` |
+| **Default Scope Type** | `default_scope_type` | Select | Default visibility boundary |
+| **Default Indexing** | `default_indexing_mode` | Select | `fts`, `vector`, `both`, `none` |
+| **Default Retrieval** | `default_retrieval_mode` | Select | `inject`, `tool_only`, `hybrid` |
+| **Recommended Model** | `recommended_model` | Data | Suggested AI model for capture |
+
+**Built-in Profiles:**
+- **Programming**: Code patterns, tech stack, debugging approaches
+- **General Knowledge**: Facts, preferences, topics, interests
+- **Travel Planning**: Destinations, dates, bookings, preferences
+- **Documentation**: API docs, tutorials, guides, concepts
+- **Science/Research**: Hypotheses, findings, data, citations
+- **Language Learning**: Vocabulary, grammar, mistakes, progress
+- **CRM**: Contacts, opportunities, interactions, follow-ups
+
+#### Memory Policy
+
+Controls when and how memories are captured, stored, and retrieved.
+
+-   **Python Class**: `MemoryPolicy(Document)`
+-   **File**: `huf/huf/doctype/memory_policy/memory_policy.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Policy Name** | `policy_name` | Data | Unique name |
+| **Enabled** | `enabled` | Check | Active/inactive |
+| **Agent** | `agent` | Link(Agent) | Optional: agent-specific policy |
+| **Memory Profile** | `memory_profile` | Link(Memory Profile) | Schema and defaults |
+| **Capture Owner** | `capture_owner` | Select | Who produces memory: `main_agent`, `memory_agent`, `post_run_llm`, `rules_only` |
+| **Memory Agent** | `memory_agent` | Link(Agent) | Dedicated agent for capture (if owner = memory_agent) |
+| **Capture Stage** | `capture_stage` | Select | When to capture |
+| **Capture Frequency** | `capture_frequency_type` | Select | How often to capture |
+| **Frequency Value** | `capture_frequency_value` | Int | N for every_n_runs/turns |
+| **Conversation End Strategy** | `conversation_end_strategy` | Select | `manual_close`, `idle_timeout`, `heuristic`, `never` |
+| **Idle Timeout (min)** | `idle_timeout_minutes` | Int | Minutes of inactivity before end |
+| **Capture Prompt** | `capture_prompt` | Text | Custom extraction prompt |
+| **Allow Open Schema** | `allow_open_schema` | Check | Accept any JSON structure |
+| **Require Schema Match** | `require_json_schema_match` | Check | Validate against schema |
+| **Allow Update Existing** | `allow_update_existing` | Check | Update similar memories |
+| **Allow Merge** | `allow_merge` | Check | Merge new data with existing |
+| **Allow Append** | `allow_append` | Check | Append to list fields |
+| **Min Confidence** | `min_confidence` | Float | Threshold for accepting memories (0-1) |
+| **Store Raw Payload** | `store_raw_payload` | Check | Keep unprocessed capture output |
+| **Store Summary** | `store_summary` | Check | Generate text summary |
+| **Enable FTS Index** | `enable_fts_index` | Check | Full-text search indexing |
+| **Enable Vector Index** | `enable_vector_index` | Check | Semantic/vector indexing |
+| **Vector Backend** | `vector_backend` | Select | `sqlite_vec`, `pgvector`, `custom` |
+| **FTS Backend** | `fts_backend` | Select | `sqlite_fts`, `custom` |
+| **Default Retrieval Mode** | `retrieval_mode_default` | Select | `inject`, `tool_only`, `hybrid` |
+| **Max Items to Inject** | `max_items_to_inject` | Int | Maximum memories per prompt |
+| **Max Tokens to Inject** | `max_tokens_to_inject` | Int | Token budget for memories |
+
+**Default Policies:**
+- **Default Conservative**: High quality, fewer memories, production-ready
+- **Default Aggressive**: More memories, may include noise, good for development
+- **Default Rules-Only**: Fast, deterministic, no LLM, pattern-based
+
+### Capture Pipeline (`capture.py`)
+
+Handles memory extraction from conversations.
+
+#### Producer Modes
+
+-   **`main_agent`**: Agent extracts its own memories
+-   **`memory_agent`**: Dedicated agent for memory capture
+-   **`post_run_llm`**: Separate LLM call for extraction
+-   **`rules_only`**: Pattern-based extraction, no LLM
+
+#### Capture Stages
+
+-   **`in_prompt`**: During main LLM generation (blocking)
+-   **`post_response_sync`**: Immediately after response (blocking)
+-   **`post_response_async`**: Background after response (non-blocking) ⭐ Recommended
+-   **`conversation_end`**: When conversation closes
+-   **`scheduled`**: At specific times
+
+#### Core Functions
+
+-   **`capture_memory(agent, conversation, context, policy, profile, run=None)`**
+    -   Main capture entry point
+    -   Handles producer selection, prompt construction, execution
+    -   Returns dict with `success`, `memory_id`, `title`, `confidence`
+
+-   **`_produce_memory_by_main_agent(...)`**
+    -   Main agent self-captures during generation
+
+-   **`_produce_memory_by_memory_agent(...)`**
+    -   Delegates to dedicated memory agent
+
+-   **`_produce_memory_by_post_run_llm(...)`**
+    -   Fresh LLM call for extraction
+
+-   **`_produce_memory_by_rules(...)`**
+    -   Pattern matching without LLM
+
+### Storage Layer (`storage.py`)
+
+Manages persistence and basic retrieval.
+
+#### Core Functions
+
+-   **`create_memory(title, memory_type, data, agent, scope_type, scope_key, ...)`**
+    -   Create new memory record
+    -   Validates and stores structured data
+    -   Returns `MemoryRecord` object
+
+-   **`update_memory(memory_id, updates, merge=False)`**
+    -   Update existing memory
+    -   Optional merge with existing data
+
+-   **`get_memory(memory_id)`**
+    -   Retrieve single memory by ID
+
+-   **`delete_memory(memory_id, hard_delete=False)`**
+    -   Soft delete (archive) or hard delete
+
+-   **`search_memories_base(query, filters, limit)`**
+    -   Basic filtered search
+
+### Retrieval System (`retrieval.py`, `search.py`)
+
+Finds and injects relevant memories.
+
+#### Search Modes
+
+-   **`fts`**: Full-text keyword search
+-   **`vector`**: Semantic similarity search
+-   **`hybrid`**: Combined FTS + vector with ranking ⭐ Recommended
+
+#### Core Functions
+
+-   **`search_memories(query, agent, scope_type, scope_key, memory_types, limit, search_mode, ...)`**
+    -   Advanced search with filters and ranking
+    -   Returns list of `MemoryRecord` objects
+
+-   **`get_memory_context(agent, conversation, user, query, max_items, max_tokens)`**
+    -   Get formatted memory block for prompt injection
+    -   Handles ranking, filtering, and formatting
+    -   Returns formatted string
+
+-   **`_rank_memories(memories, query)`**
+    -   Reranks candidates based on:
+        - Relevance (40%)
+        - Recency (20%)
+        - Importance (20%)
+        - Retrieval frequency (10%)
+        - Confidence (10%)
+
+### Indexing (`indexing.py`)
+
+Manages search indexes.
+
+#### Index Backends
+
+-   **`sqlite_fts`**: SQLite FTS5 for full-text search
+-   **`sqlite_vec`**: SQLite with vector extension
+-   **`pgvector`**: PostgreSQL vector extension
+-   **`custom`**: Bring your own index
+
+#### Core Functions
+
+-   **`index_memory(memory_id, index_types=["fts", "vector"])`**
+    -   Add memory to specified indexes
+
+-   **`search_index(query, index_type, limit)`**
+    -   Search specific index
+
+-   **`rebuild_index(index_type="all")`**
+    -   Rebuild all or specific index
+
+### Setup and Seeding (`setup.py`)
+
+Handles installation and default data.
+
+#### Hooks
+
+-   **`after_install()`**: Called after app installation
+-   **`after_migrate()`**: Called after database migration
+
+#### Functions
+
+-   **`seed_memory_profiles()`**: Creates 7 built-in profiles (idempotent)
+-   **`seed_memory_policies()`**: Creates 3 default policies (idempotent)
+-   **`get_seeding_stats()`**: Returns seeding statistics
+
+### Agent Integration
+
+The Memory System integrates with agents through:
+
+#### Agent DocType Fields
+
+| Field | Type | Description |
+|:------|:-----|:------------|
+| `enable_memory` | Check | Enable memory for this agent |
+| `memory_policy` | Link(Memory Policy) | Policy controlling capture |
+| `memory_profile` | Link(Memory Profile) | Schema and defaults |
+| `memory_agent` | Link(Agent) | Dedicated capture agent |
+| `memory_run_order` | Select | `before_main_response`, `after_main_response`, `background` |
+| `default_memory_scope_type` | Select | Default visibility |
+| `default_memory_scope_key_template` | Data | Template for scope keys |
+| `enable_memory_search_tool` | Check | Allow agent to search memories |
+| `enable_memory_write_tool` | Check | Allow agent to create/update memories |
+| `memory_index_backend_default` | Select | Index backend preference |
+| `memory_visibility_default` | Select | Default memory visibility |
+| `memory_retrieval_mode` | Select | `inject`, `tool_only`, `hybrid` |
+| `memory_max_items` | Int | Max memories to inject |
+| `memory_in_prompt_budget` | Int | Token budget for memories |
+
+#### Memory Tools
+
+Agents can use these tools when enabled:
+
+-   **`memory_search`**: Search for relevant memories
+-   **`memory_create`**: Create a new memory
+-   **`memory_update`**: Update an existing memory
+
+### Frontend Components
+
+#### MemoryTab (`frontend/src/components/agent/MemoryTab.tsx`)
+
+React component for configuring agent memory settings.
+
+**Features:**
+-   Memory enable/disable toggle
+-   Policy and profile selection
+-   Scope and retrieval configuration
+-   Token budgeting with sliders
+-   Tool enablement
+
+#### MemoryPolicyForm (`frontend/src/components/agent/MemoryPolicyForm.tsx`)
+
+React component for creating/editing memory policies.
+
+**Features:**
+-   Multi-tab form (General, Capture, Storage, Advanced)
+-   Real-time validation
+-   Schema editor with JSON validation
+-   Help text and tooltips
+
+#### React Hooks
+
+-   **`useMemory()`**: Hook for memory operations (search, create, update, delete)
+-   **`useMemorySearch()`**: Dedicated search hook with debouncing
+
+### Documentation
+
+Complete documentation in `docs/memory/`:
+
+| Document | Description |
+|:---------|:------------|
+| `overview.md` | Architecture, mental model, key concepts |
+| `getting-started.md` | Quick start guide |
+| `profiles.md` | Profile documentation and examples |
+| `capture-modes.md` | Capture timing and strategies |
+| `retrieval.md` | Search, ranking, and injection |
+| `api-reference.md` | Python and frontend API reference |
+| `best-practices.md` | Production recommendations |
+
 ## Development and Coding Guidelines
 
 ### Frontend TypeScript Strictness

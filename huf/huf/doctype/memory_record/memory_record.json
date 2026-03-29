@@ -63,33 +63,38 @@
    "fieldtype": "Link",
    "label": "Agent",
    "options": "Agent",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The agent that created or owns this memory."
   },
   {
    "fieldname": "conversation",
    "fieldtype": "Link",
    "label": "Conversation",
-   "options": "Agent Conversation"
+   "options": "Agent Conversation",
+   "description": "The conversation from which this memory was extracted."
   },
   {
    "fieldname": "run",
    "fieldtype": "Link",
    "label": "Run",
-   "options": "Agent Run"
+   "options": "Agent Run",
+   "description": "The specific agent run that produced this memory."
   },
   {
    "fieldname": "source_type",
    "fieldtype": "Select",
    "label": "Source Type",
    "options": "\nconversation\nrun\nmanual\nevent\nscheduled\nimported",
-   "reqd": 1
+   "reqd": 1,
+   "description": "How this memory was created: conversation (from chat), run (from execution), manual (user-created), event (triggered), scheduled (batch), or imported."
   },
   {
    "fieldname": "producer_mode",
    "fieldtype": "Select",
    "label": "Producer Mode",
    "options": "\nmain_agent\nmemory_agent\npost_run_llm\nrules_only\nmanual",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The mechanism that produced this memory: main_agent, memory_agent, post_run_llm, rules_only, or manual (user-entered)."
   },
   {
    "fieldname": "column_break_source",
@@ -98,13 +103,15 @@
   {
    "fieldname": "created_from_turn_count",
    "fieldtype": "Int",
-   "label": "Created from Turn #"
+   "label": "Created from Turn #",
+   "description": "The conversation turn number when this memory was captured."
   },
   {
    "fieldname": "memory_profile",
    "fieldtype": "Link",
    "label": "Memory Profile",
-   "options": "Memory Profile"
+   "options": "Memory Profile",
+   "description": "The profile that defined the schema and capture behavior for this memory."
   },
   {
    "fieldname": "status",
@@ -112,7 +119,8 @@
    "label": "Status",
    "options": "\nactive\nsuperseded\narchived\nexpired\nerror",
    "reqd": 1,
-   "default": "active"
+   "default": "active",
+   "description": "Current state: active (available for retrieval), superseded (replaced by newer version), archived (manually archived), expired (past TTL), or error (capture failed)."
   },
   {
    "fieldname": "content_section",
@@ -123,19 +131,22 @@
    "fieldname": "title",
    "fieldtype": "Data",
    "label": "Title",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Human-readable title summarizing the memory content."
   },
   {
    "fieldname": "memory_type",
    "fieldtype": "Select",
    "label": "Memory Type",
    "options": "\nprofile\nsession_state\npreference\nfact\nplan\nobservation\ninsight\ndomain_object\ncustom",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The semantic type of this memory: profile (user info), session_state (temporary), preference (user likes), fact (knowledge), plan (future actions), observation (noted event), insight (derived conclusion), domain_object (structured data), or custom."
   },
   {
    "fieldname": "schema_name",
    "fieldtype": "Data",
-   "label": "Schema Name"
+   "label": "Schema Name",
+   "description": "The JSON Schema this memory conforms to, if any."
   },
   {
    "fieldname": "column_break_content",
@@ -145,17 +156,20 @@
    "fieldname": "data_json",
    "fieldtype": "JSON",
    "label": "Data (JSON)",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The structured memory content in JSON format. This is the primary data payload."
   },
   {
    "fieldname": "summary_text",
    "fieldtype": "Text",
-   "label": "Summary"
+   "label": "Summary",
+   "description": "A plain text summary of the memory for human review and full-text search."
   },
   {
    "fieldname": "raw_context_excerpt",
    "fieldtype": "Text",
-   "label": "Raw Context Excerpt"
+   "label": "Raw Context Excerpt",
+   "description": "The original conversation excerpt from which this memory was extracted. Useful for auditing and debugging."
   },
   {
    "fieldname": "scope_section",
@@ -167,20 +181,23 @@
    "fieldtype": "Select",
    "label": "Scope Type",
    "options": "\nconversation\nuser\nagent\nnamespace\nglobal",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The visibility boundary: conversation (this chat only), user (all user's chats), agent (all this agent's chats), namespace (shared group), or global (all agents)."
   },
   {
    "fieldname": "scope_key",
    "fieldtype": "Data",
    "label": "Scope Key",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Unique identifier for the scope instance. E.g., user ID for user scope, conversation ID for conversation scope."
   },
   {
    "fieldname": "visibility",
    "fieldtype": "Select",
    "label": "Visibility",
    "options": "\nprivate\nshared_with_agent\nshared_with_namespace\nglobal",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Access control: private (owner only), shared_with_agent (owner + agent), shared_with_namespace (namespace members), or global (all users/agents)."
   },
   {
    "fieldname": "column_break_scope",
@@ -191,14 +208,16 @@
    "fieldtype": "Float",
    "label": "Confidence",
    "precision": "2",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "AI-assigned confidence score (0-1) indicating certainty about the memory accuracy. Higher = more certain."
   },
   {
    "fieldname": "importance_score",
    "fieldtype": "Float",
    "label": "Importance Score",
    "precision": "2",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "AI-assigned importance score (0-1) indicating how significant this memory is. Used for ranking during retrieval."
   },
   {
    "fieldname": "temporal_section",
@@ -208,24 +227,28 @@
   {
    "fieldname": "effective_from",
    "fieldtype": "Datetime",
-   "label": "Effective From"
+   "label": "Effective From",
+   "description": "When this memory becomes valid. Before this time, the memory is not considered active."
   },
   {
    "fieldname": "effective_until",
    "fieldtype": "Datetime",
-   "label": "Effective Until"
+   "label": "Effective Until",
+   "description": "When this memory expires. After this time, the memory status becomes 'expired'."
   },
   {
    "fieldname": "ttl_days",
    "fieldtype": "Int",
    "label": "TTL (Days)",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Time-to-live in days. The memory will automatically expire after this many days from creation."
   },
   {
    "fieldname": "supersedes_memory_record",
    "fieldtype": "Link",
    "label": "Supersedes Memory Record",
-   "options": "Memory Record"
+   "options": "Memory Record",
+   "description": "If this memory replaces an older version, link to the superseded record here."
   },
   {
    "fieldname": "column_break_temporal",
@@ -235,12 +258,14 @@
    "fieldname": "creation_timestamp",
    "fieldtype": "Datetime",
    "label": "Creation Timestamp",
-   "read_only": 1
+   "read_only": 1,
+   "description": "Exact time when this memory was created."
   },
   {
    "fieldname": "expiration_timestamp",
    "fieldtype": "Datetime",
-   "label": "Expiration Timestamp"
+   "label": "Expiration Timestamp",
+   "description": "Calculated expiration time based on TTL or effective_until date."
   },
   {
    "fieldname": "tags_section",
@@ -251,7 +276,8 @@
    "fieldname": "tags",
    "fieldtype": "Table",
    "label": "Tags",
-   "options": "Memory Record Tag"
+   "options": "Memory Record Tag",
+   "description": "Tags for categorizing and filtering memories."
   },
   {
    "fieldname": "metadata_section",
@@ -261,7 +287,8 @@
   {
    "fieldname": "metadata_json",
    "fieldtype": "JSON",
-   "label": "Metadata (JSON)"
+   "label": "Metadata (JSON)",
+   "description": "Additional metadata about this memory. Use for custom fields, provenance tracking, or integration data."
   },
   {
    "fieldname": "indexing_section",
@@ -272,19 +299,22 @@
    "fieldname": "fts_indexed",
    "fieldtype": "Check",
    "label": "FTS Indexed",
-   "default": "0"
+   "default": "0",
+   "description": "Whether this memory has been indexed for full-text search."
   },
   {
    "fieldname": "vector_indexed",
    "fieldtype": "Check",
    "label": "Vector Indexed",
-   "default": "0"
+   "default": "0",
+   "description": "Whether this memory has been indexed for vector/semantic search."
   },
   {
    "fieldname": "index_backend",
    "fieldtype": "Select",
    "label": "Index Backend",
-   "options": "\nnone\nsqlite_fts\nsqlite_vec\npgvector\ncustom"
+   "options": "\nnone\nsqlite_fts\nsqlite_vec\npgvector\ncustom",
+   "description": "The backend used for indexing this memory."
   },
   {
    "fieldname": "column_break_indexing",
@@ -294,20 +324,23 @@
    "fieldname": "last_indexed_at",
    "fieldtype": "Datetime",
    "label": "Last Indexed At",
-   "read_only": 1
+   "read_only": 1,
+   "description": "When this memory was last indexed. Used to determine if re-indexing is needed."
   },
   {
    "fieldname": "last_retrieved_at",
    "fieldtype": "Datetime",
    "label": "Last Retrieved At",
-   "read_only": 1
+   "read_only": 1,
+   "description": "When this memory was last accessed. Used for LRU caching and importance scoring."
   },
   {
    "fieldname": "retrieval_count",
    "fieldtype": "Int",
    "label": "Retrieval Count",
    "default": "0",
-   "read_only": 1
+   "read_only": 1,
+   "description": "Number of times this memory has been retrieved. Used for popularity-based ranking."
   }
  ],
  "index_web_pages_for_search": 1,

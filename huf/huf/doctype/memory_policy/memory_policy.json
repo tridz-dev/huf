@@ -60,18 +60,21 @@
    "fieldtype": "Data",
    "label": "Policy Name",
    "reqd": 1,
-   "unique": 1
+   "unique": 1,
+   "description": "A unique name for this memory policy. Use descriptive names that indicate the policy's purpose."
   },
   {
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled",
-   "default": "1"
+   "default": "1",
+   "description": "Enable or disable this policy. Disabled policies will not capture memories even if assigned to agents."
   },
   {
    "fieldname": "description",
    "fieldtype": "Text",
-   "label": "Description"
+   "label": "Description",
+   "description": "Describe when and how this policy should be used. Helps users choose the right policy for their needs."
   },
   {
    "fieldname": "column_break_basic",
@@ -81,13 +84,15 @@
    "fieldname": "agent",
    "fieldtype": "Link",
    "label": "Agent",
-   "options": "Agent"
+   "options": "Agent",
+   "description": "The agent this policy applies to. Leave empty to create a reusable policy template."
   },
   {
    "fieldname": "memory_profile",
    "fieldtype": "Link",
    "label": "Memory Profile",
-   "options": "Memory Profile"
+   "options": "Memory Profile",
+   "description": "The memory profile that defines the schema and default behavior for this policy."
   },
   {
    "fieldname": "capture_section",
@@ -99,21 +104,24 @@
    "fieldtype": "Select",
    "label": "Capture Owner",
    "options": "\nmain_agent\nmemory_agent\npost_run_llm\nrules_only",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Who produces the memory: main_agent (the agent itself), memory_agent (dedicated capture agent), post_run_llm (separate LLM call), or rules_only (no LLM, pattern-based)."
   },
   {
    "fieldname": "memory_agent",
    "fieldtype": "Link",
    "label": "Memory Agent",
    "options": "Agent",
-   "depends_on": "eval:doc.capture_owner=='memory_agent'"
+   "depends_on": "eval:doc.capture_owner=='memory_agent'",
+   "description": "The dedicated agent used for memory capture when Capture Owner is set to 'memory_agent'."
   },
   {
    "fieldname": "capture_stage",
    "fieldtype": "Select",
    "label": "Capture Stage",
    "options": "\nin_prompt\npost_response_sync\npost_response_async\nconversation_end\nscheduled",
-   "reqd": 1
+   "reqd": 1,
+   "description": "When memory capture occurs: in_prompt (during generation), post_response_sync (immediately after), post_response_async (background), conversation_end, or scheduled."
   },
   {
    "fieldname": "column_break_capture",
@@ -124,27 +132,31 @@
    "fieldtype": "Select",
    "label": "Capture Frequency Type",
    "options": "\nevery_run\nevery_n_runs\nevery_n_turns\nconversation_end\nmanual\nscheduled",
-   "reqd": 1
+   "reqd": 1,
+   "description": "How often to capture: every_run (each time), every_n_runs (periodic), every_n_turns (after N messages), conversation_end, manual (explicit only), or scheduled."
   },
   {
    "fieldname": "capture_frequency_value",
    "fieldtype": "Int",
    "label": "Capture Frequency Value",
-   "depends_on": "eval:['every_n_runs','every_n_turns'].includes(doc.capture_frequency_type)"
+   "depends_on": "eval:['every_n_runs','every_n_turns'].includes(doc.capture_frequency_type)",
+   "description": "The N value for 'every_n_runs' or 'every_n_turns' frequency types. E.g., 3 means capture every 3rd run or turn."
   },
   {
    "fieldname": "conversation_end_strategy",
    "fieldtype": "Select",
    "label": "Conversation End Strategy",
    "options": "\nmanual_close\nidle_timeout\nheuristic\nnever",
-   "depends_on": "eval:doc.capture_frequency_type=='conversation_end'"
+   "depends_on": "eval:doc.capture_frequency_type=='conversation_end'",
+   "description": "How to determine when a conversation ends: manual_close (user action), idle_timeout (inactivity), heuristic (AI detection), or never (must manually trigger)."
   },
   {
    "fieldname": "idle_timeout_minutes",
    "fieldtype": "Int",
    "label": "Idle Timeout (Minutes)",
    "depends_on": "eval:doc.conversation_end_strategy=='idle_timeout'",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Minutes of inactivity before a conversation is considered ended. Memories are captured when timeout occurs."
   },
   {
    "fieldname": "prompt_section",
@@ -154,7 +166,8 @@
   {
    "fieldname": "capture_prompt",
    "fieldtype": "Text",
-   "label": "Capture Prompt"
+   "label": "Capture Prompt",
+   "description": "Custom prompt to guide memory extraction. Overrides the profile's default capture prompt. Be specific about what to capture and how to format it."
   },
   {
    "fieldname": "schema_section",
@@ -164,13 +177,15 @@
   {
    "fieldname": "capture_schema_json",
    "fieldtype": "JSON",
-   "label": "Capture Schema (JSON)"
+   "label": "Capture Schema (JSON)",
+   "description": "JSON Schema for validating captured memories. If a profile is selected, this inherits from the profile but can be overridden here."
   },
   {
    "fieldname": "allow_open_schema",
    "fieldtype": "Check",
    "label": "Allow Open Schema",
-   "default": "0"
+   "default": "0",
+   "description": "Allow any JSON structure without schema validation. Useful for flexible capture but may result in inconsistent data."
   },
   {
    "fieldname": "column_break_schema",
@@ -180,25 +195,29 @@
    "fieldname": "require_json_schema_match",
    "fieldtype": "Check",
    "label": "Require JSON Schema Match",
-   "default": "0"
+   "default": "0",
+   "description": "Require captured memories to strictly match the JSON Schema. Memories that don't match will be rejected."
   },
   {
    "fieldname": "allow_update_existing",
    "fieldtype": "Check",
    "label": "Allow Update Existing",
-   "default": "1"
+   "default": "1",
+   "description": "Allow updating existing memories when similar content is captured again. Prevents duplicate memories."
   },
   {
    "fieldname": "allow_merge",
    "fieldtype": "Check",
    "label": "Allow Merge",
-   "default": "0"
+   "default": "0",
+   "description": "Merge new data with existing memories rather than replacing them. Useful for accumulating information over time."
   },
   {
    "fieldname": "allow_append",
    "fieldtype": "Check",
    "label": "Allow Append",
-   "default": "0"
+   "default": "0",
+   "description": "Append new items to lists within existing memories. Useful for collecting multiple related items."
   },
   {
    "fieldname": "quality_section",
@@ -210,19 +229,22 @@
    "fieldtype": "Float",
    "label": "Minimum Confidence",
    "precision": "2",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Minimum confidence score (0-1) for accepting memories. Memories below this threshold are rejected. Higher values = higher quality, fewer memories."
   },
   {
    "fieldname": "store_raw_payload",
    "fieldtype": "Check",
    "label": "Store Raw Payload",
-   "default": "0"
+   "default": "0",
+   "description": "Store the raw, unprocessed capture output. Useful for debugging but increases storage usage."
   },
   {
    "fieldname": "store_summary",
    "fieldtype": "Check",
    "label": "Store Summary",
-   "default": "1"
+   "default": "1",
+   "description": "Generate and store a text summary of the memory. Enables text-based search and human review."
   },
   {
    "fieldname": "column_break_quality",
@@ -237,13 +259,15 @@
    "fieldname": "enable_fts_index",
    "fieldtype": "Check",
    "label": "Enable FTS Index",
-   "default": "0"
+   "default": "0",
+   "description": "Enable Full-Text Search indexing for keyword-based memory retrieval. Recommended for most use cases."
   },
   {
    "fieldname": "enable_vector_index",
    "fieldtype": "Check",
    "label": "Enable Vector Index",
-   "default": "0"
+   "default": "0",
+   "description": "Enable vector/semantic indexing for similarity-based memory retrieval. Requires more storage but enables semantic search."
   },
   {
    "fieldname": "column_break_indexing",
@@ -254,14 +278,16 @@
    "fieldtype": "Select",
    "label": "Vector Backend",
    "options": "\nsqlite_vec\npgvector\ncustom",
-   "depends_on": "eval:doc.enable_vector_index==1"
+   "depends_on": "eval:doc.enable_vector_index==1",
+   "description": "Backend for vector storage: sqlite_vec (embedded), pgvector (PostgreSQL extension), or custom (self-managed)."
   },
   {
    "fieldname": "fts_backend",
    "fieldtype": "Select",
    "label": "FTS Backend",
    "options": "\nsqlite_fts\ncustom",
-   "depends_on": "eval:doc.enable_fts_index==1"
+   "depends_on": "eval:doc.enable_fts_index==1",
+   "description": "Backend for full-text search: sqlite_fts (embedded SQLite FTS5) or custom (external search engine)."
   },
   {
    "fieldname": "retrieval_section",
@@ -274,13 +300,15 @@
    "label": "Default Retrieval Mode",
    "options": "\ninject\ntool_only\nhybrid",
    "reqd": 1,
-   "default": "inject"
+   "default": "inject",
+   "description": "How memories are provided to agents: inject (automatically include in prompt), tool_only (agent requests via tool), or hybrid (both)."
   },
   {
    "fieldname": "max_items_to_inject",
    "fieldtype": "Int",
    "label": "Max Items to Inject",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Maximum number of memories to include in a single prompt. Prevents context overflow."
   },
   {
    "fieldname": "column_break_retrieval",
@@ -290,7 +318,8 @@
    "fieldname": "max_tokens_to_inject",
    "fieldtype": "Int",
    "label": "Max Tokens to Inject",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Maximum tokens to use for injected memories. Acts as a budget to prevent exceeding context window limits."
   }
  ],
  "index_web_pages_for_search": 1,
