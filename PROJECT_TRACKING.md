@@ -32,7 +32,7 @@ Transform HUF from "agent orchestration + RAG" into a platform where agents main
 | 1.1 | Memory Record DocType definition | ✅ Complete | Data Model Architect |
 | 1.2 | Memory Policy DocType definition | ✅ Complete | Data Model Architect |
 | 1.3 | Memory Profile DocType definition | ✅ Complete | Data Model Architect |
-| 1.4 | Memory Record Tag child table | 🟡 Partial | Data Model Architect |
+| 1.4 | Memory Record Tag child table | ✅ Complete | Data Model Architect |
 | 1.5 | Agent DocType memory fields | 🔲 Pending | TBD |
 | 1.6 | Agent Conversation memory fields | 🔲 Pending | TBD |
 | 1.7 | Agent Run observability fields | 🔲 Pending | TBD |
@@ -112,14 +112,15 @@ Transform HUF from "agent orchestration + RAG" into a platform where agents main
 - ✅ **Memory Record DocType design complete** (`~/code/huf-memory/doctype_designs/memory_record.json`)
 - ✅ **Memory Policy DocType design complete** (`~/code/huf-memory/doctype_designs/memory_policy.json`)
 - ✅ **Memory Profile DocType design complete** (`~/code/huf-memory/doctype_designs/memory_profile.json`)
-- ✅ **Memory Record Tag child table implementation started** (`huf/huf/doctype/memory_record_tag/`)
+- ✅ **Memory Record Tag child table implementation complete** (`huf/huf/doctype/memory_record_tag/`)
+- ✅ **Frappe DocType files created** for Memory Record, Memory Policy, Memory Profile
+- ✅ **Python controller classes implemented** with full business logic
 - ✅ **Capture & Retrieval technical specifications complete** (`~/code/huf-memory/tech_specs/CAPTURE_RETRIEVAL.md`)
 - ✅ **Storage Architecture technical specifications complete** (`~/code/huf-memory/tech_specs/STORAGE_ARCHITECTURE.md`)
 - ✅ **3 Opinionated Profile designs complete** (programming, travel_planning, documentation in `~/code/huf-memory/profiles/`)
 
 ### In Progress
-- 🟡 Memory Record Tag child table needs completion (Python controller is empty)
-- 🟡 Awaiting Phase 1 DocType implementation (conversion from JSON designs to Frappe files)
+- 🟡 Awaiting Phase 2 capture pipeline implementation
 - 🟡 Awaiting agent assignments for remaining implementation tasks
 
 ### Pending Tasks (Ready for Assignment)
@@ -143,8 +144,8 @@ Transform HUF from "agent orchestration + RAG" into a platform where agents main
 | `~/code/huf-memory/doctype_designs/memory_profile.json` | Memory Profile DocType schema definition | ✅ Complete | data-model-architect |
 | `~/code/huf-memory/tech_specs/CAPTURE_RETRIEVAL.md` | Capture modes & retrieval technical specs | ✅ Complete | tech-spec-writer |
 | `~/code/huf-memory/tech_specs/STORAGE_ARCHITECTURE.md` | Storage & indexing technical specs | ✅ Complete | tech-spec-writer |
-| `huf/huf/doctype/memory_record_tag/memory_record_tag.json` | Memory Record Tag child table (Frappe) | 🟡 Complete | data-model-architect |
-| `huf/huf/doctype/memory_record_tag/memory_record_tag.py` | Memory Record Tag controller (stub) | 🟡 Stub Only | data-model-architect |
+| `huf/huf/doctype/memory_record_tag/memory_record_tag.json` | Memory Record Tag child table (Frappe) | ✅ Complete | data-model-architect |
+| `huf/huf/doctype/memory_record_tag/memory_record_tag.py` | Memory Record Tag controller (full implementation) | ✅ Complete | data-model-architect |
 | `~/code/huf-memory/profiles/programming/profile.json` | Programming Memory profile definition | ✅ Complete | profile-ux-designer |
 | `~/code/huf-memory/profiles/travel_planning/profile.json` | Travel Planning Memory profile definition | ✅ Complete | profile-ux-designer |
 | `~/code/huf-memory/profiles/documentation/profile.json` | Documentation Memory profile definition | ✅ Complete | profile-ux-designer |
@@ -175,14 +176,18 @@ Transform HUF from "agent orchestration + RAG" into a platform where agents main
 
 ## 8. Next Steps
 
-### Immediate (Next 24h)
-1. [ ] Complete Memory Record Tag child table (add controller logic)
+### Immediate (Next 24h) - DISPATCHED TO SUBAGENTS
+1. [ ] Complete Memory Record Tag child table (add controller logic) → backend-doctypes
 2. [ ] Convert JSON DocType designs to Frappe DocType files for:
-   - Memory Record
-   - Memory Policy
-   - Memory Profile
-3. [ ] Create Python controller classes for the three main DocTypes
-4. [ ] Add memory fields to Agent, Agent Conversation, Agent Run DocTypes
+   - Memory Record → backend-doctypes
+   - Memory Policy → backend-doctypes
+   - Memory Profile → backend-doctypes
+3. [ ] Create Python controller classes for the three main DocTypes → backend-doctypes
+4. [ ] Add memory fields to Agent, Agent Conversation, Agent Run DocTypes → backend-doctypes
+5. [ ] Implement capture modes (in-prompt, post-response sync/async) → capture-pipeline
+6. [ ] Implement storage backends & FTS/vector indexing → storage-indexing
+7. [ ] Implement prompt injection & memory search tool → retrieval-system
+8. [ ] Implement Agent Memory tab UI & Memory Explorer → ui-integration
 
 ### Short Term (This Week)
 1. [ ] Complete all Phase 1 DocType implementations
@@ -222,6 +227,7 @@ Transform HUF from "agent orchestration + RAG" into a platform where agents main
 | 2026-03-28 11:06 | data-model-architect | Started Memory Record Tag child table implementation | Complete controller logic |
 | 2026-03-28 11:06 | coordinator | Updated PROJECT_TRACKING.md with current status | Continue monitoring implementation |
 | 2026-03-28 11:07 | frontend-developer | Completed TypeScript types and API services for Memory system | Integrate with UI components |
+| 2026-03-29 14:34 | backend-doctypes | Completed Memory Record Tag controller logic; Verified all Phase 1 DocType implementations (Memory Record, Memory Policy, Memory Profile) are complete with full Python controller classes | Proceed to Phase 2 capture pipeline implementation |
 
 ---
 
