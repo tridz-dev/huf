@@ -447,18 +447,24 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		return {"status": "failed", "error": "tool.call node missing tool_name in config"}
 
 	# Build args, potentially with context interpolation
-	args = dict(config.get("args", {}))
+	# Support both 'args' (preferred) and 'parameters' (legacy)
+	args = dict(config.get("args") or config.get("parameters") or {})
 	ctx = _load_context(flow_run)
 
 	# Recursive context variable substitution
+	import re
+	
 	def _substitute(data):
 		if isinstance(data, dict):
 			return {k: _substitute(v) for k, v in data.items()}
 		elif isinstance(data, list):
 			return [_substitute(v) for v in data]
-		elif isinstance(data, str) and data.startswith("{{") and data.endswith("}}"):
-			context_key = data[2:-2].strip()
-			return ctx.get(context_key, data)
+		elif isinstance(data, str):
+			# Handle inline templates like "Hello {{name}}"
+			def replace_var(match):
+				var_name = match.group(1).strip()
+				return str(ctx.get(var_name, match.group(0)))
+			return re.sub(r'\{\{(.*?)\}\}', replace_var, data)
 		return data
 
 	args = _substitute(args)
