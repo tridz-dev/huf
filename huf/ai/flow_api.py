@@ -474,9 +474,12 @@ def get_node_schemas() -> dict:
 			"config_schema": [
 				{"name": "title", "label": "Title", "type": "string", "default": "Approval Required"},
 				{"name": "instructions", "label": "Instructions", "type": "text"},
+				{"name": "context_summary", "label": "Context Summary", "type": "text", "supports_variables": True, "description": "Summary shown to approver with context variables"},
 				{"name": "approval_type", "label": "Approval Type", "type": "select", "options": ["role", "user"], "default": "role"},
-				{"name": "approver_role", "label": "Approver Role", "type": "string", "show_if": {"field": "approval_type", "value": "role"}},
+				{"name": "approver_role", "label": "Approver Role", "type": "role_select", "show_if": {"field": "approval_type", "value": "role"}},
 				{"name": "approver_users", "label": "Approver Users", "type": "string", "show_if": {"field": "approval_type", "value": "user"}},
+				{"name": "reference_doctype", "label": "Reference DocType", "type": "doctype_select", "description": "Link approval to a specific document type"},
+				{"name": "reference_name", "label": "Reference Document", "type": "string", "supports_variables": True, "description": "Document name (supports {{variables}})"},
 				{"name": "store_decision_in_context", "label": "Store Decision Key", "type": "string", "default": "approval"},
 			],
 		},
