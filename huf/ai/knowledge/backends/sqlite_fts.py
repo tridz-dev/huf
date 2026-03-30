@@ -4,7 +4,7 @@ import os
 import sqlite3
 import json
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from contextlib import contextmanager
 
 import frappe
@@ -246,3 +246,20 @@ class SQLiteFTSBackend(KnowledgeBackend):
 			stats["input_count"] = cursor.fetchone()[0]
 		
 		return stats
+	
+	def health_check(self) -> Tuple[bool, str]:
+		"""Check backend health. Returns (is_healthy, message)."""
+		try:
+			# Quick test query - check if we can access the database and perform a search
+			self.search("health_check_test", top_k=1)
+			return (True, "Healthy")
+		except Exception as e:
+			return (False, str(e))
+	
+	def supports_filters(self) -> bool:
+		"""Whether this backend supports metadata filtering."""
+		return False  # FTS5 backend doesn't support metadata filtering yet
+	
+	def supports_hybrid_search(self) -> bool:
+		"""Whether this backend supports hybrid search."""
+		return False  # SQLite FTS doesn't support hybrid search natively

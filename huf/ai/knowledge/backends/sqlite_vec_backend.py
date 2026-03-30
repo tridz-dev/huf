@@ -5,7 +5,7 @@ import os
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import frappe
 from frappe import _
@@ -300,3 +300,20 @@ class SQLiteVecBackend(KnowledgeBackend):
 			stats["input_count"] = conn.execute("SELECT COUNT(DISTINCT input_id) FROM chunks").fetchone()[0]
 
 		return stats
+	
+	def health_check(self) -> Tuple[bool, str]:
+		"""Check backend health. Returns (is_healthy, message)."""
+		try:
+			# Quick test query - check if we can access the database and perform a search
+			self.search("health_check_test", top_k=1)
+			return (True, "Healthy")
+		except Exception as e:
+			return (False, str(e))
+	
+	def supports_filters(self) -> bool:
+		"""Whether this backend supports metadata filtering."""
+		return True
+	
+	def supports_hybrid_search(self) -> bool:
+		"""Whether this backend supports hybrid search."""
+		return False  # SQLite-vec doesn't support hybrid search natively
