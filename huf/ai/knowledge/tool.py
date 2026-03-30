@@ -4,6 +4,7 @@ import frappe
 from typing import Optional
 
 from .retriever import knowledge_search, get_search_diagnostics
+from .fallback_retriever import FallbackRetriever
 
 
 
@@ -111,13 +112,13 @@ def handle_knowledge_search(
 	if not knowledge_source:
 		return "Error: No knowledge sources available for this agent."
 
-	# Perform search (ignore_permissions=True: agent has explicit knowledge linkage)
+	# Perform search using FallbackRetriever for automatic failover
 	try:
-		results = knowledge_search(
+		retriever = FallbackRetriever(knowledge_source)
+		results = retriever.search(
 			query=query,
-			knowledge_source=knowledge_source,
 			top_k=top_k,
-			ignore_permissions=True,
+			use_fallback=True
 		)
 
 		if not results:
@@ -134,6 +135,12 @@ def handle_knowledge_search(
 		# Format results
 		output = []
 		output.append(f"Search results from '{knowledge_source}':")
+		
+		# Check if fallback was used
+		if results and results[0].get("_search_metadata", {}).get("fallback_used"):
+			fallback_backend = results[0]["_search_metadata"].get("fallback_backend")
+			output.append(f"(Note: Using fallback backend '{fallback_backend}' due to primary backend issues)")
+		
 		output.append("")
 
 		for i, result in enumerate(results, 1):
