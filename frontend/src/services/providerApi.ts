@@ -151,7 +151,7 @@ export async function updateProvider(name: string, data: Partial<AIProviderDoc>)
 export async function getModels(providerId?: string): Promise<AIModel[]> {
   try {
       const models = await db.getDocList(doctype['AI Model'], {
-        fields: ['name', 'model_name', 'provider', 'modalities'],
+        fields: ['name', 'model_name', 'provider'],
         filters: providerId ? [['provider', '=', providerId]] : undefined,
         limit: 1000,
       });
@@ -159,7 +159,6 @@ export async function getModels(providerId?: string): Promise<AIModel[]> {
         name: m.name,
         model_name: m.model_name || m.name,
         provider: m.provider,
-        modalities: m.modalities,
       })) as AIModel[];    
   } catch (error) {
     handleFrappeError(error, 'Error fetching models');

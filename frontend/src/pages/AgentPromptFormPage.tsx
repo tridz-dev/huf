@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Form } from '@/components/ui/form';
+import { Form, FormField, FormItem, FormControl, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoreVertical, Save, Trash2 } from 'lucide-react';
+import { MoreVertical, Save, Trash2, Copy, GitFork } from 'lucide-react';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { InstructionsTextarea } from '@/components/agent/InstructionsTextarea';
 import {
@@ -66,11 +66,11 @@ export function AgentPromptFormPage() {
   const [usageAgents, setUsageAgents] = useState<AgentPromptUsageAgent[]>([]);
   const [docMeta, setDocMeta] = useState<Pick<
     AgentPromptDoc,
-    'name' | 'version' | 'is_latest' | 'previous_version' | 'categories'
+    'name' | 'version' | 'is_latest' | 'previous_version' | 'category' | 'forked_from'
   > | null>(null);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any | null>(null);
-  const [selectedCategories, setSelectedCategories] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<any | null>(null);
   const [allCategories, setAllCategories] = useState<any[]>([]);
 
   const form = useForm<AgentPromptFormValues>({
@@ -88,6 +88,33 @@ export function AgentPromptFormPage() {
 
   useEffect(() => {
     if (!id || isNew) {
+      const state = location.state as { 
+        prefill?: Partial<AgentPromptFormValues>;
+        previous_version?: string;
+        forked_from?: string;
+        current_version?: number;
+        category?: any;
+      } | null;
+      
+      if (state?.prefill) {
+        form.reset({
+          ...form.getValues(),
+          ...state.prefill
+        });
+      }
+      if (state?.previous_version || state?.forked_from) {
+        setDocMeta({
+          name: '',
+          version: state.previous_version && state.current_version ? state.current_version + 1 : 1,
+          is_latest: 1,
+          previous_version: state.previous_version,
+          forked_from: state.forked_from,
+        });
+      }
+      if (state?.category) {
+        setSelectedCategory(state.category);
+      }
+
       setLoading(false);
       return;
     }
@@ -104,6 +131,7 @@ export function AgentPromptFormPage() {
           version: prompt.version,
           is_latest: prompt.is_latest,
           previous_version: prompt.previous_version,
+          category: prompt.category,
         });
 
         const [count, agents] = await Promise.all([
@@ -156,29 +184,42 @@ export function AgentPromptFormPage() {
     }
   }, [form.watch('title'), isNew, form]);
 
-  // Auto-save categories when they change
+  // Set selected category when all categories are loaded
+  useEffect(() => {
+    if (allCategories.length > 0 && docMeta?.category) {
+      const match = allCategories.find((c) => c.name === docMeta.category);
+      if (match) setSelectedCategory(match);
+    }
+  }, [allCategories, docMeta?.category]);
+
+  // Auto-save category when it changes
   useEffect(() => {
     if (!docMeta?.name || loading) return;
+    // Don't auto-save if selectedCategory is still null but docMeta has a category (not yet loaded)
+    if (docMeta.category && !selectedCategory && allCategories.length === 0) return;
+    // Only save if the category has actually changed
+    if (selectedCategory?.name === docMeta?.category) return;
 
-    const saveCategories = async () => {
+    const saveCategory = async () => {
       try {
         await updateAgentPrompt(docMeta.name, {
-          categories: selectedCategories.map(c => c.name),
+          category: selectedCategory?.name || undefined,
         });
       } catch (error) {
-        console.error('Failed to save categories:', error);
+        console.error('Failed to save category:', error);
         toast.error('Failed to save category changes');
       }
     };
 
     // Debounce the save to avoid too many API calls
-    const timeoutId = setTimeout(saveCategories, 500);
+    const timeoutId = setTimeout(saveCategory, 500);
     return () => clearTimeout(timeoutId);
-  }, [selectedCategories, docMeta?.name, loading]);
+  }, [selectedCategory, docMeta?.name, loading, docMeta?.category, allCategories.length]);
 
-  const handleSave = form.handleSubmit(async (values) => {
-    setSaving(true);
-    try {
+  const handleSave = form.handleSubmit(
+    async (values) => {
+      setSaving(true);
+      try {
       const payload: Partial<AgentPromptDoc> = {
         title: values.title,
         slug: values.slug || undefined,
@@ -187,8 +228,15 @@ export function AgentPromptFormPage() {
         visibility: values.visibility,
         tags: values.tags || undefined,
         prompt_body: values.prompt_body,
-        categories: selectedCategories.map(c => c.name),
+        category: selectedCategory?.name || undefined,
       };
+
+      if (isNew && docMeta?.previous_version) {
+        payload.previous_version = docMeta.previous_version;
+      }
+      if (isNew && docMeta?.forked_from) {
+        payload.forked_from = docMeta.forked_from;
+      }
 
       if (isNew) {
         const created = await createAgentPrompt(payload);
@@ -276,10 +324,49 @@ export function AgentPromptFormPage() {
       toast.error('Failed to save Agent Prompt', {
         description: getFrappeErrorMessage(error),
       });
-    } finally {
-      setSaving(false);
+      } finally {
+        setSaving(false);
+      }
+    },
+    (errors) => {
+      if (errors.title) {
+        toast.error(errors.title.message || 'Title is required');
+      } else {
+        toast.error('Please check the form for errors');
+      }
     }
-  });
+  );
+
+  const handleCreateNewVersion = () => {
+    if (!docMeta?.name) return;
+    const currentValues = form.getValues();
+    navigate('/prompts/new', {
+      state: {
+        prefill: {
+          ...currentValues,
+        },
+        previous_version: docMeta.name,
+        current_version: docMeta.version,
+        category: selectedCategory,
+      }
+    });
+  };
+
+  const handleForkPrompt = () => {
+    if (!docMeta?.name) return;
+    const currentValues = form.getValues();
+    navigate('/prompts/new', {
+      state: {
+        prefill: {
+          ...currentValues,
+          title: `Copy of ${currentValues.title}`,
+          slug: '',
+        },
+        forked_from: docMeta.name,
+        category: selectedCategory,
+      }
+    });
+  };
 
   const handleDelete = async () => {
     if (!id || isNew) return;
@@ -312,11 +399,21 @@ export function AgentPromptFormPage() {
           <form onSubmit={handleSave} className="space-y-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="space-y-2">
-                <Input
-                  value={form.watch('title')}
-                  onChange={(event) => form.setValue('title', event.target.value, { shouldDirty: true })}
-                  className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl"
-                  placeholder="Prompt Title"
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <FormControl>
+                        <Input
+                          {...field}
+                          className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
+                          placeholder="Prompt Title"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={form.watch('is_active') ? 'default' : 'secondary'}>
@@ -364,6 +461,14 @@ export function AgentPromptFormPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleCreateNewVersion}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Create New Version
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleForkPrompt}>
+                        <GitFork className="mr-2 h-4 w-4" />
+                        Fork Prompt
+                      </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
@@ -379,15 +484,22 @@ export function AgentPromptFormPage() {
                 <CardTitle>Prompt Details</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input
-                    id="title"
-                    value={form.watch('title') || ''}
-                    onChange={(event) => form.setValue('title', event.target.value, { shouldDirty: true })}
-                    placeholder="Prompt title"
-                  />
-                </div>
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem className="space-y-2 sm:col-span-2">
+                      <Label>Title</Label>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Prompt title"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="space-y-2">
                   <Label htmlFor="slug">Slug</Label>
                   <Input
@@ -450,15 +562,13 @@ export function AgentPromptFormPage() {
             </Card>
 
             <CategoryTab
-              selectedCategories={selectedCategories}
-              onAddCategories={() => {
+              selectedCategory={selectedCategory}
+              onAddCategory={() => {
                 setEditingCategory(null);
                 setCategoryModalOpen(true);
               }}
-              onRemoveCategory={(name) =>
-                setSelectedCategories((prev) =>
-                  prev.filter((c) => c.name !== name)
-                )
+              onRemoveCategory={() =>
+                setSelectedCategory(null)
               }
               onEditCategory={(category) => {
                 setEditingCategory(category);
@@ -510,8 +620,8 @@ export function AgentPromptFormPage() {
               if (!open) setEditingCategory(null);
             }}
             categories={allCategories}
-            selected={selectedCategories}
-            onSave={setSelectedCategories}
+            selected={selectedCategory}
+            onSave={setSelectedCategory}
             refreshCategories={async () => {
               const data = await getCategories();
               setAllCategories(data);
