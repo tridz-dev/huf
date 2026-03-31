@@ -35,6 +35,10 @@ export function PromptTemplateSection({
   const selectedPrompt = promptOptions.find((option) => option.value === form.watch('agent_prompt'));
   const attachedVersion = form.watch('template_version_at_attach');
   const isLocked = form.watch('prompt_version_locked');
+  const promptComboboxOptions = promptOptions.map((option) => ({
+    ...option,
+    subtitle: option.version ? `Version ${option.version}` : undefined,
+  }));
 
   return (
     <Card>
@@ -55,7 +59,7 @@ export function PromptTemplateSection({
               <div className="flex items-center gap-2">
                 <FormControl>
                   <Combobox
-                    options={promptOptions}
+                    options={promptComboboxOptions}
                     value={field.value}
                     onValueChange={field.onChange}
                     placeholder={loadingPrompts ? 'Loading templates...' : 'Select an Agent Prompt'}
