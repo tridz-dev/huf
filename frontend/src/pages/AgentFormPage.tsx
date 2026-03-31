@@ -594,6 +594,24 @@ export function AgentFormPage() {
   }, [watchPromptMode, watchAgentPrompt, form, pendingSelectedPrompt]);
 
   useEffect(() => {
+    if (watchPromptMode !== 'Template' || !watchAgentPrompt) {
+      return;
+    }
+
+    const selectedPrompt = promptOptions.find((option) => option.value === watchAgentPrompt);
+    if (!selectedPrompt || typeof selectedPrompt.version !== 'number') {
+      return;
+    }
+
+    const currentVersion = form.getValues('template_version_at_attach');
+    if (currentVersion === selectedPrompt.version) {
+      return;
+    }
+
+    form.setValue('template_version_at_attach', selectedPrompt.version, { shouldDirty: true });
+  }, [watchPromptMode, watchAgentPrompt, promptOptions, form]);
+
+  useEffect(() => {
     if (!pendingScrollToPromptField) return;
     if (activeTab !== 'general') return;
     if (watchPromptMode !== 'Template') return;
