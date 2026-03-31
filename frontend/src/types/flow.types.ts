@@ -1,4 +1,5 @@
 import { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
+import type { BackendSettings } from '../services/flowApi';
 
 export type FlowStatus = 'draft' | 'active' | 'paused' | 'error';
 
@@ -55,6 +56,8 @@ export interface WebhookTriggerConfig {
   apiKey?: string;
   auth?: string;
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  headers?: Record<string, string>;
+  body_template?: string;
 }
 
 export interface ScheduleTriggerConfig {
@@ -199,7 +202,7 @@ export interface FlowNodeData {
   triggerConfig?: TriggerConfig;
   actionConfig?: ActionConfig;
   /** Live execution status — updated via Frappe Realtime events */
-  status?: 'idle' | 'running' | 'success' | 'error';
+  status?: 'idle' | 'running' | 'success' | 'error' | 'waiting';
 }
 
 export type FlowNode = ReactFlowNode<FlowNodeData>;
@@ -216,6 +219,8 @@ export interface Flow {
   createdAt: Date;
   updatedAt: Date;
   version: number;
+  /** Engine execution settings (mirrors backend definition_json.settings) */
+  settings?: BackendSettings;
 }
 
 export interface FlowMetadata {

@@ -265,3 +265,19 @@ export async function rejectFlowRun(
         handleFrappeError(error, `Error rejecting flow run ${flowRunId}`);
     }
 }
+
+/** Resume a flow run waiting for user input */
+export async function resumeFlowRun(
+    flowRunId: string,
+    input?: Record<string, unknown>
+): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
+    try {
+        const result = await call.post('huf.ai.flow_api.resume_flow_run', {
+            flow_run_id: flowRunId,
+            input: input ? JSON.stringify(input) : undefined,
+        });
+        return result.message as { flow_run_id: string; status: string; current_node_id: string };
+    } catch (error) {
+        handleFrappeError(error, `Error resuming flow run ${flowRunId}`);
+    }
+}

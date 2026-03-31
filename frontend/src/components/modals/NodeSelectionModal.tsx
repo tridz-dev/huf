@@ -34,8 +34,9 @@ import { actionOptions } from '../../data/actions';
 import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType } from '../../types/flow.types';
 import { Agent } from '../../types/agent.types';
 import { getAgents, getDocTypes } from '../../services/agentApi';
-import type { AgentDoc } from '../../types/agent.types';
+import { AgentDoc } from '../../types/agent.types';
 import { Combobox } from '../ui/combobox';
+import { toast } from 'sonner';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -226,29 +227,33 @@ export function NodeSelectionModal({
 
     if (config.type === 'webhook') {
       return (
-        <div className="space-y-4 mt-4">
+        <div className="space-y-4 mt-4 overflow-y-auto max-h-[400px] pr-2">
           <div>
             <Label htmlFor="webhook-url">Webhook URL</Label>
-            <Input
-              id="webhook-url"
-              value={config.url || ''}
-              onChange={(e) => setTriggerConfig({ ...config, url: e.target.value })}
-              placeholder="https://api.example.com/webhook"
-            />
-          </div>
-          <div>
-            <Label htmlFor="api-key">API Key</Label>
-            <Input
-              id="api-key"
-              value={config.apiKey || ''}
-              onChange={(e) => setTriggerConfig({ ...config, apiKey: e.target.value })}
-              placeholder="Enter API key"
-            />
+            <div className="flex gap-2">
+              <Input
+                id="webhook-url"
+                value={config.url || ''}
+                readOnly
+                className="bg-muted text-xs font-mono"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(config.url || '');
+                  toast.success('Copied to clipboard');
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">This is your endpoint. Send data here to trigger this flow.</p>
           </div>
           <div>
             <Label htmlFor="method">HTTP Method</Label>
             <Select
-              value={config.method}
+              value={config.method || 'POST'}
               onValueChange={(value) =>
                 setTriggerConfig({ ...config, method: value as any })
               }
@@ -263,6 +268,42 @@ export function NodeSelectionModal({
                 <SelectItem value="DELETE">DELETE</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label htmlFor="api-key">Security — API Key (Optional)</Label>
+            <Input
+              id="api-key"
+              value={config.apiKey || ''}
+              onChange={(e) => setTriggerConfig({ ...config, apiKey: e.target.value })}
+              placeholder="Enter API key to require X-API-Key header"
+            />
+          </div>
+          <div>
+            <Label htmlFor="headers">Custom Headers (JSON string)</Label>
+            <textarea
+              id="headers"
+              className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-ring"
+              value={JSON.stringify(config.headers || {}, null, 2)}
+              onChange={(e) => {
+                try {
+                  const headers = JSON.parse(e.target.value);
+                  setTriggerConfig({ ...config, headers });
+                } catch {
+                  // Wait for valid JSON
+                }
+              }}
+              placeholder='{ "X-Custom": "Value" }'
+            />
+          </div>
+          <div>
+            <Label htmlFor="body-template">Expected Body Template (JSON for validation or documentation)</Label>
+            <textarea
+              id="body-template"
+              className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-ring"
+              value={config.body_template || ''}
+              onChange={(e) => setTriggerConfig({ ...config, body_template: e.target.value })}
+              placeholder='{ "order_id": "123", "amount": 100 }'
+            />
           </div>
         </div>
       );
@@ -402,11 +443,10 @@ export function NodeSelectionModal({
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">{title}</h3>
         <div className="grid grid-cols-2 gap-3">
           {actions.map((action) => {
-            // Safely get icon component with fallback
             const Icon = iconMap[action.icon || 'FileText'];
-            if (!Icon) {
-              console.warn(`Icon not found for action: ${action.id}, icon: ${action.icon}`);
-            }
+            // Super safe check to prevent React Error 130 (object without $$typeof)
+            const isValidComponent = Icon && (typeof Icon === 'function' || (typeof Icon === 'object' && '$$typeof' in Icon));
+
             return (
               <button
                 key={action.id}
@@ -414,7 +454,7 @@ export function NodeSelectionModal({
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  {Icon ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
+                  {isValidComponent ? <Icon className="w-4 h-4 text-primary" /> : <div className="w-4 h-4" />}
                 </div>
                 <div className="text-left flex-1 min-w-0">
                   <div className="text-sm font-medium">{action.name}</div>

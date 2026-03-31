@@ -20,6 +20,7 @@ import {
   getFlowRun as apiGetFlowRun,
   approveFlowRun as apiApproveFlowRun,
   rejectFlowRun as apiRejectFlowRun,
+  resumeFlowRun as apiResumeFlowRun,
 } from './flowApi';
 import type { FlowRunSummary, FlowRunDetail } from './flowApi';
 import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend } from './flowSerializer';
@@ -152,6 +153,11 @@ class FlowService {
     const flow = this.flowCache.get(id);
     if (!flow) return null;
 
+    // Keep DocType fields in sync when renaming
+    if (typeof updates.name === 'string' && updates.name.trim()) {
+      await updateFlowDefinitionFields(id, { flow_name: updates.name });
+    }
+
     const updatedFlow: Flow = {
       ...flow,
       ...updates,
@@ -222,6 +228,10 @@ class FlowService {
     return apiRejectFlowRun(flowRunId, comment);
   }
 
+  async resumeFlowRun(flowRunId: string, input?: Record<string, unknown>) {
+    return apiResumeFlowRun(flowRunId, input);
+  }
+
   // ─── Local-only mutation helpers (update cache, notify) ────────────
 
   /**
@@ -233,7 +243,12 @@ class FlowService {
     const flow = this.flowCache.get(id);
     if (!flow) return null;
 
-    const updatedFlow = { ...flow, ...updates, updatedAt: new Date() };
+    const updatedFlow = {
+      ...flow,
+      ...updates,
+      updatedAt: new Date(),
+      version: (flow.version || 0) + 1
+    };
     this.flowCache.set(id, updatedFlow);
     this.notifyListeners();
     return updatedFlow;

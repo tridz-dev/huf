@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 
@@ -19,6 +19,7 @@ interface FlowContextType {
   setSelectedEdge: (edgeId: string | null) => void;
   createFlow: (name: string, category?: string) => Promise<Flow>;
   updateFlowName: (flowId: string, name: string) => Promise<void>;
+  updateFlowMetadata: (flowId: string, updates: Partial<Flow>) => Promise<void>;
   deleteFlow: (flowId: string) => Promise<void>;
   updateNodes: (nodes: FlowNode[]) => void;
   updateEdges: (edges: FlowEdge[]) => void;
@@ -40,7 +41,11 @@ function flowsEqual(a: Flow | null, b: Flow | null): boolean {
   return (
     a.id === b.id &&
     a.name === b.name &&
+    a.description === b.description &&
     a.status === b.status &&
+    a.category === b.category &&
+    (a.settings?.mode || null) === (b.settings?.mode || null) &&
+    (a.settings?.max_hops ?? null) === (b.settings?.max_hops ?? null) &&
     a.version === b.version &&
     a.nodes.length === b.nodes.length &&
     a.edges.length === b.edges.length
@@ -60,6 +65,12 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const hasFetchedRef = useRef(false);
   // Ref to track last synced flow to prevent circular updates
   const lastSyncedFlowRef = useRef<Flow | null>(null);
+  const activeFlowRef = useRef<Flow | null>(activeFlow);
+
+  // Sync ref with state
+  useEffect(() => {
+    activeFlowRef.current = activeFlow;
+  }, [activeFlow]);
 
   const refreshFlows = useCallback(async () => {
     try {
@@ -122,24 +133,104 @@ export function FlowProvider({ children }: { children: ReactNode }) {
         const cached = flowService.getCachedFlow(activeFlowId);
         // Only update if the cached flow is different from what we last synced
         // and different from current active flow
-        if (cached && !flowsEqual(cached, lastSyncedFlowRef.current) && !flowsEqual(cached, activeFlow)) {
+        if (cached && !flowsEqual(cached, lastSyncedFlowRef.current) && !flowsEqual(cached, activeFlowRef.current)) {
           lastSyncedFlowRef.current = cached;
           setActiveFlowState(cached);
         }
       }
     });
     return unsubscribe;
-  }, [activeFlowId, activeFlow]);
+  }, [activeFlowId]); // Only resubscribe on ID change, use ref for content comparison
 
   // Load active flow when ID changes (not when loadActiveFlow function changes)
   useEffect(() => {
     // Skip if we're already showing the correct flow
-    if (activeFlow?.id === activeFlowId && activeFlowId) {
+    if (activeFlowRef.current?.id === activeFlowId && activeFlowId) {
       return;
     }
     loadActiveFlow();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFlowId]);
+
+  // ─── Realtime Event Listeners for Flow Execution Tracker ─────────────
+  useEffect(() => {
+    if (!activeFlowId) return;
+
+    const handleNodeStart = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      setActiveFlowState(prev => {
+        if (!prev) return prev;
+        const nodes = prev.nodes.map(n =>
+          n.id === data.node_id ? { ...n, data: { ...n.data, status: 'running' as const } } : n
+        );
+        return { ...prev, nodes };
+      });
+    };
+
+    const handleNodeEnd = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      setActiveFlowState(prev => {
+        if (!prev) return prev;
+        const nodes = prev.nodes.map(n =>
+          n.id === data.node_id ? { ...n, data: { ...n.data, status: (data.status === 'success' ? 'success' : 'error') as any } } : n
+        );
+        return { ...prev, nodes };
+      });
+    };
+
+    const handleFlowPaused = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      setActiveFlowState(prev => {
+        if (!prev) return prev;
+        const nodes = prev.nodes.map(n =>
+          n.id === data.node_id ? { ...n, data: { ...n.data, status: 'waiting' as any } } : n
+        );
+        return { ...prev, nodes };
+      });
+    };
+
+    const handleFlowCompleted = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      setActiveFlowState(prev => {
+        if (!prev) return prev;
+        // Mark node as success if provided
+        const nodes = prev.nodes.map(n =>
+          data.node_id && n.id === data.node_id ? { ...n, data: { ...n.data, status: 'success' as const } } : n
+        );
+        return { ...prev, nodes };
+      });
+      refreshFlows(); // Reload flows to get updated statuses
+    };
+
+    const handleFlowError = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      // Mark flow as error
+      setActiveFlowState(prev => {
+        if (!prev) return prev;
+        // Mark the active node as error
+        const nodes = prev.nodes.map(n =>
+          n.data.status === 'running' || (data.node_id && n.id === data.node_id)
+            ? { ...n, data: { ...n.data, status: 'error' as const } }
+            : n
+        );
+        return { ...prev, nodes };
+      });
+    };
+
+    window.addEventListener('frappe:flow_node_start', handleNodeStart);
+    window.addEventListener('frappe:flow_node_end', handleNodeEnd);
+    window.addEventListener('frappe:flow_paused', handleFlowPaused);
+    window.addEventListener('frappe:flow_completed', handleFlowCompleted);
+    window.addEventListener('frappe:flow_error', handleFlowError);
+
+    return () => {
+      window.removeEventListener('frappe:flow_node_start', handleNodeStart);
+      window.removeEventListener('frappe:flow_node_end', handleNodeEnd);
+      window.removeEventListener('frappe:flow_paused', handleFlowPaused);
+      window.removeEventListener('frappe:flow_completed', handleFlowCompleted);
+      window.removeEventListener('frappe:flow_error', handleFlowError);
+    };
+  }, [activeFlowId, refreshFlows]);
 
   const setActiveFlow = useCallback((flowId: string) => {
     setActiveFlowId(flowId);
@@ -156,6 +247,15 @@ export function FlowProvider({ children }: { children: ReactNode }) {
 
   const updateFlowName = useCallback(async (flowId: string, name: string) => {
     await flowService.updateFlowName(flowId, name);
+    await refreshFlows();
+    if (flowId === activeFlowId) {
+      const cached = flowService.getCachedFlow(flowId);
+      if (cached) setActiveFlowState(cached);
+    }
+  }, [activeFlowId, refreshFlows]);
+
+  const updateFlowMetadata = useCallback(async (flowId: string, updates: Partial<Flow>) => {
+    await flowService.updateFlow(flowId, updates);
     await refreshFlows();
     if (flowId === activeFlowId) {
       const cached = flowService.getCachedFlow(flowId);
@@ -302,7 +402,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
-  const value: FlowContextType = {
+  const value = useMemo(() => ({
     flows,
     activeFlowId,
     activeFlow,
@@ -317,6 +417,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     setSelectedEdge: handleSetSelectedEdge,
     createFlow,
     updateFlowName,
+    updateFlowMetadata,
     deleteFlow,
     updateNodes,
     updateEdges,
@@ -327,7 +428,33 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     addEdge,
     saveFlow,
     refreshFlows,
-  };
+  }), [
+    flows,
+    activeFlowId,
+    activeFlow,
+    selectedNodeId,
+    selectedEdgeId,
+    loading,
+    error,
+    saveState,
+    hasUnsavedChanges,
+    setActiveFlow,
+    handleSetSelectedNode,
+    handleSetSelectedEdge,
+    createFlow,
+    updateFlowName,
+    updateFlowMetadata,
+    deleteFlow,
+    updateNodes,
+    updateEdges,
+    updateNodesAndEdges,
+    addNode,
+    updateNode,
+    deleteNode,
+    addEdge,
+    saveFlow,
+    refreshFlows,
+  ]);
 
   return <FlowContext.Provider value={value}>{children}</FlowContext.Provider>;
 }

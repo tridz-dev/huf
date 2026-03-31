@@ -9,7 +9,7 @@
  */
 
 import type { Flow, FlowNode, FlowEdge, FlowNodeData, FlowStatus } from '@/types/flow.types';
-import type { BackendFlowGraph, BackendNode, BackendEdge } from './flowApi';
+import type { BackendFlowGraph, BackendNode, BackendEdge, BackendSettings } from './flowApi';
 
 // ─── Frontend → Backend ──────────────────────────────────────────────
 
@@ -21,6 +21,12 @@ export function serializeFlow(flow: Flow): BackendFlowGraph {
         (n) => n.data?.nodeType === 'trigger'
     );
 
+    const settings: BackendSettings = {
+        ...(flow.settings || {}),
+        mode: (flow.settings && flow.settings.mode) || 'normal',
+        max_hops: (flow.settings && flow.settings.max_hops) || 100,
+    };
+
     return {
         schema_version: 1,
         id: flow.id,
@@ -28,10 +34,7 @@ export function serializeFlow(flow: Flow): BackendFlowGraph {
         entry: entryNode?.id || flow.nodes[0]?.id || '',
         nodes: flow.nodes.map(serializeNode),
         edges: flow.edges.map(serializeEdge),
-        settings: {
-            mode: 'normal',
-            max_hops: 100,
-        },
+        settings,
         metadata: {
             name: flow.name,
             description: flow.description,
@@ -134,6 +137,7 @@ export function deserializeFlow(
         createdAt: new Date(),
         updatedAt: new Date(),
         version: graph.version,
+        settings: graph.settings,
     };
 }
 
