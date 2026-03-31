@@ -14,7 +14,7 @@ import ReactFlow, {
   Panel
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { PanelLeftOpen, PanelRightOpen, Maximize2 } from 'lucide-react';
+import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus } from 'lucide-react';
 import { Button } from './ui/button';
 import { TriggerNode } from './nodes/TriggerNode';
 import { ActionNode } from './nodes/ActionNode';
@@ -53,6 +53,14 @@ export function FlowCanvas({
   // Sync from activeFlow to local state when flow changes (not on every node/edge update)
   useEffect(() => {
     if (activeFlow) {
+      // Cancel any pending debounced updates to avoid re-applying stale nodes/edges
+      // after a context-driven graph change (e.g., delete button).
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+        updateTimeoutRef.current = null;
+      }
+      pendingUpdateRef.current = null;
+
       isSyncingFromProps.current = true;
       setNodes(activeFlow.nodes);
       setEdges(activeFlow.edges);
@@ -61,7 +69,7 @@ export function FlowCanvas({
         isSyncingFromProps.current = false;
       });
     }
-  }, [activeFlow?.id, activeFlow?.version]); // Only re-sync when flow ID or version changes, not on every node/edge change
+  }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length]); // Re-sync on ID/version change OR structural changes (add/delete)
 
   // Debounced update to context to batch rapid changes
   const scheduleContextUpdate = useCallback((newNodes?: Node<FlowNodeData>[], newEdges?: Edge[]) => {
@@ -145,7 +153,7 @@ export function FlowCanvas({
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
       setSelectedNode(node.id);
-      if (node.data.nodeType === 'trigger' && !node.data.configured) {
+      if (node.data.nodeType === 'trigger') {
         setCurrentNodeId(node.id);
         setModalMode('trigger');
         setIsModalOpen(true);
@@ -174,29 +182,54 @@ export function FlowCanvas({
 
   const handleSaveTriggerConfig = useCallback(
     (config: TriggerConfig) => {
+      const iconMap: Record<string, string> = {
+        webhook: 'Webhook',
+        schedule: 'Clock',
+        'doc-event': 'Database',
+        'app-trigger': 'Mail'
+      };
+
+      const labelMap: Record<string, string> = {
+        webhook: 'Webhook',
+        schedule: 'Schedule',
+        'doc-event': 'Doc Event',
+        'app-trigger': 'App Trigger'
+      };
+
       if (currentNodeId) {
         const node = nodes.find((n) => n.id === currentNodeId);
         if (node) {
-          const iconMap: Record<string, string> = {
-            webhook: 'Webhook',
-            schedule: 'Clock',
-            'doc-event': 'Database',
-            'app-trigger': 'Mail'
-          };
-
           updateNode(currentNodeId, {
             data: {
               ...node.data,
-              label: config.type === 'webhook' ? 'Webhook' :
-                config.type === 'schedule' ? 'Schedule' :
-                  config.type === 'doc-event' ? 'Doc Event' :
-                    'App Trigger',
+              label: labelMap[config.type || 'webhook'] || 'Trigger',
               icon: iconMap[config.type || 'webhook'],
               configured: true,
               triggerConfig: config
             }
           });
         }
+      } else {
+        // Create a new trigger node
+        const newNodeId = `node-trigger-${Date.now()}`;
+        const newNode: Node<FlowNodeData> = {
+          id: newNodeId,
+          type: 'trigger',
+          position: { x: 250, y: 100 },
+          data: {
+            label: labelMap[config.type || 'webhook'] || 'Trigger',
+            nodeType: 'trigger',
+            icon: iconMap[config.type || 'webhook'],
+            configured: true,
+            triggerConfig: config
+          }
+        };
+
+        setNodes((nds) => {
+          const updatedNodes = [...nds, newNode];
+          updateNodesAndEdges(updatedNodes, edges);
+          return updatedNodes;
+        });
       }
       setIsModalOpen(false);
       setCurrentNodeId(null);
@@ -277,15 +310,15 @@ export function FlowCanvas({
           });
 
           const updatedNodes = [...currentNodes, newNode];
-          
+
           // Direct update to context (not debounced) for explicit user actions
           if (!isSyncingFromProps.current) {
             updateNodesAndEdges(updatedNodes, newEdges);
           }
-          
+
           setIsModalOpen(false);
           setSourceNodeForAction(null);
-          
+
           return newEdges;
         });
         return currentNodes;
@@ -344,22 +377,39 @@ export function FlowCanvas({
           className="!bg-background !border-border !bottom-6"
         />
         <Panel position="top-right" className="m-2">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-10 w-10 rounded-full bg-background/60 backdrop-blur-sm"
-            onClick={() => {
-              if (showLeftSidebar || showRightSidebar) {
-                onToggleLeftSidebar();
-                onToggleRightSidebar();
-              } else {
-                onToggleLeftSidebar();
-                onToggleRightSidebar();
-              }
-            }}
-          >
-            <Maximize2 className="w-4 h-4" />
-          </Button>
+          <div className="flex gap-2">
+            {!nodes.some(n => n.data.nodeType === 'trigger') && (
+              <Button
+                variant="default"
+                size="sm"
+                className="rounded-full shadow-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => {
+                  setModalMode('trigger');
+                  setCurrentNodeId(null);
+                  setIsModalOpen(true);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Trigger
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 rounded-full bg-background/60 backdrop-blur-sm"
+              onClick={() => {
+                if (showLeftSidebar || showRightSidebar) {
+                  onToggleLeftSidebar();
+                  onToggleRightSidebar();
+                } else {
+                  onToggleLeftSidebar();
+                  onToggleRightSidebar();
+                }
+              }}
+            >
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+          </div>
         </Panel>
         {!showLeftSidebar && (
           <Panel position="bottom-left" className="mb-4">

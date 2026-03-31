@@ -1,18 +1,42 @@
-import { useState } from 'react';
-import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings } from 'lucide-react';
 import { Button } from './ui/button';
 import { useFlowContext } from '../contexts/FlowContext';
 import { runFlow, updateFlowDefinitionFields } from '../services/flowApi';
 import { toast } from 'sonner';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
+import { FlowSettingsModal } from './modals/FlowSettingsModal';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export function FlowsHeaderActions() {
   const { activeFlow, saveState, hasUnsavedChanges, saveFlow } = useFlowContext();
   const [isRunning, setIsRunning] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const openSettingsFromUrl = () => {
+    const sp = new URLSearchParams(location.search);
+    return sp.get('settings') === '1';
+  };
+
+  useEffect(() => {
+    if (openSettingsFromUrl()) setShowSettings(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
+  const handleCloseSettings = () => {
+    setShowSettings(false);
+    const sp = new URLSearchParams(location.search);
+    if (sp.has('settings')) {
+      navigate({ pathname: location.pathname, search: '' }, { replace: true });
+    }
+  };
 
   const handleRun = async () => {
     if (!activeFlow) return;
@@ -118,6 +142,18 @@ export function FlowsHeaderActions() {
         <span>Runs</span>
       </Button>
 
+      {/* Settings Button */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="gap-2"
+        onClick={() => setShowSettings(true)}
+        disabled={!activeFlow}
+      >
+        <Settings className="w-4 h-4" />
+        <span>Settings</span>
+      </Button>
+
       {/* Run Button */}
       <Button
         variant="secondary"
@@ -157,6 +193,10 @@ export function FlowsHeaderActions() {
       <FlowRunViewer
         runId={selectedRunId}
         onClose={() => setSelectedRunId(null)}
+      />
+      <FlowSettingsModal
+        open={showSettings}
+        onClose={handleCloseSettings}
       />
     </div>
   );
