@@ -19,7 +19,9 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { InstructionsTextarea } from '@/components/agent/InstructionsTextarea';
 import {
   createAgentPrompt,
+  createAgentPromptNewVersion,
   deleteAgentPrompt,
+  forkAgentPrompt,
   getAgentPrompt,
   getAgentPromptUsageCount,
   getAgentsUsingPrompt,
@@ -337,35 +339,45 @@ export function AgentPromptFormPage() {
     }
   );
 
-  const handleCreateNewVersion = () => {
+  const handleCreateNewVersion = async () => {
     if (!docMeta?.name) return;
+
     const currentValues = form.getValues();
-    navigate('/prompts/new', {
-      state: {
-        prefill: {
-          ...currentValues,
-        },
-        previous_version: docMeta.name,
-        current_version: docMeta.version,
-        category: selectedCategory,
-      }
-    });
+    try {
+      setSaving(true);
+      const result = await createAgentPromptNewVersion(
+        docMeta.name,
+        currentValues.prompt_body,
+        currentValues.title,
+        currentValues.description
+      );
+      toast.success(`Created version ${result.version}`);
+      navigate(`/prompts/${result.name}`);
+    } catch (error) {
+      toast.error('Failed to create new version', {
+        description: getFrappeErrorMessage(error),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleForkPrompt = () => {
+  const handleForkPrompt = async () => {
     if (!docMeta?.name) return;
+
     const currentValues = form.getValues();
-    navigate('/prompts/new', {
-      state: {
-        prefill: {
-          ...currentValues,
-          title: `Copy of ${currentValues.title}`,
-          slug: '',
-        },
-        forked_from: docMeta.name,
-        category: selectedCategory,
-      }
-    });
+    try {
+      setSaving(true);
+      const result = await forkAgentPrompt(docMeta.name, `Copy of ${currentValues.title}`);
+      toast.success('Prompt forked successfully');
+      navigate(`/prompts/${result.name}`);
+    } catch (error) {
+      toast.error('Failed to fork prompt', {
+        description: getFrappeErrorMessage(error),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
