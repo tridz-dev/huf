@@ -510,7 +510,7 @@ export function NodeSelectionModal({
                 <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
               </TabsList>
 
-              <div className="flex-1 overflow-y-auto mt-4">
+              <div className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">
                 <TabsContent value={triggerSubTab} className="mt-0">
                   {triggerSubTab === 'ai-agents' ? (
                     loadingAgents ? (
@@ -649,7 +649,7 @@ export function NodeSelectionModal({
             </Tabs>
           </TabsContent>
 
-          <TabsContent value="actions" className="flex-1 overflow-y-auto mt-4">
+          <TabsContent value="actions" className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">
             {renderActionCategory('AI & Agents', agentActions)}
             {renderActionCategory('Tools', toolActions)}
             {renderActionCategory('Control Flow', controlActions)}
