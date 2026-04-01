@@ -227,7 +227,7 @@ export function NodeSelectionModal({
 
     if (config.type === 'webhook') {
       return (
-        <div className="space-y-4 mt-4 overflow-y-auto max-h-[400px] pr-2">
+        <div className="space-y-4 mt-4 overflow-y-auto max-h-[300px] pr-2 border rounded-md p-3 bg-muted/20">
           <div>
             <Label htmlFor="webhook-url">Webhook URL</Label>
             <div className="flex gap-2">
@@ -491,7 +491,7 @@ export function NodeSelectionModal({
           />
         </div>
 
-        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)}>
+        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {mode !== 'trigger' ? (
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="triggers">Triggers</TabsTrigger>
@@ -504,7 +504,7 @@ export function NodeSelectionModal({
           )}
 
           <TabsContent value="triggers" className="flex-1 overflow-hidden flex flex-col mt-4">
-            <Tabs value={triggerSubTab} onValueChange={(v) => setTriggerSubTab(v as TriggerSubTab)}>
+            <Tabs value={triggerSubTab} onValueChange={(v) => setTriggerSubTab(v as TriggerSubTab)} className="flex-1 flex flex-col min-h-0 overflow-hidden">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="explore">Explore</TabsTrigger>
                 <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>

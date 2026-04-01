@@ -62,6 +62,10 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
     try {
       await deleteFlow(activeFlow.id);
       toast.success('Flow deleted successfully');
+      // Reset dialog states before closing to ensure AlertDialog unmounts cleanly
+      // This is critical when already on /flows, since navigate('/flows') won't remount
+      setShowDeleteConfirm(false);
+      setIsDeleting(false);
       onClose();
       navigate('/flows');
     } catch (err: any) {
