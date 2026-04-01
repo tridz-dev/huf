@@ -127,4 +127,4 @@ def _inject_extra_args(args: dict, tool_doc: dict):
 		args.setdefault("agent_name", tool_doc["agent"])
 
 	elif tool_type in ("GET", "POST"):
-		args.setdefault("tool_name", tool_doc.get("name"))
+		args.setdefault("tool_name", tool_doc.get("tool_name"))
