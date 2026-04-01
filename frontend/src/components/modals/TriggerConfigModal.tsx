@@ -283,7 +283,7 @@ export function TriggerConfigModal({
             <TabsTrigger value="utility">Utility</TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 overflow-y-auto mt-4">
+          <div className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">
             <TabsContent value={activeTab} className="mt-0">
               {highlightTriggers.length > 0 && (
                 <div className="mb-6">
