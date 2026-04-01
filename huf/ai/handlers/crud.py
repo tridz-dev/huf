@@ -17,6 +17,7 @@ from huf.ai.tool_functions import (
 	cancel_document,
 	create_documents,
 	delete_documents,
+	get_documents,
 	get_report_result,
 	get_value,
 	set_value,
@@ -340,6 +341,29 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
 
 	except Exception as e:
 		frappe.log_error(title="SDK Functions Debug", message=f"Error in handle_get_document: {str(e)}")
+		return {"success": False, "error": str(e)}
+
+
+def handle_get_documents(reference_doctype: str, document_ids: list, **kwargs):
+	"""
+	Get multiple documents by id.
+
+	This backs the "Get Multiple Documents" tool type.
+	"""
+	try:
+		if not reference_doctype:
+			reference_doctype = frappe.flags.get("current_function_doctype")
+
+		if not reference_doctype:
+			return {"success": False, "error": "No reference doctype provided."}
+
+		if not isinstance(document_ids, list) or not document_ids:
+			return {"success": False, "error": "document_ids must be a non-empty list"}
+
+		docs = get_documents(reference_doctype, document_ids)
+		return {"success": True, "result": docs, "count": len(docs)}
+	except Exception as e:
+		frappe.log_error(title="SDK Functions Debug", message=f"Error in handle_get_documents: {str(e)}")
 		return {"success": False, "error": str(e)}
 
 
