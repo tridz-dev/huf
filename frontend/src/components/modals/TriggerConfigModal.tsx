@@ -260,12 +260,12 @@ export function TriggerConfigModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Select Trigger</DialogTitle>
         </DialogHeader>
 
-        <div className="relative mb-4">
+        <div className="relative mb-4 flex-shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search triggers..."
@@ -275,85 +275,87 @@ export function TriggerConfigModal({
           />
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ModalTab)} className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <TabsList className="grid w-full grid-cols-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ModalTab)} className="flex-1 flex flex-col min-h-0">
+          <TabsList className="grid w-full grid-cols-4 flex-shrink-0">
             <TabsTrigger value="explore">Explore</TabsTrigger>
             <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
             <TabsTrigger value="apps">Apps</TabsTrigger>
             <TabsTrigger value="utility">Utility</TabsTrigger>
           </TabsList>
 
-          <TabsContent value={activeTab} className="flex-1 overflow-y-auto mt-4">
-            {highlightTriggers.length > 0 && (
-              <div className="mb-6">
-                <h3 className="text-sm font-medium mb-3 text-muted-foreground">
-                  Highlights
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {highlightTriggers.map((trigger) => {
-                    const Icon = iconMap[trigger.icon || 'Webhook'];
-                    return (
-                      <button
-                        key={trigger.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedTrigger === trigger.id
+          <div className="flex-1 overflow-y-auto mt-4">
+            <TabsContent value={activeTab} className="mt-0">
+              {highlightTriggers.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-medium mb-3 text-muted-foreground">
+                    Highlights
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {highlightTriggers.map((trigger) => {
+                      const Icon = iconMap[trigger.icon || 'Webhook'];
+                      return (
+                        <button
+                          key={trigger.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedTrigger === trigger.id
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50 hover:bg-accent'
-                          }`}
-                        onClick={() => handleSelectTrigger(trigger.id)}
-                      >
-                        <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <Icon className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="text-left flex-1 min-w-0">
-                          <div className="text-sm font-medium">{trigger.name}</div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                            }`}
+                          onClick={() => handleSelectTrigger(trigger.id)}
+                        >
+                          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Icon className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="text-left flex-1 min-w-0">
+                            <div className="text-sm font-medium">{trigger.name}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {popularTriggers.length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium mb-3 text-muted-foreground">
-                  Popular
-                </h3>
-                <div className="space-y-2">
-                  {popularTriggers.map((trigger) => {
-                    const Icon = iconMap[trigger.icon || 'Webhook'];
-                    return (
-                      <button
-                        key={trigger.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedTrigger === trigger.id
+              {popularTriggers.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium mb-3 text-muted-foreground">
+                    Popular
+                  </h3>
+                  <div className="space-y-2">
+                    {popularTriggers.map((trigger) => {
+                      const Icon = iconMap[trigger.icon || 'Webhook'];
+                      return (
+                        <button
+                          key={trigger.id}
+                          className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedTrigger === trigger.id
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50 hover:bg-accent'
-                          }`}
-                        onClick={() => handleSelectTrigger(trigger.id)}
-                      >
-                        <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <Icon className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="text-left flex-1 min-w-0">
-                          <div className="text-sm font-medium">{trigger.name}</div>
-                          {trigger.description && (
-                            <div className="text-xs text-muted-foreground">
-                              {trigger.description}
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
+                            }`}
+                          onClick={() => handleSelectTrigger(trigger.id)}
+                        >
+                          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Icon className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="text-left flex-1 min-w-0">
+                            <div className="text-sm font-medium">{trigger.name}</div>
+                            {trigger.description && (
+                              <div className="text-xs text-muted-foreground">
+                                {trigger.description}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
-          </TabsContent>
+              )}
+            </TabsContent>
+
+            {renderConfigForm()}
+          </div>
         </Tabs>
 
-        {renderConfigForm()}
-
-        <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
+        <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
