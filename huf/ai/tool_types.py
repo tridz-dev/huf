@@ -41,5 +41,7 @@ DOCTYPE_BOUND_TYPES: frozenset[str] = frozenset({
 	"Update Multiple Documents",
 	"Delete Document",
 	"Delete Multiple Documents",
+	"Submit Document",
+	"Cancel Document",
 	"Attach File to Document",
 })

@@ -400,9 +400,16 @@ def handle_delete_documents(reference_doctype: str, document_ids: list, **kwargs
 
 
 def handle_submit_document(
-	reference_doctype: str, document_id: str, ignore_permissions=False, **kwargs
+	reference_doctype: str = None, document_id: str = None, ignore_permissions=False, **kwargs
 ):
 	"""Submit a document."""
+	if not reference_doctype:
+		reference_doctype = frappe.flags.get("current_function_doctype")
+	if not reference_doctype:
+		return {"success": False, "error": "No reference doctype provided."}
+	if not document_id:
+		return {"success": False, "error": "document_id is required"}
+
 	if not ignore_permissions and not frappe.has_permission(
 		reference_doctype, "submit", doc=document_id
 	):
@@ -414,9 +421,16 @@ def handle_submit_document(
 
 
 def handle_cancel_document(
-	reference_doctype: str, document_id: str, ignore_permissions=False, **kwargs
+	reference_doctype: str = None, document_id: str = None, ignore_permissions=False, **kwargs
 ):
 	"""Cancel a document."""
+	if not reference_doctype:
+		reference_doctype = frappe.flags.get("current_function_doctype")
+	if not reference_doctype:
+		return {"success": False, "error": "No reference doctype provided."}
+	if not document_id:
+		return {"success": False, "error": "document_id is required"}
+
 	if not ignore_permissions and not frappe.has_permission(
 		reference_doctype, "cancel", doc=document_id
 	):
