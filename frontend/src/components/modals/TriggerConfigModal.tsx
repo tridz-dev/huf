@@ -85,6 +85,9 @@ export function TriggerConfigModal({
         integration: triggerId as any,
         event: 'new_message'
       });
+    } else {
+      // Clear any previous config form for triggers with no sub-settings
+      setConfig({ type: undefined });
     }
   };
 
@@ -275,7 +278,7 @@ export function TriggerConfigModal({
           />
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ModalTab)} className="flex-1 flex flex-col min-h-0">
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as ModalTab); setSelectedTrigger(null); setConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
           <TabsList className="grid w-full grid-cols-4 flex-shrink-0">
             <TabsTrigger value="explore">Explore</TabsTrigger>
             <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>

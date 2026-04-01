@@ -188,6 +188,9 @@ export function NodeSelectionModal({
         integration: triggerId as any,
         event: 'new_message'
       });
+    } else {
+      // Clear any previous config form for triggers with no sub-settings
+      setTriggerConfig({ type: undefined });
     }
   };
 
@@ -491,7 +494,7 @@ export function NodeSelectionModal({
           />
         </div>
 
-        <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="flex-1 flex flex-col min-h-0">
+        <Tabs value={mainTab} onValueChange={(v) => { setMainTab(v as MainTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
           {mode !== 'trigger' ? (
             <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
               <TabsTrigger value="triggers">Triggers</TabsTrigger>
@@ -504,7 +507,7 @@ export function NodeSelectionModal({
           )}
 
           <TabsContent value="triggers" className="flex-1 flex flex-col min-h-0 mt-4">
-            <Tabs value={triggerSubTab} onValueChange={(v) => setTriggerSubTab(v as TriggerSubTab)} className="flex-1 flex flex-col min-h-0">
+            <Tabs value={triggerSubTab} onValueChange={(v) => { setTriggerSubTab(v as TriggerSubTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
               <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
                 <TabsTrigger value="explore">Explore</TabsTrigger>
                 <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
