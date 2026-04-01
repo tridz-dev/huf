@@ -116,7 +116,7 @@ def handle_set_conversation_data(
 		frappe.db.set_value("Agent Conversation", conversation_id, "conversation_data", new_json)
 		frappe.db.commit()  # Persist changes immediately
 
-		return {"success": True, "message": f"Set '{name}' match successfully"}
+		return {"success": True, "message": f"Set '{name}' successfully"}
 
 	except Exception as e:
 		frappe.log_error(title="Conversation Data", message=f"Error setting conversation data: {str(e)}")
