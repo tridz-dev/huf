@@ -266,11 +266,11 @@ def create_function_tool(
 
 				huf_ctx = _frappe_run_context_dict(ctx)
 				if "conversation_id" in huf_ctx:
-					args_dict["conversation_id"] = huf_ctx["conversation_id"]
+					args_dict.setdefault("conversation_id", huf_ctx["conversation_id"])
 				if "agent_run_id" in huf_ctx:
-					args_dict["agent_run_id"] = huf_ctx["agent_run_id"]
+					args_dict.setdefault("agent_run_id", huf_ctx["agent_run_id"])
 				if "agent_name" in huf_ctx:
-					args_dict["agent_name"] = huf_ctx["agent_name"]
+					args_dict.setdefault("agent_name", huf_ctx["agent_name"])
 
 				if allowed_for_guest and frappe.session.user == "Guest":
 					args_dict["ignore_permissions"] = True
