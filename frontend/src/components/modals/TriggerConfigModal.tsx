@@ -275,7 +275,7 @@ export function TriggerConfigModal({
           />
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ModalTab)}>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ModalTab)} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="explore">Explore</TabsTrigger>
             <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
@@ -295,11 +295,10 @@ export function TriggerConfigModal({
                     return (
                       <button
                         key={trigger.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                          selectedTrigger === trigger.id
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedTrigger === trigger.id
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50 hover:bg-accent'
-                        }`}
+                          }`}
                         onClick={() => handleSelectTrigger(trigger.id)}
                       >
                         <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -326,11 +325,10 @@ export function TriggerConfigModal({
                     return (
                       <button
                         key={trigger.id}
-                        className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${
-                          selectedTrigger === trigger.id
+                        className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedTrigger === trigger.id
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50 hover:bg-accent'
-                        }`}
+                          }`}
                         onClick={() => handleSelectTrigger(trigger.id)}
                       >
                         <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
