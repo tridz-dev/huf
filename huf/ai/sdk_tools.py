@@ -261,24 +261,16 @@ def create_function_tool(
 
 				args_dict = json.loads(args_json or "{}")
 
-				if isinstance(ctx, dict):
-					if "conversation_id" in ctx:
-						args_dict["conversation_id"] = ctx["conversation_id"]
-					if "agent_run_id" in ctx:
-						args_dict["agent_run_id"] = ctx["agent_run_id"]
-					if "agent_name" in ctx:
-						args_dict["agent_name"] = ctx["agent_name"]
-
 				if _extra_args:
 					args_dict.update(_extra_args)
 
-                huf_ctx = _frappe_run_context_dict(ctx)
-                if "conversation_id" in huf_ctx:
-                    args_dict["conversation_id"] = huf_ctx["conversation_id"]
-                if "agent_run_id" in huf_ctx:
-                    args_dict["agent_run_id"] = huf_ctx["agent_run_id"]
-                if "agent_name" in huf_ctx:
-                    args_dict["agent_name"] = huf_ctx["agent_name"]
+				huf_ctx = _frappe_run_context_dict(ctx)
+				if "conversation_id" in huf_ctx:
+					args_dict["conversation_id"] = huf_ctx["conversation_id"]
+				if "agent_run_id" in huf_ctx:
+					args_dict["agent_run_id"] = huf_ctx["agent_run_id"]
+				if "agent_name" in huf_ctx:
+					args_dict["agent_name"] = huf_ctx["agent_name"]
 
 				if allowed_for_guest and frappe.session.user == "Guest":
 					args_dict["ignore_permissions"] = True
@@ -407,6 +399,7 @@ from huf.ai.handlers.crud import (  # noqa: F401
 	handle_delete_document,
 	handle_delete_documents,
 	handle_get_document,
+	handle_get_documents,
 	handle_get_list,
 	handle_get_report_result,
 	handle_get_value,
