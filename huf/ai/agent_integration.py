@@ -517,7 +517,10 @@ def run_background_summarization(conversation_name, agent_name):
             frappe.db.commit()
             
     except Exception as e:
-        frappe.log_error(f"Background summarization failed: {str(e)}", "Agent Background Summarization")
+        frappe.log_error(
+            title="Agent Background Summarization",
+            message=f"Background summarization failed: {str(e)}",
+        )
 
 @frappe.whitelist()
 def generate_conversation_title(conversation_name, agent_name):
