@@ -12,6 +12,7 @@
   "column_break_lrkj",
   "types",
   "reference_doctype",
+  "report_name",
   "agent",
   "base_url",
   "provider_app",
@@ -55,7 +56,7 @@
    "options": "\nGet Document\nGet Multiple Documents\nGet List\nCreate Document\nCreate Multiple Documents\nUpdate Document\nUpdate Multiple Documents\nDelete Document\nDelete Multiple Documents\nSubmit Document\nCancel Document\nGet Amended Document\nCustom Function\nApp Provided\nAttach File to Document\nGet Report Result\nGet Value\nSet Value\nGET\nPOST\nRun Agent\nClient Side Tool\nGet Conversation Data\nSet Conversation Data\nLoad Conversation Data"
   },
   {
-   "depends_on": "eval: [\n  'Get Document',\n  'Get Multiple Documents',\n  'Get List',\n  'Create Document',\n  'Create Multiple Documents',\n  'Update Document',\n  'Update Multiple Documents',\n  'Delete Document',\n  'Delete Multiple Documents',\n  'Submit Document',\n  'Cancel Document',\n  'Get Amended Document',\n  'Attach File to Document',\n  'Get Report Result',\n  'Get Value',\n  'Set Value'\n].includes(doc.types)",
+   "depends_on": "eval: [\n  'Get Document',\n  'Get Multiple Documents',\n  'Get List',\n  'Create Document',\n  'Create Multiple Documents',\n  'Update Document',\n  'Update Multiple Documents',\n  'Delete Document',\n  'Delete Multiple Documents',\n  'Submit Document',\n  'Cancel Document',\n  'Get Amended Document',\n  'Attach File to Document',\n  'Get Value',\n  'Set Value'\n].includes(doc.types)",
    "fieldname": "reference_doctype",
    "fieldtype": "Link",
    "label": "Reference DocType",
@@ -167,12 +168,19 @@
   {
    "fieldname": "section_break_ajuk",
    "fieldtype": "Section Break"
+  },
+  {
+   "depends_on": "eval:doc.types == 'Get Report Result'",
+   "fieldname": "report_name",
+   "fieldtype": "Link",
+   "label": "Report Name",
+   "options": "Report"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-22 22:21:36.079707",
+ "modified": "2026-04-01 19:11:46.009850",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Function",
@@ -204,16 +212,13 @@
    "write": 1
   },
   {
-   "create": 0,
-   "delete": 0,
    "email": 1,
    "export": 1,
    "print": 1,
    "read": 1,
    "report": 1,
    "role": "Huf User",
-   "share": 1,
-   "write": 0
+   "share": 1
   }
  ],
  "row_format": "Dynamic",

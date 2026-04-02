@@ -46,7 +46,6 @@ class AgentToolFunction(Document):
 				'Cancel Document',
 				'Get Amended Document',
 				'Attach File to Document',
-				'Get Report Result',
 				'Get Value',
 				'Set Value'
 			]:
