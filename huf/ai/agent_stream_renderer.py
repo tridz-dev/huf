@@ -68,6 +68,7 @@ class AgentStreamRenderer(BaseRenderer):
 		model = frappe.form_dict.get("model")
 		prompt_template = frappe.form_dict.get("prompt_template")
 		prompt_version = frappe.form_dict.get("prompt_version")
+		prompt_cache_options = frappe.form_dict.get("prompt_cache_options")
 		
 		if not prompt:
 			# Try to get from POST body
@@ -79,6 +80,7 @@ class AgentStreamRenderer(BaseRenderer):
 					if not model: model = body.get("model")
 					if not prompt_template: prompt_template = body.get("prompt_template")
 					if not prompt_version: prompt_version = body.get("prompt_version")
+					if not prompt_cache_options: prompt_cache_options = body.get("prompt_cache_options")
 			except Exception:
 				pass
 		
@@ -174,7 +176,8 @@ class AgentStreamRenderer(BaseRenderer):
 					conversation_id=None if create_new else conversation_id,
 					create_new=create_new,
 					prompt_template=prompt_template,
-					prompt_version=prompt_version
+					prompt_version=prompt_version,
+					prompt_cache_options=prompt_cache_options
 				)
 				
 				# Convert async generator to sync
@@ -445,4 +448,3 @@ class AgentStreamRenderer(BaseRenderer):
 
 		headers = {"Content-Type": "text/html; charset=utf-8"}
 		return self.build_response(html_content, headers=headers)
-
