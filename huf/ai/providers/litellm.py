@@ -58,9 +58,6 @@ def _build_text_content(text: str, provider_name: str, cache_enabled: bool, cach
     if provider_name == "anthropic":
         return [{"type": "text", "text": text, "cache_control": {"type": cache_control_type}}]
 
-    if provider_name in ("openai", "deepseek", "gemini", "google"):
-        return [{"type": "text", "text": text}]
-
     return [{"type": "text", "text": text}]
 
 
@@ -347,13 +344,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             if context and context.get("response_format"):
                 completion_kwargs["response_format"] = context.get("response_format")
 
-            if (
-                provider_name in ("openai", "deepseek")
-                and openai_prompt_cache_retention
-            ):
+            if openai_prompt_cache_retention:
                 completion_kwargs["prompt_cache_retention"] = openai_prompt_cache_retention
 
-            if provider_name in ("gemini", "google") and gemini_cached_content:
+            if gemini_cached_content:
                 completion_kwargs["cached_content"] = gemini_cached_content
 
             if top_p:
@@ -784,13 +778,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         if top_p:
             completion_kwargs["top_p"] = top_p
 
-        if (
-            provider_name in ("openai", "deepseek")
-            and openai_prompt_cache_retention
-        ):
+        if openai_prompt_cache_retention:
             completion_kwargs["prompt_cache_retention"] = openai_prompt_cache_retention
 
-        if provider_name in ("gemini", "google") and gemini_cached_content:
+        if gemini_cached_content:
             completion_kwargs["cached_content"] = gemini_cached_content
 
         provider_name = normalized_model.split("/")[0]
