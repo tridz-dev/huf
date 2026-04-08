@@ -221,21 +221,24 @@ doc_events = {
 # 	],
 # }
 scheduler_events = {
-    "all": [
-        "huf.ai.agent_scheduler.run_scheduled_agents"
-    ],
-    "daily": [
-        "huf.ai.knowledge.maintenance.cleanup_orphaned_files",
-        "huf.ai.knowledge.maintenance.optimize_indexes",
-    ],
-    "cron": {
-        "*/1 * * * *": [
-            "huf.ai.orchestration.scheduler.process_orchestrations"
-        ]
-    },
-    "hourly": [
-        "huf.ai.mcp_client.auto_sync_mcp_server_tools"
-    ]
+	"all": [
+		"huf.ai.agent_scheduler.run_scheduled_agents"
+	],
+	"cron": {
+		"*/5 * * * *": [
+			"huf.ai.odoo.polling.run_polling_sync"
+		],
+		"*/1 * * * *": [
+			"huf.ai.orchestration.scheduler.process_orchestrations"
+		]
+	},
+	"daily": [
+		"huf.ai.knowledge.maintenance.cleanup_orphaned_files",
+		"huf.ai.knowledge.maintenance.optimize_indexes",
+	],
+	"hourly": [
+		"huf.ai.mcp_client.auto_sync_mcp_server_tools"
+	]
 }
 
 

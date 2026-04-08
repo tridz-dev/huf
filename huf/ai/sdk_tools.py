@@ -138,6 +138,26 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_set_conversation_data"
                     elif function_doc.types == "Load Conversation Data":
                         function_path = "huf.ai.sdk_tools.handle_load_conversation_data"
+                    elif function_doc.types == "Odoo Search Read":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_search_read"
+                    elif function_doc.types == "Odoo Read":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_read"
+                    elif function_doc.types == "Odoo Create":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_create"
+                    elif function_doc.types == "Odoo Write":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_write"
+                    elif function_doc.types == "Odoo Delete":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_unlink"
+                    elif function_doc.types == "Odoo Execute":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_execute"
+                    elif function_doc.types == "Odoo Fields Get":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_fields_get"
+                    elif function_doc.types == "Odoo List Models":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_list_models"
+                    elif function_doc.types == "Odoo Search Count":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_search_count"
+                    elif function_doc.types == "Odoo Read Group":
+                        function_path = "huf.ai.odoo.tool_handlers.handle_odoo_read_group"
 
                     else:
                         continue
@@ -180,6 +200,12 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     elif function_doc.types == "Run Agent":
                         if function_doc.agent:
                             extra_args["agent_name"] = function_doc.agent
+                    
+                    elif function_doc.types.startswith("Odoo"):
+                        if function_doc.odoo_connection:
+                            extra_args["connection"] = function_doc.odoo_connection
+                        elif hasattr(agent, "odoo_connection") and agent.odoo_connection:
+                            extra_args["connection"] = agent.odoo_connection
 
                     tool = create_function_tool(
                         function_doc.tool_name,

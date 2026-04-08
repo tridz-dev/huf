@@ -1,0 +1,213 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:connection_name",
+ "creation": "2026-03-24 23:20:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "connection_name",
+  "odoo_url",
+  "database_name",
+  "username",
+  "api_key",
+  "auth_method",
+  "column_break_6",
+  "odoo_version",
+  "protocol",
+  "hosting_type",
+  "is_active",
+  "section_break_11",
+  "connection_status",
+  "last_tested",
+  "last_sync_datetime",
+  "user_id",
+  "odoo_server_version",
+  "column_break_16",
+  "webhook_key",
+  "webhook_url",
+  "rate_limit_rpm",
+  "section_break_20",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "connection_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Connection Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "odoo_url",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Odoo URL",
+   "reqd": 1
+  },
+  {
+   "fieldname": "database_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Database Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "username",
+   "fieldtype": "Data",
+   "label": "Username",
+   "reqd": 1
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key",
+   "reqd": 1
+  },
+  {
+   "default": "API Key",
+   "fieldname": "auth_method",
+   "fieldtype": "Select",
+   "label": "Authentication Method",
+   "options": "API Key\nPassword",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_6",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Auto Detect",
+   "fieldname": "odoo_version",
+   "fieldtype": "Select",
+   "label": "Odoo Version",
+   "options": "15\n16\n17\n18\n19\nAuto Detect"
+  },
+  {
+   "default": "Auto",
+   "fieldname": "protocol",
+   "fieldtype": "Select",
+   "label": "Protocol",
+   "options": "JSON-RPC\nXML-RPC\nJSON-2\nAuto"
+  },
+  {
+   "default": "Unknown",
+   "fieldname": "hosting_type",
+   "fieldtype": "Select",
+   "label": "Hosting Type",
+   "options": "Odoo.com SaaS\nOdoo.sh\nSelf-Hosted\nUnknown"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Active"
+  },
+  {
+   "fieldname": "section_break_11",
+   "fieldtype": "Section Break",
+   "label": "Connection Status"
+  },
+  {
+   "default": "Not Tested",
+   "fieldname": "connection_status",
+   "fieldtype": "Select",
+   "label": "Connection Status",
+   "options": "Not Tested\nConnected\nFailed\nAuth Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_tested",
+   "fieldtype": "Datetime",
+   "label": "Last Tested",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_sync_datetime",
+   "fieldtype": "Datetime",
+   "label": "Last Sync (Polling)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "user_id",
+   "fieldtype": "Int",
+   "label": "Odoo User ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "odoo_server_version",
+   "fieldtype": "Data",
+   "label": "Server Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_16",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "webhook_key",
+   "fieldtype": "Password",
+   "label": "Webhook Key",
+   "read_only": 1
+  },
+  {
+   "fieldname": "webhook_url",
+   "fieldtype": "Data",
+   "label": "Webhook URL",
+   "read_only": 1
+  },
+  {
+   "default": "60",
+   "fieldname": "rate_limit_rpm",
+   "fieldtype": "Int",
+   "label": "Rate Limit (RPM)"
+  },
+  {
+   "fieldname": "section_break_20",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-03-24 23:20:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Odoo Connection",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Admin",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

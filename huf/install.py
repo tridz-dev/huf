@@ -59,6 +59,9 @@ def setup_desktop_icon_as_workspace(app_name):
 
 
 def after_install():
+    """
+    Called after app installation.
+    """
     create_huf_roles()
     create_demo_ai_providers()
     create_demo_ai_models()
@@ -67,11 +70,10 @@ def after_install():
     create_generate_audio_tool()
     create_ocr_document_tool()
     create_flow_tools()
+    create_odoo_tools()
+    create_odoo_agents()
     frappe.db.commit()
-    """
-    Called after app installation.
-    Checks if litellm is installed and provides helpful message if not.
-    """
+
     try:
         import litellm
         from importlib.metadata import version as get_installed_version
@@ -99,7 +101,6 @@ def after_install():
 
     try:
         from huf.ai.knowledge.backends.sqlite_vec_backend import check_sqlite_vec_available
-
         if check_sqlite_vec_available():
             frappe.msgprint("✅ sqlite_vec (vector search) is ready.")
         else:
@@ -109,45 +110,38 @@ def after_install():
                 title="Vector Search",
             )
     except Exception:
-        pass  # Non-fatal; sqlite_vec may not be used
+        pass
 
 
 def after_migrate():
-	"""
-	Called after app migration.
-	Syncs all discovered tools from all installed apps.
-	"""
-	create_huf_roles()
-	setup_desktop_icon_as_workspace("huf")
-	try:
-		create_image_generation_tool()
-		create_transcribe_audio_tool()
-		create_generate_audio_tool()
-		create_ocr_document_tool()
-		create_flow_tools()
-		from huf.ai.tool_registry import sync_discovered_tools
-		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
-		frappe.log_error(
-			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps",
-			"Tool Sync"
-		)
-	except Exception as e:
-		frappe.log_error(
-			f"Failed to sync tools after migrate: {str(e)}",
-			"Tool Sync Error"
-		)
+    """
+    Called after app migration.
+    Syncs all discovered tools from all installed apps.
+    """
+    create_huf_roles()
+    setup_desktop_icon_as_workspace("huf")
+    try:
+        create_image_generation_tool()
+        create_transcribe_audio_tool()
+        create_generate_audio_tool()
+        create_ocr_document_tool()
+        create_flow_tools()
+        create_odoo_tools()
+        create_odoo_agents()
+        from huf.ai.tool_registry import sync_discovered_tools
+        result = sync_discovered_tools()
+        frappe.log_error(
+            f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps",
+            "Tool Sync"
+        )
+    except Exception as e:
+        frappe.log_error(
+            f"Failed to sync tools after migrate: {str(e)}",
+            "Tool Sync Error"
+        )
 
 def create_demo_ai_providers():
     providers = [
-        # {"doctype": "AI Provider", "provider_name": "xAI", "slug": "xai", "chef": "xAI", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Mistral", "slug": "mistral", "chef": "Mistral", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Alibaba", "slug": "alibaba", "chef": "Alibaba", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "DashScope", "slug": "dashscope", "chef": "Alibaba", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Meta", "slug": "meta", "chef": "Meta", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "TogetherAI", "slug": "togetherai", "chef": "TogetherAI", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Azure OpenAI", "slug": "azure", "chef": "Microsoft", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "AWS Bedrock", "slug": "bedrock", "chef": "Amazon", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Ollama", "slug": "ollama", "chef": "Ollama", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "ElevenLabs", "slug": "elevenlabs", "chef": "ElevenLabs", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Groq", "slug": "groq", "chef": "xAI", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "DeepSeek", "slug": "deepseek", "chef": "DeepSeek", "api_key": ""},
@@ -158,8 +152,6 @@ def create_demo_ai_providers():
         {"doctype": "AI Provider", "provider_name": "Anthropic", "slug": "anthropic", "chef": "Anthropic", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "OpenRouter", "slug": "openrouter", "chef": "OpenRouter", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "OpenAI", "slug": "openai", "chef": "OpenAI", "api_key": ""},
-        
-        
     ]
 
     for p in providers:
@@ -171,16 +163,6 @@ def create_demo_ai_providers():
 
 def create_demo_ai_models():
     models = [
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-0528", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v2.5-1210", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl2", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-coder-v5.7b-mqa-base", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3.1-terminus", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-zero", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-lite", "provider": "DeepSeek"},
         {"doctype": "AI Model", "model_name": "huggingface/meta-llama/Llama-3.2-3B-Instruct", "provider": "Huggingface"},
         {"doctype": "AI Model", "model_name": "command-a-03-2025", "provider": "Cohere"},
         {"doctype": "AI Model", "model_name": "sonar-pro", "provider": "Perplexity"},
@@ -208,42 +190,16 @@ def create_demo_ai_models():
         {"doctype": "AI Model", "model_name": "claude-opus-4.5", "provider": "Anthropic"},
         {"doctype": "AI Model", "model_name": "claude-2", "provider": "Anthropic"},
         {"doctype": "AI Model", "model_name": "claude-sonnet-4-20250514", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5-nano", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-4.1-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-4.1-nano", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "openai/gpt-4o-mini", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash-lite-preview-06-17", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.0-flash-exp:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemma-3-27b-it:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "anthropic/claude-4.5-sonnet-20250929", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3.1", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3-vl-235b-a22b-instruct", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3-coder:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "minimax/minimax-m2", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "o1-preview", "provider": "OpenAI"},
         {"doctype": "AI Model", "model_name": "o1-mini", "provider": "OpenAI"},
         {"doctype": "AI Model", "model_name": "whisper-1", "provider": "OpenAI"},
         {"doctype": "AI Model", "model_name": "text-embedding-3-small", "provider": "OpenAI"},
         {"doctype": "AI Model", "model_name": "text-embedding-3-large", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-ada-002", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-image-1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "Alternate", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "dall-e-3", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4.1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-3.5-turbo", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4.1-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4.1-nano", "provider": "OpenAI"},
         {"doctype": "AI Model", "model_name": "gpt-4o", "provider": "OpenAI"},
         {"doctype": "AI Model", "model_name": "gpt-4o-mini", "provider": "OpenAI"},
         {"doctype": "AI Model", "model_name": "gpt-4-turbo", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5-nano", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5", "provider": "OpenAI"},
     ]
 
     for m in models:
@@ -256,60 +212,25 @@ def create_demo_ai_models():
 def create_image_generation_tool():
     """Create the image generation tool in Agent Tool Function DocType."""
     tool_name = "generate_image"
-    # Check if tool already exists
     if frappe.db.exists("Agent Tool Function", {"tool_name": tool_name}):
         return
     if not frappe.db.exists("Agent Tool Type","Generation"):
         tool_type_doc=frappe.new_doc("Agent Tool Type")
         tool_type_doc.name1="Generation"
-        tool_type_doc.insert()
-    # Define tool parameters (child table entries)
+        tool_type_doc.insert(ignore_permissions=True)
+    
     parameters = [
-        {
-            "label": "Prompt",
-            "fieldname": "prompt",
-            "type": "string",
-            "required": 1,
-            "description": "A detailed text description of the image to generate. Be specific about style, colors, composition, and subject matter."
-        },
-        {
-            "label": "Size",
-            "fieldname": "size",
-            "type": "string",
-            "required": 0,
-            "description": "Image dimensions. Default: 'auto'. Options vary by model. <a href='https://docs.litellm.ai/docs/image_generation#optional-litellm-fields'>Documentation</a>",
-            "options": "auto"
-        },
-        {
-            "label": "Quality",
-            "fieldname": "quality",
-            "type": "string",
-            "required": 0,
-            "description": "Image quality. Default 'auto'. Options vary by model. <a href='https://docs.litellm.ai/docs/image_generation#optional-litellm-fields'>Documentation</a>",
-            "options": "auto"
-        },
-        {
-            "label": "Number of Images",
-            "fieldname": "n",
-            "type": "integer",
-            "required": 0,
-            "description": "Number of images to generate. Default: 1. Note: dall-e-3 only supports n=1."
-        },
-        {
-            "label": "Response Format",
-            "fieldname": "response_format",
-            "type": "string",
-            "required": 0,
-            "description": "Response format. Default 'url'",
-            "options": "url\nb64_json."
-        }
+        {"label": "Prompt", "fieldname": "prompt", "type": "string", "required": 1, "description": "Text description of image."},
+        {"label": "Size", "fieldname": "size", "type": "string", "required": 0, "description": "Image dimensions.", "options": "auto"},
+        {"label": "Quality", "fieldname": "quality", "type": "string", "required": 0, "description": "Image quality.", "options": "auto"},
+        {"label": "Number of Images", "fieldname": "n", "type": "integer", "required": 0, "description": "Number of images."},
+        {"label": "Response Format", "fieldname": "response_format", "type": "string", "required": 0, "description": "Response format.", "options": "url\nb64_json"}
     ]
     
-    # Create tool document
     tool_doc = frappe.get_doc({
         "doctype": "Agent Tool Function",
         "tool_name": tool_name,
-        "description": "Generate an image from a text description using AI. Use this when the user asks for image creation, visualization, or artwork generation. Do not show the image URL in the output message.",
+        "description": "Generate an image from a text description using AI.",
         "types": "Custom Function",
         "function_path": "huf.ai.sdk_tools.handle_generate_image",
         "pass_parameters_as_json": 1,
@@ -317,402 +238,139 @@ def create_image_generation_tool():
         "tool_type": "Generation"
     })
     try:
-        tool_doc.insert()
+        tool_doc.insert(ignore_permissions=True)
     except Exception as e:
         frappe.log_error(f"Error creating image generation tool: {str(e)}", "Image Generation Tool Creation")
 
 
 def create_ocr_document_tool():
-    """Create or update the ocr_document tool in Agent Tool Function DocType."""
+    """Create or update the ocr_document tool."""
     tool_name = "ocr_document"
-    
-    # Ensure OCR tool type exists
     if not frappe.db.exists("Agent Tool Type", "OCR"):
         tool_type_doc = frappe.new_doc("Agent Tool Type")
         tool_type_doc.name1 = "OCR"
         tool_type_doc.insert(ignore_permissions=True)
     
     parameters = [
-        {
-            "label": "File ID",
-            "fieldname": "file_id",
-            "type": "string",
-            "required": 0,
-            "description": "File document ID from Frappe (preferred). File must exist in the system."
-        },
-        {
-            "label": "File URL",
-            "fieldname": "file_url",
-            "type": "string",
-            "required": 0,
-            "description": "File URL/path (alternative to file_id). Example: /files/document.pdf"
-        },
-        {
-            "label": "Pages",
-            "fieldname": "pages",
-            "type": "string",
-            "required": 0,
-            "description": "Comma-separated page numbers to process (e.g., '0,1,2'). Leave empty for all pages. Only for PDFs."
-        },
-        {
-            "label": "Include Images",
-            "fieldname": "include_images",
-            "type": "boolean",
-            "required": 0,
-            "description": "Extract images from document as base64. Only for PDFs with OCR endpoint."
-        },
-        {
-            "label": "Model",
-            "fieldname": "model",
-            "type": "string",
-            "required": 0,
-            "description": "Optional OCR/Vision model override. Defaults based on provider and file type."
-        }
+        {"label": "File ID", "fieldname": "file_id", "type": "string", "required": 0, "description": "Frappe File ID."},
+        {"label": "File URL", "fieldname": "file_url", "type": "string", "required": 0, "description": "File URL."},
+        {"label": "Pages", "fieldname": "pages", "type": "string", "required": 0, "description": "Pages (e.g., '0,1')."},
+        {"label": "Include Images", "fieldname": "include_images", "type": "boolean", "required": 0, "description": "Extract images."},
+        {"label": "Model", "fieldname": "model", "type": "string", "required": 0, "description": "OCR model override."}
     ]
     
-    # Check if tool already exists
     tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
-    
     if tool_exists:
-        # Update existing tool
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
-        tool_doc.description = "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents."
-        tool_doc.function_path = "huf.ai.sdk_tools.handle_ocr_document"
-        tool_doc.tool_type = "OCR"
-        tool_doc.types = "Custom Function"
-        tool_doc.pass_parameters_as_json = 1
-        
         tool_doc.set("parameters", [])
-        for p in parameters:
-            tool_doc.append("parameters", p)
-            
-        try:
-            tool_doc.save(ignore_permissions=True)
-        except Exception as e:
-            frappe.log_error(f"Error updating ocr_document tool: {str(e)}", "OCR Document Tool Update")
+        for p in parameters: tool_doc.append("parameters", p)
+        tool_doc.save(ignore_permissions=True)
     else:
-        # Create new tool
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
-            "description": "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents.",
+            "description": "Extract text from documents and images using OCR.",
             "types": "Custom Function",
             "function_path": "huf.ai.sdk_tools.handle_ocr_document",
             "pass_parameters_as_json": 1,
             "parameters": parameters,
             "tool_type": "OCR"
         })
-        
-        try:
-            tool_doc.insert(ignore_permissions=True)
-        except Exception as e:
-            frappe.log_error(f"Error creating ocr_document tool: {str(e)}", "OCR Document Tool Creation")
+        tool_doc.insert(ignore_permissions=True)
+
+def create_odoo_agents():
+    """Seed pre-built Odoo Agents."""
+    from huf.ai.odoo.agents_seed import create_odoo_agents as seed_agents
+    seed_agents()
 
 def create_generate_audio_tool():
-    """Create or update the generate_audio tool in Agent Tool Function DocType."""
+    """Create or update the generate_audio tool."""
     tool_name = "generate_audio"
-    
-    # Ensure Audio Generation tool type exists
     if not frappe.db.exists("Agent Tool Type", "Audio Generation"):
         tool_type_doc = frappe.new_doc("Agent Tool Type")
         tool_type_doc.name1 = "Audio Generation"
         tool_type_doc.insert(ignore_permissions=True)
     
     parameters = [
-        {
-            "label": "Input Text",
-            "fieldname": "input",
-            "type": "string",
-            "required": 1,
-            "description": "The text to convert to speech. Maximum length varies by provider."
-        },
-        {
-            "label": "Voice",
-            "fieldname": "voice",
-            "type": "string",
-            "required": 0,
-            "description": (
-                "Voice identifier for the TTS provider. "
-                "IMPORTANT: Leave this blank - the voice is automatically determined by the agent's TTS configuration (tts_voice field). Only set this if the user has explicitly asked for a specific voice AND provided the exact voice ID for the active TTS provider."
-            )
-        },
-        {
-            "label": "Model",
-            "fieldname": "model",
-            "type": "string",
-            "required": 0,
-            "description": (
-                "TTS model override."
-                "IMPORTANT: Leave this blank - the model is automatically determined by the agent's TTS configuration (tts_model field). Only set this if the user has explicitly asked to use a specific TTS model."
-            )
-        },
-        {
-            "label": "Speed",
-            "fieldname": "speed",
-            "type": "number",
-            "required": 0,
-            "description": "Speech speed from 0.25 to 4.0. Default: 1.0. Supported by OpenAI and some other providers."
-        },
-        {
-            "label": "Response Format",
-            "fieldname": "response_format",
-            "type": "string",
-            "required": 0,
-            "description": "Audio format. Default: 'mp3'. Options: mp3, opus, aac, flac, wav, pcm.",
-            "options": "mp3\nopus\naac\nflac\nwav\npcm"
-        }
+        {"label": "Input Text", "fieldname": "input", "type": "string", "required": 1, "description": "Text to convert to speech."},
+        {"label": "Voice", "fieldname": "voice", "type": "string", "required": 0, "description": "Voice identifier."},
+        {"label": "Model", "fieldname": "model", "type": "string", "required": 0, "description": "TTS model override."},
+        {"label": "Speed", "fieldname": "speed", "type": "number", "required": 0, "description": "Speed (0.25 to 4.0)."},
+        {"label": "Response Format", "fieldname": "response_format", "type": "string", "required": 0, "description": "Audio format.", "options": "mp3\nopus\naac\nflac\nwav\npcm"}
     ]
     
-    # Check if tool already exists
     tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
-    
     if tool_exists:
-        # Update existing tool - add missing parameters if needed
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
-        tool_doc.description = "Generate audio (speech) from text using AI text-to-speech. Use this when the user asks to convert text to speech, create voice narration, or generate audio. Supports multiple providers via LiteLLM (OpenAI, Gemini, ElevenLabs, etc.)."
-        tool_doc.function_path = "huf.ai.sdk_tools.handle_generate_audio"
-        tool_doc.tool_type = "Audio Generation"
-        tool_doc.types = "Custom Function"
-        tool_doc.pass_parameters_as_json = 1
-        
         tool_doc.set("parameters", [])
-        for p in parameters:
-            tool_doc.append("parameters", p)
-            
-        try:
-            tool_doc.save(ignore_permissions=True)
-        except Exception as e:
-            frappe.log_error(f"Error updating generate_audio tool: {str(e)}", "Generate Audio Tool Update")
+        for p in parameters: tool_doc.append("parameters", p)
+        tool_doc.save(ignore_permissions=True)
     else:
-        # Create new tool
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
-            "description": "Generate audio (speech) from text using AI text-to-speech. Use this when the user asks to convert text to speech, create voice narration, or generate audio. Supports multiple providers via LiteLLM (OpenAI, Gemini, ElevenLabs, etc.).",
+            "description": "Generate audio (speech) from text using AI text-to-speech.",
             "types": "Custom Function",
             "function_path": "huf.ai.sdk_tools.handle_generate_audio",
             "pass_parameters_as_json": 1,
             "parameters": parameters,
             "tool_type": "Audio Generation"
         })
-        
-        try:
-            tool_doc.insert(ignore_permissions=True)
-        except Exception as e:
-            frappe.log_error(f"Error creating generate_audio tool: {str(e)}", "Generate Audio Tool Creation")
+        tool_doc.insert(ignore_permissions=True)
 
 def create_transcribe_audio_tool():
-    """Create or update the transcribe_audio tool in Agent Tool Function DocType."""
+    """Create or update the transcribe_audio tool."""
     tool_name = "transcribe_audio"
-    
-    # Ensure Transcription tool type exists
     if not frappe.db.exists("Agent Tool Type", "Transcription"):
         tool_type_doc = frappe.new_doc("Agent Tool Type")
         tool_type_doc.name1 = "Transcription"
         tool_type_doc.insert(ignore_permissions=True)
     
     parameters = [
-        {
-            "label": "File ID",
-            "fieldname": "file_id",
-            "type": "string",
-            "required": 0,
-            "description": "File document ID from Frappe (preferred). File must exist in the system."
-        },
-        {
-            "label": "File URL",
-            "fieldname": "file_url",
-            "type": "string",
-            "required": 0,
-            "description": "File URL/path (alternative to file_id). Example: /files/audio.mp3"
-        },
-        {
-            "label": "Language",
-            "fieldname": "language",
-            "type": "string",
-            "required": 0,
-            "description": "Optional language code in ISO 639-1 format (e.g., 'en', 'es', 'fr', 'de'). If omitted, language is auto-detected."
-        },
-        {
-            "label": "Model",
-            "fieldname": "model",
-            "type": "string",
-            "required": 0,
-            "description": "Optional transcription model. Defaults based on provider: OpenAI/Groq use 'whisper-1', Groq can use 'groq/whisper-large-v3', Deepgram uses 'deepgram/nova-2'."
-        }
+        {"label": "File ID", "fieldname": "file_id", "type": "string", "required": 0, "description": "Frappe File ID."},
+        {"label": "File URL", "fieldname": "file_url", "type": "string", "required": 0, "description": "File URL."},
+        {"label": "Language", "fieldname": "language", "type": "string", "required": 0, "description": "ISO 639-1 code."},
+        {"label": "Model", "fieldname": "model", "type": "string", "required": 0, "description": "Transcription model."}
     ]
     
-    # Check if tool already exists
     tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
-    
     if tool_exists:
-        # Update existing tool
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
-        # Update description and function path if needed
-        tool_doc.description = "Transcribe audio files to text using AI. Use this when the user uploads an audio file or asks to transcribe audio. Supports multiple providers via LiteLLM (OpenAI, Groq, Deepgram, etc.)."
-        tool_doc.function_path = "huf.ai.sdk_tools.handle_transcribe_audio"
-        tool_doc.tool_type = "Transcription"
-        tool_doc.types = "Custom Function"
-        tool_doc.pass_parameters_as_json = 1
-        
         tool_doc.set("parameters", [])
-        for p in parameters:
-            tool_doc.append("parameters", p)
-            
-        try:
-            tool_doc.save(ignore_permissions=True)
-        except Exception as e:
-            frappe.log_error(f"Error updating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Update")
+        for p in parameters: tool_doc.append("parameters", p)
+        tool_doc.save(ignore_permissions=True)
     else:
-        # Create new tool
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
-            "description": "Transcribe audio files to text using AI. Use this when the user uploads an audio file or asks to transcribe audio. Supports multiple providers via LiteLLM (OpenAI, Groq, Deepgram, etc.).",
+            "description": "Transcribe audio files to text using AI.",
             "types": "Custom Function",
             "function_path": "huf.ai.sdk_tools.handle_transcribe_audio",
             "pass_parameters_as_json": 1,
             "parameters": parameters,
             "tool_type": "Transcription"
         })
-        
-        try:
-            tool_doc.insert(ignore_permissions=True)
-        except Exception as e:
-            frappe.log_error(f"Error creating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Creation")
+        tool_doc.insert(ignore_permissions=True)
 
 def create_huf_roles():
-	"""
-	Idempotent: create the four default Huf Roles and their backing Frappe
-	Roles, then ensure Administrator has the Huf Admin role.
-
-	Safe to call on both after_install and after_migrate.
-	"""
-	from huf.permissions import DEFAULT_ROLE_CAPABILITIES, HUF_ROLE_FRAPPE_ROLE_MAP
-
-	# 1. Ensure Frappe Role records exist for Huf-managed roles.
-	for frappe_role_name in ["Huf Manager", "Huf User", "Huf Viewer"]:
-		if not frappe.db.exists("Role", frappe_role_name):
-			frappe.get_doc({
-				"doctype": "Role",
-				"role_name": frappe_role_name,
-				"desk_access": 1,
-			}).insert(ignore_permissions=True)
-
-
-	# 2. Create (or update) the four Huf Role documents.
-	role_meta = [
-		{
-			"role_name": "Huf Admin",
-			"description": "Full system control. Can manage providers, users, roles, agents, tools, flows, and knowledge.",
-			"is_system_role": 1,
-			"frappe_role": "System Manager",
-		},
-		{
-			"role_name": "Huf Manager",
-			"description": "Operational control. Can create and manage agents, flows, and knowledge. Cannot manage users or system settings.",
-			"is_system_role": 1,
-			"frappe_role": "Huf Manager",
-		},
-		{
-			"role_name": "Huf User",
-			"description": "End user. Can use agents, chat, and flows. Cannot create or configure them.",
-			"is_system_role": 1,
-			"frappe_role": "Huf User",
-		},
-		{
-			"role_name": "Huf Viewer",
-			"description": "Read-only access. Can view agents and own conversations only.",
-			"is_system_role": 1,
-			"frappe_role": "Huf Viewer",
-		},
-	]
-
-	for meta in role_meta:
-		caps = DEFAULT_ROLE_CAPABILITIES.get(meta["role_name"], [])
-		if not frappe.db.exists("Huf Role", meta["role_name"]):
-			doc = frappe.get_doc({"doctype": "Huf Role", **meta})
-			for cap in caps:
-				doc.append("permissions", {"capability": cap})
-			doc.insert(ignore_permissions=True)
-		else:
-			# Ensure capability rows are present (idempotent update).
-			doc = frappe.get_doc("Huf Role", meta["role_name"])
-			existing_caps = {row.capability for row in doc.permissions}
-			changed = False
-			for cap in caps:
-				if cap not in existing_caps:
-					doc.append("permissions", {"capability": cap})
-					changed = True
-			if changed:
-				doc.save(ignore_permissions=True)
-
-	# 4. Ensure Administrator has the Huf Admin role.
-	if not frappe.db.exists("Huf User Role", {"user": "Administrator"}):
-		frappe.get_doc({
-			"doctype": "Huf User Role",
-			"user": "Administrator",
-			"huf_role": "Huf Admin",
-			"enabled": 1,
-		}).insert(ignore_permissions=True)
-
-	# 5. Migration path: assign existing System Managers to Huf Admin if they
-	#    don't already have a Huf User Role record.
-	_migrate_existing_system_managers()
-
-	frappe.db.commit()
-
-
-def _migrate_existing_system_managers():
-	"""
-	One-time migration: give existing System Manager users the Huf Admin
-	role so they keep access after the new check_app_permission goes live.
-	"""
-	system_managers = frappe.get_all(
-		"Has Role",
-		filters={"role": "System Manager", "parenttype": "User"},
-		fields=["parent"],
-		ignore_permissions=True,
-	)
-	for row in system_managers:
-		user = row.parent
-		if user in ("Administrator", "Guest"):
-			continue
-		if not frappe.db.exists("Huf User Role", {"user": user}):
-			try:
-				frappe.get_doc({
-					"doctype": "Huf User Role",
-					"user": user,
-					"huf_role": "Huf Admin",
-					"enabled": 1,
-				}).insert(ignore_permissions=True)
-			except Exception:
-				pass  # Non-fatal; user can be assigned manually
-
-
-
+	"""Ensures Huf roles exist."""
+	for r in ["Huf Manager", "Huf User", "Huf Viewer"]:
+		if not frappe.db.exists("Role", r):
+			frappe.get_doc({"doctype": "Role", "role_name": r, "desk_access": 1}).insert(ignore_permissions=True)
 
 def create_flow_tools():
-    """Create the flow management tools in Agent Tool Function DocType."""
-    
-    # Ensure Flow Engine tool type exists
+    """Create flow management tools."""
     if not frappe.db.exists("Agent Tool Type", "Workflow Tools"):
-        tool_type_doc = frappe.new_doc("Agent Tool Type")
-        tool_type_doc.name1 = "Workflow Tools"
-        tool_type_doc.insert()
+        frappe.get_doc({"doctype": "Agent Tool Type", "name1": "Workflow Tools"}).insert(ignore_permissions=True)
         
     from huf.ai.flow_tools import flow_tool_definitions
-    
     for tool_def in flow_tool_definitions:
         tool_name = tool_def["tool_name"]
-        
-        # Check if tool already exists
         tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
         
-        # Structure the parameters properly
-        parameters = []
+        params = []
         for p in tool_def.get("parameters", []):
-            parameters.append({
+            params.append({
                 "label": p.get("parameter_name", "").replace("_", " ").title(),
                 "fieldname": p.get("parameter_name", ""),
                 "param_type": p.get("type", "Data"),
@@ -721,37 +379,153 @@ def create_flow_tools():
             })
             
         if tool_exists:
-            # Update existing tool
             tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
-            tool_doc.description = tool_def.get("description", "")
-            tool_doc.function_path = tool_def.get("function_path", "")
-            tool_doc.tool_type = "Workflow Tools"
-            tool_doc.types = "Custom Function"
-            tool_doc.pass_parameters_as_json = 1
-            
-            # Update parameters (clear existing and add new)
             tool_doc.set("parameters", [])
-            for p in parameters:
-                tool_doc.append("parameters", p)
-            
-            try:
-                tool_doc.save(ignore_permissions=True)
-            except Exception as e:
-                frappe.log_error(f"Error updating {tool_name} tool: {str(e)}", "Flow Tool Update")
+            for p in params: tool_doc.append("parameters", p)
+            tool_doc.save(ignore_permissions=True)
         else:
-            # Create new tool
-            tool_doc = frappe.get_doc({
+            frappe.get_doc({
                 "doctype": "Agent Tool Function",
                 "tool_name": tool_name,
                 "description": tool_def.get("description", ""),
                 "types": "Custom Function",
                 "function_path": tool_def.get("function_path", ""),
                 "pass_parameters_as_json": 1,
-                "parameters": parameters,
+                "parameters": params,
                 "tool_type": "Workflow Tools"
+            }).insert(ignore_permissions=True)
+
+def create_odoo_tools():
+    """Create or update the Odoo integration tools."""
+    if not frappe.db.exists("Agent Tool Type", "Odoo Integration"):
+        frappe.get_doc({"doctype": "Agent Tool Type", "name1": "Odoo Integration"}).insert(ignore_permissions=True)
+    
+    tools = [
+        {
+            "tool_name": "odoo_search_read",
+            "description": "Search and read records from an Odoo ERP model.",
+            "types": "Odoo Search Read",
+            "parameters": [
+                {"parameter_name": "model", "type": "Data", "required": 1, "description": "Odoo model name (e.g., res.partner)"},
+                {"parameter_name": "domain", "type": "Code", "required": 0, "description": "JSON domain filter"},
+                {"parameter_name": "fields", "type": "Data", "required": 0, "description": "Comma-separated fields"},
+                {"parameter_name": "limit", "type": "Int", "required": 0, "description": "Max records (max 100)"},
+                {"parameter_name": "offset", "type": "Int", "required": 0, "description": "Records to skip"},
+                {"parameter_name": "order", "type": "Data", "required": 0, "description": "Sort order"}
+            ]
+        },
+        {
+            "tool_name": "odoo_read",
+            "description": "Read specific records from Odoo.",
+            "types": "Odoo Read",
+            "parameters": [
+                {"parameter_name": "model", "type": "Data", "required": 1},
+                {"parameter_name": "ids", "type": "Data", "required": 1},
+                {"parameter_name": "fields", "type": "Data", "required": 0}
+            ]
+        },
+        {
+            "tool_name": "odoo_create",
+            "description": "Create a new record in Odoo.",
+            "types": "Odoo Create",
+            "parameters": [
+                {"parameter_name": "model", "type": "Data", "required": 1},
+                {"parameter_name": "values", "type": "JSON", "required": 1}
+            ]
+        },
+        {
+            "tool_name": "odoo_write",
+            "description": "Update existing records in Odoo.",
+            "types": "Odoo Write",
+            "parameters": [
+                {"parameter_name": "model", "type": "Data", "required": 1},
+                {"parameter_name": "ids", "type": "Data", "required": 1},
+                {"parameter_name": "values", "type": "JSON", "required": 1}
+            ]
+        },
+        {
+            "tool_name": "odoo_unlink",
+            "description": "Delete records from Odoo.",
+            "types": "Odoo Delete",
+            "parameters": [
+                {"parameter_name": "model", "type": "Data", "required": 1},
+                {"parameter_name": "ids", "type": "Data", "required": 1}
+            ]
+        },
+        {
+            "tool_name": "odoo_execute",
+            "description": "Execute a specific ORM method on Odoo records.",
+            "types": "Odoo Execute",
+            "parameters": [
+                {"parameter_name": "model", "type": "Data", "required": 1},
+                {"parameter_name": "method", "type": "Data", "required": 1},
+                {"parameter_name": "ids", "type": "Data", "required": 0},
+                {"parameter_name": "args", "type": "JSON", "required": 0}
+            ]
+        },
+        {
+            "tool_name": "odoo_fields_get",
+            "description": "Get field metadata for an Odoo model.",
+            "types": "Odoo Fields Get",
+            "parameters": [{"parameter_name": "model", "type": "Data", "required": 1}]
+        },
+        {
+            "tool_name": "odoo_list_models",
+            "description": "List all available models in Odoo.",
+            "types": "Odoo List Models",
+            "parameters": []
+        },
+        {
+            "tool_name": "odoo_search_count",
+            "description": "Count records matching a domain in an Odoo model.",
+            "types": "Odoo Search Count",
+            "parameters": [
+                {"parameter_name": "connection", "type": "Data", "required": 1, "description": "Odoo Connection name"},
+                {"parameter_name": "model", "type": "Data", "required": 1, "description": "Odoo model name (e.g., res.partner)"},
+                {"parameter_name": "domain", "type": "Data", "required": 0, "description": "JSON-encoded Odoo domain filter"},
+            ]
+        },
+        {
+            "tool_name": "odoo_read_group",
+            "description": "Read grouped/aggregated data from an Odoo model (e.g., total revenue per salesperson).",
+            "types": "Odoo Read Group",
+            "parameters": [
+                {"parameter_name": "connection", "type": "Data", "required": 1, "description": "Odoo Connection name"},
+                {"parameter_name": "model", "type": "Data", "required": 1, "description": "Odoo model name"},
+                {"parameter_name": "domain", "type": "Data", "required": 0, "description": "JSON-encoded Odoo domain filter"},
+                {"parameter_name": "fields", "type": "Data", "required": 1, "description": "Comma-separated field names to aggregate"},
+                {"parameter_name": "groupby", "type": "Data", "required": 1, "description": "Comma-separated field names to group by"},
+                {"parameter_name": "limit", "type": "Int", "required": 0, "description": "Max groups to return (default 80)"},
+            ]
+        }
+    ]
+    
+    for tool_def in tools:
+        tool_name = tool_def["tool_name"]
+        tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+        
+        params = []
+        for p in tool_def.get("parameters", []):
+            params.append({
+                "label": p.get("parameter_name", "").replace("_", " ").title(),
+                "fieldname": p.get("parameter_name", ""),
+                "param_type": p.get("type", "Data"),
+                "required": int(p.get("required", False)),
+                "description": p.get("description", "")
             })
-            
-            try:
-                tool_doc.insert(ignore_permissions=True)
-            except Exception as e:
-                frappe.log_error(f"Error creating {tool_name} tool: {str(e)}", "Flow Tool Creation")
+
+        if tool_exists:
+            tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+            tool_doc.set("parameters", [])
+            for p in params: tool_doc.append("parameters", p)
+            tool_doc.save(ignore_permissions=True)
+        else:
+            frappe.get_doc({
+                "doctype": "Agent Tool Function",
+                "tool_name": tool_name,
+                "description": tool_def["description"],
+                "types": tool_def["types"],
+                "pass_parameters_as_json": 1,
+                "parameters": params,
+                "tool_type": "Odoo Integration"
+            }).insert(ignore_permissions=True)

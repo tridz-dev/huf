@@ -45,6 +45,7 @@
   "instructions",
   "tools_and_mcp_tab",
   "agent_tool",
+  "odoo_connection",
   "mcp_servers_section",
   "agent_mcp_server",
   "knowledge_tab",
@@ -194,6 +195,14 @@
    "fieldtype": "Table",
    "label": "Agent Tool",
    "options": "Agent Tool"
+  },
+  {
+   "depends_on": "eval: doc.agent_tool && doc.agent_tool.some(t => t.tool && t.tool.startsWith('odoo_'))",
+   "description": "Default Odoo connection for this agent's tools.",
+   "fieldname": "odoo_connection",
+   "fieldtype": "Link",
+   "label": "Odoo Connection",
+   "options": "Odoo Connection"
   },
   {
    "description": "Connect to external MCP servers for additional tool capabilities",
