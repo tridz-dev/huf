@@ -1074,14 +1074,27 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
 
         target_agent = frappe.get_doc("Agent", target_agent_name)
         
+        from huf.ai.agent_integration import _is_user_allowed
+        if not _is_user_allowed(target_agent, frappe.session.user):
+            return {
+                "success": False, 
+                "error": f"Permission Denied: User '{frappe.session.user}' is not authorized to run the sub-agent '{target_agent_name}'."
+            }
+        
         conversation_id = kwargs.get("conversation_id")
         agent_run_id = kwargs.get("agent_run_id")
         agent_name_self = kwargs.get("agent_name")
 
+        if target_agent_name == agent_name_self:
+            return {
+                "success": False, 
+                "error": f"Circular Dependency Error: An agent cannot invoke itself as a sub-agent."
+            }
+
         job = enqueue(
             "huf.ai.agent_integration.run_agent_sync",
             queue="default",
-            timeout=300,
+            timeout=1500,
             is_async=True,
             agent_name=target_agent_name,
             prompt=prompt,
@@ -1091,7 +1104,11 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
             invoked_by_agent=agent_name_self,
         )
 
-        return {"success": True, "queued": True, "job_id": job.id}
+        return {
+            "status": "Queued",
+            "message": "The task is currently being processed in the background. IMPORTANT: DO NOT tell the user that the task is completed or successful yet. Inform the user that you are working on it and will provide an update shortly. Do not mention the terms 'sub-agent' or 'background queue' explicitly, keep it natural (e.g., 'I am processing this for you now...').",
+            "job_id": job.id
+        }
     except Exception as e:
         frappe.log_error("Run Agent Tool Error", str(e))
         return {"success": False, "error": str(e)}
