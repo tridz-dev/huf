@@ -179,7 +179,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
 
                     elif function_doc.types == "Run Agent":
                         if function_doc.agent:
-                            extra_args["agent_name"] = function_doc.agent
+                            extra_args["target_agent_name"] = function_doc.agent
 
                     tool = create_function_tool(
                         function_doc.tool_name,
@@ -1064,28 +1064,51 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
 def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, **kwargs):
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
 
-def handle_run_agent(agent_name: str, prompt: str, **kwargs):
+def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
     """
     Queue another agent execution instead of blocking.
     """
     try:
-        if not frappe.db.exists("Agent", agent_name):
-            return {"success": False, "error": f"Agent '{agent_name}' does not exist"}
+        if not frappe.db.exists("Agent", target_agent_name):
+            return {"success": False, "error": f"Agent '{target_agent_name}' does not exist"}
 
-        target_agent = frappe.get_doc("Agent", agent_name)
+        target_agent = frappe.get_doc("Agent", target_agent_name)
+        
+        from huf.ai.agent_integration import _is_user_allowed
+        if not _is_user_allowed(target_agent, frappe.session.user):
+            return {
+                "success": False, 
+                "error": f"Permission Denied: User '{frappe.session.user}' is not authorized to run the sub-agent '{target_agent_name}'."
+            }
+        
+        conversation_id = kwargs.get("conversation_id")
+        agent_run_id = kwargs.get("agent_run_id")
+        agent_name_self = kwargs.get("agent_name")
+
+        if target_agent_name == agent_name_self:
+            return {
+                "success": False, 
+                "error": f"Circular Dependency Error: An agent cannot invoke itself as a sub-agent."
+            }
 
         job = enqueue(
             "huf.ai.agent_integration.run_agent_sync",
             queue="default",
-            timeout=300,
+            timeout=1500,
             is_async=True,
-            agent_name=agent_name,
+            agent_name=target_agent_name,
             prompt=prompt,
             provider=target_agent.provider,
             model=target_agent.model,
+            parent_conversation_id=conversation_id,
+            invoked_by_agent=agent_name_self,
         )
 
-        return {"success": True, "queued": True, "job_id": job.id}
+        return {
+            "status": "Queued",
+            "message": "The task is currently being processed in the background. IMPORTANT: DO NOT tell the user that the task is completed or successful yet. Inform the user that you are working on it and will provide an update shortly. Do not mention the terms 'sub-agent' or 'background queue' explicitly, keep it natural (e.g., 'I am processing this for you now...').",
+            "job_id": job.id
+        }
     except Exception as e:
         frappe.log_error("Run Agent Tool Error", str(e))
         return {"success": False, "error": str(e)}
