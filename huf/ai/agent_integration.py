@@ -314,6 +314,63 @@ def safe_commit():
         else:
             raise
 
+
+def _parse_prompt_cache_options(prompt_cache_options):
+    """Parse prompt caching options passed via API/runtime and return a dict."""
+    if not prompt_cache_options:
+        return {}
+
+    if isinstance(prompt_cache_options, dict):
+        return prompt_cache_options
+
+    if isinstance(prompt_cache_options, str):
+        try:
+            parsed = json.loads(prompt_cache_options)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+
+    return {}
+
+
+def _resolve_prompt_cache_options(channel_id: str, prompt_cache_options=None) -> dict:
+    """
+    Resolve prompt-cache controls from runtime overrides + site config defaults.
+
+    Site config (non-UI) format:
+    {
+      "default": {"openai_prompt_cache_retention": "24h"},
+      "channels": {
+        "api": {"openai_prompt_cache_retention": "6h"},
+        "doc_event": {"openai_prompt_cache_retention": "24h"},
+        "sse_stream": {"openai_prompt_cache_retention": "24h"}
+      }
+    }
+    """
+    resolved = {}
+    site_defaults = frappe.conf.get("huf_prompt_cache_defaults")
+
+    if isinstance(site_defaults, str):
+        try:
+            site_defaults = json.loads(site_defaults)
+        except Exception:
+            site_defaults = {}
+
+    if isinstance(site_defaults, dict):
+        default_opts = site_defaults.get("default")
+        if isinstance(default_opts, dict):
+            resolved.update(default_opts)
+
+        channel_opts = (site_defaults.get("channels") or {}).get((channel_id or "").lower())
+        if isinstance(channel_opts, dict):
+            resolved.update(channel_opts)
+
+    runtime_opts = _parse_prompt_cache_options(prompt_cache_options)
+    if runtime_opts:
+        resolved.update(runtime_opts)
+
+    return resolved
+
 def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False, tool_call_id=None):
     """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
@@ -582,6 +639,7 @@ def run_agent_sync(
     prompt_version = None,
     parent_conversation_id: str = None,
     invoked_by_agent: str = None,
+    prompt_cache_options=None,
 ):
 
     if not agent_name:
@@ -750,6 +808,8 @@ def run_agent_sync(
             except Exception:
                 pass
 
+        resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
@@ -757,7 +817,8 @@ def run_agent_sync(
             "agent_name": agent_name,
             "response_format": response_format,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "prompt_cache_options": resolved_prompt_cache,
         }
 
         context_strategy = agent_doc.context_strategy or "Summarize"
@@ -812,7 +873,8 @@ def run_agent_sync(
             "agent_name": agent_name,
             "response_format": response_format,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "prompt_cache_options": resolved_prompt_cache,
         }
         run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model, context)
         result = _run_async_safely(run)
@@ -1156,7 +1218,8 @@ async def run_agent_stream(
     prompt_template: str = None,
     prompt_version = None,
     parent_conversation_id: str = None,
-    invoked_by_agent: str = None
+    invoked_by_agent: str = None,
+    prompt_cache_options=None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -1303,13 +1366,16 @@ async def run_agent_stream(
             
         agent = manager.create_agent()
         
+        resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
             "conversation_history": history,
             "agent_name": agent_name,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "prompt_cache_options": resolved_prompt_cache,
         }
         
         # SUMMARIZATION LOGIC
