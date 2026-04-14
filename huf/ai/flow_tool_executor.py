@@ -167,7 +167,7 @@ def _inject_extra_args(args: dict, tool_doc: dict):
 			args.setdefault("reference_doctype", tool_doc["reference_doctype"])
 
 	elif tool_type == "Run Agent" and tool_doc.get("agent"):
-		args.setdefault("agent_name", tool_doc["agent"])
+		args.setdefault("target_agent_name", tool_doc["agent"])
 
 	elif tool_type in ("GET", "POST"):
 		args.setdefault("tool_name", tool_doc.get("name"))

@@ -637,6 +637,8 @@ def run_agent_sync(
     run_kind: str = None,
     prompt_template: str = None,
     prompt_version = None,
+    parent_conversation_id: str = None,
+    invoked_by_agent: str = None,
     prompt_cache_options=None,
 ):
 
@@ -730,7 +732,8 @@ def run_agent_sync(
 
     run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert(ignore_permissions=True)
-    conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+    if prompt and not str(prompt).startswith("[SILENT_TRIGGER]"):
+        conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
 
@@ -1045,6 +1048,39 @@ def run_agent_sync(
         }, update_modified=True)
         safe_commit()
 
+        # Handle Sub-Agent Success Lifecycle Hook
+        if parent_conversation_id and invoked_by_agent:
+            # 1. Silent Auto-Awaken Trigger
+            # We bypass Agent Message insertion and use a silent trigger to hide the intermediate execution from the UI
+            try:
+                silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{final_output}"
+                frappe.enqueue(
+                    "huf.ai.agent_integration.run_agent_sync",
+                    queue="default",
+                    timeout=300,
+                    is_async=True,
+                    agent_name=invoked_by_agent,
+                    prompt=silent_trigger,
+                    parent_conversation_id=None,
+                    conversation_id=parent_conversation_id,
+                    channel_id=channel_id,
+                    external_id=external_id
+                )
+            except Exception as hook_err:
+                frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
+
+            # 3. Real-Time UI Notification
+            frappe.publish_realtime(
+                event=f"conversation:{parent_conversation_id}",
+                message={
+                    "type": "sub_agent_completed",
+                    "agent_name": agent_name,
+                    "status": "Success",
+                    "result": final_output
+                },
+                user=frappe.session.user
+            )
+
         # Auto-naming check
         if agent_doc.autonaming_of_conversation_title:
             conv_title = conversation.title
@@ -1129,6 +1165,38 @@ def run_agent_sync(
         run_doc.db_set("error_message", error_msg)
         frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "Huf")
 
+        # Handle Sub-Agent Failure Lifecycle Hook
+        if parent_conversation_id and invoked_by_agent:
+            # 1. Silent Auto-Awaken Trigger
+            try:
+                silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                frappe.enqueue(
+                    "huf.ai.agent_integration.run_agent_sync",
+                    queue="default",
+                    timeout=300,
+                    is_async=True,
+                    agent_name=invoked_by_agent,
+                    prompt=silent_trigger,
+                    parent_conversation_id=None,
+                    conversation_id=parent_conversation_id,
+                    channel_id=channel_id,
+                    external_id=external_id
+                )
+            except Exception as hook_err:
+                frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+            # 3. Real-Time UI Notification
+            frappe.publish_realtime(
+                event=f"conversation:{parent_conversation_id}",
+                message={
+                    "type": "sub_agent_failed",
+                    "agent_name": agent_name,
+                    "status": "Failed",
+                    "result": error_msg
+                },
+                user=frappe.session.user
+            )
+
         return {
             "success": False,
             "error": error_msg,
@@ -1149,6 +1217,8 @@ async def run_agent_stream(
     create_new: bool = False,
     prompt_template: str = None,
     prompt_version = None,
+    parent_conversation_id: str = None,
+    invoked_by_agent: str = None,
     prompt_cache_options=None,
 ):
     """
@@ -1534,6 +1604,37 @@ async def run_agent_stream(
                     }, update_modified=True)
                     safe_commit()
 
+                    # Handle Sub-Agent Success Lifecycle Hook
+                    if parent_conversation_id and invoked_by_agent:
+                        # Silent Auto-Awaken Trigger
+                        try:
+                            silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{full_response}"
+                            frappe.enqueue(
+                                "huf.ai.agent_integration.run_agent_sync",
+                                queue="default",
+                                timeout=300,
+                                is_async=True,
+                                agent_name=invoked_by_agent,
+                                prompt=silent_trigger,
+                                parent_conversation_id=None,
+                                conversation_id=parent_conversation_id,
+                                channel_id=channel_id,
+                                external_id=external_id
+                            )
+                        except Exception as hook_err:
+                            frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
+
+                        frappe.publish_realtime(
+                            event=f"conversation:{parent_conversation_id}",
+                            message={
+                                "type": "sub_agent_completed",
+                                "agent_name": agent_name,
+                                "status": "Success",
+                                "result": full_response
+                            },
+                            user=frappe.session.user
+                        )
+
                     # Auto-naming check for stream
                     try:
                         if agent_doc.autonaming_of_conversation_title:
@@ -1611,6 +1712,37 @@ async def run_agent_stream(
                     }, update_modified=True)
                     safe_commit()
                     
+                    # Handle Sub-Agent Failure Lifecycle Hook
+                    if parent_conversation_id and invoked_by_agent:
+                        # Silent Auto-Awaken Trigger
+                        try:
+                            silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                            frappe.enqueue(
+                                "huf.ai.agent_integration.run_agent_sync",
+                                queue="default",
+                                timeout=300,
+                                is_async=True,
+                                agent_name=invoked_by_agent,
+                                prompt=silent_trigger,
+                                parent_conversation_id=None,
+                                conversation_id=parent_conversation_id,
+                                channel_id=channel_id,
+                                external_id=external_id
+                            )
+                        except Exception as hook_err:
+                            frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+                        frappe.publish_realtime(
+                            event=f"conversation:{parent_conversation_id}",
+                            message={
+                                "type": "sub_agent_failed",
+                                "agent_name": agent_name,
+                                "status": "Failed",
+                                "result": error_msg
+                            },
+                            user=frappe.session.user
+                        )
+
                     yield chunk
                     return
         
@@ -1665,6 +1797,37 @@ async def run_agent_stream(
             }, update_modified=True)
             safe_commit()
             
+            # Handle Sub-Agent Failure Lifecycle Hook
+            if parent_conversation_id and invoked_by_agent:
+                # Silent Auto-Awaken Trigger
+                try:
+                    silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                    frappe.enqueue(
+                        "huf.ai.agent_integration.run_agent_sync",
+                        queue="default",
+                        timeout=300,
+                        is_async=True,
+                        agent_name=invoked_by_agent,
+                        prompt=silent_trigger,
+                        parent_conversation_id=None,
+                        conversation_id=parent_conversation_id,
+                        channel_id=channel_id,
+                        external_id=external_id
+                    )
+                except Exception as hook_err:
+                    frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+                frappe.publish_realtime(
+                    event=f"conversation:{parent_conversation_id}",
+                    message={
+                        "type": "sub_agent_failed",
+                        "agent_name": agent_name,
+                        "status": "Failed",
+                        "result": error_msg
+                    },
+                    user=frappe.session.user
+                )
+
             yield {
                 "type": "error",
                 "error": error_msg
