@@ -1053,7 +1053,7 @@ def run_agent_sync(
             # 1. Silent Auto-Awaken Trigger
             # We bypass Agent Message insertion and use a silent trigger to hide the intermediate execution from the UI
             try:
-                silent_trigger = f"[SILENT_TRIGGER] Sub-Agent '{agent_name}' completed its background task.\nResult:\n{final_output}"
+                silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{final_output}"
                 frappe.enqueue(
                     "huf.ai.agent_integration.run_agent_sync",
                     queue="default",
@@ -1169,7 +1169,7 @@ def run_agent_sync(
         if parent_conversation_id and invoked_by_agent:
             # 1. Silent Auto-Awaken Trigger
             try:
-                silent_trigger = f"[SILENT_TRIGGER] Sub-Agent '{agent_name}' failed to complete its background task.\nError:\n{error_msg}"
+                silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
                 frappe.enqueue(
                     "huf.ai.agent_integration.run_agent_sync",
                     queue="default",
@@ -1608,7 +1608,7 @@ async def run_agent_stream(
                     if parent_conversation_id and invoked_by_agent:
                         # Silent Auto-Awaken Trigger
                         try:
-                            silent_trigger = f"[SILENT_TRIGGER] Sub-Agent '{agent_name}' completed its background task.\nResult:\n{full_response}"
+                            silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{full_response}"
                             frappe.enqueue(
                                 "huf.ai.agent_integration.run_agent_sync",
                                 queue="default",
@@ -1716,7 +1716,7 @@ async def run_agent_stream(
                     if parent_conversation_id and invoked_by_agent:
                         # Silent Auto-Awaken Trigger
                         try:
-                            silent_trigger = f"[SILENT_TRIGGER] Sub-Agent '{agent_name}' failed to complete its background task.\nError:\n{error_msg}"
+                            silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
                             frappe.enqueue(
                                 "huf.ai.agent_integration.run_agent_sync",
                                 queue="default",
@@ -1801,7 +1801,7 @@ async def run_agent_stream(
             if parent_conversation_id and invoked_by_agent:
                 # Silent Auto-Awaken Trigger
                 try:
-                    silent_trigger = f"[SILENT_TRIGGER] Sub-Agent '{agent_name}' failed to complete its background task.\nError:\n{error_msg}"
+                    silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
                     frappe.enqueue(
                         "huf.ai.agent_integration.run_agent_sync",
                         queue="default",
