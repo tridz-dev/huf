@@ -14,9 +14,9 @@ class AIModel(Document):
 def get_models_by_modality(doctype, txt, searchfield, start, page_len, filters):
 	"""
 	Link field query for AI Model with modality filtering.
-
+	
 	Supports Frappe link query signature.
-
+	
 	Expected filters:
 	- modality (str): one of the configured modality options
 	- provider (optional): AI Provider name (DocType link) to further restrict
@@ -31,9 +31,10 @@ def get_models_by_modality(doctype, txt, searchfield, start, page_len, filters):
 		frappe.throw(_("Invalid modality: {0}").format(modality))
 
 	conditions = ["(model_name LIKE %(txt)s OR name LIKE %(txt)s)"]
-	params = {"txt": f"%{txt}%", "modality": modality, "start": start, "page_len": page_len}
+	params = {"txt": f"%{txt}%", "modality": modality, "modality_pattern": f"%{modality}%", "start": start, "page_len": page_len}
 
-	conditions.append("IFNULL(modalities, '') = %(modality)s")
+	# Match modality - handles both single values and comma-separated lists
+	conditions.append("(modalities = %(modality)s OR modalities LIKE %(modality_pattern)s)")
 
 	if provider:
 		conditions.append("provider = %(provider)s")
@@ -49,3 +50,15 @@ def get_models_by_modality(doctype, txt, searchfield, start, page_len, filters):
 		""",
 		params,
 	)
+
+
+@frappe.whitelist()
+def get_modalities():
+	"""Return the available AI model modality options."""
+	return [
+		"Text",
+		"Image", 
+		"Text-to-Speech",
+		"Transcription",
+		"Embeddings",
+	]

@@ -8,4 +8,7 @@
 huf.patches.add_tool_types
 huf.patches.setup_desktop_icon_as_workspace
 huf.patches.v1.update_image_tool
+huf.patches.convert_modalities_to_json
+huf.patches.clear_modalities
+huf.patches.fix_existing_modalities
 huf.patches.v1.update_agent_background_color

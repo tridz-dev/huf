@@ -6,6 +6,7 @@ Installation hooks for Huf app
 """
 
 import frappe
+import json
 from huf.utils import is_frappe_16
 
 def setup_desktop_icon_as_workspace(app_name):
@@ -119,6 +120,7 @@ def after_migrate():
 	"""
 	create_huf_roles()
 	setup_desktop_icon_as_workspace("huf")
+	populate_model_modalities()  # Update existing models with modalities
 	try:
 		create_image_generation_tool()
 		create_transcribe_audio_tool()
@@ -135,6 +137,70 @@ def after_migrate():
 		frappe.log_error(
 			f"Failed to sync tools after migrate: {str(e)}",
 			"Tool Sync Error"
+		)
+
+def populate_model_modalities():
+	"""
+	Populate modalities for models that don't have them based on their names and known patterns.
+	This ensures existing models get the modalities field populated after migration.
+	"""
+	# Mapping of model names/patterns to their modality
+	modality_map = {
+		# Transcription models
+		"whisper": "Transcription",
+		"transcrib": "Transcription",
+		# Image generation models
+		"dall-e": "Image",
+		"dall_e": "Image",
+		"gpt-image": "Image",
+		"image": "Image",
+		"vision": "Image",
+		"vl": "Image",  # Vision-Language models
+		"qwen3-vl": "Image",
+		# Embedding models
+		"embedding": "Embeddings",
+		"embed": "Embeddings",
+		"text-embedding": "Embeddings",
+		# TTS models - check if from ElevenLabs
+		"elevenlabs": "Text-to-Speech",
+	}
+	
+	try:
+		# Get all models without modalities
+		models = frappe.db.sql(
+			"""
+			SELECT name, model_name FROM `tabAI Model`
+			WHERE IFNULL(modalities, '') = ''
+			""",
+			as_dict=True
+		)
+		
+		updated_count = 0
+		for model in models:
+			model_name_lower = (model.get("model_name") or model.get("name")).lower()
+			modality = None
+			
+			# Check against patterns
+			for pattern, mods in modality_map.items():
+				if pattern.lower() in model_name_lower:
+					modality = mods
+					break
+			
+			# Update the model only when we have an explicit modality.
+			if modality:
+				frappe.db.set_value("AI Model", model.get("name"), "modalities", modality, update_modified=False)
+				updated_count += 1
+		if updated_count > 0:
+			frappe.db.commit()
+			frappe.msgprint(
+				f"✅ Updated modalities for {updated_count} AI models",
+				indicator="green",
+				title="Model Migration"
+			)
+	except Exception as e:
+		frappe.log_error(
+			f"Failed to populate model modalities: {str(e)}",
+			"Model Modality Population Error"
 		)
 
 def create_demo_ai_providers():
@@ -170,85 +236,93 @@ def create_demo_ai_providers():
             doc.insert(ignore_permissions=True)
 
 def create_demo_ai_models():
-    models = [
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-0528", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v2.5-1210", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl2", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-coder-v5.7b-mqa-base", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3.1-terminus", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-zero", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-lite", "provider": "DeepSeek"},
-        {"doctype": "AI Model", "model_name": "huggingface/meta-llama/Llama-3.2-3B-Instruct", "provider": "Huggingface"},
-        {"doctype": "AI Model", "model_name": "command-a-03-2025", "provider": "Cohere"},
-        {"doctype": "AI Model", "model_name": "sonar-pro", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar-reasoning", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar-reasoning-pro", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar-deep-research", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "gemini-3-pro-preview", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-pro", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-flash", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-flash-lite", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemma-3-27b-it", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemma-3-9b-it", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "nano-banana-pro", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "text-embedding-004", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.0-flash-001", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.0-flash-lite-preview", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "claude-sonnet-4.5", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-opus-4", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-opus-4.1", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-haiku-4.5", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-3.7-sonnet", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-3.5-sonnet", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-3.5-haiku", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-opus-4.5", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-2", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-sonnet-4-20250514", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5-nano", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-4.1-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-4.1-nano", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-4o-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash-lite-preview-06-17", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.0-flash-exp:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemma-3-27b-it:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "anthropic/claude-4.5-sonnet-20250929", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3.1", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3-vl-235b-a22b-instruct", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3-coder:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "minimax/minimax-m2", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "o1-preview", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "o1-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "whisper-1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-3-small", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-3-large", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-ada-002", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-image-1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "Alternate", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "dall-e-3", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4.1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-3.5-turbo", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4.1-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4.1-nano", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4o", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4o-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4-turbo", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5-nano", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5", "provider": "OpenAI"},
+    # Map of model names to their modalities
+    models_with_modalities = [
+        {"model_name": "huggingface/meta-llama/Llama-3.2-3B-Instruct", "provider": "Huggingface", "modalities": json.dumps(["Text"])},
+        {"model_name": "command-a-03-2025", "provider": "Cohere", "modalities": json.dumps(["Text"])},
+        {"model_name": "sonar-pro", "provider": "Perplexity", "modalities": json.dumps(["Text"])},
+        {"model_name": "sonar", "provider": "Perplexity", "modalities": json.dumps(["Text"])},
+        {"model_name": "sonar-reasoning", "provider": "Perplexity", "modalities": json.dumps(["Text"])},
+        {"model_name": "sonar-reasoning-pro", "provider": "Perplexity", "modalities": json.dumps(["Text"])},
+        {"model_name": "sonar-deep-research", "provider": "Perplexity", "modalities": json.dumps(["Text"])},
+        {"model_name": "gemini-3-pro-preview", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "gemini-2.5-pro", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "gemini-2.5-flash", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "gemini-2.5-flash-lite", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "gemma-3-27b-it", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "gemma-3-9b-it", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "nano-banana-pro", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "text-embedding-004", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "gemini-2.0-flash-001", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "gemini-2.0-flash-lite-preview", "provider": "Google", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-sonnet-4.5", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-opus-4", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-opus-4.1", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-haiku-4.5", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-3.7-sonnet", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-3.5-sonnet", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-3.5-haiku", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-opus-4.5", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-2", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "claude-sonnet-4-20250514", "provider": "Anthropic", "modalities": json.dumps(["Text"])},
+        {"model_name": "openai/gpt-5", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "openai/gpt-5-mini", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "openai/gpt-5-nano", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "openai/gpt-4.1-mini", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "openai/gpt-4.1-nano", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "openai/gpt-4o-mini", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "google/gemini-2.5-flash", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "google/gemini-2.5-flash-lite-preview-06-17", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "google/gemini-2.0-flash-exp:free", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "google/gemma-3-27b-it:free", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "anthropic/claude-4.5-sonnet-20250929", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "deepseek/deepseek-chat-v3-0324", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "deepseek/deepseek-chat-v3.1", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "qwen/qwen3-vl-235b-a22b-instruct", "provider": "OpenRouter", "modalities": json.dumps(["Image"])},
+        {"model_name": "qwen/qwen3-coder:free", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "minimax/minimax-m2", "provider": "OpenRouter", "modalities": json.dumps(["Text"])},
+        {"model_name": "o1-preview", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "o1-mini", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "whisper-1", "provider": "OpenAI", "modalities": json.dumps(["Transcription"])},
+        {"model_name": "text-embedding-3-small", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "text-embedding-3-large", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "text-embedding-ada-002", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-image-1", "provider": "OpenAI", "modalities": json.dumps(["Image"])},
+        {"model_name": "Alternate", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "dall-e-3", "provider": "OpenAI", "modalities": json.dumps(["Image"])},
+        {"model_name": "gpt-4.1", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-3.5-turbo", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-4.1-mini", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-4.1-nano", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-4o", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-4o-mini", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-4-turbo", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-5.1", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-5-mini", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-5-nano", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
+        {"model_name": "gpt-5", "provider": "OpenAI", "modalities": json.dumps(["Text"])},
     ]
 
-    for m in models:
+    for m in models_with_modalities:
         if not frappe.db.exists("AI Model", m["model_name"]):
-            doc = frappe.get_doc(m)
+            modalities = m.get("modalities")
+            if isinstance(modalities, str):
+                try:
+                    parsed = json.loads(modalities)
+                    if isinstance(parsed, list) and parsed:
+                        modalities = parsed[0]
+                except Exception:
+                    pass
+
+            if isinstance(modalities, list):
+                modalities = modalities[0] if modalities else None
+
+            doc = frappe.get_doc({
+                "doctype": "AI Model",
+                "model_name": m["model_name"],
+                "provider": m["provider"],
+                "modalities": modalities,
+            })
             doc.flags.ignore_mandatory = True
             doc.flags.ignore_validate = True
             doc.insert(ignore_permissions=True)

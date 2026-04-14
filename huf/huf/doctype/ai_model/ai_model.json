@@ -28,12 +28,11 @@
    "unique": 1
   },
   {
-   "description": "Supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription).",
    "fieldname": "modalities",
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Modalities",
-   "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings"
+   "options": "Text\nImage\nText-to-Speech\nTranscription\nEmbeddings"
   }
  ],
  "grid_page_length": 50,

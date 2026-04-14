@@ -115,41 +115,6 @@ class Agent(Document):
         if self.enable_prompt_caching:
             self._validate_prompt_caching()
 
-        self._validate_advanced_models()
-
-    def _validate_advanced_models(self):
-        def _has_modality(model_docname: str, required: str) -> bool:
-            if not model_docname:
-                return True
-            modalities = frappe.db.get_value("AI Model", model_docname, "modalities") or ""
-            # MultiSelect is stored as CSV
-            items = {m.strip() for m in modalities.split(",") if m and m.strip()}
-            return required in items
-
-        # Image generation model
-        if getattr(self, "image_generation_model", None):
-            if not _has_modality(self.image_generation_model, "Image"):
-                frappe.throw(
-                    _("Selected Image Generation Model does not support modality: Image"),
-                    title=_("Invalid Model Capability"),
-                )
-
-        # TTS model
-        if getattr(self, "tts_model", None):
-            if not _has_modality(self.tts_model, "Text-to-Speech"):
-                frappe.throw(
-                    _("Selected TTS Model does not support modality: Text-to-Speech"),
-                    title=_("Invalid Model Capability"),
-                )
-
-        # STT model (audio transcription)
-        if getattr(self, "stt_model", None):
-            if not _has_modality(self.stt_model, "Transcription"):
-                frappe.throw(
-                    _("Selected STT Model does not support modality: Transcription"),
-                    title=_("Invalid Model Capability"),
-                )
-
     def _validate_prompt_caching(self):
         if not self.model:
             frappe.throw(_("A model must be selected before enabling prompt caching."))

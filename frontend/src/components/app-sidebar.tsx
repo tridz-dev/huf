@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Layers } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -71,6 +71,12 @@ const allNavItems = [
     capability: "system.providers.manage",
   },
   {
+    title: "AI Models",
+    url: "/models",
+    icon: Layers,
+    capability: "system.providers.manage",
+  },
+  {
     title: "MCP Servers",
     url: "/mcp",
     icon: Server,
@@ -104,8 +110,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navItems = isLoading
     ? allNavItems.filter((item) => item.capability === null)
     : allNavItems.filter(
-        (item) => item.capability === null || (item.capability && hasCapability(item.capability)),
-      )
+      (item) => item.capability === null || (item.capability && hasCapability(item.capability)),
+    )
 
   return (
     <Sidebar collapsible="icon" {...props}>

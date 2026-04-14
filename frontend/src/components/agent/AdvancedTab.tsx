@@ -7,9 +7,6 @@ import { UseFormReturn } from 'react-hook-form';
 import type { AgentFormValues } from './types';
 import type { AIModel } from '@/types/agent.types';
 import {
-	MODEL_MODALITY_IMAGE,
-	MODEL_MODALITY_TTS,
-	MODEL_MODALITY_STT,
 	IMAGE_MODEL_LABEL,
 	IMAGE_MODEL_PLACEHOLDER,
 	IMAGE_MODEL_DESCRIPTION,
@@ -29,14 +26,7 @@ interface AdvancedTabProps {
   allModels: AIModel[];
 }
 
-function modelSupports(model: AIModel, required: string): boolean {
-  return (model.modalities || '').trim() === required;
-}
-
 export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
-	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
-	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
-	const sttModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_STT));
 	const contextStrategy = form.watch('context_strategy');
 
   return (
@@ -345,7 +335,7 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {imageModels.map((m) => (
+                    {allModels.map((m) => (
                       <SelectItem key={m.name} value={m.name}>
                         {m.model_name || m.name}
                       </SelectItem>
@@ -374,7 +364,7 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {ttsModels.map((m) => (
+                    {allModels.map((m) => (
                       <SelectItem key={m.name} value={m.name}>
                         {m.model_name || m.name}
                       </SelectItem>
@@ -418,7 +408,7 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    {sttModels.map((m) => (
+                    {allModels.map((m) => (
                       <SelectItem key={m.name} value={m.name}>
                         {m.model_name || m.name}
                       </SelectItem>

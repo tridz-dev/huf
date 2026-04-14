@@ -29,6 +29,7 @@ const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
 const IntegrationsPageWrapper = lazy(() => import('./pages/IntegrationsPageWrapper'));
+const ModelListingPageWrapper = lazy(() => import('./pages/ModelListingPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPage = lazy(() => import('./pages/AgentRunDetailPage'));
@@ -223,6 +224,16 @@ function App() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationsPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/models"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ModelListingPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
