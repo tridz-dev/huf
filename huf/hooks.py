@@ -6,8 +6,7 @@ app_email = "info@tridz.com"
 app_license = "agpl"
 source_link = "https://github.com/tridz-dev/huf.git"
 app_logo_url="/assets/huf/Images/huf.png"
-# for version 16+ this has to be /desk/huf, this is being updated in after_app_install hook
-app_url="huf"
+app_url="/huf"
 # Apps
 # ------------------
 
