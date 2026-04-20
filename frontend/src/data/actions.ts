@@ -21,6 +21,20 @@ export const actionOptions: ActionOption[] = [
 
   // ─── Control Flow ───────────────────────────────────────────────────
   {
+    id: 'router',
+    name: 'LLM Router',
+    description: 'Intelligently route based on AI analysis',
+    icon: 'GitBranch',
+    category: 'control'
+  },
+  {
+    id: 'condition',
+    name: 'Condition (If/Else)',
+    description: 'Branch flow based on data',
+    icon: 'GitBranch',
+    category: 'control'
+  },
+  {
     id: "loop",
     name: "Loop",
     description: "Iterate over array data",
