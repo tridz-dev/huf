@@ -66,9 +66,10 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
     };
   }, [isResizing]);
 
-  // Load agents when agent-run node selected
+  // Load agents when agent-run or router node selected
   useEffect(() => {
-    if (!selectedNode?.data.actionConfig || (selectedNode.data.actionConfig as any).type !== 'agent-run') return;
+    const actionType = (selectedNode?.data.actionConfig as any)?.type;
+    if (!selectedNode?.data.actionConfig || !['agent-run', 'router'].includes(actionType)) return;
     setLoadingAgents(true);
     getAgents()
       .then((result) => {
