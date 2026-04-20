@@ -86,7 +86,14 @@ def create_agent_tools(agent) -> list[FunctionTool]:
 			)
 
 	# Load native tools from Agent Tool Function documents
-	allowed_tool_docs = PermissionAwareToolRegistry.get_allowed_tools(agent, frappe.session.user)
+	allowed_tool_docs = []
+	if hasattr(agent, "agent_tool") and agent.agent_tool:
+		for tool_link in agent.agent_tool:
+			try:
+				tool_doc = frappe.get_doc("Agent Tool Function", tool_link.tool)
+				allowed_tool_docs.append(tool_doc)
+			except Exception as e:
+				frappe.log_error(f"Error loading tool {tool_link.tool}: {str(e)}", "SDK Tools")
 
 	for function_doc in allowed_tool_docs:
 		try:
@@ -136,6 +143,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
 				extra_args=extra_args,
 				tool_type=function_doc.types,
 				allowed_for_guest=bool(function_doc.allowed_for_guest),
+				tool_doc=function_doc,
 			)
 
 			if tool:
@@ -220,6 +228,7 @@ def create_function_tool(
 	extra_args: dict[str, Any] = None,
 	tool_type: str = None,
 	allowed_for_guest: bool = False,
+	tool_doc: Any = None,
 ) -> FunctionTool:
 	"""
 	Create a FunctionTool for Huf Tool functions.
@@ -246,7 +255,15 @@ def create_function_tool(
 		_function = function
 
 		async def on_invoke_tool(ctx=None, args_json: str = None) -> str:
-			# Permission check before execution
+			# Strict runtime permission check
+			if tool_doc:
+				from huf.ai.tool_registry import PermissionAwareToolRegistry
+				if not PermissionAwareToolRegistry._can_use_tool(tool_doc, frappe.session.user):
+					return json.dumps({
+						"error": f"Permission Denied: You do not have the required permissions to use the '{name}' tool.",
+						"denied": True
+					})
+
 			if tool_type:
 				perm_check = _check_tool_permission(
 					tool_type, ctx, allowed_for_guest=allowed_for_guest
