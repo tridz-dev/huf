@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import type { AgentFormValues } from './types';
 import type { UseFormReturn } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 
 export interface AgentPromptOption {
@@ -31,9 +31,14 @@ export function PromptTemplateSection({
   showAddNew = true,
 }: PromptTemplateSectionProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const selectedPrompt = promptOptions.find((option) => option.value === form.watch('agent_prompt'));
   const attachedVersion = form.watch('template_version_at_attach');
   const isLocked = form.watch('prompt_version_locked');
+  const promptComboboxOptions = promptOptions.map((option) => ({
+    ...option,
+    subtitle: option.version ? `Version ${option.version}` : undefined,
+  }));
 
   return (
     <Card>
@@ -49,12 +54,12 @@ export function PromptTemplateSection({
           control={form.control}
           name="agent_prompt"
           render={({ field }) => (
-            <FormItem className="sm:col-span-2">
+            <FormItem id="agent-prompt-field" className="sm:col-span-2">
               <FormLabel>Agent Prompt</FormLabel>
               <div className="flex items-center gap-2">
                 <FormControl>
                   <Combobox
-                    options={promptOptions}
+                    options={promptComboboxOptions}
                     value={field.value}
                     onValueChange={field.onChange}
                     placeholder={loadingPrompts ? 'Loading templates...' : 'Select an Agent Prompt'}
@@ -64,7 +69,31 @@ export function PromptTemplateSection({
                   />
                 </FormControl>
                 {showAddNew ? (
-                  <Button type="button" variant="secondary" onClick={() => navigate('/prompts/new')}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() =>
+                      (() => {
+                        const returnTo = `${location.pathname}#general`;
+                        const selectedPromptField = 'agent_prompt';
+                        // Fallback for cases where react-router location.state is lost.
+                        try {
+                          localStorage.setItem(
+                            'agentPromptCreateReturnTo',
+                            JSON.stringify({ returnTo, selectedPromptField })
+                          );
+                        } catch {
+                          // ignore storage failures
+                        }
+                        navigate('/prompts/new', {
+                          state: {
+                            returnTo,
+                            selectedPromptField,
+                          },
+                        });
+                      })()
+                    }
+                  >
                     <Plus className="w-4 h-4 mr-2" />
                     New
                   </Button>

@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
+import { getAgentPrompt } from '../services/agentPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolTypes, getToolFunction, updateToolFunction, getToolFunctionsByName } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -107,7 +108,12 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
 export function AgentFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const isNew = id === 'new';
+  const [pendingSelectedPrompt, setPendingSelectedPrompt] = useState<string | null>(null);
+  const [pendingSelectedPromptField, setPendingSelectedPromptField] = useState<string | null>(null);
+  const [pendingScrollToPromptField, setPendingScrollToPromptField] = useState(false);
+  const [resolvingPendingPrompt, setResolvingPendingPrompt] = useState(false);
 
   // Tab configuration - single source of truth
   const tabConfig = {
@@ -465,6 +471,91 @@ export function AgentFormPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const state = location.state as { selectedPrompt?: string; showTab?: string; selectedPromptField?: string } | null;
+    if (state?.selectedPrompt) {
+      setPendingSelectedPrompt(state.selectedPrompt);
+      setPendingSelectedPromptField(state.selectedPromptField || 'agent_prompt');
+      if (state.showTab) {
+        setActiveTab(state.showTab);
+      }
+    }
+  }, [location.state]);
+
+  useEffect(() => {
+    if (!pendingSelectedPrompt) return;
+    if (resolvingPendingPrompt) return;
+
+    const fieldName = pendingSelectedPromptField || 'agent_prompt';
+    let cancelled = false;
+
+    const run = async () => {
+      setResolvingPendingPrompt(true);
+      try {
+        const promptExists = promptOptions.some((option) => option.value === pendingSelectedPrompt);
+
+        // Ensure the selector's option list contains the newly created prompt.
+        if (!promptExists) {
+          const promptDoc = await getAgentPrompt(pendingSelectedPrompt);
+
+          if (promptDoc?.is_active === 1) {
+            const option: AgentPromptOption = {
+              value: promptDoc.name,
+              label: promptDoc.title || promptDoc.name,
+              description: promptDoc.description || undefined,
+              version: typeof promptDoc.version === 'number' ? promptDoc.version : undefined,
+              isLatest: promptDoc.is_latest === 1,
+            };
+
+            setPromptOptions((prev) => {
+              if (prev.some((p) => p.value === option.value)) return prev;
+              return [option, ...prev];
+            });
+          }
+        }
+
+        // If we're coming back in Local mode, switch to Template so the selector is visible.
+        if (fieldName === 'agent_prompt' && form.getValues('prompt_mode') !== 'Template') {
+          form.setValue('prompt_mode', 'Template', { shouldDirty: true });
+        }
+
+        // Attach/select the created prompt in the form.
+        form.setValue(fieldName as any, pendingSelectedPrompt as any, { shouldDirty: true });
+
+        setPendingSelectedPrompt(null);
+        setPendingSelectedPromptField(null);
+
+        if (fieldName === 'agent_prompt') {
+          setPendingScrollToPromptField(true);
+        }
+
+        // clear transient history state so we don't re-run this on future navigations
+        navigate(`${location.pathname}${location.search}${location.hash}`, { replace: true, state: {} });
+      } catch (error) {
+        console.error('Failed to resolve pending prompt selection:', error);
+        toast.error('Failed to select newly created prompt');
+      } finally {
+        if (!cancelled) setResolvingPendingPrompt(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    pendingSelectedPrompt,
+    pendingSelectedPromptField,
+    resolvingPendingPrompt,
+    promptOptions,
+    form,
+    location.pathname,
+    location.search,
+    location.hash,
+    navigate,
+  ]);
+
   // Load models when provider changes
   useEffect(() => {
     if (watchProvider) {
@@ -487,6 +578,8 @@ export function AgentFormPage() {
   const watchAgentPrompt = form.watch('agent_prompt');
 
   useEffect(() => {
+    // Don't clear prompt selection while we're applying an incoming selection from navigation.
+    if (pendingSelectedPrompt) return;
     if (watchPromptMode === 'Local') {
       form.setValue('agent_prompt', '', { shouldDirty: false });
       form.setValue('prompt_version_locked', false, { shouldDirty: false });
@@ -498,7 +591,43 @@ export function AgentFormPage() {
       form.setValue('prompt_version_locked', false, { shouldDirty: false });
       form.setValue('template_version_at_attach', undefined, { shouldDirty: false });
     }
-  }, [watchPromptMode, watchAgentPrompt, form]);
+  }, [watchPromptMode, watchAgentPrompt, form, pendingSelectedPrompt]);
+
+  useEffect(() => {
+    if (watchPromptMode !== 'Template' || !watchAgentPrompt) {
+      return;
+    }
+
+    const selectedPrompt = promptOptions.find((option) => option.value === watchAgentPrompt);
+    if (!selectedPrompt || typeof selectedPrompt.version !== 'number') {
+      return;
+    }
+
+    const currentVersion = form.getValues('template_version_at_attach');
+    if (currentVersion === selectedPrompt.version) {
+      return;
+    }
+
+    form.setValue('template_version_at_attach', selectedPrompt.version, { shouldDirty: true });
+  }, [watchPromptMode, watchAgentPrompt, promptOptions, form]);
+
+  useEffect(() => {
+    if (!pendingScrollToPromptField) return;
+    if (activeTab !== 'general') return;
+    if (watchPromptMode !== 'Template') return;
+
+    const el = document.getElementById('agent-prompt-field');
+    if (el) {
+      // Wait a couple frames for the tab content to finish rendering.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      });
+    }
+
+    setPendingScrollToPromptField(false);
+  }, [pendingScrollToPromptField, activeTab, watchPromptMode]);
 
   // Load agent data when id is available (only for edit mode)
   useEffect(() => {
