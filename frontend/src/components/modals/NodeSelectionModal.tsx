@@ -166,7 +166,7 @@ export function NodeSelectionModal({
     if (triggerId === 'webhook') {
       setTriggerConfig({
         type: 'webhook',
-        url: `https://api.example.com/webhook/${Math.random().toString(36).substring(7)}`,
+        url: `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook`,
         apiKey: Math.random().toString(36).substring(2, 15),
         method: 'POST'
       });
