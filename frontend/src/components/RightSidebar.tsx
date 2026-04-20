@@ -127,7 +127,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
   // Load DocTypes when doc-event trigger or human-in-loop node selected
   useEffect(() => {
     const isDocEvent = selectedNode?.data.triggerConfig && (selectedNode.data.triggerConfig as any).type === 'doc-event';
-    const isHumanInLoop = selectedNode?.data.actionConfig && (selectedNode.data.actionConfig as any).type === 'human-in-loop';
+    const isHumanInLoop = selectedNode?.data.actionConfig && (selectedNode.data.actionConfig as any).type === 'human.approval';
     if (!isDocEvent && !isHumanInLoop) return;
     if (docTypes.length > 0) return; // already loaded
     setLoadingDocTypes(true);
@@ -143,7 +143,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
 
   // Load roles when human-in-loop node selected
   useEffect(() => {
-    if (!selectedNode?.data.actionConfig || (selectedNode.data.actionConfig as any).type !== 'human-in-loop') return;
+    if (!selectedNode?.data.actionConfig || (selectedNode.data.actionConfig as any).type !== 'human.approval') return;
     if (roles.length > 0) return; // already loaded
     setLoadingRoles(true);
     getRoles()
@@ -671,7 +671,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                 );
               }
 
-              if (config.type === 'human-in-loop') {
+              if (config.type === 'human.approval') {
                 const approvalType = (config as any).approval_type || 'role';
                 return (
                   <div className="space-y-3">
