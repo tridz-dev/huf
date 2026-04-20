@@ -44,7 +44,7 @@ export type ActionType =
   | 'agent-run'
   | 'tool-call'
   | 'router'
-  | 'human-in-loop'
+  | 'human.approval'
   | 'condition'
   | 'http-request'
   | 'transform'
@@ -112,14 +112,14 @@ export interface RouterActionConfig {
   conversation_mode?: 'flow_shared' | 'isolated';
 }
 
-export interface HumanInLoopActionConfig {
-  type: 'human-in-loop';
+export interface HumanApprovalActionConfig {
+  type: 'human.approval';
   title?: string;
   instructions?: string;
   context_summary?: string;
   approval_type?: 'role' | 'user';
-  approver_role?: string;
-  approver_users?: string[];
+  assigned_role?: string;
+  assigned_user?: string[];
   reference_doctype?: string;
   reference_name?: string;
   store_decision_in_context?: string;
@@ -179,7 +179,7 @@ export type ActionConfig =
   | AgentRunActionConfig
   | ToolCallActionConfig
   | RouterActionConfig
-  | HumanInLoopActionConfig
+  | HumanApprovalActionConfig
   | ConditionActionConfig
   | HttpRequestActionConfig
   | TransformActionConfig
