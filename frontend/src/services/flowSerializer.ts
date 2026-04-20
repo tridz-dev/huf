@@ -69,7 +69,7 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNode['type'] {
         case 'agent-run': return 'agent.run';
         case 'tool-call': return 'tool.call';
         case 'router': return 'router.llm';
-        case 'human-in-loop': return 'human.approval';
+        case 'human.approval': return 'human.approval';
         case 'condition': return 'condition';
         case 'http-request': return 'http_request';
         case 'transform': return 'transform';
@@ -99,6 +99,12 @@ function extractNodeConfig(node: FlowNode): Record<string, unknown> {
 
 function serializeEdge(edge: FlowEdge): BackendEdge {
     const data = edge.data as Record<string, unknown> | undefined;
+    const meta = { ...(data?.meta as Record<string, unknown> || {}) };
+    
+    if (edge.label) {
+        meta.label = edge.label as string;
+    }
+    
     return {
         id: edge.id,
         from: edge.source,
@@ -106,7 +112,7 @@ function serializeEdge(edge: FlowEdge): BackendEdge {
         type: (data?.edgeType as BackendEdge['type']) || 'always',
         priority: (data?.priority as number) || 0,
         condition: data?.condition as string | undefined,
-        meta: data?.meta as Record<string, unknown> | undefined,
+        meta: Object.keys(meta).length > 0 ? meta : undefined,
     };
 }
 
@@ -223,7 +229,7 @@ function mapBackendActionType(backendType: string): string {
         'agent.run': 'agent-run',
         'tool.call': 'tool-call',
         'router.llm': 'router',
-        'human.approval': 'human-in-loop',
+        'human.approval': 'human.approval',
         'condition': 'condition',
         'http_request': 'http-request',
         'transform': 'transform',
@@ -247,6 +253,7 @@ function deserializeEdge(edge: BackendEdge): FlowEdge {
         source: edge.from,
         target: edge.to,
         type: 'default', // React Flow visual edge type
+        label: edge.meta?.label as string | undefined, // Restore the label for React Flow to display
         data: {
             edgeType: edge.type,
             priority: edge.priority,
