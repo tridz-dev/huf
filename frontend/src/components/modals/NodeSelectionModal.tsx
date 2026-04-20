@@ -207,8 +207,8 @@ export function NodeSelectionModal({
       config = { type: 'router', router_agent_name: '', conversation_mode: 'flow_shared' };
     } else if (actionId === 'loop') {
       config = { type: 'loop', iterate_over: '', item_key: 'loop_item', index_key: 'loop_index', max_iterations: 100 };
-    } else if (actionId === 'human-in-loop') {
-      config = { type: 'human-in-loop', title: 'Approval Required', instructions: '', approval_type: 'role', store_decision_in_context: 'approval' };
+    } else if (actionId === 'human.approval') {
+      config = { type: 'human.approval', title: 'Approval Required', instructions: '', approval_type: 'role', store_decision_in_context: 'approval' };
     } else if (actionId === 'http-request') {
       config = { type: 'http-request', url: '', method: 'GET', timeout: 30 };
     } else if (actionId === 'transform') {
