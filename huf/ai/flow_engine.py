@@ -219,6 +219,13 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 		next_node = _evaluate_edges(flow_run, current_node, {"status": "success"}, edges_list)
 
 	if not next_node:
+		# No outgoing edges — approval was the final step, complete the flow gracefully
+		outgoing = [e for e in edges_list if e.get("from") == current_node]
+		if not outgoing:
+			flow_run.db_set({"waiting": None, "status": "Running"})
+			frappe.db.commit()
+			_complete_flow_run(flow_run)
+			return
 		_fail_flow_run(flow_run, f"No edge found for outcome '{decision}' from node '{current_node}'")
 		return
 
