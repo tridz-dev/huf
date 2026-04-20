@@ -171,6 +171,7 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 	run_flow(flow_run_name)
 
 
+@frappe.whitelist()
 def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = None):
 	"""
 	Approve or reject a flow run waiting for approval.
