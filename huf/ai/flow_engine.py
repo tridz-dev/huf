@@ -215,6 +215,9 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 			break
 
 	if not next_node:
+		next_node = _evaluate_edges(flow_run, current_node, {"status": "success"}, edges_list)
+
+	if not next_node:
 		_fail_flow_run(flow_run, f"No edge found for outcome '{decision}' from node '{current_node}'")
 		return
 
