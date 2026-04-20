@@ -42,7 +42,7 @@ export const actionOptions: ActionOption[] = [
     category: "control",
   },
   {
-    id: 'human-in-loop',
+    id: 'human.approval',
     name: 'Human in Loop',
     description: 'Request human approval',
     icon: 'UserCheck',
