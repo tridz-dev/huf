@@ -318,6 +318,27 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name="show_tool_execution_details"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Show Tool Execution Details</FormLabel>
+                  <FormDescription>
+                    Enable to display tool execution status and responses in the agent output. This includes whether each tool call is completed and its corresponding result.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value ?? false}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </CardContent>
       </Card>
 
