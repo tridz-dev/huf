@@ -70,6 +70,7 @@
   "stt_model",
   "huf_ui_section",
   "agent_color",
+  "show_tool_execution_details",
   "permissions_tab",
   "allow_guest",
   "allowed_users",
@@ -555,12 +556,19 @@
    "fieldname": "audio_transcription_section",
    "fieldtype": "Section Break",
    "label": "Audio Transcription"
+  },
+  {
+   "default": "1",
+   "description": "Enable to display tool execution status and responses in the agent output.\nThis includes whether each tool call is completed and its corresponding result.",
+   "fieldname": "show_tool_execution_details",
+   "fieldtype": "Check",
+   "label": "Show Tool Execution Details"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-11 12:59:21.085509",
+ "modified": "2026-04-20 16:43:49.008915",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

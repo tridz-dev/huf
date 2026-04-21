@@ -33,6 +33,7 @@ import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpAp
 import type { MCPServerDoc } from '../services/mcpApi';
 import type { AgentKnowledgeRow } from '../types/agent.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
+import { writeToolDetailsSetting } from '../components/chat/useChatAgentIdentity';
 
 type PromptListRow = {
   name: string;
@@ -912,12 +913,16 @@ export function AgentFormPage() {
         setAllowChat(newAgent.allow_chat === 1);
         setInitialKnowledgeSources([...knowledgeSources]);
         setAgentStats({ last_run: newAgent.last_run ?? null, total_run: newAgent.total_run ?? null });
+        // Sync tool-details setting to other tabs via localStorage
+        writeToolDetailsSetting(newAgent.name, newAgent.show_tool_execution_details === 1);
         // Navigate to the edit page with the new agent's ID
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
         // Update existing agent
         await updateAgent(id, agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent updated successfully!');
+        // Sync tool-details setting to other tabs via localStorage
+        writeToolDetailsSetting(id, !!values.show_tool_execution_details);
 // Reset form state with the updated values to mark form as clean
 form.reset({
   agent_name: values.agent_name,
