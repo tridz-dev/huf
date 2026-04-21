@@ -367,10 +367,19 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 	# Get payload from request
 	payload = {}
 	if frappe.request:
-		if frappe.request.is_json:
-			payload = frappe.request.get_json(silent=True) or {}
-		else:
-			payload = dict(frappe.request.form) if frappe.request.form else {}
+		try:
+			raw = frappe.request.get_data(as_text=True)
+			if raw:
+				payload = frappe.parse_json(raw)
+		except Exception:
+			pass
+
+		if not payload:
+			if frappe.request.form:
+				payload = dict(frappe.request.form)
+			else:
+				exclude = {'cmd', 'flow_id', 'webhook_key'}
+				payload = {k: v for k, v in frappe.local.form_dict.items() if k not in exclude}
 
 	from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
 
