@@ -26,6 +26,9 @@ from huf.ai.flow_orchestrator import (
 	parse_decision,
 )
 from huf.ai.flow_tool_executor import execute as execute_tool
+from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
+from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
+
 
 DEFAULT_MAX_HOPS = 100
 
@@ -234,6 +237,8 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
 	frappe.db.commit()
 
+	_clear_flow_notifications(flow_run)
+
 	run_flow(flow_run.name)
 
 
@@ -371,6 +376,8 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 
 	executors = {
 		"trigger.webhook": _exec_trigger_webhook,
+		"trigger.schedule": _exec_trigger_schedule,
+		"trigger.doc-event": _exec_trigger_doc_event,
 		"agent.run": _exec_agent_run,
 		"tool.call": _exec_tool_call,
 		"router.llm": _exec_router_llm,
@@ -394,6 +401,80 @@ def _exec_trigger_webhook(flow_run, node: dict, config: dict, settings: dict) ->
 	# The trigger payload is already in the flow run context
 	ctx = _load_context(flow_run)
 	return {"status": "success", "output": ctx}
+
+
+def _exec_trigger_schedule(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute trigger.schedule node - passthrough for scheduled execution.
+	
+	The actual scheduling is handled externally via Frappe Scheduler.
+	This executor just passes through with a timestamp indicating when
+	the schedule triggered the flow.
+	"""
+	ctx = _load_context(flow_run)
+	
+	# Add schedule trigger metadata to context
+	schedule_info = {
+		"trigger_type": "schedule",
+		"triggered_at": str(now_datetime()),
+		"cron_expression": config.get("cron", ""),
+		"schedule_name": config.get("schedule_name", ""),
+	}
+	
+	# Merge with existing context
+	ctx["_schedule_trigger"] = schedule_info
+	flow_run.db_set("context_json", json.dumps(ctx, default=str))
+	frappe.db.commit()
+	
+	return {
+		"status": "success",
+		"trigger_type": "schedule",
+		"schedule_info": schedule_info,
+	}
+
+
+def _exec_trigger_doc_event(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute trigger.doc-event node - pass through with doc context.
+	
+	This executor handles flows triggered by document events (after_insert, on_update, etc.).
+	The trigger payload contains the doc that triggered the event, along with metadata
+	about the event type and triggering document.
+	
+	The payload is already set during flow_run creation by flow_hooks.run_doc_event_flows().
+	This executor mainly validates and enriches the context for downstream nodes.
+	"""
+	ctx = _load_context(flow_run)
+	
+	# Extract trigger info from context (set by flow_hooks)
+	trigger_info = ctx.get("trigger", {})
+	doc_data = ctx.get("doc", {})
+	
+	# Enrich context with doc-event specific metadata
+	doc_event_info = {
+		"trigger_type": "doc_event",
+		"triggered_at": str(now_datetime()),
+		"doctype": trigger_info.get("doctype", ctx.get("doctype")),
+		"docname": trigger_info.get("docname", ctx.get("docname")),
+		"event": trigger_info.get("event", ctx.get("event")),
+	}
+	
+	# Add to context for easy access by downstream nodes
+	ctx["_doc_event_trigger"] = doc_event_info
+	
+	# Ensure doc data is accessible
+	if doc_data and not ctx.get("doc"):
+		ctx["doc"] = doc_data
+	
+	# Persist updated context
+	flow_run.db_set("context_json", json.dumps(ctx, default=str))
+	frappe.db.commit()
+	
+	return {
+		"status": "success",
+		"trigger_type": "doc_event",
+		"doc_event_info": doc_event_info,
+	}
 
 
 def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -590,6 +671,10 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute human.approval node - pause for human decision."""
+	# If already waiting at this node, don't re-send notifications or re-set state
+	if flow_run.status == "Waiting Approval" and flow_run.current_node_id == node.get("id"):
+		return {"status": "waiting_approval"}
+
 	# Interpolate context_summary, reference_name if they contain {{variables}}
 	ctx = _load_context(flow_run)
 	context_summary = config.get("context_summary", "")
@@ -621,7 +706,152 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	)
 	frappe.db.commit()
 
+	# Send notifications to approvers
+	_send_approval_notifications(flow_run, node, config, waiting_data)
+
 	return {"status": "waiting_approval"}
+
+
+def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_data: dict):
+	"""
+	Send notification to approvers when a flow reaches human.approval node.
+	
+	Supports two notification methods:
+	1. Frappe Notification Log (bell icon in UI)
+	2. Email notification (if email is configured)
+	
+	Args:
+		flow_run: The Flow Run document
+		node: The current node dict
+		config: Node configuration
+		waiting_data: The waiting state data
+	"""
+	approval_type = waiting_data.get("approval_type", "role")
+	approvers = []
+	
+	# Determine approvers based on approval_type
+	if approval_type == "role":
+		approver_role = waiting_data.get("approver_role")
+		if approver_role:
+			# Optimized role lookup: Get all users with this role directly from Has Role table
+			approver_names = frappe.get_all(
+				"Has Role",
+				filters={"role": approver_role, "parenttype": "User"},
+				pluck="parent"
+			)
+			if approver_names:
+				# Filter to ensure we only notify enabled System Users
+				approvers = frappe.get_all(
+					"User",
+					filters={
+						"name": ["in", approver_names],
+						"enabled": 1,
+						"user_type": "System User",
+					},
+					pluck="name"
+				)
+	elif approval_type == "users":
+		approver_users = waiting_data.get("approver_users", [])
+		if isinstance(approver_users, str):
+			# Handle comma-separated string
+			approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
+		approvers = approver_users
+	
+	# Ensure unique recipients to avoid duplicate emails
+	if approvers:
+		approvers = list(set(approvers))
+	
+	if not approvers:
+		frappe.log_error(
+			f"No approvers found for flow run {flow_run.name}",
+			"Flow Approval Notification"
+		)
+		return
+	
+	title = waiting_data.get("title", "Approval Required")
+	instructions = waiting_data.get("instructions", "Please review and approve this flow.")
+	flow_run_link = f"/huf/flows/{flow_run.flow_id}?run={flow_run.name}"
+
+
+	
+	# Create notification for each approver
+	for user in approvers:
+		try:
+			# Get user email for notification (enqueue_create_notification expects emails)
+			user_email = frappe.db.get_value("User", user, "email") or user
+			
+			# 1. Create Frappe Notification Log (appears in bell icon)
+			enqueue_create_notification(user_email, {
+				"type": "Assignment",
+				"document_type": "Flow Run",
+				"document_name": flow_run.name,
+				"subject": _("Approval Required: {0}").format(title),
+				"email_content": f"""
+					<p>{instructions}</p>
+					<p><strong>{_("Flow")}:</strong> {flow_run.flow_id}</p>
+					<p><strong>{_("Run ID")}:</strong> {flow_run.name}</p>
+					<p><a href="{flow_run_link}">{_("View Flow Run")}</a></p>
+				""",
+			})
+			
+			if is_email_notifications_enabled(user):
+				user_doc = frappe.get_doc("User", user)
+				if user_doc.email:
+					frappe.sendmail(
+						recipients=[user_doc.email],
+						subject=_("[HUF] Approval Required: {0}").format(title),
+						message=f"""
+							<p>{_("Dear")} {user_doc.full_name or user},</p>
+							<p>{_("A flow is waiting for your approval.")}</p>
+							<hr>
+							<p><strong>{_("Flow")}:</strong> {flow_run.flow_id}</p>
+							<p><strong>{_("Run ID")}:</strong> {flow_run.name}</p>
+							<p><strong>{_("Instructions")}:</strong></p>
+							<p>{instructions}</p>
+							<hr>
+							<p>
+								<a href="{frappe.utils.get_url(flow_run_link)}" 
+								   style="background-color: #171717; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+									{_("Review Approval")}
+								</a>
+							</p>
+							<p style="color: #666; font-size: 12px;">
+								{_("This is an automated message from the HUF Flow Engine.")}
+							</p>
+						""",
+						delayed=True,
+					)
+		except Exception as e:
+			# Log error but don't fail the flow
+			frappe.log_error(
+				f"Failed to send approval notification to {user}: {str(e)}",
+				_("Flow Approval Notification")
+			)
+
+
+def _clear_flow_notifications(flow_run):
+	"""
+	Mark all notifications for a specific flow run as read.
+	Called when a human decision is made.
+	"""
+	try:
+		# Standard Frappe approach: find notification log entries for this document
+		# and mark them as read for all users who were notified.
+		frappe.db.set_value(
+			"Notification Log",
+			{
+				"document_type": "Flow Run",
+				"document_name": flow_run.name,
+				"read": 0
+			},
+			"read",
+			1,
+			update_modified=False
+		)
+		frappe.db.commit()
+	except Exception:
+		# Cleanup is best-effort
+		pass
 
 
 def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -681,7 +911,9 @@ def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> di
 		}
 
 		# Save to context if configured
-		save_key = config.get("save_result_to_context")
+		# Support both output.save_result_to_context (new) and root-level (legacy)
+		output_config = config.get("output", {})
+		save_key = output_config.get("save_result_to_context") or config.get("save_result_to_context")
 		if save_key:
 			ctx[save_key] = result
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
