@@ -20,6 +20,14 @@ export function FlowsHeaderActions() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const runFromUrl = sp.get('run');
+    if (runFromUrl) {
+      setSelectedRunId(runFromUrl);
+    }
+  }, [location.search]);
+
   const openSettingsFromUrl = () => {
     const sp = new URLSearchParams(location.search);
     return sp.get('settings') === '1';
