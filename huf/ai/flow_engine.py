@@ -770,8 +770,11 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 	
 	title = waiting_data.get("title", "Approval Required")
 	instructions = waiting_data.get("instructions", "Please review and approve this flow.")
-	flow_run_link = f"/huf/flows/{flow_run.flow_id}?run={flow_run.name}"
-
+	
+	flow_run_path = f"/huf/flows/{flow_run.flow_id}?run={flow_run.name}"
+	
+	_host = (frappe.conf.get("host_name") or frappe.utils.get_url()).rstrip("/")
+	flow_run_url = f"{_host}{flow_run_path}"
 
 	
 	# Create notification for each approver
@@ -790,7 +793,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 					<p>{instructions}</p>
 					<p><strong>{_("Flow")}:</strong> {flow_run.flow_id}</p>
 					<p><strong>{_("Run ID")}:</strong> {flow_run.name}</p>
-					<p><a href="{flow_run_link}">{_("View Flow Run")}</a></p>
+					<p><a href="{flow_run_url}">{_("View Flow Run")}</a></p>
 				""",
 			})
 			
@@ -810,7 +813,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 							<p>{instructions}</p>
 							<hr>
 							<p>
-								<a href="{frappe.utils.get_url(flow_run_link)}" 
+								<a href="{flow_run_url}" 
 								   style="background-color: #171717; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
 									{_("Review Approval")}
 								</a>
