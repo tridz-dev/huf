@@ -37,6 +37,7 @@ interface ChatMessageProps {
     message: MessageType;
     agentName: string;
     agentColor: string | null;
+    showToolExecutionDetails?: boolean;
     status: 'submitted' | 'streaming' | 'ready' | 'error';
     loadingType?: LoadingType;
     onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
@@ -47,6 +48,7 @@ export function ChatMessage({
     message, 
     agentName,
     agentColor,
+    showToolExecutionDetails = true,
     status,
     loadingType = 'default',
     onFeedback,
@@ -57,6 +59,21 @@ export function ChatMessage({
     const timestamp = message.versions[0]?.id ? undefined : undefined; // We'll get timestamp from message if available
     const timeDisplay = timestamp ? formatTime(timestamp) : '';
     const userInitials = user?.full_name ? getInitials(user.full_name) : 'You';
+
+    // Skip rendering ALL tool-related messages when tool execution details are hidden
+    if (!showToolExecutionDetails) {
+        // Hide messages with tool-related kinds (stored in DB as text)
+        const kind = message.kind;
+        if (kind === 'Tool Call' || kind === 'Tool Result') {
+            return null;
+        }
+        // Hide messages that only contain Tool UI components (from socket events)
+        const hasToolsOnly = message.tools && message.tools.length > 0 &&
+            (!message.versions[0]?.content || message.versions[0].content.trim() === '');
+        if (hasToolsOnly) {
+            return null;
+        }
+    }
 
     return (
         <div className={cn("flex gap-3 group relative", isUser ? "flex-row" : "flex-row")}>
@@ -78,7 +95,7 @@ export function ChatMessage({
                     )}
                 </div>
                 
-                {message.tools && message.tools.length > 0 ? (
+                {showToolExecutionDetails && message.tools && message.tools.length > 0 ? (
                     message.tools.map((tool, toolIndex) => (
                         <Tool key={`${message.key}-tool-${toolIndex}`}>
                             <ToolHeader
@@ -103,9 +120,9 @@ export function ChatMessage({
                              message.from === 'assistant' && 
                              (!message.versions[0]?.content || message.versions[0].content.trim() === '') && (
                                 <MessageLoadingState
-                                    type={message.tools?.length ? 'tool-execution' : loadingType}
-                                    hasTools={!!message.tools && message.tools.length > 0}
-                                    toolName={message.tools?.[0]?.name}
+                                    type={showToolExecutionDetails && message.tools?.length ? 'tool-execution' : loadingType}
+                                    hasTools={showToolExecutionDetails && !!message.tools && message.tools.length > 0}
+                                    toolName={showToolExecutionDetails ? message.tools?.[0]?.name : undefined}
                                 />
                             )}
                             {message.generatedAudio && message.from === 'assistant' ? (
@@ -153,7 +170,7 @@ export function ChatMessage({
                             )}
                         </MessageContent>
                         {/* Actions for assistant messages */}
-                        {message.from === 'assistant' && message.versions[0]?.content && !message.tools && (
+                        {message.from === 'assistant' && message.versions[0]?.content && (!message.tools || !showToolExecutionDetails) && (
                             <div className="opacity-0 transition-opacity group-hover:opacity-100">
                                 <MessageActions
                                     content={message.versions[0].content}

@@ -33,6 +33,7 @@ import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpAp
 import type { MCPServerDoc } from '../services/mcpApi';
 import type { AgentKnowledgeRow } from '../types/agent.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
+import { writeToolDetailsSetting } from '../components/chat/useChatAgentIdentity';
 
 type PromptListRow = {
   name: string;
@@ -98,6 +99,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     enable_conversation_data: agent.enable_conversation_data === 1,
     autonaming_of_conversation_title: agent.autonaming_of_conversation_title === 1,
     agent_color: agent.agent_color?.trim() || '',
+    show_tool_execution_details: agent.show_tool_execution_details === 1,
     image_generation_model: agent.image_generation_model || undefined,
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
@@ -165,6 +167,7 @@ export function AgentFormPage() {
         'enable_conversation_data',
         'autonaming_of_conversation_title',
         'agent_color',
+        'show_tool_execution_details',
         'image_generation_model',
         'tts_model',
         'tts_voice',
@@ -288,6 +291,7 @@ export function AgentFormPage() {
         enable_conversation_data: false,
         autonaming_of_conversation_title: false,
         agent_color: '',
+        show_tool_execution_details: false,
         image_generation_model: undefined,
         tts_model: undefined,
         tts_voice: '',
@@ -671,6 +675,7 @@ export function AgentFormPage() {
             enable_conversation_data: data.enable_conversation_data === 1,
             autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
             agent_color: data.agent_color?.trim() || '',
+            show_tool_execution_details: data.show_tool_execution_details === 1,
   
             image_generation_model: data.image_generation_model || undefined,
             tts_model: data.tts_model || undefined,
@@ -832,6 +837,7 @@ export function AgentFormPage() {
         enable_conversation_data: values.enable_conversation_data ? 1 : 0,
         autonaming_of_conversation_title: values.autonaming_of_conversation_title ? 1 : 0,
         agent_color: values.agent_color?.trim() || undefined,
+        show_tool_execution_details: values.show_tool_execution_details ? 1 : 0,
 
         image_generation_model: values.image_generation_model || undefined,
         tts_model: values.tts_model || undefined,
@@ -896,6 +902,7 @@ export function AgentFormPage() {
           enable_conversation_data: newAgent.enable_conversation_data === 1,
           autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
           agent_color: newAgent.agent_color?.trim() || '',
+          show_tool_execution_details: newAgent.show_tool_execution_details === 1,
 
           image_generation_model: newAgent.image_generation_model || undefined,
           tts_model: newAgent.tts_model || undefined,
@@ -906,12 +913,16 @@ export function AgentFormPage() {
         setAllowChat(newAgent.allow_chat === 1);
         setInitialKnowledgeSources([...knowledgeSources]);
         setAgentStats({ last_run: newAgent.last_run ?? null, total_run: newAgent.total_run ?? null });
+        // Sync tool-details setting to other tabs via localStorage
+        writeToolDetailsSetting(newAgent.name, newAgent.show_tool_execution_details === 1);
         // Navigate to the edit page with the new agent's ID
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
         // Update existing agent
         await updateAgent(id, agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent updated successfully!');
+        // Sync tool-details setting to other tabs via localStorage
+        writeToolDetailsSetting(id, !!values.show_tool_execution_details);
 // Reset form state with the updated values to mark form as clean
 form.reset({
   agent_name: values.agent_name,
@@ -947,6 +958,7 @@ form.reset({
   enable_conversation_data: values.enable_conversation_data,
   autonaming_of_conversation_title: values.autonaming_of_conversation_title,
   agent_color: values.agent_color,
+  show_tool_execution_details: values.show_tool_execution_details,
 
   image_generation_model: values.image_generation_model,
   tts_model: values.tts_model,
