@@ -230,6 +230,7 @@ export interface AgentDoc {
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
+  show_tool_execution_details?: 0 | 1; // 0 or 1
   allow_guest?: number; // 0 or 1
   allowed_users?: AgentPermissionUserRow[];
   allowed_roles?: AgentPermissionRoleRow[];

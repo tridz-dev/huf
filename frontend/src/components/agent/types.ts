@@ -52,6 +52,7 @@ export const agentFormSchema = z.object({
       (v) => v === undefined || v === '' || /^#[0-9A-Fa-f]{6}$/.test(v),
       { message: 'Use a hex color including #, e.g. #6366F1' },
     ),
+  show_tool_execution_details: z.boolean().optional(),
 
   // Advanced model overrides
   image_generation_model: z.string().optional(),
