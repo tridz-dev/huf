@@ -39,6 +39,7 @@ const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourc
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
+const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
 
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
@@ -214,6 +215,16 @@ function App() {
             element={
               <ProtectedRoute>
                 <DataTableBuilderWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/models"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ModelsPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
