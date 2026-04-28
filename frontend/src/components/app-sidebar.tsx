@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -63,6 +63,12 @@ const allNavItems = [
     url: "/knowledge",
     icon: BookOpen,
     capability: "agent.use",
+  },
+  {
+    title: "Models",
+    url: "/models",
+    icon: Cpu,
+    capability: "system.providers.manage",
   },
   {
     title: "AI Providers",

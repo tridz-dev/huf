@@ -419,7 +419,8 @@ export function AgentFormPage() {
       db.getDocList('Role', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
     ]).then(([providersData, modelsData, toolTypesData, usersData, rolesData]) => {
       setProviders(providersData as AIProvider[]);
-      setAllModels(modelsData);
+      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as any).items;
+      setAllModels(modelsArray);
       setToolTypes(toolTypesData);
       setUsers(usersData as Array<{ name: string }>);
       setRoles((rolesData as Array<{ name: string }>).filter((role) => role.name !== 'Guest'));
@@ -564,10 +565,11 @@ export function AgentFormPage() {
   useEffect(() => {
     if (watchProvider) {
       getModels(watchProvider).then((modelsData) => {
-        setModels(modelsData);
+        const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as any).items;
+        setModels(modelsArray);
         // Clear model selection if current model doesn't belong to selected provider
         const currentModel = form.getValues('model');
-        if (currentModel && !modelsData.find(m => m.name === currentModel)) {
+        if (currentModel && !modelsArray.find((m: AIModel) => m.name === currentModel)) {
           form.setValue('model', '');
         }
       }).catch((error) => {
