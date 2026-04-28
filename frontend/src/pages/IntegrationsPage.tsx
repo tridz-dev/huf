@@ -93,10 +93,10 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
     }
   }, [error]);
 
-  // Fetch all models once to get model counts
   useEffect(() => {
     getModels().then((modelsData) => {
-      setModels(modelsData);
+      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as any).items;
+      setModels(modelsArray);
     }).catch((error) => {
       console.error('Error fetching models:', error);
       toast.error('Failed to load models', {
