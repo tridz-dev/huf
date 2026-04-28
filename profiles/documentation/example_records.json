@@ -1,0 +1,157 @@
+[
+  {
+    "memory_id": "mem_docs_001",
+    "profile": "documentation",
+    "document_type": "decision",
+    "project_name": "huf-memory-system",
+    "component": "storage-layer",
+    "section_id": "adr-001-storage-backend",
+    "title": "ADR-001: SQLite with Optional Vector Backend for Memory Storage",
+    "content": "# ADR-001: SQLite with Optional Vector Backend for Memory Storage\n\n## Status\nAccepted\n\n## Context\nWe need a storage solution for the memory system that balances portability, performance, and flexibility. The system must work in single-node deployments while leaving room for future scale-out.\n\n## Decision\nUse SQLite as the canonical storage with optional indexing into SQLite FTS and SQLite-vec for vector search. This keeps HUF portable while supporting both text and semantic search.\n\n## Consequences\n\n### Positive\n- Zero external dependencies for basic operation\n- Single-file portability\n- Easy backups and migrations\n- FTS and vector capabilities available when needed\n\n### Negative\n- Not suitable for high-write distributed scenarios\n- Vector performance limited compared to dedicated vector DBs\n\n### Neutral\n- Can migrate to pgvector later without changing application code",
+    "structured_data": {
+      "decision_date": "2024-03-15",
+      "status": "accepted",
+      "scope": "memory storage architecture",
+      "context": "Need portable, flexible storage for memory records",
+      "decision": "SQLite canonical + optional FTS/vector indexing"
+    },
+    "related_sections": ["adr-002-retrieval-model", "docs-storage-architecture"],
+    "supersedes": [],
+    "tags": ["architecture", "storage", "sqlite", "vector", "adr"],
+    "priority": "high",
+    "status": "approved",
+    "authors": ["system-architect"],
+    "stakeholders": ["backend-team", "devops"],
+    "decision_rationale": "SQLite provides the best balance of portability and capability for HUF's target deployment scenarios. The optional indexing layer allows users to enable advanced search only when needed.",
+    "alternatives_considered": [
+      "PostgreSQL with pgvector - too heavy for single-node",
+      "Dedicated vector DB (Pinecone, Weaviate) - external dependency",
+      "Pure JSON files - no search capability",
+      "LevelDB/RocksDB - good but no built-in FTS/vector"
+    ],
+    "consequences": {
+      "positive": [
+        "Zero external dependencies for basic operation",
+        "Single-file portability",
+        "Easy backups and migrations",
+        "FTS and vector capabilities available when needed"
+      ],
+      "negative": [
+        "Not suitable for high-write distributed scenarios",
+        "Vector performance limited compared to dedicated vector DBs"
+      ],
+      "neutral": [
+        "Can migrate to pgvector later without changing application code"
+      ]
+    },
+    "scope_type": "namespace",
+    "scope_key": "huf-core",
+    "confidence": 0.98,
+    "importance_score": 0.95,
+    "created_at": "2024-03-15T10:30:00Z",
+    "updated_at": "2024-03-15T10:30:00Z",
+    "retrieval_count": 42,
+    "is_update": false,
+    "update_summary": null
+  },
+  {
+    "memory_id": "mem_docs_002",
+    "profile": "documentation",
+    "document_type": "api_contract",
+    "project_name": "huf-memory-system",
+    "component": "memory-api",
+    "section_id": "api-memory-record-create",
+    "title": "Memory Record Create API",
+    "content": "# Memory Record Create API\n\n## Endpoint\n`POST /api/v1/memory/records`\n\n## Request\n\n### Headers\n- `Content-Type: application/json`\n- `Authorization: Bearer <token>`\n\n### Body\n```json\n{\n  \"profile\": \"documentation\",\n  \"document_type\": \"requirements\",\n  \"project_name\": \"my-project\",\n  \"title\": \"User Authentication Requirements\",\n  \"content\": \"The system must support OAuth2...\",\n  \"structured_data\": {\n    \"priority_level\": \"high\",\n    \"epic_id\": \"auth-001\"\n  },\n  \"tags\": [\"auth\", \"oauth2\"],\n  \"priority\": \"high\",\n  \"scope_type\": \"namespace\",\n  \"scope_key\": \"my-team\"\n}\n```\n\n## Response\n\n### Success (201 Created)\n```json\n{\n  \"memory_id\": \"mem_abc123\",\n  \"section_id\": \"req-auth-001\",\n  \"status\": \"active\",\n  \"created_at\": \"2024-03-20T14:30:00Z\",\n  \"indexed\": true\n}\n```\n\n### Error (400 Bad Request)\n```json\n{\n  \"error\": \"validation_error\",\n  \"message\": \"Missing required field: document_type\",\n  \"field\": \"document_type\"\n}\n```\n\n### Error (409 Conflict)\n```json\n{\n  \"error\": \"duplicate_section\",\n  \"message\": \"Section ID already exists. Use PUT for updates.\",\n  \"existing_memory_id\": \"mem_xyz789\"\n}\n```",
+    "structured_data": {
+      "api_version": "v1",
+      "endpoint_paths": ["/api/v1/memory/records"],
+      "request_schema": {
+        "type": "object",
+        "required": ["profile", "document_type", "title", "content"],
+        "properties": {
+          "profile": {"type": "string"},
+          "document_type": {"type": "string"},
+          "title": {"type": "string"},
+          "content": {"type": "string"}
+        }
+      },
+      "response_schema": {
+        "success": {"status": 201, "body": "memory_id, section_id, status"},
+        "error_validation": {"status": 400, "body": "error, message, field"},
+        "error_duplicate": {"status": 409, "body": "error, message, existing_memory_id"}
+      },
+      "auth_methods": ["bearer_token"],
+      "rate_limits": "100 req/min per user"
+    },
+    "related_sections": ["api-memory-record-update", "api-memory-record-get", "api-memory-search"],
+    "supersedes": ["api-draft-memory-create-v0"],
+    "tags": ["api", "rest", "memory-record", "v1"],
+    "priority": "critical",
+    "status": "approved",
+    "authors": ["api-lead", "backend-team"],
+    "stakeholders": ["frontend-team", "integrations", "qa"],
+    "scope_type": "namespace",
+    "scope_key": "huf-api-docs",
+    "confidence": 0.97,
+    "importance_score": 0.95,
+    "created_at": "2024-03-20T14:00:00Z",
+    "updated_at": "2024-03-25T09:15:00Z",
+    "retrieval_count": 128,
+    "is_update": true,
+    "update_summary": "Added 409 Conflict response for duplicate section IDs, clarified rate limits"
+  },
+  {
+    "memory_id": "mem_docs_003",
+    "profile": "documentation",
+    "document_type": "architecture",
+    "project_name": "huf-memory-system",
+    "component": "capture-pipeline",
+    "section_id": "arch-capture-modes",
+    "title": "Memory Capture Pipeline Architecture",
+    "content": "# Memory Capture Pipeline Architecture\n\n## Overview\nThe memory system supports multiple capture modes to balance latency, consistency, and cost.\n\n## Capture Modes\n\n### 1. In-Prompt Capture\nThe main agent maintains structured memory during its run.\n\n**Flow:**\n```\nUser Input → Agent Processing → Memory Update in Context → Response\n```\n\n**Best for:**\n- Low-latency simple fields\n- Session state\n- Known domain patterns\n\n**Trade-offs:**\n- Consumes context window\n- Limited to main agent capabilities\n\n### 2. Post-Response Synchronous\nCapture happens immediately after user-facing response.\n\n**Flow:**\n```\nUser Input → Agent Response → Memory Extraction (sync) → Store → Return to User\n```\n\n**Best for:**\n- Critical profile updates\n- High-confidence structured extraction\n\n**Trade-offs:**\n- Adds latency to response\n- Failures block completion\n\n### 3. Post-Response Asynchronous (Recommended)\nBackground job performs extraction after main response.\n\n**Flow:**\n```\nUser Input → Agent Response (returned immediately)\n                          ↓\n                   Background Job → Extract → Store → Index\n```\n\n**Best for:**\n- Complex extraction\n- Cost optimization\n- Non-critical documentation\n\n**Trade-offs:**\n- Slight delay before searchable\n- Needs queue infrastructure\n\n### 4. Specialized Memory Agent\nDedicated agent for extraction with its own model/prompt.\n\n**Flow:**\n```\nConversation Context → Memory Agent → Structured Extraction → Store\n```\n\n**Best for:**\n- Strict schemas\n- Domain-specific extraction\n- Different model for cost/quality\n\n### 5. Rule-Only Capture\nNo LLM involved, deterministic extraction.\n\n**Flow:**\n```\nEvent → Rule Engine → Structured Data → Store\n```\n\n**Best for:**\n- Timestamps, IDs\n- State transitions\n- System events\n\n## Pipeline Components\n\n```\n┌─────────────────┐\n│  Capture Trigger │\n└────────┬────────┘\n         ↓\n┌─────────────────┐    ┌──────────────────┐\n│  Context Buffer  │───→│  Extraction Stage │\n└─────────────────┘    └────────┬─────────┘\n                                ↓\n                    ┌───────────────────────┐\n                    │  Validation & Merge   │\n                    └───────────┬───────────┘\n                                ↓\n                    ┌───────────────────────┐\n                    │  Canonical Storage    │\n                    └───────────┬───────────┘\n                                ↓\n                    ┌───────────────────────┐\n                    │  Optional Indexing    │\n                    │  (FTS / Vector)       │\n                    └───────────────────────┘\n```",
+    "structured_data": {
+      "diagram_notation": "mermaid",
+      "layers": [
+        "capture-triggers",
+        "context-buffer",
+        "extraction-stage",
+        "validation-merge",
+        "canonical-storage",
+        "optional-indexing"
+      ],
+      "interfaces": [
+        "agent-memory-api",
+        "background-job-queue",
+        "storage-backend",
+        "search-index"
+      ],
+      "dependencies": [
+        "sqlite",
+        "optional-vector-backend",
+        "job-queue"
+      ],
+      "performance_targets": {
+        "in_prompt_latency": "< 10ms",
+        "async_extraction": "< 5s",
+        "indexing_delay": "< 30s"
+      }
+    },
+    "related_sections": ["adr-001-storage-backend", "api-memory-record-create"],
+    "supersedes": [],
+    "tags": ["architecture", "capture", "pipeline", "async", "extraction"],
+    "priority": "high",
+    "status": "approved",
+    "authors": ["system-architect"],
+    "stakeholders": ["backend-team", "ml-team", "devops"],
+    "scope_type": "namespace",
+    "scope_key": "huf-core",
+    "confidence": 0.96,
+    "importance_score": 0.92,
+    "created_at": "2024-03-18T11:00:00Z",
+    "updated_at": "2024-03-18T11:00:00Z",
+    "retrieval_count": 67,
+    "is_update": false,
+    "update_summary": null
+  }
+]
