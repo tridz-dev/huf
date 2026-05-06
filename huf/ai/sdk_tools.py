@@ -828,13 +828,15 @@ def handle_get_list(
 				warning = f"{warning}\n{filter_warning}" if warning else filter_warning
 
 		page_length = limit if limit and int(limit) > 0 else None
+		ignore_permissions = kwargs.get("ignore_permissions", False)
 
-		result = frappe.get_all(
+		result = frappe.get_list(
 			reference_doctype,
 			filters=filters,
 			fields=filtered_fields,
 			limit_page_length=page_length,
 			order_by=order_by,
+			ignore_permissions=ignore_permissions,
 		)
 
 
@@ -1005,7 +1007,7 @@ def handle_cancel_document(reference_doctype: str, document_id: str, ignore_perm
     doc.cancel()
     return {"success": True, "message": "Cancelled"}
 
-def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, **kwargs):
+def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, ignore_permissions=False, **kwargs):
     """
     Get a field value (or multiple values) from a DocType.
     Matches the auto-generated JSON schema: doctype + filters + fieldname.
@@ -1017,7 +1019,24 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
         }
 
     try:
-        value = frappe.db.get_value(doctype, filters, fieldname)
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
+        if not doc_name:
+            return {
+                "success": False,
+                "error": f"No {doctype} found matching filters {filters}"
+            }
+
+        if not ignore_permissions and not frappe.has_permission(doctype, "read", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have read permission on {doctype} {doc_name}"
+            }
+
+        value = frappe.db.get_value(doctype, doc_name, fieldname)
         return {
             "success": True,
             "doctype": doctype,
@@ -1030,7 +1049,7 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
 
 
 
-def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, **kwargs):
+def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, ignore_permissions=False, **kwargs):
     """
     Set a field value on a document that matches filters.
     """
@@ -1038,14 +1057,26 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         return {"success": False, "error": "Missing required parameters"}
 
     try:
-        doc_name = frappe.db.get_value(doctype, filters, "name")
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
         if not doc_name:
             return {
                 "success": False,
                 "error": f"No {doctype} found matching filters {filters}"
             }
 
-        updated = frappe.db.set_value(doctype, doc_name, fieldname, value)
+        if not ignore_permissions and not frappe.has_permission(doctype, "write", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have write permission on {doctype} {doc_name}"
+            }
+
+        doc = frappe.get_doc(doctype, doc_name)
+        doc.set(fieldname, value)
+        doc.save(ignore_permissions=ignore_permissions)
         frappe.db.commit()
 
         return {
@@ -1053,7 +1084,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
             "doctype": doctype,
             "name": doc_name,
             "fieldname": fieldname,
-            "new_value": updated[fieldname] if isinstance(updated, dict) else value
+            "new_value": doc.get(fieldname)
         }
 
     except Exception as e:
@@ -1061,7 +1092,9 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         return {"success": False, "error": str(e)}
 
 
-def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, **kwargs):
+def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, ignore_permissions=False, **kwargs):
+    if not ignore_permissions and not frappe.has_permission("Report", "read", doc=report_name):
+        return {"success": False, "error": f"You do not have permission to read Report {report_name}"}
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
 
 def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
