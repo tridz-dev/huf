@@ -356,37 +356,6 @@ def get_report_result(
 
 	return {"columns": columns, "data": data}
 
-def attach_file_to_document(doctype: str, document_id: str, file_path: str):
-    """
-    Attach a file to a document in the database
-    """
-    if not frappe.db.exists(doctype, document_id):
-        return {
-            "document_id": document_id,
-            "message": f"{doctype} with ID {document_id} not found",
-            "doctype": doctype,
-        }
-
-    file = frappe.get_doc("File", {"file_url": file_path})
-
-    if not file:
-        frappe.throw(_("File not found"))
-
-    newFile = frappe.get_doc(
-        {
-            "doctype": "File",
-            "file_url": file_path,
-            "attached_to_doctype": doctype,
-            "attached_to_name": document_id,
-            "folder": file.folder,
-            "file_name": file.file_name,
-            "is_private": file.is_private,
-        }
-    )
-    newFile.insert()
-
-    return {"document_id": document_id, "message": "File attached", "file_id": newFile.name}
-
 def _download_content(url: str, timeout: int = 30) -> bytes:
     """Download bytes from an http/https url."""
 
