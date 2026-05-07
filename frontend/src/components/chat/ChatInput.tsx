@@ -10,13 +10,18 @@ import {
   streamingAvailable,
   setStreamingAvailable,
 } from "@/services/streamChatApi";
+import { transcribeAudio } from "@/services/chatApi";
+import { SpeechInput } from "@/components/ai-elements/speech-input";
 import type { MessageType } from './types';
+
+export type LoadingType = 'default' | 'transcribing';
 
 interface ChatInputProps {
     chatId: string | null;
     agentName: string;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
+    onLoadingTypeChange?: (type: LoadingType) => void;
     isCreatingConversationRef: React.MutableRefObject<boolean>;
     newlyCreatedConversationIdRef: React.MutableRefObject<string | null>;
     setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>;
@@ -29,6 +34,7 @@ export function ChatInput({
     agentName,
     onConversationCreated,
     onStatusChange,
+    onLoadingTypeChange,
     isCreatingConversationRef,
     newlyCreatedConversationIdRef,
     setMessages,
@@ -39,6 +45,7 @@ export function ChatInput({
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const isAudioRecordingFlowRef = useRef(false);
     
     const MIN_HEIGHT = 60;
     const MAX_HEIGHT = 200;
@@ -55,6 +62,40 @@ export function ChatInput({
         return () => clearTimeout(timer);
     }, [chatId]);
 
+    const runAgentAndUpdateAssistant = useCallback(
+        async (params: {
+            message: string;
+            conversationId: string | undefined;
+            assistantMessageId: string;
+            updateAssistantContent: (content: string) => void;
+        }) => {
+            const useStreaming = streamingAvailable;
+            const response = await sendMessage(
+                {
+                    agent: agentName,
+                    message: params.message,
+                    conversationId: params.conversationId,
+                },
+                {
+                    useStreaming,
+                    onDelta: useStreaming ? params.updateAssistantContent : undefined,
+                }
+            );
+            const msg = response.message as Record<string, unknown>;
+            const conversationId =
+                (msg?.conversation_id as string) ??
+                ((msg?.run as Record<string, unknown>)?.conversation_id as string);
+            const responseTextRaw =
+                (msg?.run as Record<string, unknown>)?.response ?? msg?.response;
+            const responseText = typeof responseTextRaw === 'string' ? responseTextRaw : '';
+            if (!useStreaming && responseText) {
+                params.updateAssistantContent(responseText);
+            }
+            return { conversationId };
+        },
+        [agentName]
+    );
+
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
         
@@ -66,42 +107,27 @@ export function ChatInput({
         setIsSubmitting(true);
         onStatusChange('submitted');
 
-        // Add user message immediately
         const userMessageKey = `user-${Date.now()}`;
         const userMessage: MessageType = {
             key: userMessageKey,
             from: 'user',
-            versions: [
-                {
-                    id: userMessageKey,
-                    content: messageText,
-                },
-            ],
+            versions: [{ id: userMessageKey, content: messageText }],
         };
         setMessages((prev) => [...prev, userMessage]);
-
-        // Clear input immediately
         setMessage('');
-        if (textareaRef.current) {
-            textareaRef.current.focus();
-        }
+        if (textareaRef.current) textareaRef.current.focus();
 
         const assistantMessageId = `assistant-${Date.now()}`;
-        const assistantMessage: MessageType = {
-            key: assistantMessageId,
-            from: 'assistant',
-            versions: [{ id: assistantMessageId, content: '' }],
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
+        setMessages((prev) => [
+            ...prev,
+            { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
+        ]);
 
         const updateAssistantContent = (content: string) => {
             setMessages((prev) =>
                 prev.map((msg) =>
                     msg.key === assistantMessageId
-                        ? {
-                              ...msg,
-                              versions: [{ id: assistantMessageId, content }],
-                          }
+                        ? { ...msg, versions: [{ id: assistantMessageId, content }] }
                         : msg
                 )
             );
@@ -109,71 +135,129 @@ export function ChatInput({
         };
 
         try {
-            if (!chatId) {
-                isCreatingConversationRef.current = true;
-            }
-
-            const useStreaming = streamingAvailable;
-            const response = await sendMessage(
-                {
-                    agent: agentName,
-                    message: messageText,
-                    conversationId: chatId ?? undefined,
-                },
-                {
-                    useStreaming,
-                    onDelta:
-                        useStreaming
-                            ? (text) => updateAssistantContent(text)
-                            : undefined,
-                }
-            );
-
-            const msg = response.message as Record<string, unknown>;
-            const conversationId =
-                (msg?.conversation_id as string) ??
-                ((msg?.run as Record<string, unknown>)?.conversation_id as string);
-            const responseTextRaw =
-                (msg?.run as Record<string, unknown>)?.response ?? msg?.response;
-            const responseText =
-                typeof responseTextRaw === 'string' ? responseTextRaw : '';
-
-            if (!useStreaming && responseText) {
-                updateAssistantContent(responseText);
-            }
+            if (!chatId) isCreatingConversationRef.current = true;
+            const { conversationId } = await runAgentAndUpdateAssistant({
+                message: messageText,
+                conversationId: chatId ?? undefined,
+                assistantMessageId,
+                updateAssistantContent,
+            });
             onStatusChange('ready');
-
             if (conversationId && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = conversationId;
                 onConversationCreated(conversationId, agentName);
-                setTimeout(() => {
-                    isCreatingConversationRef.current = false;
-                }, 500);
+                setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
             } else {
                 isCreatingConversationRef.current = false;
             }
-
-            setTimeout(() => {
-                if (textareaRef.current) {
-                    textareaRef.current.focus();
-                }
-            }, chatId ? 100 : 200);
+            setTimeout(() => textareaRef.current?.focus(), chatId ? 100 : 200);
         } catch (error) {
-            if (streamingAvailable) {
-                setStreamingAvailable(false);
-            }
+            if (streamingAvailable) setStreamingAvailable(false);
             isCreatingConversationRef.current = false;
             onStatusChange('error');
             toast.error('Failed to send message', {
                 description: error instanceof Error ? error.message : 'An error occurred',
             });
-            setMessages((prev) =>
-                prev.filter((msg) => msg.key !== assistantMessageId)
-            );
+            setMessages((prev) => prev.filter((msg) => msg.key !== assistantMessageId));
         } finally {
             setIsSubmitting(false);
         }
-    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint]);
+    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant]);
+
+    const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
+        const filename = `recording-${Date.now()}.webm`;
+        const reader = new FileReader();
+        const b64 = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => {
+                const result = reader.result as string;
+                const base64 = result.includes(',') ? result.split(',')[1] : result;
+                resolve(base64 ?? '');
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+
+        const userMessageKey = `user-${Date.now()}`;
+        const assistantMessageId = `assistant-${Date.now()}`;
+        setMessages((prev) => [
+            ...prev,
+            { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
+        ]);
+        onStatusChange('submitted');
+        onLoadingTypeChange?.('transcribing');
+
+        try {
+            const res = await transcribeAudio({
+                filename,
+                b64data: b64,
+                agent: agentName,
+                conversation: chatId ?? undefined,
+            });
+            if (!res?.success || !res.transcript) {
+                setMessages((prev) => prev.filter((m) => m.key !== assistantMessageId));
+                throw new Error(typeof res?.error === 'string' ? res.error : 'Transcription failed');
+            }
+            isAudioRecordingFlowRef.current = true;
+            setMessages((prev) => {
+                const idx = prev.findIndex((m) => m.key === assistantMessageId);
+                const userMessage: MessageType = {
+                    key: userMessageKey,
+                    from: 'user',
+                    versions: [{ id: userMessageKey, content: res.transcript! }],
+                };
+                if (idx < 0) return [...prev, userMessage];
+                return [...prev.slice(0, idx), userMessage, ...prev.slice(idx)];
+            });
+            onLoadingTypeChange?.('default');
+            if (!chatId) isCreatingConversationRef.current = true;
+            const updateAssistantContent = (content: string) => {
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.key === assistantMessageId ? { ...m, versions: [{ id: assistantMessageId, content }] } : m
+                    )
+                );
+                scrollToBottomAfterPaint?.(false);
+            };
+            try {
+                await runAgentAndUpdateAssistant({
+                    message: res.transcript,
+                    conversationId: res.conversation_id,
+                    assistantMessageId,
+                    updateAssistantContent,
+                });
+                onStatusChange('ready');
+                if (res.conversation_id && onConversationCreated) {
+                    newlyCreatedConversationIdRef.current = res.conversation_id;
+                    onConversationCreated(res.conversation_id, agentName);
+                }
+                return res.transcript;
+            } catch (agentErr) {
+                isCreatingConversationRef.current = false;
+                setMessages((prev) => prev.filter((m) => m.key !== assistantMessageId));
+                onStatusChange('error');
+                toast.error('Failed to send message', {
+                    description: agentErr instanceof Error ? agentErr.message : 'An error occurred',
+                });
+                throw agentErr;
+            }
+        } catch (err) {
+            onStatusChange('error');
+            onLoadingTypeChange?.('default');
+            isCreatingConversationRef.current = false;
+            toast.error('Failed to transcribe or send', {
+                description: err instanceof Error ? err.message : 'An error occurred',
+            });
+            throw err;
+        }
+    }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant]);
+
+    const handleTranscriptionChange = useCallback((text: string) => {
+        if (isAudioRecordingFlowRef.current) {
+            isAudioRecordingFlowRef.current = false;
+            return;
+        }
+        setMessage((prev) => (prev ? `${prev} ${text}` : text));
+    }, []);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -301,6 +385,15 @@ export function ChatInput({
                             </ShortcutKey>
                             for new line
                         </span>
+                        {!message.trim() && (
+                            <SpeechInput
+                                onTranscriptionChange={handleTranscriptionChange}
+                                onAudioRecorded={handleAudioRecorded}
+                                disabled={isSubmitting || isModelMismatch}
+                                size="icon"
+                                className="shrink-0 rounded-full"
+                            />
+                        )}
                         <Button
                             type="submit"
                             disabled={!message.trim() || isSubmitting || isModelMismatch}

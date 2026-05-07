@@ -27,6 +27,17 @@ from datetime import datetime, timedelta
 from .tool_registry import PermissionAwareToolRegistry
 MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
 
+
+def _frappe_run_context_dict(ctx) -> dict:
+    """Huf run context may be a dict or an Agents SDK ToolContext wrapping that dict."""
+    if ctx is None:
+        return {}
+    if isinstance(ctx, dict):
+        return ctx
+    inner = getattr(ctx, "context", None)
+    return inner if isinstance(inner, dict) else {}
+
+
 def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_guest: bool = False):
     """Guard function to block dangerous tools for Guest users"""
     user = frappe.session.user
@@ -168,7 +179,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
 
                     elif function_doc.types == "Run Agent":
                         if function_doc.agent:
-                            extra_args["agent_name"] = function_doc.agent
+                            extra_args["target_agent_name"] = function_doc.agent
 
                     tool = create_function_tool(
                         function_doc.tool_name,
@@ -292,13 +303,13 @@ def create_function_tool(
 
                 args_dict = json.loads(args_json or "{}")
 
-                if isinstance(ctx, dict):
-                    if "conversation_id" in ctx:
-                        args_dict["conversation_id"] = ctx["conversation_id"]
-                    if "agent_run_id" in ctx:
-                        args_dict["agent_run_id"] = ctx["agent_run_id"]
-                    if "agent_name" in ctx:
-                        args_dict["agent_name"] = ctx["agent_name"]
+                huf_ctx = _frappe_run_context_dict(ctx)
+                if "conversation_id" in huf_ctx:
+                    args_dict["conversation_id"] = huf_ctx["conversation_id"]
+                if "agent_run_id" in huf_ctx:
+                    args_dict["agent_run_id"] = huf_ctx["agent_run_id"]
+                if "agent_name" in huf_ctx:
+                    args_dict["agent_name"] = huf_ctx["agent_name"]
 
                 if _extra_args:
                     args_dict.update(_extra_args)
@@ -817,13 +828,15 @@ def handle_get_list(
 				warning = f"{warning}\n{filter_warning}" if warning else filter_warning
 
 		page_length = limit if limit and int(limit) > 0 else None
+		ignore_permissions = kwargs.get("ignore_permissions", False)
 
-		result = frappe.get_all(
+		result = frappe.get_list(
 			reference_doctype,
 			filters=filters,
 			fields=filtered_fields,
 			limit_page_length=page_length,
 			order_by=order_by,
+			ignore_permissions=ignore_permissions,
 		)
 
 
@@ -994,7 +1007,7 @@ def handle_cancel_document(reference_doctype: str, document_id: str, ignore_perm
     doc.cancel()
     return {"success": True, "message": "Cancelled"}
 
-def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, **kwargs):
+def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, ignore_permissions=False, **kwargs):
     """
     Get a field value (or multiple values) from a DocType.
     Matches the auto-generated JSON schema: doctype + filters + fieldname.
@@ -1006,7 +1019,24 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
         }
 
     try:
-        value = frappe.db.get_value(doctype, filters, fieldname)
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
+        if not doc_name:
+            return {
+                "success": False,
+                "error": f"No {doctype} found matching filters {filters}"
+            }
+
+        if not ignore_permissions and not frappe.has_permission(doctype, "read", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have read permission on {doctype} {doc_name}"
+            }
+
+        value = frappe.db.get_value(doctype, doc_name, fieldname)
         return {
             "success": True,
             "doctype": doctype,
@@ -1019,7 +1049,7 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
 
 
 
-def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, **kwargs):
+def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, ignore_permissions=False, **kwargs):
     """
     Set a field value on a document that matches filters.
     """
@@ -1027,14 +1057,26 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         return {"success": False, "error": "Missing required parameters"}
 
     try:
-        doc_name = frappe.db.get_value(doctype, filters, "name")
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
         if not doc_name:
             return {
                 "success": False,
                 "error": f"No {doctype} found matching filters {filters}"
             }
 
-        updated = frappe.db.set_value(doctype, doc_name, fieldname, value)
+        if not ignore_permissions and not frappe.has_permission(doctype, "write", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have write permission on {doctype} {doc_name}"
+            }
+
+        doc = frappe.get_doc(doctype, doc_name)
+        doc.set(fieldname, value)
+        doc.save(ignore_permissions=ignore_permissions)
         frappe.db.commit()
 
         return {
@@ -1042,7 +1084,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
             "doctype": doctype,
             "name": doc_name,
             "fieldname": fieldname,
-            "new_value": updated[fieldname] if isinstance(updated, dict) else value
+            "new_value": doc.get(fieldname)
         }
 
     except Exception as e:
@@ -1050,31 +1092,56 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         return {"success": False, "error": str(e)}
 
 
-def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, **kwargs):
+def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, ignore_permissions=False, **kwargs):
+    if not ignore_permissions and not frappe.has_permission("Report", "read", doc=report_name):
+        return {"success": False, "error": f"You do not have permission to read Report {report_name}"}
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
 
-def handle_run_agent(agent_name: str, prompt: str, **kwargs):
+def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
     """
     Queue another agent execution instead of blocking.
     """
     try:
-        if not frappe.db.exists("Agent", agent_name):
-            return {"success": False, "error": f"Agent '{agent_name}' does not exist"}
+        if not frappe.db.exists("Agent", target_agent_name):
+            return {"success": False, "error": f"Agent '{target_agent_name}' does not exist"}
 
-        target_agent = frappe.get_doc("Agent", agent_name)
+        target_agent = frappe.get_doc("Agent", target_agent_name)
+        
+        from huf.ai.agent_integration import _is_user_allowed
+        if not _is_user_allowed(target_agent, frappe.session.user):
+            return {
+                "success": False, 
+                "error": f"Permission Denied: User '{frappe.session.user}' is not authorized to run the sub-agent '{target_agent_name}'."
+            }
+        
+        conversation_id = kwargs.get("conversation_id")
+        agent_run_id = kwargs.get("agent_run_id")
+        agent_name_self = kwargs.get("agent_name")
+
+        if target_agent_name == agent_name_self:
+            return {
+                "success": False, 
+                "error": f"Circular Dependency Error: An agent cannot invoke itself as a sub-agent."
+            }
 
         job = enqueue(
             "huf.ai.agent_integration.run_agent_sync",
             queue="default",
-            timeout=300,
+            timeout=1500,
             is_async=True,
-            agent_name=agent_name,
+            agent_name=target_agent_name,
             prompt=prompt,
             provider=target_agent.provider,
             model=target_agent.model,
+            parent_conversation_id=conversation_id,
+            invoked_by_agent=agent_name_self,
         )
 
-        return {"success": True, "queued": True, "job_id": job.id}
+        return {
+            "status": "Queued",
+            "message": "The task is currently being processed in the background. IMPORTANT: DO NOT tell the user that the task is completed or successful yet. Inform the user that you are working on it and will provide an update shortly. Do not mention the terms 'sub-agent' or 'background queue' explicitly, keep it natural (e.g., 'I am processing this for you now...').",
+            "job_id": job.id
+        }
     except Exception as e:
         frappe.log_error("Run Agent Tool Error", str(e))
         return {"success": False, "error": str(e)}
@@ -1928,6 +1995,245 @@ def _get_default_tts_model(provider_name: str) -> str:
     
     return defaults.get(provider_name.lower())
 
+_TTS_ENV_VAR_PROVIDERS: dict[str, str] = {
+    "google":     "GEMINI_API_KEY",
+    "gemini":     "GEMINI_API_KEY",
+    "vertex_ai":  "GEMINI_API_KEY",
+    "elevenlabs": "ELEVENLABS_API_KEY",
+    "minimax":    "MINIMAX_API_KEY",
+}
+
+
+def _resolve_tts_config(
+    agent_doc,
+    tool_model: str | None = None,
+    tool_voice: str | None = None,
+) -> dict:
+    """
+    Resolve the TTS model, voice, API key, and provider for audio generation.
+
+    Priority (highest → lowest):
+
+    1. **Tool-call parameter** - ``model`` / ``voice`` values passed by the
+       agent at runtime (highest precedence; lets individual calls override).
+    2. **Agent-level TTS configuration** - ``agent.tts_model`` / ``agent.tts_voice``
+       fields set on the Agent DocType.  The API key is fetched from the *TTS
+       model's own provider* (``AI Model → AI Provider``), which may be a
+       completely different provider from the agent's main conversational model.
+    3. **Provider default** - ``_get_default_tts_model`` / ``_get_default_voice``
+       derived from the agent's main provider (fallback when nothing else is set).
+
+    Args:
+        agent_doc:   Loaded ``Agent`` Frappe document.
+        tool_model:  Optional model name supplied by the tool call at runtime.
+        tool_voice:  Optional voice name supplied by the tool call at runtime.
+
+    Returns:
+        dict:
+            - ``tts_model``     - Normalised LiteLLM model string.
+            - ``voice``         - Voice identifier for the TTS provider.
+            - ``api_key``       - Decrypted API key for the TTS provider.
+            - ``provider_name`` - Lowercase provider name (used for env-var routing).
+            - ``provider_doc``  - Loaded ``AI Provider`` document for the TTS provider.
+            - ``source``        - How the model was resolved: ``"tool_param"``,
+                                  ``"agent_config"``, or ``"provider_default"``.
+
+    Raises:
+        ValueError: If no TTS model can be determined and the provider does not
+                    natively support TTS.
+    """
+    from huf.ai.providers.litellm import _normalize_model_name
+
+    if tool_model:
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+        if not api_key:
+            raise ValueError(
+                f"API key is not configured for provider "
+                f"'{provider_doc.provider_name}'. Please add it to the AI Provider document."
+            )
+        provider_name = provider_doc.provider_name.lower()
+        voice = tool_voice or _get_default_voice(provider_name)
+        normalized = _normalize_model_name(tool_model, agent_doc.provider)
+        return {
+            "tts_model":     normalized,
+            "voice":         voice,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  provider_doc,
+            "source":        "tool_param",
+        }
+
+    if getattr(agent_doc, "tts_model", None):
+        tts_model_doc = frappe.get_doc("AI Model", agent_doc.tts_model)
+
+        if not tts_model_doc.provider:
+            raise ValueError(
+                f"TTS model '{agent_doc.tts_model}' has no provider linked. "
+                f"Please set a provider on the AI Model document."
+            )
+
+        tts_provider_doc = frappe.get_doc("AI Provider", tts_model_doc.provider)
+        api_key = tts_provider_doc.get_password("api_key")
+
+        if not api_key:
+            raise ValueError(
+                f"API key is not configured for TTS provider "
+                f"'{tts_provider_doc.provider_name}'. "
+                f"Please add the API key to that AI Provider document."
+            )
+
+        provider_name = tts_provider_doc.provider_name.lower()
+
+        voice = (
+            getattr(agent_doc, "tts_voice", None)
+            or _get_default_voice(provider_name)
+            or tool_voice
+        )
+
+        normalized = _normalize_model_name(
+            tts_model_doc.model_name, tts_model_doc.provider
+        )
+        return {
+            "tts_model":     normalized,
+            "voice":         voice,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  tts_provider_doc,
+            "source":        "agent_config",
+        }
+
+    provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+    api_key = provider_doc.get_password("api_key")
+
+    if not api_key:
+        raise ValueError(
+            f"API key is not configured for provider "
+            f"'{provider_doc.provider_name}'. Please add it to the AI Provider document."
+        )
+
+    provider_name = provider_doc.provider_name.lower()
+    tts_model = _get_default_tts_model(provider_name)
+
+    if not tts_model:
+        raise ValueError(
+            f"Text-to-speech is not natively supported by provider "
+            f"'{provider_doc.provider_name}'. Please either:\n"
+            f"  \u2022 Set a dedicated 'TTS Model' on the Agent "
+            f"(Advanced Settings \u2192 Audio Generation), or\n"
+            f"  \u2022 Pass a 'model' parameter directly to the generate_audio tool."
+        )
+
+    voice = tool_voice or _get_default_voice(provider_name)
+    normalized = _normalize_model_name(tts_model, agent_doc.provider)
+    return {
+        "tts_model":     normalized,
+        "voice":         voice,
+        "api_key":       api_key,
+        "provider_name": provider_name,
+        "provider_doc":  provider_doc,
+        "source":        "provider_default",
+    }
+
+def _get_default_stt_model(provider_name: str) -> str:
+    """
+    Get default STT model for a provider.
+    """
+    defaults = {
+        "openai": "whisper-1",
+        "azure": "whisper-1",
+        "groq": "groq/whisper-large-v3",
+        "deepgram": "deepgram/nova-2",
+    }
+    return defaults.get(provider_name.lower())
+
+def _resolve_stt_config(
+    agent_doc,
+    tool_model: str | None = None,
+) -> dict:
+    """
+    Resolve the STT model, API key, and provider for audio transcription.
+    Priority (highest → lowest):
+    1. Tool-call parameter
+    2. Agent-level STT configuration
+    3. Provider default
+    """
+    from huf.ai.providers.litellm import _normalize_model_name
+
+    if tool_model:
+        stt_provider_name = None
+        search_model = tool_model
+        if "/" in search_model:
+            search_model = search_model.split("/")[-1]
+            
+        model_doc = frappe.get_all("AI Model", filters={"name": search_model}, fields=["provider"])
+        if model_doc:
+            stt_provider_name = model_doc[0].provider
+        elif "/" in tool_model:
+            provider_slug = tool_model.split("/")[0]
+            provs = frappe.get_all("AI Provider", filters={"slug": provider_slug}, fields=["name"])
+            if provs:
+                stt_provider_name = provs[0].name
+                
+        if not stt_provider_name:
+            stt_provider_name = agent_doc.provider
+
+        provider_doc = frappe.get_doc("AI Provider", stt_provider_name)
+        api_key = provider_doc.get_password("api_key")
+        if not api_key:
+            raise ValueError(f"API key is not configured for provider '{provider_doc.provider_name}'.")
+            
+        provider_name = provider_doc.provider_name.lower()
+        normalized = _normalize_model_name(tool_model, stt_provider_name)
+        return {
+            "stt_model":     normalized,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  provider_doc,
+            "source":        "tool_param",
+        }
+
+    if getattr(agent_doc, "stt_model", None):
+        stt_model_doc = frappe.get_doc("AI Model", agent_doc.stt_model)
+        if not stt_model_doc.provider:
+            raise ValueError(f"STT model '{agent_doc.stt_model}' has no provider linked.")
+
+        stt_provider_doc = frappe.get_doc("AI Provider", stt_model_doc.provider)
+        api_key = stt_provider_doc.get_password("api_key")
+        if not api_key:
+            raise ValueError(f"API key is not configured for STT provider '{stt_provider_doc.provider_name}'.")
+
+        provider_name = stt_provider_doc.provider_name.lower()
+        normalized = _normalize_model_name(stt_model_doc.model_name, stt_model_doc.provider)
+        return {
+            "stt_model":     normalized,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  stt_provider_doc,
+            "source":        "agent_config",
+        }
+
+    provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+    api_key = provider_doc.get_password("api_key")
+    if not api_key:
+        raise ValueError(f"API key is not configured for provider '{provider_doc.provider_name}'.")
+
+    provider_name = provider_doc.provider_name.lower()
+    stt_model = _get_default_stt_model(provider_name)
+
+    if not stt_model:
+        stt_model = "whisper-1" # Safe ultimate fallback
+        
+    normalized = _normalize_model_name(stt_model, agent_doc.provider)
+    return {
+        "stt_model":     normalized,
+        "api_key":       api_key,
+        "provider_name": provider_name,
+        "provider_doc":  provider_doc,
+        "source":        "provider_default",
+    }
+
+
 @frappe.whitelist()
 async def handle_generate_audio(
     input: str,
@@ -1967,6 +2273,8 @@ async def handle_generate_audio(
                 "speed": float,
                 "format": str,
                 "model": str
+                "model_source": str,
+                "tts_provider": str,
             },
             "message": str,
             "conversation_id": str
@@ -1976,77 +2284,42 @@ async def handle_generate_audio(
         # Get agent configuration from context
         if not agent_name:
             return {"success": False, "error": "Agent name not found in context"}
-        
-        agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-        
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
-        
-        # Determine TTS model
-        tts_model = None
-        
-        if model:
-            # Use explicitly provided model
-            tts_model = model
 
-            # If model is provided but voice isn't, determine default voice based on provider
-            if not voice:
-                voice = _get_default_voice(provider_doc.provider_name.lower())
-        else:
-            # Auto-detect suitable TTS model based on provider
-            provider_name = provider_doc.provider_name.lower()
-            tts_model = _get_default_tts_model(provider_name)
-            
-            # If voice not provided, get default for this provider
-            if not voice:
-                voice = _get_default_voice(provider_name)
-        
-        if not tts_model:
-            return {
-                "success": False,
-                "error": f"Text-to-speech not supported for provider '{provider_doc.provider_name}'. Please provide a model parameter."
-            }
-        
-        # Determine Voice if not provided
-        if not voice:
-            voice = _get_default_voice(provider_doc.provider_name.lower())
-        
-        # Normalize to LiteLLM format
-        from huf.ai.providers.litellm import _normalize_model_name
-        normalized_model = _normalize_model_name(tts_model, agent_doc.provider)
-        
-        # Call LiteLLM speech generation
+        agent_doc = frappe.get_doc("Agent", agent_name)
+
+        try:
+            tts_config = _resolve_tts_config(
+                agent_doc, tool_model=model, tool_voice=voice
+            )
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+
+        normalized_model = tts_config["tts_model"]
+        voice            = tts_config["voice"]
+        api_key          = tts_config["api_key"]
+        provider_name    = tts_config["provider_name"]
+        tts_source       = tts_config["source"]
+        tts_provider_doc = tts_config["provider_doc"]
+
         import litellm
-        
-        # Build parameters for speech generation
-        speech_params = {
+
+        speech_params: dict = {
             "model": normalized_model,
             "input": input,
-            "voice": voice
+            "voice": voice,
         }
-        
-        env_var_providers = {
-            "google": "GEMINI_API_KEY",
-            "vertex_ai": "GEMINI_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-        }
-        
-        provider_key = provider_doc.provider_name.lower()
-        if provider_key in env_var_providers:
+
+        if provider_name in _TTS_ENV_VAR_PROVIDERS:
             import os
-            os.environ[env_var_providers[provider_key]] = api_key
+            os.environ[_TTS_ENV_VAR_PROVIDERS[provider_name]] = api_key
         else:
             speech_params["api_key"] = api_key
-        
-        # Add optional parameters
-        # LiteLLM forwards provider-specific params automatically
+
         if speed != 1.0:
             speech_params["speed"] = speed
         if response_format != "mp3":
             speech_params["response_format"] = response_format
-        
+
         # Call LiteLLM speech (returns HttpxBinaryResponseContent)
         response = await asyncio.to_thread(
             litellm.speech,
@@ -2095,14 +2368,25 @@ async def handle_generate_audio(
                     "agent_run": kwargs.get("agent_run_id"),
                     "conversation_index": conversation_index,
                     "is_agent_message": 1,
-                    "user": "Agent"
+                    "user": "Agent",
+                    "tts_voice": voice
                 })
                 message_doc.insert(ignore_permissions=True)
+
+                if tts_source == "agent_config" and getattr(agent_doc, "tts_model", None):
+                    frappe.db.set_value(
+                        "Agent Message", message_doc.name,
+                        "tts_model", agent_doc.tts_model,
+                        update_modified=False
+                    )
+                    message_doc.tts_model = agent_doc.tts_model
+
             except Exception as e:
                 frappe.log_error(
                     f"Error creating Agent Message for generated audio: {str(e)}",
                     "Audio Generation Message Creation"
                 )
+                message_doc = None
         
         # Save file attached to the Agent Message
         if message_doc:
@@ -2183,7 +2467,9 @@ async def handle_generate_audio(
                 "voice": voice,
                 "speed": speed,
                 "format": response_format,
-                "model": normalized_model
+                "model": normalized_model,
+                "model_source": tts_source,
+                "tts_provider": tts_provider_doc.provider_name,
             },
             "message": "Generated audio successfully",
             "conversation_id": conversation_id
@@ -2237,11 +2523,6 @@ async def handle_transcribe_audio(
             return {"success": False, "error": "Agent name not found in context"}
         
         agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-        
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
         
         # Get audio file
         file_doc = None
@@ -2272,55 +2553,93 @@ async def handle_transcribe_audio(
             return {"success": False, "error": f"Error getting file path: {str(e)}"}
         
         # Determine transcription model
-        if not model:
-            provider_name = provider_doc.provider_name.lower()
-            if provider_name in ["openai", "azure"]:
-                model = "whisper-1"
-            elif provider_name == "groq":
-                model = "groq/whisper-large-v3"
-            elif provider_name == "deepgram":
-                model = "deepgram/nova-2"
-            else:
-                model = "whisper-1"  # Default fallback
-        
-        # Normalize model name for LiteLLM
-        from huf.ai.providers.litellm import _normalize_model_name
-        normalized_model = _normalize_model_name(model, agent_doc.provider)
+        try:
+            stt_config = _resolve_stt_config(agent_doc, tool_model=model)
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+
+        normalized_model = stt_config["stt_model"]
+        api_key          = stt_config["api_key"]
+        provider_name    = stt_config["provider_name"]
+        stt_source       = stt_config["source"]
+        stt_provider_doc = stt_config["provider_doc"]
         
         # Call LiteLLM transcription
         import litellm
         
-        # Build parameters for transcription
-        # LiteLLM accepts file path (string) or file-like object
-        transcription_params = {
-            "model": normalized_model,
-            "file": file_path,  # Pass file path directly
-            "api_key": api_key
-        }
-        
-        # Add optional parameters
-        if language:
-            transcription_params["language"] = language
-        
-        # Call LiteLLM transcription
-        def _sync_transcribe(params):
+        if provider_name in ["google", "gemini", "vertex_ai"]:
+            import base64
+            import mimetypes
+            
             with open(file_path, "rb") as audio_file:
-                params["file"] = audio_file
-                return litellm.transcription(**params)
-
-        try:
-            response = await asyncio.to_thread(_sync_transcribe, transcription_params)
-        except Exception as e:
-            return {"success": False, "error": f"Transcription failed: {str(e)}"}
-        
-        # Extract text from response
-        # LiteLLM transcription returns a dict with 'text' key or object
-        if hasattr(response, "text"):
-            transcribed_text = response.text
-        elif isinstance(response, dict):
-            transcribed_text = response.get("text", "")
+                audio_data = audio_file.read()
+                
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if not mime_type:
+                mime_type = "audio/mp3"
+                
+            if file_path.lower().endswith(".webm") or mime_type == "video/webm":
+                mime_type = "audio/webm"
+                
+            base64_audio = base64.b64encode(audio_data).decode('utf-8')
+            audio_url = f"data:{mime_type};base64,{base64_audio}"
+            
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Please transcribe this audio exactly as it is spoken. Do not add any extra commentary or formatting. If there are multiple languages, transcribe them as spoken. If it is silent, just write [Silence]."},
+                        {"type": "image_url", "image_url": {"url": audio_url}}
+                    ]
+                }
+            ]
+            
+            import os
+            env_var = _TTS_ENV_VAR_PROVIDERS.get(provider_name, "GEMINI_API_KEY")
+            os.environ[env_var] = api_key
+                
+            try:
+                response = await asyncio.to_thread(
+                    litellm.completion,
+                    model=normalized_model,
+                    messages=messages,
+                    api_key=api_key 
+                )
+                transcribed_text = response.choices[0].message.content
+            except Exception as e:
+                return {"success": False, "error": f"Transcription failed: {str(e)}"}
+                
         else:
-             transcribed_text = str(response)
+            # Standard transcription handling (OpenAI, Deepgram, Groq, etc.)
+            transcription_params = {
+                "model": normalized_model,
+                "file": file_path,
+                "api_key": api_key
+            }
+            
+            # Add optional parameters
+            if language:
+                transcription_params["language"] = language
+            
+            # Call LiteLLM transcription
+            def _sync_transcribe(params):
+                with open(file_path, "rb") as audio_file:
+                    params["file"] = audio_file
+                    return litellm.transcription(**params)
+
+            try:
+                response = await asyncio.to_thread(_sync_transcribe, transcription_params)
+            except Exception as e:
+                return {"success": False, "error": f"Transcription failed: {str(e)}"}
+            
+            # Extract text from response
+            # LiteLLM transcription returns a dict with 'text' key or object
+            if hasattr(response, "text"):
+                transcribed_text = response.text
+            elif isinstance(response, dict):
+                transcribed_text = response.get("text", "")
+            else:
+                 transcribed_text = str(response)
         
         if not transcribed_text:
             return {"success": False, "error": "Transcription returned empty result"}
@@ -2343,6 +2662,8 @@ async def handle_transcribe_audio(
                     message_doc = frappe.get_doc("Agent Message", message_id)
                     message_doc.content = transcribed_text
                     if not message_doc.kind: message_doc.kind = "Audio"
+                    if stt_source == "agent_config" and getattr(agent_doc, "stt_model", None):
+                        message_doc.stt_model = agent_doc.stt_model
                     message_doc.save(ignore_permissions=True)
                     
                 else:
@@ -2360,6 +2681,8 @@ async def handle_transcribe_audio(
                         "is_agent_message": 0,
                         "user": frappe.session.user
                     })
+                    if stt_source == "agent_config" and getattr(agent_doc, "stt_model", None):
+                        message_doc.stt_model = agent_doc.stt_model
                     message_doc.insert(ignore_permissions=True)
                 
                 # Check if file is already attached to this message

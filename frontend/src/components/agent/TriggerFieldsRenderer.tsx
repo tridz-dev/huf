@@ -1,4 +1,4 @@
-import { Control } from 'react-hook-form';
+import { Control, FieldValues, Path } from 'react-hook-form';
 import {
   FormControl,
   FormDescription,
@@ -19,10 +19,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { triggerFieldsConfig } from './TriggerFieldsConfig';
 
-interface TriggerFieldsRendererProps {
+interface TriggerFieldsRendererProps<TFieldValues extends FieldValues> {
   triggerType: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  control: Control<any>;
+  control: Control<TFieldValues>;
   docTypes: Array<{ name: string }>;
   loadingDocTypes: boolean;
   agentId?: string;
@@ -32,13 +31,13 @@ interface TriggerFieldsRendererProps {
  * Reusable component to render trigger fields based on configuration
  * This makes it easy to add new trigger types and fields
  */
-export function TriggerFieldsRenderer({
+export function TriggerFieldsRenderer<TFieldValues extends FieldValues>({
   triggerType,
   control,
   docTypes,
   loadingDocTypes,
   agentId,
-}: TriggerFieldsRendererProps) {
+}: TriggerFieldsRendererProps<TFieldValues>) {
   const fields = triggerFieldsConfig[triggerType];
   if (!fields) return null;
 
@@ -59,7 +58,7 @@ export function TriggerFieldsRenderer({
           <FormField
             key={fieldConfig.field}
             control={control}
-            name={fieldConfig.field}
+            name={fieldConfig.field as Path<TFieldValues>}
             render={({ field }) => {
               if (fieldConfig.type === 'select') {
                 // Use Combobox for reference_doctype (searchable)

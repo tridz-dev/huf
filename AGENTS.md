@@ -145,6 +145,8 @@ The main DocType for creating an AI agent.
 | **Disabled**      | `disabled`      | Check     | If checked, this agent will be disabled and will not run.                                               |
 | **Chef**          | `chef`         | Data      | Provider standard name (fetched from provider, hidden).                                                   |
 | **Slug**          | `slug`         | Data      | Provider slug (fetched from provider, hidden).                                                          |
+| **TTS Model**    | `tts_model`    | Link (AI Model) | Dedicated model for the `generate_audio` tool. When set, the API key is sourced from the *TTS model's own provider* (`AI Model → AI Provider`), enabling cross-provider TTS (e.g. main agent on OpenAI, TTS on ElevenLabs). Falls back to the main provider's default TTS model when unset. |
+| **TTS Voice**    | `tts_voice`    | Data      | Default voice identifier for the configured TTS model (e.g. `alloy`, `nova`, `21m00Tcm4TlvDq8ikWAM`). Overridden by a `voice` argument passed directly to the `generate_audio` tool call. |
 
 **Note**: The `condition` field has been removed from Agent DocType. Conditional triggering is now handled via the `Agent Trigger` DocType.
 
@@ -433,6 +435,29 @@ Generate an image from a text description using AI.
     -   `size` (string): Image dimensions (default '1024x1024').
     -   `quality` (string): Image quality (default 'standard').
     -   `n` (integer): Number of images to generate (default 1).
+
+#### 3. generate_audio
+
+Generate audio (speech) from text using LiteLLM's `speech()` function. Supports OpenAI, Gemini, ElevenLabs, Minimax, AWS Polly, and any LiteLLM-supported TTS provider.
+
+-   **Function**: `huf.ai.sdk_tools.handle_generate_audio`
+-   **Helper**: `huf.ai.sdk_tools._resolve_tts_config` (three-tier resolution, see below)
+-   **Parameters**:
+    -   `input` (string, required): Text to convert to speech.
+    -   `voice` (string): Voice identifier. Provider-specific (e.g. `alloy`, `nova` for OpenAI; `21m00Tcm4TlvDq8ikWAM` for ElevenLabs; `Puck` for Gemini).
+    -   `model` (string): Optional TTS model override (e.g. `tts-1-hd`, `elevenlabs/eleven_multilingual_v2`).
+    -   `speed` (number): Speech speed 0.25–4.0 (default 1.0).
+    -   `response_format` (string): Audio format — `mp3` (default), `opus`, `aac`, `flac`, `wav`, `pcm`.
+
+**TTS Model / Voice Resolution (three-tier priority):**
+
+| Priority | Condition | Model source | API key source |
+| :------- | :-------- | :----------- | :------------- |
+| 1 | `model` param passed to tool call | `model` param directly | Agent's **main** provider |
+| 2 | `agent.tts_model` field is set | `AI Model.model_name` via link | `AI Model → AI Provider → api_key` (may be a **different** provider) |
+| 3 | Fallback | `_get_default_tts_model(main_provider)` | Agent's **main** provider |
+
+This enables fully cross-provider TTS: an agent using `OpenAI / gpt-4o` for conversation can use `ElevenLabs / eleven_multilingual_v2` for audio generation by simply setting `tts_model` and `tts_voice` on the Agent document (Advanced Settings → Audio Generation tab).
 
 ### Core Classes and Methods
 
@@ -1511,3 +1536,8 @@ Registered via `huf_tools` hook so agents can interact with flows:
 - **Router/orchestrator**: LLM output constrained to valid candidate edges
 - **Human approval**: User/role verification before approve/reject
 - **Hop limit**: Safety guard against infinite loops (default 100)
+
+## Development and Coding Guidelines
+
+### Frontend TypeScript Strictness
+The frontend project enforces strict TypeScript rules. Unused variables, unresolved imports, and unused functions will cause build failures (e.g., `error TS6133`). Always proactively remove unused variables, functions, and imports, especially after code refactorings, to ensure the frontend build succeeds without errors.
