@@ -40,7 +40,10 @@ function getStatusVariant(status: FlowMetadata['status']) {
   }
 }
 
-export function FlowListPage() {
+export { FlowListPage };
+export default FlowListPage;
+
+function FlowListPage() {
   const navigate = useNavigate();
   const { setActiveFlow } = useFlowContext();
   const [showSettings, setShowSettings] = useState(false);

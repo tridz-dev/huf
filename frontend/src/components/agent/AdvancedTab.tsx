@@ -5,12 +5,40 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { UseFormReturn } from 'react-hook-form';
 import type { AgentFormValues } from './types';
+import type { AIModel } from '@/types/agent.types';
+import {
+	MODEL_MODALITY_IMAGE,
+	MODEL_MODALITY_TTS,
+	MODEL_MODALITY_STT,
+	IMAGE_MODEL_LABEL,
+	IMAGE_MODEL_PLACEHOLDER,
+	IMAGE_MODEL_DESCRIPTION,
+	TTS_MODEL_LABEL,
+	TTS_MODEL_PLACEHOLDER,
+	TTS_MODEL_DESCRIPTION,
+	TTS_VOICE_LABEL,
+	TTS_VOICE_PLACEHOLDER,
+	TTS_VOICE_DESCRIPTION,
+	STT_MODEL_LABEL,
+	STT_MODEL_PLACEHOLDER,
+	STT_MODEL_DESCRIPTION,
+} from '@/data/ai';
 
 interface AdvancedTabProps {
   form: UseFormReturn<AgentFormValues>;
+  allModels: AIModel[];
 }
 
-export function AdvancedTab({ form }: AdvancedTabProps) {
+function modelSupports(model: AIModel, required: string): boolean {
+  return (model.modalities || '').trim() === required;
+}
+
+export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
+	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
+	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
+	const sttModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_STT));
+	const contextStrategy = form.watch('context_strategy');
+
   return (
     <div className="space-y-6">
       <Card>
@@ -77,6 +105,39 @@ export function AdvancedTab({ form }: AdvancedTabProps) {
               </FormItem>
             )}
           />
+
+          {contextStrategy === 'Summarize' && (
+            <FormField
+              control={form.control}
+              name="summary_model"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Summary Model</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v || undefined)}
+                    value={field.value || ''}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Default (main agent model)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {allModels.map((m) => (
+                        <SelectItem key={m.name} value={m.name}>
+                          {m.model_name || m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Optional lightweight model used only when compressing older messages (Summarize strategy).
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}
@@ -215,6 +276,178 @@ export function AdvancedTab({ form }: AdvancedTabProps) {
                     onCheckedChange={field.onChange}
                   />
                 </FormControl>
+              </FormItem>
+            )}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Huf UI</CardTitle>
+          <CardDescription>Chat avatar styling in the agent chat interface</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="agent_color"
+            render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel>Agent color</FormLabel>
+                <div className="flex flex-wrap items-center gap-3">
+                  <FormControl>
+                    <Input
+                      placeholder="#6366F1"
+                      className="max-w-[11rem] font-mono"
+                      {...field}
+                      value={field.value || ''}
+                    />
+                  </FormControl>
+                  <input
+                    type="color"
+                    className="h-9 w-12 cursor-pointer rounded border bg-background p-0.5"
+                    value={/^#[0-9A-Fa-f]{6}$/.test(field.value || '') ? field.value : '#6366f1'}
+                    onChange={(e) => field.onChange(e.target.value)}
+                    aria-label="Pick agent color"
+                  />
+                </div>
+                <FormDescription>
+                  Background color for the agent avatar in chat. Include the # prefix.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="show_tool_execution_details"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Show Tool Execution Details</FormLabel>
+                  <FormDescription>
+                    Enable to display tool execution status and responses in the agent output. This includes whether each tool call is completed and its corresponding result.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value ?? false}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Model Modality Settings</CardTitle>
+          <CardDescription>
+            Optional: select dedicated models for image generation, audio generation (TTS), and transcription (STT).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="image_generation_model"
+            render={({ field }) => (
+              <FormItem>
+								<FormLabel>{IMAGE_MODEL_LABEL}</FormLabel>
+                <Select
+                  onValueChange={(v) => field.onChange(v || undefined)}
+                  value={field.value || ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+											<SelectValue placeholder={IMAGE_MODEL_PLACEHOLDER} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {imageModels.map((m) => (
+                      <SelectItem key={m.name} value={m.name}>
+                        {m.model_name || m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+								<FormDescription>{IMAGE_MODEL_DESCRIPTION}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tts_model"
+            render={({ field }) => (
+              <FormItem>
+								<FormLabel>{TTS_MODEL_LABEL}</FormLabel>
+                <Select
+                  onValueChange={(v) => field.onChange(v || undefined)}
+                  value={field.value || ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+											<SelectValue placeholder={TTS_MODEL_PLACEHOLDER} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {ttsModels.map((m) => (
+                      <SelectItem key={m.name} value={m.name}>
+                        {m.model_name || m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+								<FormDescription>{TTS_MODEL_DESCRIPTION}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tts_voice"
+            render={({ field }) => (
+              <FormItem>
+								<FormLabel>{TTS_VOICE_LABEL}</FormLabel>
+                <FormControl>
+									<Input placeholder={TTS_VOICE_PLACEHOLDER} {...field} value={field.value || ''} />
+                </FormControl>
+								<FormDescription>{TTS_VOICE_DESCRIPTION}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="stt_model"
+            render={({ field }) => (
+              <FormItem>
+								<FormLabel>{STT_MODEL_LABEL}</FormLabel>
+                <Select
+                  onValueChange={(v) => field.onChange(v || undefined)}
+                  value={field.value || ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+											<SelectValue placeholder={STT_MODEL_PLACEHOLDER} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {sttModels.map((m) => (
+                      <SelectItem key={m.name} value={m.name}>
+                        {m.model_name || m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+								<FormDescription>{STT_MODEL_DESCRIPTION}</FormDescription>
+                <FormMessage />
               </FormItem>
             )}
           />

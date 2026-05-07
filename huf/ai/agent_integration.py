@@ -53,13 +53,13 @@ class AgentManager:
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
         try:
             from huf.ai.knowledge.tool import (
-                create_knowledge_search_tool, 
+                create_knowledge_search_tool,
                 handle_knowledge_search,
                 create_get_knowledge_sources_tool,
                 handle_get_knowledge_sources
             )
             from agents import function_tool
-            
+
             # 1. Knowledge Search Tool
             knowledge_tool_def = create_knowledge_search_tool(self.agent_doc.agent_name)
             if knowledge_tool_def:
@@ -314,6 +314,63 @@ def safe_commit():
         else:
             raise
 
+
+def _parse_prompt_cache_options(prompt_cache_options):
+    """Parse prompt caching options passed via API/runtime and return a dict."""
+    if not prompt_cache_options:
+        return {}
+
+    if isinstance(prompt_cache_options, dict):
+        return prompt_cache_options
+
+    if isinstance(prompt_cache_options, str):
+        try:
+            parsed = json.loads(prompt_cache_options)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+
+    return {}
+
+
+def _resolve_prompt_cache_options(channel_id: str, prompt_cache_options=None) -> dict:
+    """
+    Resolve prompt-cache controls from runtime overrides + site config defaults.
+
+    Site config (non-UI) format:
+    {
+      "default": {"openai_prompt_cache_retention": "24h"},
+      "channels": {
+        "api": {"openai_prompt_cache_retention": "6h"},
+        "doc_event": {"openai_prompt_cache_retention": "24h"},
+        "sse_stream": {"openai_prompt_cache_retention": "24h"}
+      }
+    }
+    """
+    resolved = {}
+    site_defaults = frappe.conf.get("huf_prompt_cache_defaults")
+
+    if isinstance(site_defaults, str):
+        try:
+            site_defaults = json.loads(site_defaults)
+        except Exception:
+            site_defaults = {}
+
+    if isinstance(site_defaults, dict):
+        default_opts = site_defaults.get("default")
+        if isinstance(default_opts, dict):
+            resolved.update(default_opts)
+
+        channel_opts = (site_defaults.get("channels") or {}).get((channel_id or "").lower())
+        if isinstance(channel_opts, dict):
+            resolved.update(channel_opts)
+
+    runtime_opts = _parse_prompt_cache_options(prompt_cache_options)
+    if runtime_opts:
+        resolved.update(runtime_opts)
+
+    return resolved
+
 def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False, tool_call_id=None):
     """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
@@ -336,23 +393,29 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
             if existing_queued:
                 doc_id = existing_queued[0]
                 doc = frappe.get_doc("Agent Tool Call", doc_id)
-                
+
                 update_data = {}
 
                 if result is not None:
-                    update_data["tool_result"] = json.dumps(result)
-                
+                    # JSON field: store valid JSON-serializable value
+                    if isinstance(result, (dict, list)):
+                        update_data["tool_result"] = result
+                    else:
+                        val = str(result)
+                        if len(val) > 140000:
+                            val = val[:140000]
+                        update_data["tool_result"] = {"output": val}
+
                 if error:
                     update_data["status"] = "Failed"
                     update_data["error_message"] = error
                 else:
                     update_data["status"] = "Completed"
-                
+
                 doc.update(update_data)
                 doc.save(ignore_permissions=True)
-                return doc.name 
+                return doc.name
             else:
-                frappe.log_error(f"Received tool output for run {agent_run} but no Queued tool call found.", "Agent Tool Call Warning")
                 return None
 
         else:
@@ -365,6 +428,14 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                     is_mcp_tool = 1
                     mcp_server = mcp_tool_entry
 
+            result_val = result
+            if result_val is not None:
+                # JSON field: store valid JSON-serializable value
+                if not isinstance(result_val, (dict, list)):
+                    val = str(result_val)
+                    if len(val) > 140000:
+                        val = val[:140000]
+                    result_val = {"output": val}
             doc = frappe.get_doc({
                 "doctype": "Agent Tool Call",
                 "agent_run": agent_run,
@@ -373,7 +444,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "is_mcp_tool": is_mcp_tool,
                 "mcp_server": mcp_server,
                 "tool_args": json.dumps(args) if args else None,
-                "tool_result": json.dumps(result) if result else None,
+                "tool_result": result_val,
                 "error_message": error,
                 "status": "Queued",
                 "call_id": tool_call_id 
@@ -387,15 +458,18 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
         return None
 
 def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None, is_output=False):
+    name = raw_call.get("name") if isinstance(raw_call, dict) else getattr(raw_call, "name", None)
+    args = raw_call.get("arguments") if isinstance(raw_call, dict) and not is_output else (getattr(raw_call, "arguments", None) if not is_output else None)
+    call_id = raw_call.get("id") if isinstance(raw_call, dict) else getattr(raw_call, "id", None)
     return process_tool_call(
         agent_run=run_doc.name,
         conversation=conversation.name,
-        name=getattr(raw_call, "name", None),
-        args=getattr(raw_call, "arguments", None) if not is_output else None,
+        name=name,
+        args=args,
         result=tool_result,
         error=error,
         is_output=is_output,
-        tool_call_id=getattr(raw_call, "id", None)
+        tool_call_id=call_id
     )
 
 def _run_async_safely(coro):
@@ -563,6 +637,9 @@ def run_agent_sync(
     run_kind: str = None,
     prompt_template: str = None,
     prompt_version = None,
+    parent_conversation_id: str = None,
+    invoked_by_agent: str = None,
+    prompt_cache_options=None,
 ):
 
     if not agent_name:
@@ -655,7 +732,8 @@ def run_agent_sync(
 
     run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert(ignore_permissions=True)
-    conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+    if prompt and not str(prompt).startswith("[SILENT_TRIGGER]"):
+        conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
 
@@ -730,6 +808,8 @@ def run_agent_sync(
             except Exception:
                 pass
 
+        resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
@@ -737,7 +817,8 @@ def run_agent_sync(
             "agent_name": agent_name,
             "response_format": response_format,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "prompt_cache_options": resolved_prompt_cache,
         }
 
         context_strategy = agent_doc.context_strategy or "Summarize"
@@ -792,14 +873,17 @@ def run_agent_sync(
             "agent_name": agent_name,
             "response_format": response_format,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "prompt_cache_options": resolved_prompt_cache,
         }
-        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model,context)
+        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model, context)
         result = _run_async_safely(run)
+
+        new_items = getattr(result, "new_items", []) or []
 
         client_side_tool_calls = []
 
-        for item in getattr(result, "new_items", []):
+        for item in new_items:
             if item.type == "tool_call_item":
                 raw = item.raw_item  
                 tool_call_id = log_tool_call(run_doc, conversation, raw, is_output=False)
@@ -908,19 +992,27 @@ def run_agent_sync(
         if usage:
             
             if isinstance(usage, dict):
-                input_tokens = getattr(usage, "prompt_tokens", usage.get("input_tokens", 0) if isinstance(usage, dict) else 0)
-                output_tokens = getattr(usage, "completion_tokens", usage.get("output_tokens", 0) if isinstance(usage, dict) else 0)
+                input_tokens = (getattr(usage, "prompt_tokens", usage.get("input_tokens", 0)) if isinstance(usage, dict) else 0) or 0
+                output_tokens = (getattr(usage, "completion_tokens", usage.get("output_tokens", 0)) if isinstance(usage, dict) else 0) or 0
                 
                 details = getattr(usage, "prompt_tokens_details", None)
+                if not details and isinstance(usage, dict):
+                    details = usage.get("prompt_tokens_details")
+
                 if details:
-                    cached_tokens = getattr(details, "cached_tokens", 0)
+                    if isinstance(details, dict):
+                        cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
+                    else:
+                        cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
                 elif isinstance(usage, dict):
-                    cached_tokens = usage.get("cached_tokens", 0)
+                    cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
                 
             else: 
-                input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0)
-                output_tokens = getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0)
-                cached_tokens = getattr(usage, "cached_tokens", 0)
+                input_tokens = (getattr(usage, "input_tokens", getattr(usage, "prompt_tokens", 0))) or 0
+                output_tokens = (getattr(usage, "output_tokens", getattr(usage, "completion_tokens", 0))) or 0
+                cached_tokens = getattr(usage, "cached_tokens", None) or 0
+            
+            cached_tokens = cached_tokens or 0
 
             try:
                 total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
@@ -955,6 +1047,39 @@ def run_agent_sync(
             "end_time": now_datetime()
         }, update_modified=True)
         safe_commit()
+
+        # Handle Sub-Agent Success Lifecycle Hook
+        if parent_conversation_id and invoked_by_agent:
+            # 1. Silent Auto-Awaken Trigger
+            # We bypass Agent Message insertion and use a silent trigger to hide the intermediate execution from the UI
+            try:
+                silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{final_output}"
+                frappe.enqueue(
+                    "huf.ai.agent_integration.run_agent_sync",
+                    queue="default",
+                    timeout=300,
+                    is_async=True,
+                    agent_name=invoked_by_agent,
+                    prompt=silent_trigger,
+                    parent_conversation_id=None,
+                    conversation_id=parent_conversation_id,
+                    channel_id=channel_id,
+                    external_id=external_id
+                )
+            except Exception as hook_err:
+                frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
+
+            # 3. Real-Time UI Notification
+            frappe.publish_realtime(
+                event=f"conversation:{parent_conversation_id}",
+                message={
+                    "type": "sub_agent_completed",
+                    "agent_name": agent_name,
+                    "status": "Success",
+                    "result": final_output
+                },
+                user=frappe.session.user
+            )
 
         # Auto-naming check
         if agent_doc.autonaming_of_conversation_title:
@@ -997,12 +1122,12 @@ def run_agent_sync(
     except Exception as e:
         error_msg = str(e)
         
-        if "ContextWindowExceededError" in error_msg or "RateLimitError" in error_msg:
+        if "ContextWindowExceededError" in error_msg:
             try:
                 frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
                 safe_commit()
                 
-                error_msg = _("This conversation has exceeded the maximum token limit or rate limit. Please start a new conversation to continue.")
+                error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
                 
                 conv_manager.add_message(
                     conversation=conversation, 
@@ -1016,11 +1141,61 @@ def run_agent_sync(
                 )
                 safe_commit()
             except Exception as inner_e:
-                frappe.log_error(f"Failed to handle rate limit in sync: {str(inner_e)}", "Agent Integration Error")
+                frappe.log_error(f"Failed to handle context window error in sync: {str(inner_e)}", "Agent Integration Error")
+                
+        elif "RateLimitError" in error_msg:
+            try:
+                error_msg = _("You have reached the API rate limit (requests/tokens per minute). Please wait a moment and try again.")
+                
+                conv_manager.add_message(
+                    conversation=conversation, 
+                    role="agent", 
+                    content=error_msg, 
+                    provider=resolved_provider, 
+                    model=resolved_model, 
+                    agent=agent_name, 
+                    run_name=run_doc.name,
+                    kind="Error"
+                )
+                safe_commit()
+            except Exception as inner_e:
+                frappe.log_error(f"Failed to handle rate limit error in sync: {str(inner_e)}", "Agent Integration Error")
 
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
         frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "Huf")
+
+        # Handle Sub-Agent Failure Lifecycle Hook
+        if parent_conversation_id and invoked_by_agent:
+            # 1. Silent Auto-Awaken Trigger
+            try:
+                silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                frappe.enqueue(
+                    "huf.ai.agent_integration.run_agent_sync",
+                    queue="default",
+                    timeout=300,
+                    is_async=True,
+                    agent_name=invoked_by_agent,
+                    prompt=silent_trigger,
+                    parent_conversation_id=None,
+                    conversation_id=parent_conversation_id,
+                    channel_id=channel_id,
+                    external_id=external_id
+                )
+            except Exception as hook_err:
+                frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+            # 3. Real-Time UI Notification
+            frappe.publish_realtime(
+                event=f"conversation:{parent_conversation_id}",
+                message={
+                    "type": "sub_agent_failed",
+                    "agent_name": agent_name,
+                    "status": "Failed",
+                    "result": error_msg
+                },
+                user=frappe.session.user
+            )
 
         return {
             "success": False,
@@ -1041,7 +1216,10 @@ async def run_agent_stream(
     conversation_id: str = None,
     create_new: bool = False,
     prompt_template: str = None,
-    prompt_version = None
+    prompt_version = None,
+    parent_conversation_id: str = None,
+    invoked_by_agent: str = None,
+    prompt_cache_options=None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -1188,13 +1366,16 @@ async def run_agent_stream(
             
         agent = manager.create_agent()
         
+        resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
             "conversation_history": history,
             "agent_name": agent_name,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "prompt_cache_options": resolved_prompt_cache,
         }
         
         # SUMMARIZATION LOGIC
@@ -1320,7 +1501,6 @@ async def run_agent_stream(
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
                     usage = chunk.get("usage", {})
-                    frappe.log_error(f"Stream Usage Received: {usage} Type: {type(usage)}", "Debug Stream Usage")
                     
                     # Calculate metrics
                     cost = 0.0
@@ -1332,70 +1512,80 @@ async def run_agent_stream(
                     if usage:
                         
                         if isinstance(usage, dict):
-                            input_tokens = getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0) if isinstance(usage, dict) else 0)
-                            output_tokens = getattr(usage, "completion_tokens", usage.get("completion_tokens", 0) if isinstance(usage, dict) else 0)
+                            input_tokens = (getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0)) if isinstance(usage, dict) else 0) or 0
+                            output_tokens = (getattr(usage, "completion_tokens", usage.get("completion_tokens", 0)) if isinstance(usage, dict) else 0) or 0
                             
                             details = getattr(usage, "prompt_tokens_details", None)
+                            if not details and isinstance(usage, dict):
+                                details = usage.get("prompt_tokens_details")
+
                             if details:
-                                cached_tokens = getattr(details, "cached_tokens", 0)
+                                if isinstance(details, dict):
+                                    cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
+                                else:
+                                    cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
                             elif isinstance(usage, dict):
-                                cached_tokens = usage.get("cached_tokens", 0)
+                                cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
                             
                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
                         else:
-                            input_tokens = getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))
-                            output_tokens = getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))
-                            cached_tokens = getattr(usage, "cached_tokens", 0)
-                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
+                            input_tokens = (getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))) or 0
+                            output_tokens = (getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))) or 0
+                            cached_tokens = getattr(usage, "cached_tokens", None) or 0
+                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) or (input_tokens + output_tokens)
+                    
+                    cached_tokens = cached_tokens or 0
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
+                            from huf.ai.providers.litellm import _normalize_model_name
+                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
                             
                             msgs_for_count = history + [{"role": "user", "content": prompt}]
-                            input_tokens = token_counter(model=model, messages=msgs_for_count)
-                            output_tokens = token_counter(model=model, text=full_response)
+                            input_tokens = token_counter(model=pricing_model, messages=msgs_for_count)
+                            output_tokens = token_counter(model=pricing_model, text=full_response)
                             total_tokens = input_tokens + output_tokens
                         except Exception as e:
                             frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
-                        
-                        try:
-                            mock_response = {
-                                "usage": {
-                                    "prompt_tokens": input_tokens,
-                                    "completion_tokens": output_tokens,
-                                    "total_tokens": input_tokens + output_tokens
-                                },
-                                "model": resolved_model
-                            }
                             
-                            pricing_model = resolved_model
-                            if resolved_provider and "/" not in resolved_model and resolved_provider.lower() not in resolved_model.lower():
-                                pricing_model = f"{resolved_provider.lower()}/{resolved_model}"
-                               
-                            mock_response["model"] = pricing_model
-                                
-                            cost = litellm.completion_cost(
-                                completion_response=mock_response,
-                                model=pricing_model
-                            )
+                    try:
+                        from huf.ai.providers.litellm import _normalize_model_name
+                        pricing_model = _normalize_model_name(resolved_model, resolved_provider)
+                        
+                        mock_response = {
+                            "usage": {
+                                "prompt_tokens": input_tokens,
+                                "completion_tokens": output_tokens,
+                                "total_tokens": input_tokens + output_tokens
+                            },
+                            "model": pricing_model
+                        }
+                        
+                        if cached_tokens > 0:
+                            mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                            
+                        cost = litellm.completion_cost(
+                            completion_response=mock_response,
+                            model=pricing_model
+                        )
 
-                        except Exception as e:
-                            frappe.log_error(f"Cost calculation failed for {model}: {e}", "Agent Stream Cost")
-                            cost = 0.0
+                    except Exception as e:
+                        frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")
+                        cost = 0.0
 
-                        # Update Conversation Metrics
-                        try:
-                            frappe.db.sql("""
-                                UPDATE `tabAgent Conversation`
-                                SET 
-                                    total_input_tokens = total_input_tokens + %s,
-                                    total_output_tokens = total_output_tokens + %s,
-                                    total_tokens = total_tokens + %s,
-                                    total_cost = total_cost + %s
-                                WHERE name = %s
-                            """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
-                        except Exception as e:
-                            frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
+                    # Update Conversation Metrics
+                    try:
+                        frappe.db.sql("""
+                            UPDATE `tabAgent Conversation`
+                            SET 
+                                total_input_tokens = total_input_tokens + %s,
+                                total_output_tokens = total_output_tokens + %s,
+                                total_tokens = total_tokens + %s,
+                                total_cost = total_cost + %s
+                            WHERE name = %s
+                        """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
+                    except Exception as e:
+                        frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
 
                     # Save final response
                     conv_manager.add_message(conversation, "agent", full_response, resolved_provider, resolved_model, agent_name, run_doc.name)
@@ -1413,6 +1603,37 @@ async def run_agent_stream(
                         "end_time": now_datetime()
                     }, update_modified=True)
                     safe_commit()
+
+                    # Handle Sub-Agent Success Lifecycle Hook
+                    if parent_conversation_id and invoked_by_agent:
+                        # Silent Auto-Awaken Trigger
+                        try:
+                            silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{full_response}"
+                            frappe.enqueue(
+                                "huf.ai.agent_integration.run_agent_sync",
+                                queue="default",
+                                timeout=300,
+                                is_async=True,
+                                agent_name=invoked_by_agent,
+                                prompt=silent_trigger,
+                                parent_conversation_id=None,
+                                conversation_id=parent_conversation_id,
+                                channel_id=channel_id,
+                                external_id=external_id
+                            )
+                        except Exception as hook_err:
+                            frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
+
+                        frappe.publish_realtime(
+                            event=f"conversation:{parent_conversation_id}",
+                            message={
+                                "type": "sub_agent_completed",
+                                "agent_name": agent_name,
+                                "status": "Success",
+                                "result": full_response
+                            },
+                            user=frappe.session.user
+                        )
 
                     # Auto-naming check for stream
                     try:
@@ -1441,12 +1662,32 @@ async def run_agent_stream(
                 elif chunk_type == "error":
                     error_msg = chunk.get("error", "Unknown error")
                     
-                    if "ContextWindowExceededError" in error_msg or "RateLimitError" in error_msg:
+                    if "ContextWindowExceededError" in error_msg:
                         try:
                             frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
                             safe_commit()
                             
-                            user_error_msg = _("This conversation has exceeded the maximum token limit or rate limit. Please start a new conversation to continue.")
+                            user_error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
+                            
+                            conv_manager.add_message(
+                                conversation=conversation, 
+                                role="agent", 
+                                content=user_error_msg, 
+                                provider=resolved_provider, 
+                                model=resolved_model, 
+                                agent=agent_name, 
+                                run_name=run_doc.name,
+                                kind="Error"
+                            )
+                            safe_commit()
+                            chunk["error"] = user_error_msg # override so the client sees the same message
+                            error_msg = user_error_msg
+                        except Exception as inner_e:
+                            frappe.log_error(f"Failed to handle context window error in stream inner block: {str(inner_e)}", "Agent Integration Error")
+
+                    elif "RateLimitError" in error_msg:
+                        try:
+                            user_error_msg = _("You have reached the API rate limit (requests/tokens per minute). Please wait a moment and try again.")
                             
                             conv_manager.add_message(
                                 conversation=conversation, 
@@ -1471,6 +1712,37 @@ async def run_agent_stream(
                     }, update_modified=True)
                     safe_commit()
                     
+                    # Handle Sub-Agent Failure Lifecycle Hook
+                    if parent_conversation_id and invoked_by_agent:
+                        # Silent Auto-Awaken Trigger
+                        try:
+                            silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                            frappe.enqueue(
+                                "huf.ai.agent_integration.run_agent_sync",
+                                queue="default",
+                                timeout=300,
+                                is_async=True,
+                                agent_name=invoked_by_agent,
+                                prompt=silent_trigger,
+                                parent_conversation_id=None,
+                                conversation_id=parent_conversation_id,
+                                channel_id=channel_id,
+                                external_id=external_id
+                            )
+                        except Exception as hook_err:
+                            frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+                        frappe.publish_realtime(
+                            event=f"conversation:{parent_conversation_id}",
+                            message={
+                                "type": "sub_agent_failed",
+                                "agent_name": agent_name,
+                                "status": "Failed",
+                                "result": error_msg
+                            },
+                            user=frappe.session.user
+                        )
+
                     yield chunk
                     return
         
@@ -1478,12 +1750,30 @@ async def run_agent_stream(
             error_msg = str(e)
             frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
             
-            if "ContextWindowExceededError" in error_msg or "RateLimitError" in error_msg:
+            if "ContextWindowExceededError" in error_msg:
                 try:
                     frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
                     safe_commit()
                     
-                    error_msg = _("This conversation has exceeded the maximum token limit or rate limit. Please start a new conversation to continue.")
+                    error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
+                    
+                    conv_manager.add_message(
+                        conversation=conversation, 
+                        role="agent", 
+                        content=error_msg, 
+                        provider=resolved_provider, 
+                        model=resolved_model, 
+                        agent=agent_name, 
+                        run_name=run_doc.name,
+                        kind="Error"
+                    )
+                    safe_commit()
+                except Exception as inner_e:
+                    frappe.log_error(f"Failed to handle context window error in stream inner block: {str(inner_e)}", "Agent Integration Error")
+
+            elif "RateLimitError" in error_msg:
+                try:
+                    error_msg = _("You have reached the API rate limit (requests/tokens per minute). Please wait a moment and try again.")
                     
                     conv_manager.add_message(
                         conversation=conversation, 
@@ -1507,6 +1797,37 @@ async def run_agent_stream(
             }, update_modified=True)
             safe_commit()
             
+            # Handle Sub-Agent Failure Lifecycle Hook
+            if parent_conversation_id and invoked_by_agent:
+                # Silent Auto-Awaken Trigger
+                try:
+                    silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                    frappe.enqueue(
+                        "huf.ai.agent_integration.run_agent_sync",
+                        queue="default",
+                        timeout=300,
+                        is_async=True,
+                        agent_name=invoked_by_agent,
+                        prompt=silent_trigger,
+                        parent_conversation_id=None,
+                        conversation_id=parent_conversation_id,
+                        channel_id=channel_id,
+                        external_id=external_id
+                    )
+                except Exception as hook_err:
+                    frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+                frappe.publish_realtime(
+                    event=f"conversation:{parent_conversation_id}",
+                    message={
+                        "type": "sub_agent_failed",
+                        "agent_name": agent_name,
+                        "status": "Failed",
+                        "result": error_msg
+                    },
+                    user=frappe.session.user
+                )
+
             yield {
                 "type": "error",
                 "error": error_msg
@@ -1519,3 +1840,65 @@ async def run_agent_stream(
             "type": "error",
             "error": error_msg
         }
+
+# ---------------------------------------------------------------------------
+# Permission query conditions — used by hooks.py permission_query_conditions
+# These return SQL WHERE fragments so Frappe's list view only shows rows
+# the current user is allowed to see.
+# ---------------------------------------------------------------------------
+
+
+def get_conversation_permission_conditions(user):
+	"""
+	Restrict Agent Conversation list to conversations the user owns,
+	unless the user has chat.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	from huf.permissions import has_capability
+	if has_capability(user, "chat.view_all"):
+		return None
+
+	# Only own conversations
+	return f"`tabAgent Conversation`.owner = {frappe.db.escape(user)}"
+
+
+def get_message_permission_conditions(user):
+	"""
+	Restrict Agent Message list to messages from conversations the user owns,
+	unless the user has chat.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	from huf.permissions import has_capability
+	if has_capability(user, "chat.view_all"):
+		return None
+
+	# Filter by conversation ownership
+	return f"(`tabAgent Message`.conversation IN (SELECT name FROM `tabAgent Conversation` WHERE owner = {frappe.db.escape(user)}))"
+
+
+def get_run_permission_conditions(user):
+	"""
+	Restrict Agent Run list to runs the user owns,
+	unless the user has agent.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	from huf.permissions import has_capability
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	return f"`tabAgent Run`.owner = {frappe.db.escape(user)}"

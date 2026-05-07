@@ -7,6 +7,7 @@ export type AIModel = {
   name: string;
   model_name: string;
   provider: string;
+  modalities?: string;
 };
 
 export type ToolType =
@@ -155,6 +156,31 @@ export type AgentRun = {
   created_at: string;
 };
 
+export interface AgentPermissionUserRow {
+  user: string;
+}
+
+export interface AgentPermissionRoleRow {
+  role: string;
+}
+
+export interface AgentKnowledgeRow {
+  name?: string;
+  knowledge_source: string;
+  mode: 'Mandatory' | 'Optional';
+  priority: number;
+  max_chunks: number;
+  token_budget: number;
+  description?: string;
+}
+
+export interface AgentOrchestrationPlanRow {
+  name?: string;
+  step_index: number;
+  status: "pending" | "in_progress" | "done" | "failed";
+  instruction: string;
+  output_ref: string;
+}
 /**
  * Agent document type from Frappe
  * Represents the raw Agent document structure from Frappe database
@@ -196,19 +222,40 @@ export interface AgentDoc {
   description?: string | null;
   instructions: string;
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
+  agent_knowledge?: AgentKnowledgeRow[];
   agent_mcp_server?: Array<{
     mcp_server: string;
     enabled: 0 | 1;
-  }>; // Array of MCP server references
+  }>;
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
+  show_tool_execution_details?: 0 | 1; // 0 or 1
+  allow_guest?: number; // 0 or 1
+  allowed_users?: AgentPermissionUserRow[];
+  allowed_roles?: AgentPermissionRoleRow[];
+  default_plan: AgentOrchestrationPlanRow[];
+  prompt_mode: 'Local' | 'Template';
+  agent_prompt?: string;
+  prompt_version_locked?: number; // 0 or 1
+  template_version_at_attach?: number; // Version number when prompt was attached
+  copied_from_prompt?: string | null; // Name of the prompt this agent was copied from, if any
   enable_prompt_caching?: number; // 0 or 1
+  cache_control_type?: string | null; // ephemeral or auto (DocType)
+  cache_system_message?: number; // 0 or 1
+  cache_conversation_history?: number; // 0 or 1
   context_strategy?: string | null; // Summarize, FIFO, or None
+  summary_model?: string | null; // AI Model name for summarization when strategy is Summarize
   summary_ratio?: number | null; // Ratio of history to summarize (0-1)
   history_limit?: number | null; // Maximum number of messages to keep
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
   max_turns?: number | null; // Maximum consecutive turns/steps
   enable_conversation_data?: number; // 0 or 1
   autonaming_of_conversation_title?: number; // 0 or 1
+
+  // Advanced model overrides
+  image_generation_model?: string | null;
+  tts_model?: string | null;
+  tts_voice?: string | null;
+  stt_model?: string | null;
 }

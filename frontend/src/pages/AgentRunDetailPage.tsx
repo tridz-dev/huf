@@ -48,7 +48,10 @@ async function fetchAgentRunDetail(name: string): Promise<AgentRunDetail | null>
   }
 }
 
-export function AgentRunDetailPage() {
+export { AgentRunDetailPage };
+export default AgentRunDetailPage;
+
+function AgentRunDetailPage() {
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
   const [run, setRun] = useState<AgentRunDetail | null>(null);
@@ -221,7 +224,7 @@ export function AgentRunDetailPage() {
             onClick={() => navigate('/executions')}
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Executions
+            Back
           </Button>
           <Card>
             <CardHeader>
@@ -248,7 +251,7 @@ export function AgentRunDetailPage() {
               onClick={() => navigate('/executions')}
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Executions
+              Back
             </Button>
           </div>
         </div>
