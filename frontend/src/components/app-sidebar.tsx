@@ -29,15 +29,21 @@ const allNavItems = [
     capability: null,
   },
   {
+    title: "Agents",
+    url: "/agents",
+    icon: Bot,
+    capability: "agent.use",
+  },
+  {
     title: "Chat",
     url: "/chat",
     icon: MessageSquare,
     capability: "chat.use",
   },
   {
-    title: "Agents",
-    url: "/agents",
-    icon: Bot,
+    title: "Agent Prompts",
+    url: "/prompts",
+    icon: ScrollText,
     capability: "agent.use",
   },
   {
@@ -65,10 +71,10 @@ const allNavItems = [
     capability: "agent.use",
   },
   {
-    title: "Models",
-    url: "/models",
-    icon: Cpu,
-    capability: "system.providers.manage",
+    title: "MCP Servers",
+    url: "/mcp",
+    icon: Server,
+    capability: "system.mcp.manage",
   },
   {
     title: "AI Providers",
@@ -77,22 +83,16 @@ const allNavItems = [
     capability: "system.providers.manage",
   },
   {
-    title: "MCP Servers",
-    url: "/mcp",
-    icon: Server,
-    capability: "system.mcp.manage",
+    title: "Models",
+    url: "/models",
+    icon: Cpu,
+    capability: "system.providers.manage",
   },
   {
     title: "Users",
     url: "/users",
     icon: Users,
     capability: "users.manage",
-  },
-  {
-    title: "Agent Prompts",
-    url: "/prompts",
-    icon: ScrollText,
-    capability: "agent.use",
   },
 ]
 

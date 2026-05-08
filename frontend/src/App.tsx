@@ -10,6 +10,7 @@ import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
+import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
 import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
@@ -101,6 +102,22 @@ function App() {
 
     socket.on("tool_call_started", (data) => {
       console.log("📡 Realtime event - tool_call_started:", data);
+    });
+
+    // Flow real-time events forwarding
+    const flowEvents = [
+      'flow_node_start',
+      'flow_node_end',
+      'flow_paused',
+      'flow_completed',
+      'flow_error'
+    ];
+
+    flowEvents.forEach(eventName => {
+      socket.on(eventName, (data) => {
+        console.log(`📡 Realtime event - ${eventName}:`, data);
+        window.dispatchEvent(new CustomEvent(`frappe:${eventName}`, { detail: data }));
+      });
     });
 
     return () => {
@@ -243,7 +260,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlowProvider>
-                  <UnifiedLayout>
+                  <UnifiedLayout headerActions={<FlowsListHeaderActions />}>
                     <Suspense fallback={<PageLoader />}>
                       <FlowListPage />
                     </Suspense>
