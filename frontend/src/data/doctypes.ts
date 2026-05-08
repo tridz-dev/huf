@@ -13,6 +13,8 @@ export const doctype = {
   "Agent Prompt": "Agent Prompt",
   "Agent Prompt Category": "Agent Prompt Category",
   "MCP Server": "MCP Server",
+  "Flow Definition": "Flow Definition",
+  "Flow Run": "Flow Run",
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",
   "Huf Data Table": "Huf Data Table",
