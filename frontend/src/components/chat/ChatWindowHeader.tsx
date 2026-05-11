@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Bot, PanelLeftOpen } from "lucide-react";
+import { Bot, LogOut, PanelLeftOpen } from "lucide-react";
 import { Button } from "../ui/button";
 import ChatAvatar from "./ChatAvatar";
 import { getInitials } from "@/utils/getInitials";
@@ -9,17 +9,20 @@ import { getConversation } from "@/services/chatApi";
 import { getAgent } from "@/services/agentApi";
 import type { AgentDoc } from "@/types/agent.types";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
+import { useUser } from "@/contexts/UserContext";
 
 interface ChatWindowHeaderProps {
     chatId?: string | null;
     sidebarOpen?: boolean;
     onToggleSidebar?: () => void;
+    standalone?: boolean;
 }
 
 export function ChatWindowHeader({
     chatId: chatIdProp,
     sidebarOpen: _sidebarOpen,
     onToggleSidebar,
+    standalone,
 }: ChatWindowHeaderProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
@@ -27,6 +30,7 @@ export function ChatWindowHeader({
     
     const [agent, setAgent] = useState<AgentDoc | null>(null);
     const [conversationModel, setConversationModel] = useState<string | null>(null);
+    const { logout } = useUser();
 
     useEffect(() => {
         let cancelled = false;
@@ -110,8 +114,11 @@ export function ChatWindowHeader({
 
     if (!agent) {
         return (
-            <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+            <header className="h-16 pl-4 md:pl-14 pr-4 md:pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10 pt-[env(safe-area-inset-top)]">
                 <div className="flex gap-x-3 items-center">
+                    {standalone && (
+                        <img src="/assets/huf/Images/huf.png" alt="Huf" className="h-8 w-8 rounded-lg object-contain" />
+                    )}
                     {showOpenSidebarBtn && (
                         <Button
                             type="button"
@@ -130,13 +137,28 @@ export function ChatWindowHeader({
                         <span className="text-xs text-zinc-500">Select an agent to start chatting</span>
                     </div>
                 </div>
+                {standalone && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-zinc-500 hover:text-zinc-900"
+                        onClick={logout}
+                    >
+                        <LogOut className="h-4 w-4" />
+                        <span className="sr-only">Log out</span>
+                    </Button>
+                )}
             </header>
         );
     }
 
     return (
-        <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-16 pl-4 md:pl-14 pr-4 md:pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10 pt-[env(safe-area-inset-top)]">
             <div className="flex gap-x-3 items-center">
+                {standalone && (
+                    <img src="/assets/huf/Images/huf.png" alt="Huf" className="h-8 w-8 rounded-lg object-contain" />
+                )}
                 {showOpenSidebarBtn && (
                     <Button
                         type="button"
@@ -169,14 +191,27 @@ export function ChatWindowHeader({
                 </div>
             </div>
             <div>
-                <Link to={`/agents/${agent.name}`}>
-                    <Button asChild variant="outline" className="gap-x-2 text-xs text-muted-foreground" size="sm">
-                        <div>
-                            <Bot className="w-4 h-4" />
-                            <span>Open Agent</span>
-                        </div>
+                {standalone ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-zinc-500 hover:text-zinc-900"
+                        onClick={logout}
+                    >
+                        <LogOut className="h-4 w-4" />
+                        <span className="sr-only">Log out</span>
                     </Button>
-                </Link>
+                ) : (
+                    <Link to={`/agents/${agent.name}`}>
+                        <Button asChild variant="outline" className="gap-x-2 text-xs text-muted-foreground" size="sm">
+                            <div>
+                                <Bot className="w-4 h-4" />
+                                <span>Open Agent</span>
+                            </div>
+                        </Button>
+                    </Link>
+                )}
             </div>
         </header>
     );
