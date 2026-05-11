@@ -31,6 +31,7 @@ const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper')
 const DataPage = lazy(() => import('./pages/DataPage'));
 const IntegrationsPageWrapper = lazy(() => import('./pages/IntegrationsPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
+const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPage = lazy(() => import('./pages/AgentRunDetailPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
@@ -304,6 +305,26 @@ function App() {
                     <ChatPage />
                   </Suspense>
                 </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ui/chat"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChatOnlyPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ui/chat/:chatId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChatOnlyPage />
+                </Suspense>
               </ProtectedRoute>
             }
           />

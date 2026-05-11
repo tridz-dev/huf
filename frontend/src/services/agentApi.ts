@@ -49,6 +49,16 @@ const AGENT_MODEL_FIELDS = [
   'slug',
 ];
 
+const CHAT_AGENT_FIELDS = [
+  'name',
+  'agent_name',
+  'description',
+  'model',
+  'chef',
+  'slug',
+  'agent_color',
+];
+
 /**
  * Fields needed for agent triggers listing
  */
@@ -105,6 +115,16 @@ export interface PaginatedAgentsResponse {
   items: AgentDoc[];
   hasMore: boolean;
   total?: number;
+}
+
+export interface ChatAgentItem {
+  name: string;
+  agent_name: string;
+  description?: string | null;
+  model?: string | null;
+  chef?: string | null;
+  slug?: string | null;
+  agent_color?: string | null;
 }
 
 /**
@@ -166,6 +186,25 @@ export async function getAgents(
     };
   } catch (error) {
     handleFrappeError(error, 'Error fetching agents');
+  }
+}
+
+export async function getChatAgents(): Promise<ChatAgentItem[]> {
+  try {
+    const agents = await db.getDocList(doctype.Agent, {
+      fields: CHAT_AGENT_FIELDS,
+      filters: [
+        ['allow_chat', '=', 1],
+        ['disabled', '=', 0],
+      ],
+      limit: 1000,
+      orderBy: { field: 'modified', order: 'desc' },
+    });
+
+    return agents as ChatAgentItem[];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching chat agents');
+    return [];
   }
 }
 
@@ -474,4 +513,3 @@ export async function getAgentModels(
     };
   }
 }
-
