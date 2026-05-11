@@ -9,14 +9,13 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'icons/*.png'],
+      injectRegister: false,
       manifest: {
-        name: 'Huf Chat',
+        name: 'Huf',
         short_name: 'Huf',
-        description: 'Huf Chat Assistant',
-        start_url: '/huf/ui/chat',
-        scope: '/huf/ui/',
+        description: 'Build and run smart AI agents with tools, chat, and automation.',
+        start_url: '/huf',
+        scope: '/huf/',
         display: 'standalone',
         background_color: '#ffffff',
         theme_color: '#111827',
@@ -40,14 +39,24 @@ export default defineConfig({
         ],
       },
       workbox: {
-        navigateFallback: '/huf/ui/chat',
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        navigateFallback: null,
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2,ttf}'],
+        modifyURLPrefix: {
+          '': '/assets/huf/frontend/',
+        },
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
             handler: 'NetworkOnly',
             options: {
               cacheName: 'huf-api-network-only',
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/huf/stream/'),
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'huf-stream-network-only',
             },
           },
           {

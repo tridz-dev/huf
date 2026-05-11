@@ -8,7 +8,6 @@ interface ChatWindowProps {
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
     sidebarOpen?: boolean;
     onToggleSidebar?: () => void;
-    standalone?: boolean;
 }
 
 export default function ChatWindow({
@@ -16,7 +15,6 @@ export default function ChatWindow({
     onConversationCreated,
     sidebarOpen,
     onToggleSidebar,
-    standalone,
 }: ChatWindowProps) {
     const { setOpen } = useSidebar();
 
@@ -32,7 +30,6 @@ export default function ChatWindow({
                 chatId={chatIdProp}
                 sidebarOpen={sidebarOpen}
                 onToggleSidebar={onToggleSidebar}
-                standalone={standalone}
             />
             <ChatMessageList chatId={chatIdProp} onConversationCreated={onConversationCreated} />
         </div>
