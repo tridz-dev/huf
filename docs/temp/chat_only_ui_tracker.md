@@ -17,6 +17,7 @@ Build a dedicated standalone chat experience for users who only have access to c
 - Existing allowed-chat agent selector is `AgentModelSelector`, backed by `getAgentModels` in `agentApi.ts`, which filters `allow_chat = 1` and `disabled = 0`.
 - Auth/logout lives in `UserContext`; `NavUser` uses the same `logout` and `user` values but is coupled to sidebar UI.
 - Permission context exposes `chat.use`, but route-level capability checks are not currently enforced by `ProtectedRoute`; sidebar visibility uses capabilities.
+- Added route-level chat-only redirect guard: users whose only capability is `chat.use` are redirected from full app routes to `/ui/chat`, while `/ui/chat*` and `/view/*` remain accessible.
 - Mobile pattern: `useIsMobile` is used in `ChatPageV2`; existing chat already prioritizes full-height flex layout and scrollable message list.
 
 ## Decisions
@@ -44,11 +45,13 @@ Build a dedicated standalone chat experience for users who only have access to c
 - [x] Verify desktop and mobile layout.
 - [x] Run build/lint/typecheck where available.
 - [ ] Commit, push, and open PR.
+- [x] Add permission redirect behavior for chat-only users.
 - [x] Update tracker and plan to final state.
 
 ## Scratchpad
 
 - Existing `/chat` should remain unchanged for admin/workbench use.
+- Existing `/chat` now redirects to `/ui/chat` only for users whose capability list is exactly `["chat.use"]`; broader users keep the desktop/full-app chat route.
 - Need avoid using `ChatWindowV2` in standalone route because it requires `useSidebar`.
 - `ChatMessageList` can be reused directly if standalone page controls selected/new agent.
 - Added `getNewConversationPath` optional prop through `ChatMessageList` to `ChatInput` to avoid hardcoded `/chat/new` when used by `/ui/chat`.
@@ -59,6 +62,7 @@ Build a dedicated standalone chat experience for users who only have access to c
 - `docs/temp/chat_only_ui_tracker.md` - persistent task tracker, TODO list, and scratchpad.
 - `docs/temp/chat_only_ui_plan.md` - temporary implementation plan.
 - `frontend/src/App.tsx` - adds `/ui/chat` and `/ui/chat/:chatId` protected routes.
+- `frontend/src/App.tsx` - also redirects chat-only users away from full app routes.
 - `frontend/src/pages/ChatOnlyPage.tsx` - standalone chat-only page state and routing.
 - `frontend/src/components/chat-only/ChatOnlyLayout.tsx` - standalone full-height shell without sidebar.
 - `frontend/src/components/chat-only/ChatHeader.tsx` - Huf identity and user/logout menu.

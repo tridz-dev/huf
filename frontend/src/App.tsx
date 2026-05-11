@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
-import { PermissionsProvider } from './contexts/PermissionsContext';
+import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
@@ -51,6 +51,21 @@ import {
 } from './services/streamChatApi';
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
+
+function ChatOnlyRedirectGuard() {
+  const location = useLocation();
+  const { capabilities, isLoading } = usePermissions();
+  const isChatOnlyUser =
+    capabilities.includes('chat.use') && capabilities.every((capability) => capability === 'chat.use');
+  const isAllowedChatOnlyPath =
+    location.pathname.startsWith('/ui/chat') || location.pathname.startsWith('/view/');
+
+  if (isLoading || !isChatOnlyUser || isAllowedChatOnlyPath) {
+    return null;
+  }
+
+  return <Navigate to="/ui/chat" replace />;
+}
 
 function App() {
   useEffect(() => {
@@ -132,6 +147,7 @@ function App() {
     <BrowserRouter basename="/huf">
       <UserProvider>
         <PermissionsProvider>
+        <ChatOnlyRedirectGuard />
         <Suspense fallback={<AuthenticatingPage />}>
           <Routes>
           <Route
