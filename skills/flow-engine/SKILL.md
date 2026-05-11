@@ -29,9 +29,13 @@ The Flow Engine provides a visual, graph-based approach to building workflows. I
 | `huf/ai/flow_tool_executor.py` | Deterministic tool execution for tool.call nodes |
 | `huf/ai/flow_orchestrator.py` | Prompt construction and JSON parsing for routing |
 | `huf/ai/flow_tools.py` | Tool definitions for huf_tools hook |
+| `huf/huf/doctype/flow_run/flow_run.js` | Desk actions for approving/rejecting waiting flow runs |
 | `frontend/src/components/FlowCanvas.tsx` | React Flow visual editor |
-| `frontend/src/components/FlowNode.tsx` | Node rendering component |
-| `frontend/src/services/flowService.ts` | Frontend flow management service |
+| `frontend/src/components/FlowRunHistory.tsx` | Flow run history drawer |
+| `frontend/src/components/FlowRunViewer.tsx` | Flow run status, context, approval, and resume UI |
+| `frontend/src/services/flowApi.ts` | Typed frontend API wrapper for Flow Definition and Flow Run endpoints |
+| `frontend/src/services/flowSerializer.ts` | Converts between React Flow state and backend `definition_json` |
+| `frontend/src/services/flowService.ts` | Frontend flow cache/service backed by Frappe APIs |
 | `frontend/src/types/flow.types.ts` | TypeScript type definitions |
 
 ## How It Works
@@ -67,10 +71,11 @@ The Flow Engine provides a visual, graph-based approach to building workflows. I
 | Type | Description | Configuration |
 |------|-------------|---------------|
 | `trigger.webhook` | Entry point for webhook-triggered flows | `auth` for webhook validation |
+| `trigger.schedule` | Entry point for scheduler-triggered flows | `cron`, `timezone`, `enabled` |
 | `agent.run` | Execute a HUF agent | `agent_name`, `prompt_template`, `output.save_response_to_context` |
 | `tool.call` | Deterministic tool execution | `tool_name`, `args`, `output.save_result_to_context` |
 | `router.llm` | LLM-based routing among candidates | `router_agent_name`, `inject.*` flags |
-| `human.approval` | Pause for human decision | `approval_type`, `approver_role`/`approver_users` |
+| `human.approval` | Pause for human decision | `approval_type`, `approver_role`/`approver_users`, optional notification metadata |
 | `end` | Termination node | - |
 
 ### Edge Types
@@ -242,6 +247,18 @@ huf.ai.flow_api.reject_flow_run(flow_run_id: str, comment: str = None) -> dict
 
 # Webhook trigger (allow_guest)
 huf.ai.flow_api.flow_webhook(flow_id: str, webhook_key: str = None) -> dict
+
+# Schedule management
+huf.ai.flow_api.schedule_flow(flow_id: str, cron: str, schedule_name: str = None, timezone: str = "UTC") -> dict
+huf.ai.flow_api.unschedule_flow(flow_id: str) -> dict
+huf.ai.flow_api.get_flow_schedule(flow_id: str) -> dict | None
+huf.ai.flow_api.execute_scheduled_flow(flow_id: str) -> dict
+
+# Dynamic UI metadata
+huf.ai.flow_api.get_node_schemas() -> dict
+
+# Approval inbox
+huf.ai.flow_api.get_pending_approvals(limit: int = 50) -> list
 ```
 
 ### Agent Tools
@@ -304,10 +321,20 @@ huf.ai.flow_api.handle_approve_flow_run(flow_run_id: str, decision: str, comment
   },
   "metadata": {
     "name": "My Flow",
-    "description": "Classifies incoming requests"
+    "description": "Classifies incoming requests",
+    "category": "automation"
   }
 }
 ```
+
+## Frontend Persistence
+
+The frontend no longer treats flows as only in-memory objects. Use `flowApi.ts` for direct Frappe calls, `flowSerializer.ts` for backend/frontend conversion, and `flowService.ts` for caching, subscriptions, and higher-level mutations. `FlowContext` tracks `saveState`/`hasUnsavedChanges` and reacts to socket events such as node start/end, pause, completion, and errors.
+
+Important UI surfaces:
+- `FlowSettingsModal.tsx`: flow name, description, category, mode, max hops, and deletion.
+- `FlowRunHistory.tsx`: recent runs for a flow.
+- `FlowRunViewer.tsx`: run payload/context/waiting state plus approve, reject, and resume actions.
 
 ## Dependencies
 
@@ -348,7 +375,8 @@ huf.ai.flow_api.handle_approve_flow_run(flow_run_id: str, decision: str, comment
 ### Approval Flows
 - When approved/rejected, the decision is stored in context under the key specified by `store_decision_in_context` (default: "approval")
 - The engine looks for outgoing edges with matching `outcome` in edge meta
-- If no matching edge found, flow fails
+- If no matching edge is found, the engine falls back to standard edge evaluation; if there are no outgoing edges, the approval can complete the flow gracefully
+- Approval notifications are sent from `_send_approval_notifications()` and link users to the Flow Run
 
 ### Agentic Mode
 - Requires `orchestrator_agent` in settings
@@ -359,6 +387,11 @@ huf.ai.flow_api.handle_approve_flow_run(flow_run_id: str, decision: str, comment
 - Run in background queue (not synchronous)
 - Auth key is checked against entry node config
 - Payload is extracted from request body or form data
+
+### Schedule Triggers
+- `trigger.schedule` nodes are pass-through entry nodes; actual scheduling is managed by `flow_api.schedule_flow()`
+- Scheduled runs execute in background via `execute_scheduled_flow()`
+- Keep schedule metadata in the flow definition/settings aligned with Frappe scheduler jobs
 
 ### Versioning
 - Flow Definition version auto-increments on save

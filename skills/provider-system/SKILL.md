@@ -35,6 +35,9 @@ The Provider System acts as a routing and abstraction layer between HUF agents a
 | `huf/huf/doctype/ai_model/ai_model.json` | DocType schema for AI Model |
 | `huf/ai/sdk_tools.py` | Tool creation and execution for agents |
 | `huf/ai/tool_serializer.py` | Provider-agnostic tool serialization |
+| `frontend/src/pages/ModelsPage.tsx` | UI for creating/updating AI Model records |
+| `frontend/src/contexts/ModelsContext.tsx` | Shared frontend model list state |
+| `frontend/src/services/providerApi.ts` | Frontend provider/model API calls and model configuration helpers |
 
 ## How It Works
 
@@ -140,7 +143,11 @@ Defines available models and their capabilities.
 | `provider` | Link | Link to AI Provider |
 | `modalities` | Select | Supported tasks: Text, Image, Text-to-Speech, Transcription, Embeddings |
 
-### 6. Multi-turn Tool Calling
+### 6. Frontend Model Management
+
+The `/models` route uses `ModelsPage.tsx` and `ModelsContext.tsx` to list, create, and configure AI Model records. Provider data and model mutations go through `providerApi.ts`; keep frontend forms aligned with `AI Model` and `AI Provider` DocType fields when adding provider capabilities.
+
+### 7. Multi-turn Tool Calling
 
 The LiteLLM provider supports multiple rounds of tool calls in a single execution:
 
@@ -164,7 +171,7 @@ for round_num in range(MAX_ROUNDS):
     messages.extend(tool_results)
 ```
 
-### 7. Streaming Support
+### 8. Streaming Support
 
 SSE streaming is supported via `run_stream()`:
 
@@ -182,7 +189,7 @@ async for chunk in stream:
 
 Endpoint: `/huf/stream/<agent_name>`
 
-### 8. Parameter Handling
+### 9. Parameter Handling
 
 Temperature and other parameters are read from Agent DocType (priority 1), then `agent.model_settings` (priority 2), then defaults.
 

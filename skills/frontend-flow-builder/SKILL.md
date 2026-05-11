@@ -17,7 +17,8 @@ The Flow Builder provides a professional UI for designing automated workflows wi
 - Real-time connection creation between nodes
 - Node configuration via side panels and modals
 - Flow versioning and metadata tracking
-- In-memory storage with subscription-based updates
+- Backend persistence through Flow Definition/Flow Run APIs with local cache subscriptions
+- Run history, run inspection, and human approval/resume controls
 
 ## Key Files
 
@@ -26,19 +27,24 @@ The Flow Builder provides a professional UI for designing automated workflows wi
 | `frontend/src/pages/FlowCanvasPage.tsx` | Main page | Route container for the flow builder, manages flow selection from URL params |
 | `frontend/src/components/FlowCanvas.tsx` | Canvas component | Core React Flow canvas with node rendering, edge connections, and interaction handling |
 | `frontend/src/contexts/FlowContext.tsx` | State management | React Context provider for flow state, node operations, and service integration |
-| `frontend/src/services/flowService.ts` | Data service | In-memory flow CRUD operations with Map-based storage and subscription pattern |
+| `frontend/src/services/flowApi.ts` | Backend API | Typed wrapper for Flow Definition and Flow Run Frappe methods |
+| `frontend/src/services/flowSerializer.ts` | Serialization | Converts React Flow nodes/edges to backend `definition_json` and back |
+| `frontend/src/services/flowService.ts` | Data service | Local cache, subscriptions, and high-level flow CRUD backed by Frappe APIs |
 | `frontend/src/types/flow.types.ts` | Type definitions | TypeScript interfaces for Flow, FlowNode, FlowEdge, and configuration types |
 | `frontend/src/components/nodes/TriggerNode.tsx` | Trigger node | Workflow entry point node with configuration status indicator |
 | `frontend/src/components/nodes/ActionNode.tsx` | Action node | Processing step node with icon mapping for different action types |
 | `frontend/src/components/nodes/EndNode.tsx` | End node | Workflow termination node with green styling |
 | `frontend/src/components/FlowsSidebarContent.tsx` | Flow list | Sidebar component for flow navigation, creation, and categorization |
 | `frontend/src/components/RightSidebar.tsx` | Config panel | Resizable right panel for node configuration with form rendering |
-| `frontend/src/components/FlowNode.tsx` | Base node | Simple base node component for generic flow visualization |
+| `frontend/src/components/FlowRunHistory.tsx` | Run history | Drawer/list for recent Flow Run records |
+| `frontend/src/components/FlowRunViewer.tsx` | Run viewer | Flow Run detail view with context, waiting state, approve/reject, and resume |
+| `frontend/src/components/modals/FlowSettingsModal.tsx` | Flow settings | Name, description, category, mode, max hops, and delete controls |
 | `frontend/src/components/modals/NodeSelectionModal.tsx` | Node selector | Comprehensive modal for adding triggers and actions with search and tabs |
 | `frontend/src/components/modals/ActionSelectionModal.tsx` | Action selector | Simplified modal for selecting action types by category |
 | `frontend/src/components/modals/TriggerConfigModal.tsx` | Trigger config | Modal for configuring trigger settings (webhook, schedule, doc-event) |
 | `frontend/src/data/actions.ts` | Action definitions | Static data for available action types with icons and categories |
 | `frontend/src/data/triggers.ts` | Trigger definitions | Static data for available trigger types with categorization |
+| `frontend/src/services/categoryApi.ts` | Categories | CRUD wrapper used by category selection/management UI |
 
 ## How It Works
 
@@ -51,29 +57,41 @@ FlowCanvas (React Flow events)
        ↓
 FlowContext (state operations)
        ↓
-flowService (Map storage)
+flowService (cache + subscriptions)
+       ↓
+flowApi / flowSerializer (Frappe APIs + definition_json)
        ↓
 Subscribers notified → UI updates
 ```
 
 ### Flow Service Architecture
 
-The `FlowService` class provides in-memory flow management using a Map-based storage system:
+The `FlowService` class keeps a local cache for responsiveness, but persistence goes through `flowApi.ts` and `flowSerializer.ts`:
 
 ```typescript
 class FlowService {
   private flows: Map<string, Flow> = new Map();
   private listeners: Set<() => void> = new Set();
-  
+
   // Subscription pattern for reactive updates
   subscribe(listener: () => void): () => void
+
+  // CRUD operations backed by Flow Definition APIs
+  createFlow(name: string, category?: string): Promise<Flow>
+  getFlow(flowId: string): Promise<Flow | null>
+  updateFlow(id: string, updates: Partial<Flow>): Promise<Flow | null>
+  deleteFlow(id: string): Promise<boolean>
+  saveFlow(flow: Flow): Promise<void>
+
+  // Run lifecycle helpers backed by Flow Run APIs
+  runFlow(flowId: string, payload?: Record<string, unknown>): Promise<{ flow_run_id: string; status: string }>
+  listFlowRuns(flowId?: string, status?: string, limit?: number): Promise<FlowRunSummary[]>
+  getFlowRun(flowRunId: string): Promise<FlowRunDetail | undefined>
+  approveFlowRun(flowRunId: string, comment?: string): Promise<unknown>
+  rejectFlowRun(flowRunId: string, comment?: string): Promise<unknown>
+  resumeFlowRun(flowRunId: string, input?: Record<string, unknown>): Promise<unknown>
   
-  // CRUD operations
-  createFlow(name: string, category?: string): Flow
-  updateFlow(id: string, updates: Partial<Flow>): Flow | null
-  deleteFlow(id: string): boolean
-  
-  // Node/Edge operations
+  // Local node/edge operations
   updateNodesAndEdges(flowId: string, nodes: FlowNode[], edges: FlowEdge[])
   addNode(flowId: string, node: FlowNode)
   updateNode(flowId: string, nodeId: string, updates: Partial<FlowNode>)
@@ -117,6 +135,11 @@ interface Flow {
   createdAt: Date;
   updatedAt: Date;
   version: number;               // Auto-incremented on changes
+  settings?: {
+    mode?: 'normal' | 'agentic';
+    max_hops?: number;
+    conversation_mode?: 'flow_shared' | 'node_isolated' | 'agent_default';
+  };
 }
 
 interface FlowNodeData {
@@ -198,7 +221,7 @@ interface RouterActionConfig {
 |------|------|----------|-------------|
 | `transform` | Repeat | Transform | Data transformation operations |
 | `router` | GitBranch | Control | Conditional branching |
-| `human-in-loop` | UserCheck | Control | Human approval workflow |
+| `human.approval` | UserCheck | Control | Human approval workflow |
 | `loop` | RotateCw | Control | Iterative processing |
 | `code` | Code | Transform | Custom code execution |
 | `utility-email` | Mail | Utility | Send email |
@@ -328,6 +351,11 @@ if (config.type === 'new-node-type') {
   );
 }
 ```
+
+8. **Update backend serialization**:
+   - Map the frontend node/action type to a backend node type in `flowSerializer.ts`.
+   - Confirm the backend type exists in `huf/huf/doctype/flow_definition/flow_definition.py`.
+   - Add or update schema metadata in `huf/ai/flow_api.py:get_node_schemas()` when the UI should render fields dynamically.
 
 ### Adding a New Trigger Type
 
