@@ -1,0 +1,22 @@
+info:
+  name: AI Model Creation
+  type: http
+  seq: 16
+
+http:
+  method: POST
+  url: "{{BASE_URL}}/api/resource/AI Model"
+  body:
+    type: json
+    data: |-
+      {
+        "model_name":"Demo Model",
+        "provider":"Demo Provider"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

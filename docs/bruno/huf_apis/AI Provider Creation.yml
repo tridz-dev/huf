@@ -1,0 +1,22 @@
+info:
+  name: AI Provider Creation
+  type: http
+  seq: 14
+
+http:
+  method: POST
+  url: "{{BASE_URL}}/api/resource/AI Provider"
+  body:
+    type: json
+    data: |-
+      {
+        "provider_name":"Demo Provider",
+        "api_key":"2134567934"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

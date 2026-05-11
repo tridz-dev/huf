@@ -179,7 +179,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
 
                     elif function_doc.types == "Run Agent":
                         if function_doc.agent:
-                            extra_args["agent_name"] = function_doc.agent
+                            extra_args["target_agent_name"] = function_doc.agent
 
                     tool = create_function_tool(
                         function_doc.tool_name,
@@ -828,13 +828,15 @@ def handle_get_list(
 				warning = f"{warning}\n{filter_warning}" if warning else filter_warning
 
 		page_length = limit if limit and int(limit) > 0 else None
+		ignore_permissions = kwargs.get("ignore_permissions", False)
 
-		result = frappe.get_all(
+		result = frappe.get_list(
 			reference_doctype,
 			filters=filters,
 			fields=filtered_fields,
 			limit_page_length=page_length,
 			order_by=order_by,
+			ignore_permissions=ignore_permissions,
 		)
 
 
@@ -1005,7 +1007,7 @@ def handle_cancel_document(reference_doctype: str, document_id: str, ignore_perm
     doc.cancel()
     return {"success": True, "message": "Cancelled"}
 
-def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, **kwargs):
+def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, ignore_permissions=False, **kwargs):
     """
     Get a field value (or multiple values) from a DocType.
     Matches the auto-generated JSON schema: doctype + filters + fieldname.
@@ -1017,7 +1019,24 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
         }
 
     try:
-        value = frappe.db.get_value(doctype, filters, fieldname)
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
+        if not doc_name:
+            return {
+                "success": False,
+                "error": f"No {doctype} found matching filters {filters}"
+            }
+
+        if not ignore_permissions and not frappe.has_permission(doctype, "read", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have read permission on {doctype} {doc_name}"
+            }
+
+        value = frappe.db.get_value(doctype, doc_name, fieldname)
         return {
             "success": True,
             "doctype": doctype,
@@ -1030,7 +1049,7 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
 
 
 
-def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, **kwargs):
+def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, ignore_permissions=False, **kwargs):
     """
     Set a field value on a document that matches filters.
     """
@@ -1038,14 +1057,26 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         return {"success": False, "error": "Missing required parameters"}
 
     try:
-        doc_name = frappe.db.get_value(doctype, filters, "name")
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
         if not doc_name:
             return {
                 "success": False,
                 "error": f"No {doctype} found matching filters {filters}"
             }
 
-        updated = frappe.db.set_value(doctype, doc_name, fieldname, value)
+        if not ignore_permissions and not frappe.has_permission(doctype, "write", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have write permission on {doctype} {doc_name}"
+            }
+
+        doc = frappe.get_doc(doctype, doc_name)
+        doc.set(fieldname, value)
+        doc.save(ignore_permissions=ignore_permissions)
         frappe.db.commit()
 
         return {
@@ -1053,7 +1084,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
             "doctype": doctype,
             "name": doc_name,
             "fieldname": fieldname,
-            "new_value": updated[fieldname] if isinstance(updated, dict) else value
+            "new_value": doc.get(fieldname)
         }
 
     except Exception as e:
@@ -1061,31 +1092,56 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         return {"success": False, "error": str(e)}
 
 
-def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, **kwargs):
+def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, ignore_permissions=False, **kwargs):
+    if not ignore_permissions and not frappe.has_permission("Report", "read", doc=report_name):
+        return {"success": False, "error": f"You do not have permission to read Report {report_name}"}
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
 
-def handle_run_agent(agent_name: str, prompt: str, **kwargs):
+def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
     """
     Queue another agent execution instead of blocking.
     """
     try:
-        if not frappe.db.exists("Agent", agent_name):
-            return {"success": False, "error": f"Agent '{agent_name}' does not exist"}
+        if not frappe.db.exists("Agent", target_agent_name):
+            return {"success": False, "error": f"Agent '{target_agent_name}' does not exist"}
 
-        target_agent = frappe.get_doc("Agent", agent_name)
+        target_agent = frappe.get_doc("Agent", target_agent_name)
+        
+        from huf.ai.agent_integration import _is_user_allowed
+        if not _is_user_allowed(target_agent, frappe.session.user):
+            return {
+                "success": False, 
+                "error": f"Permission Denied: User '{frappe.session.user}' is not authorized to run the sub-agent '{target_agent_name}'."
+            }
+        
+        conversation_id = kwargs.get("conversation_id")
+        agent_run_id = kwargs.get("agent_run_id")
+        agent_name_self = kwargs.get("agent_name")
+
+        if target_agent_name == agent_name_self:
+            return {
+                "success": False, 
+                "error": f"Circular Dependency Error: An agent cannot invoke itself as a sub-agent."
+            }
 
         job = enqueue(
             "huf.ai.agent_integration.run_agent_sync",
             queue="default",
-            timeout=300,
+            timeout=1500,
             is_async=True,
-            agent_name=agent_name,
+            agent_name=target_agent_name,
             prompt=prompt,
             provider=target_agent.provider,
             model=target_agent.model,
+            parent_conversation_id=conversation_id,
+            invoked_by_agent=agent_name_self,
         )
 
-        return {"success": True, "queued": True, "job_id": job.id}
+        return {
+            "status": "Queued",
+            "message": "The task is currently being processed in the background. IMPORTANT: DO NOT tell the user that the task is completed or successful yet. Inform the user that you are working on it and will provide an update shortly. Do not mention the terms 'sub-agent' or 'background queue' explicitly, keep it natural (e.g., 'I am processing this for you now...').",
+            "job_id": job.id
+        }
     except Exception as e:
         frappe.log_error("Run Agent Tool Error", str(e))
         return {"success": False, "error": str(e)}
