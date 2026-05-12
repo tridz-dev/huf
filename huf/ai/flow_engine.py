@@ -493,9 +493,12 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	conversation_id = flow_run.conversation if conv_mode == "flow_shared" else None
 
 	# Optionally inject flow context as system message
-	inject_context = config.get("input", {}).get("inject_flow_context", False)
+	inject_context = config.get("input", {}).get("inject_flow_context")
+	if inject_context is None:
+		inject_context = config.get("inject_flow_context", False)
+
 	if (flow_run.mode or "").lower() == "agentic":
-		inject_context = config.get("input", {}).get("inject_flow_context", True)
+		inject_context = True
 
 	try:
 		from huf.ai.agent_integration import run_agent_sync
@@ -516,8 +519,9 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 		# Save response to context if configured
 		output_config = config.get("output", {})
-		if output_config.get("save_response_to_context"):
-			ctx[output_config["save_response_to_context"]] = result.get("response", "")
+		save_key = output_config.get("save_response_to_context") or config.get("save_response_to_context")
+		if save_key:
+			ctx[save_key] = result.get("response", "")
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
 		frappe.db.commit()
@@ -585,8 +589,9 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 		# Save result to context if configured
 		output_config = config.get("output", {})
-		if output_config.get("save_result_to_context"):
-			ctx[output_config["save_result_to_context"]] = result.get("result", result)
+		save_key = output_config.get("save_result_to_context") or config.get("save_result_to_context")
+		if save_key:
+			ctx[save_key] = result.get("result", result)
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
 		frappe.db.commit()
