@@ -119,12 +119,23 @@ class ChromaBackend(KnowledgeBackend):
 		if not self._initialized:
 			raise RuntimeError("Backend not initialized. Call initialize() first.")
 		
+		from huf.ai.knowledge.embedding import get_embeddings, resolve_embedding_config
+		texts = [chunk["text"] for chunk in chunks]
+		embed_config = resolve_embedding_config(self.knowledge_source)
+		embeddings = get_embeddings(
+			texts=texts,
+			model=embed_config["model"],
+			api_key=embed_config.get("api_key"),
+			api_base=embed_config.get("api_base"),
+		)
+		
 		# Convert to LlamaIndex Documents
 		documents = []
-		for chunk in chunks:
+		for chunk, embedding in zip(chunks, embeddings):
 			doc = Document(
 				text=chunk["text"],
 				id_=chunk.get("chunk_id"),
+				embedding=embedding,
 				metadata={
 					"input_id": chunk["input_id"],
 					"input_type": chunk["input_type"],
@@ -137,15 +148,9 @@ class ChromaBackend(KnowledgeBackend):
 			)
 			documents.append(doc)
 		
-		# Add documents to vector store
-		for doc in documents:
-			self.vector_store.add([doc])
-		
-		# Update index reference
-		self.index = VectorStoreIndex.from_vector_store(
-			self.vector_store,
-			storage_context=self.storage_context,
-		)
+		# Add documents to vector store in a single batch
+		if documents:
+			self.vector_store.add(documents)
 		
 		return len(chunks)
 	
@@ -168,15 +173,22 @@ class ChromaBackend(KnowledgeBackend):
 		if not self._initialized:
 			raise RuntimeError("Backend not initialized. Call initialize() first.")
 		
-		# Build/load index
-		if not self.index:
-			self.index = VectorStoreIndex.from_vector_store(
-				self.vector_store,
-				storage_context=self.storage_context,
-			)
+		from huf.ai.knowledge.embedding import get_embedding, resolve_embedding_config
+		from llama_index.core.vector_stores import VectorStoreQuery
 		
-		# Create retriever with optional filters
-		retriever_kwargs = {"similarity_top_k": top_k}
+		embed_config = resolve_embedding_config(self.knowledge_source)
+		query_embedding = get_embedding(
+			text=query,
+			model=embed_config["model"],
+			api_key=embed_config.get("api_key"),
+			api_base=embed_config.get("api_base"),
+		)
+		
+		query_kwargs = {
+			"query_embedding": query_embedding,
+			"similarity_top_k": top_k,
+			"mode": "default",
+		}
 		
 		# Chroma supports metadata filtering through LlamaIndex
 		if filters:
@@ -185,12 +197,20 @@ class ChromaBackend(KnowledgeBackend):
 				ExactMatchFilter(key=key, value=value)
 				for key, value in filters.items()
 			]
-			retriever_kwargs["filters"] = MetadataFilters(filters=llama_filters)
+			query_kwargs["filters"] = MetadataFilters(filters=llama_filters)
 		
-		retriever = self.index.as_retriever(**retriever_kwargs)
+		query_obj = VectorStoreQuery(**query_kwargs)
 		
-		# Search
-		nodes = retriever.retrieve(query)
+		# Search directly on vector store to use our custom embedding
+		result = self.vector_store.query(query_obj)
+		
+		# Reconstruct nodes similar to what retriever.retrieve does
+		nodes = []
+		if result.nodes:
+			for i, node in enumerate(result.nodes):
+				if result.similarities:
+					node.score = result.similarities[i]
+				nodes.append(node)
 		
 		# Convert to ChunkResult
 		results = []
