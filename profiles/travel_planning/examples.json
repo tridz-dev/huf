@@ -1,0 +1,180 @@
+{
+  "examples": [
+    {
+      "id": "example-001",
+      "title": "Family Spring Break to Orlando",
+      "description": "A family of four planning a theme park vacation to Orlando during spring break",
+      "data": {
+        "destination": {
+          "primary": "Orlando, Florida",
+          "region": "United States"
+        },
+        "dates": {
+          "check_in": "2026-03-15",
+          "check_out": "2026-03-22",
+          "duration_nights": 7,
+          "flexibility": "±1-2 days"
+        },
+        "travelers": {
+          "adults": 2,
+          "children": 2,
+          "children_ages": [8, 11],
+          "group_type": "family"
+        },
+        "budget": {
+          "total_budget": 8000,
+          "currency": "USD",
+          "budget_tier": "mid-range",
+          "accommodation_per_night": 250,
+          "notes": "Trying to keep total under $8000 including flights, hotels, and park tickets"
+        },
+        "preferences": {
+          "accommodation_types": ["hotel", "resort"],
+          "activity_style": ["adventure", "relaxation"],
+          "pace": "balanced",
+          "must_see": ["Magic Kingdom", "Universal Studios", "Harry Potter World"],
+          "avoid": ["long lines", "crowded restaurants"]
+        },
+        "purpose": {
+          "primary": "leisure",
+          "secondary": ["family bonding", "celebration"],
+          "special_occasion": "Daughter's 11th birthday"
+        },
+        "accommodation_constraints": {
+          "room_configuration": ["2 connecting rooms or family suite"],
+          "amenities_required": ["pool", "wifi", "parking"],
+          "amenities_preferred": ["breakfast", "kids_club", "shuttle to parks"],
+          "location_preference": "near_attractions"
+        },
+        "metadata": {
+          "created_at": "2026-02-10T14:30:00Z",
+          "updated_at": "2026-02-15T09:15:00Z",
+          "source": "chat_conversation",
+          "confidence": 0.92,
+          "status": "planning"
+        }
+      }
+    },
+    {
+      "id": "example-002",
+      "title": "Solo Backpacking Through Southeast Asia",
+      "description": "A solo traveler planning a budget backpacking adventure across multiple Southeast Asian countries",
+      "data": {
+        "destination": {
+          "primary": "Thailand",
+          "secondary": ["Vietnam", "Cambodia", "Laos"],
+          "region": "Southeast Asia"
+        },
+        "dates": {
+          "check_in": "2026-06-01",
+          "check_out": "2026-07-31",
+          "duration_nights": 60,
+          "flexibility": "flexible"
+        },
+        "travelers": {
+          "adults": 1,
+          "children": 0,
+          "infants": 0,
+          "group_type": "solo"
+        },
+        "budget": {
+          "total_budget": 3500,
+          "currency": "USD",
+          "budget_tier": "budget",
+          "accommodation_per_night": 25,
+          "notes": "Targeting $50/day total including accommodation, food, and local transport"
+        },
+        "preferences": {
+          "accommodation_types": ["hostel", "vacation_rental"],
+          "activity_style": ["cultural", "adventure", "food_wine"],
+          "pace": "packed",
+          "dietary_restrictions": ["vegetarian"],
+          "must_see": ["Angkor Wat", "Ha Long Bay", "Chiang Mai temples", "street food markets"],
+          "avoid": ["tourist traps", "expensive restaurants", "organized tours"]
+        },
+        "purpose": {
+          "primary": "cultural_exploration",
+          "secondary": ["adventure", "food tourism", "personal growth"]
+        },
+        "accommodation_constraints": {
+          "room_configuration": ["dorm bed or private room in hostel"],
+          "amenities_required": ["wifi", "laundry"],
+          "amenities_preferred": ["kitchen", "common area", "bike rental"],
+          "location_preference": "near_transit"
+        },
+        "metadata": {
+          "created_at": "2026-01-20T10:00:00Z",
+          "updated_at": "2026-03-01T16:45:00Z",
+          "source": "voice_conversation",
+          "confidence": 0.88,
+          "status": "planning"
+        }
+      }
+    },
+    {
+      "id": "example-003",
+      "title": "Luxury Anniversary Trip to Santorini",
+      "description": "A couple celebrating their 25th wedding anniversary with a luxury getaway to Greece",
+      "data": {
+        "destination": {
+          "primary": "Santorini",
+          "secondary": ["Athens"],
+          "region": "Greece"
+        },
+        "dates": {
+          "check_in": "2026-09-12",
+          "check_out": "2026-09-19",
+          "duration_nights": 7,
+          "flexibility": "fixed"
+        },
+        "travelers": {
+          "adults": 2,
+          "children": 0,
+          "group_type": "couple"
+        },
+        "budget": {
+          "total_budget": 15000,
+          "currency": "USD",
+          "budget_tier": "luxury",
+          "accommodation_per_night": 800,
+          "notes": "Splurging for the 25th anniversary, no strict budget within reason"
+        },
+        "preferences": {
+          "accommodation_types": ["boutique", "resort"],
+          "activity_style": ["relaxation", "cultural", "food_wine"],
+          "pace": "relaxed",
+          "must_see": ["Oia sunset", "wine tasting", "Akrotiri ruins", "private boat tour"],
+          "avoid": ["crowds", "packed schedules", "budget accommodations"]
+        },
+        "purpose": {
+          "primary": "celebration",
+          "special_occasion": "25th wedding anniversary",
+          "occasion_date": "2026-09-15"
+        },
+        "accommodation_constraints": {
+          "room_configuration": ["suite with caldera view"],
+          "amenities_required": ["wifi", "pool", "spa", "breakfast"],
+          "amenities_preferred": ["private terrace", "jacuzzi", "concierge"],
+          "location_preference": "quiet_area",
+          "loyalty_programs": ["Marriott Bonvoy"]
+        },
+        "metadata": {
+          "created_at": "2025-12-01T09:00:00Z",
+          "updated_at": "2026-03-20T11:30:00Z",
+          "source": "chat_conversation",
+          "confidence": 0.96,
+          "status": "booked"
+        }
+      }
+    }
+  ],
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Example memory records demonstrating various travel planning scenarios",
+    "coverage": [
+      "Family vacation with children",
+      "Solo backpacking on a budget",
+      "Luxury couple's celebration"
+    ]
+  }
+}

@@ -21,15 +21,21 @@ def _build_backend_config(source) -> dict:
 		"chunk_overlap": source.chunk_overlap,
 	}
 
-	if source.knowledge_type == "sqlite_vec":
+	if source.knowledge_type in ("sqlite_vec", "chroma"):
 		config["embedding_model"] = source.embedding_model
 		config["vector_dimension"] = source.vector_dimension
 		config["embedding_provider"] = getattr(source, "embedding_provider", None)
 
+	if source.knowledge_type == "chroma":
+		from frappe.utils import get_files_path
+		files_path = get_files_path(is_private=True)
+		safe_name = frappe.scrub(source.name)
+		config["persist_directory"] = os.path.join(files_path, "knowledge", f"{safe_name}_chroma")
+
 	return config
 
 
-def process_knowledge_input(knowledge_input: str) -> dict:
+def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> dict:
 	"""
 	Process a single knowledge input and add to index.
 	
@@ -46,7 +52,7 @@ def process_knowledge_input(knowledge_input: str) -> dict:
 		
 		# Acquire lock for this knowledge source
 		lock_key = f"knowledge_index_{source.name}"
-		if not frappe.cache().set(lock_key, 1, ex=300, nx=True):
+		if not skip_lock and not frappe.cache().set(lock_key, 1, ex=300, nx=True):
 			raise Exception(_("Another indexing operation is in progress"))
 		
 		try:
@@ -117,7 +123,8 @@ def process_knowledge_input(knowledge_input: str) -> dict:
 			}
 			
 		finally:
-			frappe.cache().delete(lock_key)
+			if not skip_lock:
+				frappe.cache().delete(lock_key)
 			
 	except Exception as e:
 		frappe.db.rollback()
@@ -187,7 +194,7 @@ def rebuild_knowledge_index(knowledge_source: str) -> dict:
 			
 			total_chunks = 0
 			for input_name in inputs:
-				result = process_knowledge_input(input_name)
+				result = process_knowledge_input(input_name, skip_lock=True)
 				if result.get("status") == "success":
 					total_chunks += result.get("chunks_created", 0)
 			
@@ -263,10 +270,11 @@ def update_source_stats(source, backend):
 	source.total_chunks = stats.get("chunk_count", 0)
 	source.total_inputs = stats.get("input_count", 0)
 	source.index_size_bytes = stats.get("size_bytes", 0)
-	source.sqlite_file_path = backend.db_path
+	db_path = getattr(backend, "db_path", None)
+	source.sqlite_file_path = db_path
 	
 	# Update SQLite file reference
-	if backend.db_path and os.path.exists(backend.db_path):
+	if db_path and os.path.exists(db_path):
 		# Create or update file reference
 		from frappe.utils import get_files_path
 		files_path = get_files_path(is_private=True)
