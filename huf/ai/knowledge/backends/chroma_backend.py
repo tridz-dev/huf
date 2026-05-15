@@ -129,17 +129,20 @@ class ChromaBackend(KnowledgeBackend):
 			api_base=embed_config.get("api_base"),
 		)
 		
+		import uuid
+		
 		# Convert to LlamaIndex Documents
 		documents = []
 		for chunk, embedding in zip(chunks, embeddings):
+			chunk_id = chunk.get("chunk_id") or str(uuid.uuid4())
 			doc = Document(
 				text=chunk["text"],
-				id_=chunk.get("chunk_id"),
+				id_=chunk_id,
 				embedding=embedding,
 				metadata={
 					"input_id": chunk["input_id"],
 					"input_type": chunk["input_type"],
-					"chunk_id": chunk.get("chunk_id"),
+					"chunk_id": chunk_id,
 					"source_title": chunk.get("source_title"),
 					"chunk_index": chunk.get("chunk_index"),
 					"knowledge_source": self.knowledge_source,
@@ -204,28 +207,25 @@ class ChromaBackend(KnowledgeBackend):
 		# Search directly on vector store to use our custom embedding
 		result = self.vector_store.query(query_obj)
 		
-		# Reconstruct nodes similar to what retriever.retrieve does
-		nodes = []
-		if result.nodes:
-			for i, node in enumerate(result.nodes):
-				if result.similarities:
-					node.score = result.similarities[i]
-				nodes.append(node)
-		
 		# Convert to ChunkResult
 		results = []
-		for node in nodes:
-			result = ChunkResult(
-				chunk_id=node.metadata.get("chunk_id", ""),
-				text=node.text,
-				title=node.metadata.get("source_title"),
-				score=float(node.score) if hasattr(node, "score") and node.score is not None else 0.0,
-				source=node.metadata.get("knowledge_source"),
-				metadata={k: v for k, v in node.metadata.items() if k not in [
-					"chunk_id", "source_title", "knowledge_source"
-				]}
-			)
-			results.append(result)
+		if result.nodes:
+			for i, node in enumerate(result.nodes):
+				score = 0.0
+				if result.similarities and i < len(result.similarities):
+					score = float(result.similarities[i])
+				
+				res = ChunkResult(
+					chunk_id=node.metadata.get("chunk_id", ""),
+					text=node.text,
+					title=node.metadata.get("source_title"),
+					score=score,
+					source=node.metadata.get("knowledge_source"),
+					metadata={k: v for k, v in node.metadata.items() if k not in [
+						"chunk_id", "source_title", "knowledge_source"
+					]}
+				)
+				results.append(res)
 		
 		return results
 	
