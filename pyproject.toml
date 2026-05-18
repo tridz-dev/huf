@@ -13,7 +13,13 @@ dependencies = [
     "litellm>=1.0.0,!=1.82.7,!=1.82.8",
     "llama-index-core>=0.10.0",
     "sqlite-vec",
-    "pysqlite3-binary",
+    "pysqlite3-binary; platform_machine == 'x86_64' and python_version < '3.14'",
+    "chromadb",
+    "llama-index-vector-stores-chroma",
+    "pypdf",
+    "python-docx",
+    "beautifulsoup4",
+    "aiohttp",
 ]
 
 [build-system]
