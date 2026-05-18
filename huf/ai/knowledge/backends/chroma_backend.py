@@ -14,7 +14,6 @@ try:
 	from llama_index.vector_stores.chroma import ChromaVectorStore
 	from llama_index.core import VectorStoreIndex, StorageContext, Document
 	import chromadb
-	from chromadb.config import Settings
 	LLAMAINDEX_AVAILABLE = True
 except ImportError:
 	LLAMAINDEX_AVAILABLE = False
@@ -63,9 +62,6 @@ class ChromaBackend(KnowledgeBackend):
 			# File-based persistent client
 			self.client = chromadb.PersistentClient(
 				path=persist_directory,
-				settings=Settings(
-					anonymized_telemetry=False,
-				)
 			)
 		else:
 			# HTTP client for Chroma server
@@ -77,9 +73,6 @@ class ChromaBackend(KnowledgeBackend):
 				host=host,
 				port=port,
 				ssl=ssl,
-				settings=Settings(
-					anonymized_telemetry=False,
-				)
 			)
 		
 		# Get or create collection

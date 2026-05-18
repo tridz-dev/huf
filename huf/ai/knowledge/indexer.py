@@ -27,10 +27,17 @@ def _build_backend_config(source) -> dict:
 		config["embedding_provider"] = getattr(source, "embedding_provider", None)
 
 	if source.knowledge_type == "chroma":
-		from frappe.utils import get_files_path
-		files_path = get_files_path(is_private=True)
-		safe_name = frappe.scrub(source.name)
-		config["persist_directory"] = os.path.join(files_path, "knowledge", f"{safe_name}_chroma")
+		chroma_mode = getattr(source, "chroma_mode", "File") or "File"
+		if chroma_mode == "Server":
+			config["host"] = getattr(source, "chroma_host", None) or "localhost"
+			config["port"] = int(getattr(source, "chroma_port", None) or 8000)
+			config["ssl"] = bool(getattr(source, "chroma_ssl", False))
+			
+		else:
+			from frappe.utils import get_files_path
+			files_path = get_files_path(is_private=True)
+			safe_name = frappe.scrub(source.name)
+			config["persist_directory"] = os.path.join(files_path, "knowledge", f"{safe_name}_chroma")
 
 	return config
 
