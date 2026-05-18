@@ -18,7 +18,7 @@ def get_doc_event_agents(event: str):
     if cached:
         return frappe.parse_json(cached)
 
-    triggers = frappe.get_list(
+    triggers = frappe.get_all(
         "Agent Trigger",
         filters={
             "trigger_type": "Doc Event",
