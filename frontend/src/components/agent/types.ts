@@ -43,6 +43,7 @@ export const agentFormSchema = z.object({
   max_knowledge_tokens: z.number().optional(),
   max_turns: z.number().optional(),
   enable_conversation_data: z.boolean().optional(),
+  inject_conversation_data: z.boolean().optional(),
   autonaming_of_conversation_title: z.boolean().optional(),
 
   agent_color: z
