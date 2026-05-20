@@ -55,6 +55,7 @@
   "context_strategy",
   "history_limit",
   "enable_conversation_data",
+  "inject_conversation_data",
   "autonaming_of_conversation_title",
   "column_break_ctx",
   "summary_ratio",
@@ -504,6 +505,14 @@
    "fieldname": "enable_conversation_data",
    "fieldtype": "Check",
    "label": "Allow Conversation Data Management"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_conversation_data==1",
+   "description": "Auto-injects all active memory items into the LLM system prompt on every turn. Disabling this avoids 'Context Bloat' (saving tokens/cost and improving speed) and allows on-demand access strictly through the 'get_conversation_data' tool.",
+   "fieldname": "inject_conversation_data",
+   "fieldtype": "Check",
+   "label": "Inject Conversation Data into Prompt"
   },
   {
    "fieldname": "image_generation_section",
