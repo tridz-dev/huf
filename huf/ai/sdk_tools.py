@@ -233,7 +233,9 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         "name": {"type": "string", "description": "Name of the item to set"},
                         "value": {"type": "string", "description": "Value to store (scalar, object, or array)"},
                         "value_type": {"type": "string", "description": "Type of value (scalar, object, array). Optional."},
-                        "source": {"type": "string", "description": "Source of data (agent/user). Default: agent"}
+                        "source": {"type": "string", "description": "Source of data (agent/user). Default: agent"},
+                        "auto_inject": {"type": "boolean", "description": "Whether to auto-inject this variable in the system prompt on future turns. Set false for high-volume variables to prevent context bloat. Default: true"},
+                        "inject_mode": {"type": "string", "enum": ["visible", "hidden"], "description": "Injection mode. 'visible' to auto-inject in system prompt (if enabled on agent), 'hidden' to keep it in the data layer only. Default: visible"}
                     },
                     "required": ["name", "value"]
                 }
@@ -1228,6 +1230,8 @@ def handle_set_conversation_data(
     value_type: str = None, 
     source: str = "agent", 
     conversation_id: str = None, 
+    auto_inject: bool = None,
+    inject_mode: str = None,
     **kwargs
 ):
     """Set a value in conversation data."""
@@ -1265,11 +1269,31 @@ def handle_set_conversation_data(
         found = False
         for i, item in enumerate(state["items"]):
             if item.get("name") == name:
+                resolved_auto_inject = auto_inject if auto_inject is not None else kwargs.get("auto_inject")
+                if resolved_auto_inject is None:
+                    resolved_auto_inject = item.get("auto_inject", True)
+                
+                resolved_inject_mode = inject_mode if inject_mode is not None else kwargs.get("inject_mode")
+                if resolved_inject_mode is None:
+                    resolved_inject_mode = item.get("inject_mode", "visible")
+                
+                updated_item["auto_inject"] = resolved_auto_inject
+                updated_item["inject_mode"] = resolved_inject_mode
                 state["items"][i] = updated_item
                 found = True
                 break
         
         if not found:
+            resolved_auto_inject = auto_inject if auto_inject is not None else kwargs.get("auto_inject")
+            if resolved_auto_inject is None:
+                resolved_auto_inject = True
+            
+            resolved_inject_mode = inject_mode if inject_mode is not None else kwargs.get("inject_mode")
+            if resolved_inject_mode is None:
+                resolved_inject_mode = "visible"
+                
+            updated_item["auto_inject"] = resolved_auto_inject
+            updated_item["inject_mode"] = resolved_inject_mode
             state["items"].append(updated_item)
 
         new_json = json.dumps(state, ensure_ascii=False, indent=2)

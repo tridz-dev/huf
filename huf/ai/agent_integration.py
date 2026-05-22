@@ -829,13 +829,21 @@ def run_agent_sync(
             # Just inject the stored summary. Actual summarization happens in background.
             if stored_summary:
                 history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
+        elif context_strategy == "FIFO":
+            if len(history) > history_limit:
+                history = history[-history_limit:]
         
-        # Inject Conversation Data Snapshot if enabled
-        if agent_doc.enable_conversation_data and conversation.conversation_data:
+        # Inject Conversation Data Snapshot if enabled and auto-injection is not disabled (defaults to 1 if not specified)
+        if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:
              try:
                 data_snapshot = json.loads(conversation.conversation_data)
-                # Filter to only show name/value to save tokens
-                simplified_items = {item["name"]: item["value"] for item in data_snapshot.get("items", [])}
+                # Filter to only show name/value to save tokens, excluding hidden/non-injected variables
+                simplified_items = {}
+                for item in data_snapshot.get("items", []):
+                    if item.get("auto_inject") is False or item.get("inject_mode") == "hidden":
+                        continue
+                    simplified_items[item["name"]] = item["value"]
+                
                 if simplified_items:
                     data_msg = f"CURRENT MEMORY STATE (Conversation Data): {json.dumps(simplified_items, ensure_ascii=False)}"
                     # Insert right after summary but before user messages
@@ -843,10 +851,6 @@ def run_agent_sync(
                     history.insert(insert_idx, {"role": "system", "content": data_msg})
              except:
                  pass
-        
-        elif context_strategy == "FIFO":
-            if len(history) > history_limit:
-                history = history[-history_limit:]
         
         base_prompt = f"""
             Current user message:
@@ -1405,10 +1409,16 @@ async def run_agent_stream(
                 frappe.log_error(f"Summarization failed: {str(e)}", "Agent Summarization Error")
                 pass
 
-        if agent_doc.enable_conversation_data and conversation.conversation_data:
+        if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:
              try:
                 data_snapshot = json.loads(conversation.conversation_data)
-                simplified_items = {item["name"]: item["value"] for item in data_snapshot.get("items", [])}
+                # Filter to only show name/value to save tokens, excluding hidden/non-injected variables
+                simplified_items = {}
+                for item in data_snapshot.get("items", []):
+                    if item.get("auto_inject") is False or item.get("inject_mode") == "hidden":
+                        continue
+                    simplified_items[item["name"]] = item["value"]
+                
                 if simplified_items:
                     data_msg = f"CURRENT MEMORY STATE (Conversation Data): {json.dumps(simplified_items, ensure_ascii=False)}"
                     insert_idx = 0
