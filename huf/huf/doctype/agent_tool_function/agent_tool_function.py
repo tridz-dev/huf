@@ -18,6 +18,7 @@ class AgentToolFunction(Document):
 	def before_validate(self):
 		self.validate_reference_doctype()
 		self.validate_fields_for_doctype()
+		self.validate_code_interpreter()
 		self.prepare_function_params()
 		self.validate_json()
 		self.validate_tool_name()
@@ -51,6 +52,23 @@ class AgentToolFunction(Document):
 				'Set Value'
 			]:
 				frappe.throw(_("Please select a DocType for this function."))
+
+	def validate_code_interpreter(self):
+		if self.types != "Code Interpreter":
+			return
+		valid_modes = ("disabled", "whitelist", "open")
+		mode = self.network_mode or "disabled"
+		if mode not in valid_modes:
+			frappe.throw(_("Network Mode must be one of: disabled, whitelist, open"))
+		if mode == "whitelist":
+			if self.network_presets:
+				import json as _json
+				try:
+					parsed = _json.loads(self.network_presets)
+					if not isinstance(parsed, list):
+						frappe.throw(_("Network Presets must be a JSON array, e.g. [\"pip\",\"npm\"]"))
+				except _json.JSONDecodeError:
+					frappe.throw(_("Network Presets contains invalid JSON"))
 
 	def validate_fields_for_doctype(self):
 		if not self.reference_doctype:
@@ -498,7 +516,31 @@ class AgentToolFunction(Document):
 				"required": ["prompt"],
 				"additionalProperties": False
 			}
-					
+
+		elif self.types == "Code Interpreter":
+			params = {
+				"type": "object",
+				"properties": {
+					"code": {
+						"type": "string",
+						"description": "The source code to execute."
+					},
+					"language": {
+						"type": "string",
+						"description": "Programming language: python, javascript, bash, etc.",
+						"enum": ["python", "javascript", "bash", "sh", "ruby", "php"],
+						"default": "python"
+					},
+					"timeout": {
+						"type": "integer",
+						"description": "Maximum execution time in seconds (default: 30, max: 300).",
+						"default": 30
+					}
+				},
+				"required": ["code"],
+				"additionalProperties": False
+			}
+
 		else:
 			params = self.build_params_json_from_table()
 
@@ -639,6 +681,9 @@ class AgentToolFunction(Document):
 			if not self.reference_doctype:
 				frappe.throw(_("Please select a DocType for this function."))
 
+
+		if self.types == "Code Interpreter":
+			self.validate_code_interpreter()
 
 		if self.types == "Custom Function":
 			f = frappe.get_attr(self.function_path)

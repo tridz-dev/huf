@@ -127,6 +127,9 @@ export async function updateToolFunction(name: string, data: {
     key: string;
     value: string;
   }>;
+  network_mode?: string;
+  network_presets?: string;
+  allowed_domains?: string;
 }): Promise<AgentToolFunctionRef> {
   try {
     // Prepare data for Frappe
@@ -169,6 +172,11 @@ export async function updateToolFunction(name: string, data: {
         value: header.value,
       }));
     }
+
+    // Network policy fields (Code Interpreter)
+    if (data.network_mode !== undefined) toolData.network_mode = data.network_mode;
+    if (data.network_presets !== undefined) toolData.network_presets = data.network_presets;
+    if (data.allowed_domains !== undefined) toolData.allowed_domains = data.allowed_domains;
 
     const updatedTool = await db.updateDoc(doctype['Agent Tool Function'], name, toolData);
     return {
@@ -214,6 +222,9 @@ export async function createToolFunction(data: {
     key: string;
     value: string;
   }>;
+  network_mode?: string;
+  network_presets?: string;
+  allowed_domains?: string;
 }): Promise<AgentToolFunctionRef> {
   try {
     // Prepare data for Frappe
@@ -257,6 +268,11 @@ export async function createToolFunction(data: {
         value: header.value,
       }));
     }
+
+    // Network policy fields (Code Interpreter)
+    if (data.network_mode) toolData.network_mode = data.network_mode;
+    if (data.network_presets) toolData.network_presets = data.network_presets;
+    if (data.allowed_domains) toolData.allowed_domains = data.allowed_domains;
 
     const newTool = await db.createDoc(doctype['Agent Tool Function'], toolData);
     return {

@@ -29,6 +29,11 @@ export type ToolFormData = {
   pass_parameters_as_json?: boolean;
   provider_app?: string;
   base_url?: string;
+
+  // Code Interpreter — network policy
+  network_mode?: 'disabled' | 'whitelist' | 'open';
+  network_presets?: string; // JSON array string e.g. '["pip","npm"]'
+  allowed_domains?: string; // newline-separated domain list
   
   // Optional fields
   required_permission?: 'read' | 'write' | 'create' | 'delete' | 'submit' | 'cancel';

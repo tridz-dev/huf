@@ -41,6 +41,10 @@ export const createToolFormSchema = (availableToolTypes: ToolType[]) => {
     allowed_for_guest: z.boolean().optional(),
     parameters: z.array(z.any()).optional(),
     http_headers: z.array(z.any()).optional(),
+    // Code Interpreter — network policy
+    network_mode: z.enum(['disabled', 'whitelist', 'open']).optional(),
+    network_presets: z.string().optional(),
+    allowed_domains: z.string().optional(),
   });
 };
 
@@ -81,6 +85,10 @@ export const shouldShowField = (fieldName: string, types: ToolType): boolean => 
     case 'base_url':
     case 'http_headers':
       return ['GET', 'POST'].includes(types);
+    case 'network_mode':
+    case 'network_presets':
+    case 'allowed_domains':
+      return types === 'Code Interpreter';
     default:
       return true;
   }
@@ -106,6 +114,9 @@ export const getDefaultToolFormValues = (
   allowed_for_guest: initialData?.allowed_for_guest || false,
   parameters: initialData?.parameters || [],
   http_headers: initialData?.http_headers || [],
+  network_mode: initialData?.network_mode || 'disabled',
+  network_presets: initialData?.network_presets || '[]',
+  allowed_domains: initialData?.allowed_domains || '',
 });
 
 export const buildMissingMandatoryParameters = (
