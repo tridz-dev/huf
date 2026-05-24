@@ -6,7 +6,7 @@ Supported: SQLite FTS (keyword search), SQLite Vec (vector search), ChromaDB (ve
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 
 
@@ -58,6 +58,28 @@ class KnowledgeBackend(ABC):
 	def get_stats(self) -> Dict[str, Any]:
 		"""Get backend statistics (chunk count, size, etc.)."""
 		pass
+	
+	@abstractmethod
+	def health_check(self) -> Tuple[bool, str]:
+		"""Check backend health. Returns (is_healthy, message)."""
+		...
+	
+	@abstractmethod
+	def supports_filters(self) -> bool:
+		"""Whether this backend supports metadata filtering."""
+		...
+	
+	@abstractmethod
+	def supports_hybrid_search(self) -> bool:
+		"""Whether this backend supports hybrid search."""
+		...
+	
+	def get_capabilities(self) -> Dict[str, bool]:
+		"""Return backend capabilities."""
+		return {
+			"filters": self.supports_filters(),
+			"hybrid_search": self.supports_hybrid_search(),
+		}
 
 
 def get_backend(backend_type: str) -> type:
@@ -73,3 +95,16 @@ def get_backend(backend_type: str) -> type:
 	
 	import frappe
 	return frappe.get_attr(backends[backend_type])
+
+
+# Auto-register existing backends at module load time
+try:
+	from .factory import BackendFactory
+	from .sqlite_vec_backend import SQLiteVecBackend
+	from .sqlite_fts import SQLiteFTSBackend
+
+	BackendFactory.register("sqlite_vec", SQLiteVecBackend)
+	BackendFactory.register("sqlite_fts", SQLiteFTSBackend)
+except ImportError:
+	# Allow importing without factory for backward compatibility
+	pass
