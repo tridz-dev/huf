@@ -262,6 +262,7 @@ Upstream incident thread:
 ## Documentation
 
 - [**Full Documentation**](https://docs.huf.ai/) — Guides, tutorials, and API reference
+- [**Scaling HUF Strategy**](./docs/SCALING_HUF_STRATEGY.md) — Execution backend strategy for Frappe Direct, Frappe Queue, and Temporal-based large-scale deployments.
 - [**AGENTS.md**](./AGENTS.md) — Technical context for AI agents. Adopts the [agents.md](https://agents.md) standard.
 - [**CLAUDE.md**](./CLAUDE.md) — Defines coding standards, review criteria, and project-specific rules. Claude reads this file during runs and follows your conventions.
 
