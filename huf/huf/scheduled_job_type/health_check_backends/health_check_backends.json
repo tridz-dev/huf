@@ -1,0 +1,23 @@
+{
+    "name": "health_check_backends",
+    "description": "Periodic health check for knowledge backend systems",
+    "method": "huf.ai.knowledge.health_monitor.check_all_backends",
+    "cron_format": "*/5 * * * *",
+    "enabled": 1,
+    "timeout": 300,
+    "retry_limit": 3,
+    "retry_interval": 60,
+    "args": [],
+    "kwargs": {},
+    "notification": {
+        "on_failure": 1,
+        "on_success": 0,
+        "recipients": []
+    },
+    "metadata": {
+        "version": "1.0.0",
+        "category": "knowledge_system",
+        "priority": "high",
+        "created_by": "system"
+    }
+}

@@ -88,6 +88,48 @@ class SQLiteFTSBackend(KnowledgeBackend):
 		with self._get_connection() as conn:
 			conn.executescript(self.SCHEMA)
 	
+	def health_check(self) -> bool:
+		"""
+		Check if the backend is healthy and accessible.
+		
+		Returns True if the database is accessible and tables exist.
+		"""
+		try:
+			if not self.db_path or not os.path.exists(self.db_path):
+				return False
+			
+			with self._get_connection(readonly=True) as conn:
+				# Check if required tables exist
+				cursor = conn.execute("""
+					SELECT name FROM sqlite_master 
+					WHERE type='table' AND name IN ('chunks', 'chunks_fts')
+				""")
+				tables = {row[0] for row in cursor.fetchall()}
+				return 'chunks' in tables and 'chunks_fts' in tables
+					
+		except Exception as e:
+			frappe.log_error(
+				f"SQLite FTS health check failed for {self.knowledge_source}: {e}",
+				"Backend Health Check"
+			)
+			return False
+	
+	def supports_filters(self) -> bool:
+		"""
+		Check if this backend supports filtering.
+		
+		SQLite FTS5 supports basic filtering through SQL WHERE clauses.
+		"""
+		return True
+	
+	def supports_hybrid_search(self) -> bool:
+		"""
+		Check if this backend supports hybrid search.
+		
+		SQLite FTS5 is keyword-based only, does not support vector similarity.
+		"""
+		return False
+	
 	@contextmanager
 	def _get_connection(self, readonly: bool = False):
 		"""Get SQLite connection with proper settings."""
