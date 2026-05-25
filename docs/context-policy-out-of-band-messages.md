@@ -255,6 +255,250 @@ get_selected_record(handle)
 get_record_details(doctype, name)
 ```
 
+## Tool call nuances, edge cases, and coverage
+
+Tool calls need special handling because they are both execution trace and model working context.
+
+A tool result may be needed immediately by the model during the current run, but it should not always become part of future conversation history. Large tool results are one of the most common ways context bloat appears.
+
+Examples:
+
+- `search_documents` returns 100 ERP rows.
+- `get_document` returns a large nested document.
+- `knowledge_search` returns many chunks.
+- A hotel/product/invoice search tool returns a full ranked candidate list.
+- A browser tool returns a full page snapshot or scraped table.
+- A reporting tool returns a large report payload.
+- A sub-agent returns a long intermediate analysis.
+
+### Current desired distinction
+
+```text
+Tool execution trace
+= what tool was called, arguments, status, timing, raw output, errors
+
+Tool result for current run
+= content the model needs immediately to complete the current response
+
+Tool result for future turns
+= summary/reference/on-demand handle, not always full raw output
+```
+
+### Recommended default behavior
+
+Tool calls should be stored for audit, but future history should include only a compact representation unless explicitly configured otherwise.
+
+Default policy:
+
+```text
+tool_call      -> include_reference or include_summary
+tool_result    -> include_summary / include_reference / include_on_demand
+large raw data -> artifact or source DocType reference
+errors         -> include_summary unless debugging mode is enabled
+debug traces   -> exclude or developer_only
+```
+
+Example future history line:
+
+```text
+[Tool result omitted: 40 records returned by product_search, handle=ATC-00045]
+```
+
+### Edge cases
+
+#### Small deterministic tool results
+
+Some tool results are tiny and useful in future context.
+
+Examples:
+
+```text
+currency conversion result
+current weather summary
+single document field lookup
+calculated total
+```
+
+These can use:
+
+```text
+context_policy = include_full
+```
+
+or:
+
+```text
+context_policy = include_summary
+```
+
+#### Large search/list/report results
+
+Large arrays should not be appended to Agent Message history.
+
+Recommended policy:
+
+```text
+context_policy = include_reference
+record_kind = tool_result or result_snapshot
+reference_doctype = Agent Tool Call / Agent Context Artifact / app-specific context DocType
+```
+
+#### Tool outputs required for the same run
+
+During a single agent run, the provider/runtime may need to pass the tool output back to the model so it can finish the response. That is valid.
+
+The context policy should apply mainly to persistence and future replay:
+
+```text
+current_run_visibility = model_visible
+future_context_policy = include_reference
+```
+
+This avoids breaking provider-native tool loops while still preventing future token growth.
+
+#### Client-side tools
+
+Client-side tools may return browser/UI/user-device data. These should be treated as untrusted app payloads.
+
+Recommended policy:
+
+```text
+visibility = ui_only or audit_only
+context_policy = include_summary / include_reference / include_on_demand
+```
+
+Never blindly replay full client-side payloads unless the tool is explicitly marked safe and small.
+
+#### Knowledge search tools
+
+Knowledge snippets are often useful, but repeated injection can duplicate the same retrieved chunks across turns.
+
+Recommended policy:
+
+```text
+record_kind = retrieval_context
+context_policy = transient_only for current response
+or include_reference if the retrieved set must be remembered
+```
+
+The durable record should capture source IDs, chunk IDs, query, score, and summary rather than repeatedly storing full chunk text in message history.
+
+#### Write/action tools
+
+Create/update/delete/submit/cancel tools should preserve auditability.
+
+Future context usually needs only the action summary and document reference:
+
+```text
+Created Sales Order SO-00045 for customer ABC.
+Updated Invoice INV-00091 payment status.
+Cancelled Payment Entry PE-00012.
+```
+
+Raw request/response payloads should remain in tool logs or artifacts.
+
+#### Error outputs
+
+Errors can be useful for retry and debugging, but stack traces and raw provider errors can be long or sensitive.
+
+Recommended policy:
+
+```text
+user-visible error summary -> include_summary
+stack trace/raw error      -> developer_only + exclude
+```
+
+#### Sub-agent results
+
+Sub-agent output can be either final user-facing content or intermediate working context.
+
+Recommended policy:
+
+```text
+final delegated answer -> include_summary or include_full, depending on size
+intermediate analysis  -> include_reference or exclude
+raw sub-agent trace    -> developer_only
+```
+
+#### Streaming tool output
+
+For streaming or incremental tools, store chunks as artifacts/events, but persist a final compact tool result message.
+
+Recommended policy:
+
+```text
+stream chunks -> artifact/debug events
+final result  -> summary/reference
+```
+
+### Tool-level configuration
+
+Each Agent Tool Function should eventually support defaults such as:
+
+```text
+default_context_policy
+max_context_chars
+max_context_tokens
+summarize_result
+store_raw_result
+raw_result_visibility
+artifact_type
+safe_to_include_full
+```
+
+This lets tool authors define safe behavior once instead of relying on every agent prompt to handle it.
+
+### Agent-level configuration
+
+Agent settings may provide fallback behavior:
+
+```text
+default_tool_result_context_policy
+max_tool_result_context_tokens
+allow_full_tool_result_replay
+auto_summarize_large_tool_results
+store_large_tool_results_as_artifacts
+```
+
+Suggested safe default:
+
+```text
+default_tool_result_context_policy = include_reference
+allow_full_tool_result_replay = false
+auto_summarize_large_tool_results = true
+```
+
+### Coverage required in implementation
+
+The context policy must cover all places where tool results can enter model input:
+
+1. Current run provider-native tool loop.
+2. Agent Message persistence.
+3. Conversation history replay.
+4. Background summarization.
+5. Conversation title generation.
+6. Sub-agent silent trigger handoff.
+7. Streaming/SSE chat path.
+8. Multi-run/orchestration path.
+9. Client-side tool callback path.
+10. Future flow node execution path.
+
+A partial fix that only sanitizes `Agent Message.content` may still leak tokens through summarization, silent triggers, orchestration handoffs, or frontend-resubmitted prompts.
+
+### Recommended implementation approach
+
+Phase 1 should not change provider-native tool execution inside a single run. It should only prevent large tool outputs from being saved/replayed as normal history.
+
+Minimum safe behavior:
+
+```text
+1. Store raw tool output in Agent Tool Call or Agent Context Artifact.
+2. Store Agent Message content as a compact summary/reference.
+3. Add context_policy to the message/artifact.
+4. Make conversation history loader respect context_policy.
+5. Add tests for large tool output not appearing in future model history.
+```
+
 ## Relationship to Conversation Data Management
 
 HUF already has conversation data management on Agent settings. This can be useful for small key-value state, but it should not be used for large result payloads if auto-injection is enabled.
@@ -309,13 +553,18 @@ Backend changes:
    - summary only for `include_summary`
    - compact handle line for `include_reference`
    - nothing for `exclude`, `transient_only`, and `include_on_demand`
-5. Add tests for repeated result-context conversations where token growth stays bounded.
+5. Add safe handling for tool call/result messages:
+   - raw tool output remains in Agent Tool Call / artifact
+   - Agent Message stores compact summary/reference
+   - future context respects policy
+6. Add tests for repeated result-context and large-tool-output conversations where token growth stays bounded.
 
 Acceptance criteria:
 
-- Persisted `Agent Message.content` no longer needs to contain large retrieval/result sections.
+- Persisted `Agent Message.content` no longer needs to contain large retrieval/result/tool-output sections.
 - History replay does not include records marked out-of-band/reference-only.
 - Repeated turns do not grow input tokens by more than expected unless new large context is intentionally attached.
+- Large tool result JSON does not appear in future conversation history unless explicitly configured.
 
 ### Phase 2: First-class out-of-band/reference message support
 
@@ -342,6 +591,7 @@ UI behavior:
 - Show collapsed context markers in chat/admin view.
 - Do not show raw payload in normal chat by default.
 - Allow managers/developers to inspect referenced artifacts/documents where permissions allow.
+- Show tool calls and tool results as expandable cards with summary first and raw payload behind permission-aware inspection.
 
 ### Phase 3: Agent Context Artifact DocType
 
@@ -419,6 +669,7 @@ Out-of-band context should not automatically become long-term memory. Memory cap
 3. Update history loading to respect policy only when policy is present.
 4. Add app/runtime APIs to create reference-only messages.
 5. Move large payloads to app DocTypes or `Agent Context Artifact` in later phases.
+6. Keep provider-native current-run tool execution unchanged until the central context assembler is introduced.
 
 ## Open questions
 
@@ -430,9 +681,11 @@ Out-of-band context should not automatically become long-term memory. Memory cap
 6. How should permissions work when a message references a DocType from another app?
 7. Should expired artifacts remain audit-visible but no longer fetchable by model tools?
 8. Should HUF provide a generic `Result Context` DocType, or should each app define domain-specific context DocTypes?
+9. Should tool-level context policy be configured on `Agent Tool Function`, `Agent`, or both?
+10. What is the safe default for existing tools: include summary, include reference, or keep legacy full replay until explicitly migrated?
 
 ## Initial recommendation
 
 Implement Phase 1 and Phase 2 first.
 
-For application use cases such as search, comparison, recommendations, report review, or document retrieval, store the user-visible result snapshot in the app's own DocType or a future Agent Context Artifact and save only a reference in HUF. Use HUF conversation data only for compact working state. Do not persist large retrieval/result payloads as normal Agent Message content.
+For application use cases such as search, comparison, recommendations, report review, or document retrieval, store the user-visible result snapshot in the app's own DocType or a future Agent Context Artifact and save only a reference in HUF. Use HUF conversation data only for compact working state. Do not persist large retrieval/result/tool-output payloads as normal Agent Message content.
