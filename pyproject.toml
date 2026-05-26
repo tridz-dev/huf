@@ -14,6 +14,7 @@ dependencies = [
     "llama-index-core>=0.10.0",
     "sqlite-vec",
     "pysqlite3-binary; platform_machine == 'x86_64' and python_version < '3.14'",
+    "httpx>=0.24.0",
     "chromadb",
     "llama-index-vector-stores-chroma",
     "pypdf",
