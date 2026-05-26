@@ -9,6 +9,8 @@ export type MessageType = {
   }[];
   kind?: string;
   generatedImage?: string;
+  generatedAudio?: string;
+  voiceMessage?: string;
   tools?: {
     tool_call_id: string;
     name: string;

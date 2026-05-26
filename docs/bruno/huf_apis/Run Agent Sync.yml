@@ -1,0 +1,25 @@
+info:
+  name: Run Agent Sync
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{BASE_URL}}/api/method/huf.ai.agent_integration.run_agent_sync?agent_name={{Agent_Name}}&prompt={{Prompt}}"
+  params:
+    - name: agent_name
+      value: "{{Agent_Name}}"
+      type: query
+    - name: prompt
+      value: "{{Prompt}}"
+      type: query
+  body:
+    type: json
+    data: ""
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

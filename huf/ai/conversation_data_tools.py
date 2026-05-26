@@ -54,6 +54,8 @@ def handle_set_conversation_data(
     value_type: str = None, 
     source: str = "agent", 
     conversation_id: str = None, 
+    auto_inject: bool = None,
+    inject_mode: str = None,
     **kwargs
 ):
     """Set a value in conversation data."""
@@ -91,11 +93,31 @@ def handle_set_conversation_data(
         found = False
         for i, item in enumerate(state["items"]):
             if item.get("name") == name:
+                resolved_auto_inject = auto_inject if auto_inject is not None else kwargs.get("auto_inject")
+                if resolved_auto_inject is None:
+                    resolved_auto_inject = item.get("auto_inject", True)
+                
+                resolved_inject_mode = inject_mode if inject_mode is not None else kwargs.get("inject_mode")
+                if resolved_inject_mode is None:
+                    resolved_inject_mode = item.get("inject_mode", "visible")
+                
+                updated_item["auto_inject"] = resolved_auto_inject
+                updated_item["inject_mode"] = resolved_inject_mode
                 state["items"][i] = updated_item
                 found = True
                 break
         
         if not found:
+            resolved_auto_inject = auto_inject if auto_inject is not None else kwargs.get("auto_inject")
+            if resolved_auto_inject is None:
+                resolved_auto_inject = True
+            
+            resolved_inject_mode = inject_mode if inject_mode is not None else kwargs.get("inject_mode")
+            if resolved_inject_mode is None:
+                resolved_inject_mode = "visible"
+                
+            updated_item["auto_inject"] = resolved_auto_inject
+            updated_item["inject_mode"] = resolved_inject_mode
             state["items"].append(updated_item)
 
         new_json = json.dumps(state, ensure_ascii=False, indent=2)
