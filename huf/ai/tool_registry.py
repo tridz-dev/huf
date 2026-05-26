@@ -288,6 +288,17 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             errors.append(f"App '{app}': Failed to process tools list: {str(e)}")
             frappe.log_error(f"Failed to process tools for app '{app}': {str(e)}", "Tool Sync Error")
             continue
+
+    # Ensure all tool types exist
+    for app, d in tools_to_process:
+        try:
+            category = d.get("tool_type")
+            if category and not frappe.db.exists("Agent Tool Type", category):
+                tool_type_doc = frappe.new_doc("Agent Tool Type")
+                tool_type_doc.name1 = category
+                tool_type_doc.insert(ignore_permissions=True)
+        except Exception as e:
+            errors.append(f"Failed to create Tool Type '{category}': {str(e)}")
     
     # BATCH 2: Validate all functions first (before any DB operations)
     validated_tools = []
@@ -368,6 +379,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 "tool_name": tool_name,
                 "description": d.get("description", ""),
                 "types": "App Provided",
+                "tool_type":  d.get("tool_type"),
                 "function_path": d.get("function_path"),
                 "parameters": [
                     {
