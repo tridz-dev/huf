@@ -299,7 +299,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 tool_type_doc.insert(ignore_permissions=True)
         except Exception as e:
             errors.append(f"Failed to create Tool Type '{category}': {str(e)}")
-    
+    frappe.db.commit()
     # BATCH 2: Validate all functions first (before any DB operations)
     validated_tools = []
     validation_cache = {}  # function_path -> bool
@@ -413,9 +413,9 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             synced_count += 1
         except Exception as e:
             tool_name = payload.get("tool_name", "unknown")
-            error_msg = f"Failed to update tool '{tool_name}' (docname: {docname}): {str(e)}"
+            error_msg = f"Failed to update tool '{tool_name}': {str(e)}"
             errors.append(error_msg)
-            frappe.log_error(error_msg, "Tool Sync Error")
+            frappe.log_error(error_msg[:140], "Tool Sync Error")
             continue
     
     for payload in to_create:
@@ -426,7 +426,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             tool_name = payload.get("tool_name", "unknown")
             error_msg = f"Failed to create tool '{tool_name}': {str(e)}"
             errors.append(error_msg)
-            frappe.log_error(error_msg, "Tool Sync Error")
+            frappe.log_error(error_msg[:140], "Tool Sync Error")
             continue
 
     # Only cleanup orphaned tools if scanning all apps (not incremental)
