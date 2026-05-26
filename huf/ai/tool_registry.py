@@ -379,7 +379,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 "tool_name": tool_name,
                 "description": d.get("description", ""),
                 "types": "App Provided",
-                "tool_type":  d.get("tool_type"),
+                "tool_type":  d.get("category") or d.get("tool_type"),
                 "function_path": d.get("function_path"),
                 "parameters": [
                     {
