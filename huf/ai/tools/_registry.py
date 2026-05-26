@@ -1130,13 +1130,32 @@ GIPHY_TOOLS = [
 	},
 ]
 
+RECIPIENT_TOOLS = [
+	{
+		"tool_name": "get_integration_recipient",
+		"description": (
+			"Look up a named recipient's service-specific ID from Integration Settings. "
+			"Use this before sending a message to resolve a human name (e.g. 'John Doe', 'Sales Team') "
+			"to the correct Telegram Chat ID, Slack User/Channel ID, Discord Channel ID, etc. "
+			"Call this tool first, then pass the returned recipient_id to the relevant send tool."
+		),
+		"function_path": "huf.ai.tools.recipient.handle_get_recipient",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("service", required=True, description="The service name, e.g. 'telegram', 'slack', 'discord'"),
+			_p("recipient_name", required=True, description="Human-friendly recipient name as stored in Integration Settings, e.g. 'John Doe'"),
+		],
+	},
+]
+
 
 # ---------------------------------------------------------------------------
 # Master list: every tool grouped for easy iteration
 # ---------------------------------------------------------------------------
 
 ALL_INTEGRATION_TOOLS = (
-	SLACK_TOOLS
+	RECIPIENT_TOOLS
+	+ SLACK_TOOLS
 	+ DISCORD_TOOLS
 	+ TELEGRAM_TOOLS
 	+ JIRA_TOOLS
