@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "creation": "2026-03-04 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "capability",
+  "label"
+ ],
+ "fields": [
+  {
+   "fieldname": "capability",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Capability",
+   "options": "agent.use\nagent.create\nagent.edit\nagent.delete\nagent.view_all\nchat.use\nchat.view_own\nchat.view_all\nknowledge.use\nknowledge.create\nknowledge.manage\ntools.use\ntools.create\ntools.manage\nflows.use\nflows.create\nflows.manage\nsystem.providers.manage\nsystem.models.manage\nsystem.mcp.manage\nsystem.settings.manage\nusers.invite\nusers.manage\nroles.manage",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "",
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Label",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-03-04 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Huf Role Permission",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

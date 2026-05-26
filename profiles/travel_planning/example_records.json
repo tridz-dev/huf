@@ -1,0 +1,226 @@
+[
+  {
+    "record_id": "mem_travel_001",
+    "title": "Tokyo Spring Trip 2026",
+    "source_type": "conversation",
+    "producer_mode": "memory_agent",
+    "memory_type": "domain_object",
+    "scope_type": "user",
+    "scope_key": "user_12345",
+    "status": "active",
+    "confidence": 0.95,
+    "importance_score": 0.8,
+    "data_json": {
+      "destination": "Tokyo, Japan",
+      "dates": {
+        "start_date": "2026-04-05",
+        "end_date": "2026-04-15",
+        "duration_days": 10,
+        "flexibility": "fixed"
+      },
+      "travelers": {
+        "count": 2,
+        "composition": ["partner"],
+        "ages": {
+          "adults": 2,
+          "children": 0,
+          "infants": 0
+        }
+      },
+      "budget": {
+        "total_budget": 6000,
+        "currency": "USD",
+        "budget_tier": "mid_range",
+        "per_person_max": 3000
+      },
+      "preferences": {
+        "accommodation_type": ["hotel", "boutique"],
+        "room_preferences": ["non-smoking", "city view", "near subway"],
+        "activity_style": ["cultural", "foodie", "nature"],
+        "pace": "moderate",
+        "dietary_restrictions": ["pescatarian"],
+        "accessibility_needs": []
+      },
+      "purpose": {
+        "primary": "vacation",
+        "secondary": ["anniversary"],
+        "special_occasion": "10-year anniversary celebration"
+      },
+      "constraints": {
+        "must_visit": ["Mount Fuji day trip", "Tsukiji Outer Market", "teamLab Planets"],
+        "must_avoid": ["crowded tourist buses", "chain restaurants"],
+        "transportation_preferences": ["train", "walking"],
+        "visa_requirements": {
+          "needs_visa": false,
+          "visa_status": "visa-free for 90 days"
+        },
+        "health_requirements": ["COVID vaccination certificate"],
+        "time_constraints": null
+      },
+      "booked_items": [
+        {
+          "type": "flight",
+          "name": "United Airlines UA881",
+          "confirmation": "ABC123",
+          "date": "2026-04-05",
+          "cost": 1200
+        },
+        {
+          "type": "hotel",
+          "name": "Shibuya Excel Hotel Tokyu",
+          "confirmation": "HTL789",
+          "date": "2026-04-05 to 2026-04-15",
+          "cost": 2100
+        }
+      ],
+      "itinerary_notes": "First time in Japan. Interested in cherry blossoms, ramen tours, and onsen experience. Prefers walking neighborhoods over major tourist sites."
+    },
+    "summary_text": "10-day anniversary trip to Tokyo for 2 adults in April 2026. Mid-range budget, cultural and foodie interests. Flights and hotel booked.",
+    "tags": ["anniversary", "japan", "tokyo", "spring", "booked"],
+    "created_at": "2026-02-15T10:30:00Z",
+    "last_retrieved_at": "2026-03-01T14:22:00Z",
+    "retrieval_count": 5
+  },
+  {
+    "record_id": "mem_travel_002",
+    "title": "Bali Family Vacation",
+    "source_type": "conversation",
+    "producer_mode": "memory_agent",
+    "memory_type": "domain_object",
+    "scope_type": "conversation",
+    "scope_key": "conv_98765",
+    "status": "active",
+    "confidence": 0.88,
+    "importance_score": 0.7,
+    "data_json": {
+      "destination": "Bali, Indonesia",
+      "dates": {
+        "start_date": null,
+        "end_date": null,
+        "duration_days": 14,
+        "flexibility": "flexible_1_3_days"
+      },
+      "travelers": {
+        "count": 4,
+        "composition": ["family_with_children"],
+        "ages": {
+          "adults": 2,
+          "children": 2,
+          "infants": 0
+        }
+      },
+      "budget": {
+        "total_budget": 8000,
+        "currency": "USD",
+        "budget_tier": "mid_range",
+        "per_person_max": 2000
+      },
+      "preferences": {
+        "accommodation_type": ["villa", "resort"],
+        "room_preferences": ["private pool", "kid-friendly", "kitchen"],
+        "activity_style": ["relaxing", "nature", "wellness"],
+        "pace": "relaxed",
+        "dietary_restrictions": ["gluten-free", "dairy-free"],
+        "accessibility_needs": ["stroller accessible"]
+      },
+      "purpose": {
+        "primary": "vacation",
+        "secondary": ["family_reunion"],
+        "special_occasion": null
+      },
+      "constraints": {
+        "must_visit": ["Ubud Monkey Forest", "beach clubs in Seminyak"],
+        "must_avoid": ["crowded day tours", "long car rides with kids"],
+        "transportation_preferences": ["private_driver", "walking"],
+        "visa_requirements": {
+          "needs_visa": true,
+          "visa_status": "visa on arrival"
+        },
+        "health_requirements": ["travel insurance required"],
+        "time_constraints": "avoid school holidays"
+      },
+      "booked_items": [],
+      "itinerary_notes": "Kids are 4 and 7 years old. Need activities suitable for young children. Interested in family yoga, cooking class, and gentle nature walks."
+    },
+    "summary_text": "2-week family vacation to Bali for family of 4. Mid-range budget, relaxed pace. Looking for kid-friendly villa with pool. Dates flexible within a few days.",
+    "tags": ["bali", "family", "kids", "villa", "planning"],
+    "created_at": "2026-03-10T09:15:00Z",
+    "last_retrieved_at": null,
+    "retrieval_count": 0
+  },
+  {
+    "record_id": "mem_travel_003",
+    "title": "Iceland Northern Lights Adventure",
+    "source_type": "run",
+    "producer_mode": "post_run_llm",
+    "memory_type": "domain_object",
+    "scope_type": "global",
+    "scope_key": "iceland_trips",
+    "status": "active",
+    "confidence": 0.92,
+    "importance_score": 0.75,
+    "data_json": {
+      "destination": "Iceland",
+      "dates": {
+        "start_date": "2026-11-20",
+        "end_date": "2026-11-27",
+        "duration_days": 7,
+        "flexibility": "fixed"
+      },
+      "travelers": {
+        "count": 1,
+        "composition": ["solo"],
+        "ages": {
+          "adults": 1,
+          "children": 0,
+          "infants": 0
+        }
+      },
+      "budget": {
+        "total_budget": 4500,
+        "currency": "USD",
+        "budget_tier": "mid_range",
+        "per_person_max": 4500
+      },
+      "preferences": {
+        "accommodation_type": ["hostel", "camping"],
+        "room_preferences": ["shared kitchen access", "northern lights viewing spot"],
+        "activity_style": ["adventure", "nature", "photography"],
+        "pace": "packed",
+        "dietary_restrictions": ["vegetarian"],
+        "accessibility_needs": []
+      },
+      "purpose": {
+        "primary": "adventure",
+        "secondary": ["education"],
+        "special_occasion": "Bucket list photography trip"
+      },
+      "constraints": {
+        "must_visit": ["Blue Lagoon", "Golden Circle", "Jökulsárlón glacier lagoon", "northern lights viewing"],
+        "must_avoid": ["tourist bus tours", "guided group activities"],
+        "transportation_preferences": ["car_rental"],
+        "visa_requirements": {
+          "needs_visa": false,
+          "visa_status": "Schengen - visa free for 90 days"
+        },
+        "health_requirements": ["warm weather gear required", "travel insurance with emergency evacuation"],
+        "time_constraints": "November only for northern lights season"
+      },
+      "booked_items": [
+        {
+          "type": "car",
+          "name": "4x4 Rental - Budget Iceland",
+          "confirmation": "CAR456",
+          "date": "2026-11-20 to 2026-11-27",
+          "cost": 800
+        }
+      ],
+      "itinerary_notes": "Solo photography-focused trip. Planning to chase auroras and capture landscape shots. Comfortable with cold weather. Renting camper van for flexibility."
+    },
+    "summary_text": "7-day solo adventure to Iceland in November 2026 for northern lights and photography. Mid-range budget, camper van rental booked. Packed itinerary.",
+    "tags": ["iceland", "solo", "photography", "northern_lights", "camper_van"],
+    "created_at": "2026-03-20T16:45:00Z",
+    "last_retrieved_at": "2026-03-22T11:30:00Z",
+    "retrieval_count": 2
+  }
+]

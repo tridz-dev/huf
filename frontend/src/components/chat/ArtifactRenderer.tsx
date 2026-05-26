@@ -32,7 +32,6 @@ import {
 	ExternalLinkIcon,
 } from 'lucide-react';
 import type { ParsedArtifact, ArtifactType } from '@/types/artifact.types';
-import type { BundledLanguage } from 'shiki';
 import { cn } from '@/lib/utils';
 import { Mermaid } from '@/components/ui/mermaid';
 import { JSXPreview, JSXPreviewContent, JSXPreviewExport } from '@/components/ui/jsx-preview';
@@ -74,10 +73,10 @@ const LANGUAGE_MAP: Record<string, string> = {
 	text: 'text',
 };
 
-function normalizeLanguage(language?: string): BundledLanguage {
-	if (!language) return 'text' as BundledLanguage;
+function normalizeLanguage(language?: string): string {
+	if (!language) return 'text';
 	const lower = language.toLowerCase();
-	return (LANGUAGE_MAP[lower] || lower) as BundledLanguage;
+	return LANGUAGE_MAP[lower] || lower;
 }
 
 export function ArtifactRenderer({
@@ -276,35 +275,35 @@ export function ArtifactRenderer({
 						)}
 					</div>
 				</div>
-			<ArtifactActions>
-				{messageId && (artifact.type === 'jsx' || artifact.type === 'chart') && (
+				<ArtifactActions>
+					{messageId && (artifact.type === 'jsx' || artifact.type === 'chart') && (
+						<ArtifactAction
+							icon={ExternalLinkIcon}
+							tooltip="Open full screen"
+							label="Open in new tab"
+							onClick={handleOpenPreview}
+						/>
+					)}
 					<ArtifactAction
-						icon={ExternalLinkIcon}
-						tooltip="Open full screen"
-						label="Open in new tab"
-						onClick={handleOpenPreview}
+						icon={isCopied ? CheckIcon : CopyIcon}
+						tooltip={isCopied ? 'Copied!' : 'Copy'}
+						label="Copy content"
+						onClick={handleCopy}
 					/>
-				)}
-				<ArtifactAction
-					icon={isCopied ? CheckIcon : CopyIcon}
-					tooltip={isCopied ? 'Copied!' : 'Copy'}
-					label="Copy content"
-					onClick={handleCopy}
-				/>
-				<ArtifactAction
-					icon={DownloadIcon}
-					tooltip="Download"
-					label="Download file"
-					onClick={handleDownload}
-				/>
-				<ArtifactAction
-					icon={isFullscreen ? MinimizeIcon : MaximizeIcon}
-					tooltip={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-					label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-					onClick={toggleFullscreen}
-				/>
-				{onClose && <ArtifactClose onClick={onClose} />}
-			</ArtifactActions>
+					<ArtifactAction
+						icon={DownloadIcon}
+						tooltip="Download"
+						label="Download file"
+						onClick={handleDownload}
+					/>
+					<ArtifactAction
+						icon={isFullscreen ? MinimizeIcon : MaximizeIcon}
+						tooltip={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+						label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+						onClick={toggleFullscreen}
+					/>
+					{onClose && <ArtifactClose onClick={onClose} />}
+				</ArtifactActions>
 			</ArtifactHeader>
 			<ArtifactContent className={isFullscreen ? 'flex-1' : ''}>
 				{renderContent()}

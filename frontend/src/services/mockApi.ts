@@ -1,19 +1,29 @@
 import { Agent, AgentConversation, AgentRun, AIProvider, AIModel, AgentToolFunctionRef } from '../types/agent.types';
+import {
+	MOCK_MODEL_CLAUDE3_OPUS,
+	MOCK_MODEL_CLAUDE3_SONNET,
+	MOCK_MODEL_GEMINI_PRO,
+	MOCK_MODEL_GPT35_TURBO,
+	MOCK_MODEL_GPT4,
+	MOCK_PROVIDER_ANTHROPIC,
+	MOCK_PROVIDER_GOOGLE,
+	MOCK_PROVIDER_OPENAI,
+} from "@/data/ai";
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const providers: AIProvider[] = [
-  { name: "openai", provider_name: "OpenAI" },
-  { name: "anthropic", provider_name: "Anthropic" },
-  { name: "google", provider_name: "Google" },
+	{ name: MOCK_PROVIDER_OPENAI, provider_name: "OpenAI" },
+	{ name: MOCK_PROVIDER_ANTHROPIC, provider_name: "Anthropic" },
+	{ name: MOCK_PROVIDER_GOOGLE, provider_name: "Google" },
 ];
 
 const models: AIModel[] = [
-  { name: "gpt-4", model_name: "GPT-4", provider: "openai" },
-  { name: "gpt-3.5-turbo", model_name: "GPT-3.5 Turbo", provider: "openai" },
-  { name: "claude-3-opus", model_name: "Claude 3 Opus", provider: "anthropic" },
-  { name: "claude-3-sonnet", model_name: "Claude 3 Sonnet", provider: "anthropic" },
-  { name: "gemini-pro", model_name: "Gemini Pro", provider: "google" },
+	{ name: MOCK_MODEL_GPT4, model_name: "GPT-4", provider: MOCK_PROVIDER_OPENAI },
+	{ name: MOCK_MODEL_GPT35_TURBO, model_name: "GPT-3.5 Turbo", provider: MOCK_PROVIDER_OPENAI },
+	{ name: MOCK_MODEL_CLAUDE3_OPUS, model_name: "Claude 3 Opus", provider: MOCK_PROVIDER_ANTHROPIC },
+	{ name: MOCK_MODEL_CLAUDE3_SONNET, model_name: "Claude 3 Sonnet", provider: MOCK_PROVIDER_ANTHROPIC },
+	{ name: MOCK_MODEL_GEMINI_PRO, model_name: "Gemini Pro", provider: MOCK_PROVIDER_GOOGLE },
 ];
 
 const toolFunctions: AgentToolFunctionRef[] = [
@@ -44,8 +54,8 @@ const mockAgents: Agent[] = [
   {
     name: "1",
     agent_name: "Customer Support Agent",
-    provider: "openai",
-    model: "gpt-4",
+    provider: MOCK_PROVIDER_OPENAI,
+    model: MOCK_MODEL_GPT4,
     instructions: "You are a helpful customer support agent. Provide clear, concise answers to customer inquiries.\n\nGoals:\n- Resolve customer issues quickly\n- Maintain a friendly, professional tone\n- Escalate complex issues when needed\n\nConstraints:\n- Always verify customer identity before sharing sensitive information\n- Never make promises about features or timelines without confirmation",
     temperature: 1,
     top_p: 1,
@@ -135,8 +145,8 @@ const mockAgents: Agent[] = [
   {
     name: "2",
     agent_name: "Data Analyst Agent",
-    provider: "anthropic",
-    model: "claude-3-opus",
+    provider: MOCK_PROVIDER_ANTHROPIC,
+    model: MOCK_MODEL_CLAUDE3_OPUS,
     instructions: "Analyze data and generate actionable insights.",
     temperature: 0.7,
     top_p: 1,

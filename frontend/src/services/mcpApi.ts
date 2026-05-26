@@ -6,6 +6,7 @@
 
 import { db, call } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { fetchPaginatedCount } from './utilsApi';
 import { doctype } from '@/data/doctypes';
 
 /**
@@ -135,17 +136,12 @@ export async function getMCPServers(
         const hasMore = mappedServers.length > limit;
         const items = hasMore ? mappedServers.slice(0, limit) : mappedServers;
 
-        // Only fetch count on first page to avoid unnecessary API calls
-        let total: number | undefined;
-        if (page === 1) {
-            try {
-                const { fetchDocCount } = await import('./utilsApi');
-                const countFilters = [...filters];
-                total = await fetchDocCount(doctype['MCP Server'], countFilters);
-            } catch {
-                // Ignore count errors - total is optional
-            }
-        }
+        const total = await fetchPaginatedCount(
+            page,
+            items.length,
+            doctype['MCP Server'],
+            filters,
+        );
 
         return {
             items,

@@ -540,9 +540,10 @@ Test files are located in:
 17. **Toasts**: Use `sonner` (`toast.success()`, `toast.error()`) — not native alerts or custom toast implementations
 18. **Real-time**: Socket.io for live agent feedback (tool calls, new messages), SSE via fetch ReadableStream for streaming responses
 19. **Routing**: All routes are under `/huf` basename — use React Router `Link` and `useNavigate` for navigation
+20. **TypeScript Strictness**: The project enforces strict TypeScript settings. Always clean up and remove unused imports, variables, and functions to prevent build failures (e.g., TS6133).
 
 ### General
-20. **Docker Dev**: Use `docker/` for quick evaluation; use Frappe bench for full development
+21. **Docker Dev**: Use `docker/` for quick evaluation; use Frappe bench for full development
 
 ## Related Documentation
 

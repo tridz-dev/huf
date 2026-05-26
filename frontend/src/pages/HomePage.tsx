@@ -115,7 +115,10 @@ function formatCurrency(amount: number): string {
   return `$${trimmed}`;
 }
 
-export function HomePage() {
+export { HomePage };
+export default HomePage;
+
+function HomePage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('agents');
   const [metrics, setMetrics] = useState<DashboardMetrics>({

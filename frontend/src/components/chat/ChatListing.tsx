@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Clock4, Plus, Users } from 'lucide-react';
+import { Clock4, PanelLeftClose, Plus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -20,6 +20,7 @@ import { getInitials } from '@/utils/getInitials';
 import { toDate, startOfDay } from '@/utils/time';
 import { AgentModelSelector } from './AgentModelSelector';
 import { Button } from '../ui/button';
+import { SidebarTrigger } from '../ui/sidebar';
 // import { DEFAULT_AGENT_COLOR } from '@/data/color';
 import { getAgent } from '@/services/agentApi';
 import ConversationTitle, { type ConversationTitleRef } from './ConversationTitle';
@@ -40,7 +41,7 @@ function getRecentBucketLabel(ts?: string): string {
   return 'OLDER';
 }
 
-export default function ChatListing() {
+export default function ChatListing({ onClose }: { onClose?: () => void }) {
   const navigate = useNavigate();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
   const selectedChatId = routeChatId && routeChatId !== 'new' ? routeChatId : null;
@@ -197,7 +198,7 @@ export default function ChatListing() {
   return (
     <div className="h-full min-w-80 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
       <div className="shrink-0 px-3 pt-3 pb-2 sticky top-0 z-1 bg-sidebar">
-        <ChatListHeader onAgentSelect={handleAgentSelect} />
+        <ChatListHeader onAgentSelect={handleAgentSelect} onClose={onClose} />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
         <Tabs defaultValue="recents" value={activeTab} onValueChange={setActiveTab} className="space-y-2">
@@ -634,9 +635,11 @@ function RecentsConversationList({
 }
 
 function ChatListHeader({ 
-  onAgentSelect 
+  onAgentSelect,
+  onClose,
 }: { 
   onAgentSelect?: (agentId: string) => void;
+  onClose?: () => void;
 }) {
   const [selectedAgent, setSelectedAgent] = useState<string>('');
 
@@ -646,14 +649,31 @@ function ChatListHeader({
   }, [onAgentSelect]);
 
   return (
-    <div className="flex items-center justify-between">
-      <h1 className="font-semibold text-sm tracking-tight text-zinc-700">Chat</h1>
-      {onAgentSelect && (
-        <AgentModelSelector
-          value={selectedAgent}
-          onValueChange={handleAgentChange}
-        />
-      )}
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <SidebarTrigger className="-ml-1" />
+        <h1 className="font-semibold text-sm tracking-tight text-zinc-700">Chat</h1>
+      </div>
+      <div className="flex items-center gap-1">
+        {onAgentSelect && (
+          <AgentModelSelector
+            value={selectedAgent}
+            onValueChange={handleAgentChange}
+          />
+        )}
+        {onClose && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-zinc-500 hover:text-zinc-900"
+            onClick={onClose}
+          >
+            <PanelLeftClose className="w-4 h-4" />
+            <span className="sr-only">Close sidebar</span>
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

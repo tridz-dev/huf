@@ -1,0 +1,147 @@
+{
+  "profile_name": "documentation",
+  "display_name": "Documentation Memory",
+  "description": "Capture and maintain structured documentation state from conversations and runs. Supports project requirements, architecture notes, implementation decisions, API contracts, status summaries, codebase mapping, and domain glossary.",
+  "category": "engineering",
+  "version": "1.0.0",
+  "is_system_profile": true,
+  "icon": "📄",
+  
+  "default_memory_type": "domain_object",
+  "default_scope_type": "namespace",
+  "default_retrieval_mode": "hybrid",
+  "default_capture_stage": "post_response_async",
+  
+  "schema_definition": {
+    "type": "object",
+    "properties": {
+      "document_type": {
+        "type": "string",
+        "enum": [
+          "requirements",
+          "architecture",
+          "decision",
+          "api_contract",
+          "status",
+          "codebase_mapping",
+          "glossary",
+          "migration_guide",
+          "deployment_notes",
+          "changelog"
+        ],
+        "description": "Type of documentation being captured"
+      },
+      "project_name": {
+        "type": "string",
+        "description": "Name of the project or system this documentation relates to"
+      },
+      "component": {
+        "type": "string",
+        "description": "Specific component, module, or subsystem"
+      },
+      "section_id": {
+        "type": "string",
+        "description": "Unique identifier for this section or record for targeted updates"
+      },
+      "title": {
+        "type": "string",
+        "description": "Human-readable title of this documentation entry"
+      },
+      "content": {
+        "type": "string",
+        "description": "The main documentation content"
+      },
+      "structured_data": {
+        "type": "object",
+        "description": "Typed fields specific to the document_type"
+      },
+      "related_sections": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "List of related section_ids for cross-linking"
+      },
+      "supersedes": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Section IDs that this entry replaces or supersedes"
+      },
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Tags for categorization"
+      },
+      "priority": {
+        "type": "string",
+        "enum": ["critical", "high", "medium", "low", "draft"],
+        "description": "Documentation priority level"
+      },
+      "status": {
+        "type": "string",
+        "enum": ["draft", "review", "approved", "deprecated", "archived"],
+        "description": "Current status of this documentation"
+      },
+      "authors": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Contributors to this documentation"
+      },
+      "stakeholders": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "People or teams who should be aware of this documentation"
+      },
+      "decision_rationale": {
+        "type": "string",
+        "description": "For decision documents: why this decision was made"
+      },
+      "alternatives_considered": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Options that were evaluated"
+      },
+      "consequences": {
+        "type": "object",
+        "properties": {
+          "positive": { "type": "array", "items": { "type": "string" } },
+          "negative": { "type": "array", "items": { "type": "string" } },
+          "neutral": { "type": "array", "items": { "type": "string" } }
+        },
+        "description": "Expected consequences of decisions or changes"
+      }
+    },
+    "required": ["document_type", "title", "content"]
+  },
+  
+  "recommended_model": {
+    "provider": "anthropic",
+    "model": "claude-3-5-sonnet",
+    "rationale": "Strong structured output capabilities and reasoning for documentation extraction"
+  },
+  
+  "storage_defaults": {
+    "store_raw_payload": true,
+    "store_summary": true,
+    "enable_fts_index": true,
+    "enable_vector_index": true,
+    "index_backend": "sqlite_vec",
+    "allow_update_existing": true,
+    "allow_merge": true,
+    "ttl_days": null
+  },
+  
+  "retrieval_defaults": {
+    "max_items_to_inject": 5,
+    "max_tokens_to_inject": 2000,
+    "ranking_strategy": "recency_and_relevance",
+    "context_window_overlap": true
+  },
+  
+  "ui_labels": {
+    "create_button": "Capture Documentation",
+    "edit_button": "Update Section",
+    "search_placeholder": "Search documentation...",
+    "filter_by_type": "Document Type",
+    "filter_by_project": "Project",
+    "filter_by_status": "Status"
+  }
+}

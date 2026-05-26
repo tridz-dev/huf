@@ -155,7 +155,7 @@ export function ToolsTab({
                 return (
                   <div
                     key={tool.name}
-                    className="group flex h-full items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                    className="group flex flex-col lg:flex-row h-full lg:items-start lg:justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex-1 min-w-0 flex items-start gap-3">
                       <div className="mt-0.5 rounded-md border bg-muted/30 p-1.5 text-muted-foreground">
@@ -176,7 +176,7 @@ export function ToolsTab({
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 mt-2 lg:mt-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                       {onEditTool && (
                         <Button
                           type="button"
@@ -255,7 +255,7 @@ export function ToolsTab({
               {mcpServers.map((mcp) => (
                 <div
                   key={mcp.name}
-                  className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                  className="flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                 >
                   <Link 
                     to={`/mcp/${mcp.mcp_server}`}
@@ -279,7 +279,7 @@ export function ToolsTab({
                       </p>
                     )}
                   </Link>
-                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1 shrink-0 mt-2 sm:mt-0" onClick={(e) => e.stopPropagation()}>
                     <Button
                       type="button"
                       variant="ghost"

@@ -1,0 +1,25 @@
+info:
+  name: Agent Stream
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{BASE_URL}}/huf/stream/ToDo Agent?agent_name={{Agent_Name}}&prompt={{Prompt}}"
+  params:
+    - name: agent_name
+      value: "{{Agent_Name}}"
+      type: query
+    - name: prompt
+      value: "{{Prompt}}"
+      type: query
+  body:
+    type: json
+    data: ""
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

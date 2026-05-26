@@ -6,8 +6,7 @@ app_email = "info@tridz.com"
 app_license = "agpl"
 source_link = "https://github.com/tridz-dev/huf.git"
 app_logo_url="/assets/huf/Images/huf.png"
-# for version 16+ this has to be /desk/huf, this is being updated in after_app_install hook
-app_url="huf"
+app_url="/huf"
 # Apps
 # ------------------
 
@@ -20,7 +19,7 @@ add_to_apps_screen = [
 		"logo": app_logo_url,
 		"title": "Huf",
 		"route": app_url,
-		"has_permission": "huf.permission.check_app_permission"
+		"has_permission": "huf.permissions.check_app_permission"
 	}
 ]
 
@@ -147,6 +146,9 @@ after_uninstall = "huf.ai.tool_registry.sync_app_tools"
 # }
 permission_query_conditions = {
     "Agent": "huf.huf.doctype.agent.agent.get_permission_query_conditions",
+    "Agent Conversation": "huf.ai.agent_integration.get_conversation_permission_conditions",
+    "Agent Message": "huf.ai.agent_integration.get_message_permission_conditions",
+    "Agent Run": "huf.ai.agent_integration.get_run_permission_conditions",
 }
 #
 # has_permission = {

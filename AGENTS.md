@@ -1536,3 +1536,8 @@ Registered via `huf_tools` hook so agents can interact with flows:
 - **Router/orchestrator**: LLM output constrained to valid candidate edges
 - **Human approval**: User/role verification before approve/reject
 - **Hop limit**: Safety guard against infinite loops (default 100)
+
+## Development and Coding Guidelines
+
+### Frontend TypeScript Strictness
+The frontend project enforces strict TypeScript rules. Unused variables, unresolved imports, and unused functions will cause build failures (e.g., `error TS6133`). Always proactively remove unused variables, functions, and imports, especially after code refactorings, to ensure the frontend build succeeds without errors.

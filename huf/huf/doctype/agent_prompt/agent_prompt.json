@@ -1,7 +1,7 @@
 {
  "actions": [],
  "autoname": "hash",
- "creation": "2026-02-20 00:00:00.000000",
+ "creation": "2026-02-20 00:00:00",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
@@ -85,9 +85,9 @@
    "options": "Public\nApp\nPrivate"
   },
   {
+   "description": "Comma-separated tags for search and filtering.",
    "fieldname": "tags",
    "fieldtype": "Small Text",
-   "description": "Comma-separated tags for search and filtering.",
    "label": "Tags"
   },
   {
@@ -148,14 +148,14 @@
    "description": "Shared identifier across all versions of the same prompt lineage. Auto-set on creation.",
    "fieldname": "prompt_group",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "Prompt Group",
-   "read_only": 1,
-   "hidden": 1
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-20 00:00:00.000000",
+ "modified": "2026-03-11 11:53:50.495597",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Prompt",
@@ -173,8 +173,19 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "select": 1,
+   "share": 1
   }
  ],
+ "row_format": "Dynamic",
  "sort_field": "modified",
  "sort_order": "DESC",
  "states": [],

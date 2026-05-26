@@ -314,6 +314,63 @@ def safe_commit():
         else:
             raise
 
+
+def _parse_prompt_cache_options(prompt_cache_options):
+    """Parse prompt caching options passed via API/runtime and return a dict."""
+    if not prompt_cache_options:
+        return {}
+
+    if isinstance(prompt_cache_options, dict):
+        return prompt_cache_options
+
+    if isinstance(prompt_cache_options, str):
+        try:
+            parsed = json.loads(prompt_cache_options)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+
+    return {}
+
+
+def _resolve_prompt_cache_options(channel_id: str, prompt_cache_options=None) -> dict:
+    """
+    Resolve prompt-cache controls from runtime overrides + site config defaults.
+
+    Site config (non-UI) format:
+    {
+      "default": {"openai_prompt_cache_retention": "24h"},
+      "channels": {
+        "api": {"openai_prompt_cache_retention": "6h"},
+        "doc_event": {"openai_prompt_cache_retention": "24h"},
+        "sse_stream": {"openai_prompt_cache_retention": "24h"}
+      }
+    }
+    """
+    resolved = {}
+    site_defaults = frappe.conf.get("huf_prompt_cache_defaults")
+
+    if isinstance(site_defaults, str):
+        try:
+            site_defaults = json.loads(site_defaults)
+        except Exception:
+            site_defaults = {}
+
+    if isinstance(site_defaults, dict):
+        default_opts = site_defaults.get("default")
+        if isinstance(default_opts, dict):
+            resolved.update(default_opts)
+
+        channel_opts = (site_defaults.get("channels") or {}).get((channel_id or "").lower())
+        if isinstance(channel_opts, dict):
+            resolved.update(channel_opts)
+
+    runtime_opts = _parse_prompt_cache_options(prompt_cache_options)
+    if runtime_opts:
+        resolved.update(runtime_opts)
+
+    return resolved
+
 def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False, tool_call_id=None):
     """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
@@ -580,6 +637,9 @@ def run_agent_sync(
     run_kind: str = None,
     prompt_template: str = None,
     prompt_version = None,
+    parent_conversation_id: str = None,
+    invoked_by_agent: str = None,
+    prompt_cache_options=None,
 ):
 
     if not agent_name:
@@ -672,7 +732,8 @@ def run_agent_sync(
 
     run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert(ignore_permissions=True)
-    conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+    if prompt and not str(prompt).startswith("[SILENT_TRIGGER]"):
+        conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
 
@@ -747,6 +808,8 @@ def run_agent_sync(
             except Exception:
                 pass
 
+        resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
@@ -754,7 +817,8 @@ def run_agent_sync(
             "agent_name": agent_name,
             "response_format": response_format,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "prompt_cache_options": resolved_prompt_cache,
         }
 
         context_strategy = agent_doc.context_strategy or "Summarize"
@@ -765,13 +829,21 @@ def run_agent_sync(
             # Just inject the stored summary. Actual summarization happens in background.
             if stored_summary:
                 history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
+        elif context_strategy == "FIFO":
+            if len(history) > history_limit:
+                history = history[-history_limit:]
         
-        # Inject Conversation Data Snapshot if enabled
-        if agent_doc.enable_conversation_data and conversation.conversation_data:
+        # Inject Conversation Data Snapshot if enabled and auto-injection is not disabled (defaults to 1 if not specified)
+        if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:
              try:
                 data_snapshot = json.loads(conversation.conversation_data)
-                # Filter to only show name/value to save tokens
-                simplified_items = {item["name"]: item["value"] for item in data_snapshot.get("items", [])}
+                # Filter to only show name/value to save tokens, excluding hidden/non-injected variables
+                simplified_items = {}
+                for item in data_snapshot.get("items", []):
+                    if item.get("auto_inject") is False or item.get("inject_mode") == "hidden":
+                        continue
+                    simplified_items[item["name"]] = item["value"]
+                
                 if simplified_items:
                     data_msg = f"CURRENT MEMORY STATE (Conversation Data): {json.dumps(simplified_items, ensure_ascii=False)}"
                     # Insert right after summary but before user messages
@@ -779,10 +851,6 @@ def run_agent_sync(
                     history.insert(insert_idx, {"role": "system", "content": data_msg})
              except:
                  pass
-        
-        elif context_strategy == "FIFO":
-            if len(history) > history_limit:
-                history = history[-history_limit:]
         
         base_prompt = f"""
             Current user message:
@@ -809,7 +877,8 @@ def run_agent_sync(
             "agent_name": agent_name,
             "response_format": response_format,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "prompt_cache_options": resolved_prompt_cache,
         }
         run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model, context)
         result = _run_async_safely(run)
@@ -983,6 +1052,39 @@ def run_agent_sync(
         }, update_modified=True)
         safe_commit()
 
+        # Handle Sub-Agent Success Lifecycle Hook
+        if parent_conversation_id and invoked_by_agent:
+            # 1. Silent Auto-Awaken Trigger
+            # We bypass Agent Message insertion and use a silent trigger to hide the intermediate execution from the UI
+            try:
+                silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{final_output}"
+                frappe.enqueue(
+                    "huf.ai.agent_integration.run_agent_sync",
+                    queue="default",
+                    timeout=300,
+                    is_async=True,
+                    agent_name=invoked_by_agent,
+                    prompt=silent_trigger,
+                    parent_conversation_id=None,
+                    conversation_id=parent_conversation_id,
+                    channel_id=channel_id,
+                    external_id=external_id
+                )
+            except Exception as hook_err:
+                frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
+
+            # 3. Real-Time UI Notification
+            frappe.publish_realtime(
+                event=f"conversation:{parent_conversation_id}",
+                message={
+                    "type": "sub_agent_completed",
+                    "agent_name": agent_name,
+                    "status": "Success",
+                    "result": final_output
+                },
+                user=frappe.session.user
+            )
+
         # Auto-naming check
         if agent_doc.autonaming_of_conversation_title:
             conv_title = conversation.title
@@ -1067,6 +1169,38 @@ def run_agent_sync(
         run_doc.db_set("error_message", error_msg)
         frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "Huf")
 
+        # Handle Sub-Agent Failure Lifecycle Hook
+        if parent_conversation_id and invoked_by_agent:
+            # 1. Silent Auto-Awaken Trigger
+            try:
+                silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                frappe.enqueue(
+                    "huf.ai.agent_integration.run_agent_sync",
+                    queue="default",
+                    timeout=300,
+                    is_async=True,
+                    agent_name=invoked_by_agent,
+                    prompt=silent_trigger,
+                    parent_conversation_id=None,
+                    conversation_id=parent_conversation_id,
+                    channel_id=channel_id,
+                    external_id=external_id
+                )
+            except Exception as hook_err:
+                frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+            # 3. Real-Time UI Notification
+            frappe.publish_realtime(
+                event=f"conversation:{parent_conversation_id}",
+                message={
+                    "type": "sub_agent_failed",
+                    "agent_name": agent_name,
+                    "status": "Failed",
+                    "result": error_msg
+                },
+                user=frappe.session.user
+            )
+
         return {
             "success": False,
             "error": error_msg,
@@ -1086,7 +1220,10 @@ async def run_agent_stream(
     conversation_id: str = None,
     create_new: bool = False,
     prompt_template: str = None,
-    prompt_version = None
+    prompt_version = None,
+    parent_conversation_id: str = None,
+    invoked_by_agent: str = None,
+    prompt_cache_options=None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -1233,13 +1370,16 @@ async def run_agent_stream(
             
         agent = manager.create_agent()
         
+        resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
             "conversation_history": history,
             "agent_name": agent_name,
             "conversation_id": conversation.name,
-            "agent_run_id": run_doc.name
+            "agent_run_id": run_doc.name,
+            "prompt_cache_options": resolved_prompt_cache,
         }
         
         # SUMMARIZATION LOGIC
@@ -1269,10 +1409,16 @@ async def run_agent_stream(
                 frappe.log_error(f"Summarization failed: {str(e)}", "Agent Summarization Error")
                 pass
 
-        if agent_doc.enable_conversation_data and conversation.conversation_data:
+        if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:
              try:
                 data_snapshot = json.loads(conversation.conversation_data)
-                simplified_items = {item["name"]: item["value"] for item in data_snapshot.get("items", [])}
+                # Filter to only show name/value to save tokens, excluding hidden/non-injected variables
+                simplified_items = {}
+                for item in data_snapshot.get("items", []):
+                    if item.get("auto_inject") is False or item.get("inject_mode") == "hidden":
+                        continue
+                    simplified_items[item["name"]] = item["value"]
+                
                 if simplified_items:
                     data_msg = f"CURRENT MEMORY STATE (Conversation Data): {json.dumps(simplified_items, ensure_ascii=False)}"
                     insert_idx = 0
@@ -1468,6 +1614,37 @@ async def run_agent_stream(
                     }, update_modified=True)
                     safe_commit()
 
+                    # Handle Sub-Agent Success Lifecycle Hook
+                    if parent_conversation_id and invoked_by_agent:
+                        # Silent Auto-Awaken Trigger
+                        try:
+                            silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{full_response}"
+                            frappe.enqueue(
+                                "huf.ai.agent_integration.run_agent_sync",
+                                queue="default",
+                                timeout=300,
+                                is_async=True,
+                                agent_name=invoked_by_agent,
+                                prompt=silent_trigger,
+                                parent_conversation_id=None,
+                                conversation_id=parent_conversation_id,
+                                channel_id=channel_id,
+                                external_id=external_id
+                            )
+                        except Exception as hook_err:
+                            frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
+
+                        frappe.publish_realtime(
+                            event=f"conversation:{parent_conversation_id}",
+                            message={
+                                "type": "sub_agent_completed",
+                                "agent_name": agent_name,
+                                "status": "Success",
+                                "result": full_response
+                            },
+                            user=frappe.session.user
+                        )
+
                     # Auto-naming check for stream
                     try:
                         if agent_doc.autonaming_of_conversation_title:
@@ -1545,6 +1722,37 @@ async def run_agent_stream(
                     }, update_modified=True)
                     safe_commit()
                     
+                    # Handle Sub-Agent Failure Lifecycle Hook
+                    if parent_conversation_id and invoked_by_agent:
+                        # Silent Auto-Awaken Trigger
+                        try:
+                            silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                            frappe.enqueue(
+                                "huf.ai.agent_integration.run_agent_sync",
+                                queue="default",
+                                timeout=300,
+                                is_async=True,
+                                agent_name=invoked_by_agent,
+                                prompt=silent_trigger,
+                                parent_conversation_id=None,
+                                conversation_id=parent_conversation_id,
+                                channel_id=channel_id,
+                                external_id=external_id
+                            )
+                        except Exception as hook_err:
+                            frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+                        frappe.publish_realtime(
+                            event=f"conversation:{parent_conversation_id}",
+                            message={
+                                "type": "sub_agent_failed",
+                                "agent_name": agent_name,
+                                "status": "Failed",
+                                "result": error_msg
+                            },
+                            user=frappe.session.user
+                        )
+
                     yield chunk
                     return
         
@@ -1599,6 +1807,37 @@ async def run_agent_stream(
             }, update_modified=True)
             safe_commit()
             
+            # Handle Sub-Agent Failure Lifecycle Hook
+            if parent_conversation_id and invoked_by_agent:
+                # Silent Auto-Awaken Trigger
+                try:
+                    silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                    frappe.enqueue(
+                        "huf.ai.agent_integration.run_agent_sync",
+                        queue="default",
+                        timeout=300,
+                        is_async=True,
+                        agent_name=invoked_by_agent,
+                        prompt=silent_trigger,
+                        parent_conversation_id=None,
+                        conversation_id=parent_conversation_id,
+                        channel_id=channel_id,
+                        external_id=external_id
+                    )
+                except Exception as hook_err:
+                    frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+                frappe.publish_realtime(
+                    event=f"conversation:{parent_conversation_id}",
+                    message={
+                        "type": "sub_agent_failed",
+                        "agent_name": agent_name,
+                        "status": "Failed",
+                        "result": error_msg
+                    },
+                    user=frappe.session.user
+                )
+
             yield {
                 "type": "error",
                 "error": error_msg
@@ -1611,3 +1850,65 @@ async def run_agent_stream(
             "type": "error",
             "error": error_msg
         }
+
+# ---------------------------------------------------------------------------
+# Permission query conditions — used by hooks.py permission_query_conditions
+# These return SQL WHERE fragments so Frappe's list view only shows rows
+# the current user is allowed to see.
+# ---------------------------------------------------------------------------
+
+
+def get_conversation_permission_conditions(user):
+	"""
+	Restrict Agent Conversation list to conversations the user owns,
+	unless the user has chat.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	from huf.permissions import has_capability
+	if has_capability(user, "chat.view_all"):
+		return None
+
+	# Only own conversations
+	return f"`tabAgent Conversation`.owner = {frappe.db.escape(user)}"
+
+
+def get_message_permission_conditions(user):
+	"""
+	Restrict Agent Message list to messages from conversations the user owns,
+	unless the user has chat.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	from huf.permissions import has_capability
+	if has_capability(user, "chat.view_all"):
+		return None
+
+	# Filter by conversation ownership
+	return f"(`tabAgent Message`.conversation IN (SELECT name FROM `tabAgent Conversation` WHERE owner = {frappe.db.escape(user)}))"
+
+
+def get_run_permission_conditions(user):
+	"""
+	Restrict Agent Run list to runs the user owns,
+	unless the user has agent.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	from huf.permissions import has_capability
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	return f"`tabAgent Run`.owner = {frappe.db.escape(user)}"

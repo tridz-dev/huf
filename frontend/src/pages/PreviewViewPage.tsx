@@ -8,7 +8,7 @@
  * Toolbar toggles "JSX only" (default) / "Full message".
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, ExternalLink, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -18,8 +18,12 @@ import { handleFrappeError } from '@/lib/frappe-error';
 import { parseJSXPreviews, hasJSXPreviews } from '@/utils/jsxPreviewParser';
 import { parseArtifacts, hasArtifacts } from '@/utils/artifactParser';
 import { parseWebPreviews, hasWebPreviews } from '@/utils/webPreviewParser';
-import { MessageResponse } from '@/components/ai-elements/message';
 import { JSXPreviewRenderer } from '@/components/chat/JSXPreviewRenderer';
+
+/** Lazy load MessageResponse (Streamdown) - ~1.2MB, only needed for full message view */
+const MessageResponse = lazy(() =>
+	import('@/components/ai-elements/message').then((m) => ({ default: m.MessageResponse })),
+);
 import { WebPreviewRenderer } from '@/components/chat/WebPreviewRenderer';
 import { ArtifactRenderer } from '@/components/chat/ArtifactRenderer';
 import type { ParsedJSXPreview, ParsedArtifact, ParsedWebPreview } from '@/types/artifact.types';
@@ -229,7 +233,15 @@ export function PreviewViewPage() {
 						<>
 							{textContent && textContent.trim() && (
 								<div className="prose prose-sm dark:prose-invert max-w-none">
-									<MessageResponse>{textContent}</MessageResponse>
+									<Suspense
+										fallback={
+											<div className="animate-pulse rounded bg-muted/50 p-4 text-sm text-muted-foreground">
+												Loading…
+											</div>
+										}
+									>
+										<MessageResponse>{textContent}</MessageResponse>
+									</Suspense>
 								</div>
 							)}
 							{jsxPreviews.map((preview, idx) => (

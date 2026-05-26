@@ -27,6 +27,17 @@ from datetime import datetime, timedelta
 from .tool_registry import PermissionAwareToolRegistry
 MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
 
+
+def _frappe_run_context_dict(ctx) -> dict:
+    """Huf run context may be a dict or an Agents SDK ToolContext wrapping that dict."""
+    if ctx is None:
+        return {}
+    if isinstance(ctx, dict):
+        return ctx
+    inner = getattr(ctx, "context", None)
+    return inner if isinstance(inner, dict) else {}
+
+
 def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_guest: bool = False):
     """Guard function to block dangerous tools for Guest users"""
     user = frappe.session.user
@@ -168,7 +179,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
 
                     elif function_doc.types == "Run Agent":
                         if function_doc.agent:
-                            extra_args["agent_name"] = function_doc.agent
+                            extra_args["target_agent_name"] = function_doc.agent
 
                     tool = create_function_tool(
                         function_doc.tool_name,
@@ -222,7 +233,9 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         "name": {"type": "string", "description": "Name of the item to set"},
                         "value": {"type": "string", "description": "Value to store (scalar, object, or array)"},
                         "value_type": {"type": "string", "description": "Type of value (scalar, object, array). Optional."},
-                        "source": {"type": "string", "description": "Source of data (agent/user). Default: agent"}
+                        "source": {"type": "string", "description": "Source of data (agent/user). Default: agent"},
+                        "auto_inject": {"type": "boolean", "description": "Whether to auto-inject this variable in the system prompt on future turns. Set false for high-volume variables to prevent context bloat. Default: true"},
+                        "inject_mode": {"type": "string", "enum": ["visible", "hidden"], "description": "Injection mode. 'visible' to auto-inject in system prompt (if enabled on agent), 'hidden' to keep it in the data layer only. Default: visible"}
                     },
                     "required": ["name", "value"]
                 }
@@ -292,13 +305,13 @@ def create_function_tool(
 
                 args_dict = json.loads(args_json or "{}")
 
-                if isinstance(ctx, dict):
-                    if "conversation_id" in ctx:
-                        args_dict["conversation_id"] = ctx["conversation_id"]
-                    if "agent_run_id" in ctx:
-                        args_dict["agent_run_id"] = ctx["agent_run_id"]
-                    if "agent_name" in ctx:
-                        args_dict["agent_name"] = ctx["agent_name"]
+                huf_ctx = _frappe_run_context_dict(ctx)
+                if "conversation_id" in huf_ctx:
+                    args_dict["conversation_id"] = huf_ctx["conversation_id"]
+                if "agent_run_id" in huf_ctx:
+                    args_dict["agent_run_id"] = huf_ctx["agent_run_id"]
+                if "agent_name" in huf_ctx:
+                    args_dict["agent_name"] = huf_ctx["agent_name"]
 
                 if _extra_args:
                     args_dict.update(_extra_args)
@@ -817,13 +830,15 @@ def handle_get_list(
 				warning = f"{warning}\n{filter_warning}" if warning else filter_warning
 
 		page_length = limit if limit and int(limit) > 0 else None
+		ignore_permissions = kwargs.get("ignore_permissions", False)
 
-		result = frappe.get_all(
+		result = frappe.get_list(
 			reference_doctype,
 			filters=filters,
 			fields=filtered_fields,
 			limit_page_length=page_length,
 			order_by=order_by,
+			ignore_permissions=ignore_permissions,
 		)
 
 
@@ -994,7 +1009,7 @@ def handle_cancel_document(reference_doctype: str, document_id: str, ignore_perm
     doc.cancel()
     return {"success": True, "message": "Cancelled"}
 
-def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, **kwargs):
+def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, ignore_permissions=False, **kwargs):
     """
     Get a field value (or multiple values) from a DocType.
     Matches the auto-generated JSON schema: doctype + filters + fieldname.
@@ -1006,7 +1021,24 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
         }
 
     try:
-        value = frappe.db.get_value(doctype, filters, fieldname)
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
+        if not doc_name:
+            return {
+                "success": False,
+                "error": f"No {doctype} found matching filters {filters}"
+            }
+
+        if not ignore_permissions and not frappe.has_permission(doctype, "read", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have read permission on {doctype} {doc_name}"
+            }
+
+        value = frappe.db.get_value(doctype, doc_name, fieldname)
         return {
             "success": True,
             "doctype": doctype,
@@ -1019,7 +1051,7 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
 
 
 
-def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, **kwargs):
+def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, ignore_permissions=False, **kwargs):
     """
     Set a field value on a document that matches filters.
     """
@@ -1027,14 +1059,26 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         return {"success": False, "error": "Missing required parameters"}
 
     try:
-        doc_name = frappe.db.get_value(doctype, filters, "name")
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
         if not doc_name:
             return {
                 "success": False,
                 "error": f"No {doctype} found matching filters {filters}"
             }
 
-        updated = frappe.db.set_value(doctype, doc_name, fieldname, value)
+        if not ignore_permissions and not frappe.has_permission(doctype, "write", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have write permission on {doctype} {doc_name}"
+            }
+
+        doc = frappe.get_doc(doctype, doc_name)
+        doc.set(fieldname, value)
+        doc.save(ignore_permissions=ignore_permissions)
         frappe.db.commit()
 
         return {
@@ -1042,7 +1086,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
             "doctype": doctype,
             "name": doc_name,
             "fieldname": fieldname,
-            "new_value": updated[fieldname] if isinstance(updated, dict) else value
+            "new_value": doc.get(fieldname)
         }
 
     except Exception as e:
@@ -1050,31 +1094,56 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         return {"success": False, "error": str(e)}
 
 
-def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, **kwargs):
+def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, ignore_permissions=False, **kwargs):
+    if not ignore_permissions and not frappe.has_permission("Report", "read", doc=report_name):
+        return {"success": False, "error": f"You do not have permission to read Report {report_name}"}
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
 
-def handle_run_agent(agent_name: str, prompt: str, **kwargs):
+def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
     """
     Queue another agent execution instead of blocking.
     """
     try:
-        if not frappe.db.exists("Agent", agent_name):
-            return {"success": False, "error": f"Agent '{agent_name}' does not exist"}
+        if not frappe.db.exists("Agent", target_agent_name):
+            return {"success": False, "error": f"Agent '{target_agent_name}' does not exist"}
 
-        target_agent = frappe.get_doc("Agent", agent_name)
+        target_agent = frappe.get_doc("Agent", target_agent_name)
+        
+        from huf.ai.agent_integration import _is_user_allowed
+        if not _is_user_allowed(target_agent, frappe.session.user):
+            return {
+                "success": False, 
+                "error": f"Permission Denied: User '{frappe.session.user}' is not authorized to run the sub-agent '{target_agent_name}'."
+            }
+        
+        conversation_id = kwargs.get("conversation_id")
+        agent_run_id = kwargs.get("agent_run_id")
+        agent_name_self = kwargs.get("agent_name")
+
+        if target_agent_name == agent_name_self:
+            return {
+                "success": False, 
+                "error": f"Circular Dependency Error: An agent cannot invoke itself as a sub-agent."
+            }
 
         job = enqueue(
             "huf.ai.agent_integration.run_agent_sync",
             queue="default",
-            timeout=300,
+            timeout=1500,
             is_async=True,
-            agent_name=agent_name,
+            agent_name=target_agent_name,
             prompt=prompt,
             provider=target_agent.provider,
             model=target_agent.model,
+            parent_conversation_id=conversation_id,
+            invoked_by_agent=agent_name_self,
         )
 
-        return {"success": True, "queued": True, "job_id": job.id}
+        return {
+            "status": "Queued",
+            "message": "The task is currently being processed in the background. IMPORTANT: DO NOT tell the user that the task is completed or successful yet. Inform the user that you are working on it and will provide an update shortly. Do not mention the terms 'sub-agent' or 'background queue' explicitly, keep it natural (e.g., 'I am processing this for you now...').",
+            "job_id": job.id
+        }
     except Exception as e:
         frappe.log_error("Run Agent Tool Error", str(e))
         return {"success": False, "error": str(e)}
@@ -1161,6 +1230,8 @@ def handle_set_conversation_data(
     value_type: str = None, 
     source: str = "agent", 
     conversation_id: str = None, 
+    auto_inject: bool = None,
+    inject_mode: str = None,
     **kwargs
 ):
     """Set a value in conversation data."""
@@ -1198,11 +1269,31 @@ def handle_set_conversation_data(
         found = False
         for i, item in enumerate(state["items"]):
             if item.get("name") == name:
+                resolved_auto_inject = auto_inject if auto_inject is not None else kwargs.get("auto_inject")
+                if resolved_auto_inject is None:
+                    resolved_auto_inject = item.get("auto_inject", True)
+                
+                resolved_inject_mode = inject_mode if inject_mode is not None else kwargs.get("inject_mode")
+                if resolved_inject_mode is None:
+                    resolved_inject_mode = item.get("inject_mode", "visible")
+                
+                updated_item["auto_inject"] = resolved_auto_inject
+                updated_item["inject_mode"] = resolved_inject_mode
                 state["items"][i] = updated_item
                 found = True
                 break
         
         if not found:
+            resolved_auto_inject = auto_inject if auto_inject is not None else kwargs.get("auto_inject")
+            if resolved_auto_inject is None:
+                resolved_auto_inject = True
+            
+            resolved_inject_mode = inject_mode if inject_mode is not None else kwargs.get("inject_mode")
+            if resolved_inject_mode is None:
+                resolved_inject_mode = "visible"
+                
+            updated_item["auto_inject"] = resolved_auto_inject
+            updated_item["inject_mode"] = resolved_inject_mode
             state["items"].append(updated_item)
 
         new_json = json.dumps(state, ensure_ascii=False, indent=2)

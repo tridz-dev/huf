@@ -1,0 +1,25 @@
+info:
+  name: Agent Message
+  type: http
+  seq: 12
+
+http:
+  method: GET
+  url: '{{BASE_URL}}/api/resource/Agent%20Message?fields=["name","conversation","agent","model","provider","agent_run","content"]&limit_page_length=0&as_dict=true'
+  params:
+    - name: fields
+      value: '["name","conversation","agent","model","provider","agent_run","content"]'
+      type: query
+    - name: limit_page_length
+      value: "0"
+      type: query
+    - name: as_dict
+      value: "true"
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

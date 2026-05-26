@@ -9,14 +9,22 @@ import {
   type HTMLAttributes,
   useContext,
   useEffect,
-  useRef,
   useState,
 } from "react";
-import { type BundledLanguage, codeToHtml, type ShikiTransformer } from "shiki";
+import Prism from "prismjs";
+import "prismjs/themes/prism-tomorrow.css";
+import "prismjs/components/prism-jsx.js";
+import "prismjs/components/prism-tsx.js";
+import "prismjs/components/prism-typescript.js";
+import "prismjs/components/prism-python.js";
+import "prismjs/components/prism-bash.js";
+import "prismjs/components/prism-json.js";
+import "prismjs/components/prism-yaml.js";
+import "prismjs/components/prism-sql.js";
 
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
-  language: BundledLanguage;
+  language: string;
   showLineNumbers?: boolean;
 };
 
@@ -28,48 +36,13 @@ const CodeBlockContext = createContext<CodeBlockContextType>({
   code: "",
 });
 
-const lineNumberTransformer: ShikiTransformer = {
-  name: "line-numbers",
-  line(node, line) {
-    node.children.unshift({
-      type: "element",
-      tagName: "span",
-      properties: {
-        className: [
-          "inline-block",
-          "min-w-10",
-          "mr-4",
-          "text-right",
-          "select-none",
-          "text-muted-foreground",
-        ],
-      },
-      children: [{ type: "text", value: String(line) }],
-    });
-  },
-};
-
-export async function highlightCode(
-  code: string,
-  language: BundledLanguage,
-  showLineNumbers = false
-) {
-  const transformers: ShikiTransformer[] = showLineNumbers
-    ? [lineNumberTransformer]
-    : [];
-
-  return await Promise.all([
-    codeToHtml(code, {
-      lang: language,
-      theme: "one-light",
-      transformers,
-    }),
-    codeToHtml(code, {
-      lang: language,
-      theme: "one-dark-pro",
-      transformers,
-    }),
-  ]);
+export async function highlightCode(code: string, language: string) {
+  const grammar = Prism.languages[language] || Prism.languages.javascript || Prism.languages.markup;
+  try {
+    return Prism.highlight(code, grammar, language);
+  } catch (e) {
+    return code;
+  }
 }
 
 export const CodeBlock = ({
@@ -81,42 +54,24 @@ export const CodeBlock = ({
   ...props
 }: CodeBlockProps) => {
   const [html, setHtml] = useState<string>("");
-  const [darkHtml, setDarkHtml] = useState<string>("");
-  const mounted = useRef(false);
 
   useEffect(() => {
-    highlightCode(code, language, showLineNumbers).then(([light, dark]) => {
-      if (!mounted.current) {
-        setHtml(light);
-        setDarkHtml(dark);
-        mounted.current = true;
-      }
-    });
-
-    return () => {
-      mounted.current = false;
-    };
-  }, [code, language, showLineNumbers]);
+    highlightCode(code, language).then((highlighted) => setHtml(highlighted));
+  }, [code, language]);
 
   return (
     <CodeBlockContext.Provider value={{ code }}>
       <div
         className={cn(
-          "group relative w-full overflow-hidden rounded-md border bg-background text-foreground",
+          "group relative w-full overflow-hidden rounded-md border bg-zinc-950 text-zinc-50",
           className
         )}
         {...props}
       >
         <div className="relative">
-          <div
-            className="overflow-x-auto overflow-y-hidden dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-          <div
-            className="hidden overflow-x-auto overflow-y-hidden dark:block [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: "this is needed."
-            dangerouslySetInnerHTML={{ __html: darkHtml }}
+          <pre
+            className={`language-${language} overflow-x-auto p-4 text-sm font-mono m-0`}
+            dangerouslySetInnerHTML={{ __html: html || code }}
           />
           {children && (
             <div className="absolute top-2 right-2 flex items-center gap-2">

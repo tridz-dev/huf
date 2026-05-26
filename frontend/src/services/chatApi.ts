@@ -43,6 +43,8 @@ export interface AgentMessageDoc {
   is_agent_message?: 0 | 1 | string;
   kind?: string;
   generated_image?: string;
+  generated_audio?: string;
+  voice_message?: string;
   tool_name?: string;
   tool_status?: string;
   tool_args?: string | Record<string, unknown>;
@@ -57,6 +59,8 @@ export interface ChatMessage {
   isAgent: boolean;
   kind?: string;
   generatedImage?: string;
+  generatedAudio?: string;
+  voiceMessage?: string;
   toolName?: string;
   toolStatus?: string;
   toolArgs?: string | Record<string, unknown>;
@@ -86,6 +90,8 @@ function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
     isAgent,
     kind: doc.kind,
     generatedImage: doc.generated_image,
+    generatedAudio: doc.generated_audio,
+    voiceMessage: doc.voice_message,
     toolName: doc.tool_name,
     toolStatus: doc.tool_status,
     toolArgs: doc.tool_args,
@@ -279,7 +285,7 @@ export async function getConversationMessages(
 
   try {
     const messages = await db.getDocList(doctype['Agent Message'], {
-      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'voice_message', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
       filters: [['conversation', '=', conversation]],
       orderBy: { field: 'creation', order: 'desc' },
       limit,
@@ -295,6 +301,41 @@ export async function getConversationMessages(
     };
   } catch (error) {
     handleFrappeError(error, 'Error fetching conversation messages');
+  }
+}
+
+/**
+ * Transcribe audio only (no agent run). Returns transcript for streaming flow.
+ */
+export interface TranscribeAudioParams {
+  filename: string;
+  b64data: string;
+  agent: string;
+  conversation?: string;
+}
+
+export interface TranscribeAudioResponse {
+  success: boolean;
+  conversation_id?: string;
+  transcript?: string;
+  message_id?: string;
+  error?: string;
+}
+
+export async function transcribeAudio(
+  params: TranscribeAudioParams
+): Promise<TranscribeAudioResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_chat.upload_audio_and_transcribe_web', {
+      filename: params.filename,
+      b64data: params.b64data,
+      agent: params.agent,
+      conversation: params.conversation ?? undefined,
+      transcribe_only: true,
+    });
+    return (result?.message ?? result) as TranscribeAudioResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error transcribing audio');
   }
 }
 

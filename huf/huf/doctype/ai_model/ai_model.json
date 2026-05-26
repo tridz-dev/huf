@@ -7,7 +7,8 @@
  "engine": "InnoDB",
  "field_order": [
   "model_name",
-  "provider"
+  "provider",
+  "modalities"
  ],
  "fields": [
   {
@@ -25,12 +26,20 @@
    "label": "Model Name",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "description": "Supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription).",
+   "fieldname": "modalities",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Modalities",
+   "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-11 18:34:54.241474",
+ "modified": "2026-03-11 12:20:30.191336",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "AI Model",
@@ -48,6 +57,31 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 0,
+   "select": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 0
   }
  ],
  "row_format": "Dynamic",

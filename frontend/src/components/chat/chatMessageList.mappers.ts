@@ -3,6 +3,33 @@ import type { ChatMessage } from '@/services/chatApi';
 import { mapToolStatusToState } from './utils';
 import type { MessageType } from './types';
 
+/** Normalize socket event - backend may send `status`/`result` instead of `tool_status`/`tool_result` */
+function normalizeToolCallEvent(raw: Record<string, unknown>): ToolCallEvent {
+  const tool_status =
+    (raw.tool_status as string) ?? (raw.status as string) ?? 'Queued';
+  let tool_result = raw.tool_result as Record<string, unknown> | undefined;
+  if (!tool_result && typeof raw.result === 'string') {
+    try {
+      const parsed = JSON.parse(raw.result);
+      tool_result = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : undefined;
+    } catch {
+      tool_result = { output: raw.result };
+    }
+  }
+  return {
+    ...raw,
+    agent_run_id: (raw.agent_run_id as string) ?? '',
+    conversation_id: (raw.conversation_id as string) ?? '',
+    message_id: (raw.message_id as string) ?? (raw.agent_run_id as string) ?? '',
+    tool_call_id: (raw.tool_call_id as string) ?? '',
+    tool_name: (raw.tool_name as string) ?? 'unknown',
+    tool_status: tool_status as ToolCallEvent['tool_status'],
+    tool_args: raw.tool_args as Record<string, unknown> | undefined,
+    tool_result,
+    error: (raw.error as string | null) ?? undefined,
+  } as ToolCallEvent;
+}
+
 function safeParseJsonRecord(value: unknown): Record<string, unknown> {
   if (!value) return {};
   if (typeof value === 'object') return value as Record<string, unknown>;
@@ -27,27 +54,50 @@ function safeStringify(value: unknown): string {
   }
 }
 
-export function upsertToolUpdateFromSocket(prev: MessageType[], event: ToolCallEvent): MessageType[] {
+export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCallEvent | Record<string, unknown>): MessageType[] {
+  const event = normalizeToolCallEvent(
+    typeof rawEvent?.type === 'string' ? (rawEvent as Record<string, unknown>) : (rawEvent as Record<string, unknown>)
+  );
+
+  // Skip events with no meaningful identifiers
+  if (!event.tool_call_id && !event.tool_name) return prev;
+  const displayName = event.tool_name && event.tool_name !== 'unknown' ? event.tool_name : 'Tool';
+
   const parsedArgs = safeParseJsonRecord(event.tool_args);
   const parsedResult = event.tool_result ? safeStringify(event.tool_result) : undefined;
 
   const updatedTool = {
     tool_call_id: event.tool_call_id,
-    name: event.tool_name,
-    description: event.tool_name,
+    name: displayName,
+    description: displayName,
     status: mapToolStatusToState(event.tool_status) as any,
     parameters: parsedArgs,
     result: event.tool_status === 'Completed' ? parsedResult : undefined,
     error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
   };
 
-  const messageIndex = prev.findIndex((msg) => msg.key === event.agent_run_id);
+  // Find message: 1) by agent_run_id, 2) by tool_call_id in any message's tools
+  let messageIndex = event.agent_run_id
+    ? prev.findIndex((msg) => msg.key === event.agent_run_id)
+    : -1;
+  if (messageIndex < 0 && event.tool_call_id) {
+    messageIndex = prev.findIndex(
+      (msg) => msg.tools?.some((t: { tool_call_id?: string }) => t.tool_call_id === event.tool_call_id)
+    );
+  }
 
-  // Update existing assistant run message
+  // Update existing assistant message
   if (messageIndex >= 0) {
     const message = prev[messageIndex];
     const existingTools = message.tools || [];
-    const toolIndex = existingTools.findIndex((tool) => tool.name === event.tool_name);
+    let toolIndex = event.tool_call_id
+      ? existingTools.findIndex((t: { tool_call_id?: string }) => t.tool_call_id === event.tool_call_id)
+      : -1;
+    if (toolIndex < 0) {
+      toolIndex = existingTools.findIndex(
+        (t: { name?: string }) => t.name === displayName || t.name === event.tool_name
+      );
+    }
 
     const updatedTools = [...existingTools];
     if (toolIndex >= 0) updatedTools[toolIndex] = updatedTool;
@@ -64,7 +114,9 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], event: ToolCallE
     return updated;
   }
 
-  // Otherwise create a temporary assistant message for the tool call
+  // Don't create new message if we have no agent_run_id (completed event without started)
+  if (!event.agent_run_id) return prev;
+
   const isImageGeneration = event.tool_name === 'generate_image' && event.type === 'tool_call_started';
   const newMessage: MessageType = {
     key: event.agent_run_id,
@@ -90,6 +142,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
       ...updated[messageIndex],
       kind: event.kind,
       generatedImage: event.generated_image,
+      generatedAudio: event.generated_audio,
       versions: updated[messageIndex].versions.map((v) =>
         v.id === event.message_id ? { ...v, content: event.content || v.content } : v
       ),
@@ -102,6 +155,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
     from: 'assistant',
     kind: event.kind,
     generatedImage: event.generated_image,
+    generatedAudio: event.generated_audio,
     versions: [
       {
         id: event.message_id,
@@ -136,6 +190,8 @@ export function mergeConversationItemsIntoMessages(
       from: item.isAgent ? 'assistant' : 'user',
       kind: item.kind,
       generatedImage: item.generatedImage,
+      generatedAudio: item.generatedAudio,
+      voiceMessage: item.voiceMessage,
       versions: [
         {
           id: item.id,

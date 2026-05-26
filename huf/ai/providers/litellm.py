@@ -23,8 +23,9 @@ from types import SimpleNamespace
 import frappe
 import litellm
 from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, completion_cost, ContextWindowExceededError
-from litellm.utils import supports_prompt_caching, trim_messages
+from litellm.utils import trim_messages
 from huf.ai.tool_serializer import serialize_tools
+from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 
 
 class SimpleResult:
@@ -42,12 +43,48 @@ class SimpleResult:
 _L1_CAPABILITY_CACHE = {}
 
 
-async def _execute_tool_call(tool, args_json, context=None):
+def _get_prompt_cache_options(context: dict | None) -> dict:
+    if not isinstance(context, dict):
+        return {}
+    options = context.get("prompt_cache_options")
+    return options if isinstance(options, dict) else {}
+
+
+def _build_text_content(text: str, provider_name: str, cache_enabled: bool, cache_control_type: str):
+    """Build provider-compatible message content payload with optional cache marker."""
+    if not cache_enabled:
+        return text
+
+    if provider_name == "anthropic":
+        return [{"type": "text", "text": text, "cache_control": {"type": cache_control_type}}]
+
+    return [{"type": "text", "text": text}]
+
+
+async def _execute_tool_call(tool, args_json, context=None, tool_call_id=None):
     """Execute a tool call and return the result.
-    Uses positional args so both HUF tools (args_json) and agents @function_tool (input) work.
+
+    Huf passes a plain dict as ``context`` (conversation_id, agent_run_id, …). Tools built with
+    the Agents SDK ``@function_tool`` expect a ``ToolContext`` with ``tool_name``; passing a dict
+    causes 'dict' object has no attribute 'tool_name'. Wrap dicts in ``ToolContext`` while keeping
+    the Huf payload on ``ToolContext.context`` so ``sdk_tools`` can still merge it into args.
     """
     args_str = args_json if isinstance(args_json, str) else json.dumps(args_json or {})
-    return await tool.on_invoke_tool(context, args_str)
+
+    invoke_ctx = context
+    if isinstance(context, dict):
+        from agents.tool_context import ToolContext
+        from agents.usage import Usage
+
+        invoke_ctx = ToolContext(
+            context,
+            usage=Usage(),
+            tool_name=tool.name,
+            tool_call_id=tool_call_id if tool_call_id is not None else "",
+            tool_arguments=args_str,
+        )
+
+    return await tool.on_invoke_tool(invoke_ctx, args_str)
 
 
 def _find_tool(agent, tool_name):
@@ -183,6 +220,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         cache_control_type = "ephemeral"
         cache_system_message = False
         cache_conversation_history = False
+        prompt_cache_options = _get_prompt_cache_options(context)
+        static_prefix = (prompt_cache_options.get("static_prefix") or "").strip()
+        dynamic_suffix = prompt_cache_options.get("dynamic_suffix")
+        openai_prompt_cache_retention = prompt_cache_options.get("openai_prompt_cache_retention")
+        gemini_cached_content = prompt_cache_options.get("gemini_cached_content")
+        cache_static_prefix = bool(prompt_cache_options.get("cache_static_prefix", True))
+        cache_dynamic_content_override = prompt_cache_options.get("cache_dynamic_content")
         
         if agent_doc:
             enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
@@ -194,46 +238,41 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         model_supports_caching = False
         if enable_prompt_caching:
             try:
-                base_model = normalized_model.split("/", 1)[-1] if "/" in normalized_model else normalized_model
-                model_supports_caching = supports_prompt_caching(model=normalized_model) or supports_prompt_caching(model=base_model)
+                model_supports_caching = model_supports_prompt_caching(model, provider)
             except Exception:
-                # If check fails, assume not supported
                 model_supports_caching = False
                 frappe.log_error(
                     f"Failed to check prompt caching support for model {normalized_model}",
                     "LiteLLM Prompt Caching"
                 )
 
-        # Prepare messages with cache_control if enabled
+        if not isinstance(dynamic_suffix, str):
+            dynamic_suffix = enhanced_prompt
+
+        # Prepare messages with cache control/static-vs-dynamic segmentation
         messages = []
         provider_name = normalized_model.split("/")[0]
+
+        if static_prefix:
+            static_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_static_prefix
+            )
+            messages.append(
+                {
+                    "role": "system",
+                    "content": _build_text_content(
+                        static_prefix, provider_name, static_cache_enabled, cache_control_type
+                    ),
+                }
+            )
         
         if agent.instructions:
-            if not (enable_prompt_caching and model_supports_caching and cache_system_message):
-                system_content = agent.instructions
-            else:
-                if provider_name == "anthropic" or "anthropic" in normalized_model:
-                    # Anthropic: content array with cache_control
-                    system_content = [
-                        {
-                            "type": "text",
-                            "text": agent.instructions,
-                            "cache_control": {"type": cache_control_type}
-                        }
-                    ]
-                elif provider_name in ("openai", "deepseek"):
-                    # OpenAI/Deepseek: content array format (LiteLLM handles cache_control)
-                    system_content = [
-                        {
-                            "type": "text",
-                            "text": agent.instructions
-                        }
-                    ]
-                    # Note: OpenAI requires messages to be marked for caching
-                    # LiteLLM handles this automatically when content is an array
-                else:
-                    system_content = [{"type": "text", "text": agent.instructions}]
-            
+            system_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_system_message
+            )
+            system_content = _build_text_content(
+                agent.instructions, provider_name, system_cache_enabled, cache_control_type
+            )
             messages.append({"role": "system", "content": system_content})
         
         # Insert Conversation History if available
@@ -241,26 +280,16 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             messages.extend(context["conversation_history"])
         
         # Add user message with cache_control if conversation history caching is enabled
-        if not (enable_prompt_caching and model_supports_caching and cache_conversation_history):
-            user_content = enhanced_prompt
-        else:
-            if provider_name == "anthropic" or "anthropic" in normalized_model:
-                # Anthropic: content array with cache_control
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt,
-                        "cache_control": {"type": cache_control_type}
-                    }
-                ]
-            elif provider_name in ("openai", "deepseek"):
-                # OpenAI/Deepseek: content array format
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt
-                    }
-                ]
+        cache_dynamic_content = cache_conversation_history
+        if isinstance(cache_dynamic_content_override, bool):
+            cache_dynamic_content = cache_dynamic_content_override
+
+        user_content = _build_text_content(
+            dynamic_suffix,
+            provider_name,
+            enable_prompt_caching and model_supports_caching and cache_dynamic_content,
+            cache_control_type,
+        )
         
         messages.append({"role": "user", "content": user_content})
 
@@ -314,6 +343,12 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
             if context and context.get("response_format"):
                 completion_kwargs["response_format"] = context.get("response_format")
+
+            if openai_prompt_cache_retention:
+                completion_kwargs["prompt_cache_retention"] = openai_prompt_cache_retention
+
+            if gemini_cached_content:
+                completion_kwargs["cached_content"] = gemini_cached_content
 
             if top_p:
                 completion_kwargs["top_p"] = top_p
@@ -495,7 +530,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                             frappe.db.commit()
                         
                         result_content = await _execute_tool_call(
-                            tool_to_run, tool_args, context
+                            tool_to_run, tool_args, context, tool_call.id
                         )
                     except Exception as e:
                         result_content = f"Error executing tool {tool_name}: {str(e)}"
@@ -626,6 +661,13 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         cache_control_type = "ephemeral"
         cache_system_message = False
         cache_conversation_history = False
+        prompt_cache_options = _get_prompt_cache_options(context)
+        static_prefix = (prompt_cache_options.get("static_prefix") or "").strip()
+        dynamic_suffix = prompt_cache_options.get("dynamic_suffix")
+        openai_prompt_cache_retention = prompt_cache_options.get("openai_prompt_cache_retention")
+        gemini_cached_content = prompt_cache_options.get("gemini_cached_content")
+        cache_static_prefix = bool(prompt_cache_options.get("cache_static_prefix", True))
+        cache_dynamic_content_override = prompt_cache_options.get("cache_dynamic_content")
         
         if agent_doc:
             enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
@@ -637,8 +679,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         model_supports_caching = False
         if enable_prompt_caching:
             try:
-                base_model = normalized_model.split("/", 1)[-1] if "/" in normalized_model else normalized_model
-                model_supports_caching = supports_prompt_caching(model=normalized_model) or supports_prompt_caching(model=base_model)
+                model_supports_caching = model_supports_prompt_caching(model, provider)
             except Exception:
                 model_supports_caching = False
                 frappe.log_error(
@@ -646,53 +687,49 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     title="LiteLLM Prompt Caching"
                 )
 
-        # Prepare messages with cache_control if enabled
+        if not isinstance(dynamic_suffix, str):
+            dynamic_suffix = enhanced_prompt
+
+        # Prepare messages with cache control/static-vs-dynamic segmentation
         messages = []
         provider_name = normalized_model.split("/")[0]
+
+        if static_prefix:
+            static_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_static_prefix
+            )
+            messages.append(
+                {
+                    "role": "system",
+                    "content": _build_text_content(
+                        static_prefix, provider_name, static_cache_enabled, cache_control_type
+                    ),
+                }
+            )
         
         if agent.instructions:
-            system_content = agent.instructions
-            
-            if enable_prompt_caching and model_supports_caching and cache_system_message:
-                if provider_name == "anthropic" or "anthropic" in normalized_model:
-                    system_content = [
-                        {
-                            "type": "text",
-                            "text": agent.instructions,
-                            "cache_control": {"type": cache_control_type}
-                        }
-                    ]
-                elif provider_name in ("openai", "deepseek"):
-                    system_content = [
-                        {
-                            "type": "text",
-                            "text": agent.instructions
-                        }
-                    ]
-            
+            system_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_system_message
+            )
+            system_content = _build_text_content(
+                agent.instructions, provider_name, system_cache_enabled, cache_control_type
+            )
             messages.append({"role": "system", "content": system_content})
         
         # Insert Conversation History if available
         if context and context.get("conversation_history"):
             messages.extend(context["conversation_history"])
         
-        user_content = enhanced_prompt
-        if enable_prompt_caching and model_supports_caching and cache_conversation_history:
-            if provider_name == "anthropic" or "anthropic" in normalized_model:
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt,
-                        "cache_control": {"type": cache_control_type}
-                    }
-                ]
-            elif provider_name in ("openai", "deepseek"):
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt
-                    }
-                ]
+        cache_dynamic_content = cache_conversation_history
+        if isinstance(cache_dynamic_content_override, bool):
+            cache_dynamic_content = cache_dynamic_content_override
+
+        user_content = _build_text_content(
+            dynamic_suffix,
+            provider_name,
+            enable_prompt_caching and model_supports_caching and cache_dynamic_content,
+            cache_control_type,
+        )
         
         messages.append({"role": "user", "content": user_content})
 
@@ -740,6 +777,12 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
         if top_p:
             completion_kwargs["top_p"] = top_p
+
+        if openai_prompt_cache_retention:
+            completion_kwargs["prompt_cache_retention"] = openai_prompt_cache_retention
+
+        if gemini_cached_content:
+            completion_kwargs["cached_content"] = gemini_cached_content
 
         provider_name = normalized_model.split("/")[0]
         _setup_api_key(provider_name, api_key, completion_kwargs)
@@ -868,7 +911,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
                                     try:
                                         result_content = await _execute_tool_call(
-                                            tool_to_run, tool_args, context
+                                            tool_to_run, tool_args, context, tool_call.get("id")
                                         )
                                     except Exception as e:
                                         result_content = f"Error executing tool {tool_name}: {str(e)}"
@@ -902,14 +945,24 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     msg_doc.kind = "Tool Result"
                                                     msg_doc.save(ignore_permissions=True)
 
+                                                tool_result_for_socket = (
+                                                    result_content
+                                                    if isinstance(result_content, (dict, list))
+                                                    else {"output": str(result_content)[:140000]}
+                                                )
                                                 frappe.publish_realtime(
                                                     event=f'conversation:{context.get("conversation_id")}',
                                                     message={
                                                         "type": "tool_call_completed",
+                                                        "conversation_id": context.get("conversation_id"),
+                                                        "agent_run_id": context.get("agent_run_id"),
+                                                        "message_id": message_name,
                                                         "tool_call_id": tool_call["id"],
                                                         "tool_name": tool_name,
+                                                        "tool_status": "Completed",
                                                         "status": "Completed",
-                                                        "result": str(result_content)[:1000]
+                                                        "tool_result": tool_result_for_socket,
+                                                        "result": json.dumps(tool_result_for_socket) if isinstance(tool_result_for_socket, (dict, list)) else str(result_content)[:1000],
                                                     },
                                                     user=frappe.session.user,
                                                     after_commit=False

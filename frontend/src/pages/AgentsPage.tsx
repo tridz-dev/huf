@@ -29,7 +29,10 @@ function getStatusLabel(agent: AgentDoc): 'active' | 'disabled' {
   return agent.disabled === 1 ? 'disabled' : 'active';
 }
 
-export function AgentsPage() {
+export { AgentsPage };
+export default AgentsPage;
+
+function AgentsPage() {
   const navigate = useNavigate();
 
   const {

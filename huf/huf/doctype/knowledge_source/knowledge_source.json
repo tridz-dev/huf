@@ -17,6 +17,12 @@
         "vector_dimension",
         "column_break_vector",
         "embedding_provider",
+        "chroma_server_section",
+        "chroma_mode",
+        "chroma_host",
+        "column_break_chroma",
+        "chroma_port",
+        "chroma_ssl",
         "storage_settings_section",
         "storage_mode",
         "sqlite_file",
@@ -169,22 +175,22 @@
             "fieldname": "knowledge_type",
             "fieldtype": "Select",
             "label": "Knowledge Type",
-            "options": "sqlite_fts\nsqlite_vec",
+            "options": "sqlite_fts\nsqlite_vec\nchroma",
             "reqd": 1
         },
         {
             "fieldname": "vector_settings_section",
             "fieldtype": "Section Break",
             "label": "Vector Settings",
-            "depends_on": "eval:doc.knowledge_type === 'sqlite_vec'"
+            "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
         },
         {
             "fieldname": "embedding_model",
             "fieldtype": "Data",
             "label": "Embedding Model",
             "description": "LiteLLM model identifier, e.g. openai/text-embedding-3-small",
-            "depends_on": "eval:doc.knowledge_type === 'sqlite_vec'",
-            "mandatory_depends_on": "eval:doc.knowledge_type === 'sqlite_vec'"
+            "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)",
+            "mandatory_depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
         },
         {
             "fieldname": "vector_dimension",
@@ -193,8 +199,8 @@
             "default": 1536,
             "non_negative": 1,
             "description": "Must match the embedding model output dimensionality",
-            "depends_on": "eval:doc.knowledge_type === 'sqlite_vec'",
-            "mandatory_depends_on": "eval:doc.knowledge_type === 'sqlite_vec'"
+            "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)",
+            "mandatory_depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
         },
         {
             "fieldname": "column_break_vector",
@@ -206,12 +212,55 @@
             "label": "Embedding Provider",
             "options": "AI Provider",
             "description": "AI Provider for API key resolution",
-            "depends_on": "eval:doc.knowledge_type === 'sqlite_vec'"
+            "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
+        },
+        {
+            "fieldname": "chroma_server_section",
+            "fieldtype": "Section Break",
+            "label": "Chroma Connection Settings",
+            "depends_on": "eval:doc.knowledge_type === 'chroma'"
+        },
+        {
+            "fieldname": "chroma_mode",
+            "fieldtype": "Select",
+            "label": "Chroma Mode",
+            "options": "File\nServer",
+            "default": "File",
+            "description": "File: store on disk. Server: connect to a running Chroma server.",
+            "depends_on": "eval:doc.knowledge_type === 'chroma'"
+        },
+        {
+            "fieldname": "chroma_host",
+            "fieldtype": "Data",
+            "label": "Chroma Host",
+            "default": "localhost",
+            "description": "Hostname or IP of the Chroma server (only used in Server mode)",
+            "depends_on": "eval:doc.knowledge_type === 'chroma' && doc.chroma_mode === 'Server'"
+        },
+        {
+            "fieldname": "column_break_chroma",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "chroma_port",
+            "fieldtype": "Int",
+            "label": "Chroma Port",
+            "default": 8000,
+            "description": "Port of the Chroma server (only used in Server mode)",
+            "depends_on": "eval:doc.knowledge_type === 'chroma' && doc.chroma_mode === 'Server'"
+        },
+        {
+            "fieldname": "chroma_ssl",
+            "fieldtype": "Check",
+            "label": "Use SSL (HTTPS)",
+            "default": 0,
+            "description": "Enable if your Chroma server uses HTTPS",
+            "depends_on": "eval:doc.knowledge_type === 'chroma' && doc.chroma_mode === 'Server'"
         }
     ],
     "index_web_pages_for_search": 1,
     "links": [],
-    "modified": "2026-01-10 00:00:00.000000",
+    "modified": "2026-05-18 10:30:10.000000",
     "modified_by": "Administrator",
     "module": "Huf",
     "name": "Knowledge Source",
@@ -229,6 +278,30 @@
             "role": "System Manager",
             "share": 1,
             "write": 1
+        },
+        {
+            "create": 1,
+            "delete": 1,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Huf Manager",
+            "share": 1,
+            "write": 1
+        },
+        {
+            "create": 0,
+            "delete": 0,
+            "email": 1,
+            "export": 1,
+            "print": 1,
+            "read": 1,
+            "report": 1,
+            "role": "Huf User",
+            "share": 1,
+            "write": 0
         }
     ],
     "row_format": "Dynamic",

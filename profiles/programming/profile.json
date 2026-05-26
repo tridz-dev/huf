@@ -1,0 +1,186 @@
+{
+  "profile_name": "programming",
+  "display_name": "Programming Memory",
+  "description": "Captures coding context, technical decisions, debugging insights, and reusable patterns to improve development workflows over time.",
+  "category": "development",
+  "version": "1.0.0",
+  "is_system_profile": true,
+  "icon": "code-2",
+  "schema_version": "1.0",
+  "default_schema_json": {
+    "type": "object",
+    "required": ["memory_type", "language"],
+    "properties": {
+      "memory_type": {
+        "type": "string",
+        "enum": ["language_pref", "stack_config", "convention", "architecture_decision", "fix_pattern", "debug_context", "snippet", "tool_config", "learning"],
+        "description": "Type of programming memory being captured"
+      },
+      "language": {
+        "type": "string",
+        "description": "Primary programming language or runtime (e.g., TypeScript, Python, Rust, Go)"
+      },
+      "frameworks": {
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "Frameworks and libraries in use"
+      },
+      "stack": {
+        "type": "object",
+        "properties": {
+          "frontend": { "type": "string" },
+          "backend": { "type": "string" },
+          "database": { "type": "string" },
+          "infra": { "type": "string" },
+          "tools": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "conventions": {
+        "type": "object",
+        "properties": {
+          "naming": { "type": "string", "description": "Naming conventions followed" },
+          "style_guide": { "type": "string", "description": "Style guide or linter rules" },
+          "project_structure": { "type": "string", "description": "Directory and file organization patterns" },
+          "custom_rules": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "decision": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "context": { "type": "string" },
+          "options_considered": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "chosen_approach": { "type": "string" },
+          "rationale": { "type": "string" },
+          "tradeoffs": { "type": "string" },
+          "reversibility": { "type": "string", "enum": ["reversible", "irreversible", "costly_to_change"] }
+        }
+      },
+      "fix_pattern": {
+        "type": "object",
+        "properties": {
+          "problem": { "type": "string", "description": "Description of the bug or issue" },
+          "symptoms": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "root_cause": { "type": "string" },
+          "solution": { "type": "string" },
+          "prevention": { "type": "string" },
+          "related_issues": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "debug_context": {
+        "type": "object",
+        "properties": {
+          "error_message": { "type": "string" },
+          "error_code": { "type": "string" },
+          "stack_trace_hash": { "type": "string" },
+          "environment": { "type": "string" },
+          "steps_tried": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "resolution": { "type": "string" }
+        }
+      },
+      "snippet": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "code": { "type": "string" },
+          "usage": { "type": "string" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "importance": {
+        "type": "string",
+        "enum": ["critical", "high", "medium", "low"],
+        "description": "How important this memory is for future context"
+      },
+      "confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Confidence in the accuracy of this memory"
+      },
+      "tags": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "related_files": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "project_context": {
+        "type": "string",
+        "description": "Project name or identifier for scoping"
+      }
+    }
+  },
+  "recommended_model": "claude-3-5-sonnet",
+  "recommended_provider": "anthropic",
+  "default_capture_stage": "post_response_async",
+  "default_frequency": "conversation_end",
+  "default_scope_type": "user",
+  "default_indexing_mode": "fts_and_vector",
+  "default_retrieval_mode": "hybrid",
+  "default_memory_type_mapping": {
+    "language_pref": "preference",
+    "stack_config": "preference",
+    "convention": "preference",
+    "architecture_decision": "insight",
+    "fix_pattern": "insight",
+    "debug_context": "observation",
+    "snippet": "domain_object",
+    "tool_config": "preference",
+    "learning": "insight"
+  },
+  "ui_config": {
+    "display_fields": ["memory_type", "language", "title"],
+    "filter_fields": ["memory_type", "language", "importance", "tags"],
+    "sort_default": "-created_at",
+    "icon_map": {
+      "language_pref": "languages",
+      "stack_config": "layers",
+      "convention": "file-check",
+      "architecture_decision": "git-branch",
+      "fix_pattern": "bug",
+      "debug_context": "terminal",
+      "snippet": "code",
+      "tool_config": "settings",
+      "learning": "book-open"
+    },
+    "color_map": {
+      "language_pref": "blue",
+      "stack_config": "purple",
+      "convention": "green",
+      "architecture_decision": "orange",
+      "fix_pattern": "red",
+      "debug_context": "gray",
+      "snippet": "cyan",
+      "tool_config": "slate",
+      "learning": "yellow"
+    }
+  },
+  "help_text": {
+    "short": "Capture coding context, decisions, and patterns",
+    "long": "This profile captures structured programming knowledge including language preferences, stack configurations, coding conventions, architectural decisions, reusable fix patterns, debugging context, and code snippets. Use it to build a persistent technical memory that improves code assistance over time."
+  }
+}

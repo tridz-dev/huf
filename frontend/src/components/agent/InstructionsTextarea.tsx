@@ -157,7 +157,7 @@ export function InstructionsTextarea({
 
       {/* Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-[95vw] w-full min-w-[600px] max-h-[90vh] flex flex-col">
+        <DialogContent className="w-full min-w-0 max-h-[90vh] sm:max-w-[95vw] flex flex-col">
           <DialogHeader>
             <DialogTitle>{modalTitle}</DialogTitle>
             <DialogDescription>Define system prompt, goals, and constraints</DialogDescription>

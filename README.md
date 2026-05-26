@@ -6,6 +6,8 @@ HUF sits at the intersection of knowledge, automation, and tools—enabling AI t
 
 [**Documentation**](https://docs.huf.ai/) | [**Report Issue**](https://github.com/tridz-dev/huf/issues) | [**Discussions**](https://github.com/tridz-dev/huf/discussions)
 
+> ⚠️ **Security notice (LiteLLM):** LiteLLM (a HUF dependency) reported compromised PyPI releases `1.82.7` and `1.82.8` on **March 24, 2026**. HUF blocks these versions and shows an install-time alert if detected. Incident: https://github.com/BerriAI/litellm/issues/24518
+
 <br/>
 
 <img width="1905" height="928" alt="HUF Dashboard" src="https://github.com/user-attachments/assets/61a8511b-80cc-4843-a90c-bfcfc4a45c97" />
@@ -241,6 +243,19 @@ bench restart
 | **Frontend** | React 18, TypeScript, Tailwind CSS |
 | **Flow Builder** | React Flow / XYFlow | (WIP)
 | **Database** | MariaDB |
+
+---
+
+## Security Notice (LiteLLM)
+
+LiteLLM is a core dependency of Huf. On **March 24, 2026**, the LiteLLM team reported a supply-chain compromise affecting published releases (`1.82.7` and `1.82.8`) that included a malicious `.pth` startup payload.
+
+What Huf has done:
+- Blocked compromised versions in dependency constraints (`litellm>=1.0.0,!=1.82.7,!=1.82.8`).
+- Added install-time detection in `huf/install.py` to show a critical alert if a compromised LiteLLM version is already present in the environment.
+
+Upstream incident thread:
+- https://github.com/BerriAI/litellm/issues/24518
 
 ---
 

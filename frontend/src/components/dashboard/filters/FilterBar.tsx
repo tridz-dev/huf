@@ -50,7 +50,7 @@ export function FilterBar({
   };
 
   return (
-    <div className="flex gap-4 items-center">
+    <div className="flex flex-wrap gap-4 items-center">
       {onSearchChange && (
         <>
           {collapsibleSearch ? (
