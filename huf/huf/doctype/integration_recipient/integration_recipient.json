@@ -1,0 +1,52 @@
+{
+ "actions": [],
+ "creation": "2026-05-26 07:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "recipient_name",
+  "recipient_id",
+  "user"
+ ],
+ "fields": [
+  {
+   "fieldname": "recipient_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Recipient Name",
+   "reqd": 1,
+   "description": "A human-friendly label for this recipient (e.g. John Doe, Sales Alerts, Engineering Team)"
+  },
+  {
+   "fieldname": "recipient_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Recipient ID",
+   "reqd": 1,
+   "description": "Service-specific ID: Telegram Chat ID, Slack User/Channel ID, Discord Channel ID, email address, etc."
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "User",
+   "options": "User",
+   "description": "Optionally link to a Frappe User account"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-05-26 07:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Integration Recipient",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
