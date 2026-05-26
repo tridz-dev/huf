@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 interface UsePageDataOptions<T> {
   fetchFn?: () => Promise<T[]>;
@@ -13,33 +13,52 @@ export function usePageData<T>({
   searchFields = [],
   filterFn,
 }: UsePageDataOptions<T>) {
+  // State
   const [data, setData] = useState<T[]>(initialData);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const hasFetchedRef = useRef(false);
+  const hasFetched = useRef(false);
 
+  // Fetch data on mount only
   useEffect(() => {
-    if (fetchFn && !hasFetchedRef.current) {
-      hasFetchedRef.current = true;
-      setLoading(true);
-      fetchFn()
-        .then((result) => {
-          setData(result);
-          setError(null);
-        })
-        .catch((err) => {
-          setError(err);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else if (!fetchFn) {
-      setData(initialData);
+    if (!fetchFn || hasFetched.current) {
+      setLoading(false);
+      return;
     }
-  }, [fetchFn, initialData]);
 
+    hasFetched.current = true;
+    let cancelled = false;
+
+    const doFetch = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const result = await fetchFn();
+        if (!cancelled) {
+          setData(result);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    doFetch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []); // Empty deps - only run once on mount
+
+  // Filter and search logic
   const filteredData = useMemo(() => {
     let result = [...data];
 
@@ -63,6 +82,23 @@ export function usePageData<T>({
     return result;
   }, [data, search, searchFields, filters, filterFn]);
 
+  // Manual refresh function
+  const refresh = useCallback(async () => {
+    if (!fetchFn) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await fetchFn();
+      setData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchFn]);
+
   return {
     data: filteredData,
     allData: data,
@@ -73,5 +109,6 @@ export function usePageData<T>({
     filters,
     setFilters,
     setData,
+    refresh,
   };
 }

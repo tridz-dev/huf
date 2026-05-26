@@ -1,52 +1,82 @@
-import { ActionOption } from '../types/modal.types';
+import { ActionOption } from "../types/modal.types";
 
 export const actionOptions: ActionOption[] = [
+  // ─── AI & Agents ────────────────────────────────────────────────────
   {
-    id: 'transform',
-    name: 'Transform Data',
-    description: 'Transform and map data fields',
-    icon: 'Repeat',
-    category: 'transform'
+    id: 'agent-run',
+    name: 'Run Agent',
+    description: 'Execute a HUF AI agent',
+    icon: 'Bot',
+    category: 'agent'
   },
+
+  // ─── Tools ──────────────────────────────────────────────────────────
+  {
+    id: 'tool-call',
+    name: 'Call Tool',
+    description: 'Execute a tool function',
+    icon: 'Wrench',
+    category: 'tool'
+  },
+
+  // ─── Control Flow ───────────────────────────────────────────────────
   {
     id: 'router',
-    name: 'Router',
-    description: 'Split flow into branches with conditions',
+    name: 'LLM Router',
+    description: 'Intelligently route based on AI analysis',
     icon: 'GitBranch',
     category: 'control'
   },
   {
-    id: 'loop',
-    name: 'Loop',
-    description: 'Iterate over array data',
-    icon: 'RotateCw',
+    id: 'condition',
+    name: 'Condition (If/Else)',
+    description: 'Branch flow based on data',
+    icon: 'GitBranch',
     category: 'control'
   },
   {
-    id: 'human-in-loop',
+    id: "loop",
+    name: "Loop",
+    description: "Iterate over array data",
+    icon: "RotateCw",
+    category: "control",
+  },
+  {
+    id: 'human.approval',
     name: 'Human in Loop',
     description: 'Request human approval',
     icon: 'UserCheck',
     category: 'control'
   },
+
+  // ─── Transform ──────────────────────────────────────────────────────
   {
-    id: 'code',
-    name: 'Execute Code',
-    description: 'Run custom JavaScript/Python code',
-    icon: 'Code',
+    id: 'transform',
+    name: 'Transform Data',
+    description: 'Map and transform data fields',
+    icon: 'Repeat',
     category: 'transform'
   },
   {
+    id: 'code',
+    name: 'Execute Code',
+    description: 'Run custom code snippet',
+    icon: 'Code',
+    category: 'transform'
+  },
+
+  // ─── Utilities ──────────────────────────────────────────────────────
+  {
     id: 'email',
     name: 'Send Email',
-    description: 'Send an email message',
+    description: 'Send an email notification',
     icon: 'Mail',
     category: 'utility'
   },
   {
     id: 'webhook',
     name: 'Call Webhook',
-    description: 'Make HTTP request to webhook',
+    description: 'Make an HTTP request',
     icon: 'Webhook',
     category: 'utility'
   },
@@ -60,21 +90,23 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'date',
     name: 'Date Utility',
-    description: 'Format or manipulate dates',
+    description: 'Format and manipulate dates',
     icon: 'Calendar',
     category: 'utility'
   },
+
+  // ─── Integrations ──────────────────────────────────────────────────
   {
     id: 'slack',
     name: 'Slack',
-    description: 'Send Slack messages',
+    description: 'Send messages to Slack',
     icon: 'MessageSquare',
     category: 'integration'
   },
   {
     id: 'sheets',
     name: 'Google Sheets',
-    description: 'Update Google Sheets',
+    description: 'Read or write spreadsheet data',
     icon: 'Sheet',
     category: 'integration'
   },
@@ -84,5 +116,5 @@ export const actionOptions: ActionOption[] = [
     description: 'Create or update Notion pages',
     icon: 'FileText',
     category: 'integration'
-  }
+  },
 ];
