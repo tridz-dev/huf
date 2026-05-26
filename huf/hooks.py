@@ -325,3 +325,12 @@ fixtures = [
         ]
     }
 ]
+
+# Integration Tools Hook
+# ----------------------
+# Register all external integration tools (Slack, GitHub, etc.)
+# The tool_registry.sync_discovered_tools() function reads this hook
+to_sync_tools = "huf.ai.tool_registry.sync_discovered_tools"
+
+# Register integration tools from _registry
+huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
