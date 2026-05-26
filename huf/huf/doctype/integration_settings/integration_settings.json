@@ -12,6 +12,8 @@
   "is_default",
   "section_break_1",
   "credentials",
+  "section_break_recipients",
+  "recipients",
   "section_break_2",
   "last_used",
   "last_error"
@@ -56,6 +58,17 @@
    "reqd": 1
   },
   {
+   "fieldname": "section_break_recipients",
+   "fieldtype": "Section Break",
+   "label": "Recipients"
+  },
+  {
+   "description": "Define named recipients for this service. The agent can look up a recipient by name and get their service-specific ID (e.g. Telegram Chat ID, Slack User ID, Discord Channel ID).",
+   "fieldname": "recipients",
+   "fieldtype": "Table",
+   "options": "Integration Recipient"
+  },
+  {
    "fieldname": "section_break_2",
    "fieldtype": "Section Break",
    "label": "Usage Statistics"
@@ -76,7 +89,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-08 12:00:00.000000",
+ "modified": "2026-05-26 13:14:46.300000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Integration Settings",
