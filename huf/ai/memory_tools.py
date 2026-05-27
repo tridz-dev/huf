@@ -4,4 +4,4 @@ import frappe
 
 
 def ping():
-    return {"ok": True}
+    return {"ok": True, "v": 2}
