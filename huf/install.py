@@ -117,6 +117,7 @@ def after_migrate():
 		remove_deprecated_gemini_audio_tools()
 		create_ocr_document_tool()
 		create_flow_tools()
+		sync_tool_types()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
 		frappe.log_error(
