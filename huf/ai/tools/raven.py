@@ -32,7 +32,7 @@ def _resolve_channel_id(channel_id=None, channel_name=None):
 # Messages
 # ---------------------------------------------------------------------------
 
-def handle_send_message(**kwargs) -> str:
+def _handle_send_message(**kwargs) -> str:
     """Send a message to a Raven channel."""
     if not _raven_installed():
         return _error("Frappe Raven app is not installed.")
@@ -59,7 +59,7 @@ def handle_send_message(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_messages(**kwargs) -> str:
+def _handle_get_messages(**kwargs) -> str:
     """Get recent messages from a channel."""
     if not _raven_installed():
         return _error("Frappe Raven app is not installed.")
@@ -112,7 +112,7 @@ def handle_get_messages(**kwargs) -> str:
 # Channels
 # ---------------------------------------------------------------------------
 
-def handle_list_channels(**kwargs) -> str:
+def _handle_list_channels(**kwargs) -> str:
     """List all channels (optionally filter by type: public/private/open)."""
     if not _raven_installed():
         return _error("Frappe Raven app is not installed.")
@@ -153,7 +153,7 @@ def handle_list_channels(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_channel_members(**kwargs) -> str:
+def _handle_get_channel_members(**kwargs) -> str:
     """Get members of a channel."""
     if not _raven_installed():
         return _error("Frappe Raven app is not installed.")
@@ -183,7 +183,7 @@ def handle_get_channel_members(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_channel(**kwargs) -> str:
+def _handle_create_channel(**kwargs) -> str:
     """Create a new channel."""
     if not _raven_installed():
         return _error("Frappe Raven app is not installed.")
@@ -239,7 +239,7 @@ def handle_create_channel(**kwargs) -> str:
 # Search
 # ---------------------------------------------------------------------------
 
-def handle_search_messages(**kwargs) -> str:
+def _handle_search_messages(**kwargs) -> str:
     """Search messages across channels or within a specific channel."""
     if not _raven_installed():
         return _error("Frappe Raven app is not installed.")
@@ -283,3 +283,20 @@ def handle_search_messages(**kwargs) -> str:
     except Exception as e:
         frappe.log_error(f"Raven Search Messages Error: {e}", "Raven Tool")
         return _error(str(e))
+
+
+def handle_action(**kwargs) -> str:
+    action = kwargs.get("action", "").strip().lower()
+    dispatch = {
+        "send_message": _handle_send_message,
+        "get_messages": _handle_get_messages,
+        "list_channels": _handle_list_channels,
+        "get_members": _handle_get_channel_members,
+        "create_channel": _handle_create_channel,
+        "search_messages": _handle_search_messages,
+    }
+    handler = dispatch.get(action)
+    if not handler:
+        valid = ", ".join(sorted(dispatch.keys()))
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+    return handler(**kwargs)
