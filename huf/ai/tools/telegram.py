@@ -9,7 +9,7 @@ import httpx
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
 
 
-def _handle_send_message(**kwargs) -> str:
+def handle_send_message(**kwargs) -> str:
     """Send a message via Telegram bot."""
     service_name = "telegram"
     try:
@@ -44,15 +44,3 @@ def _handle_send_message(**kwargs) -> str:
         frappe.log_error(error_msg, "Telegram Tool")
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)})
-
-
-def handle_action(**kwargs) -> str:
-    action = kwargs.get("action", "").strip().lower()
-    dispatch = {
-        "send_message": _handle_send_message,
-    }
-    handler = dispatch.get(action)
-    if not handler:
-        valid = ", ".join(sorted(dispatch.keys()))
-        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
-    return handler(**kwargs)

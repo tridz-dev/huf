@@ -11,92 +11,218 @@ Each entry is a dict with:
 
 
 def _p(name, type="string", required=False, description=""):
-    return {
-        "label": name.replace("_", " ").title(),
-        "fieldname": name,
-        "type": type,
-        "required": int(required),
-        "description": description,
-    }
+	return {
+		"label": name.replace("_", " ").title(),
+		"fieldname": name,
+		"type": type,
+		"required": int(required),
+		"description": description,
+	}
 
 
 def _action(choices):
-    return _p("action", required=True, description=f"Action to perform. One of: {choices}")
+	return _p("action", required=True, description=f"Action to perform. One of: {choices}")
 
 
 # ---------------------------------------------------------------------------
-# Communication Tools
+# Communication & Developer Tools
+# Shipped in develop (PR #273). Not refactored — kept exactly as-is.
 # ---------------------------------------------------------------------------
 
-SLACK_TOOLS = [{
-    "tool_name": "slack",
-    "description": "Interact with Slack workspace. Actions: send_message (channel, text), reply_thread (channel, text, thread_ts), list_channels, get_history (channel, limit), search_messages (query, limit), list_users (limit).",
-    "function_path": "huf.ai.tools.slack.handle_action",
-    "category": "Communication Tools",
-    "parameters": [
-        _action("send_message|reply_thread|list_channels|get_history|search_messages|list_users"),
-        _p("channel", description="Channel ID or name"),
-        _p("text", description="Message text"),
-        _p("thread_ts", description="Parent message timestamp (for reply_thread)"),
-        _p("query", description="Search query (for search_messages)"),
-        _p("limit", type="integer", description="Max results"),
-    ],
-}]
+RECIPIENT_TOOLS = [
+	{
+		"tool_name": "get_integration_recipient",
+		"description": (
+			"Look up a named recipient's service-specific ID from Integration Settings. "
+			"Use this before sending a message to resolve a human name (e.g. 'John Doe', 'Sales Team') "
+			"to the correct Telegram Chat ID, Slack User/Channel ID, Discord Channel ID, etc. "
+			"Call this tool first, then pass the returned recipient_id to the relevant send tool."
+		),
+		"function_path": "huf.ai.tools.recipient.handle_get_recipient",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("service", required=True, description="The service name, e.g. 'telegram', 'slack', 'discord'"),
+			_p("recipient_name", required=True, description="Human-friendly recipient name as stored in Integration Settings, e.g. 'John Doe'"),
+		],
+	},
+]
 
-DISCORD_TOOLS = [{
-    "tool_name": "discord",
-    "description": "Interact with Discord. Actions: send_message (channel_id, message), get_messages (channel_id, limit), list_channels (guild_id), delete_message (channel_id, message_id).",
-    "function_path": "huf.ai.tools.discord.handle_action",
-    "category": "Communication Tools",
-    "parameters": [
-        _action("send_message|get_messages|list_channels|delete_message"),
-        _p("channel_id", description="Discord channel ID"),
-        _p("guild_id", description="Discord server (guild) ID"),
-        _p("message", description="Message text"),
-        _p("message_id", description="Message ID to delete"),
-        _p("limit", type="integer", description="Max messages"),
-    ],
-}]
+SLACK_TOOLS = [
+	{
+		"tool_name": "slack_send_message",
+		"description": "Send a message to a Slack channel. Requires SLACK_TOKEN env var.",
+		"function_path": "huf.ai.tools.slack.handle_send_message",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("channel", required=True, description="Channel ID or name to send the message to"),
+			_p("text", required=True, description="Message text (supports Slack mrkdwn formatting)"),
+		],
+	},
+	{
+		"tool_name": "slack_send_thread_reply",
+		"description": "Reply to a message thread in a Slack channel. Requires SLACK_TOKEN env var.",
+		"function_path": "huf.ai.tools.slack.handle_send_message_thread",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("channel", required=True, description="Channel ID or name"),
+			_p("text", required=True, description="Reply text"),
+			_p("thread_ts", required=True, description="Timestamp of the parent message"),
+		],
+	},
+	{
+		"tool_name": "slack_list_channels",
+		"description": "List all channels in the Slack workspace. Requires SLACK_TOKEN env var.",
+		"function_path": "huf.ai.tools.slack.handle_list_channels",
+		"category": "Communication Tools",
+		"parameters": [],
+	},
+	{
+		"tool_name": "slack_get_channel_history",
+		"description": "Get message history of a Slack channel. Requires SLACK_TOKEN env var.",
+		"function_path": "huf.ai.tools.slack.handle_get_channel_history",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("channel", required=True, description="Channel ID to fetch history from"),
+			_p("limit", type="integer", description="Max messages to fetch (default 100)"),
+		],
+	},
+	{
+		"tool_name": "slack_search_messages",
+		"description": "Search messages across the Slack workspace. Supports modifiers like from:@user, in:#channel. Requires SLACK_TOKEN env var.",
+		"function_path": "huf.ai.tools.slack.handle_search_messages",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("query", required=True, description="Search query"),
+			_p("limit", type="integer", description="Max results (default 20, max 100)"),
+		],
+	},
+	{
+		"tool_name": "slack_list_users",
+		"description": "List all users in the Slack workspace. Requires SLACK_TOKEN env var.",
+		"function_path": "huf.ai.tools.slack.handle_list_users",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("limit", type="integer", description="Max users to fetch (default 100)"),
+		],
+	},
+]
 
-TELEGRAM_TOOLS = [{
-    "tool_name": "telegram",
-    "description": "Send messages via Telegram bot. Actions: send_message (chat_id, message).",
-    "function_path": "huf.ai.tools.telegram.handle_action",
-    "category": "Communication Tools",
-    "parameters": [
-        _action("send_message"),
-        _p("chat_id", description="Telegram chat ID"),
-        _p("message", description="Message text"),
-    ],
-}]
+DISCORD_TOOLS = [
+	{
+		"tool_name": "discord_send_message",
+		"description": "Send a message to a Discord channel. Requires DISCORD_BOT_TOKEN env var.",
+		"function_path": "huf.ai.tools.discord.handle_send_message",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("channel_id", required=True, description="Discord channel ID"),
+			_p("message", required=True, description="Message text to send"),
+		],
+	},
+	{
+		"tool_name": "discord_get_messages",
+		"description": "Get message history of a Discord channel. Requires DISCORD_BOT_TOKEN env var.",
+		"function_path": "huf.ai.tools.discord.handle_get_channel_messages",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("channel_id", required=True, description="Discord channel ID"),
+			_p("limit", type="integer", description="Max messages (default 50)"),
+		],
+	},
+	{
+		"tool_name": "discord_list_channels",
+		"description": "List all channels in a Discord server. Requires DISCORD_BOT_TOKEN env var.",
+		"function_path": "huf.ai.tools.discord.handle_list_channels",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("guild_id", required=True, description="Discord server (guild) ID"),
+		],
+	},
+	{
+		"tool_name": "discord_delete_message",
+		"description": "Delete a message from a Discord channel. Requires DISCORD_BOT_TOKEN env var.",
+		"function_path": "huf.ai.tools.discord.handle_delete_message",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("channel_id", required=True, description="Discord channel ID"),
+			_p("message_id", required=True, description="Message ID to delete"),
+		],
+	},
+]
 
-GITHUB_TOOLS = [{
-    "tool_name": "github",
-    "description": "Interact with GitHub. Actions: list_repos, get_repo (repo_name), create_issue (repo_name, title, body), create_pr (repo_name, title, head, base, body), get_file (repo_name, path), search_code (query).",
-    "function_path": "huf.ai.tools.github.handle_action",
-    "category": "Developer Tools",
-    "parameters": [
-        _action("list_repos|get_repo|create_issue|create_pr|get_file|search_code"),
-        _p("repo_name", description="Repository (owner/name)"),
-        _p("title", description="Issue or PR title"),
-        _p("body", description="Issue or PR body"),
-        _p("head", description="Head branch (for create_pr)"),
-        _p("base", description="Base branch (for create_pr)"),
-        _p("path", description="File path in repo (for get_file)"),
-        _p("query", description="Search query (for search_code)"),
-    ],
-}]
+TELEGRAM_TOOLS = [
+	{
+		"tool_name": "telegram_send_message",
+		"description": "Send a message via Telegram bot. Requires TELEGRAM_TOKEN env var.",
+		"function_path": "huf.ai.tools.telegram.handle_send_message",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("chat_id", required=True, description="Telegram chat ID to send to"),
+			_p("message", required=True, description="Message text"),
+		],
+	},
+]
 
-RECIPIENT_TOOLS = [{
-    "tool_name": "get_integration_recipient",
-    "description": "Look up a named recipient's service-specific ID (Slack user/channel, Telegram chat, Discord channel) from Integration Settings. Use before sending messages to resolve human names to IDs.",
-    "function_path": "huf.ai.tools.recipient.handle_get_recipient",
-    "category": "Communication Tools",
-    "parameters": [
-        _p("service", required=True, description="Service name: telegram, slack, discord"),
-        _p("recipient_name", required=True, description="Human-friendly name as stored in Integration Settings"),
-    ],
-}]
+GITHUB_TOOLS = [
+	{
+		"tool_name": "github_list_repos",
+		"description": "List GitHub repositories for the authenticated user. Requires GITHUB_ACCESS_TOKEN env var.",
+		"function_path": "huf.ai.tools.github.handle_list_repos",
+		"category": "Developer Tools",
+		"parameters": [],
+	},
+	{
+		"tool_name": "github_get_repo",
+		"description": "Get details of a GitHub repository. Requires GITHUB_ACCESS_TOKEN env var.",
+		"function_path": "huf.ai.tools.github.handle_get_repo",
+		"category": "Developer Tools",
+		"parameters": [_p("repo_name", required=True, description="Repository (owner/name)")],
+	},
+	{
+		"tool_name": "github_create_issue",
+		"description": "Create a GitHub issue. Requires GITHUB_ACCESS_TOKEN env var.",
+		"function_path": "huf.ai.tools.github.handle_create_issue",
+		"category": "Developer Tools",
+		"parameters": [
+			_p("repo_name", required=True, description="Repository (owner/name)"),
+			_p("title", required=True, description="Issue title"),
+			_p("body", description="Issue body"),
+		],
+	},
+	{
+		"tool_name": "github_create_pr",
+		"description": "Create a GitHub pull request. Requires GITHUB_ACCESS_TOKEN env var.",
+		"function_path": "huf.ai.tools.github.handle_create_pull_request",
+		"category": "Developer Tools",
+		"parameters": [
+			_p("repo_name", required=True, description="Repository (owner/name)"),
+			_p("title", required=True, description="PR title"),
+			_p("body", description="PR description"),
+			_p("head", required=True, description="Head branch"),
+			_p("base", required=True, description="Base branch"),
+		],
+	},
+	{
+		"tool_name": "github_get_file",
+		"description": "Get file content from a GitHub repository. Requires GITHUB_ACCESS_TOKEN env var.",
+		"function_path": "huf.ai.tools.github.handle_get_file_content",
+		"category": "Developer Tools",
+		"parameters": [
+			_p("repo_name", required=True, description="Repository (owner/name)"),
+			_p("path", required=True, description="File path in repository"),
+		],
+	},
+	{
+		"tool_name": "github_search_code",
+		"description": "Search code across GitHub. Requires GITHUB_ACCESS_TOKEN env var.",
+		"function_path": "huf.ai.tools.github.handle_search_code",
+		"category": "Developer Tools",
+		"parameters": [_p("query", required=True, description="Code search query")],
+	},
+]
+
+# ---------------------------------------------------------------------------
+# Frappe App Tools  (added in this branch — consolidated action-based)
+# ---------------------------------------------------------------------------
 
 CRM_TOOLS = [{
     "tool_name": "frappe_crm",
@@ -163,6 +289,10 @@ RAVEN_TOOLS = [{
         _p("limit", type="integer", description="Max results"),
     ],
 }]
+
+# ---------------------------------------------------------------------------
+# ERPNext Tools  (added in this branch — consolidated action-based)
+# ---------------------------------------------------------------------------
 
 ERPNEXT_TOOLS = [{
     "tool_name": "erpnext",
@@ -278,20 +408,20 @@ ERPNEXT_REPORT_TOOLS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Master list: every tool grouped for easy iteration
+# Master list
 # ---------------------------------------------------------------------------
 
 ALL_INTEGRATION_TOOLS = (
-    RECIPIENT_TOOLS
-    + SLACK_TOOLS
-    + DISCORD_TOOLS
-    + TELEGRAM_TOOLS
-    + GITHUB_TOOLS
-    + CRM_TOOLS
-    + HELPDESK_TOOLS
-    + RAVEN_TOOLS
-    + ERPNEXT_TOOLS
-    + ERPNEXT_CRM_TOOLS
-    + ERPNEXT_INVENTORY_TOOLS
-    + ERPNEXT_REPORT_TOOLS
+	RECIPIENT_TOOLS
+	+ SLACK_TOOLS
+	+ DISCORD_TOOLS
+	+ TELEGRAM_TOOLS
+	+ GITHUB_TOOLS
+	+ CRM_TOOLS
+	+ HELPDESK_TOOLS
+	+ RAVEN_TOOLS
+	+ ERPNEXT_TOOLS
+	+ ERPNEXT_CRM_TOOLS
+	+ ERPNEXT_INVENTORY_TOOLS
+	+ ERPNEXT_REPORT_TOOLS
 )
