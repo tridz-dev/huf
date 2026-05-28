@@ -21,7 +21,7 @@ def _get_slack_headers():
     }
 
 
-def _handle_send_message(**kwargs) -> str:
+def handle_send_message(**kwargs) -> str:
     """Send a message to a Slack channel."""
     service_name = "slack"
     try:
@@ -55,7 +55,7 @@ def _handle_send_message(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def _handle_send_message_thread(**kwargs) -> str:
+def handle_send_message_thread(**kwargs) -> str:
     """Reply to a message thread in a Slack channel."""
     service_name = "slack"
     try:
@@ -90,7 +90,7 @@ def _handle_send_message_thread(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def _handle_list_channels(**kwargs) -> str:
+def handle_list_channels(**kwargs) -> str:
     """List all channels in the Slack workspace."""
     service_name = "slack"
     try:
@@ -125,7 +125,7 @@ def _handle_list_channels(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def _handle_get_channel_history(**kwargs) -> str:
+def handle_get_channel_history(**kwargs) -> str:
     """Get message history of a Slack channel."""
     service_name = "slack"
     try:
@@ -165,7 +165,7 @@ def _handle_get_channel_history(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def _handle_search_messages(**kwargs) -> str:
+def handle_search_messages(**kwargs) -> str:
     """Search messages across the Slack workspace."""
     service_name = "slack"
     try:
@@ -206,7 +206,7 @@ def _handle_search_messages(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def _handle_list_users(**kwargs) -> str:
+def handle_list_users(**kwargs) -> str:
     """List all users in the Slack workspace."""
     service_name = "slack"
     try:
@@ -241,20 +241,3 @@ def _handle_list_users(**kwargs) -> str:
         frappe.log_error(error_msg, "Slack Tool")
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)})
-
-
-def handle_action(**kwargs) -> str:
-    action = kwargs.get("action", "").strip().lower()
-    dispatch = {
-        "send_message": _handle_send_message,
-        "reply_thread": _handle_send_message_thread,
-        "list_channels": _handle_list_channels,
-        "get_history": _handle_get_channel_history,
-        "search_messages": _handle_search_messages,
-        "list_users": _handle_list_users,
-    }
-    handler = dispatch.get(action)
-    if not handler:
-        valid = ", ".join(sorted(dispatch.keys()))
-        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
-    return handler(**kwargs)
