@@ -121,9 +121,12 @@ def handle_list_channels(**kwargs) -> str:
         filters = {"is_archived": 0}
         channel_type = kwargs.get("channel_type") or kwargs.get("type")
         if channel_type:
-            filters["type"] = channel_type.capitalize()
+            ctype = channel_type.capitalize()
+            if ctype in {"Private", "Public", "Open"}:
+                filters["type"] = ctype
 
         limit = int(kwargs.get("limit", 50))
+        offset = int(kwargs.get("offset", 0))
 
         channels = frappe.get_all(
             "Raven Channel",
@@ -140,6 +143,7 @@ def handle_list_channels(**kwargs) -> str:
             ],
             filters=filters,
             limit=limit,
+            limit_start=offset,
             order_by="modified desc",
         )
 
@@ -161,10 +165,15 @@ def handle_get_channel_members(**kwargs) -> str:
         if not channel_id:
             return _error("channel_id or channel_name is required and must exist")
 
+        limit = int(kwargs.get("limit", 100))
+        offset = int(kwargs.get("offset", 0))
+
         members = frappe.get_all(
             "Raven Channel Member",
             filters={"channel_id": channel_id},
             fields=["name", "user_id", "is_admin", "last_visit", "allow_notifications"],
+            limit=limit,
+            limit_start=offset,
             order_by="creation asc",
         )
 
@@ -244,6 +253,7 @@ def handle_search_messages(**kwargs) -> str:
             kwargs.get("channel_id"), kwargs.get("channel_name")
         )
         limit = int(kwargs.get("limit", 50))
+        offset = int(kwargs.get("offset", 0))
 
         filters = {"text": ["like", f"%{query}%"]}
         if channel_id:
@@ -265,6 +275,7 @@ def handle_search_messages(**kwargs) -> str:
             ],
             filters=filters,
             limit=limit,
+            limit_start=offset,
             order_by="creation desc",
         )
 

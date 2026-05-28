@@ -35,6 +35,7 @@ def handle_get_tickets(**kwargs) -> str:
         team = kwargs.get("team")
         search = kwargs.get("search")
         limit = int(kwargs.get("limit", 20))
+        offset = int(kwargs.get("offset", 0))
 
         if status:
             filters["status"] = status
@@ -73,6 +74,7 @@ def handle_get_tickets(**kwargs) -> str:
             filters=filters,
             or_filters=or_filters or None,
             limit=limit,
+            limit_start=offset,
             order_by="modified desc",
         )
 
@@ -126,9 +128,9 @@ def handle_create_ticket(**kwargs) -> str:
         doc.description = kwargs.get("description", "")
         doc.customer = kwargs.get("customer", "")
         doc.priority = kwargs.get("priority", "")
-        doc.ticket_type = kwargs.get("ticket_type", "")
+        doc.ticket_type = kwargs.get("ticket_type") or kwargs.get("type", "")
         doc.agent_group = kwargs.get("team", "")
-        doc.raised_by = kwargs.get("raised_by", frappe.session.user)
+        doc.raised_by = kwargs.get("raised_by") or kwargs.get("email", frappe.session.user)
         doc.contact = kwargs.get("contact", "")
         doc.insert(ignore_permissions=True)
 
@@ -158,6 +160,10 @@ def handle_update_ticket(**kwargs) -> str:
             doc.priority = kwargs["priority"]
         if "team" in kwargs:
             doc.agent_group = kwargs["team"]
+        if "ticket_type" in kwargs:
+            doc.ticket_type = kwargs["ticket_type"]
+        if "type" in kwargs:
+            doc.ticket_type = kwargs["type"]
         if "description" in kwargs:
             doc.description = kwargs["description"]
         if "resolution_details" in kwargs:
@@ -249,10 +255,20 @@ def handle_get_teams(**kwargs) -> str:
 
     try:
         limit = int(kwargs.get("limit", 50))
+        offset = int(kwargs.get("offset", 0))
+        search = kwargs.get("search")
+        or_filters = []
+        if search:
+            or_filters = [
+                ["HD Team", "team_name", "like", f"%{search}%"],
+            ]
+
         teams = frappe.get_all(
             "HD Team",
-            fields=["name", "team_name", "ignore_restrictions"],
+            fields=["name", "team_name", "ignore_restrictions", "assignment_rule"],
+            or_filters=or_filters or None,
             limit=limit,
+            limit_start=offset,
             order_by="modified desc",
         )
         return json.dumps({"success": True, "count": len(teams), "results": teams})
