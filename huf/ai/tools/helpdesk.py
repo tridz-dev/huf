@@ -22,7 +22,7 @@ def _error(msg):
 # Tickets
 # ---------------------------------------------------------------------------
 
-def handle_get_tickets(**kwargs) -> str:
+def _handle_get_tickets(**kwargs) -> str:
     """List tickets with filters (status, priority, assigned_to, team, search)."""
     if not _helpdesk_installed():
         return _error("Frappe Helpdesk app is not installed.")
@@ -84,7 +84,7 @@ def handle_get_tickets(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_ticket(**kwargs) -> str:
+def _handle_get_ticket(**kwargs) -> str:
     """Get single ticket details with comments."""
     if not _helpdesk_installed():
         return _error("Frappe Helpdesk app is not installed.")
@@ -113,7 +113,7 @@ def handle_get_ticket(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_ticket(**kwargs) -> str:
+def _handle_create_ticket(**kwargs) -> str:
     """Create a support ticket."""
     if not _helpdesk_installed():
         return _error("Frappe Helpdesk app is not installed.")
@@ -140,7 +140,7 @@ def handle_create_ticket(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_update_ticket(**kwargs) -> str:
+def _handle_update_ticket(**kwargs) -> str:
     """Update ticket (status, priority, assigned_to, team)."""
     if not _helpdesk_installed():
         return _error("Frappe Helpdesk app is not installed.")
@@ -183,7 +183,7 @@ def handle_update_ticket(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_add_comment(**kwargs) -> str:
+def _handle_add_comment(**kwargs) -> str:
     """Add a comment/reply to a ticket."""
     if not _helpdesk_installed():
         return _error("Frappe Helpdesk app is not installed.")
@@ -212,7 +212,7 @@ def handle_add_comment(**kwargs) -> str:
 # Agents & Teams
 # ---------------------------------------------------------------------------
 
-def handle_get_agents(**kwargs) -> str:
+def _handle_get_agents(**kwargs) -> str:
     """List helpdesk agents."""
     if not _helpdesk_installed():
         return _error("Frappe Helpdesk app is not installed.")
@@ -248,7 +248,7 @@ def handle_get_agents(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_teams(**kwargs) -> str:
+def _handle_get_teams(**kwargs) -> str:
     """List helpdesk teams."""
     if not _helpdesk_installed():
         return _error("Frappe Helpdesk app is not installed.")
@@ -277,7 +277,7 @@ def handle_get_teams(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_assign_ticket(**kwargs) -> str:
+def _handle_assign_ticket(**kwargs) -> str:
     """Assign ticket to an agent."""
     if not _helpdesk_installed():
         return _error("Frappe Helpdesk app is not installed.")
@@ -299,3 +299,22 @@ def handle_assign_ticket(**kwargs) -> str:
     except Exception as e:
         frappe.log_error(f"Helpdesk Assign Ticket Error: {e}", "Helpdesk Tool")
         return _error(str(e))
+
+
+def handle_action(**kwargs) -> str:
+    action = kwargs.get("action", "").strip().lower()
+    dispatch = {
+        "list_tickets": _handle_get_tickets,
+        "get_ticket": _handle_get_ticket,
+        "create_ticket": _handle_create_ticket,
+        "update_ticket": _handle_update_ticket,
+        "add_comment": _handle_add_comment,
+        "list_agents": _handle_get_agents,
+        "list_teams": _handle_get_teams,
+        "assign_ticket": _handle_assign_ticket,
+    }
+    handler = dispatch.get(action)
+    if not handler:
+        valid = ", ".join(sorted(dispatch.keys()))
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+    return handler(**kwargs)

@@ -21,7 +21,7 @@ def _get_discord_headers():
     }
 
 
-def handle_send_message(**kwargs) -> str:
+def _handle_send_message(**kwargs) -> str:
     """Send a message to a Discord channel."""
     service_name = "discord"
     try:
@@ -52,7 +52,7 @@ def handle_send_message(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_get_channel_messages(**kwargs) -> str:
+def _handle_get_channel_messages(**kwargs) -> str:
     """Get message history of a Discord channel."""
     service_name = "discord"
     try:
@@ -87,7 +87,7 @@ def handle_get_channel_messages(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_list_channels(**kwargs) -> str:
+def _handle_list_channels(**kwargs) -> str:
     """List all channels in a Discord server (guild)."""
     service_name = "discord"
     try:
@@ -120,7 +120,7 @@ def handle_list_channels(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_delete_message(**kwargs) -> str:
+def _handle_delete_message(**kwargs) -> str:
     """Delete a message from a Discord channel."""
     service_name = "discord"
     try:
@@ -147,3 +147,18 @@ def handle_delete_message(**kwargs) -> str:
         frappe.log_error(error_msg, "Discord Tool")
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)})
+
+
+def handle_action(**kwargs) -> str:
+    action = kwargs.get("action", "").strip().lower()
+    dispatch = {
+        "send_message": _handle_send_message,
+        "get_messages": _handle_get_channel_messages,
+        "list_channels": _handle_list_channels,
+        "delete_message": _handle_delete_message,
+    }
+    handler = dispatch.get(action)
+    if not handler:
+        valid = ", ".join(sorted(dispatch.keys()))
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+    return handler(**kwargs)

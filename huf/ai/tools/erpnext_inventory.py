@@ -26,7 +26,7 @@ def _docstatus_label(ds):
 # Items
 # ---------------------------------------------------------------------------
 
-def handle_get_items(**kwargs) -> str:
+def _handle_get_items(**kwargs) -> str:
     """List ERPNext items with optional search and filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -78,7 +78,7 @@ def handle_get_items(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_item(**kwargs) -> str:
+def _handle_get_item(**kwargs) -> str:
     """Get a single ERPNext item by item_code with item_defaults child table."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -98,7 +98,7 @@ def handle_get_item(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_item_prices(**kwargs) -> str:
+def _handle_get_item_prices(**kwargs) -> str:
     """List ERPNext item prices for an item with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -150,7 +150,7 @@ def handle_get_item_prices(**kwargs) -> str:
 # BOM
 # ---------------------------------------------------------------------------
 
-def handle_get_boms(**kwargs) -> str:
+def _handle_get_boms(**kwargs) -> str:
     """List ERPNext BOMs with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -199,7 +199,7 @@ def handle_get_boms(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_bom(**kwargs) -> str:
+def _handle_get_bom(**kwargs) -> str:
     """Get a single ERPNext BOM by name with items and operations child tables."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -219,7 +219,7 @@ def handle_get_bom(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_bom(**kwargs) -> str:
+def _handle_create_bom(**kwargs) -> str:
     """Create a draft ERPNext BOM. Provide item, quantity, and line items."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -262,7 +262,7 @@ def handle_create_bom(**kwargs) -> str:
 # Stock & Inventory
 # ---------------------------------------------------------------------------
 
-def handle_get_stock_balance(**kwargs) -> str:
+def _handle_get_stock_balance(**kwargs) -> str:
     """Get current stock balance per item and warehouse from Stock Ledger Entry."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -319,7 +319,7 @@ def handle_get_stock_balance(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_stock_movements(**kwargs) -> str:
+def _handle_get_stock_movements(**kwargs) -> str:
     """List ERPNext stock ledger entries with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -372,7 +372,7 @@ def handle_get_stock_movements(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_stock_entries(**kwargs) -> str:
+def _handle_get_stock_entries(**kwargs) -> str:
     """List ERPNext stock entry documents with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -419,7 +419,7 @@ def handle_get_stock_entries(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_warehouses(**kwargs) -> str:
+def _handle_get_warehouses(**kwargs) -> str:
     """List ERPNext warehouses with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -458,7 +458,7 @@ def handle_get_warehouses(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_delivery_notes(**kwargs) -> str:
+def _handle_get_delivery_notes(**kwargs) -> str:
     """List ERPNext delivery notes with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -506,7 +506,7 @@ def handle_get_delivery_notes(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_purchase_receipts(**kwargs) -> str:
+def _handle_get_purchase_receipts(**kwargs) -> str:
     """List ERPNext purchase receipts with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -552,3 +552,26 @@ def handle_get_purchase_receipts(**kwargs) -> str:
     except Exception as e:
         frappe.log_error(f"ERPNext Get Purchase Receipts Error: {e}", "ERPNext Tool")
         return _error(str(e))
+
+
+def handle_action(**kwargs) -> str:
+    action = kwargs.get("action", "").strip().lower()
+    dispatch = {
+        "list_items": _handle_get_items,
+        "get_item": _handle_get_item,
+        "item_prices": _handle_get_item_prices,
+        "stock_balance": _handle_get_stock_balance,
+        "stock_movements": _handle_get_stock_movements,
+        "list_stock_entries": _handle_get_stock_entries,
+        "list_warehouses": _handle_get_warehouses,
+        "list_delivery_notes": _handle_get_delivery_notes,
+        "list_purchase_receipts": _handle_get_purchase_receipts,
+        "list_boms": _handle_get_boms,
+        "get_bom": _handle_get_bom,
+        "create_bom": _handle_create_bom,
+    }
+    handler = dispatch.get(action)
+    if not handler:
+        valid = ", ".join(sorted(dispatch.keys()))
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+    return handler(**kwargs)

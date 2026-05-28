@@ -23,7 +23,7 @@ def _error(msg):
 # Lead
 # ---------------------------------------------------------------------------
 
-def handle_get_leads(**kwargs) -> str:
+def _handle_get_leads(**kwargs) -> str:
     """List ERPNext leads with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -75,7 +75,7 @@ def handle_get_leads(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_lead(**kwargs) -> str:
+def _handle_get_lead(**kwargs) -> str:
     """Get a single ERPNext Lead by name/ID with all fields."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -94,7 +94,7 @@ def handle_get_lead(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_lead(**kwargs) -> str:
+def _handle_create_lead(**kwargs) -> str:
     """Create a new ERPNext Lead."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -127,7 +127,7 @@ def handle_create_lead(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_update_lead(**kwargs) -> str:
+def _handle_update_lead(**kwargs) -> str:
     """Update fields on an existing ERPNext Lead."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -171,7 +171,7 @@ def handle_update_lead(**kwargs) -> str:
 # Opportunity
 # ---------------------------------------------------------------------------
 
-def handle_get_opportunities(**kwargs) -> str:
+def _handle_get_opportunities(**kwargs) -> str:
     """List ERPNext Opportunities with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -218,7 +218,7 @@ def handle_get_opportunities(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_opportunity(**kwargs) -> str:
+def _handle_create_opportunity(**kwargs) -> str:
     """Create a new ERPNext Opportunity."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -249,7 +249,7 @@ def handle_create_opportunity(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_update_opportunity(**kwargs) -> str:
+def _handle_update_opportunity(**kwargs) -> str:
     """Update fields on an existing ERPNext Opportunity."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -282,3 +282,21 @@ def handle_update_opportunity(**kwargs) -> str:
     except Exception as e:
         frappe.log_error(f"ERPNext CRM Update Opportunity Error: {e}", "ERPNext CRM Tool")
         return _error(str(e))
+
+
+def handle_action(**kwargs) -> str:
+    action = kwargs.get("action", "").strip().lower()
+    dispatch = {
+        "list_leads": _handle_get_leads,
+        "get_lead": _handle_get_lead,
+        "create_lead": _handle_create_lead,
+        "update_lead": _handle_update_lead,
+        "list_opportunities": _handle_get_opportunities,
+        "create_opportunity": _handle_create_opportunity,
+        "update_opportunity": _handle_update_opportunity,
+    }
+    handler = dispatch.get(action)
+    if not handler:
+        valid = ", ".join(sorted(dispatch.keys()))
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+    return handler(**kwargs)

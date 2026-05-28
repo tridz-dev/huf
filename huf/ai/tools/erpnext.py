@@ -26,7 +26,7 @@ def _docstatus_label(ds):
 # Sales Invoice
 # ---------------------------------------------------------------------------
 
-def handle_get_sales_invoices(**kwargs) -> str:
+def _handle_get_sales_invoices(**kwargs) -> str:
     """List Sales Invoices with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -86,7 +86,7 @@ def handle_get_sales_invoices(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_sales_invoice(**kwargs) -> str:
+def _handle_get_sales_invoice(**kwargs) -> str:
     """Get a single Sales Invoice by name/ID with all fields including items."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -107,7 +107,7 @@ def handle_get_sales_invoice(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_sales_invoice(**kwargs) -> str:
+def _handle_create_sales_invoice(**kwargs) -> str:
     """Create a draft Sales Invoice."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -148,7 +148,7 @@ def handle_create_sales_invoice(**kwargs) -> str:
 # Purchase Invoice
 # ---------------------------------------------------------------------------
 
-def handle_get_purchase_invoices(**kwargs) -> str:
+def _handle_get_purchase_invoices(**kwargs) -> str:
     """List Purchase Invoices with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -210,7 +210,7 @@ def handle_get_purchase_invoices(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_purchase_invoice(**kwargs) -> str:
+def _handle_get_purchase_invoice(**kwargs) -> str:
     """Get a single Purchase Invoice by name/ID with all fields including items."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -235,7 +235,7 @@ def handle_get_purchase_invoice(**kwargs) -> str:
 # Payment Entry
 # ---------------------------------------------------------------------------
 
-def handle_get_payments(**kwargs) -> str:
+def _handle_get_payments(**kwargs) -> str:
     """List Payment Entries with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -286,7 +286,7 @@ def handle_get_payments(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_payment(**kwargs) -> str:
+def _handle_create_payment(**kwargs) -> str:
     """Create a draft Payment Entry. Optionally link to an invoice."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -343,7 +343,7 @@ def handle_create_payment(**kwargs) -> str:
 # Quotation
 # ---------------------------------------------------------------------------
 
-def handle_get_quotations(**kwargs) -> str:
+def _handle_get_quotations(**kwargs) -> str:
     """List Quotations with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -397,7 +397,7 @@ def handle_get_quotations(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_quotation(**kwargs) -> str:
+def _handle_create_quotation(**kwargs) -> str:
     """Create a draft Quotation."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -441,7 +441,7 @@ def handle_create_quotation(**kwargs) -> str:
 # Customer
 # ---------------------------------------------------------------------------
 
-def handle_get_customers(**kwargs) -> str:
+def _handle_get_customers(**kwargs) -> str:
     """List/search Customers with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -491,7 +491,7 @@ def handle_get_customers(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_customer(**kwargs) -> str:
+def _handle_get_customer(**kwargs) -> str:
     """Get a single Customer by name/ID with linked addresses and contacts."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -546,7 +546,7 @@ def handle_get_customer(**kwargs) -> str:
 # GL Entry (read-only)
 # ---------------------------------------------------------------------------
 
-def handle_get_account_ledger(**kwargs) -> str:
+def _handle_get_account_ledger(**kwargs) -> str:
     """Query GL Entries for an account with running balance. GL Entry is read-only."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -609,7 +609,7 @@ def handle_get_account_ledger(**kwargs) -> str:
 # Journal Entry
 # ---------------------------------------------------------------------------
 
-def handle_create_journal_entry(**kwargs) -> str:
+def _handle_create_journal_entry(**kwargs) -> str:
     """Create a draft Journal Entry with account lines."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -648,7 +648,7 @@ def handle_create_journal_entry(**kwargs) -> str:
 # Request for Quotation
 # ---------------------------------------------------------------------------
 
-def handle_get_rfqs(**kwargs) -> str:
+def _handle_get_rfqs(**kwargs) -> str:
     """List Request for Quotation documents with optional filters."""
     if not _erpnext_installed():
         return _error("ERPNext is not installed.")
@@ -681,3 +681,28 @@ def handle_get_rfqs(**kwargs) -> str:
     except Exception as e:
         frappe.log_error(f"ERPNext Get RFQs Error: {e}", "ERPNext Tool")
         return _error(str(e))
+
+
+def handle_action(**kwargs) -> str:
+    action = kwargs.get("action", "").strip().lower()
+    dispatch = {
+        "list_sales_invoices": _handle_get_sales_invoices,
+        "get_sales_invoice": _handle_get_sales_invoice,
+        "create_sales_invoice": _handle_create_sales_invoice,
+        "list_purchase_invoices": _handle_get_purchase_invoices,
+        "get_purchase_invoice": _handle_get_purchase_invoice,
+        "list_payments": _handle_get_payments,
+        "create_payment": _handle_create_payment,
+        "list_customers": _handle_get_customers,
+        "get_customer": _handle_get_customer,
+        "list_quotations": _handle_get_quotations,
+        "create_quotation": _handle_create_quotation,
+        "list_rfqs": _handle_get_rfqs,
+        "get_ledger": _handle_get_account_ledger,
+        "create_journal_entry": _handle_create_journal_entry,
+    }
+    handler = dispatch.get(action)
+    if not handler:
+        valid = ", ".join(sorted(dispatch.keys()))
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+    return handler(**kwargs)

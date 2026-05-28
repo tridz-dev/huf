@@ -22,7 +22,7 @@ def _error(msg):
 # Leads
 # ---------------------------------------------------------------------------
 
-def handle_get_leads(**kwargs) -> str:
+def _handle_get_leads(**kwargs) -> str:
     """List leads with optional filters (status, assigned_to, search query)."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -77,7 +77,7 @@ def handle_get_leads(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_get_lead(**kwargs) -> str:
+def _handle_get_lead(**kwargs) -> str:
     """Get a single lead by name/ID with all fields."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -97,7 +97,7 @@ def handle_get_lead(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_lead(**kwargs) -> str:
+def _handle_create_lead(**kwargs) -> str:
     """Create a new lead."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -137,7 +137,7 @@ def handle_create_lead(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_update_lead(**kwargs) -> str:
+def _handle_update_lead(**kwargs) -> str:
     """Update lead fields."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -186,7 +186,7 @@ def handle_update_lead(**kwargs) -> str:
 # Deals
 # ---------------------------------------------------------------------------
 
-def handle_get_deals(**kwargs) -> str:
+def _handle_get_deals(**kwargs) -> str:
     """List deals with optional filters."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -242,7 +242,26 @@ def handle_get_deals(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_create_deal(**kwargs) -> str:
+def _handle_get_deal(**kwargs) -> str:
+    """Get a single deal by name/ID with all fields."""
+    if not _crm_installed():
+        return _error("Frappe CRM app is not installed.")
+
+    try:
+        name = kwargs.get("name") or kwargs.get("deal_id")
+        if not name:
+            return _error("name or deal_id is required")
+        if not frappe.db.exists("CRM Deal", name):
+            return _error(f"Deal {name} not found")
+
+        doc = frappe.get_doc("CRM Deal", name)
+        return json.dumps({"success": True, "results": doc.as_dict()})
+    except Exception as e:
+        frappe.log_error(f"CRM Get Deal Error: {e}", "CRM Tool")
+        return _error(str(e))
+
+
+def _handle_create_deal(**kwargs) -> str:
     """Create a deal from a lead or standalone."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -305,7 +324,7 @@ def handle_create_deal(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_update_deal(**kwargs) -> str:
+def _handle_update_deal(**kwargs) -> str:
     """Update deal fields."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -353,7 +372,7 @@ def handle_update_deal(**kwargs) -> str:
 # Notes & Tasks
 # ---------------------------------------------------------------------------
 
-def handle_add_note(**kwargs) -> str:
+def _handle_add_note(**kwargs) -> str:
     """Add a note to a lead or deal."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -381,7 +400,7 @@ def handle_add_note(**kwargs) -> str:
         return _error(str(e))
 
 
-def handle_add_task(**kwargs) -> str:
+def _handle_add_task(**kwargs) -> str:
     """Create a task linked to a lead or deal."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -418,7 +437,7 @@ def handle_add_task(**kwargs) -> str:
 # Contacts
 # ---------------------------------------------------------------------------
 
-def handle_get_contacts(**kwargs) -> str:
+def _handle_get_contacts(**kwargs) -> str:
     """List/search contacts. Optionally filter by deal to return CRM Contacts child rows."""
     if not _crm_installed():
         return _error("Frappe CRM app is not installed.")
@@ -501,3 +520,25 @@ def handle_get_contacts(**kwargs) -> str:
     except Exception as e:
         frappe.log_error(f"CRM Get Contacts Error: {e}", "CRM Tool")
         return _error(str(e))
+
+
+def handle_action(**kwargs) -> str:
+    action = kwargs.get("action", "").strip().lower()
+    dispatch = {
+        "list_leads": _handle_get_leads,
+        "get_lead": _handle_get_lead,
+        "create_lead": _handle_create_lead,
+        "update_lead": _handle_update_lead,
+        "list_deals": _handle_get_deals,
+        "get_deal": _handle_get_deal,
+        "create_deal": _handle_create_deal,
+        "update_deal": _handle_update_deal,
+        "add_note": _handle_add_note,
+        "add_task": _handle_add_task,
+        "list_contacts": _handle_get_contacts,
+    }
+    handler = dispatch.get(action)
+    if not handler:
+        valid = ", ".join(sorted(dispatch.keys()))
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+    return handler(**kwargs)

@@ -44,7 +44,7 @@ def _make_github_request(method: str, endpoint: str, json_data=None, params=None
     return response.json() if response.text else {}
 
 
-def handle_list_repos(**kwargs) -> str:
+def _handle_list_repos(**kwargs) -> str:
     """List GitHub repositories for the authenticated user."""
     service_name = "github"
     try:
@@ -76,7 +76,7 @@ def handle_list_repos(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_get_repo(**kwargs) -> str:
+def _handle_get_repo(**kwargs) -> str:
     """Get details of a GitHub repository."""
     service_name = "github"
     try:
@@ -113,7 +113,7 @@ def handle_get_repo(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_create_issue(**kwargs) -> str:
+def _handle_create_issue(**kwargs) -> str:
     """Create a GitHub issue."""
     service_name = "github"
     try:
@@ -149,7 +149,7 @@ def handle_create_issue(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_create_pull_request(**kwargs) -> str:
+def _handle_create_pull_request(**kwargs) -> str:
     """Create a GitHub pull request."""
     service_name = "github"
     try:
@@ -192,7 +192,7 @@ def handle_create_pull_request(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_get_file_content(**kwargs) -> str:
+def _handle_get_file_content(**kwargs) -> str:
     """Get file content from a GitHub repository."""
     service_name = "github"
     try:
@@ -227,7 +227,7 @@ def handle_get_file_content(**kwargs) -> str:
         return json.dumps({"success": False, "error": str(e)})
 
 
-def handle_search_code(**kwargs) -> str:
+def _handle_search_code(**kwargs) -> str:
     """Search code across GitHub."""
     service_name = "github"
     try:
@@ -258,3 +258,20 @@ def handle_search_code(**kwargs) -> str:
         frappe.log_error(error_msg, "GitHub Tool")
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)})
+
+
+def handle_action(**kwargs) -> str:
+    action = kwargs.get("action", "").strip().lower()
+    dispatch = {
+        "list_repos": _handle_list_repos,
+        "get_repo": _handle_get_repo,
+        "create_issue": _handle_create_issue,
+        "create_pr": _handle_create_pull_request,
+        "get_file": _handle_get_file_content,
+        "search_code": _handle_search_code,
+    }
+    handler = dispatch.get(action)
+    if not handler:
+        valid = ", ".join(sorted(dispatch.keys()))
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+    return handler(**kwargs)
