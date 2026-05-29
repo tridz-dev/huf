@@ -117,8 +117,10 @@ def after_migrate():
 		remove_deprecated_gemini_audio_tools()
 		create_ocr_document_tool()
 		create_flow_tools()
+		register_integration_services()
+		sync_tool_types()
 		from huf.ai.tool_registry import sync_discovered_tools
-		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
+		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
 		frappe.log_error(
 			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps",
 			"Tool Sync"
@@ -792,6 +794,56 @@ def register_integration_services():
 				{"key": "server_url", "label": "Jira Server URL", "required": True},
 				{"key": "username", "label": "Username", "required": True},
 				{"key": "token", "label": "API Token", "required": True}
+			]
+		},
+		
+		# Google Workspace Tools
+		{
+			"service_name": "gmail",
+			"category": "Google",
+			"description": "Gmail email management",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
+		{
+			"service_name": "google_calendar",
+			"category": "Google",
+			"description": "Google Calendar event management",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
+		{
+			"service_name": "google_drive",
+			"category": "Google",
+			"description": "Google Drive file management",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
+		{
+			"service_name": "google_sheets",
+			"category": "Google",
+			"description": "Google Sheets management",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
+		{
+			"service_name": "google_maps",
+			"category": "Google",
+			"description": "Google Maps directions and geocoding",
+			"required_credentials": [
+				{"key": "api_key", "label": "Google Maps API Key", "required": True}
 			]
 		},
 	]
