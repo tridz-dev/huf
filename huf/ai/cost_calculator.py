@@ -206,8 +206,8 @@ def calculate_cost(
             litellm_cost = completion_cost(completion_response=litellm_response)
             if litellm_cost and float(litellm_cost) > 0:
                 return float(litellm_cost), "litellm"
-        except Exception:
-            # LiteLLM silently returns 0 for unknown models; that falls through
+        except Exception as e:
+            frappe.log_error(f"LiteLLM auto-lookup failed for '{model_name}': {str(e)}", "Cost Calculator Priority 2")
             pass
 
     # ── Priority 3: Unknown ──────────────────────────────────────────────────

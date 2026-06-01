@@ -1017,6 +1017,36 @@ def run_agent_sync(
                 cached_tokens = getattr(usage, "cached_tokens", None) or 0
             
             cached_tokens = cached_tokens or 0
+            
+            try:
+                # Prefer cost directly from the result
+                cost = getattr(result, "cost", 0)
+                if not cost:
+                    from huf.ai.cost_calculator import calculate_cost
+                    
+                    mock_response = {
+                        "usage": {
+                            "prompt_tokens": input_tokens,
+                            "completion_tokens": output_tokens,
+                            "total_tokens": input_tokens + output_tokens
+                        },
+                        # Pass exactly the resolved model (e.g. gpt-4o) so litellm native pricing works without openai/ prefix errors
+                        "model": resolved_model 
+                    }
+                    
+                    if cached_tokens > 0:
+                        mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                        
+                    cost, _source = calculate_cost(
+                        model_name=resolved_model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cached_tokens=cached_tokens,
+                        litellm_response=mock_response
+                    )
+            except Exception as e:
+                frappe.log_error(f"Cost calculation failed for {resolved_model} in sync: {e}", "Agent Sync Cost")
+                cost = 0.0
 
             try:
                 total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
@@ -1559,25 +1589,33 @@ async def run_agent_stream(
                             frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
                             
                     try:
-                        from huf.ai.providers.litellm import _normalize_model_name
-                        pricing_model = _normalize_model_name(resolved_model, resolved_provider)
-                        
-                        mock_response = {
-                            "usage": {
-                                "prompt_tokens": input_tokens,
-                                "completion_tokens": output_tokens,
-                                "total_tokens": input_tokens + output_tokens
-                            },
-                            "model": pricing_model
-                        }
-                        
-                        if cached_tokens > 0:
-                            mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                        # Prefer cost directly from the chunk (calculated by provider)
+                        cost = chunk.get("cost")
+                        if not cost:
+                            from huf.ai.providers.litellm import _normalize_model_name
+                            from huf.ai.cost_calculator import calculate_cost
                             
-                        cost = litellm.completion_cost(
-                            completion_response=mock_response,
-                            model=pricing_model
-                        )
+                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
+                            
+                            mock_response = {
+                                "usage": {
+                                    "prompt_tokens": input_tokens,
+                                    "completion_tokens": output_tokens,
+                                    "total_tokens": input_tokens + output_tokens
+                                },
+                                "model": pricing_model
+                            }
+                            
+                            if cached_tokens > 0:
+                                mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                                
+                            cost, _source = calculate_cost(
+                                model_name=resolved_model,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                cached_tokens=cached_tokens,
+                                litellm_response=mock_response
+                            )
 
                     except Exception as e:
                         frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")
