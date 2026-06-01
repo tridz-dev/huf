@@ -139,12 +139,20 @@ def _calculate_from_custom_pricing(
     output_price = pricing["output_cost_per_1m_tokens"]
     cached_price = pricing.get("cached_input_cost_per_1m_tokens")
 
-    cost = (input_tokens / 1_000_000) * input_price
-    cost += (output_tokens / 1_000_000) * output_price
+    cost = 0.0
 
     if cached_price is not None and cached_tokens > 0:
-        # Add explicit cache-read cost (e.g. Anthropic charges $0.30/1M for cache reads)
+        # Cached tokens are usually a subset of input tokens.
+        # We bill the cached portion at the cached rate, and the remainder at the regular rate.
+        non_cached_input = max(0, input_tokens - cached_tokens)
+        cost += (non_cached_input / 1_000_000) * input_price
         cost += (cached_tokens / 1_000_000) * cached_price
+    else:
+        # Standard calculation (no caching discount)
+        cost += (input_tokens / 1_000_000) * input_price
+
+    # Always add output cost
+    cost += (output_tokens / 1_000_000) * output_price
 
     return round(cost, 10)
 
@@ -192,6 +200,8 @@ def calculate_cost(
     if litellm_response is not None:
         try:
             from litellm import completion_cost
+            
+            unregister_model_pricing_with_litellm(model_name)
 
             litellm_cost = completion_cost(completion_response=litellm_response)
             if litellm_cost and float(litellm_cost) > 0:
@@ -239,6 +249,42 @@ def register_model_pricing_with_litellm(model_name: str, pricing: dict):
     except Exception as e:
         frappe.log_error(
             f"Failed to register '{model_name}' pricing with LiteLLM: {str(e)}",
+            "Cost Calculator",
+        )
+
+def unregister_model_pricing_with_litellm(model_name: str):
+    """
+    Remove custom pricing from LiteLLM's in-memory price registry and restore the original.
+    This forces LiteLLM to fall back to its own built-in JSON pricing table.
+    """
+    if not model_name:
+        return
+        
+    try:
+        import litellm
+        import json
+        import os
+        
+        # LiteLLM's original prices are stored in this JSON file
+        json_file_path = os.path.join(os.path.dirname(litellm.__file__), "model_prices_and_context_window.json")
+        
+        if os.path.exists(json_file_path):
+            with open(json_file_path, "r") as f:
+                original_prices = json.load(f)
+                
+            # If the model originally existed in LiteLLM, restore its original config.
+            # Otherwise, it was purely a custom model, so pop it completely.
+            if model_name in original_prices:
+                litellm.model_cost[model_name] = original_prices[model_name]
+            elif model_name in litellm.model_cost:
+                litellm.model_cost.pop(model_name, None)
+        else:
+            # Fallback if json not found for some reason
+            litellm.model_cost.pop(model_name, None)
+            
+    except Exception as e:
+        frappe.log_error(
+            f"Failed to unregister '{model_name}' pricing with LiteLLM: {str(e)}",
             "Cost Calculator",
         )
 
