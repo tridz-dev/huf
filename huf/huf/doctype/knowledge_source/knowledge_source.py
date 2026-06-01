@@ -1,15 +1,24 @@
 # Copyright (c) 2025, Huf and contributors
 # For license information, please see license.txt
 
+import re
+
 import frappe
 from frappe.model.document import Document
 from frappe import _
+
+
+VECTOR_KNOWLEDGE_TYPES = {"sqlite_vec", "chroma", "pgvector"}
+PGVECTOR_DISTANCE_METRICS = {"cosine", "l2", "inner_product"}
+PGVECTOR_INDEX_TYPES = {"none", "hnsw", "ivfflat"}
+PGVECTOR_SSLMODES = {"prefer", "require", "disable", "allow", "verify-ca", "verify-full"}
 
 
 class KnowledgeSource(Document):
 	def validate(self):
 		self.validate_chunk_settings()
 		self.validate_vector_settings()
+		self.validate_pgvector_settings()
 		
 	def validate_chunk_settings(self):
 		if self.chunk_size and self.chunk_size < 100:
@@ -18,11 +27,13 @@ class KnowledgeSource(Document):
 			frappe.throw(_("Chunk overlap must be less than chunk size"))
 
 	def validate_vector_settings(self):
-		if self.knowledge_type == "sqlite_vec":
+		if self.knowledge_type in VECTOR_KNOWLEDGE_TYPES:
 			if not self.embedding_model:
 				frappe.throw(_("Embedding Model is required for vector knowledge types"))
 			if not self.vector_dimension or self.vector_dimension <= 0:
 				frappe.throw(_("Vector Dimension must be a positive integer for vector knowledge types"))
+
+		if self.knowledge_type == "sqlite_vec":
 			from huf.ai.knowledge.backends.sqlite_vec_backend import check_sqlite_vec_available
 
 			if not check_sqlite_vec_available():
@@ -31,6 +42,61 @@ class KnowledgeSource(Document):
 					  "Install pysqlite3-binary: pip install pysqlite3-binary. "
 					  "Or use sqlite_fts for keyword search.")
 				)
+
+	def validate_pgvector_settings(self):
+		if self.knowledge_type != "pgvector":
+			return
+
+		if not self.pgvector_connection_mode:
+			self.pgvector_connection_mode = "External PostgreSQL"
+		if not self.pgvector_table_name:
+			self.pgvector_table_name = "huf_knowledge_vectors"
+		if not self.pgvector_distance_metric:
+			self.pgvector_distance_metric = "cosine"
+		if not self.pgvector_index_type:
+			self.pgvector_index_type = "hnsw"
+		if not self.pgvector_sslmode:
+			self.pgvector_sslmode = "prefer"
+
+		if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", self.pgvector_table_name):
+			frappe.throw(_("PGVector Table Name must be a valid PostgreSQL identifier"))
+
+		if self.pgvector_distance_metric not in PGVECTOR_DISTANCE_METRICS:
+			frappe.throw(_("Invalid PGVector Distance Metric"))
+
+		if self.pgvector_index_type not in PGVECTOR_INDEX_TYPES:
+			frappe.throw(_("Invalid PGVector Index Type"))
+
+		if self.pgvector_sslmode not in PGVECTOR_SSLMODES:
+			frappe.throw(_("Invalid PGVector SSL Mode"))
+
+		if self.pgvector_connection_mode == "External PostgreSQL":
+			missing_fields = []
+			for fieldname, label in {
+				"pgvector_host": "Host",
+				"pgvector_port": "Port",
+				"pgvector_database": "Database",
+				"pgvector_user": "User",
+			}.items():
+				if not self.get(fieldname):
+					missing_fields.append(label)
+
+			if missing_fields:
+				frappe.throw(
+					_("Missing PGVector connection fields: {0}").format(", ".join(missing_fields))
+				)
+
+			if int(self.pgvector_port or 0) <= 0:
+				frappe.throw(_("PGVector Port must be a positive integer"))
+
+		elif self.pgvector_connection_mode == "Site PostgreSQL":
+			if frappe.conf.db_type != "postgres":
+				frappe.throw(
+					_("Site PostgreSQL mode requires the Frappe site database to be PostgreSQL. "
+					  "Use External PostgreSQL for MariaDB-backed sites.")
+				)
+		else:
+			frappe.throw(_("Invalid PGVector Connection Mode"))
 	
 	def before_save(self):
 		if not self.chunk_size:
@@ -39,6 +105,17 @@ class KnowledgeSource(Document):
 			self.chunk_overlap = 50
 		if not self.status:
 			self.status = "Pending"
+		if self.knowledge_type == "pgvector":
+			if not self.pgvector_connection_mode:
+				self.pgvector_connection_mode = "External PostgreSQL"
+			if not self.pgvector_table_name:
+				self.pgvector_table_name = "huf_knowledge_vectors"
+			if not self.pgvector_distance_metric:
+				self.pgvector_distance_metric = "cosine"
+			if not self.pgvector_index_type:
+				self.pgvector_index_type = "hnsw"
+			if not self.pgvector_sslmode:
+				self.pgvector_sslmode = "prefer"
 	
 	def on_trash(self):
 		# Delete SQLite artifact file
