@@ -51,7 +51,8 @@
         "total_inputs",
         "index_size_bytes",
         "error_message",
-        "disabled"
+        "disabled",
+        "test_connection"
     ],
     "fields": [
         {
@@ -183,6 +184,14 @@
             "fieldname": "disabled",
             "fieldtype": "Check",
             "label": "Disabled"
+        },
+        {
+            "fieldname": "test_connection",
+            "fieldtype": "Button",
+            "label": "Test Connection",
+            "options": "test_connection",
+            "depends_on": "eval:doc.knowledge_type=='pgvector'",
+            "in_list_view": 0
         },
         {
             "fieldname": "knowledge_type",
