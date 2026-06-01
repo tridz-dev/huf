@@ -15,11 +15,33 @@ PGVECTOR_SSLMODES = {"prefer", "require", "disable", "allow", "verify-ca", "veri
 
 
 class KnowledgeSource(Document):
+	def before_validate(self):
+		self.set_defaults()
+
 	def validate(self):
 		self.validate_chunk_settings()
 		self.validate_vector_settings()
 		self.validate_pgvector_settings()
 		
+	def set_defaults(self):
+		if not self.chunk_size:
+			self.chunk_size = 512
+		if not self.chunk_overlap:
+			self.chunk_overlap = 50
+		if not self.status:
+			self.status = "Pending"
+		if self.knowledge_type == "pgvector":
+			if not self.pgvector_connection_mode:
+				self.pgvector_connection_mode = "External PostgreSQL"
+			if not self.pgvector_table_name:
+				self.pgvector_table_name = "huf_knowledge_vectors"
+			if not self.pgvector_distance_metric:
+				self.pgvector_distance_metric = "cosine"
+			if not self.pgvector_index_type:
+				self.pgvector_index_type = "hnsw"
+			if not self.pgvector_sslmode:
+				self.pgvector_sslmode = "prefer"
+
 	def validate_chunk_settings(self):
 		if self.chunk_size and self.chunk_size < 100:
 			frappe.throw(_("Chunk size must be at least 100 characters"))
@@ -47,18 +69,7 @@ class KnowledgeSource(Document):
 		if self.knowledge_type != "pgvector":
 			return
 
-		if not self.pgvector_connection_mode:
-			self.pgvector_connection_mode = "External PostgreSQL"
-		if not self.pgvector_table_name:
-			self.pgvector_table_name = "huf_knowledge_vectors"
-		if not self.pgvector_distance_metric:
-			self.pgvector_distance_metric = "cosine"
-		if not self.pgvector_index_type:
-			self.pgvector_index_type = "hnsw"
-		if not self.pgvector_sslmode:
-			self.pgvector_sslmode = "prefer"
-
-		if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", self.pgvector_table_name):
+		if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", self.pgvector_table_name or ""):
 			frappe.throw(_("PGVector Table Name must be a valid PostgreSQL identifier"))
 
 		if self.pgvector_distance_metric not in PGVECTOR_DISTANCE_METRICS:
@@ -99,23 +110,7 @@ class KnowledgeSource(Document):
 			frappe.throw(_("Invalid PGVector Connection Mode"))
 	
 	def before_save(self):
-		if not self.chunk_size:
-			self.chunk_size = 512
-		if not self.chunk_overlap:
-			self.chunk_overlap = 50
-		if not self.status:
-			self.status = "Pending"
-		if self.knowledge_type == "pgvector":
-			if not self.pgvector_connection_mode:
-				self.pgvector_connection_mode = "External PostgreSQL"
-			if not self.pgvector_table_name:
-				self.pgvector_table_name = "huf_knowledge_vectors"
-			if not self.pgvector_distance_metric:
-				self.pgvector_distance_metric = "cosine"
-			if not self.pgvector_index_type:
-				self.pgvector_index_type = "hnsw"
-			if not self.pgvector_sslmode:
-				self.pgvector_sslmode = "prefer"
+		self.set_defaults()
 	
 	def on_trash(self):
 		# Delete SQLite artifact file
