@@ -1,13 +1,11 @@
 # Copyright (c) 2025, Huf and contributors
 # For license information, please see license.txt
 
-"""PostgreSQL/PGVector backend for HUF knowledge storage."""
+"""PostgreSQL/PGVector backend using the LlamaIndex adapter."""
 
-import json
 import re
 import uuid
-from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import frappe
 from frappe import _
@@ -15,158 +13,108 @@ from frappe import _
 from . import ChunkResult, KnowledgeBackend
 
 try:
-	import psycopg
-	from psycopg import sql
-	PSYCOPG_AVAILABLE = True
+	from llama_index.core import Document, StorageContext
+	from llama_index.core.vector_stores import VectorStoreQuery
+	from llama_index.core.vector_stores.types import ExactMatchFilter, MetadataFilters
+	from llama_index.vector_stores.postgres import PGVectorStore
+	LLAMAINDEX_PGVECTOR_AVAILABLE = True
 except ImportError:
-	PSYCOPG_AVAILABLE = False
+	LLAMAINDEX_PGVECTOR_AVAILABLE = False
 
 
 VALID_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-DISTANCE_OPERATORS = {
-	"cosine": "<=>",
-	"l2": "<->",
-	"inner_product": "<#>",
-}
 
 
 class PGVectorBackend(KnowledgeBackend):
-	"""PostgreSQL backend using the pgvector extension for semantic search."""
+	"""PostgreSQL/pgvector backend for HUF knowledge storage.
+
+	This mirrors the Chroma backend pattern: HUF resolves and generates
+	embeddings, while LlamaIndex owns the vector-store adapter behavior.
+	"""
 
 	def __init__(self):
 		self.knowledge_source = None
 		self.config = {}
 		self.table_name = "huf_knowledge_vectors"
 		self.dimension = 1536
-		self.distance_metric = "cosine"
 		self.connection_mode = "External PostgreSQL"
+		self.vector_store = None
+		self.storage_context = None
 		self._initialized = False
 
 	def initialize(self, knowledge_source: str, config: Dict[str, Any]) -> None:
-		if not PSYCOPG_AVAILABLE:
+		if not LLAMAINDEX_PGVECTOR_AVAILABLE:
 			frappe.throw(
-				_("psycopg is required for pgvector knowledge sources. "
-				  "Install it with: pip install psycopg[binary]")
+				_("llama-index-vector-stores-postgres is required for pgvector knowledge sources. "
+				  "Install it with: pip install llama-index-vector-stores-postgres")
 			)
 
 		self.knowledge_source = knowledge_source
 		self.config = config or {}
 		self.table_name = self.config.get("table_name") or "huf_knowledge_vectors"
 		self.dimension = int(self.config.get("vector_dimension") or 1536)
-		self.distance_metric = self.config.get("distance_metric") or "cosine"
 		self.connection_mode = self.config.get("connection_mode") or "External PostgreSQL"
 
 		self._validate_config()
-		self._ensure_schema()
+		self.vector_store = PGVectorStore.from_params(**self._get_connection_params())
+		self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
 		self._initialized = True
 
 	def _validate_config(self) -> None:
 		if not VALID_IDENTIFIER.match(self.table_name):
 			frappe.throw(_("PGVector table name must be a valid PostgreSQL identifier"))
-
-		if self.distance_metric not in DISTANCE_OPERATORS:
-			frappe.throw(_("Unsupported PGVector distance metric: {0}").format(self.distance_metric))
-
 		if self.dimension <= 0:
 			frappe.throw(_("PGVector vector dimension must be positive"))
 
-	@contextmanager
-	def _get_connection(self):
-		conn = psycopg.connect(**self._get_connection_params())
-		try:
-			yield conn
-			conn.commit()
-		except Exception:
-			conn.rollback()
-			raise
-		finally:
-			conn.close()
-
 	def _get_connection_params(self) -> Dict[str, Any]:
+		params = {
+			"table_name": self.table_name,
+			"embed_dim": self.dimension,
+			"use_jsonb": True,
+		}
+
+		index_type = self.config.get("index_type")
+		if index_type == "hnsw":
+			params["hnsw_kwargs"] = {
+				"hnsw_m": int(self.config.get("hnsw_m") or 16),
+				"hnsw_ef_construction": int(self.config.get("hnsw_ef_construction") or 64),
+				"hnsw_ef_search": int(self.config.get("hnsw_ef_search") or 40),
+			}
+
 		if self.connection_mode == "Site PostgreSQL":
 			if frappe.conf.db_type != "postgres":
 				frappe.throw(
 					_("Site PostgreSQL mode requires a PostgreSQL-backed Frappe site. "
 					  "Use External PostgreSQL for MariaDB-backed sites.")
 				)
-			return {
+			params.update({
 				"host": frappe.conf.db_host or "localhost",
 				"port": int(frappe.conf.db_port or 5432),
-				"dbname": frappe.conf.db_name,
+				"database": frappe.conf.db_name,
 				"user": frappe.conf.db_user,
 				"password": frappe.conf.db_password,
-			}
+			})
+			return params
 
-		params = {
+		params.update({
 			"host": self.config.get("host") or "localhost",
 			"port": int(self.config.get("port") or 5432),
-			"dbname": self.config.get("database"),
+			"database": self.config.get("database"),
 			"user": self.config.get("user"),
 			"password": self.config.get("password"),
-		}
+		})
+
 		sslmode = self.config.get("sslmode")
 		if sslmode:
 			params["sslmode"] = sslmode
-		return params
 
-	def _ensure_schema(self) -> None:
-		with self._get_connection() as conn:
-			with conn.cursor() as cursor:
-				cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
-				cursor.execute(
-					sql.SQL(
-						"""
-						CREATE TABLE IF NOT EXISTS {table} (
-							id BIGSERIAL PRIMARY KEY,
-							site_name TEXT NOT NULL,
-							knowledge_source TEXT NOT NULL,
-							input_id TEXT NOT NULL,
-							input_type TEXT NOT NULL,
-							chunk_id TEXT NOT NULL UNIQUE,
-							source_title TEXT,
-							chunk_index INTEGER,
-							text TEXT NOT NULL,
-							char_start INTEGER,
-							char_end INTEGER,
-							metadata JSONB DEFAULT '{{}}'::jsonb,
-							embedding VECTOR({dimension}) NOT NULL,
-							created_at TIMESTAMPTZ DEFAULT now(),
-							updated_at TIMESTAMPTZ DEFAULT now()
-						)
-						"""
-					).format(
-						table=sql.Identifier(self.table_name),
-						dimension=sql.SQL(str(self.dimension)),
-					)
-				)
-				cursor.execute(
-					sql.SQL(
-						"CREATE INDEX IF NOT EXISTS {index} ON {table} (site_name, knowledge_source)"
-					).format(
-						index=sql.Identifier(f"idx_{self.table_name}_source"),
-						table=sql.Identifier(self.table_name),
-					)
-				)
-				cursor.execute(
-					sql.SQL(
-						"CREATE INDEX IF NOT EXISTS {index} ON {table} (site_name, knowledge_source, input_id)"
-					).format(
-						index=sql.Identifier(f"idx_{self.table_name}_input"),
-						table=sql.Identifier(self.table_name),
-					)
-				)
-				cursor.execute(
-					sql.SQL(
-						"CREATE INDEX IF NOT EXISTS {index} ON {table} USING GIN (metadata)"
-					).format(
-						index=sql.Identifier(f"idx_{self.table_name}_metadata"),
-						table=sql.Identifier(self.table_name),
-					)
-				)
+		return params
 
 	def add_chunks(self, chunks: List[Dict[str, Any]]) -> int:
 		if not chunks:
 			return 0
+		if not self._initialized:
+			raise RuntimeError("Backend not initialized. Call initialize() first.")
 
 		from huf.ai.knowledge.embedding import get_embeddings, resolve_embedding_config
 
@@ -179,60 +127,49 @@ class PGVectorBackend(KnowledgeBackend):
 			api_base=embed_config.get("api_base"),
 		)
 
-		with self._get_connection() as conn:
-			with conn.cursor() as cursor:
-				for chunk, embedding in zip(chunks, embeddings):
-					chunk_id = chunk.get("chunk_id") or str(uuid.uuid4())
-					metadata = json.dumps(chunk.get("metadata") or {})
-					cursor.execute(
-						sql.SQL(
-							"""
-							INSERT INTO {table}
-							(site_name, knowledge_source, input_id, input_type, chunk_id, source_title,
-							 chunk_index, text, char_start, char_end, metadata, embedding, updated_at)
-							VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::vector, now())
-							ON CONFLICT (chunk_id) DO UPDATE SET
-								site_name = EXCLUDED.site_name,
-								knowledge_source = EXCLUDED.knowledge_source,
-								input_id = EXCLUDED.input_id,
-								input_type = EXCLUDED.input_type,
-								source_title = EXCLUDED.source_title,
-								chunk_index = EXCLUDED.chunk_index,
-								text = EXCLUDED.text,
-								char_start = EXCLUDED.char_start,
-								char_end = EXCLUDED.char_end,
-								metadata = EXCLUDED.metadata,
-								embedding = EXCLUDED.embedding,
-								updated_at = now()
-							"""
-						).format(table=sql.Identifier(self.table_name)),
-						(
-							frappe.local.site,
-							self.knowledge_source,
-							chunk["input_id"],
-							chunk["input_type"],
-							chunk_id,
-							chunk.get("source_title"),
-							chunk.get("chunk_index"),
-							chunk["text"],
-							chunk.get("char_start"),
-							chunk.get("char_end"),
-							metadata,
-							self._format_vector(embedding),
-						),
-					)
+		documents = []
+		for chunk, embedding in zip(chunks, embeddings):
+			chunk_id = chunk.get("chunk_id") or str(uuid.uuid4())
+			documents.append(
+				Document(
+					text=chunk["text"],
+					id_=chunk_id,
+					embedding=embedding,
+					metadata={
+						"site_name": frappe.local.site,
+						"knowledge_source": self.knowledge_source,
+						"input_id": chunk["input_id"],
+						"input_type": chunk["input_type"],
+						"chunk_id": chunk_id,
+						"source_title": chunk.get("source_title"),
+						"chunk_index": chunk.get("chunk_index"),
+						"char_start": chunk.get("char_start"),
+						"char_end": chunk.get("char_end"),
+						**(chunk.get("metadata") or {}),
+					},
+				)
+			)
+
+		if documents:
+			self.vector_store.add(documents)
+
 		return len(chunks)
 
 	def delete_chunks(self, input_id: str) -> int:
-		with self._get_connection() as conn:
-			with conn.cursor() as cursor:
-				cursor.execute(
-					sql.SQL(
-						"DELETE FROM {table} WHERE site_name = %s AND knowledge_source = %s AND input_id = %s"
-					).format(table=sql.Identifier(self.table_name)),
-					(frappe.local.site, self.knowledge_source, input_id),
-				)
-				return cursor.rowcount or 0
+		if not self._initialized:
+			raise RuntimeError("Backend not initialized. Call initialize() first.")
+
+		filters = MetadataFilters(filters=[
+			ExactMatchFilter(key="site_name", value=frappe.local.site),
+			ExactMatchFilter(key="knowledge_source", value=self.knowledge_source),
+			ExactMatchFilter(key="input_id", value=input_id),
+		])
+		try:
+			self.vector_store.delete_nodes(filters=filters)
+		except Exception as exc:
+			frappe.logger().warning(f"PGVector delete_chunks error for {input_id}: {str(exc)}")
+			return 0
+		return 0
 
 	def search(
 		self,
@@ -242,6 +179,8 @@ class PGVectorBackend(KnowledgeBackend):
 	) -> List[ChunkResult]:
 		if not query or not query.strip():
 			return []
+		if not self._initialized:
+			raise RuntimeError("Backend not initialized. Call initialize() first.")
 
 		from huf.ai.knowledge.embedding import get_embedding, resolve_embedding_config
 
@@ -253,93 +192,78 @@ class PGVectorBackend(KnowledgeBackend):
 			api_base=embed_config.get("api_base"),
 		)
 
-		where_parts = [sql.SQL("site_name = %s"), sql.SQL("knowledge_source = %s")]
-		params: List[Any] = [frappe.local.site, self.knowledge_source]
+		llama_filters = [
+			ExactMatchFilter(key="site_name", value=frappe.local.site),
+			ExactMatchFilter(key="knowledge_source", value=self.knowledge_source),
+		]
 		if filters:
-			for key, value in filters.items():
-				where_parts.append(sql.SQL("metadata ->> %s = %s"))
-				params.extend([key, str(value)])
+			llama_filters.extend(
+				ExactMatchFilter(key=key, value=value)
+				for key, value in filters.items()
+			)
 
-		operator = sql.SQL(DISTANCE_OPERATORS[self.distance_metric])
-		vector_text = self._format_vector(query_embedding)
-		params.extend([vector_text, vector_text, int(top_k)])
+		query_obj = VectorStoreQuery(
+			query_embedding=query_embedding,
+			similarity_top_k=top_k,
+			mode="default",
+			filters=MetadataFilters(filters=llama_filters),
+		)
+		result = self.vector_store.query(query_obj)
 
-		with self._get_connection() as conn:
-			with conn.cursor() as cursor:
-				cursor.execute(
-					sql.SQL(
-						"""
-						SELECT chunk_id, text, source_title, input_id, metadata,
-						       embedding {operator} %s::vector AS distance
-						FROM {table}
-						WHERE {where_sql}
-						ORDER BY embedding {operator} %s::vector
-						LIMIT %s
-						"""
-					).format(
-						table=sql.Identifier(self.table_name),
-						operator=operator,
-						where_sql=sql.SQL(" AND ").join(where_parts),
-					),
-					params,
-				)
-				results = []
-				for row in cursor.fetchall():
-					chunk_id, text, title, input_id, metadata, distance = row
-					results.append(
-						ChunkResult(
-							chunk_id=chunk_id,
-							text=text,
-							title=title,
-							score=self._distance_to_score(distance),
-							source=input_id,
-							metadata=metadata or {},
-						)
+		results = []
+		if result.nodes:
+			for index, node in enumerate(result.nodes):
+				score = 0.0
+				if result.similarities and index < len(result.similarities):
+					score = float(result.similarities[index])
+
+				metadata = dict(node.metadata or {})
+				results.append(
+					ChunkResult(
+						chunk_id=metadata.get("chunk_id", node.id_ or ""),
+						text=node.text,
+						title=metadata.get("source_title"),
+						score=score,
+						source=metadata.get("input_id"),
+						metadata={k: v for k, v in metadata.items() if k not in [
+							"chunk_id", "source_title", "knowledge_source", "site_name"
+						]},
 					)
-				return results
+				)
+
+		return results
 
 	def clear(self) -> None:
-		with self._get_connection() as conn:
-			with conn.cursor() as cursor:
-				cursor.execute(
-					sql.SQL("DELETE FROM {table} WHERE site_name = %s AND knowledge_source = %s").format(
-						table=sql.Identifier(self.table_name)
-					),
-					(frappe.local.site, self.knowledge_source),
-				)
+		if not self._initialized:
+			raise RuntimeError("Backend not initialized. Call initialize() first.")
+
+		filters = MetadataFilters(filters=[
+			ExactMatchFilter(key="site_name", value=frappe.local.site),
+			ExactMatchFilter(key="knowledge_source", value=self.knowledge_source),
+		])
+		try:
+			self.vector_store.delete_nodes(filters=filters)
+		except Exception as exc:
+			frappe.logger().warning(f"PGVector clear error for {self.knowledge_source}: {str(exc)}")
+			raise
 
 	def get_stats(self) -> Dict[str, Any]:
-		stats = {
+		return {
 			"backend_type": "pgvector",
 			"knowledge_source": self.knowledge_source,
 			"table_name": self.table_name,
+			"initialized": self._initialized,
+			"vector_dimension": self.dimension,
 			"chunk_count": 0,
 			"input_count": 0,
-			"vector_dimension": self.dimension,
-			"distance_metric": self.distance_metric,
+			"size_bytes": 0,
 		}
-		with self._get_connection() as conn:
-			with conn.cursor() as cursor:
-				cursor.execute(
-					sql.SQL(
-						"""
-						SELECT COUNT(*), COUNT(DISTINCT input_id)
-						FROM {table}
-						WHERE site_name = %s AND knowledge_source = %s
-						"""
-					).format(table=sql.Identifier(self.table_name)),
-					(frappe.local.site, self.knowledge_source),
-				)
-				chunk_count, input_count = cursor.fetchone()
-				stats["chunk_count"] = chunk_count or 0
-				stats["input_count"] = input_count or 0
-		return stats
 
-	def health_check(self):
+	def health_check(self) -> Tuple[bool, str]:
 		try:
-			with self._get_connection() as conn:
-				with conn.cursor() as cursor:
-					cursor.execute("SELECT 1")
+			if not self._initialized:
+				return (False, "Backend not initialized")
+			self.search("health_check", top_k=1)
 			return (True, "Healthy")
 		except Exception as exc:
 			return (False, str(exc))
@@ -348,21 +272,4 @@ class PGVectorBackend(KnowledgeBackend):
 		return True
 
 	def supports_hybrid_search(self) -> bool:
-		return False
-
-	def _format_vector(self, embedding: List[float]) -> str:
-		if len(embedding) != self.dimension:
-			frappe.throw(
-				_("Embedding dimension mismatch. Expected {0}, got {1}").format(
-					self.dimension, len(embedding)
-				)
-			)
-		return "[" + ",".join(str(float(value)) for value in embedding) + "]"
-
-	def _distance_to_score(self, distance) -> float:
-		if distance is None:
-			return 0.0
-		distance = float(distance)
-		if self.distance_metric == "cosine":
-			return max(0.0, 1.0 - distance)
-		return 1.0 / (1.0 + abs(distance))
+		return bool(self.config.get("hybrid_search"))
