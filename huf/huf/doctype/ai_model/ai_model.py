@@ -31,16 +31,19 @@ class AIModel(Document):
 		from huf.ai.cost_calculator import (
 			invalidate_model_pricing_cache,
 			register_model_pricing_with_litellm,
+			unregister_model_pricing_with_litellm,
 			get_model_pricing,
 		)
 
 		# Always invalidate so next request fetches fresh data
 		invalidate_model_pricing_cache(self.name)
 
-		# Re-register with LiteLLM if custom pricing is configured
+		# Re-register with LiteLLM if custom pricing is configured, otherwise clear the override
 		pricing = get_model_pricing(self.name)
 		if pricing:
 			register_model_pricing_with_litellm(self.name, pricing)
+		else:
+			unregister_model_pricing_with_litellm(self.name)
 
 
 
