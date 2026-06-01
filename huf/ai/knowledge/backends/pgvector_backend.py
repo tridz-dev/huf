@@ -17,6 +17,7 @@ try:
 	from llama_index.core.vector_stores import VectorStoreQuery
 	from llama_index.core.vector_stores.types import ExactMatchFilter, MetadataFilters
 	from llama_index.vector_stores.postgres import PGVectorStore
+	from sqlalchemy import create_engine, text
 	LLAMAINDEX_PGVECTOR_AVAILABLE = True
 except ImportError:
 	LLAMAINDEX_PGVECTOR_AVAILABLE = False
@@ -56,6 +57,7 @@ class PGVectorBackend(KnowledgeBackend):
 		self.connection_mode = self.config.get("connection_mode") or "External PostgreSQL"
 
 		self._validate_config()
+		self._ensure_pgvector_extension()
 		self.vector_store = PGVectorStore.from_params(**self._get_connection_params())
 		self.storage_context = StorageContext.from_defaults(vector_store=self.vector_store)
 		self._initialized = True
@@ -81,34 +83,87 @@ class PGVectorBackend(KnowledgeBackend):
 				"hnsw_ef_search": int(self.config.get("hnsw_ef_search") or 40),
 			}
 
+		params.update(self._get_database_params())
+		return params
+
+	def _get_database_params(self) -> Dict[str, Any]:
 		if self.connection_mode == "Site PostgreSQL":
 			if frappe.conf.db_type != "postgres":
 				frappe.throw(
 					_("Site PostgreSQL mode requires a PostgreSQL-backed Frappe site. "
 					  "Use External PostgreSQL for MariaDB-backed sites.")
 				)
-			params.update({
+			return {
 				"host": frappe.conf.db_host or "localhost",
 				"port": int(frappe.conf.db_port or 5432),
 				"database": frappe.conf.db_name,
 				"user": frappe.conf.db_user,
 				"password": frappe.conf.db_password,
-			})
-			return params
+			}
 
-		params.update({
+		params = {
 			"host": self.config.get("host") or "localhost",
 			"port": int(self.config.get("port") or 5432),
 			"database": self.config.get("database"),
 			"user": self.config.get("user"),
 			"password": self.config.get("password"),
-		})
-
+		}
 		sslmode = self.config.get("sslmode")
 		if sslmode:
 			params["sslmode"] = sslmode
-
 		return params
+
+	def _get_sqlalchemy_url(self) -> str:
+		params = self._get_database_params()
+		sslmode = params.get("sslmode")
+		url = (
+			f"postgresql+psycopg://{params.get('user')}:{params.get('password') or ''}"
+			f"@{params.get('host')}:{params.get('port')}/{params.get('database')}"
+		)
+		if sslmode:
+			url += f"?sslmode={sslmode}"
+		return url
+
+	def _get_sql_table_name(self) -> str:
+		return f"data_{self.table_name}"
+
+	def _ensure_pgvector_extension(self) -> None:
+		try:
+			engine = create_engine(self._get_sqlalchemy_url())
+			with engine.begin() as conn:
+				conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+		except Exception as exc:
+			frappe.throw(
+				_("Unable to ensure PostgreSQL pgvector extension. "
+				  "Create it manually with `CREATE EXTENSION IF NOT EXISTS vector;` "
+				  "or grant the database user permission. Error: {0}").format(str(exc))
+			)
+
+	def _count_by_filters(self, extra_where: str = "", params: Optional[Dict[str, Any]] = None) -> Tuple[int, int]:
+		params = params or {}
+		query = f"""
+			SELECT COUNT(*) AS chunk_count,
+			       COUNT(DISTINCT metadata_->>'input_id') AS input_count
+			FROM {self._get_sql_table_name()}
+			WHERE metadata_->>'site_name' = :site_name
+			  AND metadata_->>'knowledge_source' = :knowledge_source
+			  {extra_where}
+		"""
+		try:
+			engine = create_engine(self._get_sqlalchemy_url())
+			with engine.begin() as conn:
+				row = conn.execute(
+					text(query),
+					{
+						"site_name": frappe.local.site,
+						"knowledge_source": self.knowledge_source,
+						**params,
+					},
+				).fetchone()
+				return (int(row[0] or 0), int(row[1] or 0))
+		except Exception as exc:
+			frappe.logger().warning(f"PGVector count failed for {self.knowledge_source}: {str(exc)}")
+			return (0, 0)
 
 	def add_chunks(self, chunks: List[Dict[str, Any]]) -> int:
 		if not chunks:
@@ -159,6 +214,10 @@ class PGVectorBackend(KnowledgeBackend):
 		if not self._initialized:
 			raise RuntimeError("Backend not initialized. Call initialize() first.")
 
+		count_before, _ = self._count_by_filters(
+			extra_where="AND metadata_->>'input_id' = :input_id",
+			params={"input_id": input_id},
+		)
 		filters = MetadataFilters(filters=[
 			ExactMatchFilter(key="site_name", value=frappe.local.site),
 			ExactMatchFilter(key="knowledge_source", value=self.knowledge_source),
@@ -169,7 +228,7 @@ class PGVectorBackend(KnowledgeBackend):
 		except Exception as exc:
 			frappe.logger().warning(f"PGVector delete_chunks error for {input_id}: {str(exc)}")
 			return 0
-		return 0
+		return count_before
 
 	def search(
 		self,
@@ -248,14 +307,15 @@ class PGVectorBackend(KnowledgeBackend):
 			raise
 
 	def get_stats(self) -> Dict[str, Any]:
+		chunk_count, input_count = self._count_by_filters()
 		return {
 			"backend_type": "pgvector",
 			"knowledge_source": self.knowledge_source,
 			"table_name": self.table_name,
 			"initialized": self._initialized,
 			"vector_dimension": self.dimension,
-			"chunk_count": 0,
-			"input_count": 0,
+			"chunk_count": chunk_count,
+			"input_count": input_count,
 			"size_bytes": 0,
 		}
 
@@ -263,7 +323,7 @@ class PGVectorBackend(KnowledgeBackend):
 		try:
 			if not self._initialized:
 				return (False, "Backend not initialized")
-			self.search("health_check", top_k=1)
+			self.get_stats()
 			return (True, "Healthy")
 		except Exception as exc:
 			return (False, str(exc))
