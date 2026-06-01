@@ -14,14 +14,14 @@ def _build_backend_config(source) -> dict:
 	"""Build configuration dict for backend initialization.
 
 	Includes chunking settings for all backends and adds embedding
-	configuration for the sqlite_vec vector backend.
+	configuration for vector backends.
 	"""
 	config = {
 		"chunk_size": source.chunk_size,
 		"chunk_overlap": source.chunk_overlap,
 	}
 
-	if source.knowledge_type in ("sqlite_vec", "chroma"):
+	if source.knowledge_type in ("sqlite_vec", "chroma", "pgvector"):
 		config["embedding_model"] = source.embedding_model
 		config["vector_dimension"] = source.vector_dimension
 		config["embedding_provider"] = getattr(source, "embedding_provider", None)
@@ -38,6 +38,20 @@ def _build_backend_config(source) -> dict:
 			files_path = get_files_path(is_private=True)
 			safe_name = frappe.scrub(source.name)
 			config["persist_directory"] = os.path.join(files_path, "knowledge", f"{safe_name}_chroma")
+
+	if source.knowledge_type == "pgvector":
+		config.update({
+			"connection_mode": getattr(source, "pgvector_connection_mode", None) or "External PostgreSQL",
+			"table_name": getattr(source, "pgvector_table_name", None) or "huf_knowledge_vectors",
+			"distance_metric": getattr(source, "pgvector_distance_metric", None) or "cosine",
+			"index_type": getattr(source, "pgvector_index_type", None) or "hnsw",
+			"host": getattr(source, "pgvector_host", None) or "localhost",
+			"port": int(getattr(source, "pgvector_port", None) or 5432),
+			"database": getattr(source, "pgvector_database", None),
+			"user": getattr(source, "pgvector_user", None),
+			"password": source.get_password("pgvector_password") if getattr(source, "pgvector_password", None) else None,
+			"sslmode": getattr(source, "pgvector_sslmode", None) or "prefer",
+		})
 
 	return config
 
@@ -261,44 +275,26 @@ def _extract_text(doc) -> ExtractedText:
 		return extractor.extract(file_path)
 	
 	elif doc.input_type == "URL":
-		# Get URL extractor
-		from .extractors.url import URLExtractor
-		extractor = URLExtractor()
-		return extractor.extract(doc.url)
+		# Fetch URL content
+		import requests
+		response = requests.get(doc.url, timeout=30)
+		response.raise_for_status()
+		
+		# Extract text from HTML
+		extractor = TextExtractor.get_extractor("html")
+		return extractor.extract_from_content(response.text, doc.url)
 	
-	raise ValueError(f"Unknown input type: {doc.input_type}")
+	else:
+		frappe.throw(_("Unsupported input type: {0}").format(doc.input_type))
 
 
 def update_source_stats(source, backend):
-	"""Update knowledge source statistics."""
-	stats = backend.get_stats()
-	
-	source.reload()
-	source.total_chunks = stats.get("chunk_count", 0)
-	source.total_inputs = stats.get("input_count", 0)
-	source.index_size_bytes = stats.get("size_bytes", 0)
-	db_path = getattr(backend, "db_path", None)
-	source.sqlite_file_path = db_path
-	
-	# Update SQLite file reference
-	if db_path and os.path.exists(db_path):
-		# Create or update file reference
-		from frappe.utils import get_files_path
-		files_path = get_files_path(is_private=True)
-		relative_path = os.path.relpath(backend.db_path, files_path)
-		file_url = f"/private/files/{relative_path.replace(os.sep, '/')}"
-		
-		# Check if file doc exists
-		existing_file = frappe.db.exists("File", {"file_url": file_url})
-		if not existing_file:
-			file_doc = frappe.get_doc({
-				"doctype": "File",
-				"file_name": os.path.basename(backend.db_path),
-				"file_url": file_url,
-				"is_private": 1,
-			})
-			file_doc.insert(ignore_permissions=True)
-		
-		source.sqlite_file = file_url
-	
-	source.save(ignore_permissions=True)
+	"""Update knowledge source statistics from backend."""
+	try:
+		stats = backend.get_stats()
+		source.total_chunks = stats.get("chunk_count", 0)
+		source.total_inputs = stats.get("input_count", 0)
+		source.index_size_bytes = stats.get("size_bytes", 0)
+		source.save(ignore_permissions=True)
+	except Exception as e:
+		frappe.logger().warning(f"Failed to update knowledge source stats: {str(e)}")
