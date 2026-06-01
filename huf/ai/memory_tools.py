@@ -110,6 +110,31 @@ def save_memory_record(
     if promote_to_knowledge and not _is_manager():
         frappe.throw(_("Knowledge promotion blocked"))
 
+    # Apply Memory Policy rules if Agent has a policy
+    if agent_name:
+        agent_policy = frappe.db.get_value("Agent", agent_name, "memory_policy")
+        if agent_policy:
+            policy = frappe.get_doc("Memory Policy", agent_policy)
+            
+            # Record type validation
+            if policy.allowed_record_types:
+                allowed = [t.strip() for t in policy.allowed_record_types.split("\n") if t.strip()]
+                if allowed and record_type not in allowed:
+                    frappe.throw(_("Record type {0} is not allowed by policy {1}").format(record_type, policy.name))
+                    
+            # Status override
+            if policy.approval_required:
+                status = "Draft"
+            elif status == "Draft" and policy.default_status == "Active":
+                status = "Active"
+                
+            # Auto-promote
+            if policy.auto_promote_to_knowledge and not promote_to_knowledge:
+                if float(confidence or 0) >= policy.promotion_min_confidence and float(importance_score or 0) >= policy.promotion_min_importance:
+                    promote_to_knowledge = True
+                    if not knowledge_source:
+                        knowledge_source = policy.knowledge_source
+
     tag_text = ", ".join(tags) if isinstance(tags, list) else (tags or "")
     doc = frappe.get_doc(
         {
@@ -147,6 +172,50 @@ def save_memory_record(
         "scope_key": doc.scope_key,
         "projection_status": doc.projection_status,
     }
+
+
+def get_injected_memory_text(agent_name, policy, conversation_id=None):
+    """Fetch memories to inject into system prompt based on policy."""
+    if not policy or policy.inject_mode != "Always":
+        return None
+        
+    limit = policy.max_records or 5
+    budget = policy.token_budget or 1000
+    
+    # Use search to get active memories the agent is allowed to read
+    # We query with no keyword so it just gets recent/important ones
+    res = search_memory_records(
+        query=None,
+        status="Active",
+        limit=limit * 2, # Fetch more in case we hit token limits
+        conversation_id=conversation_id,
+        agent_name=agent_name
+    )
+    
+    if not res.get("success") or not res.get("results"):
+        return None
+        
+    # Build text up to token budget (rough estimate: 1 word ~ 1.3 tokens)
+    lines = []
+    current_words = 0
+    max_words = int(budget / 1.3)
+    
+    for row in res.get("results", []):
+        if len(lines) >= limit:
+            break
+            
+        line = f"[{row.get('record_type')} - {row.get('title')}] {row.get('summary_text')}"
+        words_in_line = len(line.split())
+        
+        if current_words + words_in_line > max_words:
+            break
+            
+        lines.append(line)
+        current_words += words_in_line
+        
+    if lines:
+        return "\n".join(lines)
+    return None
 
 
 @frappe.whitelist()
