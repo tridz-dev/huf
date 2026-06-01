@@ -31,8 +31,8 @@ def check_sqlite_vec_available() -> bool:
 		return False
 
 
-class SQLiteVecBackend(KnowledgeBackend):
-	"""SQLite backend using sqlite-vec extension for vector similarity search."""
+class SQLiteHybridBackend(KnowledgeBackend):
+	"""SQLite backend combining sqlite-vec and FTS5 for hybrid search (RRF)."""
 
 	SCHEMA = """
 	CREATE TABLE IF NOT EXISTS chunks (
@@ -51,6 +51,31 @@ class SQLiteVecBackend(KnowledgeBackend):
 	CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
 		embedding FLOAT[{dimension}]
 	);
+
+	CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+		text,
+		source_title,
+		content='chunks',
+		content_rowid='rowid',
+		tokenize='porter unicode61'
+	);
+
+	CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
+		INSERT INTO chunks_fts(rowid, text, source_title) 
+		VALUES (new.rowid, new.text, new.source_title);
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
+		INSERT INTO chunks_fts(chunks_fts, rowid, text, source_title) 
+		VALUES ('delete', old.rowid, old.text, old.source_title);
+	END;
+
+	CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
+		INSERT INTO chunks_fts(chunks_fts, rowid, text, source_title) 
+		VALUES ('delete', old.rowid, old.text, old.source_title);
+		INSERT INTO chunks_fts(rowid, text, source_title) 
+		VALUES (new.rowid, new.text, new.source_title);
+	END;
 
 	CREATE INDEX IF NOT EXISTS idx_chunks_input_id ON chunks(input_id);
 	"""
@@ -204,6 +229,16 @@ class SQLiteVecBackend(KnowledgeBackend):
 			cursor = conn.execute("DELETE FROM chunks WHERE input_id = ?", (input_id,))
 			return cursor.rowcount
 
+	def _escape_fts_query(self, query: str) -> str:
+		special_chars = ['"', "'", "(", ")", "*", ":", "^", "-", "+"]
+		result = query
+		for char in special_chars:
+			result = result.replace(char, " ")
+		terms = result.split()
+		if len(terms) > 1:
+			return " OR ".join(f'"{term}"' for term in terms if term)
+		return result
+
 	def search(
 		self,
 		query: str,
@@ -222,9 +257,12 @@ class SQLiteVecBackend(KnowledgeBackend):
 			api_key=embed_config.get("api_key"),
 			api_base=embed_config.get("api_base"),
 		)
+		
+		safe_fts_query = self._escape_fts_query(query)
 
 		filter_clauses = []
-		params: List[Any] = [json.dumps(query_embedding), top_k]
+		# Parameters for vector match, fts match, and k limit
+		params: List[Any] = [json.dumps(query_embedding), safe_fts_query, top_k]
 
 		if filters:
 			top_level_cols = ["input_id", "input_type", "source_title", "chunk_index"]
@@ -232,6 +270,7 @@ class SQLiteVecBackend(KnowledgeBackend):
 				if key in top_level_cols:
 					filter_clauses.append(f"c.{key} = ?")
 				else:
+					# Phase 5: Advanced metadata filtering via JSON extract
 					filter_clauses.append(f"json_extract(c.metadata, '$.{key}') = ?")
 				params.append(value)
 
@@ -239,22 +278,45 @@ class SQLiteVecBackend(KnowledgeBackend):
 		if filter_clauses:
 			where_sql = " AND " + " AND ".join(filter_clauses)
 
+		# Reciprocal Rank Fusion (RRF) Implementation
+		# k = 60 is standard for RRF
 		with self._get_connection(readonly=True) as conn:
 			cursor = conn.execute(
 				f"""
+				WITH vec_results AS (
+					SELECT rowid, distance,
+						   row_number() over (order by distance asc) as rnk
+					FROM chunks_vec 
+					WHERE embedding MATCH ? 
+					LIMIT 100
+				),
+				fts_results AS (
+					SELECT rowid, bm25(chunks_fts, 1.0, 0.75) as bm25_score,
+						   row_number() over (order by bm25(chunks_fts, 1.0, 0.75) asc) as rnk
+					FROM chunks_fts
+					WHERE chunks_fts MATCH ?
+					LIMIT 100
+				),
+				combined AS (
+					SELECT 
+						COALESCE(v.rowid, f.rowid) as rowid,
+						COALESCE(1.0 / (60 + v.rnk), 0.0) + COALESCE(1.0 / (60 + f.rnk), 0.0) as rrf_score
+					FROM vec_results v
+					FULL OUTER JOIN fts_results f ON v.rowid = f.rowid
+				)
 				SELECT
 					c.chunk_id,
 					c.text,
 					c.source_title,
 					c.input_id,
 					c.metadata,
-					v.distance
-				FROM chunks_vec v
-				JOIN chunks c ON c.rowid = v.rowid
-				WHERE v.embedding MATCH ?
-				AND k = ?
+					cb.rrf_score
+				FROM combined cb
+				JOIN chunks c ON c.rowid = cb.rowid
+				WHERE 1=1
 				{where_sql}
-				ORDER BY v.distance ASC
+				ORDER BY cb.rrf_score DESC
+				LIMIT ?
 				""",
 				params,
 			)
@@ -268,13 +330,12 @@ class SQLiteVecBackend(KnowledgeBackend):
 					except json.JSONDecodeError:
 						pass
 
-				score = 1.0 / (1.0 + float(row["distance"] or 0.0))
 				results.append(
 					ChunkResult(
 						chunk_id=row["chunk_id"],
 						text=row["text"],
 						title=row["source_title"],
-						score=score,
+						score=row["rrf_score"],
 						source=row["input_id"],
 						metadata=metadata,
 					)
@@ -286,6 +347,7 @@ class SQLiteVecBackend(KnowledgeBackend):
 		with self._get_connection() as conn:
 			conn.execute("DELETE FROM chunks_vec")
 			conn.execute("DELETE FROM chunks")
+			conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
 
 	def get_stats(self) -> Dict[str, Any]:
 		stats = {

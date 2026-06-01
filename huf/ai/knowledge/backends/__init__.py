@@ -65,6 +65,7 @@ def get_backend(backend_type: str) -> type:
 	backends = {
 		"sqlite_fts": "huf.ai.knowledge.backends.sqlite_fts.SQLiteFTSBackend",
 		"sqlite_vec": "huf.ai.knowledge.backends.sqlite_vec_backend.SQLiteVecBackend",
+		"sqlite_hybrid": "huf.ai.knowledge.backends.sqlite_hybrid.SQLiteHybridBackend",
 		"chroma": "huf.ai.knowledge.backends.chroma_backend.ChromaBackend",
 	}
 	

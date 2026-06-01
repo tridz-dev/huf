@@ -169,8 +169,24 @@ class SQLiteFTSBackend(KnowledgeBackend):
 		# Escape special FTS5 characters
 		safe_query = self._escape_fts_query(query)
 		
+		filter_clauses = []
+		params: List[Any] = [safe_query, top_k]
+
+		if filters:
+			top_level_cols = ["input_id", "input_type", "source_title", "chunk_index"]
+			for key, value in filters.items():
+				if key in top_level_cols:
+					filter_clauses.append(f"c.{key} = ?")
+				else:
+					filter_clauses.append(f"json_extract(c.metadata, '$.{key}') = ?")
+				params.append(value)
+
+		where_sql = ""
+		if filter_clauses:
+			where_sql = " AND " + " AND ".join(filter_clauses)
+			
 		with self._get_connection(readonly=True) as conn:
-			cursor = conn.execute("""
+			cursor = conn.execute(f"""
 				SELECT 
 					c.chunk_id,
 					c.text,
@@ -181,9 +197,10 @@ class SQLiteFTSBackend(KnowledgeBackend):
 				FROM chunks_fts
 				JOIN chunks c ON chunks_fts.rowid = c.rowid
 				WHERE chunks_fts MATCH ?
+				{where_sql}
 				ORDER BY score
 				LIMIT ?
-			""", (safe_query, top_k))
+			""", params)
 			
 			results = []
 			for row in cursor.fetchall():
