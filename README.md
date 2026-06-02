@@ -1,8 +1,8 @@
 # HUF
 
-**Open-source AI infrastructure for Frappe. Build agents, automate workflows, and keep your data under your control.**
+**Open-source AI infrastructure for any app. Build multi-agent solutions, automate ai driven deterministic workflows, and keep your data under your control.**
 
-HUF is a complete, self-hosted AI layer built on the Frappe framework. It gives teams everything needed to create intelligent agents, ground them in real business knowledge, and orchestrate complex workflows — without sending data to third-party platforms or rebuilding infrastructure from scratch.
+HUF is a complete, self-hosted AI layer built on open standards. It gives teams everything needed to create intelligent multi-agent solutions, ground them in real data, and orchestrate complex workflows, without sending data to third-party platforms or rebuilding infrastructure from scratch.
 
 [**Documentation**](https://docs.huf.ai/) | [**Report Issue**](https://github.com/tridz-dev/huf/issues) | [**Discussions**](https://github.com/tridz-dev/huf/discussions)
 
@@ -12,7 +12,7 @@ HUF is a complete, self-hosted AI layer built on the Frappe framework. It gives 
 
 <br/>
 
-> **Note:** HUF is actively being migrated from an existing implementation. Not recommended for production use at this stage.
+> **Note:** HUF is under active development.  
 
 ---
 
