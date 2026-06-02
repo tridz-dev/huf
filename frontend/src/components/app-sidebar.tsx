@@ -35,8 +35,27 @@ const sidebarSections: NavSection[] = [
   {
     label: "",
     items: [
-      { title: "Knowledge", url: "/knowledge", icon: BookOpen, capability: "agent.use" },
-      { title: "Settings", url: "/settings", icon: Settings, capability: null },
+      {
+        title: "Knowledge",
+        icon: BookOpen,
+        capability: "agent.use",
+        items: [
+          { title: "Sources", url: "/knowledge", capability: "agent.use" },
+          { title: "Data", url: "/data", capability: "agent.use" },
+        ],
+      },
+      {
+        title: "Settings",
+        icon: Settings,
+        capability: null,
+        items: [
+          { title: "AI Providers", url: "/providers", capability: null },
+          { title: "AI Models", url: "/models", capability: null },
+          { title: "MCP Servers", url: "/mcp", capability: null },
+          { title: "Users", url: "/users", capability: null },
+          { title: "Roles", url: "/roles", capability: null },
+        ],
+      },
     ],
   },
 ]
@@ -53,9 +72,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // Filter items by capability
   const filteredSections = sidebarSections.map((section) => ({
     ...section,
-    items: isLoading
-      ? section.items.filter((item) => item.capability === null)
-      : section.items.filter((item) => item.capability === null || (item.capability && hasCapability(item.capability))),
+    items: section.items
+      .map(item => {
+        // Check main item capability
+        const isItemAllowed = isLoading
+          ? item.capability === null
+          : item.capability === null || (item.capability && hasCapability(item.capability))
+        
+        if (!isItemAllowed) return null
+
+        // If it has sub-items, filter those too
+        if (item.items) {
+          const filteredSubItems = item.items.filter(subItem => 
+            isLoading
+              ? subItem.capability === null
+              : subItem.capability === null || (subItem.capability && hasCapability(subItem.capability))
+          )
+          // If all sub-items are filtered out, don't show the parent if it only acts as a collapsible container
+          // But since it might be a valid parent, we will just return it with filtered subItems
+          return { ...item, items: filteredSubItems }
+        }
+
+        return item
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null),
   })).filter(section => section.items.length > 0)
 
   return (

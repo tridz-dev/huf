@@ -37,8 +37,6 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
-const KnowledgeLandingPage = lazy(() => import('./pages/KnowledgeLandingPage'));
-const SettingsLandingPage = lazy(() => import('./pages/SettingsLandingPage'));
 
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
@@ -188,10 +186,8 @@ function App() {
             }
           />
           {/* Knowledge & Data Routes */}
-          <Route element={<ProtectedRoute><Suspense fallback={<PageLoader />}><KnowledgeLandingPage /></Suspense></ProtectedRoute>}>
-            <Route path="/knowledge" element={<Suspense fallback={<PageLoader />}><KnowledgeSourcesPage /></Suspense>} />
-            <Route path="/data" element={<Suspense fallback={<PageLoader />}><DataPage /></Suspense>} />
-          </Route>
+          <Route path="/knowledge" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><KnowledgeSourcesPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/data" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><DataPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
 
           <Route
             path="/data/new"
@@ -228,14 +224,12 @@ function App() {
             }
           />
           {/* Settings Routes */}
-          <Route element={<ProtectedRoute><Suspense fallback={<PageLoader />}><SettingsLandingPage /></Suspense></ProtectedRoute>}>
-            <Route path="/settings" element={<Navigate to="/providers" replace />} />
-            <Route path="/providers" element={<Suspense fallback={<PageLoader />}><IntegrationsPageWrapper /></Suspense>} />
-            <Route path="/models" element={<Suspense fallback={<PageLoader />}><ModelsPageWrapper /></Suspense>} />
-            <Route path="/mcp" element={<Suspense fallback={<PageLoader />}><McpListingPage /></Suspense>} />
-            <Route path="/users" element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
-            <Route path="/roles" element={<Suspense fallback={<PageLoader />}><RolesPage /></Suspense>} />
-          </Route>
+          <Route path="/settings" element={<Navigate to="/providers" replace />} />
+          <Route path="/providers" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><IntegrationsPageWrapper /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/models" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><ModelsPageWrapper /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/mcp" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><McpListingPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><UsersPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/roles" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><RolesPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
 
           <Route
             path="/flows"
