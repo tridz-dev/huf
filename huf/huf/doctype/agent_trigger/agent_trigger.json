@@ -181,6 +181,26 @@
    "fieldname": "prompt_field",
    "fieldtype": "Select",
    "label": "Prompt Field"
+  },
+  {
+   "fieldname": "seeding_metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Seeding Metadata",
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "label": "Source File",
+   "read_only": 1,
+   "hidden": 1
   }
  ],
  "grid_page_length": 50,
