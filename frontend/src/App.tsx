@@ -12,6 +12,11 @@ import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { PageLoader } from './components/PageLoader';
+import { DataHeaderActions } from './components/DataHeaderActions';
+import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
+import { McpHeaderActions } from './components/McpHeaderActions';
+import { UsersHeaderActions } from './components/UsersHeaderActions';
+import { ModelsHeaderActions } from './components/ModelsHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
@@ -186,8 +191,8 @@ function App() {
             }
           />
           {/* Knowledge & Data Routes */}
-          <Route path="/knowledge" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><KnowledgeSourcesPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
-          <Route path="/data" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><DataPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/knowledge" element={<ProtectedRoute><UnifiedLayout headerActions={<KnowledgeHeaderActions />}><Suspense fallback={<PageLoader />}><KnowledgeSourcesPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/data" element={<ProtectedRoute><UnifiedLayout headerActions={<DataHeaderActions />}><Suspense fallback={<PageLoader />}><DataPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
 
           <Route
             path="/data/new"
@@ -226,9 +231,9 @@ function App() {
           {/* Settings Routes */}
           <Route path="/settings" element={<Navigate to="/providers" replace />} />
           <Route path="/providers" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><IntegrationsPageWrapper /></Suspense></UnifiedLayout></ProtectedRoute>} />
-          <Route path="/models" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><ModelsPageWrapper /></Suspense></UnifiedLayout></ProtectedRoute>} />
-          <Route path="/mcp" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><McpListingPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><UsersPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/models" element={<ProtectedRoute><UnifiedLayout headerActions={<ModelsHeaderActions />}><Suspense fallback={<PageLoader />}><ModelsPageWrapper /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/mcp" element={<ProtectedRoute><UnifiedLayout headerActions={<McpHeaderActions />}><Suspense fallback={<PageLoader />}><McpListingPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute><UnifiedLayout headerActions={<UsersHeaderActions />}><Suspense fallback={<PageLoader />}><UsersPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
           <Route path="/roles" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><RolesPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
 
           <Route
