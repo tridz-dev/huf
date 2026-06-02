@@ -42,6 +42,7 @@ const sidebarSections: NavSection[] = [
         items: [
           { title: "Tables", url: "/data", capability: "agent.use" },
           { title: "Documents", url: "/knowledge", capability: "agent.use" },
+          { title: "Memory", url: "/memory", capability: "agent.use" },
         ],
       },
       {

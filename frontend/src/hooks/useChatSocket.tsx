@@ -24,6 +24,7 @@ export type NewAgentMessageEvent = {
     generated_audio?: string;
     agent_run_id?: string;
     conversation_index?: number;
+    injected_memories?: string[];
 };
 
 type ChatSocketProps = {   

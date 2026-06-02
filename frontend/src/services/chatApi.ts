@@ -48,6 +48,7 @@ export interface AgentMessageDoc {
   tool_name?: string;
   tool_status?: string;
   tool_args?: string | Record<string, unknown>;
+  injected_memories?: string | string[];
   creation?: string;
   modified?: string;
 }
@@ -64,6 +65,7 @@ export interface ChatMessage {
   toolName?: string;
   toolStatus?: string;
   toolArgs?: string | Record<string, unknown>;
+  injectedMemories?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -95,6 +97,7 @@ function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
     toolName: doc.tool_name,
     toolStatus: doc.tool_status,
     toolArgs: doc.tool_args,
+    injectedMemories: typeof doc.injected_memories === 'string' ? JSON.parse(doc.injected_memories || '[]') : doc.injected_memories,
     createdAt: doc.creation,
     updatedAt: doc.modified,
   };
@@ -285,7 +288,7 @@ export async function getConversationMessages(
 
   try {
     const messages = await db.getDocList(doctype['Agent Message'], {
-      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'voice_message', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'voice_message', 'tool_name', 'tool_status', 'tool_args', 'injected_memories', 'creation', 'modified'],
       filters: [['conversation', '=', conversation]],
       orderBy: { field: 'creation', order: 'desc' },
       limit,

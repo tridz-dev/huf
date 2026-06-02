@@ -42,6 +42,7 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
+const MemoryPage = lazy(() => import('./pages/MemoryPage'));
 
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
@@ -192,6 +193,7 @@ function App() {
           />
           {/* Knowledge & Data Routes */}
           <Route path="/knowledge" element={<ProtectedRoute><UnifiedLayout headerActions={<KnowledgeHeaderActions />}><Suspense fallback={<PageLoader />}><KnowledgeSourcesPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
+          <Route path="/memory" element={<ProtectedRoute><UnifiedLayout><Suspense fallback={<PageLoader />}><MemoryPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
           <Route path="/data" element={<ProtectedRoute><UnifiedLayout headerActions={<DataHeaderActions />}><Suspense fallback={<PageLoader />}><DataPage /></Suspense></UnifiedLayout></ProtectedRoute>} />
 
           <Route
