@@ -55,6 +55,36 @@ frappe.ui.form.on("Knowledge Source", {
 		const uses_vectors = frm.doc.knowledge_type === "sqlite_vec";
 		frm.toggle_reqd("embedding_model", uses_vectors);
 		frm.toggle_reqd("vector_dimension", uses_vectors);
+	},
+
+	test_connection(frm) {
+		frappe.show_alert({ message: __("Testing connection…"), indicator: "blue" });
+		frappe.call({
+			method: "huf.huf.doctype.knowledge_source.knowledge_source.test_connection",
+			args: { knowledge_source: frm.doc.name },
+			callback(r) {
+				if (!r.message) return;
+				const { success, results, message } = r.message;
+
+				let rows = Object.entries(results).map(([key, val]) => {
+					const icon = val.status === "ok" ? "✅" : "❌";
+					const detail = val.status === "ok"
+						? (val.dimension ? `dim=${val.dimension}` : `chunks=${val.chunk_count ?? 0}`)
+						: val.message;
+					return `<tr><td><b>${key}</b></td><td>${icon} ${val.status}</td><td class="text-muted small">${frappe.utils.escape_html(detail || "")}</td></tr>`;
+				}).join("");
+
+				frappe.msgprint({
+					title: __("Test Connection"),
+					indicator: success ? "green" : "red",
+					message: `<p>${frappe.utils.escape_html(message)}</p>
+						<table class="table table-bordered table-sm mt-2">
+							<thead><tr><th>${__("Check")}</th><th>${__("Status")}</th><th>${__("Detail")}</th></tr></thead>
+							<tbody>${rows}</tbody>
+						</table>`
+				});
+			}
+		});
 	}
 });
 

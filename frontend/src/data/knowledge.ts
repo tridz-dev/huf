@@ -6,9 +6,14 @@
 export const knowledgeTypes = [
   { label: 'SQLite FTS', value: 'sqlite_fts' },
   { label: 'SQLite Vec', value: 'sqlite_vec' },
+  { label: 'ChromaDB', value: 'chroma' },
+  { label: 'PGVector', value: 'pgvector' },
 ] as const;
 
 export type KnowledgeTypeOption = (typeof knowledgeTypes)[number]['value'];
+
+export const vectorKnowledgeTypes = ['sqlite_vec', 'chroma', 'pgvector'] as const;
+export type VectorKnowledgeTypeOption = (typeof vectorKnowledgeTypes)[number];
 
 export const knowledgeScopes = [
   { label: 'Site', value: 'Site' },

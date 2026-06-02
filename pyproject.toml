@@ -17,6 +17,8 @@ dependencies = [
     "httpx>=0.24.0",
     "chromadb",
     "llama-index-vector-stores-chroma",
+    "llama-index-vector-stores-postgres",
+    "psycopg[binary]>=3.1.0",
     "pypdf",
     "python-docx",
     "beautifulsoup4",

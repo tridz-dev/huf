@@ -23,6 +23,19 @@
         "column_break_chroma",
         "chroma_port",
         "chroma_ssl",
+        "pgvector_section",
+        "pgvector_connection_mode",
+        "pgvector_table_name",
+        "pgvector_distance_metric",
+        "column_break_pgvector_1",
+        "pgvector_host",
+        "pgvector_port",
+        "pgvector_database",
+        "column_break_pgvector_2",
+        "pgvector_user",
+        "pgvector_password",
+        "pgvector_sslmode",
+        "pgvector_index_type",
         "storage_settings_section",
         "storage_mode",
         "sqlite_file",
@@ -38,7 +51,8 @@
         "total_inputs",
         "index_size_bytes",
         "error_message",
-        "disabled"
+        "disabled",
+        "test_connection"
     ],
     "fields": [
         {
@@ -172,25 +186,33 @@
             "label": "Disabled"
         },
         {
+            "fieldname": "test_connection",
+            "fieldtype": "Button",
+            "label": "Test Connection",
+            "options": "test_connection",
+            "depends_on": "eval:doc.knowledge_type=='pgvector'",
+            "in_list_view": 0
+        },
+        {
             "fieldname": "knowledge_type",
             "fieldtype": "Select",
             "label": "Knowledge Type",
-            "options": "sqlite_fts\nsqlite_vec\nchroma",
+            "options": "sqlite_fts\nsqlite_vec\nchroma\npgvector",
             "reqd": 1
         },
         {
             "fieldname": "vector_settings_section",
             "fieldtype": "Section Break",
             "label": "Vector Settings",
-            "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
+            "depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector'].includes(doc.knowledge_type)"
         },
         {
             "fieldname": "embedding_model",
             "fieldtype": "Data",
             "label": "Embedding Model",
             "description": "LiteLLM model identifier, e.g. openai/text-embedding-3-small",
-            "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)",
-            "mandatory_depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
+            "depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector'].includes(doc.knowledge_type)",
+            "mandatory_depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector'].includes(doc.knowledge_type)"
         },
         {
             "fieldname": "vector_dimension",
@@ -199,8 +221,8 @@
             "default": 1536,
             "non_negative": 1,
             "description": "Must match the embedding model output dimensionality",
-            "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)",
-            "mandatory_depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
+            "depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector'].includes(doc.knowledge_type)",
+            "mandatory_depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector'].includes(doc.knowledge_type)"
         },
         {
             "fieldname": "column_break_vector",
@@ -212,7 +234,7 @@
             "label": "Embedding Provider",
             "options": "AI Provider",
             "description": "AI Provider for API key resolution",
-            "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
+            "depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector'].includes(doc.knowledge_type)"
         },
         {
             "fieldname": "chroma_server_section",
@@ -256,11 +278,104 @@
             "default": 0,
             "description": "Enable if your Chroma server uses HTTPS",
             "depends_on": "eval:doc.knowledge_type === 'chroma' && doc.chroma_mode === 'Server'"
+        },
+        {
+            "fieldname": "pgvector_section",
+            "fieldtype": "Section Break",
+            "label": "PGVector Connection Settings",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector'"
+        },
+        {
+            "fieldname": "pgvector_connection_mode",
+            "fieldtype": "Select",
+            "label": "Connection Mode",
+            "options": "External PostgreSQL\nSite PostgreSQL",
+            "default": "External PostgreSQL",
+            "description": "External PostgreSQL is recommended for MariaDB-backed Frappe sites. Site PostgreSQL is only valid when the Frappe site database is PostgreSQL.",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector'"
+        },
+        {
+            "fieldname": "pgvector_table_name",
+            "fieldtype": "Data",
+            "label": "Table Name",
+            "default": "huf_knowledge_vectors",
+            "description": "PGVector table used for this knowledge source. Keep this stable after indexing.",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector'"
+        },
+        {
+            "fieldname": "pgvector_distance_metric",
+            "fieldtype": "Select",
+            "label": "Distance Metric",
+            "options": "cosine\nl2\ninner_product",
+            "default": "cosine",
+            "description": "Vector distance metric used for retrieval.",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector'"
+        },
+        {
+            "fieldname": "column_break_pgvector_1",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "pgvector_host",
+            "fieldtype": "Data",
+            "label": "Host",
+            "default": "localhost",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'",
+            "mandatory_depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'"
+        },
+        {
+            "fieldname": "pgvector_port",
+            "fieldtype": "Int",
+            "label": "Port",
+            "default": 5432,
+            "depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'",
+            "mandatory_depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'"
+        },
+        {
+            "fieldname": "pgvector_database",
+            "fieldtype": "Data",
+            "label": "Database",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'",
+            "mandatory_depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'"
+        },
+        {
+            "fieldname": "column_break_pgvector_2",
+            "fieldtype": "Column Break"
+        },
+        {
+            "fieldname": "pgvector_user",
+            "fieldtype": "Data",
+            "label": "User",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'",
+            "mandatory_depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'"
+        },
+        {
+            "fieldname": "pgvector_password",
+            "fieldtype": "Password",
+            "label": "Password",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'"
+        },
+        {
+            "fieldname": "pgvector_sslmode",
+            "fieldtype": "Select",
+            "label": "SSL Mode",
+            "options": "prefer\nrequire\ndisable\nallow\nverify-ca\nverify-full",
+            "default": "prefer",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector' && doc.pgvector_connection_mode === 'External PostgreSQL'"
+        },
+        {
+            "fieldname": "pgvector_index_type",
+            "fieldtype": "Select",
+            "label": "Index Type",
+            "options": "none\nhnsw\nivfflat",
+            "default": "hnsw",
+            "description": "Preferred vector index type. Backend implementation may create or validate this later.",
+            "depends_on": "eval:doc.knowledge_type === 'pgvector'"
         }
     ],
     "index_web_pages_for_search": 1,
     "links": [],
-    "modified": "2026-05-18 10:30:10.000000",
+    "modified": "2026-06-01 00:00:00.000000",
     "modified_by": "Administrator",
     "module": "Huf",
     "name": "Knowledge Source",

@@ -41,7 +41,8 @@
    "depends_on": "eval:doc.input_type == 'File'",
    "fieldname": "file",
    "fieldtype": "Attach",
-   "label": "File"
+   "label": "File",
+   "description": "Indexing time depends on file size and your embedding provider's speed. If indexing times out, increase litellm_embedding_timeout in site_config (default: 600s)."
   },
   {
    "fieldname": "file_name",

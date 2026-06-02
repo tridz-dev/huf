@@ -1,4 +1,4 @@
-export type KnowledgeType = 'sqlite_fts' | 'sqlite_vec';
+export type KnowledgeType = 'sqlite_fts' | 'sqlite_vec' | 'chroma' | 'pgvector';
 export type KnowledgeScope = 'Site' | 'Workspace' | 'Agent' | 'Global';
 export type KnowledgeSourceStatus = 'Pending' | 'Indexing' | 'Ready' | 'Error' | 'Rebuilding';
 export type KnowledgeStorageMode = 'Frappe File';
@@ -27,10 +27,28 @@ export interface KnowledgeSourceDoc {
   knowledge_type: KnowledgeType;
   scope: KnowledgeScope;
 
-  // Vector settings (sqlite_vec only)
+  // Vector settings
   embedding_model?: string | null;
   vector_dimension?: number | null;
   embedding_provider?: string | null;
+
+  // Chroma settings
+  chroma_mode?: 'File' | 'Server' | null;
+  chroma_host?: string | null;
+  chroma_port?: number | null;
+  chroma_ssl?: number | null;
+
+  // PGVector settings
+  pgvector_connection_mode?: 'External PostgreSQL' | 'Site PostgreSQL' | null;
+  pgvector_table_name?: string | null;
+  pgvector_distance_metric?: 'cosine' | 'l2' | 'inner_product' | null;
+  pgvector_host?: string | null;
+  pgvector_port?: number | null;
+  pgvector_database?: string | null;
+  pgvector_user?: string | null;
+  pgvector_password?: string | null;
+  pgvector_sslmode?: 'prefer' | 'require' | 'disable' | 'allow' | 'verify-ca' | 'verify-full' | null;
+  pgvector_index_type?: 'none' | 'hnsw' | 'ivfflat' | null;
 
   // Storage
   storage_mode: KnowledgeStorageMode;
