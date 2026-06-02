@@ -41,9 +41,10 @@ HUF is designed to be the **core AI layer** inside an organization or product, n
 |------------|-----------------|
 | **Multi-Provider AI** | Connect to OpenAI, Anthropic, Google, Mistral, and 100+ providers through a unified interface |
 | **Intelligent Tools** | Give AI the ability to read, write, and act on your business data |
-| **Knowledge Grounding** | RAG-powered context from your docs, files, and URLs |
+| **Knowledge Grounding** | RAG-powered context from your docs, files, and URLs—with SQLite FTS5 and ChromaDB backends |
 | **Event-Driven Execution** | Trigger agents on document events, schedules, or webhooks |
-| **Visual Workflow Builder** | Design complex automations with drag-and-drop flows (WIP)|
+| **Visual Flow Builder** | Design complex automations with drag-and-drop flows, router nodes, and human approval gates |
+| **Integration Layer** | Connect agents to external services (Gmail, Slack, GitHub, and more) through managed credentials |
 | **Full Auditability** | Every run, every tool call, every token—logged and traceable |
 | **Cost Control** | Track usage and spending across models and teams |
 
@@ -126,8 +127,10 @@ Create AI agents with custom instructions, connect them to any LLM provider, and
 - **CRUD Operations** — Read, create, update, delete documents
 - **Custom Functions** — Connect any Python function as a tool
 - **HTTP Requests** — Call external APIs and services
-- **Agent Chaining** — Agents can trigger other agents
+- **Agent Chaining** — Agents can trigger other agents with async message-passing
 - **MCP Integration** — Connect to external tool providers (Gmail, GitHub, Slack, etc.)
+- **Role-Based Permissions** — Granular access control per agent and user
+- **Prompt Caching** — Reduce latency and cost with configurable runtime caching
 
 ### Knowledge Management
 
@@ -135,7 +138,7 @@ Ground AI responses in your actual business knowledge:
 
 - **Multiple Input Types** — Files, text, URLs
 - **Automatic Chunking** — Intelligent text segmentation
-- **Fast Search** — BM25-powered retrieval via SQLite FTS5
+- **Dual Backends** — BM25 full-text search (SQLite FTS5) or semantic vector search (ChromaDB)
 - **Flexible Injection** — Mandatory context or on-demand search
 
 ### Trigger System
@@ -152,9 +155,27 @@ Run agents automatically based on events:
 Design complex workflows with a modern React-based interface:
 
 - **Drag-and-Drop Canvas** — Build flows visually
-- **Node Types** — Triggers, actions, utilities, conditions
+- **Node Types** — Triggers, agents, HTTP actions, router/orchestrator, condition, utility
+- **Human-in-the-Loop** — Approval gates that pause execution until a human approves or rejects
 - **Real-Time Editing** — See changes instantly
-- **App Integrations** — Gmail, Calendar, Slack, Notion, HubSpot
+- **App Integrations** — Gmail, Calendar, Slack, Notion, HubSpot, and more via Integration Layer
+
+### Integration Layer
+
+Manage credentials and connections to external services in one place:
+
+- **Integration Services** — Register third-party services with metadata and tool categories
+- **Managed Credentials** — Secure per-service credential storage
+- **Integration Recipients** — Route notifications and actions to specific users or addresses
+- **Tool Sync** — Automatically surface integration tools inside agents and flows
+
+### Models & Providers
+
+First-class model management alongside provider configuration:
+
+- **Models Page** — Browse, create, and configure AI models independently from providers
+- **Provider Credentials** — Secure API key storage per provider
+- **100+ Providers** — Any model accessible via LiteLLM
 
 ### Observability
 
@@ -164,6 +185,20 @@ Full visibility into what your AI is doing:
 - **Conversations** — Complete chat history with context
 - **Tool Calls** — Every tool invocation with arguments and results
 - **Feedback System** — Capture user ratings for quality improvement
+- **Configurable Detail Level** — Show or hide tool execution details per agent
+
+---
+
+## Coming Soon
+
+These capabilities are in final development and will ship soon:
+
+| Capability | What it enables |
+|------------|-----------------|
+| **Knowledge & Memory** | Persistent agent memory and learning from past conversations |
+| **File-Based Agent Declaration** | Define agents in code using declarative config files, for teams building Frappe apps on top of HUF |
+| **Frappe Tools** | Deep integration with Frappe/ERPNext—reports, forms, workflows, and data as native agent tools |
+| **Fully Agentic UI** | An AI-native interface where the UI itself is driven by and responds to agent actions |
 
 ---
 
@@ -199,21 +234,22 @@ bench restart
 │                         HUF Engine                              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐         │
-│  │   Agents     │  │  Knowledge   │  │   Triggers     │         │
-│  │              │  │              │  │                │         │
-│  │ Instructions │  │ RAG/FTS5     │  │ Events         │         │
-│  │ Tools        │  │ Chunking     │  │ Schedules      │         │
-│  │ Parameters   │  │ Retrieval    │  │ Webhooks (WIP) │         │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬─────────┘         │
-│         │                 │                 │                   │
-│         └────────────────┬┴─────────────────┘                   │
-│                          │                                      │
-│  ┌───────────────────────▼───────────────────────────────────┐  │
-│  │                   Execution Layer                         │  │
-│  │                                                           │  │
-│  │  LiteLLM (100+ providers) │ Tool System │ MCP Client      │  │
-│  └───────────────────────────────────────────────────────────┘  │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐        │
+│  │   Agents     │  │  Knowledge   │  │   Triggers     │        │
+│  │              │  │              │  │                │        │
+│  │ Instructions │  │ FTS5/Chroma  │  │ Events         │        │
+│  │ Tools        │  │ Chunking     │  │ Schedules      │        │
+│  │ Parameters   │  │ Retrieval    │  │ Webhooks       │        │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬─────────┘        │
+│         │                 │                 │                  │
+│         └────────────────┬┴─────────────────┘                  │
+│                          │                                     │
+│  ┌───────────────────────▼───────────────────────────────────┐ │
+│  │                   Execution Layer                         │ │
+│  │                                                           │ │
+│  │  LiteLLM (100+ providers) │ Tool System │ MCP Client      │ │
+│  │  Prompt Caching │ Role Permissions │ Integrations         │ │
+│  └───────────────────────────────────────────────────────────┘ │
 │                                                                 │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │                   Observability                            │ │
@@ -227,7 +263,7 @@ bench restart
         ▼                     ▼                     ▼
    ┌─────────┐          ┌─────────┐          ┌───────────────┐
    │  Chat   │          │  API    │          │     Flows     │
-   │   UI    │          │ Endpoint│          │ Builder (WIP) │
+   │   UI    │          │ Endpoint│          │    Builder    │
    └─────────┘          └─────────┘          └───────────────┘
 ```
 
@@ -238,10 +274,10 @@ bench restart
 | Layer | Technology |
 |-------|------------|
 | **Backend** | Frappe Framework, Python 3.10+ |
-| **AI Integration** | LiteLLM |
-| **Knowledge** | SQLite FTS5 (LlamaIndex) & multiple VectorDBs WIP.  | 
+| **AI Integration** | LiteLLM (100+ providers) |
+| **Knowledge** | SQLite FTS5 (BM25) + ChromaDB (vector) |
 | **Frontend** | React 18, TypeScript, Tailwind CSS |
-| **Flow Builder** | React Flow / XYFlow | (WIP)
+| **Flow Builder** | React Flow / XYFlow |
 | **Database** | MariaDB |
 
 ---
@@ -262,9 +298,9 @@ Upstream incident thread:
 ## Documentation
 
 - [**Full Documentation**](https://docs.huf.ai/) — Guides, tutorials, and API reference
+- [**Bruno API Collection**](./docs/bruno/) — Ready-to-use API collection for testing and exploration
 - [**AGENTS.md**](./AGENTS.md) — Technical context for AI agents. Adopts the [agents.md](https://agents.md) standard.
 - [**CLAUDE.md**](./CLAUDE.md) — Defines coding standards, review criteria, and project-specific rules. Claude reads this file during runs and follows your conventions.
-
 
 ---
 
