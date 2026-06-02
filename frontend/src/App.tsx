@@ -39,6 +39,7 @@ const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourc
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
+const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
@@ -117,6 +118,16 @@ function App() {
           <Routes>
           <Route
             path="/"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <HubSimplePage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>

@@ -3,10 +3,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ArrowRightLeft, Plus, Bot, Workflow } from 'lucide-react';
+import { ChevronLeft, Plus, Bot, Workflow } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function HomeHeaderActions() {
@@ -22,9 +21,9 @@ export function HomeHeaderActions() {
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" onClick={() => navigate('/agents')}>
-        <ArrowRightLeft className="w-4 h-4 mr-2" />
-        Switch to Advanced Hub
+      <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1.5 text-slate-600">
+        <ChevronLeft className="w-4 h-4" />
+        Hub
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -41,11 +40,6 @@ export function HomeHeaderActions() {
           <DropdownMenuItem onClick={handleNewAgent}>
             <Bot className="w-4 h-4 mr-2" />
             New Agent
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => navigate('/agents')}>
-            <ArrowRightLeft className="w-4 h-4 mr-2" />
-            Open Advanced Hub
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
