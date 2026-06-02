@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react"
 import { ChevronRight, type LucideIcon } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 
@@ -40,6 +41,27 @@ export function NavMain({
 }) {
   const location = useLocation()
   const { isMobile, setOpenMobile } = useSidebar()
+  const [openItem, setOpenItem] = useState<string | null>(null)
+
+  // Auto-open active menu on route change
+  useEffect(() => {
+    let foundActive = false
+    for (const section of sections) {
+      for (const item of section.items) {
+        if (item.items && item.items.length > 0) {
+          const isSubItemActive = item.items.some(
+            (subItem) => location.pathname === subItem.url || location.pathname.startsWith(subItem.url + '/')
+          )
+          if (isSubItemActive) {
+            setOpenItem(item.title)
+            foundActive = true
+            break
+          }
+        }
+      }
+      if (foundActive) break
+    }
+  }, [location.pathname, sections])
 
   const handleNavClick = () => {
     if (isMobile) {
@@ -63,7 +85,14 @@ export function NavMain({
                   <Collapsible
                     key={item.title}
                     asChild
-                    defaultOpen={isActive}
+                    open={openItem === item.title}
+                    onOpenChange={(isOpen) => {
+                      if (isOpen) {
+                        setOpenItem(item.title)
+                      } else if (openItem === item.title) {
+                        setOpenItem(null)
+                      }
+                    }}
                     className="group/collapsible"
                   >
                     <SidebarMenuItem>
