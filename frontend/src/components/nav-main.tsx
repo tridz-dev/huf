@@ -8,6 +8,14 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
@@ -40,7 +48,7 @@ export function NavMain({
   sections: NavSection[]
 }) {
   const location = useLocation()
-  const { isMobile, setOpenMobile } = useSidebar()
+  const { isMobile, setOpenMobile, state } = useSidebar()
   const [openItem, setOpenItem] = useState<string | null>(null)
 
   // Auto-open active menu on route change
@@ -81,6 +89,35 @@ export function NavMain({
               const isActive = Boolean(isSubItemActive || (item.url && (location.pathname === item.url || (item.url !== '/' && location.pathname.startsWith(item.url + '/')))))
 
               if (item.items && item.items.length > 0) {
+                if (state === "collapsed") {
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <SidebarMenuButton tooltip={item.title} isActive={isActive}>
+                            {item.icon && <item.icon />}
+                            <span>{item.title}</span>
+                          </SidebarMenuButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="right" align="start" sideOffset={16} className="w-48">
+                          <DropdownMenuLabel>{item.title}</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {item.items.map((subItem) => {
+                            const isSubActive = location.pathname === subItem.url || location.pathname.startsWith(subItem.url + '/')
+                            return (
+                              <DropdownMenuItem key={subItem.title} asChild>
+                                <NavLink to={subItem.url} onClick={handleNavClick} className={isSubActive ? "bg-accent text-accent-foreground font-medium" : ""}>
+                                  {subItem.title}
+                                </NavLink>
+                              </DropdownMenuItem>
+                            )
+                          })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </SidebarMenuItem>
+                  )
+                }
+
                 return (
                   <Collapsible
                     key={item.title}
