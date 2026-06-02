@@ -68,6 +68,8 @@ def after_install():
     remove_deprecated_gemini_audio_tools()
     create_ocr_document_tool()
     create_flow_tools()
+    create_memory_tools()
+    create_default_memory_policies()
     register_integration_services()
     sync_tool_types()
     from huf.ai.tool_registry import sync_discovered_tools
@@ -117,6 +119,8 @@ def after_migrate():
 		remove_deprecated_gemini_audio_tools()
 		create_ocr_document_tool()
 		create_flow_tools()
+		create_memory_tools()
+		create_default_memory_policies()
 		register_integration_services()
 		sync_tool_types()
 		from huf.ai.tool_registry import sync_discovered_tools
@@ -905,3 +909,198 @@ def sync_tool_types():
 			continue
 	
 	frappe.db.commit()
+
+
+def create_memory_tools():
+    """Create or update memory management tools in Agent Tool Function DocType."""
+
+    # Ensure Memory tool type exists
+    if not frappe.db.exists("Agent Tool Type", "Memory"):
+        tool_type_doc = frappe.new_doc("Agent Tool Type")
+        tool_type_doc.name1 = "Memory"
+        tool_type_doc.insert(ignore_permissions=True)
+
+    memory_tools = [
+        {
+            "tool_name": "save_memory_record",
+            "description": (
+                "Save a new memory record. Use this to store facts, preferences, decisions, "
+                "observations, or other information the user shares for future reference. "
+                "Memory is scoped and governed by permissions."
+            ),
+            "function_path": "huf.ai.memory_tools.handle_save_memory_record",
+            "types": "Save Memory Record",
+            "parameters": [
+                {"label": "Title", "fieldname": "title", "param_type": "Data", "required": 1, "description": "Short descriptive title for this memory"},
+                {"label": "Summary Text", "fieldname": "summary_text", "param_type": "Long Text", "required": 1, "description": "Detailed content of this memory"},
+                {"label": "Record Type", "fieldname": "record_type", "param_type": "Data", "required": 0, "description": "Type: Fact, Preference, Research Note, Decision, Extracted Data, State, Summary, Policy Hint, Observation, Insight, Custom. Default: Fact"},
+                {"label": "Scope Type", "fieldname": "scope_type", "param_type": "Data", "required": 0, "description": "Scope: Conversation, User, Agent, Site, Global. Default: Conversation"},
+                {"label": "Scope Key", "fieldname": "scope_key", "param_type": "Data", "required": 0, "description": "Scope identifier. Auto-resolved if empty."},
+                {"label": "Data JSON", "fieldname": "data_json", "param_type": "JSON", "required": 0, "description": "Optional structured data payload"},
+                {"label": "Status", "fieldname": "status", "param_type": "Data", "required": 0, "description": "Draft or Active. Default: Draft"},
+                {"label": "Visibility", "fieldname": "visibility", "param_type": "Data", "required": 0, "description": "Private, Shared with Agent, Site, Global. Default: Private"},
+                {"label": "Tags", "fieldname": "tags", "param_type": "Data", "required": 0, "description": "Comma-separated tags"},
+                {"label": "Confidence", "fieldname": "confidence", "param_type": "Float", "required": 0, "description": "Confidence score 0-1. Default: 0"},
+                {"label": "Importance Score", "fieldname": "importance_score", "param_type": "Float", "required": 0, "description": "Importance score 0-1. Default: 0"},
+            ],
+        },
+        {
+            "tool_name": "search_memory_records",
+            "description": (
+                "Search through saved memory records. Use to recall facts, preferences, "
+                "prior decisions, or any stored information. Returns matching records "
+                "ordered by importance and recency."
+            ),
+            "function_path": "huf.ai.memory_tools.handle_search_memory_records",
+            "types": "Search Memory Records",
+            "parameters": [
+                {"label": "Query", "fieldname": "query", "param_type": "Data", "required": 0, "description": "Search query to match against title, summary, type, and tags"},
+                {"label": "Record Type", "fieldname": "record_type", "param_type": "Data", "required": 0, "description": "Filter by record type"},
+                {"label": "Scope Type", "fieldname": "scope_type", "param_type": "Data", "required": 0, "description": "Filter by scope type"},
+                {"label": "Status", "fieldname": "status", "param_type": "Data", "required": 0, "description": "Filter by status. Default: Active"},
+                {"label": "Limit", "fieldname": "limit", "param_type": "Int", "required": 0, "description": "Max results (1-50). Default: 10"},
+            ],
+        },
+        {
+            "tool_name": "get_memory_record",
+            "description": "Get a specific memory record by its ID. Returns full details.",
+            "function_path": "huf.ai.memory_tools.handle_get_memory_record",
+            "types": "Get Memory Record",
+            "parameters": [
+                {"label": "Memory Record", "fieldname": "memory_record", "param_type": "Data", "required": 1, "description": "The ID/name of the memory record to retrieve"},
+            ],
+        },
+        {
+            "tool_name": "archive_memory_record",
+            "description": "Archive a memory record that is no longer actively needed. Sets status to Archived.",
+            "function_path": "huf.ai.memory_tools.handle_archive_memory_record",
+            "types": "Archive Memory Record",
+            "parameters": [
+                {"label": "Memory Record", "fieldname": "memory_record", "param_type": "Data", "required": 1, "description": "The ID/name of the memory record to archive"},
+            ],
+        },
+        {
+            "tool_name": "promote_memory_to_knowledge",
+            "description": (
+                "Promote a memory record to a knowledge source for indexed retrieval. "
+                "The memory content will be projected into the knowledge system for "
+                "semantic/keyword search. Requires manager permissions."
+            ),
+            "function_path": "huf.ai.memory_tools.handle_promote_memory_to_knowledge",
+            "types": "Promote Memory to Knowledge",
+            "parameters": [
+                {"label": "Memory Record", "fieldname": "memory_record", "param_type": "Data", "required": 1, "description": "The ID/name of the memory record to promote"},
+                {"label": "Knowledge Source", "fieldname": "knowledge_source", "param_type": "Data", "required": 0, "description": "Optional Knowledge Source to project into"},
+            ],
+        },
+    ]
+
+    # Ensure all memory tool types exist as Agent Tool Type records
+    memory_tool_types = [
+        "Save Memory Record",
+        "Search Memory Records",
+        "Get Memory Record",
+        "Archive Memory Record",
+        "Promote Memory to Knowledge",
+    ]
+    for tool_type in memory_tool_types:
+        if not frappe.db.exists("Agent Tool Type", tool_type):
+            try:
+                doc = frappe.new_doc("Agent Tool Type")
+                doc.name1 = tool_type
+                doc.insert(ignore_permissions=True)
+            except Exception:
+                pass
+
+    for tool_def in memory_tools:
+        tool_name = tool_def["tool_name"]
+        tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+
+        if tool_exists:
+            try:
+                tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
+                tool_doc.description = tool_def["description"]
+                tool_doc.function_path = tool_def["function_path"]
+                tool_doc.types = tool_def.get("types", "Custom Function")
+                tool_doc.tool_type = "Memory"
+                tool_doc.pass_parameters_as_json = 1
+                tool_doc.set("parameters", [])
+                for p in tool_def["parameters"]:
+                    tool_doc.append("parameters", p)
+                tool_doc.save(ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(f"Error updating memory tool {tool_name}: {str(e)}", "Memory Tool Update")
+        else:
+            try:
+                tool_doc = frappe.get_doc({
+                    "doctype": "Agent Tool Function",
+                    "tool_name": tool_name,
+                    "description": tool_def["description"],
+                    "types": tool_def.get("types", "Custom Function"),
+                    "function_path": tool_def["function_path"],
+                    "pass_parameters_as_json": 1,
+                    "parameters": tool_def["parameters"],
+                    "tool_type": "Memory",
+                })
+                tool_doc.insert(ignore_permissions=True)
+            except Exception as e:
+                frappe.log_error(f"Error creating memory tool {tool_name}: {str(e)}", "Memory Tool Creation")
+
+    frappe.db.commit()
+
+def create_default_memory_policies():
+    """Create default Memory Policy presets defined in the architecture RFC."""
+    presets = [
+        {
+            "policy_name": "Conservative",
+            "scope_type": "Agent",
+            "capture_mode": "Manual",
+            "approval_required": 1,
+            "default_status": "Draft",
+            "inject_mode": "Relevant Only",
+            "max_records": 5,
+            "token_budget": 1500,
+            "auto_promote_to_knowledge": 0
+        },
+        {
+            "policy_name": "Conversational",
+            "scope_type": "Agent",
+            "capture_mode": "Automatic",
+            "approval_required": 0,
+            "default_status": "Draft",
+            "inject_mode": "Always",
+            "max_records": 10,
+            "token_budget": 2000,
+            "auto_promote_to_knowledge": 0
+        },
+        {
+            "policy_name": "Research",
+            "scope_type": "Agent",
+            "capture_mode": "Agent Suggested",
+            "approval_required": 0,
+            "default_status": "Active",
+            "inject_mode": "Relevant Only",
+            "max_records": 20,
+            "token_budget": 4000,
+            "auto_promote_to_knowledge": 1,
+            "promotion_min_confidence": 0.5,
+            "promotion_min_importance": 0.5
+        },
+        {
+            "policy_name": "Operational",
+            "scope_type": "Agent",
+            "capture_mode": "Manual",
+            "approval_required": 0,
+            "default_status": "Active",
+            "inject_mode": "Tool Only",
+            "max_records": 10,
+            "token_budget": 1000,
+            "auto_promote_to_knowledge": 0
+        }
+    ]
+
+    for p in presets:
+        if not frappe.db.exists("Memory Policy", p["policy_name"]):
+            doc = frappe.new_doc("Memory Policy")
+            doc.update(p)
+            doc.insert(ignore_permissions=True)
