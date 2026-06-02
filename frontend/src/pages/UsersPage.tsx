@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { PageLayout, FilterBar } from '@/components/dashboard';
+import { FilterBar } from '@/components/dashboard';
 import { Switch } from '@/components/ui/switch';
 import {
   Table,
@@ -229,15 +229,19 @@ export default function UsersPage() {
   }, [users, search, statusFilter]);
 
   return (
-    <PageLayout
-      subtitle="Manage who has access to Huf and what they can do."
-      toolbar={
+    <div className="flex flex-col h-full overflow-hidden p-6 gap-6">
+      <div className="flex-none flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage who has access to Huf and what they can do.</p>
+        </div>
         <Button onClick={() => setShowInvite(true)}>
           <UserPlus className="h-4 w-4 mr-2" />
           Invite user
         </Button>
-      }
-      filters={
+      </div>
+
+      <div className="flex-none">
         <FilterBar
           searchPlaceholder="Search users..."
           searchValue={search}
@@ -251,81 +255,83 @@ export default function UsersPage() {
             },
           ]}
         />
-      }
-    >
-      {loading ? (
-        <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
-      ) : filteredUsers.length === 0 ? (
-        <div className="text-sm text-muted-foreground py-12 text-center">No users found.</div>
-      ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <Table className="w-full min-w-[32rem] table-fixed text-sm">
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <TableHead className="text-left px-3 py-2 font-medium sm:px-4 sm:py-3 w-[35%] sm:w-[32%]">
-                  User
-                </TableHead>
-                <TableHead className="text-right px-3 py-2 font-medium sm:px-4 sm:py-3 w-[25%] sm:w-[26%]">
-                  Role
-                </TableHead>
-                <TableHead className="text-right px-3 py-2 font-medium sm:px-4 sm:py-3 w-[20%] sm:w-[21%]">
-                  Status
-                </TableHead>
-                <TableHead className="text-right px-3 py-2 font-medium sm:px-4 sm:py-3 w-[20%] sm:w-[21%]">
-                  Actions
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="divide-y">
-              {filteredUsers.map((u) => (
-                <TableRow key={u.user} className="hover:bg-muted/20">
-                  <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3">
-                    <div
-                      className="font-medium truncate"
-                      title={[u.full_name, u.email].filter(Boolean).join(' — ')}
-                    >
-                      {u.full_name || u.email}
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate">{u.email}</div>
-                  </TableCell>
-                  <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="ml-auto flex items-center gap-1 hover:opacity-80">
-                          <Badge className={roleBadgeClass(u.huf_role)}>{u.huf_role}</Badge>
-                          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        {roles.map((r) => (
-                          <DropdownMenuItem
-                            key={r.role_name}
-                            onSelect={() => handleRoleChange(u.user, r.role_name)}
-                          >
-                            {r.role_name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                  <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
-                    <Badge variant={u.enabled ? 'default' : 'secondary'}>
-                      {u.enabled ? 'Active' : 'Disabled'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-3 py-2 sm:px-4 sm:py-3 text-right">
-                    <Switch
-                      checked={!!u.enabled}
-                      onCheckedChange={() => handleToggleEnabled(u)}
-                      aria-label={u.enabled ? 'Disable user' : 'Enable user'}
-                    />
-                  </TableCell>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        {loading ? (
+          <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-12 text-center">No users found.</div>
+        ) : (
+          <div className="overflow-x-auto rounded-md border">
+            <Table className="w-full min-w-[32rem] table-fixed text-sm">
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead className="text-left px-3 py-2 font-medium sm:px-4 sm:py-3 w-[35%] sm:w-[32%]">
+                    User
+                  </TableHead>
+                  <TableHead className="text-right px-3 py-2 font-medium sm:px-4 sm:py-3 w-[25%] sm:w-[26%]">
+                    Role
+                  </TableHead>
+                  <TableHead className="text-right px-3 py-2 font-medium sm:px-4 sm:py-3 w-[20%] sm:w-[21%]">
+                    Status
+                  </TableHead>
+                  <TableHead className="text-right px-3 py-2 font-medium sm:px-4 sm:py-3 w-[20%] sm:w-[21%]">
+                    Actions
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+              </TableHeader>
+              <TableBody className="divide-y">
+                {filteredUsers.map((u) => (
+                  <TableRow key={u.user} className="hover:bg-muted/20">
+                    <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3">
+                      <div
+                        className="font-medium truncate"
+                        title={[u.full_name, u.email].filter(Boolean).join(' — ')}
+                      >
+                        {u.full_name || u.email}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                    </TableCell>
+                    <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="ml-auto flex items-center gap-1 hover:opacity-80">
+                            <Badge className={roleBadgeClass(u.huf_role)}>{u.huf_role}</Badge>
+                            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          {roles.map((r) => (
+                            <DropdownMenuItem
+                              key={r.role_name}
+                              onSelect={() => handleRoleChange(u.user, r.role_name)}
+                            >
+                              {r.role_name}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                    <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
+                      <Badge variant={u.enabled ? 'default' : 'secondary'}>
+                        {u.enabled ? 'Active' : 'Disabled'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-3 py-2 sm:px-4 sm:py-3 text-right">
+                      <Switch
+                        checked={!!u.enabled}
+                        onCheckedChange={() => handleToggleEnabled(u)}
+                        aria-label={u.enabled ? 'Disable user' : 'Enable user'}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
 
       <InviteDialog
         open={showInvite}
@@ -333,6 +339,6 @@ export default function UsersPage() {
         onClose={() => setShowInvite(false)}
         onInvited={(u) => setUsers((prev) => [u, ...prev])}
       />
-    </PageLayout>
+    </div>
   );
 }

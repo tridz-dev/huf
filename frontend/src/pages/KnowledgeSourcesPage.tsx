@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Calendar, Settings, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
+import { FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getKnowledgeSources } from '../services/knowledgeApi';
 import { formatTimeAgo } from '../utils/time';
@@ -82,9 +82,12 @@ function KnowledgeSourcesPage() {
   }, [error]);
 
   return (
-    <PageLayout
-      subtitle="Manage knowledge sources for your AI agents"
-      filters={
+    <div className="flex flex-col h-full overflow-hidden p-6 gap-6">
+      <div className="flex-none">
+        <div className="mb-4">
+          <h1 className="text-2xl font-semibold tracking-tight">Knowledge Sources</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage knowledge sources for your AI agents</p>
+        </div>
         <FilterBar
           searchPlaceholder="Search knowledge sources..."
           searchValue={search}
@@ -98,70 +101,72 @@ function KnowledgeSourcesPage() {
             },
           ]}
         />
-      }
-    >
-      {error && !initialLoading && (
-        <div className="text-center py-12">
-          <p className="text-destructive mb-4">Failed to load knowledge sources</p>
-          <p className="text-sm text-muted-foreground mb-4">
-            {error.message || 'An error occurred while fetching knowledge sources.'}
-          </p>
-        </div>
-      )}
-      <GridView
-        items={sources}
-        columns={{ sm: 1, md: 2, lg: 3 }}
-        loading={initialLoading}
-        emptyState={
+      </div>
+      
+      <div className="flex-1 overflow-auto">
+        {error && !initialLoading && (
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No knowledge sources found.</p>
+            <p className="text-destructive mb-4">Failed to load knowledge sources</p>
+            <p className="text-sm text-muted-foreground mb-4">
+              {error.message || 'An error occurred while fetching knowledge sources.'}
+            </p>
           </div>
-        }
-        renderItem={(source) => {
-          const statusLabel = getStatusLabel(source);
-          return (
-            <ItemCard
-              title={source.source_name || source.name}
-              description={source.description?.slice(0, 100) || 'No description'}
-              status={{
-                label: statusLabel,
-                variant: getStatusVariant(source),
-              }}
-              metadata={[
-                { label: 'Type', value: source.knowledge_type === 'sqlite_fts' ? 'FTS' : 'Vec', icon: Database },
-                { label: 'Chunks', value: (source.total_chunks ?? 0).toLocaleString() },
-                {
-                  label: 'Last Indexed',
-                  value: source.last_indexed_at ? formatTimeAgo(source.last_indexed_at) : 'Never',
-                  icon: Calendar,
-                },
-              ]}
-              actions={[
-                {
-                  icon: Settings,
-                  label: 'Configure',
-                  onClick: () => navigate(`/knowledge/${source.name}`),
-                },
-              ]}
-              onClick={() => navigate(`/knowledge/${source.name}`)}
-            />
-          );
-        }}
-        keyExtractor={(source) => source.name}
-      />
-      <LoadMoreButton
-        hasMore={hasMore}
-        loading={loadingMore}
-        onLoadMore={loadMore}
-        disabled={!!search || initialLoading}
-      />
-      {!hasMore && sources.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
-          {total !== undefined
-            ? `Showing all ${total} knowledge sources`
-            : 'No more knowledge sources to load'}
-        </div>
-      )}
-    </PageLayout>
+        )}
+        <GridView
+          items={sources}
+          columns={{ sm: 1, md: 2, lg: 3 }}
+          loading={initialLoading}
+          emptyState={
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">No knowledge sources found.</p>
+            </div>
+          }
+          renderItem={(source) => {
+            const statusLabel = getStatusLabel(source);
+            return (
+              <ItemCard
+                title={source.source_name || source.name}
+                description={source.description?.slice(0, 100) || 'No description'}
+                status={{
+                  label: statusLabel,
+                  variant: getStatusVariant(source),
+                }}
+                metadata={[
+                  { label: 'Type', value: source.knowledge_type === 'sqlite_fts' ? 'FTS' : 'Vec', icon: Database },
+                  { label: 'Chunks', value: (source.total_chunks ?? 0).toLocaleString() },
+                  {
+                    label: 'Last Indexed',
+                    value: source.last_indexed_at ? formatTimeAgo(source.last_indexed_at) : 'Never',
+                    icon: Calendar,
+                  },
+                ]}
+                actions={[
+                  {
+                    icon: Settings,
+                    label: 'Configure',
+                    onClick: () => navigate(`/knowledge/${source.name}`),
+                  },
+                ]}
+                onClick={() => navigate(`/knowledge/${source.name}`)}
+              />
+            );
+          }}
+          keyExtractor={(source) => source.name}
+        />
+        <LoadMoreButton
+          hasMore={hasMore}
+          loading={loadingMore}
+          onLoadMore={loadMore}
+          disabled={!!search || initialLoading}
+        />
+        {!hasMore && sources.length > 0 && (
+          <div className="text-center py-4 text-sm text-muted-foreground">
+            {total !== undefined
+              ? `Showing all ${total} knowledge sources`
+              : 'No more knowledge sources to load'}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

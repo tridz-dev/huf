@@ -1,4 +1,4 @@
-import { Plug, Settings, Loader2 } from 'lucide-react';
+import { Plug, Settings, Loader2, Plus } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -12,7 +12,7 @@ import {
 } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
+import { FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getProviders, getProvider, updateProvider, createProvider } from '../services/providerApi';
 import { getModels } from '../services/providerApi';
@@ -198,90 +198,102 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
   };
 
   return (
-    <PageLayout
-        subtitle="Connect AI providers and external services"
-        filters={
+    <div className="flex flex-col h-full overflow-hidden p-6 gap-6">
+      <div className="flex-none flex items-start justify-between">
+        <div className="mb-4">
+          <h1 className="text-2xl font-semibold tracking-tight">AI Providers</h1>
+          <p className="text-sm text-muted-foreground mt-1">Connect AI providers and external services</p>
+        </div>
+        <Button onClick={handleAddProvider} size="sm">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Provider
+        </Button>
+      </div>
+
+      <div className="flex-none">
         <FilterBar
           searchPlaceholder="Search providers..."
           searchValue={search}
           onSearchChange={setSearch}
         />
-      }
-    >
-      {error && !initialLoading && (
-        <div className="text-center py-12">
-          <p className="text-destructive mb-4">Failed to load providers</p>
-          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching providers.'}</p>
-        </div>
-      )}
-      <GridView
-        items={providers}
-        columns={{ sm: 1, md: 2, lg: 3 }}
-        loading={initialLoading}
-        emptyState={
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        {error && !initialLoading && (
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No providers found.</p>
+            <p className="text-destructive mb-4">Failed to load providers</p>
+            <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching providers.'}</p>
           </div>
-        }
-        renderItem={(provider) => {
-          const providerModels = models.filter(m => m.provider === provider.name);
-          return (
-            <Card key={provider.name} className="h-full flex flex-col">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Plug className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{provider.provider_name}</CardTitle>
-                      <CardDescription className="text-xs">
-                        {getModelCountForProvider(provider.name)} models
-                      </CardDescription>
+        )}
+        <GridView
+          items={providers}
+          columns={{ sm: 1, md: 2, lg: 3 }}
+          loading={initialLoading}
+          emptyState={
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">No providers found.</p>
+            </div>
+          }
+          renderItem={(provider) => {
+            const providerModels = models.filter(m => m.provider === provider.name);
+            return (
+              <Card key={provider.name} className="h-full flex flex-col">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Plug className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base">{provider.provider_name}</CardTitle>
+                        <CardDescription className="text-xs">
+                          {getModelCountForProvider(provider.name)} models
+                        </CardDescription>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1">
-                {providerModels.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {providerModels.slice(0, 3).map(model => (
-                      <Badge key={model.name} variant="secondary" className="text-xs">
-                        {model.model_name}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No models configured</p>
-                )}
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1 gap-2"
-                  onClick={() => handleConfigure(provider)}
-                >
-                  <Settings className="w-4 h-4" />
-                  Configure
-                </Button>
-              </CardFooter>
-            </Card>
-          );
-        }}
-        keyExtractor={(provider) => provider.name}
-      />
-      <LoadMoreButton
-        hasMore={hasMore}
-        loading={loadingMore}
-        onLoadMore={loadMore}
-        disabled={!!search || initialLoading}
-      />
-      {!hasMore && providers.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
-          {total !== undefined ? `Showing all ${total} providers` : 'No more providers to load'}
-        </div>
-      )}
+                </CardHeader>
+                <CardContent className="flex-1">
+                  {providerModels.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {providerModels.slice(0, 3).map(model => (
+                        <Badge key={model.name} variant="secondary" className="text-xs">
+                          {model.model_name}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No models configured</p>
+                  )}
+                </CardContent>
+                <CardFooter>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1 gap-2"
+                    onClick={() => handleConfigure(provider)}
+                  >
+                    <Settings className="w-4 h-4" />
+                    Configure
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          }}
+          keyExtractor={(provider) => provider.name}
+        />
+        <LoadMoreButton
+          hasMore={hasMore}
+          loading={loadingMore}
+          onLoadMore={loadMore}
+          disabled={!!search || initialLoading}
+        />
+        {!hasMore && providers.length > 0 && (
+          <div className="text-center py-4 text-sm text-muted-foreground">
+            {total !== undefined ? `Showing all ${total} providers` : 'No more providers to load'}
+          </div>
+        )}
+      </div>
 
       {/* Configure Provider Modal */}
       <Dialog open={configureModalOpen} onOpenChange={setConfigureModalOpen}>
@@ -376,6 +388,6 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </PageLayout>
+    </div>
   );
 }

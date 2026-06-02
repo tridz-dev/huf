@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -9,13 +9,9 @@ import { ModalProvider } from './contexts/ModalContext';
 import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
-import { McpHeaderActions } from './components/McpHeaderActions';
 import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
-import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
-import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
-import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
@@ -41,6 +37,8 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
+const KnowledgeLandingPage = lazy(() => import('./pages/KnowledgeLandingPage'));
+const SettingsLandingPage = lazy(() => import('./pages/SettingsLandingPage'));
 
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
@@ -189,18 +187,12 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/data"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout headerActions={<DataHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
-                    <DataPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+          {/* Knowledge & Data Routes */}
+          <Route element={<ProtectedRoute><Suspense fallback={<PageLoader />}><KnowledgeLandingPage /></Suspense></ProtectedRoute>}>
+            <Route path="/knowledge" element={<Suspense fallback={<PageLoader />}><KnowledgeSourcesPage /></Suspense>} />
+            <Route path="/data" element={<Suspense fallback={<PageLoader />}><DataPage /></Suspense>} />
+          </Route>
+
           <Route
             path="/data/new"
             element={
@@ -235,26 +227,16 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/models"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <ModelsPageWrapper />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/providers"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <IntegrationsPageWrapper />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
+          {/* Settings Routes */}
+          <Route element={<ProtectedRoute><Suspense fallback={<PageLoader />}><SettingsLandingPage /></Suspense></ProtectedRoute>}>
+            <Route path="/settings" element={<Navigate to="/providers" replace />} />
+            <Route path="/providers" element={<Suspense fallback={<PageLoader />}><IntegrationsPageWrapper /></Suspense>} />
+            <Route path="/models" element={<Suspense fallback={<PageLoader />}><ModelsPageWrapper /></Suspense>} />
+            <Route path="/mcp" element={<Suspense fallback={<PageLoader />}><McpListingPage /></Suspense>} />
+            <Route path="/users" element={<Suspense fallback={<PageLoader />}><UsersPage /></Suspense>} />
+            <Route path="/roles" element={<Suspense fallback={<PageLoader />}><RolesPage /></Suspense>} />
+          </Route>
+
           <Route
             path="/flows"
             element={
@@ -331,42 +313,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <NotFoundPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/help"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <NotFoundPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/knowledge"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout headerActions={<KnowledgeHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
-                    <KnowledgeSourcesPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="/knowledge/:id"
             element={
@@ -377,18 +324,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/mcp"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout headerActions={<McpHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
-                    <McpListingPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="/mcp/:mcpId"
             element={
@@ -409,26 +345,7 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/users"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout headerActions={<UsersHeaderActions />}>
-                  <UsersPage />
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/roles"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <RolesPage />
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+
           <Route
             path="*"
             element={
