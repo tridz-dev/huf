@@ -1,12 +1,10 @@
 # HUF
 
-**The AI-native engine for building intelligent, action-oriented systems.**
+**Open-source AI infrastructure for Frappe. Build agents, automate workflows, and keep your data under your control.**
 
-HUF sits at the intersection of knowledge, automation, and tools—enabling AI to understand business context and execute real work safely, auditably, and at scale.
+HUF is a complete, self-hosted AI layer built on the Frappe framework. It gives teams everything needed to create intelligent agents, ground them in real business knowledge, and orchestrate complex workflows — without sending data to third-party platforms or rebuilding infrastructure from scratch.
 
 [**Documentation**](https://docs.huf.ai/) | [**Report Issue**](https://github.com/tridz-dev/huf/issues) | [**Discussions**](https://github.com/tridz-dev/huf/discussions)
-
-> ⚠️ **Security notice (LiteLLM):** LiteLLM (a HUF dependency) reported compromised PyPI releases `1.82.7` and `1.82.8` on **March 24, 2026**. HUF blocks these versions and shows an install-time alert if detected. Incident: https://github.com/BerriAI/litellm/issues/24518
 
 <br/>
 
@@ -18,34 +16,41 @@ HUF sits at the intersection of knowledge, automation, and tools—enabling AI t
 
 ---
 
-## Why HUF Exists
+## Why HUF
 
 AI adoption inside organizations is fragmented:
 
 - **Knowledge lives in too many places** — scattered across docs, databases, and people's heads
 - **Automation is rigid and rule-based** — breaks on edge cases, requires constant maintenance
 - **AI tools operate in isolation** — each team rebuilds similar assistants
-- **Costs, behavior, and risk are hard to control** — no visibility, no governance
+- **Data flows outside your control** — sent to cloud APIs you don't govern
 
-HUF exists to **centralize intelligence and execution** into a single engine—so AI can be trusted to operate inside real business systems.
+HUF exists to **centralize intelligence and execution** into a single, self-hosted engine — so AI can be trusted to operate inside real business systems without compromising data ownership.
+
+**Key principles:**
+
+- **Open source and self-hosted.** Your agents, your data, your infrastructure. Nothing leaves your servers unless you decide it should.
+- **Local model support.** Connect to Ollama, LM Studio, or any OpenAI-compatible local endpoint. Full AI capability without cloud dependency.
+- **No-code for most use cases.** Agents, knowledge sources, triggers, and flows are configured through a visual interface. Code is optional, not required.
+- **Data governance built in.** Role-based permissions, full audit trails, and cost controls give teams and leadership visibility without slowing anyone down.
 
 ---
 
 ## What HUF Does
 
-HUF is designed to be the **core AI layer** inside an organization or product, not a surface-level chatbot or a single-purpose assistant.
+HUF is the **core AI layer** inside an organization or product, not a surface-level chatbot or a single-purpose assistant.
 
 **One engine. Multiple ways to use it.**
 
 | Capability | What it enables |
 |------------|-----------------|
-| **Multi-Provider AI** | Connect to OpenAI, Anthropic, Google, Mistral, and 100+ providers through a unified interface |
+| **Universal AI Access** | Connect to virtually every major provider or run models locally — all through one interface |
 | **Intelligent Tools** | Give AI the ability to read, write, and act on your business data |
-| **Knowledge Grounding** | RAG-powered context from your docs, files, and URLs—with SQLite FTS5 and ChromaDB backends |
+| **Knowledge Grounding** | RAG-powered context from your existing data, docs, files, URLs, and custom tables |
 | **Event-Driven Execution** | Trigger agents on document events, schedules, or webhooks |
 | **Visual Flow Builder** | Design complex automations with drag-and-drop flows, router nodes, and human approval gates |
 | **Integration Layer** | Connect agents to external services (Gmail, Slack, GitHub, and more) through managed credentials |
-| **Full Auditability** | Every run, every tool call, every token—logged and traceable |
+| **Full Auditability** | Every run, every tool call, every token — logged and traceable |
 | **Cost Control** | Track usage and spending across models and teams |
 
 ---
@@ -61,7 +66,7 @@ Use HUF as the **backend AI engine** for products that need intelligence, automa
 - SaaS products adding AI capabilities
 - Platforms that need agent orchestration, cost control, and auditability
 
-HUF handles reasoning, knowledge, tool execution, and governance—so product teams can focus on user experience.
+HUF handles reasoning, knowledge, tool execution, and governance — so product teams can focus on user experience.
 
 ---
 
@@ -78,7 +83,7 @@ Replace disconnected internal AI tools with a single, governed intelligence laye
 
 ---
 
-### Automation & Orchestration Engine
+### Automation and Orchestration Engine
 
 Use HUF to build **AI-driven workflows** that reason and act across systems.
 
@@ -122,9 +127,9 @@ Give leadership visibility and control without slowing down teams.
 
 ### Agent System
 
-Create AI agents with custom instructions, connect them to any LLM provider, and equip them with tools to take action:
+Create AI agents with custom instructions, connect them to any LLM, and equip them with tools to take action:
 
-- **CRUD Operations** — Read, create, update, delete documents
+- **CRUD Operations** — Read, create, update, delete any Frappe document
 - **Custom Functions** — Connect any Python function as a tool
 - **HTTP Requests** — Call external APIs and services
 - **Agent Chaining** — Agents can trigger other agents with async message-passing
@@ -134,12 +139,21 @@ Create AI agents with custom instructions, connect them to any LLM provider, and
 
 ### Knowledge Management
 
-Ground AI responses in your actual business knowledge:
+Ground AI responses in real business knowledge. Agents can query your existing Frappe data by default via CRUD tools. For richer semantic or full-text search, build dedicated knowledge sources:
 
-- **Multiple Input Types** — Files, text, URLs
+- **Input Types** — Files, raw text, URLs, custom Data Tables
+- **Existing Data** — All Frappe DocType data is accessible to agents out of the box
 - **Automatic Chunking** — Intelligent text segmentation
-- **Dual Backends** — BM25 full-text search (SQLite FTS5) or semantic vector search (ChromaDB)
+- **Multiple Backends** — BM25 full-text search (SQLite FTS5), semantic vector search (ChromaDB), PostgreSQL vector search (pgvector, coming soon)
 - **Flexible Injection** — Mandatory context or on-demand search
+
+### Data Tables
+
+Create and manage custom structured data directly inside HUF, no external database required:
+
+- **Visual Editor** — Build and populate tables through the UI
+- **Agent-Accessible** — Use as knowledge input or tool data source
+- **No Schema Migrations** — Dynamic columns, managed by HUF
 
 ### Trigger System
 
@@ -152,7 +166,7 @@ Run agents automatically based on events:
 
 ### Visual Flow Builder
 
-Design complex workflows with a modern React-based interface:
+Design complex workflows through a modern React-based interface. No code required for most flows:
 
 - **Drag-and-Drop Canvas** — Build flows visually
 - **Node Types** — Triggers, agents, HTTP actions, router/orchestrator, condition, utility
@@ -169,13 +183,14 @@ Manage credentials and connections to external services in one place:
 - **Integration Recipients** — Route notifications and actions to specific users or addresses
 - **Tool Sync** — Automatically surface integration tools inside agents and flows
 
-### Models & Providers
+### Models and Providers
 
-First-class model management alongside provider configuration:
+Connect to virtually every major AI provider, or run models entirely on your own hardware:
 
-- **Models Page** — Browse, create, and configure AI models independently from providers
+- **Cloud Providers** — OpenAI, Anthropic, Google, Mistral, Groq, and hundreds more
+- **Local Models** — Ollama, LM Studio, and any OpenAI-compatible local endpoint
+- **Models Page** — Browse, create, and configure models independently from providers
 - **Provider Credentials** — Secure API key storage per provider
-- **100+ Providers** — Any model accessible via LiteLLM
 
 ### Observability
 
@@ -195,10 +210,11 @@ These capabilities are in final development and will ship soon:
 
 | Capability | What it enables |
 |------------|-----------------|
-| **Knowledge & Memory** | Persistent agent memory and learning from past conversations |
+| **Knowledge and Memory** | Persistent agent memory and learning from past conversations |
 | **File-Based Agent Declaration** | Define agents in code using declarative config files, for teams building Frappe apps on top of HUF |
-| **Frappe Tools** | Deep integration with Frappe/ERPNext—reports, forms, workflows, and data as native agent tools |
+| **Frappe Tools** | Deep integration with Frappe/ERPNext — reports, forms, workflows, and data as native agent tools |
 | **Fully Agentic UI** | An AI-native interface where the UI itself is driven by and responds to agent actions |
+| **pgvector Backend** | PostgreSQL-native vector search for teams already running Postgres |
 
 ---
 
@@ -247,14 +263,14 @@ bench restart
 │  ┌───────────────────────▼───────────────────────────────────┐ │
 │  │                   Execution Layer                         │ │
 │  │                                                           │ │
-│  │  LiteLLM (100+ providers) │ Tool System │ MCP Client      │ │
-│  │  Prompt Caching │ Role Permissions │ Integrations         │ │
+│  │  LiteLLM (cloud + local) | Tool System | MCP Client       │ │
+│  │  Prompt Caching | Role Permissions | Integrations         │ │
 │  └───────────────────────────────────────────────────────────┘ │
 │                                                                 │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │                   Observability                            │ │
 │  │                                                            │ │
-│  │  Runs │ Conversations │ Messages │ Tool Calls │ Costs      │ │
+│  │  Runs | Conversations | Messages | Tool Calls | Costs      │ │
 │  └────────────────────────────────────────────────────────────┘ │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -274,24 +290,26 @@ bench restart
 | Layer | Technology |
 |-------|------------|
 | **Backend** | Frappe Framework, Python 3.10+ |
-| **AI Integration** | LiteLLM (100+ providers) |
-| **Knowledge** | SQLite FTS5 (BM25) + ChromaDB (vector) |
+| **AI Integration** | LiteLLM (cloud providers + local models) |
+| **Knowledge** | SQLite FTS5 (BM25) + ChromaDB (vector) + pgvector (coming soon) |
 | **Frontend** | React 18, TypeScript, Tailwind CSS |
 | **Flow Builder** | React Flow / XYFlow |
 | **Database** | MariaDB |
 
 ---
 
-## Security Notice (LiteLLM)
+## Security Notice
 
-LiteLLM is a core dependency of Huf. On **March 24, 2026**, the LiteLLM team reported a supply-chain compromise affecting published releases (`1.82.7` and `1.82.8`) that included a malicious `.pth` startup payload.
+**HUF uses LiteLLM as a dependency for AI provider routing.** On March 24, 2026, the LiteLLM team disclosed that PyPI releases `1.82.7` and `1.82.8` were compromised — both contained a malicious `.pth` startup payload injected into the package.
 
-What Huf has done:
-- Blocked compromised versions in dependency constraints (`litellm>=1.0.0,!=1.82.7,!=1.82.8`).
-- Added install-time detection in `huf/install.py` to show a critical alert if a compromised LiteLLM version is already present in the environment.
+HUF was affected as a downstream consumer. We responded immediately:
 
-Upstream incident thread:
-- https://github.com/BerriAI/litellm/issues/24518
+- Blocked both compromised versions in our dependency constraints (`litellm>=1.0.0,!=1.82.7,!=1.82.8`)
+- Added install-time detection in `huf/install.py` — if a compromised version is already present in your environment, HUF will surface a critical alert on startup
+
+If you are running either of those LiteLLM versions, upgrade immediately.
+
+Upstream incident thread: https://github.com/BerriAI/litellm/issues/24518
 
 ---
 
