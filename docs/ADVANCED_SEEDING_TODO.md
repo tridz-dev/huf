@@ -4,28 +4,34 @@ The current App Agent Seeding system correctly imports flat JSON records for Age
 
 This document outlines the detailed plan to expand the `huf/` seeding directory to support these advanced types using the exact same declarative pattern.
 
-## 1. SQLite FTS & Vector Knowledge Sources
+## 1. SQLite FTS & Vector Knowledge Sources (Pre-built vs Raw)
 
-Currently, `Knowledge Source` JSONs are imported, but if the `storage_mode` is `SQLite (FTS)` or `SQLite (Vector)`, the actual `.sqlite` file is missing.
+Currently, `Knowledge Source` JSONs are imported, but if the `storage_mode` is `SQLite (FTS)` or `SQLite (Vector)`, the actual `.sqlite` file is missing. Furthermore, we need to support importing raw, un-indexed documents (PDFs, Word docs, Markdown) that must be ingested by the system after seeding.
 
 ### Plan
-Allow apps to include `.sqlite` files directly in their `huf/knowledge/` folder alongside the JSON definition.
+Allow apps to include `.sqlite` files (for pre-indexed DBs) or raw documents (like `.pdf`, `.docx`) directly in their `huf/knowledge/` folder alongside the JSON definition.
 
 ### Folder Structure
 ```text
 myapp/huf/knowledge/
   sales_playbook.json
   sales_playbook.sqlite  <-- The pre-built SQLite DB
+  hr_policies.json
+  hr_policies.pdf        <-- A raw document to be ingested
 ```
 
 ### Implementation Steps
 1. **Scanner Update (`huf/ai/app_seeding/scanner.py`)**:
-   - Update `get_seed_files` to also detect `.sqlite` files.
+   - Update `get_seed_files` to also detect `.sqlite`, `.pdf`, `.docx`, `.md`, and `.txt` files alongside JSON.
 2. **Loader Update (`huf/ai/app_seeding/loaders.py`)**:
-   - In `upsert_knowledge()`, check if `source_name.sqlite` exists in the same directory as the JSON.
-   - If it exists, copy the `.sqlite` file into Frappe's `site/public/files/knowledge/` directory.
-   - Update the `Knowledge Source` document's `sqlite_file` and `sqlite_file_path` fields to point to the newly copied file.
-   - Calculate and update the `index_size_bytes`.
+   - In `upsert_knowledge()`, check if a corresponding file (e.g., `source_name.sqlite` or `source_name.pdf`) exists in the same directory as the JSON.
+   - **For pre-indexed `.sqlite` files**:
+     - Copy the `.sqlite` file into Frappe's `site/public/files/knowledge/` directory.
+     - Update the `Knowledge Source` document's `sqlite_file` and `sqlite_file_path` fields.
+     - Calculate and update the `index_size_bytes`.
+   - **For raw non-ingested documents (.pdf, .docx, etc.)**:
+     - Upload the file to Frappe using `frappe.get_doc({"doctype": "File", ...})` and attach it to the `Knowledge Source` document via a `Knowledge Input` record.
+     - Trigger the background ingestion queue (`huf.ai.knowledge.enqueue_index_job` or similar) so the document is parsed, chunked, and embedded/indexed asynchronously after seeding.
 3. **Seeder Update (`huf/ai/app_seeding/seeder.py`)**:
    - Pass the `huf_dir` path down to the loaders so they can resolve adjacent files.
 
