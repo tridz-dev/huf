@@ -40,8 +40,8 @@ const sidebarSections: NavSection[] = [
         icon: BookOpen,
         capability: "agent.use",
         items: [
-          { title: "Sources", url: "/knowledge", capability: "agent.use" },
-          { title: "Data", url: "/data", capability: "agent.use" },
+          { title: "Tables", url: "/data", capability: "agent.use" },
+          { title: "Documents", url: "/knowledge", capability: "agent.use" },
         ],
       },
       {
