@@ -869,7 +869,7 @@ def run_agent_sync(
                     tool_status = tool_call_doc.status or "Completed"
                     tool_name = tool_call_doc.tool or "Unknown Tool"
 
-                    message_name = frappe.db.get_value("Agent Message", {"tool_calll": updated_tool_call_id}, "name")
+                    message_name = frappe.db.get_value("Agent Message", {"tool_call": updated_tool_call_id}, "name")
 
                     # Persist tool result with context policy (large results stored as reference only)
                     tool_result_str = str(tool_result) if tool_result is not None else ""

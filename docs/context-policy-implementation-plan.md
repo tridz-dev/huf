@@ -246,7 +246,7 @@ def add_message(
         "model": model,
         "conversation_index": last_index + 1,
         "is_agent_message": 1 if role == "agent" else 0,
-        "tool_calll": tool_call_id,
+        "tool_call": tool_call_id,
         # New fields
         "record_kind": record_kind,
         "context_policy": context_policy,
