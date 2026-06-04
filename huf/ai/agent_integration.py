@@ -238,6 +238,12 @@ class AgentManager:
     """
             instructions += tools_instruction
 
+        instructions += """
+            SYSTEM INSTRUCTION - LARGE CONTEXT REFERENCES:
+            If you see a data payload or result formatted as a reference like [record_kind: summary · handle=DocType/Name], it means the full massive data payload was truncated to save space.
+            You MUST use the `get_result_context` tool with that exact handle (e.g. DocType/Name) to fetch the full data if you need more details to answer the user's question.
+            """
+
         if self.agent_doc.enable_conversation_data:
              instructions += """
     
