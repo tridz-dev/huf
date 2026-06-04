@@ -77,7 +77,8 @@
   "allowed_roles",
   "metadata_tab",
   "last_run",
-  "total_run"
+  "total_run",
+  "max_context_chars"
  ],
  "fields": [
   {
@@ -555,12 +556,19 @@
    "fieldname": "audio_transcription_section",
    "fieldtype": "Section Break",
    "label": "Audio Transcription"
+  },
+  {
+   "default": "2000",
+   "description": "Maximum characters allowed for tool results before truncating and applying include_reference context policy.",
+   "fieldname": "max_context_chars",
+   "fieldtype": "Int",
+   "label": "Max Context Characters"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-11 12:59:21.085509",
+ "modified": "2026-06-04 12:59:21.085509",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",
