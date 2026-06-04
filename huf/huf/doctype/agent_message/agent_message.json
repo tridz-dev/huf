@@ -10,29 +10,29 @@
   "generated_image",
   "metadata_tab",
   "conversation_details_section",
+  "provider",
+  "agent",
   "conversation",
   "conversation_index",
-  "session_id",
   "column_break_jcev",
+  "model",
   "user",
-  "kind",
-  "role",
-  "is_agent_message",
+  "agent_run",
+  "session_id",
   "ai_context_section",
+  "is_agent_message",
+  "role",
   "context_policy",
   "record_kind",
+  "reference_name",
+  "token_estimate",
+  "column_break_nuxi",
+  "kind",
   "context_summary",
   "reference_doctype",
-  "reference_name",
   "visibility",
-  "token_estimate",
-  "agent",
-  "agent_run",
-  "column_break_nuxi",
-  "provider",
-  "model",
   "tool_call__details_section",
-  "tool_calll",
+  "tool_call",
   "tool_name",
   "column_break_agaw",
   "tool_status",
@@ -154,28 +154,28 @@
    "options": "\nStarted\nQueues\nCompleted\nFailed"
   },
   {
-   "fieldname": "tool_calll",
+   "fieldname": "tool_call",
    "fieldtype": "Link",
    "label": "Tool Calll",
    "options": "Agent Tool Call",
    "read_only": 1
   },
   {
-   "fetch_from": "tool_calll.tool",
+   "fetch_from": "tool_call.tool",
    "fieldname": "tool_name",
    "fieldtype": "Data",
    "label": "Tool Name",
    "read_only": 1
   },
   {
-   "fetch_from": "tool_calll.tool_args",
+   "fetch_from": "tool_call.tool_args",
    "fieldname": "tool_args",
    "fieldtype": "JSON",
    "label": "Tool Args",
    "read_only": 1
   },
   {
-   "fetch_from": "tool_calll.status",
+   "fetch_from": "tool_call.status",
    "fieldname": "tool_status",
    "fieldtype": "Data",
    "label": "Tool Status",
@@ -274,11 +274,11 @@
    "label": "Reference Name"
   },
   {
+   "default": "user_visible",
    "fieldname": "visibility",
    "fieldtype": "Select",
    "label": "Visibility",
-   "options": "user_visible\nmodel_visible\nui_only\naudit_only\ndeveloper_only",
-   "default": "user_visible"
+   "options": "user_visible\nmodel_visible\nui_only\naudit_only\ndeveloper_only"
   },
   {
    "fieldname": "token_estimate",
@@ -307,7 +307,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-11 12:26:13.116164",
+ "modified": "2026-06-04 14:55:28.143716",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",
@@ -339,7 +339,6 @@
   },
   {
    "create": 1,
-   "delete": 0,
    "email": 1,
    "export": 1,
    "print": 1,
@@ -350,16 +349,13 @@
    "write": 1
   },
   {
-   "create": 0,
-   "delete": 0,
    "email": 1,
    "export": 1,
    "print": 1,
    "read": 1,
    "report": 1,
    "role": "Huf Viewer",
-   "share": 1,
-   "write": 0
+   "share": 1
   }
  ],
  "row_format": "Dynamic",
