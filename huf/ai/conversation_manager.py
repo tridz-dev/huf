@@ -117,7 +117,7 @@ class ConversationManager:
                 "model": model,
                 "conversation_index": last_index + 1,
                 "is_agent_message": 1 if role == "agent" else 0,
-                "tool_calll": tool_call_id,
+                "tool_call": tool_call_id,
             }
 
             # Context policy fields (all optional)
@@ -156,12 +156,14 @@ class ConversationManager:
             filters={"conversation": conversation_name},
             fields=[
                 "role",
+                "kind",
                 "content",
                 "context_policy",
                 "context_summary",
                 "reference_doctype",
                 "reference_name",
                 "record_kind",
+                "tool_call",
                 "creation"
             ],
             order_by="conversation_index desc",
@@ -174,7 +176,10 @@ class ConversationManager:
         for msg in messages:
             ctx = self._message_to_context(msg)
             if ctx is not None:
-                result.append(ctx)
+                if isinstance(ctx, list):
+                    result.extend(ctx)
+                else:
+                    result.append(ctx)
         return result
 
     def _message_to_context(self, msg):
@@ -185,39 +190,100 @@ class ConversationManager:
         if policy in ("exclude", "transient_only", "include_on_demand"):
             return None
 
-        result = {
-            "role": "assistant" if msg.get("role") == "agent" else msg.get("role"),
-        }
-
+        role_mapped = "assistant" if msg.get("role") == "agent" else msg.get("role")
+        
+        # Determine the content based on policy
+        content = ""
         if policy == "include_full":
-            result["content"] = msg.get("content")
-
+            content = msg.get("content")
         elif policy == "include_summary":
-            result["content"] = msg.get("context_summary") or msg.get("content")
-
+            content = msg.get("context_summary") or msg.get("content")
         elif policy == "include_reference":
             record_kind = msg.get("record_kind") or "record"
             summary = msg.get("context_summary") or record_kind
             ref_doctype = msg.get("reference_doctype") or ""
             ref_name = msg.get("reference_name") or ""
             if ref_doctype and ref_name:
-                result["content"] = f"[{record_kind}: {summary} · handle={ref_doctype}/{ref_name}]"
+                content = f"[{record_kind}: {summary} · handle={ref_doctype}/{ref_name}]"
             else:
-                result["content"] = f"[{record_kind}: {summary}]"
-
+                content = f"[{record_kind}: {summary}]"
         elif policy == "token_budgeted":
-            # Phase 4 makes this real; for now treat as include_summary
-            result["content"] = msg.get("context_summary") or msg.get("content")
-
+            content = msg.get("context_summary") or msg.get("content")
         elif policy == "provider_cached":
-            # Phase 5 optimizes caching; for now treat as include_full
-            result["content"] = msg.get("content")
-
+            content = msg.get("content")
         else:
-            # Unknown policy: safe fallback to include_full
-            result["content"] = msg.get("content")
+            content = msg.get("content")
 
-        return result
+        tool_call_link = msg.get("tool_call")
+        msg_kind = msg.get("kind")
+        
+        if tool_call_link:
+            call_id = tool_call_link
+            tool_name = ""
+            tool_args = "{}"
+            
+            tool_call_doc = frappe.db.get_value(
+                "Agent Tool Call",
+                tool_call_link,
+                ["call_id", "tool", "tool_args"],
+                as_dict=True
+            )
+            if tool_call_doc:
+                call_id = tool_call_doc.call_id or call_id
+                tool_name = tool_call_doc.tool or ""
+                tool_args = tool_call_doc.tool_args or "{}"
+
+            # If this is a combined Tool Result message from the UI mutation pattern
+            if msg_kind == "Tool Result" and role_mapped == "assistant":
+                # Create the Assistant message containing the tool call
+                assistant_msg = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [{
+                        "id": call_id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": tool_args
+                        }
+                    }]
+                }
+                
+                # Create the subsequent Tool message containing the result
+                tool_msg = {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": tool_name,
+                    "content": content
+                }
+                return [assistant_msg, tool_msg]
+            
+            # Legacy or separate message handling
+            if role_mapped == "assistant":
+                return {
+                    "role": "assistant",
+                    "content": None if not msg.get("content") else content,
+                    "tool_calls": [{
+                        "id": call_id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": tool_args
+                        }
+                    }]
+                }
+            elif role_mapped == "tool":
+                return {
+                    "role": "tool",
+                    "content": content,
+                    "tool_call_id": call_id,
+                    "name": tool_name
+                }
+
+        return {
+            "role": role_mapped,
+            "content": content
+        }
 
     def close_conversation(self, conversation_name):
         """Mark conversation as inactive"""
