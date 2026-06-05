@@ -185,6 +185,26 @@
    "label": "Prompt Field"
   },
   {
+   "fieldname": "seeding_metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Seeding Metadata",
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "label": "Source File",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
     "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
     "fieldname": "section_break_attachments",
     "fieldtype": "Section Break",

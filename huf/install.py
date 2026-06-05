@@ -130,6 +130,15 @@ def after_migrate():
 			f"Failed to sync tools after migrate: {str(e)}",
 			"Tool Sync Error"
 		)
+		
+	try:
+		from huf.ai.app_seeding.seeder import seed_all
+		results = list(seed_all())
+		for r in results:
+			if r.errors:
+				frappe.log_error(f"Seeding errors for {r.app}: {r.errors}", "App Seeding")
+	except Exception as e:
+		frappe.log_error(f"App seeding failed: {e}", "App Seeding")
 
 def create_demo_ai_providers():
     providers = [
