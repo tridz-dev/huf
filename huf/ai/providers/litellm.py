@@ -291,6 +291,21 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             cache_control_type,
         )
         
+        # Append images if any are passed in context
+        if context and context.get("files"):
+            image_urls = []
+            for f in context.get("files"):
+                if f.get("is_image") and f.get("file_url"):
+                    url = f["file_url"]
+                    if url.startswith("/"):
+                        url = frappe.utils.get_url(url)
+                    image_urls.append({"type": "image_url", "image_url": {"url": url}})
+            
+            if image_urls:
+                if isinstance(user_content, str):
+                    user_content = [{"type": "text", "text": user_content}]
+                user_content.extend(image_urls)
+        
         messages.append({"role": "user", "content": user_content})
 
         # Convert tools
@@ -730,6 +745,21 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             enable_prompt_caching and model_supports_caching and cache_dynamic_content,
             cache_control_type,
         )
+        
+        # Append images if any are passed in context
+        if context and context.get("files"):
+            image_urls = []
+            for f in context.get("files"):
+                if f.get("is_image") and f.get("file_url"):
+                    url = f["file_url"]
+                    if url.startswith("/"):
+                        url = frappe.utils.get_url(url)
+                    image_urls.append({"type": "image_url", "image_url": {"url": url}})
+            
+            if image_urls:
+                if isinstance(user_content, str):
+                    user_content = [{"type": "text", "text": user_content}]
+                user_content.extend(image_urls)
         
         messages.append({"role": "user", "content": user_content})
 
