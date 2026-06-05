@@ -40,13 +40,18 @@ def seed_app(app_name: str, huf_dir: Path) -> SeedResult:
                     data = json.load(f)
                 
                 source_file = f"huf/{type_folder}/{file_path.name}"
-                ok, error = loader_fn(data, app_name, source_file)
                 
-                if ok:
-                    result.seeded += 1
-                else:
-                    result.skipped += 1
-                    result.errors.append(f"Failed to seed {file_path.name}: {error}")
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    ok, error = loader_fn(item, app_name, source_file)
+                    
+                    if ok:
+                        result.seeded += 1
+                    else:
+                        result.skipped += 1
+                        # Use a fallback name if the key isn't standard across all types
+                        item_name = item.get('name') or item.get('title') or item.get('agent_name') or item.get('tool_name') or item.get('source_name') or file_path.name
+                        result.errors.append(f"Failed to seed {item_name}: {error}")
             except Exception as e:
                 result.skipped += 1
                 result.errors.append(f"Error parsing {file_path.name}: {e}")
