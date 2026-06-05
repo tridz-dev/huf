@@ -13,10 +13,18 @@ def find_seed_dirs() -> dict:
         if app == "huf":
             continue
         try:
+            # Check Python package root (e.g., apps/myapp/myapp/huf)
             app_path = frappe.get_app_path(app)
             huf_dir = Path(app_path) / "huf"
             if huf_dir.is_dir():
                 result[app] = huf_dir
+                continue
+            
+            # Check App root (e.g., apps/myapp/huf)
+            app_root = Path(app_path).parent
+            huf_dir_alt = app_root / "huf"
+            if huf_dir_alt.is_dir():
+                result[app] = huf_dir_alt
         except Exception as e:
             frappe.log_error(f"Error checking app {app} for seed directory: {e}", "App Seeding Scanner")
     return result
