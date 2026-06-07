@@ -35,6 +35,7 @@ import type { ParsedArtifact, ArtifactType } from '@/types/artifact.types';
 import { cn } from '@/lib/utils';
 import { Mermaid } from '@/components/ui/mermaid';
 import { JSXPreview, JSXPreviewContent, JSXPreviewExport } from '@/components/ui/jsx-preview';
+import { sanitizeSVG } from '@/utils/sanitize';
 
 interface ArtifactRendererProps {
 	artifact: ParsedArtifact;
@@ -192,8 +193,7 @@ export function ArtifactRenderer({
 					<div className="flex flex-col gap-2">
 						<div
 							className="flex items-center justify-center p-4 bg-white rounded border"
-							// biome-ignore lint/security/noDangerouslySetInnerHtml: SVG rendering requires innerHTML
-							dangerouslySetInnerHTML={{ __html: artifact.content }}
+							dangerouslySetInnerHTML={{ __html: sanitizeSVG(artifact.content) }}
 						/>
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">

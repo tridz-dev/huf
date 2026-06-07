@@ -49,6 +49,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
+    "dompurify": "^3.3.3",
     "embla-carousel-react": "^8.6.0",
     "frappe-js-sdk": "^1.11.0",
     "html-to-image": "^1.11.13",
