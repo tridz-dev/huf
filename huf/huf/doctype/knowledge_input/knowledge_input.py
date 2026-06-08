@@ -19,8 +19,13 @@ class KnowledgeInput(Document):
 			frappe.throw(_("File is required for File input type"))
 		elif self.input_type == "Text" and not self.text:
 			frappe.throw(_("Text content is required for Text input type"))
-		elif self.input_type == "URL" and not self.url:
-			frappe.throw(_("URL is required for URL input type"))
+		elif self.input_type == "URL":
+			if not self.url:
+				frappe.throw(_("URL is required for URL input type"))
+			from huf.ai.http_handler import validate_url
+			is_valid, error_msg = validate_url(self.url)
+			if not is_valid:
+				frappe.throw(_("Invalid URL: {0}").format(error_msg))
 	
 	def compute_source_hash(self):
 		"""Compute SHA-256 hash for deduplication."""
