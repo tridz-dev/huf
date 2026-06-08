@@ -14,14 +14,6 @@ config:
         password: ""
       bypassProxy: ""
 
-request:
-  variables:
-    - name: BASE_URL
-      value: https://hufai.erpcode.tridz.in
-    - name: Agent_Name
-      value: ToDo Agent
-    - name: Prompt
-      value: Hi
 bundled: false
 extensions:
   bruno:
