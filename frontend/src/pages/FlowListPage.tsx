@@ -1,9 +1,16 @@
+import { useCallback, useState } from 'react';
 import { Calendar, Play, Activity, Settings } from 'lucide-react';
 import { PageLayout, FilterBar, GridView, ItemCard } from '../components/dashboard';
 import { usePageData } from '../hooks/dashboard/usePageData';
-import { useFlowContext } from '../contexts/FlowContext';
+
 import { FlowMetadata } from '../types/flow.types';
 import { useNavigate } from 'react-router-dom';
+import { getFlowDefinitions, getFlowDefinition } from '../services/flowApi';
+import { mapBackendStatusToFrontend } from '../services/flowSerializer';
+import { runFlow } from '../services/flowApi';
+import { toast } from 'sonner';
+import { useFlowContext } from '../contexts/FlowContext';
+import { FlowSettingsModal } from '../components/modals/FlowSettingsModal';
 
 const statusOptions = [
   { label: 'All Status', value: 'all' },
@@ -37,13 +44,55 @@ export { FlowListPage };
 export default FlowListPage;
 
 function FlowListPage() {
-  const { flows } = useFlowContext();
   const navigate = useNavigate();
+  const { setActiveFlow } = useFlowContext();
+  const [showSettings, setShowSettings] = useState(false);
 
-  const { data, loading, search, setSearch, filters, setFilters } = usePageData<FlowMetadata>({
-    initialData: flows,
+  // Memoize fetchFn with NO dependencies to prevent ANY re-renders
+  const fetchFn = useCallback(async () => {
+    const items = await getFlowDefinitions();
+
+    // Enrich with metadata (description, category) and nodeCount from definition_json
+    const withMetadata = await Promise.all(
+      items.map(async (item) => {
+        try {
+          const def = await getFlowDefinition(item.flow_id);
+          const graph = def.definition_json;
+          const metadata = graph?.metadata || {};
+          const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+
+          return {
+            id: item.flow_id,
+            name: def.flow_name || metadata.name || item.flow_name,
+            description: metadata.description,
+            status: mapBackendStatusToFrontend(def.status || item.status),
+            category: metadata.category,
+            nodeCount: nodes.length || 0,
+            createdAt: new Date(item.modified),
+            updatedAt: new Date(item.modified),
+          } as FlowMetadata;
+        } catch {
+          return {
+            id: item.flow_id,
+            name: item.flow_name,
+            description: undefined,
+            status: mapBackendStatusToFrontend(item.status),
+            category: undefined,
+            nodeCount: 0,
+            createdAt: new Date(item.modified),
+            updatedAt: new Date(item.modified),
+          } as FlowMetadata;
+        }
+      })
+    );
+
+    return withMetadata;
+  }, []);
+
+  const { data, loading, search, setSearch, filters, setFilters, refresh } = usePageData<FlowMetadata>({
+    fetchFn,
     searchFields: ['name', 'description'],
-    filterFn: (flow, filters) => {
+    filterFn: useCallback((flow: FlowMetadata, filters: Record<string, string>) => {
       if (filters.status && filters.status !== 'all' && flow.status !== filters.status) {
         return false;
       }
@@ -51,11 +100,27 @@ function FlowListPage() {
         return false;
       }
       return true;
-    },
+    }, []),
   });
 
   const handleFlowClick = (flowId: string) => {
+    // Navigate to the flow canvas
     navigate(`/flows/${flowId}`);
+  };
+
+  const handleConfigureFlow = (flowId: string) => {
+    // Stay on the list page and open the shared FlowSettingsModal
+    setActiveFlow(flowId);
+    setShowSettings(true);
+  };
+
+  const handleRunFlow = async (flowId: string) => {
+    try {
+      const result = await runFlow(flowId);
+      toast.success('Flow run started', { description: `Run ID: ${result.flow_run_id}` });
+    } catch (err) {
+      toast.error('Failed to run flow', { description: err instanceof Error ? err.message : 'Unknown error' });
+    }
   };
 
   return (
@@ -108,18 +173,26 @@ function FlowListPage() {
               {
                 icon: Play,
                 label: 'Run Flow',
-                onClick: () => console.log('Run flow', flow.id),
+                onClick: () => handleRunFlow(flow.id),
               },
               {
                 icon: Settings,
                 label: 'Configure',
-                onClick: () => handleFlowClick(flow.id),
+                onClick: () => handleConfigureFlow(flow.id),
               },
             ]}
             onClick={() => handleFlowClick(flow.id)}
           />
         )}
         keyExtractor={(flow) => flow.id}
+      />
+      <FlowSettingsModal
+        open={showSettings}
+        onClose={() => {
+          setShowSettings(false);
+          // Refresh the list so name/description/category updates are visible without manual reload
+          refresh();
+        }}
       />
     </PageLayout>
   );

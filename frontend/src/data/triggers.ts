@@ -32,53 +32,5 @@ export const triggerOptions: TriggerOption[] = [
     icon: 'Database',
     category: 'highlight',
     tab: 'explore'
-  },
-  {
-    id: 'google-sheets',
-    name: 'Google Sheets',
-    description: 'Trigger from Google Sheets',
-    icon: 'Sheet',
-    category: 'popular',
-    tab: 'apps'
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    description: 'Trigger from Slack messages',
-    icon: 'MessageSquare',
-    category: 'popular',
-    tab: 'apps'
-  },
-  {
-    id: 'notion',
-    name: 'Notion',
-    description: 'Trigger from Notion database',
-    icon: 'FileText',
-    category: 'popular',
-    tab: 'apps'
-  },
-  {
-    id: 'gmail',
-    name: 'Gmail',
-    description: 'Trigger from Gmail emails',
-    icon: 'Mail',
-    category: 'popular',
-    tab: 'apps'
-  },
-  {
-    id: 'hubspot',
-    name: 'HubSpot',
-    description: 'Trigger from HubSpot CRM',
-    icon: 'Database',
-    category: 'popular',
-    tab: 'apps'
-  },
-  {
-    id: 'calendar',
-    name: 'Calendar',
-    description: 'Trigger from calendar events',
-    icon: 'Calendar',
-    category: 'popular',
-    tab: 'apps'
   }
 ];

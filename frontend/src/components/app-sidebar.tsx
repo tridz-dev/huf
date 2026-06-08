@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -29,15 +29,21 @@ const allNavItems = [
     capability: null,
   },
   {
+    title: "Agents",
+    url: "/agents",
+    icon: Bot,
+    capability: "agent.use",
+  },
+  {
     title: "Chat",
     url: "/chat",
     icon: MessageSquare,
     capability: "chat.use",
   },
   {
-    title: "Agents",
-    url: "/agents",
-    icon: Bot,
+    title: "Agent Prompts",
+    url: "/prompts",
+    icon: ScrollText,
     capability: "agent.use",
   },
   {
@@ -65,28 +71,28 @@ const allNavItems = [
     capability: "agent.use",
   },
   {
-    title: "AI Providers",
-    url: "/providers",
-    icon: Plug,
-    capability: "system.providers.manage",
-  },
-  {
     title: "MCP Servers",
     url: "/mcp",
     icon: Server,
     capability: "system.mcp.manage",
   },
   {
+    title: "AI Providers",
+    url: "/providers",
+    icon: Plug,
+    capability: "system.providers.manage",
+  },
+  {
+    title: "Models",
+    url: "/models",
+    icon: Cpu,
+    capability: "system.providers.manage",
+  },
+  {
     title: "Users",
     url: "/users",
     icon: Users,
     capability: "users.manage",
-  },
-  {
-    title: "Agent Prompts",
-    url: "/prompts",
-    icon: ScrollText,
-    capability: "agent.use",
   },
 ]
 
