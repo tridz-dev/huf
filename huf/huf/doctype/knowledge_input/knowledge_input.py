@@ -93,6 +93,7 @@ class KnowledgeInput(Document):
 			knowledge_input=self.name,
 			job_id=f"process_input_{self.name}",
 			deduplicate=True,
+			enqueue_after_commit=True,
 		)
 
 

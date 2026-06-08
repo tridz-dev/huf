@@ -43,6 +43,7 @@ export const agentFormSchema = z.object({
   max_knowledge_tokens: z.number().optional(),
   max_turns: z.number().optional(),
   enable_conversation_data: z.boolean().optional(),
+  inject_conversation_data: z.boolean().optional(),
   autonaming_of_conversation_title: z.boolean().optional(),
 
   agent_color: z
@@ -52,6 +53,7 @@ export const agentFormSchema = z.object({
       (v) => v === undefined || v === '' || /^#[0-9A-Fa-f]{6}$/.test(v),
       { message: 'Use a hex color including #, e.g. #6366F1' },
     ),
+  show_tool_execution_details: z.boolean().optional(),
 
   // Advanced model overrides
   image_generation_model: z.string().optional(),

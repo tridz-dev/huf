@@ -15,6 +15,26 @@ export interface GetProvidersParams {
 }
 
 /**
+ * Pagination parameters for fetching models
+ */
+export interface GetModelsParams {
+  page?: number;
+  limit?: number;
+  start?: number;
+  search?: string;
+  provider?: string;
+}
+
+/**
+ * Paginated response for models
+ */
+export interface PaginatedModelsResponse {
+  items: AIModel[];
+  hasMore: boolean;
+  total?: number;
+}
+
+/**
  * Paginated response for providers
  */
 export interface PaginatedProvidersResponse {
@@ -146,10 +166,19 @@ export async function updateProvider(name: string, data: Partial<AIProviderDoc>)
 }
 
 /**
- * Fetch all AI Models from Frappe
+ * Fetch AI Models from Frappe
+ * Supports pagination, search, and provider filtering
  */
-export async function getModels(providerId?: string): Promise<AIModel[]> {
+export async function getModels(): Promise<AIModel[]>;
+export async function getModels(providerId: string): Promise<AIModel[]>;
+export async function getModels(params: GetModelsParams): Promise<PaginatedModelsResponse>;
+export async function getModels(
+  params?: GetModelsParams | string
+): Promise<PaginatedModelsResponse | AIModel[]> {
   try {
+    // Backward compatibility: if params is a string, it's a providerId
+    if (typeof params === 'string' || !params) {
+      const providerId = typeof params === 'string' ? params : undefined;
       const models = await db.getDocList(doctype['AI Model'], {
         fields: ['name', 'model_name', 'provider'],
         filters: providerId ? [['provider', '=', providerId]] : undefined,
@@ -159,9 +188,129 @@ export async function getModels(providerId?: string): Promise<AIModel[]> {
         name: m.name,
         model_name: m.model_name || m.name,
         provider: m.provider,
-      })) as AIModel[];    
+      })) as AIModel[];
+    }
+
+    const {
+      page = 1,
+      limit = 10,
+      start = (page - 1) * limit,
+      search,
+      provider,
+    } = params;
+
+    // Build filters
+    const filters: Array<[string, string, unknown]> = [];
+
+    if (search && search.trim()) {
+      filters.push(['model_name', 'like', `%${search.trim()}%`]);
+    }
+
+    if (provider) {
+      filters.push(['provider', '=', provider]);
+    }
+
+    // Fetch data
+    const models = await db.getDocList(doctype['AI Model'], {
+      fields: ['name', 'model_name', 'provider'],
+      filters: filters.length > 0 ? (filters as any) : undefined,
+      limit: limit + 1,
+      ...(start > 0 && { limit_start: start }),
+      orderBy: { field: 'modified', order: 'desc' },
+    });
+
+    const mappedModels = models.map((m: any) => ({
+      name: m.name,
+      model_name: m.model_name || m.name,
+      provider: m.provider,
+    })) as AIModel[];
+
+    const hasMore = mappedModels.length > limit;
+    const items = hasMore ? mappedModels.slice(0, limit) : mappedModels;
+
+    const total = await fetchPaginatedCount(
+      page,
+      items.length,
+      doctype['AI Model'],
+      filters
+    );
+
+    return {
+      items,
+      hasMore,
+      total,
+    };
   } catch (error) {
     handleFrappeError(error, 'Error fetching models');
+    return {
+      items: [],
+      hasMore: false,
+      total: 0,
+    };
+  }
+}
+
+/**
+ * AI Model document from Frappe
+ */
+export interface AIModelDoc {
+  name: string;
+  model_name: string;
+  provider: string;
+  modalities?: string;
+}
+
+/**
+ * Fetch a single AI Model by name
+ */
+export async function getModel(name: string): Promise<AIModelDoc> {
+  try {
+    const model = await db.getDoc(doctype['AI Model'], name);
+    return model as AIModelDoc;
+  } catch (error) {
+    handleFrappeError(error, `Error fetching model ${name}`);
+  }
+}
+
+/**
+ * Create a new AI Model document
+ */
+export async function createModel(data: Partial<AIModelDoc>): Promise<AIModelDoc> {
+  try {
+    const newModel = await db.createDoc(doctype['AI Model'], data);
+    return newModel as AIModelDoc;
+  } catch (error) {
+    handleFrappeError(error, 'Error creating model');
+  }
+}
+
+/**
+ * Update an AI Model document
+ */
+export async function updateModel(name: string, data: Partial<AIModelDoc>): Promise<AIModelDoc> {
+  try {
+    await db.updateDoc(doctype['AI Model'], name, data);
+    const updatedModel = await db.getDoc(doctype['AI Model'], name);
+    return updatedModel as AIModelDoc;
+  } catch (error) {
+    handleFrappeError(error, `Error updating model ${name}`);
+  }
+}
+
+/**
+ * Fetch modality options from AI Model DocType definition
+ */
+export async function getModalityOptions(): Promise<string[]> {
+  try {
+    const docType = await db.getDoc('DocType', doctype['AI Model']);
+    const modalitiesField = (docType as any).fields.find((f: any) => f.fieldname === 'modalities');
+    if (modalitiesField && modalitiesField.options) {
+      return modalitiesField.options.split('\n').filter((opt: string) => opt.trim().length > 0);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error fetching modality options:', error);
+    return ['Text', 'Image', 'Text-to-Speech', 'Transcription', 'Embeddings']; // Fallback
   }
 }
 
