@@ -1,23 +1,23 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
+import inspect
 import json
+import re
+import typing
 
 import frappe
 from frappe import _, is_whitelisted
-
 from frappe.model.document import Document
 
-import inspect 
-
-import typing
-
-import re
 
 class AgentToolFunction(Document):
 	def before_validate(self):
 		self.validate_reference_doctype()
 		self.validate_fields_for_doctype()
+		self.validate_base_url()
+		self.validate_http_headers()
+		self.validate_http_parameter_names()
 		self.prepare_function_params()
 		self.validate_json()
 		self.validate_tool_name()
@@ -29,6 +29,40 @@ class AgentToolFunction(Document):
 				"and be at most 128 characters long.")
 			)
 
+
+	def validate_base_url(self):
+		"""Validate that base_url is a proper HTTP(S) URL when set."""
+		if self.types in ("GET", "POST") and self.base_url:
+			from urllib.parse import urlparse
+
+			parsed = urlparse(self.base_url)
+			if parsed.scheme not in ("http", "https"):
+				frappe.throw(_("Base URL must start with http:// or https://"))
+			if not parsed.hostname:
+				frappe.throw(_("Base URL must contain a valid hostname"))
+
+	def validate_http_headers(self):
+		"""Reject HTTP headers containing CRLF characters (header injection prevention)."""
+		if not hasattr(self, "http_headers") or not self.http_headers:
+			return
+		for header in self.http_headers:
+			if header.key and ("\r" in header.key or "\n" in header.key):
+				frappe.throw(_("HTTP header key contains invalid characters: {0}").format(header.key))
+			if header.value and ("\r" in header.value or "\n" in header.value):
+				frappe.throw(_("HTTP header value for '{0}' contains invalid characters").format(header.key))
+
+	def validate_http_parameter_names(self):
+		"""Reject parameter names that collide with reserved HTTP schema keys."""
+		if self.types not in ("GET", "POST"):
+			return
+		reserved = frozenset({"url", "params", "headers", "json_data", "data", "tool_name", "method"})
+		for param in self.parameters:
+			if param.fieldname in reserved:
+				frappe.throw(
+					_("Parameter name '{0}' is reserved for HTTP tools. Choose a different name.").format(
+						param.fieldname
+					)
+				)
 
 	def validate_reference_doctype(self):
 		if not self.reference_doctype:
@@ -230,7 +264,7 @@ class AgentToolFunction(Document):
 			else:
 				params = self.get_params_as_dict()
 		elif self.types == "Get List":
-			
+
 			filter_properties = {}
 			for param in self.parameters:
 				filter_properties[param.fieldname] = {
@@ -244,8 +278,8 @@ class AgentToolFunction(Document):
 					"filters": {
 						"type": "object",
 						"description": "Dictionary of filters. Example: {'status': 'New', 'first_name': 'John Doe'}.",
-						"properties": filter_properties, 
-						"additionalProperties": True 
+						"properties": filter_properties,
+						"additionalProperties": True
 					},
 					"fields": {
 						"type": "array",
@@ -485,7 +519,7 @@ class AgentToolFunction(Document):
 				"required": [],
 				"additionalProperties": False
 			}
-		
+
 		elif self.types == "Run Agent":
 			params = {
 				"type": "object",
@@ -498,7 +532,7 @@ class AgentToolFunction(Document):
 				"required": ["prompt"],
 				"additionalProperties": False
 			}
-					
+
 		else:
 			params = self.build_params_json_from_table()
 
@@ -561,13 +595,13 @@ class AgentToolFunction(Document):
 					child_tables[param.child_table_name]["items"]["required"].append(param.fieldname)
 
 		for child_table_name, child_table in child_tables.items():
-		
+
 			if self.reference_doctype:
 				try:
 					doctype_meta = frappe.get_meta(self.reference_doctype)
 					table_field = doctype_meta.get_field(child_table_name)
 				except Exception:
-					pass 
+					pass
 
 			properties[child_table_name] = child_table
 
@@ -583,7 +617,7 @@ class AgentToolFunction(Document):
 					},
 				}
 			}
-			
+
 		else:
 			params["properties"] = properties
 			params["required"] = required
@@ -694,7 +728,7 @@ class AgentToolFunction(Document):
 		for name, param in sig.parameters.items():
 			if name in ["self", "cls"]:
 				continue
-			
+
 			param_type = "string"
 			if param.annotation != inspect.Parameter.empty:
 				if param.annotation == int:
@@ -703,11 +737,11 @@ class AgentToolFunction(Document):
 					param_type = "boolean"
 				elif param.annotation == float:
 					param_type = "number"
-				elif param.annotation == dict or param.annotation == typing.Dict:
+				elif param.annotation == dict or param.annotation == dict:
 					param_type = "object"
-				elif param.annotation == list or param.annotation == typing.List:
+				elif param.annotation == list or param.annotation == list:
 					param_type = "array"
-			
+
 			reqd = 1
 			if param.default != inspect.Parameter.empty:
 				reqd = 0
