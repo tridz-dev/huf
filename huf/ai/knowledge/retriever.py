@@ -5,6 +5,7 @@ import frappe
 from frappe import _
 
 from .backends import get_backend, ChunkResult
+from .indexer import _build_backend_config
 
 
 def get_search_diagnostics(source_names: List[str]) -> List[Dict[str, Any]]:
@@ -97,7 +98,7 @@ def knowledge_search(
 			# Initialize backend
 			backend_class = get_backend(source.knowledge_type)
 			backend = backend_class()
-			backend.initialize(source_name, {})
+			backend.initialize(source_name, _build_backend_config(source))
 			
 			# Search
 			results = backend.search(query, top_k=top_k, filters=filters)

@@ -230,6 +230,7 @@ export interface AgentDoc {
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
+  show_tool_execution_details?: 0 | 1; // 0 or 1
   allow_guest?: number; // 0 or 1
   allowed_users?: AgentPermissionUserRow[];
   allowed_roles?: AgentPermissionRoleRow[];
@@ -250,6 +251,7 @@ export interface AgentDoc {
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
   max_turns?: number | null; // Maximum consecutive turns/steps
   enable_conversation_data?: number; // 0 or 1
+  inject_conversation_data?: number; // 0 or 1
   autonaming_of_conversation_title?: number; // 0 or 1
 
   // Advanced model overrides
