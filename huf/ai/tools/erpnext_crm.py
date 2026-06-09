@@ -16,7 +16,7 @@ def _erpnext_installed():
 
 
 def _error(msg):
-    return json.dumps({"success": False, "error": msg})
+    return json.dumps({"success": False, "error": msg}, default=str)
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ def _handle_get_leads(**kwargs) -> str:
             order_by="modified desc",
         )
 
-        return json.dumps({"success": True, "count": len(leads), "results": leads})
+        return json.dumps({"success": True, "count": len(leads), "results": leads}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext CRM Get Leads Error: {e}", "ERPNext CRM Tool")
         return _error(str(e))
@@ -88,7 +88,7 @@ def _handle_get_lead(**kwargs) -> str:
             return _error(f"Lead {name} not found")
 
         doc = frappe.get_doc("Lead", name)
-        return json.dumps({"success": True, "results": doc.as_dict()})
+        return json.dumps({"success": True, "results": doc.as_dict()}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext CRM Get Lead Error: {e}", "ERPNext CRM Tool")
         return _error(str(e))
@@ -243,7 +243,7 @@ def _handle_create_opportunity(**kwargs) -> str:
         doc.currency = kwargs.get("currency", "")
         doc.insert(ignore_permissions=True)
 
-        return json.dumps({"success": True, "results": {"name": doc.name}})
+        return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext CRM Create Opportunity Error: {e}", "ERPNext CRM Tool")
         return _error(str(e))
@@ -278,7 +278,7 @@ def _handle_update_opportunity(**kwargs) -> str:
                     setattr(doc, field, kwargs[field])
 
         doc.save(ignore_permissions=True)
-        return json.dumps({"success": True, "results": {"name": doc.name}})
+        return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext CRM Update Opportunity Error: {e}", "ERPNext CRM Tool")
         return _error(str(e))
@@ -298,5 +298,5 @@ def handle_action(**kwargs) -> str:
     handler = dispatch.get(action)
     if not handler:
         valid = ", ".join(sorted(dispatch.keys()))
-        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"}, default=str)
     return handler(**kwargs)

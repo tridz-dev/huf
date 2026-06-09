@@ -16,14 +16,14 @@ def handle_send_message(**kwargs) -> str:
         chat_id = kwargs.get("chat_id")
         message = kwargs.get("message")
         if not all([chat_id, message]):
-            return json.dumps({"success": False, "error": "chat_id and message are required"})
+            return json.dumps({"success": False, "error": "chat_id and message are required"}, default=str)
 
         # Get token from Integration Settings
         token = get_credential(service_name, "token")
         if not token:
             error_msg = "Telegram bot token not configured"
             update_last_error(service_name, error_msg)
-            return json.dumps({"success": False, "error": error_msg})
+            return json.dumps({"success": False, "error": error_msg}, default=str)
         
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
@@ -43,4 +43,4 @@ def handle_send_message(**kwargs) -> str:
         error_msg = f"Telegram Send Message Error: {str(e)}"
         frappe.log_error(error_msg, "Telegram Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)

@@ -15,7 +15,7 @@ def _raven_installed():
 
 
 def _error(msg):
-    return json.dumps({"success": False, "error": msg})
+    return json.dumps({"success": False, "error": msg}, default=str)
 
 
 def _resolve_channel_id(channel_id=None, channel_name=None):
@@ -53,7 +53,7 @@ def _handle_send_message(**kwargs) -> str:
         doc.message_type = kwargs.get("message_type", "Text")
         doc.insert(ignore_permissions=True)
 
-        return json.dumps({"success": True, "results": {"name": doc.name, "channel_id": channel_id}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "channel_id": channel_id}}, default=str)
     except Exception as e:
         frappe.log_error(f"Raven Send Message Error: {e}", "Raven Tool")
         return _error(str(e))
@@ -102,7 +102,7 @@ def _handle_get_messages(**kwargs) -> str:
             order_by="creation desc",
         )
 
-        return json.dumps({"success": True, "count": len(messages), "results": messages})
+        return json.dumps({"success": True, "count": len(messages), "results": messages}, default=str)
     except Exception as e:
         frappe.log_error(f"Raven Get Messages Error: {e}", "Raven Tool")
         return _error(str(e))
@@ -147,7 +147,7 @@ def _handle_list_channels(**kwargs) -> str:
             order_by="modified desc",
         )
 
-        return json.dumps({"success": True, "count": len(channels), "results": channels})
+        return json.dumps({"success": True, "count": len(channels), "results": channels}, default=str)
     except Exception as e:
         frappe.log_error(f"Raven List Channels Error: {e}", "Raven Tool")
         return _error(str(e))
@@ -177,7 +177,7 @@ def _handle_get_channel_members(**kwargs) -> str:
             order_by="creation asc",
         )
 
-        return json.dumps({"success": True, "count": len(members), "results": members})
+        return json.dumps({"success": True, "count": len(members), "results": members}, default=str)
     except Exception as e:
         frappe.log_error(f"Raven Get Channel Members Error: {e}", "Raven Tool")
         return _error(str(e))
@@ -229,7 +229,7 @@ def _handle_create_channel(**kwargs) -> str:
                 member.user_id = user_id
                 member.insert(ignore_permissions=True)
 
-        return json.dumps({"success": True, "results": {"name": doc.name, "channel_name": doc.channel_name}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "channel_name": doc.channel_name}}, default=str)
     except Exception as e:
         frappe.log_error(f"Raven Create Channel Error: {e}", "Raven Tool")
         return _error(str(e))
@@ -279,7 +279,7 @@ def _handle_search_messages(**kwargs) -> str:
             order_by="creation desc",
         )
 
-        return json.dumps({"success": True, "count": len(messages), "results": messages})
+        return json.dumps({"success": True, "count": len(messages), "results": messages}, default=str)
     except Exception as e:
         frappe.log_error(f"Raven Search Messages Error: {e}", "Raven Tool")
         return _error(str(e))
@@ -298,5 +298,5 @@ def handle_action(**kwargs) -> str:
     handler = dispatch.get(action)
     if not handler:
         valid = ", ".join(sorted(dispatch.keys()))
-        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"}, default=str)
     return handler(**kwargs)

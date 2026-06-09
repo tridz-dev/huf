@@ -15,7 +15,7 @@ def _erpnext_installed():
 
 
 def _error(msg):
-    return json.dumps({"success": False, "error": msg})
+    return json.dumps({"success": False, "error": msg}, default=str)
 
 
 def _docstatus_label(ds):
@@ -80,7 +80,7 @@ def _handle_get_sales_invoices(**kwargs) -> str:
         for inv in invoices:
             inv["docstatus_label"] = _docstatus_label(inv.get("docstatus"))
 
-        return json.dumps({"success": True, "count": len(invoices), "results": invoices})
+        return json.dumps({"success": True, "count": len(invoices), "results": invoices}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Sales Invoices Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -101,7 +101,7 @@ def _handle_get_sales_invoice(**kwargs) -> str:
         doc = frappe.get_doc("Sales Invoice", name)
         result = doc.as_dict()
         result["docstatus_label"] = _docstatus_label(result.get("docstatus"))
-        return json.dumps({"success": True, "results": result})
+        return json.dumps({"success": True, "results": result}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Sales Invoice Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -204,7 +204,7 @@ def _handle_get_purchase_invoices(**kwargs) -> str:
         for inv in invoices:
             inv["docstatus_label"] = _docstatus_label(inv.get("docstatus"))
 
-        return json.dumps({"success": True, "count": len(invoices), "results": invoices})
+        return json.dumps({"success": True, "count": len(invoices), "results": invoices}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Purchase Invoices Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -225,7 +225,7 @@ def _handle_get_purchase_invoice(**kwargs) -> str:
         doc = frappe.get_doc("Purchase Invoice", name)
         result = doc.as_dict()
         result["docstatus_label"] = _docstatus_label(result.get("docstatus"))
-        return json.dumps({"success": True, "results": result})
+        return json.dumps({"success": True, "results": result}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Purchase Invoice Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -280,7 +280,7 @@ def _handle_get_payments(**kwargs) -> str:
             order_by="posting_date desc",
         )
 
-        return json.dumps({"success": True, "count": len(payments), "results": payments})
+        return json.dumps({"success": True, "count": len(payments), "results": payments}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Payments Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -333,7 +333,7 @@ def _handle_create_payment(**kwargs) -> str:
                 )
 
         doc.insert(ignore_permissions=True)
-        return json.dumps({"success": True, "results": {"name": doc.name}})
+        return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Create Payment Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -391,7 +391,7 @@ def _handle_get_quotations(**kwargs) -> str:
         for q in quotes:
             q["docstatus_label"] = _docstatus_label(q.get("docstatus"))
 
-        return json.dumps({"success": True, "count": len(quotes), "results": quotes})
+        return json.dumps({"success": True, "count": len(quotes), "results": quotes}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Quotations Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -431,7 +431,7 @@ def _handle_create_quotation(**kwargs) -> str:
             )
 
         doc.insert(ignore_permissions=True)
-        return json.dumps({"success": True, "results": {"name": doc.name}})
+        return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Create Quotation Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -485,7 +485,7 @@ def _handle_get_customers(**kwargs) -> str:
             order_by="modified desc",
         )
 
-        return json.dumps({"success": True, "count": len(customers), "results": customers})
+        return json.dumps({"success": True, "count": len(customers), "results": customers}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Customers Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -536,7 +536,7 @@ def _handle_get_customer(**kwargs) -> str:
             contact = frappe.get_doc("Contact", link.parent)
             result["contacts"].append(contact.as_dict())
 
-        return json.dumps({"success": True, "results": result})
+        return json.dumps({"success": True, "results": result}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Customer Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -599,7 +599,7 @@ def _handle_get_account_ledger(**kwargs) -> str:
             running_balance += float(entry.get("debit", 0) or 0) - float(entry.get("credit", 0) or 0)
             entry["running_balance"] = running_balance
 
-        return json.dumps({"success": True, "count": len(entries), "results": entries})
+        return json.dumps({"success": True, "count": len(entries), "results": entries}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Account Ledger Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -638,7 +638,7 @@ def _handle_create_journal_entry(**kwargs) -> str:
             )
 
         doc.insert(ignore_permissions=True)
-        return json.dumps({"success": True, "results": {"name": doc.name}})
+        return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Create Journal Entry Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -677,7 +677,7 @@ def _handle_get_rfqs(**kwargs) -> str:
             order_by="transaction_date desc",
         )
 
-        return json.dumps({"success": True, "count": len(rfqs), "results": rfqs})
+        return json.dumps({"success": True, "count": len(rfqs), "results": rfqs}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get RFQs Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -704,5 +704,5 @@ def handle_action(**kwargs) -> str:
     handler = dispatch.get(action)
     if not handler:
         valid = ", ".join(sorted(dispatch.keys()))
-        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"}, default=str)
     return handler(**kwargs)

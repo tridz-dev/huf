@@ -15,7 +15,7 @@ def _erpnext_installed():
 
 
 def _error(msg):
-    return json.dumps({"success": False, "error": msg})
+    return json.dumps({"success": False, "error": msg}, default=str)
 
 
 def _docstatus_label(ds):
@@ -72,7 +72,7 @@ def _handle_get_items(**kwargs) -> str:
             order_by="modified desc",
         )
 
-        return json.dumps({"success": True, "count": len(items), "results": items})
+        return json.dumps({"success": True, "count": len(items), "results": items}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Items Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -92,7 +92,7 @@ def _handle_get_item(**kwargs) -> str:
 
         doc = frappe.get_doc("Item", name)
         result = doc.as_dict()
-        return json.dumps({"success": True, "results": result})
+        return json.dumps({"success": True, "results": result}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Item Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -140,7 +140,7 @@ def _handle_get_item_prices(**kwargs) -> str:
             order_by="modified desc",
         )
 
-        return json.dumps({"success": True, "count": len(prices), "results": prices})
+        return json.dumps({"success": True, "count": len(prices), "results": prices}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Item Prices Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -193,7 +193,7 @@ def _handle_get_boms(**kwargs) -> str:
             order_by="modified desc",
         )
 
-        return json.dumps({"success": True, "count": len(boms), "results": boms})
+        return json.dumps({"success": True, "count": len(boms), "results": boms}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get BOMs Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -213,7 +213,7 @@ def _handle_get_bom(**kwargs) -> str:
 
         doc = frappe.get_doc("BOM", name)
         result = doc.as_dict()
-        return json.dumps({"success": True, "results": result})
+        return json.dumps({"success": True, "results": result}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get BOM Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -252,7 +252,7 @@ def _handle_create_bom(**kwargs) -> str:
             )
 
         doc.insert(ignore_permissions=True)
-        return json.dumps({"success": True, "results": {"name": doc.name, "item": doc.item}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "item": doc.item}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Create BOM Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -313,7 +313,7 @@ def _handle_get_stock_balance(**kwargs) -> str:
                 ),
             })
 
-        return json.dumps({"success": True, "count": len(results), "results": results})
+        return json.dumps({"success": True, "count": len(results), "results": results}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Stock Balance Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -366,7 +366,7 @@ def _handle_get_stock_movements(**kwargs) -> str:
             order_by="posting_date desc, posting_time desc",
         )
 
-        return json.dumps({"success": True, "count": len(entries), "results": entries})
+        return json.dumps({"success": True, "count": len(entries), "results": entries}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Stock Movements Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -413,7 +413,7 @@ def _handle_get_stock_entries(**kwargs) -> str:
         for entry in entries:
             entry["docstatus_label"] = _docstatus_label(entry.get("docstatus"))
 
-        return json.dumps({"success": True, "count": len(entries), "results": entries})
+        return json.dumps({"success": True, "count": len(entries), "results": entries}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Stock Entries Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -452,7 +452,7 @@ def _handle_get_warehouses(**kwargs) -> str:
             order_by="warehouse_name asc",
         )
 
-        return json.dumps({"success": True, "count": len(warehouses), "results": warehouses})
+        return json.dumps({"success": True, "count": len(warehouses), "results": warehouses}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Warehouses Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -500,7 +500,7 @@ def _handle_get_delivery_notes(**kwargs) -> str:
         for note in notes:
             note["docstatus_label"] = _docstatus_label(note.get("docstatus"))
 
-        return json.dumps({"success": True, "count": len(notes), "results": notes})
+        return json.dumps({"success": True, "count": len(notes), "results": notes}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Delivery Notes Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -548,7 +548,7 @@ def _handle_get_purchase_receipts(**kwargs) -> str:
         for receipt in receipts:
             receipt["docstatus_label"] = _docstatus_label(receipt.get("docstatus"))
 
-        return json.dumps({"success": True, "count": len(receipts), "results": receipts})
+        return json.dumps({"success": True, "count": len(receipts), "results": receipts}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Get Purchase Receipts Error: {e}", "ERPNext Tool")
         return _error(str(e))
@@ -573,5 +573,5 @@ def handle_action(**kwargs) -> str:
     handler = dispatch.get(action)
     if not handler:
         valid = ", ".join(sorted(dispatch.keys()))
-        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"}, default=str)
     return handler(**kwargs)
