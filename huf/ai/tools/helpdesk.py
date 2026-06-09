@@ -15,7 +15,7 @@ def _helpdesk_installed():
 
 
 def _error(msg):
-    return json.dumps({"success": False, "error": msg})
+    return json.dumps({"success": False, "error": msg}, default=str)
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ def _handle_get_tickets(**kwargs) -> str:
             order_by="modified desc",
         )
 
-        return json.dumps({"success": True, "count": len(tickets), "results": tickets})
+        return json.dumps({"success": True, "count": len(tickets), "results": tickets}, default=str)
     except Exception as e:
         frappe.log_error(f"Helpdesk Get Tickets Error: {e}", "Helpdesk Tool")
         return _error(str(e))
@@ -107,7 +107,7 @@ def _handle_get_ticket(**kwargs) -> str:
 
         result = doc.as_dict()
         result["comments"] = comments
-        return json.dumps({"success": True, "results": result})
+        return json.dumps({"success": True, "results": result}, default=str)
     except Exception as e:
         frappe.log_error(f"Helpdesk Get Ticket Error: {e}", "Helpdesk Tool")
         return _error(str(e))
@@ -134,7 +134,7 @@ def _handle_create_ticket(**kwargs) -> str:
         doc.contact = kwargs.get("contact", "")
         doc.insert(ignore_permissions=True)
 
-        return json.dumps({"success": True, "results": {"name": doc.name, "subject": doc.subject}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "subject": doc.subject}}, default=str)
     except Exception as e:
         frappe.log_error(f"Helpdesk Create Ticket Error: {e}", "Helpdesk Tool")
         return _error(str(e))
@@ -177,7 +177,7 @@ def _handle_update_ticket(**kwargs) -> str:
                 return _error(f"Agent {assigned_to} not found")
             doc.assign_agent(assigned_to)
 
-        return json.dumps({"success": True, "results": {"name": doc.name, "subject": doc.subject}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "subject": doc.subject}}, default=str)
     except Exception as e:
         frappe.log_error(f"Helpdesk Update Ticket Error: {e}", "Helpdesk Tool")
         return _error(str(e))
@@ -202,7 +202,7 @@ def _handle_add_comment(**kwargs) -> str:
         comment.commented_by = kwargs.get("commented_by", frappe.session.user)
         comment.insert(ignore_permissions=True)
 
-        return json.dumps({"success": True, "results": {"name": comment.name}})
+        return json.dumps({"success": True, "results": {"name": comment.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"Helpdesk Add Comment Error: {e}", "Helpdesk Tool")
         return _error(str(e))
@@ -242,7 +242,7 @@ def _handle_get_agents(**kwargs) -> str:
             limit_start=offset,
             order_by="modified desc",
         )
-        return json.dumps({"success": True, "count": len(agents), "results": agents})
+        return json.dumps({"success": True, "count": len(agents), "results": agents}, default=str)
     except Exception as e:
         frappe.log_error(f"Helpdesk Get Agents Error: {e}", "Helpdesk Tool")
         return _error(str(e))
@@ -271,7 +271,7 @@ def _handle_get_teams(**kwargs) -> str:
             limit_start=offset,
             order_by="modified desc",
         )
-        return json.dumps({"success": True, "count": len(teams), "results": teams})
+        return json.dumps({"success": True, "count": len(teams), "results": teams}, default=str)
     except Exception as e:
         frappe.log_error(f"Helpdesk Get Teams Error: {e}", "Helpdesk Tool")
         return _error(str(e))
@@ -295,7 +295,7 @@ def _handle_assign_ticket(**kwargs) -> str:
         doc = frappe.get_doc("HD Ticket", ticket_id)
         doc.assign_agent(agent_id)
 
-        return json.dumps({"success": True, "results": {"name": doc.name, "assigned_to": agent_id}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "assigned_to": agent_id}}, default=str)
     except Exception as e:
         frappe.log_error(f"Helpdesk Assign Ticket Error: {e}", "Helpdesk Tool")
         return _error(str(e))
@@ -316,5 +316,5 @@ def handle_action(**kwargs) -> str:
     handler = dispatch.get(action)
     if not handler:
         valid = ", ".join(sorted(dispatch.keys()))
-        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"}, default=str)
     return handler(**kwargs)

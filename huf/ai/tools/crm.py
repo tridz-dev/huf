@@ -15,7 +15,7 @@ def _crm_installed():
 
 
 def _error(msg):
-    return json.dumps({"success": False, "error": msg})
+    return json.dumps({"success": False, "error": msg}, default=str)
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +71,7 @@ def _handle_get_leads(**kwargs) -> str:
             order_by="modified desc",
         )
 
-        return json.dumps({"success": True, "count": len(leads), "results": leads})
+        return json.dumps({"success": True, "count": len(leads), "results": leads}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Get Leads Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -91,7 +91,7 @@ def _handle_get_lead(**kwargs) -> str:
             return _error(f"Lead {name} not found")
 
         doc = frappe.get_doc("CRM Lead", name)
-        return json.dumps({"success": True, "results": doc.as_dict()})
+        return json.dumps({"success": True, "results": doc.as_dict()}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Get Lead Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -131,7 +131,7 @@ def _handle_create_lead(**kwargs) -> str:
             note.reference_docname = doc.name
             note.insert(ignore_permissions=True)
 
-        return json.dumps({"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Create Lead Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -176,7 +176,7 @@ def _handle_update_lead(**kwargs) -> str:
                 setattr(doc, field, kwargs[field])
 
         doc.save(ignore_permissions=True)
-        return json.dumps({"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Update Lead Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -219,11 +219,9 @@ def _handle_get_deals(**kwargs) -> str:
             "organization",
             "status",
             "deal_owner",
-            "deal_value",
-            "expected_deal_value",
+            "annual_revenue",
             "probability",
-            "expected_closure_date",
-            "closed_date",
+            "close_date",
             "modified",
         ]
 
@@ -236,7 +234,7 @@ def _handle_get_deals(**kwargs) -> str:
             order_by="modified desc",
         )
 
-        return json.dumps({"success": True, "count": len(deals), "results": deals})
+        return json.dumps({"success": True, "count": len(deals), "results": deals}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Get Deals Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -255,7 +253,7 @@ def _handle_get_deal(**kwargs) -> str:
             return _error(f"Deal {name} not found")
 
         doc = frappe.get_doc("CRM Deal", name)
-        return json.dumps({"success": True, "results": doc.as_dict()})
+        return json.dumps({"success": True, "results": doc.as_dict()}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Get Deal Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -307,18 +305,16 @@ def _handle_create_deal(**kwargs) -> str:
 
         doc.status = kwargs.get("status", "Qualification")
         doc.deal_owner = kwargs.get("deal_owner", "")
-        doc.deal_value = kwargs.get("deal_value", 0)
-        doc.expected_deal_value = kwargs.get("expected_deal_value", 0)
+        doc.annual_revenue = kwargs.get("deal_value", kwargs.get("annual_revenue", 0))
         doc.probability = kwargs.get("probability", 0)
-        doc.expected_closure_date = kwargs.get("expected_closure_date", "")
-        doc.closed_date = kwargs.get("closed_date", "")
+        doc.close_date = kwargs.get("expected_closure_date", kwargs.get("close_date", ""))
         doc.email = kwargs.get("email", doc.email or "")
         doc.mobile_no = kwargs.get("mobile_no", doc.mobile_no or "")
         doc.first_name = kwargs.get("first_name", doc.first_name or "")
         doc.last_name = kwargs.get("last_name", doc.last_name or "")
 
         doc.insert(ignore_permissions=True)
-        return json.dumps({"success": True, "results": {"name": doc.name, "organization": doc.organization_name or doc.organization}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "organization": doc.organization_name or doc.organization}}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Create Deal Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -341,11 +337,9 @@ def _handle_update_deal(**kwargs) -> str:
             "organization",
             "status",
             "deal_owner",
-            "deal_value",
-            "expected_deal_value",
+            "annual_revenue",
             "probability",
-            "expected_closure_date",
-            "closed_date",
+            "close_date",
             "next_step",
             "email",
             "mobile_no",
@@ -353,7 +347,6 @@ def _handle_update_deal(**kwargs) -> str:
             "website",
             "territory",
             "industry",
-            "annual_revenue",
             "lost_reason",
             "lost_notes",
         ]
@@ -361,8 +354,13 @@ def _handle_update_deal(**kwargs) -> str:
             if field in kwargs:
                 setattr(doc, field, kwargs[field])
 
+        if "deal_value" in kwargs:
+            doc.annual_revenue = kwargs["deal_value"]
+        if "expected_closure_date" in kwargs:
+            doc.close_date = kwargs["expected_closure_date"]
+
         doc.save(ignore_permissions=True)
-        return json.dumps({"success": True, "results": {"name": doc.name, "organization": doc.organization}})
+        return json.dumps({"success": True, "results": {"name": doc.name, "organization": doc.organization}}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Update Deal Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -394,7 +392,7 @@ def _handle_add_note(**kwargs) -> str:
         note.reference_docname = docname
         note.insert(ignore_permissions=True)
 
-        return json.dumps({"success": True, "results": {"name": note.name, "title": note.title}})
+        return json.dumps({"success": True, "results": {"name": note.name, "title": note.title}}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Add Note Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -427,7 +425,7 @@ def _handle_add_task(**kwargs) -> str:
         task.start_date = kwargs.get("start_date", "")
         task.insert(ignore_permissions=True)
 
-        return json.dumps({"success": True, "results": {"name": task.name, "title": task.title}})
+        return json.dumps({"success": True, "results": {"name": task.name, "title": task.title}}, default=str)
     except Exception as e:
         frappe.log_error(f"CRM Add Task Error: {e}", "CRM Tool")
         return _error(str(e))
@@ -514,7 +512,7 @@ def _handle_get_contacts(**kwargs) -> str:
                 order_by="modified desc",
             )
 
-        return json.dumps({"success": True, "count": len(contacts), "results": contacts})
+        return json.dumps({"success": True, "count": len(contacts), "results": contacts}, default=str)
     except frappe.DoesNotExistError:
         return _error("Contact DocType does not exist on this site.")
     except Exception as e:
@@ -540,5 +538,5 @@ def handle_action(**kwargs) -> str:
     handler = dispatch.get(action)
     if not handler:
         valid = ", ".join(sorted(dispatch.keys()))
-        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"})
+        return json.dumps({"success": False, "error": f"Unknown action '{action}'. Valid: {valid}"}, default=str)
     return handler(**kwargs)
