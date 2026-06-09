@@ -15,7 +15,7 @@ def _erpnext_installed():
 
 
 def _error(msg):
-    return json.dumps({"success": False, "error": msg})
+    return json.dumps({"success": False, "error": msg}, default=str)
 
 
 # Catalogue of available reports per module (used by list_reports)
@@ -120,6 +120,6 @@ def handle_list_reports(**kwargs) -> str:
         matched = {k: v for k, v in REPORT_CATALOGUE.items() if k.lower() == module.lower()}
         if not matched:
             available = list(REPORT_CATALOGUE.keys())
-            return json.dumps({"success": False, "error": f"Module '{module}' not found. Available: {available}"})
-        return json.dumps({"success": True, "results": matched})
-    return json.dumps({"success": True, "results": REPORT_CATALOGUE})
+            return json.dumps({"success": False, "error": f"Module '{module}' not found. Available: {available}"}, default=str)
+        return json.dumps({"success": True, "results": matched}, default=str)
+    return json.dumps({"success": True, "results": REPORT_CATALOGUE}, default=str)
