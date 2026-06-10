@@ -162,6 +162,11 @@ TELEGRAM_TOOLS = [
 	},
 ]
 
+
+# ---------------------------------------------------------------------------
+# Developer Tools
+# ---------------------------------------------------------------------------
+
 GITHUB_TOOLS = [
 	{
 		"tool_name": "github_list_repos",
@@ -408,6 +413,188 @@ ERPNEXT_REPORT_TOOLS = [
         ],
     },
 ]
+GMAIL_TOOLS = [
+	{
+		"tool_name": "gmail_get_emails",
+		"description": "Get latest emails from Gmail. Requires GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN env vars.",
+		"function_path": "huf.ai.tools.gmail.handle_get_emails",
+		"category": "Google Tools",
+		"parameters": [
+			_p("count", type="integer", description="Number of emails (default 10)"),
+			_p("query", description="Gmail search query to filter emails"),
+		],
+	},
+	{
+		"tool_name": "gmail_send_email",
+		"description": "Send an email via Gmail. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.gmail.handle_send_email",
+		"category": "Google Tools",
+		"parameters": [
+			_p("to", required=True, description="Recipient email address"),
+			_p("subject", required=True, description="Email subject"),
+			_p("body", required=True, description="Email body (plain text)"),
+		],
+	},
+	{
+		"tool_name": "gmail_create_draft",
+		"description": "Create a draft email in Gmail. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.gmail.handle_create_draft",
+		"category": "Google Tools",
+		"parameters": [
+			_p("to", required=True, description="Recipient email address"),
+			_p("subject", required=True, description="Email subject"),
+			_p("body", required=True, description="Email body"),
+		],
+	},
+	{
+		"tool_name": "gmail_mark_as_read",
+		"description": "Mark an email as read in Gmail. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.gmail.handle_mark_as_read",
+		"category": "Google Tools",
+		"parameters": [_p("message_id", required=True, description="Gmail message ID")],
+	},
+]
+
+GOOGLE_SHEETS_TOOLS = [
+	{
+		"tool_name": "gsheets_read",
+		"description": "Read data from a Google Sheets spreadsheet. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_sheets.handle_read_sheet",
+		"category": "Google Tools",
+		"parameters": [
+			_p("spreadsheet_id", required=True, description="Google Sheets spreadsheet ID"),
+			_p("range", description="Cell range (e.g. Sheet1!A1:D10, default: Sheet1)"),
+		],
+	},
+	{
+		"tool_name": "gsheets_update",
+		"description": "Update data in a Google Sheets spreadsheet. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_sheets.handle_update_sheet",
+		"category": "Google Tools",
+		"parameters": [
+			_p("spreadsheet_id", required=True, description="Google Sheets spreadsheet ID"),
+			_p("range", required=True, description="Cell range to update"),
+			_p("data", required=True, description="2D array of values as JSON string"),
+		],
+	},
+	{
+		"tool_name": "gsheets_create",
+		"description": "Create a new Google Sheets spreadsheet. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_sheets.handle_create_sheet",
+		"category": "Google Tools",
+		"parameters": [_p("title", required=True, description="Spreadsheet title")],
+	},
+]
+
+GOOGLE_CALENDAR_TOOLS = [
+	{
+		"tool_name": "gcalendar_list_events",
+		"description": "List upcoming Google Calendar events. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_calendar.handle_list_events",
+		"category": "Google Tools",
+		"parameters": [
+			_p("limit", type="integer", description="Max events (default 10)"),
+			_p("start_date", description="Start date filter (ISO 8601)"),
+		],
+	},
+	{
+		"tool_name": "gcalendar_create_event",
+		"description": "Create a Google Calendar event. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_calendar.handle_create_event",
+		"category": "Google Tools",
+		"parameters": [
+			_p("title", required=True, description="Event title"),
+			_p("start_date", required=True, description="Start datetime (ISO 8601)"),
+			_p("end_date", required=True, description="End datetime (ISO 8601)"),
+			_p("description", description="Event description"),
+			_p("timezone", description="Timezone (default: UTC)"),
+		],
+	},
+	{
+		"tool_name": "gcalendar_update_event",
+		"description": "Update a Google Calendar event. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_calendar.handle_update_event",
+		"category": "Google Tools",
+		"parameters": [
+			_p("event_id", required=True, description="Google Calendar event ID"),
+			_p("title", description="New event title"),
+			_p("description", description="New event description"),
+		],
+	},
+	{
+		"tool_name": "gcalendar_delete_event",
+		"description": "Delete a Google Calendar event. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_calendar.handle_delete_event",
+		"category": "Google Tools",
+		"parameters": [_p("event_id", required=True, description="Google Calendar event ID")],
+	},
+]
+
+GOOGLE_MAPS_TOOLS = [
+	{
+		"tool_name": "gmaps_search_places",
+		"description": "Search for places using Google Maps. Requires GOOGLE_MAPS_API_KEY env var.",
+		"function_path": "huf.ai.tools.google_maps.handle_search_places",
+		"category": "Google Tools",
+		"parameters": [_p("query", required=True, description="Place search query")],
+	},
+	{
+		"tool_name": "gmaps_get_directions",
+		"description": "Get directions between locations using Google Maps. Requires GOOGLE_MAPS_API_KEY env var.",
+		"function_path": "huf.ai.tools.google_maps.handle_get_directions",
+		"category": "Google Tools",
+		"parameters": [
+			_p("origin", required=True, description="Starting location"),
+			_p("destination", required=True, description="Destination location"),
+			_p("mode", description="Travel mode: driving, walking, bicycling, transit (default: driving)"),
+		],
+	},
+	{
+		"tool_name": "gmaps_geocode",
+		"description": "Convert an address to coordinates. Requires GOOGLE_MAPS_API_KEY env var.",
+		"function_path": "huf.ai.tools.google_maps.handle_geocode",
+		"category": "Google Tools",
+		"parameters": [_p("address", required=True, description="Address to geocode")],
+	},
+	{
+		"tool_name": "gmaps_reverse_geocode",
+		"description": "Convert coordinates to an address. Requires GOOGLE_MAPS_API_KEY env var.",
+		"function_path": "huf.ai.tools.google_maps.handle_reverse_geocode",
+		"category": "Google Tools",
+		"parameters": [
+			_p("lat", required=True, description="Latitude"),
+			_p("lng", required=True, description="Longitude"),
+		],
+	},
+]
+
+GOOGLE_DRIVE_TOOLS = [
+	{
+		"tool_name": "gdrive_list_files",
+		"description": "List files in Google Drive. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_drive.handle_list_files",
+		"category": "Google Tools",
+		"parameters": [
+			_p("limit", type="integer", description="Max files (default 20)"),
+			_p("query", description="Drive search query"),
+		],
+	},
+	{
+		"tool_name": "gdrive_get_file",
+		"description": "Get metadata of a Google Drive file. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_drive.handle_get_file",
+		"category": "Google Tools",
+		"parameters": [_p("file_id", required=True, description="Google Drive file ID")],
+	},
+	{
+		"tool_name": "gdrive_search_files",
+		"description": "Search for files in Google Drive. Requires Google OAuth credentials.",
+		"function_path": "huf.ai.tools.google_drive.handle_search_files",
+		"category": "Google Tools",
+		"parameters": [_p("query", required=True, description="Search query")],
+	},
+]
+
 
 # ---------------------------------------------------------------------------
 # Master list
@@ -426,4 +613,9 @@ ALL_INTEGRATION_TOOLS = (
 	+ ERPNEXT_CRM_TOOLS
 	+ ERPNEXT_INVENTORY_TOOLS
 	+ ERPNEXT_REPORT_TOOLS
+	+ GMAIL_TOOLS
+	+ GOOGLE_SHEETS_TOOLS
+	+ GOOGLE_CALENDAR_TOOLS
+	+ GOOGLE_MAPS_TOOLS
+	+ GOOGLE_DRIVE_TOOLS
 )

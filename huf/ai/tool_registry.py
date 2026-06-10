@@ -292,7 +292,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
     # Ensure all tool types exist
     for app, d in tools_to_process:
         try:
-            category = d.get("tool_type")
+            category = d.get("category") or d.get("tool_type")
             if category and not frappe.db.exists("Agent Tool Type", category):
                 tool_type_doc = frappe.new_doc("Agent Tool Type")
                 tool_type_doc.name1 = category
@@ -379,7 +379,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 "tool_name": tool_name,
                 "description": d.get("description", ""),
                 "types": "App Provided",
-                "tool_type":  d.get("category") or d.get("tool_type"),
+                "tool_type": d.get("category") or d.get("tool_type"),
                 "function_path": d.get("function_path"),
                 "parameters": [
                     {

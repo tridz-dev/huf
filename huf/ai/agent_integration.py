@@ -640,6 +640,7 @@ def run_agent_sync(
     parent_conversation_id: str = None,
     invoked_by_agent: str = None,
     prompt_cache_options=None,
+    files=None,
 ):
 
     if not agent_name:
@@ -819,6 +820,7 @@ def run_agent_sync(
             "conversation_id": conversation.name,
             "agent_run_id": run_doc.name,
             "prompt_cache_options": resolved_prompt_cache,
+            "files": files,
         }
 
         context_strategy = agent_doc.context_strategy or "Summarize"
@@ -879,6 +881,7 @@ def run_agent_sync(
             "conversation_id": conversation.name,
             "agent_run_id": run_doc.name,
             "prompt_cache_options": resolved_prompt_cache,
+            "files": files,
         }
         run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model, context)
         result = _run_async_safely(run)
