@@ -45,10 +45,11 @@ def _handle_get_items(**kwargs) -> str:
 
         or_filters = []
         if search:
+            search_term = f"%{search.replace(' ', '%')}%"
             or_filters = [
-                ["Item", "item_code", "like", f"%{search}%"],
-                ["Item", "item_name", "like", f"%{search}%"],
-                ["Item", "item_group", "like", f"%{search}%"],
+                ["Item", "item_code", "like", search_term],
+                ["Item", "item_name", "like", search_term],
+                ["Item", "item_group", "like", search_term],
             ]
 
         fields = [
