@@ -31,6 +31,7 @@ def get_doc_event_agents(event: str):
     result = []
     for t in triggers:
         try:
+            trigger_doc = frappe.get_doc("Agent Trigger", t["name"])
             agent_doc = frappe.get_doc("Agent", t["agent"])
             from huf.ai.prompt_resolver import resolve_prompt
             prompt = resolve_prompt(agent_doc)
@@ -42,6 +43,13 @@ def get_doc_event_agents(event: str):
                 "doc_event": t.get("doc_event"),
                 "condition": t.get("condition"),
                 "prompt_field": t.get("prompt_field"), 
+                "file_attachments": [
+                    {
+                        "source_type": a.source_type,
+                        "child_table": a.child_table,
+                        "field_name": a.field_name
+                    } for a in trigger_doc.get("file_attachments", [])
+                ],
                 "instructions": prompt,
                 "provider": getattr(agent_doc, "provider", None),
                 "model": getattr(agent_doc, "model", None),
@@ -103,11 +111,12 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
             include_doc=False,
             initiating_user=frappe.session.user,
             channel_id="doc_event",
-            prompt_field=agent.get("prompt_field") 
+            prompt_field=agent.get("prompt_field"),
+            file_attachments=agent.get("file_attachments")
         )
 
 
-def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model, include_doc=False, initiating_user=None, channel_id=None, prompt_field=None):
+def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model, include_doc=False, initiating_user=None, channel_id=None, prompt_field=None, file_attachments=None):
     """Background worker to run an agent when a Doc Event triggers"""
 
     custom_instruction = None
@@ -170,7 +179,77 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
         except Exception:
             external_id = initiating_user or f"shared:{agent_name}"
 
-        run_agent_sync(agent_name, prompt, provider, model, channel_id=channel, external_id=external_id)
+        # File attachments logic
+        files = []
+        if file_attachments:
+            import mimetypes
+            file_urls_to_process = []
+            for attachment in file_attachments:
+                fetch_from = attachment.get("source_type")
+                field_name = attachment.get("field_name")
+                table_name = attachment.get("child_table")
+
+                if fetch_from == "DocField":
+                    if field_name and doc.get(field_name):
+                        file_urls_to_process.append(doc.get(field_name))
+                elif fetch_from == "Child Table Field":
+                    if table_name and field_name and doc.get(table_name):
+                        for row in doc.get(table_name):
+                            f_url = row.get(field_name)
+                            if f_url:
+                                file_urls_to_process.append(f_url)
+
+            # Process found URLs
+            for f_url in file_urls_to_process:
+                if any(f["file_url"] == f_url for f in files):
+                    continue
+                
+                filename = f_url.split("/")[-1]
+                is_image = 0
+                mime_type, _ = mimetypes.guess_type(filename)
+                if mime_type and mime_type.startswith("image/"):
+                    is_image = 1
+                
+                files.append({
+                    "filename": filename,
+                    "file_url": f_url,
+                    "is_image": is_image
+                })
+
+        # Extract Text from non-image files via OCR to augment context
+        extracted_content = []
+        if any(not f.get("is_image") for f in files):
+            from huf.ai.sdk_tools import handle_ocr_document
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                for file in files:
+                    if not file.get("is_image"):
+                        ocr_result = loop.run_until_complete(
+                            handle_ocr_document(
+                                file_url=file["file_url"],
+                                agent_name=agent_name
+                            )
+                        )
+                        if ocr_result and ocr_result.get("success"):
+                            extracted_content.append(f"--- File: {file['filename']} ---\n{ocr_result.get('text')}\n")
+            except Exception as e:
+                frappe.log_error(f"Doc Event OCR Error: {str(e)}", "Agent Hooks OCR")
+            finally:
+                loop.close()
+                
+        if extracted_content:
+            prompt += f"""
+            
+            Attached File Content (OCR Extracted):
+            The following text was extracted from attached files. Use this as context:
+            
+            {''.join(extracted_content)}
+            """
+
+        run_agent_sync(agent_name, prompt, provider, model, channel_id=channel, external_id=external_id, files=files)
 
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Hook Triggered Agent Error")
