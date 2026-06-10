@@ -98,6 +98,35 @@ def handle_run_report(**kwargs) -> str:
             if default_company:
                 filters["company"] = default_company
 
+        # Auto-resolve dates from fiscal year if missing
+        if not filters.get("from_date") and not filters.get("to_date"):
+            fiscal_year = filters.get("fiscal_year")
+            if not fiscal_year:
+                fiscal_year = frappe.defaults.get_user_default("Fiscal Year") or frappe.db.get_single_value("Global Defaults", "current_fiscal_year")
+            
+            if fiscal_year:
+                try:
+                    fy_doc = None
+                    if frappe.db.exists("Fiscal Year", fiscal_year):
+                        fy_doc = frappe.get_doc("Fiscal Year", fiscal_year)
+                    else:
+                        fy_list = frappe.get_all("Fiscal Year", filters={"name": ("like", f"%{fiscal_year}%")}, limit=1)
+                        if fy_list:
+                            fy_doc = frappe.get_doc("Fiscal Year", fy_list[0].name)
+                    
+                    if fy_doc:
+                        filters["from_date"] = fy_doc.year_start_date
+                        filters["to_date"] = fy_doc.year_end_date
+                        filters["period_start_date"] = fy_doc.year_start_date
+                        filters["period_end_date"] = fy_doc.year_end_date
+                        filters["fiscal_year"] = fy_doc.name
+                except Exception:
+                    pass
+
+        # Set default periodicity for financial statements if missing
+        if not filters.get("periodicity"):
+            filters["periodicity"] = "Yearly"
+
         from frappe.desk.query_report import run as run_report
         result = run_report(report_name=report_name, filters=filters, ignore_prepared_report=True)
         return json.dumps({
@@ -106,20 +135,35 @@ def handle_run_report(**kwargs) -> str:
             "columns": result.get("columns", []),
             "results": result.get("result", []),
             "count": len(result.get("result", [])),
-        })
+        }, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Report Error [{report_name}]: {e}", "ERPNext Reports Tool")
         return _error(str(e))
 
 
 def handle_list_reports(**kwargs) -> str:
-    """List available reports, optionally filtered by module."""
+    """List available reports, optionally filtered by module or search keyword."""
     module = kwargs.get("module", "").strip()
+    search = kwargs.get("search", "").strip().lower()
+    
     if module:
         # case-insensitive match
         matched = {k: v for k, v in REPORT_CATALOGUE.items() if k.lower() == module.lower()}
+        if search:
+            for k in matched:
+                matched[k] = [r for r in matched[k] if search in r.lower()]
+                
         if not matched:
             available = list(REPORT_CATALOGUE.keys())
             return json.dumps({"success": False, "error": f"Module '{module}' not found. Available: {available}"}, default=str)
         return json.dumps({"success": True, "results": matched}, default=str)
+        
+    if search:
+        matched = {}
+        for mod, reports in REPORT_CATALOGUE.items():
+            filtered = [r for r in reports if search in r.lower()]
+            if filtered:
+                matched[mod] = filtered
+        return json.dumps({"success": True, "results": matched}, default=str)
+
     return json.dumps({"success": True, "results": REPORT_CATALOGUE}, default=str)

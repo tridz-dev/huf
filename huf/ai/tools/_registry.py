@@ -296,7 +296,7 @@ RAVEN_TOOLS = [{
 
 ERPNEXT_TOOLS = [{
     "tool_name": "erpnext",
-    "description": "Manage ERPNext transactions and accounting. Actions: list_sales_invoices (customer, status, from_date, to_date, limit), get_sales_invoice (name), create_sales_invoice (customer required, items list [{item_code,qty,rate}], company, posting_date), list_purchase_invoices (supplier, status, from_date, to_date, limit), get_purchase_invoice (name), list_payments (party_type, party, payment_type, from_date, to_date, limit), create_payment (payment_type required [Receive/Pay], party_type required, party required, paid_amount required; mode_of_payment, invoice_name), list_customers (search, customer_group, limit), get_customer (name), list_quotations (party_name, status, from_date, limit), create_quotation (quotation_to required [Customer/Lead], party_name required, items list, transaction_date, valid_till), list_rfqs (status, from_date, limit), get_ledger (account required, from_date, to_date, party_type, party, limit), create_journal_entry (voucher_type, posting_date, company, user_remark, accounts list [{account, debit_in_account_currency, credit_in_account_currency}]).",
+    "description": "Manage ERPNext transactions and accounting. Actions: list_sales_invoices (customer, status, from_date, to_date, limit), get_sales_invoice (name), create_sales_invoice (customer required, items list [{item_code,qty,rate}], company, posting_date), list_purchase_invoices (supplier, status, from_date, to_date, limit), get_purchase_invoice (name), list_payments (party_type, party, payment_type, from_date, to_date, limit), create_payment (payment_type required [Receive/Pay], party_type required, party required, paid_amount required; mode_of_payment, invoice_name, source_exchange_rate, target_exchange_rate), list_customers (search, customer_group, limit), get_customer (name), list_quotations (party_name, status, from_date, limit), create_quotation (quotation_to required [Customer/Lead], party_name required, items list, transaction_date, valid_till), list_rfqs (status, from_date, limit), get_ledger (account required, from_date, to_date, party_type, party, limit), create_journal_entry (voucher_type, posting_date, company, user_remark, accounts list [{account, debit_in_account_currency, credit_in_account_currency}]).",
     "function_path": "huf.ai.tools.erpnext.handle_action",
     "category": "ERPNext Tools",
     "parameters": [
@@ -310,6 +310,8 @@ ERPNEXT_TOOLS = [{
         _p("paid_amount", type="number", description="Payment amount"),
         _p("invoice_name", description="Invoice to link payment to"),
         _p("mode_of_payment", description="Mode of payment"),
+        _p("source_exchange_rate", type="number", description="Source exchange rate (if different currency)"),
+        _p("target_exchange_rate", type="number", description="Target exchange rate (if different currency)"),
         _p("account", description="Account name (for get_ledger)"),
         _p("status", description="Document status filter"),
         _p("from_date", description="Start date (YYYY-MM-DD)"),
