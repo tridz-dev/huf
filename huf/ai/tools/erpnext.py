@@ -460,10 +460,11 @@ def _handle_get_customers(**kwargs) -> str:
 
         or_filters = []
         if search:
+            search_term = f"%{search.replace(' ', '%')}%"
             or_filters = [
-                ["Customer", "name", "like", f"%{search}%"],
-                ["Customer", "customer_name", "like", f"%{search}%"],
-                ["Customer", "customer_group", "like", f"%{search}%"],
+                ["Customer", "name", "like", search_term],
+                ["Customer", "customer_name", "like", search_term],
+                ["Customer", "customer_group", "like", search_term],
             ]
 
         fields = [
