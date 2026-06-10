@@ -25,6 +25,19 @@ def _resolve_channel_id(channel_id=None, channel_name=None):
         cid = frappe.db.get_value("Raven Channel", {"channel_name": channel_name}, "name")
         if cid:
             return cid
+            
+        # Fallback: Raven often slugifies channel names (e.g. "Project Alpha" -> "project-alpha")
+        slugified = channel_name.lower().replace(" ", "-")
+        cid = frappe.db.get_value("Raven Channel", {"channel_name": slugified}, "name")
+        if cid:
+            return cid
+            
+        # Final fallback: fuzzy like match
+        search_term = f"%{channel_name.replace(' ', '%')}%"
+        channels = frappe.get_all("Raven Channel", filters={"channel_name": ("like", search_term)}, limit=1)
+        if channels:
+            return channels[0].name
+            
     return None
 
 
