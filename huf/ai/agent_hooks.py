@@ -54,8 +54,8 @@ def get_doc_event_agents(event: str):
                 "provider": getattr(agent_doc, "provider", None),
                 "model": getattr(agent_doc, "model", None),
             })
-        except Exception:
-            frappe.log_error(frappe.get_traceback(), f"Agent Trigger load failed: {t.get('name')}")
+        except Exception as e:
+            frappe.logger("huf").error(f"Agent Trigger load failed: {t.get('name')} - {str(e)}")
 
     frappe.cache().hset(CACHE_KEY, f"doc_event:{event}", frappe.as_json(result))
     return result
@@ -71,6 +71,10 @@ def clear_doc_event_agents_cache(doc=None, method=None):
 
 def run_hooked_agents(doc, method=None, *args, **kwargs):
     if not method:
+        return
+
+    # Prevent infinite recursion when logging errors
+    if doc.doctype == "Error Log":
         return
 
     agents = get_doc_event_agents(method)
