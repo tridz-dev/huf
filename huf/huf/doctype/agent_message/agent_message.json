@@ -19,6 +19,13 @@
   "role",
   "is_agent_message",
   "ai_context_section",
+  "context_policy",
+  "record_kind",
+  "context_summary",
+  "reference_doctype",
+  "reference_name",
+  "visibility",
+  "token_estimate",
   "agent",
   "agent_run",
   "column_break_nuxi",
@@ -238,6 +245,45 @@
    "fieldname": "ai_context_section",
    "fieldtype": "Section Break",
    "label": "AI Context"
+  },
+  {
+   "fieldname": "context_policy",
+   "fieldtype": "Select",
+   "label": "Context Policy",
+   "options": "include_full\ninclude_summary\ninclude_reference\ninclude_on_demand\nexclude\ntransient_only\ntoken_budgeted\nprovider_cached"
+  },
+  {
+   "fieldname": "record_kind",
+   "fieldtype": "Select",
+   "label": "Record Kind",
+   "options": "message\ntool_call\ntool_result\nretrieval_context\nresult_snapshot\nartifact\nsummary\nstatus\nerror\ndebug_trace"
+  },
+  {
+   "fieldname": "context_summary",
+   "fieldtype": "Small Text",
+   "label": "Context Summary"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Data",
+   "label": "Reference DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Data",
+   "label": "Reference Name"
+  },
+  {
+   "fieldname": "visibility",
+   "fieldtype": "Select",
+   "label": "Visibility",
+   "options": "user_visible\nmodel_visible\nui_only\naudit_only\ndeveloper_only",
+   "default": "user_visible"
+  },
+  {
+   "fieldname": "token_estimate",
+   "fieldtype": "Int",
+   "label": "Token Estimate"
   },
   {
    "fieldname": "column_break_nuxi",

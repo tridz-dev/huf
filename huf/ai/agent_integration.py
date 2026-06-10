@@ -871,15 +871,28 @@ def run_agent_sync(
 
                     message_name = frappe.db.get_value("Agent Message", {"tool_calll": updated_tool_call_id}, "name")
 
-                    if message_name:
-                        msg_doc = frappe.get_doc("Agent Message", message_name)
-                        
-                        result_str = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
-                        new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
-                        
-                        msg_doc.content = new_content
-                        msg_doc.kind = "Tool Result"
-                        msg_doc.save(ignore_permissions=True)
+                    # Persist tool result with context policy (large results stored as reference only)
+                    tool_result_str = str(tool_result) if tool_result is not None else ""
+                    tool_result_summary = (tool_result_str[:200] + "...") if len(tool_result_str) > 200 else tool_result_str
+                    max_context_chars = 2000
+                    use_reference = len(tool_result_str) > max_context_chars
+
+                    conv_manager.add_message(
+                        conversation,
+                        role="tool",
+                        content=tool_result_str,
+                        provider=resolved_provider,
+                        model=resolved_model,
+                        agent=agent_name,
+                        run_name=run_doc.name,
+                        kind="Tool Result",
+                        tool_call_id=updated_tool_call_id,
+                        record_kind="tool_result",
+                        context_policy="include_reference" if use_reference else "include_full",
+                        context_summary=tool_result_summary,
+                        reference_doctype="Agent Tool Call",
+                        reference_name=updated_tool_call_id
+                    )
 
                     # Emit socket event for tool call completed/failed
                     # Always emit, even if message not found (e.g., for image generation which creates its own message)
