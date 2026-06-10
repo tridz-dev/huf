@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { createContext, useContext, useEffect, useState } from "react";
+import { isValidPreviewUrl } from "@/utils/webPreviewParser";
 
 export type WebPreviewContextValue = {
   url: string;
@@ -148,7 +149,9 @@ export const WebPreviewUrl = ({
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       const target = event.target as HTMLInputElement;
-      setUrl(target.value);
+      if (isValidPreviewUrl(target.value)) {
+        setUrl(target.value);
+      }
     }
     onKeyDown?.(event);
   };
@@ -181,7 +184,8 @@ export const WebPreviewBody = ({
     <div className="flex-1">
       <iframe
         className={cn("size-full", className)}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
+        sandbox="allow-scripts allow-forms allow-popups-to-escape-sandbox"
+        referrerPolicy="no-referrer"
         src={(src ?? url) || undefined}
         title="Preview"
         {...props}
