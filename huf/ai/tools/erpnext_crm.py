@@ -42,10 +42,11 @@ def _handle_get_leads(**kwargs) -> str:
 
         or_filters = []
         if search:
+            search_term = f"%{search.replace(' ', '%')}%"
             or_filters = [
-                ["Lead", "lead_name", "like", f"%{search}%"],
-                ["Lead", "company_name", "like", f"%{search}%"],
-                ["Lead", "email_id", "like", f"%{search}%"],
+                ["Lead", "lead_name", "like", search_term],
+                ["Lead", "company_name", "like", search_term],
+                ["Lead", "email_id", "like", search_term],
             ]
 
         fields = [
@@ -140,23 +141,14 @@ def _handle_update_lead(**kwargs) -> str:
             return _error(f"Lead {name} not found")
 
         doc = frappe.get_doc("Lead", name)
-        updatable = [
-            "status",
-            "lead_owner",
-            "email_id",
-            "mobile_no",
-            "territory",
-            "qualification_status",
-            "company_name",
-            "phone",
-            "website",
-            "industry",
-            "market_segment",
-            "type",
-        ]
-        for field in updatable:
-            if field in kwargs:
-                setattr(doc, field, kwargs[field])
+        restricted_fields = {"name", "doctype", "creation", "modified", "modified_by", "owner", "docstatus", "action"}
+        for field, value in kwargs.items():
+            if field in restricted_fields:
+                continue
+            if doc.meta.has_field(field):
+                df = doc.meta.get_field(field)
+                if df.fieldtype not in ("Table", "Table MultiSelect"):
+                    setattr(doc, field, value)
 
         doc.save(ignore_permissions=True)
         return json.dumps(
@@ -262,20 +254,17 @@ def _handle_update_opportunity(**kwargs) -> str:
             return _error(f"Opportunity {name} not found")
 
         doc = frappe.get_doc("Opportunity", name)
-        updatable = [
-            "status",
-            "opportunity_amount",
-            "sales_stage",
-            "probability",
-            "expected_closing",
-            "order_lost_reason",
-        ]
-        for field in updatable:
-            if field in kwargs:
-                if field in ("opportunity_amount", "probability"):
-                    setattr(doc, field, float(kwargs[field]))
-                else:
-                    setattr(doc, field, kwargs[field])
+        restricted_fields = {"name", "doctype", "creation", "modified", "modified_by", "owner", "docstatus", "action"}
+        for field, value in kwargs.items():
+            if field in restricted_fields:
+                continue
+            if doc.meta.has_field(field):
+                df = doc.meta.get_field(field)
+                if df.fieldtype not in ("Table", "Table MultiSelect"):
+                    if df.fieldtype in ("Currency", "Float", "Percent"):
+                        setattr(doc, field, float(value) if value else 0.0)
+                    else:
+                        setattr(doc, field, value)
 
         doc.save(ignore_permissions=True)
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
