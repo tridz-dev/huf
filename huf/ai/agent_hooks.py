@@ -18,44 +18,52 @@ def get_doc_event_agents(event: str):
     if cached:
         return frappe.parse_json(cached)
 
-    triggers = frappe.get_list(
+    triggers = frappe.get_all(
         "Agent Trigger",
         filters={
             "trigger_type": "Doc Event",
             "disabled": 0,
             "doc_event": event
         },
-        fields=["name", "agent", "reference_doctype", "doc_event", "condition", "prompt_field"] 
+        fields=["name", "agent", "reference_doctype", "doc_event", "condition", "prompt_field"],
+        ignore_permissions=True
     )
 
     result = []
-    for t in triggers:
-        try:
-            trigger_doc = frappe.get_doc("Agent Trigger", t["name"])
-            agent_doc = frappe.get_doc("Agent", t["agent"])
-            from huf.ai.prompt_resolver import resolve_prompt
-            prompt = resolve_prompt(agent_doc)
-            
-            result.append({
-                "name": t["name"],
-                "agent": t["agent"],
-                "reference_doctype": t.get("reference_doctype"),
-                "doc_event": t.get("doc_event"),
-                "condition": t.get("condition"),
-                "prompt_field": t.get("prompt_field"), 
-                "file_attachments": [
-                    {
-                        "source_type": a.source_type,
-                        "child_table": a.child_table,
-                        "field_name": a.field_name
-                    } for a in trigger_doc.get("file_attachments", [])
-                ],
-                "instructions": prompt,
-                "provider": getattr(agent_doc, "provider", None),
-                "model": getattr(agent_doc, "model", None),
-            })
-        except Exception as e:
-            frappe.logger("huf").error(f"Agent Trigger load failed: {t.get('name')} - {str(e)}")
+    
+    original_ignore_permissions = frappe.flags.ignore_permissions
+    frappe.flags.ignore_permissions = True
+    
+    try:
+        for t in triggers:
+            try:
+                trigger_doc = frappe.get_doc("Agent Trigger", t["name"])
+                agent_doc = frappe.get_doc("Agent", t["agent"])
+                from huf.ai.prompt_resolver import resolve_prompt
+                prompt = resolve_prompt(agent_doc)
+                
+                result.append({
+                    "name": t["name"],
+                    "agent": t["agent"],
+                    "reference_doctype": t.get("reference_doctype"),
+                    "doc_event": t.get("doc_event"),
+                    "condition": t.get("condition"),
+                    "prompt_field": t.get("prompt_field"), 
+                    "file_attachments": [
+                        {
+                            "source_type": a.source_type,
+                            "child_table": a.child_table,
+                            "field_name": a.field_name
+                        } for a in (trigger_doc.get("file_attachments") or [])
+                    ],
+                    "instructions": prompt,
+                    "provider": getattr(agent_doc, "provider", None),
+                    "model": getattr(agent_doc, "model", None),
+                })
+            except Exception as e:
+                frappe.logger("huf").error(f"Agent Trigger load failed: {t.get('name')} - {str(e)}")
+    finally:
+        frappe.flags.ignore_permissions = original_ignore_permissions
 
     frappe.cache().hset(CACHE_KEY, f"doc_event:{event}", frappe.as_json(result))
     return result
@@ -73,8 +81,8 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
     if not method:
         return
 
-    # Prevent infinite recursion when logging errors
-    if doc.doctype == "Error Log":
+    # Do not fire agents during site install, migrations, or bulk imports.
+    if frappe.flags.in_import or frappe.flags.in_patch or frappe.flags.in_install:
         return
 
     agents = get_doc_event_agents(method)
