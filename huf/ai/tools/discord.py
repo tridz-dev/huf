@@ -28,7 +28,7 @@ def handle_send_message(**kwargs) -> str:
         channel_id = kwargs.get("channel_id")
         message = kwargs.get("message")
         if not all([channel_id, message]):
-            return json.dumps({"success": False, "error": "channel_id and message are required"})
+            return json.dumps({"success": False, "error": "channel_id and message are required"}, default=str)
 
         headers = _get_discord_headers()
         payload = {"content": message}
@@ -49,7 +49,7 @@ def handle_send_message(**kwargs) -> str:
         error_msg = f"Discord Send Message Error: {str(e)}"
         frappe.log_error(error_msg, "Discord Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_get_channel_messages(**kwargs) -> str:
@@ -58,7 +58,7 @@ def handle_get_channel_messages(**kwargs) -> str:
     try:
         channel_id = kwargs.get("channel_id")
         if not channel_id:
-            return json.dumps({"success": False, "error": "channel_id is required"})
+            return json.dumps({"success": False, "error": "channel_id is required"}, default=str)
 
         limit = int(kwargs.get("limit", 50))
         headers = _get_discord_headers()
@@ -84,7 +84,7 @@ def handle_get_channel_messages(**kwargs) -> str:
         error_msg = f"Discord Get Messages Error: {str(e)}"
         frappe.log_error(error_msg, "Discord Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_list_channels(**kwargs) -> str:
@@ -93,7 +93,7 @@ def handle_list_channels(**kwargs) -> str:
     try:
         guild_id = kwargs.get("guild_id")
         if not guild_id:
-            return json.dumps({"success": False, "error": "guild_id is required"})
+            return json.dumps({"success": False, "error": "guild_id is required"}, default=str)
 
         headers = _get_discord_headers()
         
@@ -117,7 +117,7 @@ def handle_list_channels(**kwargs) -> str:
         error_msg = f"Discord List Channels Error: {str(e)}"
         frappe.log_error(error_msg, "Discord Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_delete_message(**kwargs) -> str:
@@ -127,7 +127,7 @@ def handle_delete_message(**kwargs) -> str:
         channel_id = kwargs.get("channel_id")
         message_id = kwargs.get("message_id")
         if not all([channel_id, message_id]):
-            return json.dumps({"success": False, "error": "channel_id and message_id are required"})
+            return json.dumps({"success": False, "error": "channel_id and message_id are required"}, default=str)
 
         headers = _get_discord_headers()
         
@@ -146,4 +146,4 @@ def handle_delete_message(**kwargs) -> str:
         error_msg = f"Discord Delete Message Error: {str(e)}"
         frappe.log_error(error_msg, "Discord Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)

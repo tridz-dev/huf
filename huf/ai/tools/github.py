@@ -73,7 +73,7 @@ def handle_list_repos(**kwargs) -> str:
         error_msg = f"GitHub List Repos Error: {str(e)}"
         frappe.log_error(error_msg, "GitHub Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_get_repo(**kwargs) -> str:
@@ -82,7 +82,7 @@ def handle_get_repo(**kwargs) -> str:
     try:
         repo_name = kwargs.get("repo_name")
         if not repo_name:
-            return json.dumps({"success": False, "error": "repo_name is required"})
+            return json.dumps({"success": False, "error": "repo_name is required"}, default=str)
 
         data = _make_github_request("GET", f"repos/{repo_name}")
         
@@ -110,7 +110,7 @@ def handle_get_repo(**kwargs) -> str:
         error_msg = f"GitHub Get Repo Error: {str(e)}"
         frappe.log_error(error_msg, "GitHub Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_create_issue(**kwargs) -> str:
@@ -120,7 +120,7 @@ def handle_create_issue(**kwargs) -> str:
         repo_name = kwargs.get("repo_name")
         title = kwargs.get("title")
         if not all([repo_name, title]):
-            return json.dumps({"success": False, "error": "repo_name and title are required"})
+            return json.dumps({"success": False, "error": "repo_name and title are required"}, default=str)
 
         body = kwargs.get("body")
         payload = {"title": title}
@@ -146,7 +146,7 @@ def handle_create_issue(**kwargs) -> str:
         error_msg = f"GitHub Create Issue Error: {str(e)}"
         frappe.log_error(error_msg, "GitHub Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_create_pull_request(**kwargs) -> str:
@@ -159,7 +159,7 @@ def handle_create_pull_request(**kwargs) -> str:
         head = kwargs.get("head")
         base = kwargs.get("base")
         if not all([repo_name, title, body, head, base]):
-            return json.dumps({"success": False, "error": "repo_name, title, body, head, and base are required"})
+            return json.dumps({"success": False, "error": "repo_name, title, body, head, and base are required"}, default=str)
 
         payload = {
             "title": title,
@@ -189,7 +189,7 @@ def handle_create_pull_request(**kwargs) -> str:
         error_msg = f"GitHub Create PR Error: {str(e)}"
         frappe.log_error(error_msg, "GitHub Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_get_file_content(**kwargs) -> str:
@@ -199,7 +199,7 @@ def handle_get_file_content(**kwargs) -> str:
         repo_name = kwargs.get("repo_name")
         path = kwargs.get("path")
         if not all([repo_name, path]):
-            return json.dumps({"success": False, "error": "repo_name and path are required"})
+            return json.dumps({"success": False, "error": "repo_name and path are required"}, default=str)
 
         data = _make_github_request("GET", f"repos/{repo_name}/contents/{path}")
         
@@ -224,7 +224,7 @@ def handle_get_file_content(**kwargs) -> str:
         error_msg = f"GitHub Get File Content Error: {str(e)}"
         frappe.log_error(error_msg, "GitHub Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_search_code(**kwargs) -> str:
@@ -233,7 +233,7 @@ def handle_search_code(**kwargs) -> str:
     try:
         query = kwargs.get("query")
         if not query:
-            return json.dumps({"success": False, "error": "query is required"})
+            return json.dumps({"success": False, "error": "query is required"}, default=str)
 
         data = _make_github_request("GET", "search/code", params={"q": query, "per_page": 30})
         
@@ -257,4 +257,4 @@ def handle_search_code(**kwargs) -> str:
         error_msg = f"GitHub Search Code Error: {str(e)}"
         frappe.log_error(error_msg, "GitHub Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
