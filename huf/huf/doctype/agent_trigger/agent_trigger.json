@@ -26,6 +26,8 @@
   "last_execution",
   "webhook_key",
   "app_name",
+  "section_break_attachments",
+  "file_attachments",
   "section_break_qam6",
   "source_system",
   "metadata",
@@ -181,12 +183,46 @@
    "fieldname": "prompt_field",
    "fieldtype": "Select",
    "label": "Prompt Field"
-  }
+  },
+  {
+   "fieldname": "seeding_metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Seeding Metadata",
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "label": "Source File",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+    "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+    "fieldname": "section_break_attachments",
+    "fieldtype": "Section Break",
+    "label": "Attachments"
+   },
+   {
+    "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+    "description": "Fetch files from specific DocFields or Child Tables",
+    "fieldname": "file_attachments",
+    "fieldtype": "Table",
+    "label": "File Attachments",
+    "options": "Agent Trigger Attachment"
+   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-12 14:34:42.082064",
+ "modified": "2026-04-23 15:00:42.082064",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Trigger",
