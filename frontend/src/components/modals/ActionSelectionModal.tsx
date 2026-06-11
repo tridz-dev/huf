@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '../ui/dialog';
-import { Input } from '../ui/input';
-import { Button } from '../ui/button';
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
 import {
   Search,
   Repeat,
@@ -19,10 +19,15 @@ import {
   FileText,
   Calendar,
   MessageSquare,
-  Sheet
-} from 'lucide-react';
-import { actionOptions } from '../../data/actions';
-import { ActionConfig } from '../../types/flow.types';
+  Sheet,
+  Bot,
+  Wrench,
+  Route,
+  GitCommitHorizontal,
+  Globe
+} from "lucide-react";
+import { actionOptions } from "../../data/actions";
+import { ActionConfig } from "../../types/flow.types";
 
 interface ActionSelectionModalProps {
   open: boolean;
@@ -41,7 +46,12 @@ const iconMap: Record<string, any> = {
   FileText,
   Calendar,
   MessageSquare,
-  Sheet
+  Sheet,
+  Bot,
+  Wrench,
+  Route,
+  GitCommitHorizontal,
+  Globe
 };
 
 export function ActionSelectionModal({
@@ -49,38 +59,49 @@ export function ActionSelectionModal({
   onClose,
   onSelect
 }: ActionSelectionModalProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
 
   const filteredActions = actionOptions.filter((action) =>
     action.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const transformActions = filteredActions.filter((a) => a.category === 'transform');
-  const controlActions = filteredActions.filter((a) => a.category === 'control');
-  const utilityActions = filteredActions.filter((a) => a.category === 'utility');
-  const integrationActions = filteredActions.filter((a) => a.category === 'integration');
+  const transformActions = filteredActions.filter((a) => a.category === "transform");
+  const controlActions = filteredActions.filter((a) => a.category === "control");
+  const utilityActions = filteredActions.filter((a) => a.category === "utility");
+  const integrationActions = filteredActions.filter((a) => a.category === "integration");
 
   const handleSelectAction = (actionId: string) => {
-    let config: ActionConfig = { type: undefined };
+    let config: ActionConfig;
 
-    if (actionId === 'transform') {
-      config = { type: 'transform', transformations: [] };
-    } else if (actionId === 'router') {
-      config = { type: 'router', branches: [] };
-    } else if (actionId === 'loop') {
-      config = { type: 'loop', maxIterations: 10 };
-    } else if (actionId === 'human-in-loop') {
-      config = { type: 'human-in-loop', approvers: [] };
-    } else if (actionId === 'code') {
-      config = { type: 'code', language: 'javascript', code: '' };
-    } else if (actionId === 'email') {
-      config = { type: 'utility-email', to: '', subject: '', body: '' };
-    } else if (actionId === 'webhook') {
-      config = { type: 'utility-webhook', url: '', method: 'POST' };
-    } else if (actionId === 'file') {
-      config = { type: 'utility-file', operation: 'read', path: '' };
-    } else if (actionId === 'date') {
-      config = { type: 'utility-date', operation: 'format', format: 'YYYY-MM-DD' };
+    // Map frontend action IDs to backend-compatible ActionConfig types
+    switch (actionId) {
+      case "transform":
+        config = { type: "transform", transformations: [] };
+        break;
+      case "router":
+        config = { type: "router" };
+        break;
+      case "loop":
+        config = { type: "loop", max_iterations: 10 };
+        break;
+      case "human.approval":
+        config = { type: "human.approval", title: "Approval Required", instructions: "", approval_type: "user" };
+        break;
+      case "agent-run":
+        config = { type: "agent-run" };
+        break;
+      case "tool-call":
+        config = { type: "tool-call" };
+        break;
+      case "condition":
+        config = { type: "condition" };
+        break;
+      case "http-request":
+        config = { type: "http-request" };
+        break;
+      default:
+        // Fallback for any other actions - use transform as default
+        config = { type: "transform", transformations: [] };
     }
 
     onSelect(actionId, config);
@@ -95,7 +116,7 @@ export function ActionSelectionModal({
         <h3 className="text-sm font-medium mb-3 text-muted-foreground">{title}</h3>
         <div className="grid grid-cols-2 gap-3">
           {actions.map((action) => {
-            const Icon = iconMap[action.icon || 'FileText'];
+            const Icon = iconMap[action.icon || "FileText"];
             return (
               <button
                 key={action.id}
@@ -139,10 +160,10 @@ export function ActionSelectionModal({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {renderActionCategory('Transform', transformActions)}
-          {renderActionCategory('Control Flow', controlActions)}
-          {renderActionCategory('Utilities', utilityActions)}
-          {renderActionCategory('Integrations', integrationActions)}
+          {renderActionCategory("Transform", transformActions)}
+          {renderActionCategory("Control Flow", controlActions)}
+          {renderActionCategory("Utilities", utilityActions)}
+          {renderActionCategory("Integrations", integrationActions)}
         </div>
 
         <div className="flex justify-end pt-4 border-t">

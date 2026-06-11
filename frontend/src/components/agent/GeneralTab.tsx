@@ -100,7 +100,7 @@ export function GeneralTab({
                     field.onChange(value);
                     form.setValue('model', '');
                   }}
-                  value={field.value}
+                  value={field.value || undefined}
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -126,7 +126,7 @@ export function GeneralTab({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Model</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value} disabled={!watchProvider}>
+                <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!watchProvider}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select model" />

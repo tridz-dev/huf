@@ -19,6 +19,7 @@ import {
 export interface ComboboxOption {
   value: string;
   label: string;
+  subtitle?: string;
 }
 
 export interface ComboboxProps {
@@ -54,7 +55,13 @@ export function Combobox({
           className="w-full justify-between"
           disabled={disabled}
         >
-          {selectedOption ? selectedOption.label : placeholder}
+          {selectedOption ? (
+            <div className="flex min-w-0 flex-col items-start text-left">
+              <span className="truncate">{selectedOption.label}</span>
+            </div>
+          ) : (
+            placeholder
+          )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -79,7 +86,12 @@ export function Combobox({
                       value === option.value ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  {option.label}
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate">{option.label}</span>
+                    {option.subtitle ? (
+                      <span className="truncate text-xs text-muted-foreground">{option.subtitle}</span>
+                    ) : null}
+                  </div>
                 </CommandItem>
               ))}
             </CommandGroup>

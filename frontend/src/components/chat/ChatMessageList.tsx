@@ -40,7 +40,7 @@ export function ChatMessageList({
     const [isModelMismatch, setIsModelMismatch] = useState(false);
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
 
-    const { agentName, agentColor } = useChatAgentIdentity(chatId, searchParams);
+    const { agentName, agentColor, showToolExecutionDetails } = useChatAgentIdentity(chatId, searchParams);
 
     // Check for model mismatch between conversation and agent
     useEffect(() => {
@@ -305,6 +305,7 @@ export function ChatMessageList({
                                     message={message} 
                                     agentName={agentName}
                                     agentColor={agentColor}
+                                    showToolExecutionDetails={showToolExecutionDetails}
                                     status={status}
                                     loadingType={loadingType}
                                     onFeedback={handleFeedback}

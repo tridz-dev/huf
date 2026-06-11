@@ -100,7 +100,7 @@ export function AgentHeader({
             </div>
           )}
           {!isNew && (lastRun !== undefined || totalRun !== undefined) && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-0 sm:pl-6">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
               <span>Last run: {lastRun ? formatTimeAgo(lastRun) : 'Never'}</span>
               <span>Total runs: {totalRun ?? 0}</span>
             </div>

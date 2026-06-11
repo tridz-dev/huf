@@ -252,12 +252,42 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
                 <FormControl>
                   <Switch
                     checked={field.value ?? false}
-                    onCheckedChange={field.onChange}
+                    onCheckedChange={(val) => {
+                      field.onChange(val);
+                      if (!val) {
+                        form.setValue('inject_conversation_data', false);
+                      } else {
+                        form.setValue('inject_conversation_data', true);
+                      }
+                    }}
                   />
                 </FormControl>
               </FormItem>
             )}
           />
+
+          {form.watch('enable_conversation_data') && (
+            <FormField
+              control={form.control}
+              name="inject_conversation_data"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                  <div className="space-y-0.5">
+                    <FormLabel className="text-base">Inject Conversation Data into Prompt</FormLabel>
+                    <FormDescription>
+                      Auto-injects all memory items into the LLM system prompt on every turn. Disabling this avoids <strong>Context Bloat</strong> (saving tokens/cost and improving latency) and lets the agent load data dynamically on-demand using the <code>get_conversation_data</code> tool.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value ?? false}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}
@@ -315,6 +345,27 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
                   Background color for the agent avatar in chat. Include the # prefix.
                 </FormDescription>
                 <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="show_tool_execution_details"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Show Tool Execution Details</FormLabel>
+                  <FormDescription>
+                    Enable to display tool execution status and responses in the agent output. This includes whether each tool call is completed and its corresponding result.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value ?? false}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
               </FormItem>
             )}
           />

@@ -21,8 +21,25 @@ class TestChromaBackend(FrappeTestCase):
 		"""Set up test fixtures."""
 		self.backend = ChromaBackend()
 		
+		# Mock embedding logic
+		self.patcher_config = patch("huf.ai.knowledge.embedding.resolve_embedding_config")
+		self.mock_resolve = self.patcher_config.start()
+		self.mock_resolve.return_value = {"model": "test-model", "api_key": "test", "api_base": "test"}
+		
+		self.patcher_embeds = patch("huf.ai.knowledge.embedding.get_embeddings")
+		self.mock_get_embeds = self.patcher_embeds.start()
+		self.mock_get_embeds.return_value = [[0.1] * 1536 for _ in range(10)]
+		
+		self.patcher_embed = patch("huf.ai.knowledge.embedding.get_embedding")
+		self.mock_get_embed = self.patcher_embed.start()
+		self.mock_get_embed.return_value = [0.1] * 1536
+		
 	def tearDown(self):
 		"""Clean up after tests."""
+		self.patcher_config.stop()
+		self.patcher_embeds.stop()
+		self.patcher_embed.stop()
+		
 		if self.backend._initialized:
 			try:
 				self.backend.clear()
