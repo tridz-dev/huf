@@ -48,7 +48,7 @@ def get_doc_event_agents(event: str):
                         "source_type": a.source_type,
                         "child_table": a.child_table,
                         "field_name": a.field_name
-                    } for a in trigger_doc.get("file_attachments", [])
+                    } for a in (trigger_doc.get("file_attachments") or [])
                 ],
                 "instructions": prompt,
                 "provider": getattr(agent_doc, "provider", None),
