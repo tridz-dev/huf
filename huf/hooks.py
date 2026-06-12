@@ -1,3 +1,5 @@
+from . import __version__ as app_version
+
 app_name = "huf"
 app_title = "Huf"
 app_publisher = "Tridz Technologies Pvt Ltd"
