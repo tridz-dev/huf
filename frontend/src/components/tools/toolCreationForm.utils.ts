@@ -35,12 +35,24 @@ export const createToolFormSchema = (availableToolTypes: ToolType[]) => {
     function_name: z.string().optional(),
     pass_parameters_as_json: z.boolean().optional(),
     provider_app: z.string().optional(),
-    base_url: z.string().optional(),
+    base_url: z
+      .string()
+      .refine((val) => !val || /^https?:\/\/.+/.test(val), {
+        message: 'Must be a valid URL starting with http:// or https://',
+      })
+      .optional(),
     required_permission: z.enum(['read', 'write', 'create', 'delete', 'submit', 'cancel']).optional(),
     is_read_only: z.boolean().optional(),
     allowed_for_guest: z.boolean().optional(),
     parameters: z.array(z.any()).optional(),
-    http_headers: z.array(z.any()).optional(),
+    http_headers: z
+      .array(
+        z.object({
+          key: z.string(),
+          value: z.string(),
+        })
+      )
+      .optional(),
   });
 };
 

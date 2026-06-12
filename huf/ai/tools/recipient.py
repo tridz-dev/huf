@@ -88,4 +88,4 @@ def handle_get_recipient(**kwargs) -> str:
 
 	except Exception as e:
 		frappe.log_error(f"get_integration_recipient error: {str(e)}", "Integration Recipient Tool")
-		return json.dumps({"success": False, "error": str(e)})
+		return json.dumps({"success": False, "error": str(e)}, default=str)
