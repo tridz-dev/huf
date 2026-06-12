@@ -1,3 +1,5 @@
+from . import __version__ as app_version
+
 app_name = "huf"
 app_title = "Huf"
 app_publisher = "Tridz Technologies Pvt Ltd"
@@ -106,7 +108,10 @@ page_renderer = [
 
 # before_install = "huf.install.before_install"
 after_install = "huf.install.after_install"
-after_app_install = "huf.install.setup_desktop_icon_as_workspace"
+after_app_install = [
+    "huf.install.setup_desktop_icon_as_workspace",
+    "huf.ai.app_seeding.seeder.on_app_installed"
+]
 after_migrate = "huf.install.after_migrate"
 
 # Uninstallation

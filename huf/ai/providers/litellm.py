@@ -291,6 +291,21 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             cache_control_type,
         )
         
+        # Append images if any are passed in context
+        if context and context.get("files"):
+            image_urls = []
+            for f in context.get("files"):
+                if f.get("is_image") and f.get("file_url"):
+                    url = f["file_url"]
+                    if url.startswith("/"):
+                        url = frappe.utils.get_url(url)
+                    image_urls.append({"type": "image_url", "image_url": {"url": url}})
+            
+            if image_urls:
+                if isinstance(user_content, str):
+                    user_content = [{"type": "text", "text": user_content}]
+                user_content.extend(image_urls)
+        
         messages.append({"role": "user", "content": user_content})
 
         # Convert tools
@@ -731,6 +746,21 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             cache_control_type,
         )
         
+        # Append images if any are passed in context
+        if context and context.get("files"):
+            image_urls = []
+            for f in context.get("files"):
+                if f.get("is_image") and f.get("file_url"):
+                    url = f["file_url"]
+                    if url.startswith("/"):
+                        url = frappe.utils.get_url(url)
+                    image_urls.append({"type": "image_url", "image_url": {"url": url}})
+            
+            if image_urls:
+                if isinstance(user_content, str):
+                    user_content = [{"type": "text", "text": user_content}]
+                user_content.extend(image_urls)
+        
         messages.append({"role": "user", "content": user_content})
 
         # Convert tools to OpenAI format
@@ -936,13 +966,22 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     tc_doc.tool_result = {"output": str(result_content)[:140000]}
                                                 tc_doc.save(ignore_permissions=True)
 
-                                                message_name = frappe.db.get_value("Agent Message", {"tool_calll": tool_call_doc}, "name")
+                                                message_name = frappe.db.get_value("Agent Message", {"tool_call": tool_call_doc}, "name")
                                                 if message_name:
                                                     msg_doc = frappe.get_doc("Agent Message", message_name)
                                                     result_str = json.dumps(result_content) if not isinstance(result_content, str) else str(result_content)
-                                                    new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
-                                                    msg_doc.content = new_content
+                                                    
+                                                    result_summary = (result_str[:200] + "...") if len(result_str) > 200 else result_str
+                                                    max_context_chars = int(getattr(agent, "max_context_chars", 2000)) if agent else 2000
+                                                    use_reference = len(result_str) > max_context_chars
+                                                    
+                                                    msg_doc.content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
                                                     msg_doc.kind = "Tool Result"
+                                                    msg_doc.record_kind = "tool_result"
+                                                    msg_doc.context_policy = "include_reference" if use_reference else "include_full"
+                                                    msg_doc.context_summary = result_summary
+                                                    msg_doc.reference_doctype = "Agent Tool Call"
+                                                    msg_doc.reference_name = tool_call_doc
                                                     msg_doc.save(ignore_permissions=True)
 
                                                 tool_result_for_socket = (

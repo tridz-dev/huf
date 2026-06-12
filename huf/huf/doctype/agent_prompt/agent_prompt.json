@@ -151,6 +151,26 @@
    "hidden": 1,
    "label": "Prompt Group",
    "read_only": 1
+  },
+  {
+   "fieldname": "seeding_metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Seeding Metadata",
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "label": "Source File",
+   "read_only": 1,
+   "hidden": 1
   }
  ],
  "index_web_pages_for_search": 1,
