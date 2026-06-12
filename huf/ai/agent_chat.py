@@ -511,3 +511,55 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
     except Exception as e:
         frappe.log_error(f"OCR Processing Error: {str(e)}")
         return {"success": False, "error": str(e)}
+
+@frappe.whitelist()
+def add_message(
+    conversation_id: str,
+    role: str,
+    content: str,
+    record_kind: str = None,
+    context_policy: str = None,
+    context_summary: str = None,
+    reference_doctype: str = None,
+    reference_name: str = None,
+    visibility: str = None,
+    token_estimate: int = None
+):
+    """
+    Exposes ConversationManager.add_message as a public API.
+    Used for creating context artifacts, tool results, and out-of-band context.
+    """
+    if not conversation_id or not role:
+        frappe.throw(_("conversation_id and role are required"))
+
+    try:
+        conv_doc = frappe.get_doc("Agent Conversation", conversation_id)
+        agent_name = conv_doc.agent
+
+        cm = ConversationManager(agent_name=agent_name)
+        provider = frappe.db.get_value("Agent", agent_name, "provider")
+        model = frappe.db.get_value("Agent", agent_name, "model")
+
+        msg = cm.add_message(
+            conversation=conv_doc,
+            role=role,
+            content=content,
+            provider=provider,
+            model=model,
+            agent=agent_name,
+            record_kind=record_kind,
+            context_policy=context_policy,
+            context_summary=context_summary,
+            reference_doctype=reference_doctype,
+            reference_name=reference_name,
+            visibility=visibility,
+            token_estimate=token_estimate
+        )
+
+        return {
+            "success": True,
+            "message_id": msg.name
+        }
+    except Exception as e:
+        frappe.log_error(message=f"add_message API error: {frappe.get_traceback()}", title="Huf API")
+        raise

@@ -61,6 +61,7 @@
   "summary_ratio",
   "summary_model",
   "max_knowledge_tokens",
+  "max_context_chars",
   "max_turns",
   "image_generation_section",
   "image_generation_model",
@@ -79,7 +80,10 @@
   "allowed_roles",
   "metadata_tab",
   "last_run",
-  "total_run"
+  "total_run",
+  "seeding_metadata_section",
+  "source_app",
+  "source_file"
  ],
  "fields": [
   {
@@ -567,6 +571,13 @@
    "label": "Audio Transcription"
   },
   {
+   "default": "2000",
+   "description": "Maximum characters allowed for tool results before truncating and applying include_reference context policy.",
+   "fieldname": "max_context_chars",
+   "fieldtype": "Int",
+   "label": "Max Context Characters"
+  },
+  {
    "default": "1",
    "description": "Enable to display tool execution status and responses in the agent output.\nThis includes whether each tool call is completed and its corresponding result.",
    "fieldname": "show_tool_execution_details",
@@ -576,28 +587,28 @@
   {
    "fieldname": "seeding_metadata_section",
    "fieldtype": "Section Break",
-   "label": "Seeding Metadata",
-   "hidden": 1
+   "hidden": 1,
+   "label": "Seeding Metadata"
   },
   {
    "fieldname": "source_app",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "Source App",
-   "read_only": 1,
-   "hidden": 1
+   "read_only": 1
   },
   {
    "fieldname": "source_file",
    "fieldtype": "Data",
+   "hidden": 1,
    "label": "Source File",
-   "read_only": 1,
-   "hidden": 1
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-20 16:43:49.008915",
+ "modified": "2026-06-12 11:10:42.372998",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

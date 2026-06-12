@@ -256,6 +256,31 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             )
             if tool: tools.append(tool)
 
+            if tool: tools.append(tool)
+
+    existing_types = [t.name for t in tools] if tools else []
+    if "get_result_context" not in existing_types:
+        tool = create_function_tool(
+            name="get_result_context",
+            description="Get the full result context of an out-of-band message reference by its handle.",
+            tool_name="huf.ai.sdk_tools.handle_get_result_context",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "reference_doctype": {
+                        "type": "string",
+                        "description": "The DocType of the referenced record (e.g. 'Agent Tool Call')"
+                    },
+                    "reference_name": {
+                        "type": "string",
+                        "description": "The name/ID of the referenced record"
+                    }
+                },
+                "required": ["reference_doctype", "reference_name"]
+            }
+        )
+        if tool: tools.append(tool)
+
     return tools
 
 def create_function_tool(
@@ -1318,6 +1343,47 @@ def handle_load_conversation_data(conversation_id: str = None, **kwargs):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
+def handle_get_result_context(reference_doctype: str, reference_name: str, **kwargs):
+    """
+    Get the full result context of an out-of-band message reference by its handle.
+    """
+    try:
+        if not reference_doctype or not reference_name:
+            return {"success": False, "error": "Both reference_doctype and reference_name are required."}
+            
+        if not frappe.db.exists(reference_doctype, reference_name):
+            return {"success": False, "error": f"Document {reference_name} of type {reference_doctype} not found."}
+            
+        doc = frappe.get_doc(reference_doctype, reference_name)
+        
+        # If it's Agent Tool Call, retrieve the tool_result
+        if reference_doctype == "Agent Tool Call":
+            return {
+                "success": True,
+                "tool": doc.tool,
+                "tool_args": doc.tool_args,
+                "status": doc.status,
+                "tool_result": doc.tool_result,
+                "error_message": doc.error_message
+            }
+        
+        # If it's Agent Context Artifact, retrieve payload
+        elif reference_doctype == "Agent Context Artifact":
+            return {
+                "success": True,
+                "artifact_type": doc.artifact_type,
+                "summary": doc.summary,
+                "payload_json": doc.payload_json,
+                "reference_doctype": doc.reference_doctype,
+                "reference_name": doc.reference_name
+            }
+            
+        # For other general doctypes, retrieve as dict
+        return {"success": True, "result": doc.as_dict()}
+    except Exception as e:
+        frappe.log_error(f"Error in handle_get_result_context: {str(e)}", "SDK Functions Debug")
+        return {"success": False, "error": str(e)}
 
 def _get_default_image_model(provider_name: str) -> str:
     """
