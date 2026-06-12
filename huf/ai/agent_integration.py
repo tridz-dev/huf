@@ -42,7 +42,7 @@ class AgentManager:
 
 
     def _setup_tools(self):
-        """Create SDK Tools from existing functions"""
+        """Create SDK Tools from existing functions, skills, and MCP servers."""
         self.tools=[]
 
         try:
@@ -52,6 +52,48 @@ class AgentManager:
                 self.tools.extend(agent_tools)
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load agent tools: {e!s}")
+
+        # Merge skill MCP servers with agent-level MCP servers so attached
+        # skills can contribute runtime tools without replacing direct tools.
+        try:
+            from huf.ai.mcp_client import create_mcp_tools
+            from huf.ai.skills.loader import get_agent_skill_mcp_servers
+
+            agent_mcp_servers = [
+                row.mcp_server
+                for row in getattr(self.agent_doc, "agent_mcp_server", [])
+                if getattr(row, "enabled", True)
+            ]
+            skill_mcp_servers = get_agent_skill_mcp_servers(self.agent_doc.agent_name)
+
+            merged_server_names = []
+            seen_servers = set()
+            for name in agent_mcp_servers + skill_mcp_servers:
+                if name and name not in seen_servers:
+                    seen_servers.add(name)
+                    merged_server_names.append(name)
+
+            if merged_server_names:
+                merged_mcp_tools = create_mcp_tools(
+                    self.agent_doc, mcp_server_names=merged_server_names
+                )
+                tool_map = {tool.name: tool for tool in self.tools}
+                for tool in merged_mcp_tools:
+                    tool_map[tool.name] = tool
+                self.tools = list(tool_map.values())
+        except Exception as e:
+            logger.warning(f"Failed to load skill MCP tools: {e!s}")
+
+        try:
+            from huf.ai.skills.loader import create_list_skills_tool
+
+            list_skills_tool = create_list_skills_tool(self.agent_doc.agent_name)
+            if list_skills_tool:
+                existing_names = {tool.name for tool in self.tools}
+                if list_skills_tool.name not in existing_names:
+                    self.tools.append(list_skills_tool)
+        except Exception as e:
+            logger.warning(f"Failed to load skills listing tool: {e!s}")
 
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
         try:

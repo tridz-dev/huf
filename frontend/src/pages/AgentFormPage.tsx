@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { toast } from 'sonner';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
+import type { AgentSkillRow } from '../types/skill.types';
+import { getSkillOptions } from '../services/skillApi';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
@@ -31,6 +33,7 @@ import { AdvancedTab, type ExecutionProfileOption, type SSHConnectionOption } fr
 import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
+import { SkillsTab } from '../components/agent/SkillsTab';
 import { AgentKnowledgeModal } from '../components/agent/AgentKnowledgeModal';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
@@ -79,6 +82,10 @@ type AgentMcpServerRow = {
 type AgentUpdatePayload = Omit<Partial<AgentDoc>, "agent_tool"> & {
   agent_tool: Array<{ tool: string }>;
 };
+
+function normalizeFlag(value: boolean | number | undefined): 0 | 1 {
+  return value === true || value === 1 ? 1 : 0;
+}
 
 function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
   return {
@@ -195,6 +202,12 @@ export function AgentFormPage() {
     },
     knowledge: {
       label: 'Knowledge',
+      fields: [],
+      default: false,
+      disabled: false,
+    },
+    skills: {
+      label: 'Skills',
       fields: [],
       default: false,
       disabled: false,
@@ -321,6 +334,9 @@ export function AgentFormPage() {
   const [mcpLoading, setMcpLoading] = useState(false);
   const [knowledgeSources, setKnowledgeSources] = useState<AgentKnowledgeRow[]>([]);
   const [initialKnowledgeSources, setInitialKnowledgeSources] = useState<AgentKnowledgeRow[]>([]);
+  const [agentSkills, setAgentSkills] = useState<AgentSkillRow[]>([]);
+  const [initialAgentSkills, setInitialAgentSkills] = useState<AgentSkillRow[]>([]);
+  const [skillOptions, setSkillOptions] = useState<{ value: string; label: string; subtitle?: string }[]>([]);
   const [agentStats, setAgentStats] = useState<{ last_run?: string | null; total_run?: number | null }>({});
   const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
   const [editingKnowledgeIndex, setEditingKnowledgeIndex] = useState<number | null>(null);
@@ -385,6 +401,7 @@ export function AgentFormPage() {
         execution_shared_dir_limit_mb: undefined,
         allow_ssh: false,
         ssh_connections: [],
+        agent_skill: [],
       },
   });
 
@@ -455,11 +472,26 @@ export function AgentFormPage() {
     });
   }, [knowledgeSources, initialKnowledgeSources, isNew]);
 
-  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
+  const skillsChanged = useMemo(() => {
+    if (isNew) return agentSkills.length > 0;
+    if (agentSkills.length !== initialAgentSkills.length) return true;
+    return agentSkills.some((skill, i) => {
+      const init = initialAgentSkills[i];
+      return (
+        skill.skill !== init.skill ||
+        skill.mode !== init.mode ||
+        normalizeFlag(skill.auto_load) !== normalizeFlag(init.auto_load) ||
+        (skill.priority ?? 0) !== (init.priority ?? 0) ||
+        (skill.description || '') !== (init.description || '')
+      );
+    });
+  }, [agentSkills, initialAgentSkills, isNew]);
+
+  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged;
 
   // Deliberately excludes `isNew` (unlike showSaveButton) - a blank new-agent form
   // has nothing to lose, so it shouldn't block navigation until the user actually changes something.
-  const hasUnsavedChanges = isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
+  const hasUnsavedChanges = isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged;
 
   const shouldBlock = useCallback(
     ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
@@ -525,13 +557,15 @@ export function AgentFormPage() {
       getProviders(),
       getModels(),
       getToolTypes(),
+      getSkillOptions(),
       db.getDocList('User', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
       db.getDocList('Role', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
-    ]).then(([providersData, modelsData, toolTypesData, usersData, rolesData]) => {
+    ]).then(([providersData, modelsData, toolTypesData, skillOptionsData, usersData, rolesData]) => {
       setProviders(providersData as AIProvider[]);
       const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as { items: AIModel[] }).items;
       setAllModels(modelsArray);
       setToolTypes(toolTypesData);
+      setSkillOptions((skillOptionsData || []) as { value: string; label: string; subtitle?: string }[]);
       setUsers(usersData as Array<{ name: string }>);
       setRoles((rolesData as Array<{ name: string }>).filter((role) => role.name !== 'Guest'));
     }).catch((error) => {
@@ -1045,6 +1079,7 @@ export function AgentFormPage() {
                 : undefined,
             allow_ssh: data.allow_ssh === 1,
             ssh_connections: (data.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
+            agent_skill: [],
           });
         }
         // Track initial disabled state and persisted allow_chat
@@ -1075,6 +1110,21 @@ export function AgentFormPage() {
         } else {
           setSelectedTools([]);
           setInitialTools([]);
+        }
+        if (data.agent_skill && Array.isArray(data.agent_skill) && data.agent_skill.length > 0) {
+          const skillRows: AgentSkillRow[] = data.agent_skill.map((item) => ({
+            name: item.name,
+            skill: item.skill,
+            mode: item.mode || 'Optional',
+            auto_load: item.auto_load === 1 || item.auto_load === true ? 1 : 0,
+            priority: item.priority ?? 0,
+            description: item.description || undefined,
+          }));
+          setAgentSkills(skillRows);
+          setInitialAgentSkills(skillRows);
+        } else {
+          setAgentSkills([]);
+          setInitialAgentSkills([]);
         }
         // Load triggers from Agent Trigger doctype
         getAgentTriggers(id).then((triggersData) => {
@@ -1245,6 +1295,14 @@ export function AgentFormPage() {
           token_budget: ks.token_budget,
           description: ks.description || '',
         })),
+        agent_skill: agentSkills.map((skill) => ({
+          ...(skill.name ? { name: skill.name } : {}),
+          skill: skill.skill,
+          mode: skill.mode,
+          auto_load: normalizeFlag(skill.auto_load),
+          priority: skill.priority ?? 0,
+          description: skill.description || '',
+        })),
       } as AgentUpdatePayload;
 
       if (isNew) {
@@ -1316,12 +1374,14 @@ export function AgentFormPage() {
               : undefined,
           allow_ssh: newAgent.allow_ssh === 1,
           ssh_connections: (newAgent.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
+          agent_skill: [],
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
         setInitialTools([...selectedTools]);
         setInitialMcpServers([...mcpServers]);
         setInitialKnowledgeSources([...knowledgeSources]);
+        setInitialAgentSkills([...agentSkills]);
         setAgentStats({ last_run: newAgent.last_run ?? null, total_run: newAgent.total_run ?? null });
         // Sync tool-details setting to other tabs via localStorage
         writeToolDetailsSetting(newAgent.name, newAgent.show_tool_execution_details === 1);
@@ -1387,6 +1447,7 @@ export function AgentFormPage() {
           allow_file_upload: values.allow_file_upload,
           enable_ocr: values.enable_ocr,
           max_upload_size_mb: values.max_upload_size_mb,
+          agent_skill: agentSkills,
         });
         // Reset tools, disabled state, and persisted allow_chat after successful update
         setInitialTools([...selectedTools]);
@@ -1410,6 +1471,21 @@ export function AgentFormPage() {
             setInitialTools([...selectedTools]);
             setInitialDisabled(updatedData.disabled === 1);
             setAllowChat(updatedData.allow_chat === 1);
+            if (updatedData.agent_skill && Array.isArray(updatedData.agent_skill) && updatedData.agent_skill.length > 0) {
+              const skillRows: AgentSkillRow[] = updatedData.agent_skill.map((item) => ({
+                name: item.name,
+                skill: item.skill,
+                mode: item.mode || 'Optional',
+                auto_load: item.auto_load === 1 || item.auto_load === true ? 1 : 0,
+                priority: item.priority ?? 0,
+                description: item.description || undefined,
+              }));
+              setAgentSkills(skillRows);
+              setInitialAgentSkills(skillRows);
+            } else {
+              setAgentSkills([]);
+              setInitialAgentSkills([]);
+            }
             // Reload MCP servers from updated agent document
             if (updatedData.agent_mcp_server && Array.isArray(updatedData.agent_mcp_server) && updatedData.agent_mcp_server.length > 0) {
               const childTableServers: MCPServerRef[] = (updatedData.agent_mcp_server as AgentMcpServerRow[]).map((item) => ({
@@ -1479,7 +1555,7 @@ export function AgentFormPage() {
     } finally {
       setSaving(false);
     }
-  }, [form, id, isNew, mcpServers, navigate, selectedTools, knowledgeSources]);
+  }, [form, id, isNew, mcpServers, navigate, selectedTools, knowledgeSources, agentSkills]);
 
   // Memoize the form submit handler to avoid recreating it on every render
   const handleFormSubmit = useMemo(
@@ -1991,6 +2067,15 @@ export function AgentFormPage() {
                   onCreate={handleCreateKnowledge}
                   onEdit={handleEditKnowledge}
                   onRemove={handleRemoveKnowledge}
+                />
+              </TabsContent>
+
+              <TabsContent value="skills" className="space-y-4">
+                <SkillsTab
+                  agentSkills={agentSkills}
+                  skillOptions={skillOptions}
+                  onChange={setAgentSkills}
+                  disabled={systemLocked}
                 />
               </TabsContent>
 
