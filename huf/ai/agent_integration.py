@@ -36,7 +36,7 @@ class AgentManager:
 
     
     def _setup_tools(self):
-        """Create SDK Tools from existing functions"""
+        """Create SDK Tools from existing functions, skills, and MCP servers."""
         self.tools=[]
 
         try:
@@ -48,6 +48,56 @@ class AgentManager:
             frappe.log_error(
                 f"Error loading Agent Tool Function: {str(e)}",
                 "Agent Tool Function Error",
+            )
+        
+        # Merge skill MCP servers with agent-level MCP servers and reload MCP tools
+        # to include any servers contributed by attached skills.
+        try:
+            from huf.ai.mcp_client import create_mcp_tools
+            from huf.ai.skills.loader import get_agent_skill_mcp_servers
+
+            agent_mcp_servers = [
+                row.mcp_server
+                for row in getattr(self.agent_doc, "agent_mcp_server", [])
+                if getattr(row, "enabled", True)
+            ]
+            skill_mcp_servers = get_agent_skill_mcp_servers(self.agent_doc.agent_name)
+
+            merged_server_names = []
+            seen_servers = set()
+            for name in agent_mcp_servers + skill_mcp_servers:
+                if name and name not in seen_servers:
+                    seen_servers.add(name)
+                    merged_server_names.append(name)
+
+            if merged_server_names:
+                merged_mcp_tools = create_mcp_tools(
+                    self.agent_doc, mcp_server_names=merged_server_names
+                )
+                # Deduplicate by tool name, preferring the merged MCP version.
+                tool_map = {t.name: t for t in self.tools}
+                for tool in merged_mcp_tools:
+                    tool_map[tool.name] = tool
+                self.tools = list(tool_map.values())
+        except Exception as e:
+            frappe.log_error(
+                f"Error merging skill MCP servers: {str(e)}",
+                "MCP Tool Loading Error",
+            )
+
+        # Add a runtime list_skills tool if the agent has attached skills.
+        try:
+            from huf.ai.skills.loader import create_list_skills_tool
+
+            list_skills_tool = create_list_skills_tool(self.agent_doc.agent_name)
+            if list_skills_tool:
+                existing_names = {t.name for t in self.tools}
+                if list_skills_tool.name not in existing_names:
+                    self.tools.append(list_skills_tool)
+        except Exception as e:
+            frappe.log_error(
+                f"Error adding list_skills tool: {str(e)}",
+                "Skill Tool Loading Error",
             )
         
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
@@ -218,6 +268,23 @@ class AgentManager:
 
         from huf.ai.prompt_resolver import resolve_prompt
         instructions = resolve_prompt(self.agent_doc) or ""
+
+        # Append skill instructions and optional skill preamble to system prompt
+        try:
+            from huf.ai.skills.loader import get_skill_instructions, get_optional_skills_preamble
+
+            skill_instructions = get_skill_instructions(self.agent_doc.agent_name)
+            if skill_instructions:
+                instructions += "\n\n" + skill_instructions
+
+            optional_preamble = get_optional_skills_preamble(self.agent_doc.agent_name)
+            if optional_preamble:
+                instructions += "\n\n" + optional_preamble
+        except Exception as e:
+            frappe.log_error(
+                f"Error injecting skill instructions: {str(e)}",
+                "Skill Instruction Error",
+            )
 
         # Enhance instructions with tool descriptions
         if self.tools:

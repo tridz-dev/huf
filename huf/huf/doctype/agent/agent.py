@@ -116,6 +116,15 @@ class Agent(Document):
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._validate_skills()
+
+    def _validate_skills(self):
+        """Prevent duplicate skills from being attached to an agent."""
+        seen = set()
+        for row in self.get("agent_skill", []):
+            if row.skill in seen:
+                frappe.throw(_("Skill {0} is attached more than once.").format(row.skill))
+            seen.add(row.skill)
 
     def _validate_advanced_models(self):
         def _has_modality(model_docname: str, required: str) -> bool:

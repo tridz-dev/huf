@@ -70,6 +70,7 @@ def after_install():
     create_flow_tools()
     register_integration_services()
     sync_tool_types()
+    seed_skill_categories()
     from huf.ai.tool_registry import sync_discovered_tools
     sync_discovered_tools(use_cache=False)
     frappe.db.commit()
@@ -110,6 +111,7 @@ def after_migrate():
 	"""
 	create_huf_roles()
 	setup_desktop_icon_as_workspace("huf")
+	seed_skill_categories()
 	try:
 		create_image_generation_tool()
 		create_transcribe_audio_tool()
@@ -911,6 +913,27 @@ def sync_tool_types():
 				doc.insert()
 		except Exception as e:
 			frappe.log_error(f"Failed to create tool type {category}: {e}")
+			continue
+	
+	frappe.db.commit()
+
+
+def seed_skill_categories():
+	"""
+	Ensure default Skill Category records exist.
+	Called during after_install and after_migrate.
+	"""
+	categories = ["General", "CRM", "Support"]
+	for category in categories:
+		try:
+			if not frappe.db.exists("Skill Category", category):
+				doc = frappe.get_doc({
+					"doctype": "Skill Category",
+					"category_name": category,
+				})
+				doc.insert(ignore_permissions=True)
+		except Exception as e:
+			frappe.log_error(f"Failed to create skill category {category}: {e}")
 			continue
 	
 	frappe.db.commit()

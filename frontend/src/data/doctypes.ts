@@ -17,6 +17,9 @@ export const doctype = {
   "Flow Run": "Flow Run",
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",
+  Skill: "Skill",
+  "Skill Category": "Skill Category",
+  "Agent Skill": "Agent Skill",
   "Huf Data Table": "Huf Data Table",
 } as const;
 

@@ -50,6 +50,9 @@
   "knowledge_tab",
   "knowledge_section",
   "agent_knowledge",
+  "skills_tab",
+  "skills_section",
+  "agent_skill",
   "advance_settings_tab",
   "context_settings_section",
   "context_strategy",
@@ -286,6 +289,23 @@
    "fieldtype": "Table",
    "label": "Knowledge Sources",
    "options": "Agent Knowledge"
+  },
+  {
+   "fieldname": "skills_tab",
+   "fieldtype": "Tab Break",
+   "label": "Skills"
+  },
+  {
+   "fieldname": "skills_section",
+   "fieldtype": "Section Break",
+   "label": "Skills"
+  },
+  {
+   "description": "Reusable skill bundles attached to this agent.",
+   "fieldname": "agent_skill",
+   "fieldtype": "Table",
+   "label": "Skills",
+   "options": "Agent Skill"
   },
   {
    "fieldname": "advance_settings_tab",
@@ -597,7 +617,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-04-20 16:43:49.008915",
+ "modified": "2026-06-12 09:17:14.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

@@ -200,6 +200,17 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     f"Error processing function {function_doc.name}: {e!s}"
                 )
 
+    # Load tools from attached skills (mandatory and optional)
+    try:
+        from huf.ai.skills.loader import load_all_skill_tools
+        skill_tools = load_all_skill_tools(agent, frappe.session.user)
+        if skill_tools:
+            tools.extend(skill_tools)
+    except Exception as e:
+        frappe.log_error(
+            f"Error loading skill tools for agent: {e!s}",
+            "Skill Tool Loading Error"
+        )
 
     if hasattr(agent, "enable_conversation_data") and agent.enable_conversation_data:
         existing_types = [t.name for t in tools]

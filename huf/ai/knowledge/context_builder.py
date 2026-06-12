@@ -25,6 +25,12 @@ def build_knowledge_context(
 		Dict with 'context_text', 'sources_used', 'chunks_used'
 	"""
 	mandatory_sources = get_mandatory_knowledge(agent_name)
+
+	try:
+		from huf.ai.skills.loader import get_mandatory_skill_knowledge
+		mandatory_sources += get_mandatory_skill_knowledge(agent_name)
+	except Exception:
+		pass
 	
 	if not mandatory_sources:
 		return {

@@ -1,0 +1,230 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:skill_name",
+ "creation": "2026-06-12 09:17:14.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "details_section",
+  "skill_name",
+  "title",
+  "skill_category",
+  "description",
+  "column_break_details",
+  "status",
+  "source_type",
+  "auto_load",
+  "skill_icon",
+  "source_section",
+  "source_url",
+  "source_path",
+  "source_ref",
+  "column_break_source",
+  "provider_app",
+  "author",
+  "version",
+  "instructions_section",
+  "instructions",
+  "tools_section",
+  "skill_tools",
+  "knowledge_section",
+  "skill_knowledge",
+  "prompts_section",
+  "skill_prompts",
+  "mcp_servers_section",
+  "skill_mcp_servers"
+ ],
+ "fields": [
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "description": "Machine identifier for this skill. Use snake_case.",
+   "fieldname": "skill_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Skill Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "skill_category",
+   "fieldtype": "Link",
+   "label": "Skill Category",
+   "options": "Skill Category"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_details",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Active",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nActive\nError\nDisabled",
+   "reqd": 1
+  },
+  {
+   "default": "Local",
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "Local\nGit\nCommon Destination\nApp Provided",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "description": "If checked, this skill is loaded automatically when attached to an agent in Mandatory mode.",
+   "fieldname": "auto_load",
+   "fieldtype": "Check",
+   "label": "Auto Load"
+  },
+  {
+   "fieldname": "skill_icon",
+   "fieldtype": "Data",
+   "label": "Skill Icon"
+  },
+  {
+   "fieldname": "source_section",
+   "fieldtype": "Section Break",
+   "label": "Source"
+  },
+  {
+   "description": "Git URL or common destination URL this skill was imported from.",
+   "fieldname": "source_url",
+   "fieldtype": "Data",
+   "label": "Source URL"
+  },
+  {
+   "description": "Sub-path inside the source repository.",
+   "fieldname": "source_path",
+   "fieldtype": "Data",
+   "label": "Source Path"
+  },
+  {
+   "description": "Branch, tag or commit reference.",
+   "fieldname": "source_ref",
+   "fieldtype": "Data",
+   "label": "Source Ref"
+  },
+  {
+   "fieldname": "column_break_source",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "App name when this skill is provided via the huf_skills hook.",
+   "fieldname": "provider_app",
+   "fieldtype": "Data",
+   "label": "Provider App"
+  },
+  {
+   "fieldname": "author",
+   "fieldtype": "Data",
+   "label": "Author"
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "label": "Version"
+  },
+  {
+   "fieldname": "instructions_section",
+   "fieldtype": "Section Break",
+   "label": "Instructions"
+  },
+  {
+   "description": "Guidelines injected into the agent system prompt when this skill is loaded.",
+   "fieldname": "instructions",
+   "fieldtype": "Long Text",
+   "label": "Instructions"
+  },
+  {
+   "fieldname": "tools_section",
+   "fieldtype": "Section Break",
+   "label": "Tools"
+  },
+  {
+   "fieldname": "skill_tools",
+   "fieldtype": "Table",
+   "label": "Tools",
+   "options": "Skill Tool"
+  },
+  {
+   "fieldname": "knowledge_section",
+   "fieldtype": "Section Break",
+   "label": "Knowledge"
+  },
+  {
+   "fieldname": "skill_knowledge",
+   "fieldtype": "Table",
+   "label": "Knowledge Sources",
+   "options": "Skill Knowledge"
+  },
+  {
+   "fieldname": "prompts_section",
+   "fieldtype": "Section Break",
+   "label": "Prompts"
+  },
+  {
+   "fieldname": "skill_prompts",
+   "fieldtype": "Table",
+   "label": "Prompts",
+   "options": "Skill Prompt"
+  },
+  {
+   "fieldname": "mcp_servers_section",
+   "fieldtype": "Section Break",
+   "label": "MCP Servers"
+  },
+  {
+   "fieldname": "skill_mcp_servers",
+   "fieldtype": "Table",
+   "label": "MCP Servers",
+   "options": "Skill MCP Server"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-12 09:17:14.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Skill",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

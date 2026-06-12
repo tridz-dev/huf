@@ -55,6 +55,17 @@ export const agentFormSchema = z.object({
     ),
   show_tool_execution_details: z.boolean().optional(),
 
+  agent_skill: z.array(
+    z.object({
+      name: z.string().optional(),
+      skill: z.string().min(1, 'Skill is required'),
+      mode: z.enum(['Mandatory', 'Optional']).default('Mandatory'),
+      auto_load: z.boolean().default(true),
+      priority: z.number().default(0),
+      description: z.string().optional(),
+    })
+  ).default([]),
+
   // Advanced model overrides
   image_generation_model: z.string().optional(),
   tts_model: z.string().optional(),

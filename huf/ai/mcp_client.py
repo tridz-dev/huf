@@ -32,7 +32,7 @@ from agents import FunctionTool
 MCP_TOOL_PREFIX = "__mcp__"
 
 
-def create_mcp_tools(agent_doc) -> list[FunctionTool]:
+def create_mcp_tools(agent_doc, mcp_server_names: list[str] = None) -> list[FunctionTool]:
     """
     Create FunctionTool objects for all MCP tools available to an agent.
     
@@ -40,17 +40,27 @@ def create_mcp_tools(agent_doc) -> list[FunctionTool]:
     
     Args:
         agent_doc: The Agent document with agent_mcp_server child table
+        mcp_server_names: Optional list of MCP Server names to load. If provided,
+            these servers are used instead of agent_doc.agent_mcp_server.
     
     Returns:
         list[FunctionTool]: List of FunctionTool objects for MCP tools
     """
     tools = []
     
-    if not hasattr(agent_doc, "agent_mcp_server") or not agent_doc.agent_mcp_server:
+    if mcp_server_names is not None:
+        # Use the explicitly provided server names.
+        server_links = [
+            type("_MCPLink", (), {"mcp_server": name, "enabled": True})()
+            for name in mcp_server_names
+        ]
+    elif hasattr(agent_doc, "agent_mcp_server") and agent_doc.agent_mcp_server:
+        server_links = agent_doc.agent_mcp_server
+    else:
         return tools
     
-    for mcp_link in agent_doc.agent_mcp_server:
-        if not mcp_link.enabled:
+    for mcp_link in server_links:
+        if not getattr(mcp_link, "enabled", True):
             continue
         
         try:

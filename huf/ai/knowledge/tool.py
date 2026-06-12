@@ -7,6 +7,39 @@ from .retriever import knowledge_search, get_search_diagnostics
 
 
 
+def _get_allowed_knowledge_sources(agent_name: str) -> list[str]:
+	"""
+	Return all knowledge sources the agent is allowed to search.
+
+	Includes agent-level sources and sources attached via skills.
+	"""
+	allowed_sources = []
+	seen = set()
+
+	try:
+		agent = frappe.get_doc("Agent", agent_name)
+		for ak in agent.get("agent_knowledge", []):
+			name = ak.knowledge_source
+			if name and name not in seen:
+				seen.add(name)
+				allowed_sources.append(name)
+	except Exception:
+		pass
+
+	try:
+		from huf.ai.skills.loader import get_agent_skills
+		for skill in get_agent_skills(agent_name):
+			for sk in skill.get("skill_knowledge", []):
+				name = getattr(sk, "knowledge_source", None)
+				if name and name not in seen:
+					seen.add(name)
+					allowed_sources.append(name)
+	except Exception:
+		pass
+
+	return allowed_sources
+
+
 def create_knowledge_search_tool(agent_name: str) -> Optional[dict]:
 	"""
 	Create a knowledge_search tool definition for an agent.
@@ -14,19 +47,29 @@ def create_knowledge_search_tool(agent_name: str) -> Optional[dict]:
 	This tool allows agents to search knowledge sources.
 	"""
 	# Get all knowledge sources for this agent (valid for search)
+	allowed_sources = _get_allowed_knowledge_sources(agent_name)
+	
+	if not allowed_sources:
+		return None
+	
+	# Build human-readable source list including skill context.
+	available_sources = []
 	try:
 		agent = frappe.get_doc("Agent", agent_name)
+		for ak in agent.get("agent_knowledge", []):
+			available_sources.append(f"{ak.knowledge_source} ({ak.mode})")
 	except Exception:
-		return None
-		
-	available_sources = []
-	for ak in agent.get("agent_knowledge", []):
-		# Both Optional and Mandatory sources can be searched via tool
-		# if the agent needs more specific info
-		available_sources.append(f"{ak.knowledge_source} ({ak.mode})")
-	
-	if not available_sources:
-		return None
+		pass
+
+	try:
+		from huf.ai.skills.loader import get_agent_skills
+		for skill in get_agent_skills(agent_name):
+			for sk in skill.get("skill_knowledge", []):
+				available_sources.append(
+					f"{sk.knowledge_source} (Skill: {skill.skill_name}, {getattr(sk, 'mode', 'Mandatory')})"
+				)
+	except Exception:
+		pass
 	
 	# Build tool definition
 	return {
@@ -74,55 +117,36 @@ def handle_knowledge_search(
 	
 	Returns formatted search results.
 	"""
-	# Get allowed sources
-	agent = frappe.get_doc("Agent", agent_name)
-	allowed_sources = [
-		ak.knowledge_source 
-		for ak in agent.get("agent_knowledge", [])
-	]
-	
+	# Get allowed sources (agent-level + skill-attached)
+	allowed_sources = _get_allowed_knowledge_sources(agent_name)
+
+	if not allowed_sources:
+		return "Error: No knowledge sources available for this agent."
+
 	# Validate requested source
 	if knowledge_source:
 		if knowledge_source not in allowed_sources:
 			return f"Error: Knowledge source '{knowledge_source}' is not available. Available sources: {', '.join(allowed_sources)}"
+		target_sources = [knowledge_source]
 	else:
-		# Search matching source if only one exists, or use first one (simplistic logic)
-		# Improved: search across all optional/available if not specified?
-		# For now, let's pick the first one to avoid breaking existing logic,
-		# but ideally we should search all or ask for clarification.
-		# The retriever supports list of sources, let's use that if backend supports it.
-		# Current backend might be single-source focused in `knowledge_search` helper wrapper
-		# Let's stick to single source selection for now to match interface.
-		if len(allowed_sources) == 1:
-			knowledge_source = allowed_sources[0]
-		else:
-			# If multiple sources, we need to know which one.
-			# Or we search main one?
-			# Let's default to the highest priority one.
-			# Sort by priority
-			sorted_knowledge = sorted(
-				agent.get("agent_knowledge", []), 
-				key=lambda x: x.priority or 0, 
-				reverse=True
-			)
-			if sorted_knowledge:
-				knowledge_source = sorted_knowledge[0].knowledge_source
-	
-	if not knowledge_source:
-		return "Error: No knowledge sources available for this agent."
+		# Search across all allowed sources using the retriever's list support.
+		target_sources = allowed_sources
 
 	# Perform search (ignore_permissions=True: agent has explicit knowledge linkage)
 	try:
 		results = knowledge_search(
 			query=query,
-			knowledge_source=knowledge_source,
+			knowledge_sources=target_sources,
 			top_k=top_k,
 			ignore_permissions=True,
 		)
 
 		if not results:
-			msg = f"No relevant results found for your query in '{knowledge_source}'."
-			diagnostics = get_search_diagnostics([knowledge_source])
+			if knowledge_source:
+				msg = f"No relevant results found for your query in '{knowledge_source}'."
+			else:
+				msg = f"No relevant results found for your query across sources: {', '.join(target_sources)}."
+			diagnostics = get_search_diagnostics(target_sources)
 			if diagnostics:
 				diag = diagnostics[0]
 				if diag.get("reason"):
@@ -133,7 +157,10 @@ def handle_knowledge_search(
 
 		# Format results
 		output = []
-		output.append(f"Search results from '{knowledge_source}':")
+		if knowledge_source:
+			output.append(f"Search results from '{knowledge_source}':")
+		else:
+			output.append(f"Search results across sources: {', '.join(target_sources)}")
 		output.append("")
 
 		for i, result in enumerate(results, 1):
@@ -150,7 +177,7 @@ def handle_knowledge_search(
 
 	except Exception as e:
 		frappe.log_error(
-			f"Knowledge search tool error for source '{knowledge_source}': {e}",
+			f"Knowledge search tool error for sources {target_sources}: {e}",
 			"Knowledge Search Tool Error",
 		)
 		return f"Error searching knowledge base: {str(e)}"
@@ -161,11 +188,8 @@ def create_get_knowledge_sources_tool(agent_name: str) -> Optional[dict]:
 	Create a tool to list available knowledge sources.
 	Returns None if the agent has no knowledge sources (tool should not be added).
 	"""
-	try:
-		agent = frappe.get_doc("Agent", agent_name)
-	except Exception:
-		return None
-	if not agent.get("agent_knowledge"):
+	allowed_sources = _get_allowed_knowledge_sources(agent_name)
+	if not allowed_sources:
 		return None
 	return {
 		"tool_name": "get_knowledge_sources",
@@ -179,11 +203,20 @@ def handle_get_knowledge_sources(agent_name: str) -> str:
 	Handle get_knowledge_sources tool call.
 	"""
 	try:
-		agent = frappe.get_doc("Agent", agent_name)
 		sources = []
 		
+		agent = frappe.get_doc("Agent", agent_name)
 		for ak in agent.get("agent_knowledge", []):
 			sources.append(f"- {ak.knowledge_source} (Mode: {ak.mode}, Priority: {ak.priority})")
+
+		from huf.ai.skills.loader import get_agent_skills
+		for skill in get_agent_skills(agent_name):
+			for sk in skill.get("skill_knowledge", []):
+				sources.append(
+					f"- {sk.knowledge_source} (Skill: {skill.skill_name}, "
+					f"Mode: {getattr(sk, 'mode', 'Mandatory')}, "
+					f"Priority: {getattr(sk, 'priority', 0)})"
+				)
 			
 		if not sources:
 			return "No knowledge sources assigned to this agent."

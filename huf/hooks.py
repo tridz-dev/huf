@@ -110,15 +110,22 @@ page_renderer = [
 after_install = "huf.install.after_install"
 after_app_install = [
     "huf.install.setup_desktop_icon_as_workspace",
-    "huf.ai.app_seeding.seeder.on_app_installed"
+    "huf.ai.app_seeding.seeder.on_app_installed",
+    "huf.ai.skills.hooks.sync_app_skills",
 ]
-after_migrate = "huf.install.after_migrate"
+after_migrate = [
+    "huf.install.after_migrate",
+    "huf.ai.skills.hooks.sync_app_skills",
+]
 
 # Uninstallation
 # ------------
 
 # before_uninstall = "huf.uninstall.before_uninstall"
-after_uninstall = "huf.ai.tool_registry.sync_app_tools"
+after_uninstall = [
+    "huf.ai.tool_registry.sync_app_tools",
+    "huf.ai.skills.hooks.sync_app_skills",
+]
 
 # Integration Setup
 # ------------------
