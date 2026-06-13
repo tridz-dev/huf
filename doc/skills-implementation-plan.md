@@ -34,7 +34,7 @@ Agents attach skills through a child table `Agent Skill` with mode **Mandatory**
 | Skill versioning on agents | v1 uses the live Skill doc. Version-locking (`skill_version_at_attach`) is a follow-up. |
 | Scope | Site-level for v1, matching current `Knowledge Source` default scope. Workspace scoping is a follow-up. |
 | Common skill destination | A JSON list in `Agent Settings` (`skill_destinations`). Default entry points to `https://github.com/tridz-dev/huf-skills`. |
-| Skill manifest format | JSON manifest per skill plus `SKILL.md` frontmatter support. Reuses the project-skills `_index.json` shape where possible. |
+| Skill manifest format | **`SKILL.md`-primary.** `SKILL.md` with standard Anthropic/Claude frontmatter (`name`, `description`, `allowed-tools`, `compatibility`) plus a `huf:` extension block for Huf-specific wiring (tools, knowledge, prompts, mcp_servers, version, author, category). No separate `manifest.json`. Claude/Kimi ignore the `huf:` block; Huf reads everything. Skills from skills.sh with no `huf:` block import as instructions-only and tools are wired manually. |
 | Permissions | Standard Frappe DocType permissions for v1. No custom skill permission hooks yet. |
 | Auto-pick mechanism | System prompt preamble lists optional skills with descriptions. A `list_skills` runtime tool returns the same list. No embedding-based retrieval in v1. Dynamic `load_skill` tool is descoped for v1 because tools cannot be added to a running `Agent` instance mid-turn. |
 | MCP in skills | v1 includes a child table linking `MCP Server` docs. The loader merges skill MCP servers into the effective server list before calling the existing MCP client. |
@@ -166,23 +166,39 @@ def import_skill_from_path(path: str, source_type="Local", source_url=None, sour
     """Parse a single skill directory or SKILL.md file."""
 ```
 
-Skill manifest (`skill.json` or `SKILL.md` frontmatter):
+Skill manifest (`SKILL.md` — canonical format):
 
-```json
-{
-  "name": "huf-sales",
-  "title": "Huf Sales Skill",
-  "description": "...",
-  "category": "CRM",
-  "version": "1.0.0",
-  "author": "Tridz",
-  "instructions": "When the user asks about sales...",
-  "tools": ["get_sales_orders", "create_lead"],
-  "knowledge": [{"source": "Sales Playbook", "mode": "Mandatory", "max_chunks": 5}],
-  "prompts": [{"prompt": "Sales Response Template", "usage": "System"}],
-  "mcp_servers": ["frappe-crm-mcp"]
-}
+```markdown
+---
+name: huf-sales
+description: Sales CRM operations. Use when user asks about leads, orders, or customers.
+compatibility:
+  requires: []          # Phase 2+: list pip packages here
+
+huf:
+  version: "1.0.0"
+  author: "Tridz"
+  category: "CRM"
+  tools:
+    - get_sales_orders
+    - create_lead
+  knowledge:
+    - source: "Sales Playbook"
+      mode: Mandatory
+      max_chunks: 5
+  prompts:
+    - prompt: "Sales Response Template"
+      usage: System
+  mcp_servers:
+    - frappe-crm-mcp
+---
+
+# Huf Sales Skill
+
+When the user asks about sales pipelines, leads, or orders...
 ```
+
+> The `huf:` block is ignored by Claude/Kimi. Standard fields (`name`, `description`) are compatible with skills.sh. A skill from skills.sh with no `huf:` block imports as instructions-only; tools are wired manually afterward.
 
 **Manifest link resolution strategy**: when a manifest references a tool, knowledge source, prompt, or MCP server by name, the importer must verify the target DocType record exists. If it does not exist, log a warning and skip that item (do not create broken Link fields). In a later iteration we can add a "create stubs" option.
 
@@ -359,7 +375,7 @@ Dynamic `load_skill` is **descoped for v1** because the OpenAI Agents SDK fixes 
 | Frontend child-table save mapping | Mirror existing `agent_tool`/`agent_knowledge` patterns exactly. |
 | MCP server not linked at runtime | Refactor `create_mcp_tools(agent, mcp_server_names=None)`; loader passes the merged list from agent + skills. |
 | Skill knowledge not searchable | Widen `knowledge_search` scope to include knowledge sources from all attached skills. |
-| Manifest imports create broken links | Importer validates referenced tools/knowledge/prompts/MCP exist; skips missing items and logs warnings. |
+| `SKILL.md` imports create broken links | Importer validates referenced tools/knowledge/prompts/MCP exist in the `huf:` block; skips missing items and logs warnings. Skills from skills.sh with no `huf:` block never have broken links — they are instructions-only. |
 | Dynamic `load_skill` infeasible | Descoped for v1; optional skills are pre-loaded and gated by the system prompt preamble. |
 
 ---
@@ -377,7 +393,7 @@ Dynamic `load_skill` is **descoped for v1** because the OpenAI Agents SDK fixes 
 8. Update `huf/ai/knowledge/tool.py` so `knowledge_search` covers skill-attached knowledge sources:
    - 8a. Include skill-attached sources in the agent's allowed source list.
    - 8b. Search across multiple sources (use the retriever's list support) instead of collapsing to the highest-priority single source.
-9. Implement `huf/ai/skills/importer.py` for Git + local path + SKILL.md frontmatter, with link validation.
+9. Implement `huf/ai/skills/importer.py` for Git + local path + `.huf` zip + `SKILL.md`-primary parsing (read `name`/`description` from standard frontmatter, read `huf:` block for wiring), with link validation. `manifest.json` is not generated or consumed — `SKILL.md` is the only file format.
 10. Implement `huf/ai/skills/hooks.py` for `huf_skills` app hook sync.
 11. Implement `huf/ai/skills/api.py` whitelisted methods.
 12. Update `huf/hooks.py` (`after_migrate`, `after_app_install`, `after_uninstall`) and `huf/install.py` (default categories).
@@ -391,7 +407,7 @@ Dynamic `load_skill` is **descoped for v1** because the OpenAI Agents SDK fixes 
 18. Update `App.tsx` routes, header actions, and sidebar.
 
 ### Polish
-19. Add a sample app-provided skill manifest in `huf/ai/skills/_registry.py` (optional).
+19. Add a sample app-provided skill with a `SKILL.md` in `huf/ai/skills/_registry.py` (optional).
 20. Run `pre-commit` / lint on new frontend files.
 21. Commit and push `feature/skills-system`.
 
