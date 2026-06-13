@@ -7,7 +7,10 @@
  "field_order": [
   "default_provider",
   "column_break_ar10",
-  "default_model"
+  "default_model",
+  "skills_section",
+  "skill_destinations",
+  "last_skill_scans"
  ],
  "fields": [
   {
@@ -25,6 +28,23 @@
   {
    "fieldname": "column_break_ar10",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "skills_section",
+   "fieldtype": "Section Break",
+   "label": "Skills"
+  },
+  {
+   "description": "JSON list of common skill destinations. Example: {\"huf-skills\": {\"repo_url\": \"https://github.com/tridz-dev/huf-skills\", \"path\": \"skills\", \"ref\": \"main\"}}",
+   "fieldname": "skill_destinations",
+   "fieldtype": "JSON",
+   "label": "Skill Destinations"
+  },
+  {
+   "fieldname": "last_skill_scans",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Last Skill Scans"
   }
  ],
  "grid_page_length": 50,
