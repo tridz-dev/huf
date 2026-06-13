@@ -276,6 +276,38 @@ def get_skill_instructions(agent_name: str) -> str:
     return "\n\n".join(parts)
 
 
+def get_skill_prompts(agent_name: str) -> list[dict[str, str]]:
+    """Return prompt bodies from attached skills, tagged by usage.
+
+    Only active Agent Prompt documents are included. Each entry contains:
+    - ``usage``: "System" or "User"
+    - ``body``: the prompt template body
+    - ``skill``: the skill_name the prompt came from
+    """
+    prompts: list[dict[str, str]] = []
+
+    if not frappe.db.exists("DocType", "Agent Prompt"):
+        return prompts
+
+    for skill in get_agent_skills(agent_name):
+        for row in skill.get("skill_prompts", []):
+            try:
+                prompt_doc = frappe.get_doc("Agent Prompt", row.prompt)
+                if not getattr(prompt_doc, "is_active", 1):
+                    continue
+                prompts.append(
+                    {
+                        "usage": row.usage or "System",
+                        "body": prompt_doc.prompt_body or "",
+                        "skill": skill.skill_name,
+                    }
+                )
+            except Exception:
+                continue
+
+    return prompts
+
+
 def get_optional_skills_preamble(agent_name: str) -> str:
     """Return a system prompt section listing optional skills."""
     optional_skills = []
