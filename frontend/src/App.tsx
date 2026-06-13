@@ -12,6 +12,7 @@ import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
 import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
 import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
+import { SkillsHeaderActions } from './components/skills/SkillsHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
@@ -65,6 +66,7 @@ const IntegrationServiceFormPageWrapper = lazy(
 );
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
+const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 
 import { useEffect } from 'react';
 import { SocketProvider } from './contexts/SocketContext';
@@ -403,7 +405,7 @@ function AppShell() {
               <ProtectedRoute>
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
-                    <NotFoundPage />
+                    <AgentSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
