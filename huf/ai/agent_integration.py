@@ -269,9 +269,14 @@ class AgentManager:
         from huf.ai.prompt_resolver import resolve_prompt
         instructions = resolve_prompt(self.agent_doc) or ""
 
-        # Append skill instructions and optional skill preamble to system prompt
+        # Append skill instructions, optional skill preamble, and skill prompts
+        # (System usage) to the system prompt.
         try:
-            from huf.ai.skills.loader import get_skill_instructions, get_optional_skills_preamble
+            from huf.ai.skills.loader import (
+                get_skill_instructions,
+                get_optional_skills_preamble,
+                get_skill_prompts,
+            )
 
             skill_instructions = get_skill_instructions(self.agent_doc.agent_name)
             if skill_instructions:
@@ -280,6 +285,11 @@ class AgentManager:
             optional_preamble = get_optional_skills_preamble(self.agent_doc.agent_name)
             if optional_preamble:
                 instructions += "\n\n" + optional_preamble
+
+            skill_prompts = get_skill_prompts(self.agent_doc.agent_name)
+            system_prompts = [p["body"] for p in skill_prompts if p["usage"] == "System"]
+            if system_prompts:
+                instructions += "\n\n" + "\n\n".join(system_prompts)
         except Exception as e:
             frappe.log_error(
                 f"Error injecting skill instructions: {str(e)}",
@@ -921,11 +931,25 @@ def run_agent_sync(
              except:
                  pass
         
+        # Inject User-usage skill prompts before the current user message.
+        try:
+            from huf.ai.skills.loader import get_skill_prompts
+
+            skill_prompts = get_skill_prompts(agent_name)
+            user_prompts = [p["body"] for p in skill_prompts if p["usage"] == "User"]
+            if user_prompts:
+                prompt = "\n\n".join(user_prompts) + "\n\n" + (prompt or "")
+        except Exception as e:
+            frappe.log_error(
+                f"Error injecting user skill prompts: {str(e)}",
+                "Skill Prompt Error",
+            )
+
         base_prompt = f"""
             Current user message:
             {prompt}
         """
-        
+
         # Inject knowledge context if available
         if knowledge_context and knowledge_context.get("context_text"):
             enhanced_prompt = inject_knowledge_context(base_prompt, knowledge_context)
