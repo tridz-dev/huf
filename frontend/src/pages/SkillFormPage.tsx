@@ -28,8 +28,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
-import { Plus, Trash2, Server, BookOpen, ScrollText, Plug, Save, Sparkles } from 'lucide-react';
-import { getSkill, createSkill, updateSkill } from '@/services/skillApi';
+import { Plus, Trash2, Server, BookOpen, ScrollText, Plug, Save, Sparkles, Download } from 'lucide-react';
+import { getSkill, createSkill, updateSkill, exportSkillAsHuf } from '@/services/skillApi';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { getToolFunctions } from '@/services/toolApi';
@@ -423,6 +423,12 @@ export function SkillFormPage() {
               <Button size="sm" onClick={handleFormSubmit} disabled={saving}>
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? (isNew ? 'Creating...' : 'Saving...') : isNew ? 'Create' : 'Save'}
+              </Button>
+            )}
+            {!isNew && (
+              <Button variant="outline" size="sm" onClick={() => exportSkillAsHuf(form.getValues('skill_name'))}>
+                <Download className="w-4 h-4 mr-2" />
+                Download .huf
               </Button>
             )}
             {!isNew && (

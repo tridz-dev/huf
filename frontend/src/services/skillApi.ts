@@ -1,8 +1,34 @@
-import { db, call } from '@/lib/frappe-sdk';
+import { db, call, file } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { SkillDoc, SkillOption } from '@/types/skill.types';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { fetchPaginatedCount } from './utilsApi';
+
+export interface SkillDestination {
+  name: string;
+  repo_url: string;
+  path?: string;
+  ref?: string;
+}
+
+export interface SkillRegistrySkill {
+  name: string;
+  title: string;
+  description?: string;
+  path?: string;
+  author?: string;
+  version?: string;
+  category?: string;
+}
+
+export interface SkillRegistry {
+  name?: string;
+  description?: string;
+  source_url?: string;
+  ref?: string;
+  skills_path?: string;
+  skills?: SkillRegistrySkill[];
+}
 
 const SKILL_LIST_FIELDS = [
   'name',
@@ -165,5 +191,81 @@ export async function getSkillOptions(): Promise<SkillOption[]> {
     return (Array.isArray(message) ? message : []) as SkillOption[];
   } catch (error) {
     handleFrappeError(error, 'Error fetching skill options');
+  }
+}
+
+export async function getSkillDestinations(): Promise<SkillDestination[]> {
+  try {
+    const result = await call.get('huf.ai.skills.api.get_skill_destinations');
+    const message = (result as { message?: unknown }).message ?? result;
+    return (Array.isArray(message) ? message : []) as SkillDestination[];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching skill destinations');
+  }
+}
+
+export function exportSkillAsHuf(skill_name: string): void {
+  const url = `/api/method/huf.ai.skills.api.download_skill_huf?skill_name=${encodeURIComponent(skill_name)}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${skill_name}.huf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+export async function importSkillFromHuf(
+  fileToUpload: File
+): Promise<{ skill?: string; warnings?: string[]; success?: boolean; message?: string }> {
+  try {
+    const uploadResponse = await file.uploadFile(fileToUpload, { isPrivate: false });
+    const uploadData = (uploadResponse as { data?: { message?: { file_url?: string }; file_url?: string } }).data;
+    const file_url = uploadData?.message?.file_url || uploadData?.file_url;
+    if (!file_url) {
+      throw new Error('File upload did not return a file URL');
+    }
+    const result = await call.post('huf.ai.skills.api.import_skill_from_huf', { file_url });
+    const message = (result as { message?: unknown }).message ?? result;
+    return (message as { skill?: string; warnings?: string[]; success?: boolean; message?: string }) || { success: true };
+  } catch (error) {
+    handleFrappeError(error, 'Error importing skill from .huf');
+  }
+}
+
+export async function fetchSkillRegistry(
+  repo_url: string,
+  ref = 'main',
+  path = '_index.json'
+): Promise<SkillRegistry> {
+  try {
+    const result = await call.get('huf.ai.skills.api.fetch_skill_registry', {
+      repo_url,
+      ref,
+      path,
+    });
+    const message = (result as { message?: unknown }).message ?? result;
+    return (message as SkillRegistry) || {};
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching skill registry');
+  }
+}
+
+export async function importSkillFromRegistry(
+  repo_url: string,
+  skill_name: string,
+  path = 'skills',
+  ref = 'main'
+): Promise<{ success: boolean; message?: string; skills?: string[] }> {
+  try {
+    const result = await call.post('huf.ai.skills.api.import_skill_from_registry', {
+      repo_url,
+      skill_name,
+      path,
+      ref,
+    });
+    const message = (result as { message?: unknown }).message ?? result;
+    return message as { success: boolean; message?: string; skills?: string[] };
+  } catch (error) {
+    handleFrappeError(error, 'Error importing skill from registry');
   }
 }
