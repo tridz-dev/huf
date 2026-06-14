@@ -130,6 +130,7 @@ class TestSkillImportAndExport(FrappeTestCase):
 		skill_doc = frappe.get_doc("Skill", {"skill_name": self.skill_name})
 		content = build_skill_md(skill_doc)
 		self.assertIn("name: test-export-import-skill", content)
+		self.assertIn("title: Test Export Import Skill", content)
 		self.assertIn("huf:", content)
 		self.assertIn("Do the thing.", content)
 
