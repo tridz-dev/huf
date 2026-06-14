@@ -2111,15 +2111,6 @@ def _get_default_tts_model(provider_name: str) -> str:
 
     return defaults.get(provider_name.lower())
 
-_TTS_ENV_VAR_PROVIDERS: dict[str, str] = {
-    "google":     "GEMINI_API_KEY",
-    "gemini":     "GEMINI_API_KEY",
-    "vertex_ai":  "GEMINI_API_KEY",
-    "elevenlabs": "ELEVENLABS_API_KEY",
-    "minimax":    "MINIMAX_API_KEY",
-}
-
-
 def _resolve_tts_config(
     agent_doc,
     tool_model: str | None = None,
@@ -2425,11 +2416,7 @@ async def handle_generate_audio(
             "voice": voice,
         }
 
-        if provider_name in _TTS_ENV_VAR_PROVIDERS:
-            import os
-            os.environ[_TTS_ENV_VAR_PROVIDERS[provider_name]] = api_key
-        else:
-            speech_params["api_key"] = api_key
+        speech_params["api_key"] = api_key
 
         if speed != 1.0:
             speech_params["speed"] = speed
@@ -2709,10 +2696,6 @@ async def handle_transcribe_audio(
                     ]
                 }
             ]
-
-            import os
-            env_var = _TTS_ENV_VAR_PROVIDERS.get(provider_name, "GEMINI_API_KEY")
-            os.environ[env_var] = api_key
 
             try:
                 response = await asyncio.to_thread(
