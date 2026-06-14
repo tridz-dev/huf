@@ -127,6 +127,7 @@ def build_skill_md(skill_doc) -> str:
 	"""Build the canonical ``SKILL.md`` content for a Skill document."""
 	frontmatter: dict[str, Any] = {
 		"name": skill_doc.skill_name,
+		"title": skill_doc.title or skill_doc.skill_name,
 		"description": skill_doc.description or "",
 		"compatibility": {"requires": []},
 	}
