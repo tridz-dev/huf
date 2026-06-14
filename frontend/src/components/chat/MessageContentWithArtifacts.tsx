@@ -13,22 +13,17 @@ import { parseJSXPreviews, hasJSXPreviews } from '@/utils/jsxPreviewParser';
 import type { ParsedArtifact, ParsedWebPreview, ParsedJSXPreview } from '@/types/artifact.types';
 
 /**
- * Decode HTML entities in content to handle escaped tags like &lt;web-preview&gt;
- * This handles cases where the backend sends HTML-escaped content.
+ * Decode HTML entities in content to handle escaped tags like &lt;web-preview&gt;.
+ * Uses pure string replacement instead of the DOM parser to avoid mutation-XSS.
  */
 function decodeHtmlEntities(text: string): string {
-	if (typeof document === 'undefined') {
-		return text
-			.replace(/&lt;/g, '<')
-			.replace(/&gt;/g, '>')
-			.replace(/&quot;/g, '"')
-			.replace(/&#39;/g, "'")
-			.replace(/&amp;/g, '&');
-	}
-
-	const textarea = document.createElement('textarea');
-	textarea.innerHTML = text;
-	return textarea.value;
+	// Decode &amp; last to avoid double-decoding inputs like &amp;lt;.
+	return text
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&amp;/g, '&');
 }
 
 interface MessageContentWithArtifactsProps {
