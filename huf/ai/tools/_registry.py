@@ -151,13 +151,42 @@ DISCORD_TOOLS = [
 
 TELEGRAM_TOOLS = [
 	{
-		"tool_name": "telegram_send_message",
-		"description": "Send a message via Telegram bot. Requires TELEGRAM_TOKEN env var.",
-		"function_path": "huf.ai.tools.telegram.handle_send_message",
+		"tool_name": "telegram",
+		"description": (
+			"Manage a Telegram bot. Actions: send_message (chat_id or recipient_name, text/message, parse_mode), "
+			"reply_to_message (chat_id or recipient_name, text/message, reply_to_message_id), "
+			"send_photo (chat_id or recipient_name, photo/file/file_url, caption), "
+			"send_document (chat_id or recipient_name, document/file/file_url, caption), "
+			"edit_message_text (chat_id or recipient_name, message_id, text/message), "
+			"delete_message (chat_id or recipient_name, message_id), "
+			"get_updates (offset, limit), get_chat_info (chat_id or recipient_name), get_me, "
+			"set_webhook (url, secret_token), delete_webhook. "
+			"Use get_integration_recipient to resolve a human name to a Telegram chat ID."
+		),
+		"function_path": "huf.ai.tools.telegram.handle_action",
 		"category": "Communication Tools",
 		"parameters": [
-			_p("chat_id", required=True, description="Telegram chat ID to send to"),
-			_p("message", required=True, description="Message text"),
+			_action(
+				"send_message|reply_to_message|send_photo|send_document|"
+				"edit_message_text|delete_message|get_updates|get_chat_info|get_me|set_webhook|delete_webhook"
+			),
+			_p("chat_id", description="Telegram chat/channel ID (numeric or @username). Alternative to recipient_name."),
+			_p("recipient_name", description="Human-friendly recipient name from Integration Settings (alternative to chat_id)."),
+			_p("message", description="Message text (alias for text)."),
+			_p("text", description="Message or edited text."),
+			_p("photo", description="Photo source: Telegram file_id, public URL, or Frappe File docname/file_url."),
+			_p("document", description="Document source: Telegram file_id, public URL, or Frappe File docname/file_url."),
+			_p("file", description="Generic file source alias for photo/document."),
+			_p("file_url", description="Public file URL alias for photo/document."),
+			_p("caption", description="Caption for photo/document messages."),
+			_p("parse_mode", description="Text formatting: Markdown, HTML, or MarkdownV2."),
+			_p("reply_to_message_id", type="integer", description="Message ID to reply to."),
+			_p("message_id", type="integer", description="Message ID to edit or delete."),
+			_p("url", description="Webhook URL for set_webhook."),
+			_p("secret_token", description="Secret token for webhook verification."),
+			_p("offset", type="integer", description="Update offset for get_updates."),
+			_p("limit", type="integer", description="Max updates for get_updates (max 100)."),
+			_p("disable_notification", type="boolean", description="Send message silently."),
 		],
 	},
 ]
