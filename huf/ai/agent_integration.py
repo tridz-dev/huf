@@ -952,7 +952,7 @@ def run_agent_sync(
                     # Persist tool result with context policy (large results stored as reference only)
                     tool_result_str = str(tool_result) if tool_result is not None else ""
                     tool_result_summary = (tool_result_str[:200] + "...") if len(tool_result_str) > 200 else tool_result_str
-                    max_context_chars = int(getattr(self.agent_doc, "max_context_chars", 2000))
+                    max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000))
                     use_reference = len(tool_result_str) > max_context_chars
 
                     conv_manager.add_message(
