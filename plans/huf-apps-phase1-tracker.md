@@ -4,14 +4,14 @@ Updated by orchestrator at each checkpoint. Sub-agents must not edit this file d
 
 ## Status
 Overall: IN PROGRESS
-Last checkpoint: CHECKPOINT 3
+Last checkpoint: CHECKPOINT 4
 
 ## Phase Completion
 - [x] P0 Foundation (DocType + installer backend)
 - [x] P1 Backend wiring (hooks + install.py + app_tools)
 - [x] P2 Frontend services + routing
 - [x] P3 Frontend pages
-- [ ] P4 Frontend components
+- [x] P4 Frontend components
 - [ ] P5 ChatWindowV2 patch
 - [ ] P6 Verification
 
@@ -27,9 +27,9 @@ Last checkpoint: CHECKPOINT 3
 - [x] frontend/src/pages/AppRegistryPage.tsx
 - [x] frontend/src/pages/AppPlannerPage.tsx
 - [x] frontend/src/pages/AppLaunchPage.tsx
-- [ ] frontend/src/components/apps/AppDashboardShell.tsx
-- [ ] frontend/src/components/apps/AppListShell.tsx
-- [ ] frontend/src/components/apps/AppCollectionView.tsx
+- [x] frontend/src/components/apps/AppDashboardShell.tsx
+- [x] frontend/src/components/apps/AppListShell.tsx
+- [x] frontend/src/components/apps/AppCollectionView.tsx
 
 ### Modify
 - [x] huf/hooks.py
@@ -43,4 +43,5 @@ Last checkpoint: CHECKPOINT 3
 - P3 typecheck required minor import adjustments to match actual codebase exports:
   - AppRegistryPage: PageLayout, GridView, ItemCard use named imports (not default exports).
   - AppLaunchPage: removed unused `useNavigate` import.
-  Both fixed; remaining errors are expected (missing shell components + defaultAgentName prop).
+- P4 typecheck required a similar import adjustment in AppCollectionView (GridView, ItemCard, DataRecordList, FilterBar use named imports).
+- Remaining expected error: `defaultAgentName` prop does not exist on ChatWindowV2 (fixed in P5).
