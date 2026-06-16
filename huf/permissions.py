@@ -54,6 +54,7 @@ CAPABILITIES: dict[str, str] = {
 	"system.providers.manage": "Manage AI Providers",
 	"system.models.manage": "Manage AI Models",
 	"system.mcp.manage": "Manage MCP Servers",
+	"system.integrations.manage": "Manage Integrations",
 	"system.settings.manage": "Manage Settings",
 	# --- Users & Roles ---
 	"users.invite": "Invite Users",

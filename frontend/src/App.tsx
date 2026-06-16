@@ -41,6 +41,12 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
+const IntegrationSettingsListingPageWrapper = lazy(
+  () => import('./pages/IntegrationSettingsListingPageWrapper'),
+);
+const IntegrationSettingsDetailsPageWrapper = lazy(
+  () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
+);
 
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
@@ -373,6 +379,26 @@ function App() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <KnowledgeSourceFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integrations"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationSettingsListingPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integrations/:settingId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationSettingsDetailsPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }

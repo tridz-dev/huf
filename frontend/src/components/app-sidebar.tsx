@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2 } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -75,6 +75,12 @@ const allNavItems = [
     url: "/mcp",
     icon: Server,
     capability: "system.mcp.manage",
+  },
+  {
+    title: "Integrations",
+    url: "/integrations",
+    icon: Link2,
+    capability: "system.integrations.manage",
   },
   {
     title: "AI Providers",
