@@ -85,11 +85,33 @@ Defines a specific AI model available from a provider. Model names are automatic
 | :----------- | :----------- | :--- | :---------------------------------------- |
 | **Model Name** | `model_name` | Data | The name of the model (e.g., `gpt-4-turbo`, `claude-3-opus`, `gpt-5-mini`). Can be specified in user-friendly format - the system automatically adds provider prefix. Alternatively, use LiteLLM format (e.g., `openai/gpt-4-turbo`) for explicit provider specification. |
 | **Provider**   | `provider`   | Link | A link to the `AI Provider` DocType. The provider name is used to determine the provider prefix for model normalization.      |
+| **Input Cost per 1M Tokens (USD)** | `input_cost_per_1m_tokens` | Float | *Optional.* Custom input/prompt token price in USD per million tokens. E.g. `2.5` for $2.50/1M. Leave blank to use LiteLLM's automatic pricing. Set to `0` for free/self-hosted models. |
+| **Output Cost per 1M Tokens (USD)** | `output_cost_per_1m_tokens` | Float | *Optional.* Custom output/completion token price in USD per million tokens. Must be set together with `input_cost_per_1m_tokens`. |
+| **Cached Input Cost per 1M Tokens (USD)** | `cached_input_cost_per_1m_tokens` | Float | *Optional.* Price for prompt cache reads (cache hits) in USD per million tokens. E.g. Anthropic charges $0.30/1M for cache reads vs $3.00/1M for regular input. Leave blank if the model/provider does not charge separately for cache reads. |
 
 **Model Name Normalization:**
 - User-friendly names: `gpt-4-turbo` → automatically normalized to `openai/gpt-4-turbo`
 - Provider prefix mapping: `gemini` → `google`, `grok` → `xai`
 - LiteLLM format: `openai/gpt-4-turbo` → used as-is (no normalization needed)
+
+**Custom Pricing System:**
+
+Huf includes a production-ready, 3-tier cost calculation priority system (see `huf/ai/cost_calculator.py`):
+
+| Priority | Source | When active |
+| :------- | :----- | :---------- |
+| **1 — Custom** | `input_cost_per_1m_tokens` + `output_cost_per_1m_tokens` fields on AI Model | Both fields are set (including `0` for free models) |
+| **2 — LiteLLM Auto** | `litellm.completion_cost()` built-in price table | No custom price set, model is known to LiteLLM |
+| **3 — Unknown** | `0.0` (no silent errors) | Model is unknown to both HUF and LiteLLM |
+
+**Formula (industry standard):**
+```
+cost = (input_tokens  / 1_000_000) × input_cost_per_1m_tokens
+     + (output_tokens / 1_000_000) × output_cost_per_1m_tokens
+     + (cached_tokens / 1_000_000) × cached_input_cost_per_1m_tokens  # if set
+```
+
+**Cache behaviour:** Custom pricing is cached in Redis (10-minute TTL). The cache is auto-invalidated whenever an AI Model document is saved. After `bench migrate`, all custom prices are registered into LiteLLM's in-memory registry via `sync_all_model_pricing()`.
 
 #### 3. Agent Tool Function
 

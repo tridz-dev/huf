@@ -238,6 +238,12 @@ class AgentManager:
     """
             instructions += tools_instruction
 
+        instructions += """
+            SYSTEM INSTRUCTION - LARGE CONTEXT REFERENCES:
+            If you see a data payload or result formatted as a reference like [record_kind: summary · handle=DocType/Name], it means the full massive data payload was truncated to save space.
+            You MUST use the `get_result_context` tool with that exact handle (e.g. DocType/Name) to fetch the full data if you need more details to answer the user's question.
+            """
+
         if self.agent_doc.enable_conversation_data:
              instructions += """
     
@@ -941,17 +947,30 @@ def run_agent_sync(
                     tool_status = tool_call_doc.status or "Completed"
                     tool_name = tool_call_doc.tool or "Unknown Tool"
 
-                    message_name = frappe.db.get_value("Agent Message", {"tool_calll": updated_tool_call_id}, "name")
+                    message_name = frappe.db.get_value("Agent Message", {"tool_call": updated_tool_call_id}, "name")
 
-                    if message_name:
-                        msg_doc = frappe.get_doc("Agent Message", message_name)
-                        
-                        result_str = json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result
-                        new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
-                        
-                        msg_doc.content = new_content
-                        msg_doc.kind = "Tool Result"
-                        msg_doc.save(ignore_permissions=True)
+                    # Persist tool result with context policy (large results stored as reference only)
+                    tool_result_str = str(tool_result) if tool_result is not None else ""
+                    tool_result_summary = (tool_result_str[:200] + "...") if len(tool_result_str) > 200 else tool_result_str
+                    max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000))
+                    use_reference = len(tool_result_str) > max_context_chars
+
+                    conv_manager.add_message(
+                        conversation,
+                        role="tool",
+                        content=tool_result_str,
+                        provider=resolved_provider,
+                        model=resolved_model,
+                        agent=agent_name,
+                        run_name=run_doc.name,
+                        kind="Tool Result",
+                        tool_call_id=updated_tool_call_id,
+                        record_kind="tool_result",
+                        context_policy="include_reference" if use_reference else "include_full",
+                        context_summary=tool_result_summary,
+                        reference_doctype="Agent Tool Call",
+                        reference_name=updated_tool_call_id
+                    )
 
                     # Emit socket event for tool call completed/failed
                     # Always emit, even if message not found (e.g., for image generation which creates its own message)
@@ -1020,6 +1039,36 @@ def run_agent_sync(
                 cached_tokens = getattr(usage, "cached_tokens", None) or 0
             
             cached_tokens = cached_tokens or 0
+            
+            try:
+                # Prefer cost directly from the result
+                cost = getattr(result, "cost", 0)
+                if not cost:
+                    from huf.ai.cost_calculator import calculate_cost
+                    
+                    mock_response = {
+                        "usage": {
+                            "prompt_tokens": input_tokens,
+                            "completion_tokens": output_tokens,
+                            "total_tokens": input_tokens + output_tokens
+                        },
+                        # Pass exactly the resolved model (e.g. gpt-4o) so litellm native pricing works without openai/ prefix errors
+                        "model": resolved_model 
+                    }
+                    
+                    if cached_tokens > 0:
+                        mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                        
+                    cost, _source = calculate_cost(
+                        model_name=resolved_model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cached_tokens=cached_tokens,
+                        litellm_response=mock_response
+                    )
+            except Exception as e:
+                frappe.log_error(f"Cost calculation failed for {resolved_model} in sync: {e}", "Agent Sync Cost")
+                cost = 0.0
 
             try:
                 total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
@@ -1562,25 +1611,33 @@ async def run_agent_stream(
                             frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
                             
                     try:
-                        from huf.ai.providers.litellm import _normalize_model_name
-                        pricing_model = _normalize_model_name(resolved_model, resolved_provider)
-                        
-                        mock_response = {
-                            "usage": {
-                                "prompt_tokens": input_tokens,
-                                "completion_tokens": output_tokens,
-                                "total_tokens": input_tokens + output_tokens
-                            },
-                            "model": pricing_model
-                        }
-                        
-                        if cached_tokens > 0:
-                            mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                        # Prefer cost directly from the chunk (calculated by provider)
+                        cost = chunk.get("cost")
+                        if not cost:
+                            from huf.ai.providers.litellm import _normalize_model_name
+                            from huf.ai.cost_calculator import calculate_cost
                             
-                        cost = litellm.completion_cost(
-                            completion_response=mock_response,
-                            model=pricing_model
-                        )
+                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
+                            
+                            mock_response = {
+                                "usage": {
+                                    "prompt_tokens": input_tokens,
+                                    "completion_tokens": output_tokens,
+                                    "total_tokens": input_tokens + output_tokens
+                                },
+                                "model": pricing_model
+                            }
+                            
+                            if cached_tokens > 0:
+                                mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                                
+                            cost, _source = calculate_cost(
+                                model_name=resolved_model,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                cached_tokens=cached_tokens,
+                                litellm_response=mock_response
+                            )
 
                     except Exception as e:
                         frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")

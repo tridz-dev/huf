@@ -140,6 +140,16 @@ def after_migrate():
 	except Exception as e:
 		frappe.log_error(f"App seeding failed: {e}", "App Seeding")
 
+	# Sync custom AI Model pricing into LiteLLM's in-memory registry
+	try:
+		from huf.ai.cost_calculator import sync_all_model_pricing
+		sync_all_model_pricing()
+	except Exception as e:
+		frappe.log_error(
+			f"Failed to sync model pricing after migrate: {str(e)}",
+			"Cost Calculator Sync Error"
+		)
+
 def create_demo_ai_providers():
     providers = [
         # {"doctype": "AI Provider", "provider_name": "xAI", "slug": "xai", "chef": "xAI", "api_key": ""},

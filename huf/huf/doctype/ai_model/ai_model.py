@@ -6,8 +6,45 @@ from frappe import _
 from frappe.model.document import Document
 
 
+
 class AIModel(Document):
-	pass
+	def validate(self):
+		"""Validate that both input and output prices are set when custom pricing is enabled."""
+		if not self.get("use_custom_pricing"):
+			return
+
+		input_price = self.get("input_cost_per_1m_tokens")
+		output_price = self.get("output_cost_per_1m_tokens")
+
+		# If one is set but not the other, throw a clear validation error
+		if (input_price is not None and input_price != 0) and (output_price is None or output_price == 0):
+			frappe.throw(
+				_("Custom pricing is enabled. Please also set 'Output Cost per 1M Tokens'.")
+			)
+		if (output_price is not None and output_price != 0) and (input_price is None or input_price == 0):
+			frappe.throw(
+				_("Custom pricing is enabled. Please also set 'Input Cost per 1M Tokens'.")
+			)
+
+	def on_update(self):
+		"""Invalidate Redis pricing cache and re-register with LiteLLM."""
+		from huf.ai.cost_calculator import (
+			invalidate_model_pricing_cache,
+			register_model_pricing_with_litellm,
+			unregister_model_pricing_with_litellm,
+			get_model_pricing,
+		)
+
+		# Always invalidate so next request fetches fresh data
+		invalidate_model_pricing_cache(self.name)
+
+		# Re-register with LiteLLM if custom pricing is configured, otherwise clear the override
+		pricing = get_model_pricing(self.name)
+		if pricing:
+			register_model_pricing_with_litellm(self.name, pricing)
+		else:
+			unregister_model_pricing_with_litellm(self.name)
+
 
 
 @frappe.whitelist()
