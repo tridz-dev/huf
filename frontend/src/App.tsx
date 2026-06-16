@@ -41,6 +41,9 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
+const AppRegistryPage = lazy(() => import('./pages/AppRegistryPage'));
+const AppPlannerPage = lazy(() => import('./pages/AppPlannerPage'));
+const AppLaunchPage = lazy(() => import('./pages/AppLaunchPage'));
 
 import { useEffect } from 'react';
 import { createFrappeSocket } from './utils/socket';
@@ -232,6 +235,54 @@ function App() {
             element={
               <ProtectedRoute>
                 <DataTableBuilderWrapper />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/apps"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={null}>
+                  <Suspense fallback={<PageLoader />}>
+                    <AppRegistryPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/apps/new"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader>
+                  <Suspense fallback={<PageLoader />}>
+                    <AppPlannerPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/apps/new/:chatId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader>
+                  <Suspense fallback={<PageLoader />}>
+                    <AppPlannerPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/apps/:appId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader>
+                  <Suspense fallback={<PageLoader />}>
+                    <AppLaunchPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />

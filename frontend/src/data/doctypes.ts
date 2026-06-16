@@ -18,6 +18,7 @@ export const doctype = {
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",
   "Huf Data Table": "Huf Data Table",
+  HufApp: "Huf App",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];

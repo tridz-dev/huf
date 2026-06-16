@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, LayoutGrid } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -26,6 +26,12 @@ const allNavItems = [
     title: "Dashboard",
     url: "/",
     icon: Home,
+    capability: null,
+  },
+  {
+    title: "Apps",
+    url: "/apps",
+    icon: LayoutGrid,
     capability: null,
   },
   {
