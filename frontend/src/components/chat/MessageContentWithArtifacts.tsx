@@ -1,16 +1,20 @@
 /**
- * Helper component that parses and renders message content with artifacts, web previews, and JSX previews.
- * Extracts <artifact>, <web-preview>, and <jsx-preview> tags from content and renders them as components.
+ * Helper component that parses and renders message content with structured blocks.
+ *
+ * Extracts <artifact>, <web-preview>, <jsx-preview>, and <ui-component> tags
+ * from content and renders them using the appropriate component.
  */
 
 import { MessageResponse } from '@/components/ai-elements/message';
 import { ArtifactRenderer } from './ArtifactRenderer';
 import { WebPreviewRenderer } from './WebPreviewRenderer';
 import { JSXPreviewRenderer } from './JSXPreviewRenderer';
+import { UIComponentRenderer } from './ui-components/UIComponentRenderer';
 import { parseArtifacts, hasArtifacts } from '@/utils/artifactParser';
 import { parseWebPreviews, hasWebPreviews } from '@/utils/webPreviewParser';
 import { parseJSXPreviews, hasJSXPreviews } from '@/utils/jsxPreviewParser';
-import type { ParsedArtifact, ParsedWebPreview, ParsedJSXPreview } from '@/types/artifact.types';
+import { parseUIComponents, hasUIComponents } from '@/utils/uiComponentParser';
+import type { ParsedArtifact, ParsedWebPreview, ParsedJSXPreview, ParsedUIComponent } from '@/types/artifact.types';
 
 /**
  * Decode HTML entities in content to handle escaped tags like &lt;web-preview&gt;
@@ -37,25 +41,29 @@ interface MessageContentWithArtifactsProps {
 }
 
 export function MessageContentWithArtifacts({ content, messageKey }: MessageContentWithArtifactsProps) {
-	// Decode HTML entities first (handles &lt;web-preview&gt; → <web-preview>)
 	const decodedContent = decodeHtmlEntities(content);
 
-	// Check if content has artifacts, web previews, or JSX previews
 	const contentHasArtifacts = hasArtifacts(decodedContent);
 	const contentHasWebPreviews = hasWebPreviews(decodedContent);
 	const contentHasJSXPreviews = hasJSXPreviews(decodedContent);
+	const contentHasUIComponents = hasUIComponents(decodedContent);
 
-	// If no special content, render as plain markdown
-	if (!contentHasArtifacts && !contentHasWebPreviews && !contentHasJSXPreviews) {
+	if (!contentHasArtifacts && !contentHasWebPreviews && !contentHasJSXPreviews && !contentHasUIComponents) {
 		return <MessageResponse>{content}</MessageResponse>;
 	}
 
-	// Parse in order: JSX previews → web previews → artifacts
-	// This prevents nested tags from being captured incorrectly
+	// Parse in order: UI components → JSX previews → web previews → artifacts
 	let textContent = decodedContent;
+	let uiComponents: ParsedUIComponent[] = [];
 	let artifacts: ParsedArtifact[] = [];
 	let webPreviews: ParsedWebPreview[] = [];
 	let jsxPreviews: ParsedJSXPreview[] = [];
+
+	if (contentHasUIComponents) {
+		const parsed = parseUIComponents(textContent);
+		textContent = parsed.text;
+		uiComponents = parsed.components;
+	}
 
 	if (contentHasJSXPreviews) {
 		const parsed = parseJSXPreviews(textContent);
@@ -77,22 +85,22 @@ export function MessageContentWithArtifacts({ content, messageKey }: MessageCont
 
 	return (
 		<>
-			{/* Render text content if any remains */}
 			{textContent && textContent.trim() && (
 				<MessageResponse>{textContent}</MessageResponse>
 			)}
 
-		{/* Render JSX previews */}
+		{uiComponents.map((comp, idx) => (
+			<UIComponentRenderer key={`${messageKey}-ui-${idx}`} component={comp} />
+		))}
+
 		{jsxPreviews.map((preview, idx) => (
 			<JSXPreviewRenderer key={`${messageKey}-jsx-${idx}`} preview={preview} messageId={messageKey} />
 		))}
 
-		{/* Render web previews */}
 		{webPreviews.map((preview, idx) => (
 			<WebPreviewRenderer key={`${messageKey}-preview-${idx}`} preview={preview} />
 		))}
 
-		{/* Render artifacts */}
 		{artifacts.map((artifact) => (
 			<ArtifactRenderer key={`${messageKey}-${artifact.id}`} artifact={artifact} messageId={messageKey} />
 		))}

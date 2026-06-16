@@ -46,3 +46,19 @@ export interface JSXPreviewParseResult {
 	text: string;
 	previews: ParsedJSXPreview[];
 }
+
+/**
+ * Structured UI component rendered inline in chat.
+ * The AI emits <ui-component type="..." data='...' /> tags
+ * and the frontend maps them to purpose-built renderers.
+ */
+export interface ParsedUIComponent {
+	type: string;
+	data: Record<string, unknown> | null;
+	error?: string;
+}
+
+export interface UIComponentParseResult {
+	text: string;
+	components: ParsedUIComponent[];
+}
