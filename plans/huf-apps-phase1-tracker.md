@@ -4,13 +4,13 @@ Updated by orchestrator at each checkpoint. Sub-agents must not edit this file d
 
 ## Status
 Overall: IN PROGRESS
-Last checkpoint: CHECKPOINT 2
+Last checkpoint: CHECKPOINT 3
 
 ## Phase Completion
 - [x] P0 Foundation (DocType + installer backend)
 - [x] P1 Backend wiring (hooks + install.py + app_tools)
 - [x] P2 Frontend services + routing
-- [ ] P3 Frontend pages
+- [x] P3 Frontend pages
 - [ ] P4 Frontend components
 - [ ] P5 ChatWindowV2 patch
 - [ ] P6 Verification
@@ -24,9 +24,9 @@ Last checkpoint: CHECKPOINT 2
 - [x] huf/ai/app_installer.py
 - [x] huf/ai/app_tools.py
 - [x] frontend/src/services/appApi.ts
-- [ ] frontend/src/pages/AppRegistryPage.tsx
-- [ ] frontend/src/pages/AppPlannerPage.tsx
-- [ ] frontend/src/pages/AppLaunchPage.tsx
+- [x] frontend/src/pages/AppRegistryPage.tsx
+- [x] frontend/src/pages/AppPlannerPage.tsx
+- [x] frontend/src/pages/AppLaunchPage.tsx
 - [ ] frontend/src/components/apps/AppDashboardShell.tsx
 - [ ] frontend/src/components/apps/AppListShell.tsx
 - [ ] frontend/src/components/apps/AppCollectionView.tsx
@@ -40,4 +40,7 @@ Last checkpoint: CHECKPOINT 2
 - [ ] frontend/src/components/chat/ChatWindowV2.tsx
 
 ## Errors / Blockers
-(none)
+- P3 typecheck required minor import adjustments to match actual codebase exports:
+  - AppRegistryPage: PageLayout, GridView, ItemCard use named imports (not default exports).
+  - AppLaunchPage: removed unused `useNavigate` import.
+  Both fixed; remaining errors are expected (missing shell components + defaultAgentName prop).
