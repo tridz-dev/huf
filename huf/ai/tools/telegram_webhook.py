@@ -14,6 +14,7 @@ Security:
 """
 
 import json
+import secrets
 from typing import Optional
 
 import frappe
@@ -75,10 +76,9 @@ def handle_update():
         if settings.service != "telegram" or not settings.is_active:
             return _error("Bot configuration inactive")
 
-        # Verify secret token
+        # Verify secret token (constant-time compare to avoid timing attacks)
         expected_secret = settings.get_password("telegram_webhook_secret") or ""
         provided_secret = _get_request_header(WEBHOOK_HEADER)
-        import secrets
         if expected_secret and not secrets.compare_digest(provided_secret, expected_secret):
             return _error("Invalid secret token")
 
@@ -218,6 +218,17 @@ def _send_telegram_message(settings, chat_id, text: str, reply_to_message_id=Non
         if reply_to_message_id:
             kwargs["reply_to_message_id"] = reply_to_message_id
 
-        handle_action(**kwargs)
+        result = handle_action(**kwargs)
+        try:
+            parsed = json.loads(result) if result else {}
+        except Exception:
+            parsed = {}
+
+        if not parsed.get("success"):
+            error = parsed.get("error") or result or "Unknown Telegram send error"
+            frappe.log_error(
+                f"Telegram reply failed for {settings.name} to chat {chat_id}: {error}",
+                "Telegram Webhook",
+            )
     except Exception as e:
         frappe.log_error(f"Failed to send Telegram reply: {e}", "Telegram Webhook")
