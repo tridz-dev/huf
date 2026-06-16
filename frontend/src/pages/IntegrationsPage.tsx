@@ -248,6 +248,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
                     {providerModels.slice(0, 3).map(model => (
                       <Badge key={model.name} variant="secondary" className="text-xs">
                         {model.model_name}
+                        {model.modalities ? ` · ${model.modalities}` : ''}
                       </Badge>
                     ))}
                   </div>

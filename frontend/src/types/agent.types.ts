@@ -8,6 +8,10 @@ export type AIModel = {
   model_name: string;
   provider: string;
   modalities?: string;
+  use_custom_pricing?: number;
+  input_cost_per_1m_tokens?: number | null;
+  output_cost_per_1m_tokens?: number | null;
+  cached_input_cost_per_1m_tokens?: number | null;
 };
 
 export type ToolType =

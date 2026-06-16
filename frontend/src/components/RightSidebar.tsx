@@ -75,9 +75,11 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
       .then((result) => {
         const items = Array.isArray(result) ? result : result.items;
         setAgents(
-          (items || []).map((a: { name: string; agent_name?: string }) => ({
+          (items || []).map((a: { name: string; agent_name?: string; model?: string }) => ({
             value: a.name,
-            label: a.agent_name || a.name,
+            label: a.model
+              ? `${a.agent_name || a.name} · ${a.model}`
+              : a.agent_name || a.name,
           }))
         );
       })
