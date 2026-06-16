@@ -21,11 +21,13 @@ import {
 interface ChatMessageListProps {
     chatId?: string | null;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
+    defaultAgentName?: string;
 }
 
 export function ChatMessageList({ 
     chatId: chatIdProp, 
-    onConversationCreated 
+    onConversationCreated,
+    defaultAgentName,
 }: ChatMessageListProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
@@ -40,7 +42,7 @@ export function ChatMessageList({
     const [isModelMismatch, setIsModelMismatch] = useState(false);
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
 
-    const { agentName, agentColor, showToolExecutionDetails } = useChatAgentIdentity(chatId, searchParams);
+    const { agentName, agentColor, showToolExecutionDetails } = useChatAgentIdentity(chatId, searchParams, defaultAgentName);
 
     // Check for model mismatch between conversation and agent
     useEffect(() => {

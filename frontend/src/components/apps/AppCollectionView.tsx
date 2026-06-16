@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { db } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { type HufAppManifest } from '@/services/appApi';
@@ -18,7 +18,7 @@ interface Props {
 export default function AppCollectionView({ manifest, tableName, layoutOverride, filterOverride }: Props) {
   const viewConfig = manifest.views.find(v => v.table === tableName);
   const layout = layoutOverride ?? viewConfig?.collection_layout ?? 'list';
-  const listFields = viewConfig?.list_fields ?? [];
+  const listFields = useMemo(() => viewConfig?.list_fields ?? [], [viewConfig]);
 
   // Derive the DocType name: HUF tables are named "HF <TableName>"
   const doctypeName = `HF ${tableName}`;
@@ -27,6 +27,7 @@ export default function AppCollectionView({ manifest, tableName, layoutOverride,
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const debouncedSearch = useDebounce(search, 300);
+  const filterOverrideKey = JSON.stringify(filterOverride);
 
   useEffect(() => {
     setLoading(true);
@@ -44,7 +45,7 @@ export default function AppCollectionView({ manifest, tableName, layoutOverride,
       .then(setRecords)
       .catch(e => handleFrappeError(e, `Failed to load ${tableName}`))
       .finally(() => setLoading(false));
-  }, [doctypeName, debouncedSearch, JSON.stringify(filterOverride)]);
+  }, [doctypeName, debouncedSearch, filterOverride, filterOverrideKey, listFields, tableName]);
 
   // Field definitions for DataRecordList
   const fieldDefs = listFields.map(f => {

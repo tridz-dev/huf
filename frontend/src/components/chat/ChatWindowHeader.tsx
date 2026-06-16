@@ -14,12 +14,14 @@ interface ChatWindowHeaderProps {
     chatId?: string | null;
     sidebarOpen?: boolean;
     onToggleSidebar?: () => void;
+    defaultAgentName?: string;
 }
 
 export function ChatWindowHeader({
     chatId: chatIdProp,
     sidebarOpen: _sidebarOpen,
     onToggleSidebar,
+    defaultAgentName,
 }: ChatWindowHeaderProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
@@ -63,7 +65,7 @@ export function ChatWindowHeader({
                         return;
                     }
                 } else {
-                    agentName = searchParams.get('agent');
+                    agentName = searchParams.get('agent') || defaultAgentName || null;
                 }
 
                 if (agentName) {
@@ -104,7 +106,7 @@ export function ChatWindowHeader({
         return () => {
             cancelled = true;
         };
-    }, [chatId, searchParams]);
+    }, [chatId, searchParams, defaultAgentName]);
 
     const showOpenSidebarBtn = !!onToggleSidebar;
 

@@ -17,7 +17,7 @@ export function writeToolDetailsSetting(agent: string, enabled: boolean): void {
   }
 }
 
-export function useChatAgentIdentity(chatId: string | null, searchParams: URLSearchParams) {
+export function useChatAgentIdentity(chatId: string | null, searchParams: URLSearchParams, defaultAgentName?: string) {
   const [agentName, setAgentName] = useState<string>('');
   const [agentColor, setAgentColor] = useState<string | null>(null);
   const [showToolExecutionDetails, setShowToolExecutionDetails] = useState<boolean>(true);
@@ -62,7 +62,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
     }
 
     async function loadFromQueryParam() {
-      const agentFromQuery = searchParams.get('agent') ?? '';
+      const agentFromQuery = searchParams.get('agent') ?? defaultAgentName ?? '';
       if (!cancelled) setAgentName(agentFromQuery);
 
       if (!agentFromQuery) {
@@ -94,7 +94,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
     return () => {
       cancelled = true;
     };
-  }, [chatId, searchParams, applyToolDetails]);
+  }, [chatId, searchParams, applyToolDetails, defaultAgentName]);
 
   // ── Cross-tab sync via localStorage `storage` event ──────────────
   // Instant sync when another tab in the SAME React SPA writes to localStorage
