@@ -4,11 +4,11 @@ Updated by orchestrator at each checkpoint. Sub-agents must not edit this file d
 
 ## Status
 Overall: IN PROGRESS
-Last checkpoint: CHECKPOINT 0
+Last checkpoint: CHECKPOINT 1
 
 ## Phase Completion
 - [x] P0 Foundation (DocType + installer backend)
-- [ ] P1 Backend wiring (hooks + install.py + app_tools)
+- [x] P1 Backend wiring (hooks + install.py + app_tools)
 - [ ] P2 Frontend services + routing
 - [ ] P3 Frontend pages
 - [ ] P4 Frontend components
@@ -32,8 +32,8 @@ Last checkpoint: CHECKPOINT 0
 - [ ] frontend/src/components/apps/AppCollectionView.tsx
 
 ### Modify
-- [ ] huf/hooks.py
-- [ ] huf/install.py
+- [x] huf/hooks.py
+- [x] huf/install.py
 - [ ] frontend/src/data/doctypes.ts
 - [ ] frontend/src/App.tsx
 - [ ] frontend/src/components/app-sidebar.tsx

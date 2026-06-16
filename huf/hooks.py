@@ -338,4 +338,7 @@ fixtures = [
 to_sync_tools = "huf.ai.tool_registry.sync_discovered_tools"
 
 # Register integration tools from _registry
-huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
+huf_tools = [
+    "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS",
+    "huf.ai.app_tools.HUF_APP_TOOLS",
+]

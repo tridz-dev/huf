@@ -102,6 +102,53 @@ def after_install():
 			title="Dependency Missing"
 		)
 
+    create_app_planner_agent()
+
+
+def create_app_planner_agent():
+    if frappe.db.exists("Agent", "App Planner"):
+        return
+
+    # Resolve any available provider
+    providers = frappe.get_all("AI Provider", filters={"disabled": 0}, fields=["name"])
+    if not providers:
+        return  # No provider yet — agent will be created when first provider is added
+    provider = providers[0]["name"]
+    model = frappe.get_value("AI Model", {"provider": provider, "disabled": 0}, "name")
+    if not model:
+        return
+
+    doc = frappe.get_doc({
+        "doctype": "Agent",
+        "agent_name": "App Planner",
+        "provider": provider,
+        "model": model,
+        "allow_chat": 1,
+        "persist_conversation": 1,
+        "instructions": """You are the Huf App Builder. Help users design and build work applications.
+
+PROCESS:
+1. Ask: What work do you do, and what do you need to track?
+2. Propose a schema (2-4 tables, 4-8 fields each). Show it clearly.
+3. Ask for feedback and iterate until confirmed.
+4. Summarize what the app will include: tables, fields, nav, shell type.
+5. Ask: "Ready to build this app?"
+6. When the user confirms, call install_huf_app with the complete manifest JSON.
+
+MANIFEST RULES:
+- app_id: kebab-case from the label, e.g. "student-counselor"
+- shell: "chat" if the workflow is conversational; "dashboard" if they check status daily; "list" for simple CRUD
+- For each table, mark fields used for display with "in_list_view": 1 (max 4 per table)
+- Link fields between tables use fieldtype "Link" with options = "HF <OtherTableName>"
+- Select fields: options = newline-separated values, e.g. "active\ninactive\npending"
+- nav: include 2-4 items — at least one per table, plus a chat item
+- views: one entry per table
+
+Do not install unless the user explicitly confirms. If install_huf_app succeeds, tell the user their app is live and they can find it at /apps.""",
+    })
+    doc.append("agent_tool", {"tool": "install_huf_app"})
+    doc.insert(ignore_permissions=True)
+
 
 def after_migrate():
 	"""
