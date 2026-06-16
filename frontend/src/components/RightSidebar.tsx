@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
+import { linkRoutes } from '@/lib/link-routes';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -523,6 +524,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                         disabled={loadingAgents}
                         searchPlaceholder="Search agents..."
                         emptyText="No agent found."
+                        linkTo={linkRoutes.agent}
                       />
                     </div>
                     <div>
@@ -652,6 +654,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                         disabled={loadingAgents}
                         searchPlaceholder="Search agents..."
                         emptyText="No agent found."
+                        linkTo={linkRoutes.agent}
                       />
                     </div>
                     <div>

@@ -8,6 +8,7 @@ import type { AgentFormValues } from './types';
 import type { UseFormReturn } from 'react-hook-form';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus } from 'lucide-react';
+import { linkRoutes } from '@/lib/link-routes';
 
 export interface AgentPromptOption {
   value: string;
@@ -66,6 +67,7 @@ export function PromptTemplateSection({
                     disabled={loadingPrompts}
                     searchPlaceholder="Search templates..."
                     emptyText="No active prompt templates found."
+                    linkTo={linkRoutes.agentPrompt}
                   />
                 </FormControl>
                 {showAddNew ? (

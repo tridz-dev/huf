@@ -32,9 +32,12 @@ import {
   buildProviderNameMap,
   resolveProviderName,
 } from '../services/providerApi';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIModel, AIProvider } from '../types/agent.types';
+import { LinkFieldControl } from '../components/ui/link-field-control';
+import { linkRoutes } from '../lib/link-routes';
 
 interface ModelsPageProps {
   addModelKey?: number;
@@ -77,6 +80,8 @@ function formatPricingSummary(model: AIModel): string | null {
 }
 
 export function ModelsPage({ addModelKey }: ModelsPageProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const configureHandledRef = useRef(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [modalityOptions, setModalityOptions] = useState<string[]>([]);
   const [configureModalOpen, setConfigureModalOpen] = useState(false);
@@ -200,6 +205,44 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       setLoadingModel(false);
     }
   };
+
+  useEffect(() => {
+    const configureId = searchParams.get('configure');
+    if (!configureId || configureHandledRef.current) {
+      return;
+    }
+
+    configureHandledRef.current = true;
+    let cancelled = false;
+
+    const openFromDeepLink = async () => {
+      try {
+        const listMatch = models.find((model) => model.name === configureId);
+        if (listMatch) {
+          await handleConfigure(listMatch);
+        } else {
+          const details = await getModel(configureId);
+          await handleConfigure(details);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          toast.error('Failed to open model configuration');
+          console.error(loadError);
+        }
+      } finally {
+        if (!cancelled) {
+          setSearchParams({}, { replace: true });
+        }
+      }
+    };
+
+    openFromDeepLink();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const buildModelPayload = () => {
     const payload: Record<string, unknown> = {
@@ -378,21 +421,26 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 <Label htmlFor="provider">
                   Provider <span className="text-destructive">*</span>
                 </Label>
-                <Select
+                <LinkFieldControl
                   value={formData.provider}
-                  onValueChange={(value) => setFormData({ ...formData, provider: value })}
+                  linkTo={linkRoutes.aiProvider}
                 >
-                  <SelectTrigger id="provider">
-                    <SelectValue placeholder="Select a provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providers.map((p) => (
-                      <SelectItem key={p.name} value={p.name}>
-                        {p.provider_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <Select
+                    value={formData.provider}
+                    onValueChange={(value) => setFormData({ ...formData, provider: value })}
+                  >
+                    <SelectTrigger id="provider">
+                      <SelectValue placeholder="Select a provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {providers.map((p) => (
+                        <SelectItem key={p.name} value={p.name}>
+                          {p.provider_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </LinkFieldControl>
               </div>
 
               <div className="space-y-2">

@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
+import { linkRoutes } from '@/lib/link-routes';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -575,6 +576,7 @@ export function ToolCreationForm({
                     searchPlaceholder="Search agents..."
                     emptyText="No agent found."
                     disabled={loading || loadingData}
+                    linkTo={linkRoutes.agent}
                   />
                 </FormControl>
                 <FormMessage />

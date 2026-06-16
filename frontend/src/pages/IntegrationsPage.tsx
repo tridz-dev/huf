@@ -16,7 +16,8 @@ import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/d
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getProviders, getProvider, updateProvider, createProvider } from '../services/providerApi';
 import { getModels } from '../services/providerApi';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIProvider, AIModel } from '../types/agent.types';
 
@@ -25,6 +26,8 @@ interface IntegrationsPageProps {
 }
 
 export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const configureHandledRef = useRef(false);
   const [models, setModels] = useState<AIModel[]>([]);
   const [configureModalOpen, setConfigureModalOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
@@ -151,6 +154,44 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
       setLoadingProvider(false);
     }
   };
+
+  useEffect(() => {
+    const configureId = searchParams.get('configure');
+    if (!configureId || configureHandledRef.current) {
+      return;
+    }
+
+    configureHandledRef.current = true;
+    let cancelled = false;
+
+    const openFromDeepLink = async () => {
+      try {
+        const listMatch = providers.find((provider) => provider.name === configureId);
+        if (listMatch) {
+          await handleConfigure(listMatch);
+        } else {
+          const details = await getProvider(configureId);
+          await handleConfigure(details);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          toast.error('Failed to open provider configuration');
+          console.error(loadError);
+        }
+      } finally {
+        if (!cancelled) {
+          setSearchParams({}, { replace: true });
+        }
+      }
+    };
+
+    openFromDeepLink();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleSave = async () => {
     // Validate provider name is required

@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { LinkFieldControl } from '@/components/ui/link-field-control';
+import { linkRoutes } from '@/lib/link-routes';
 import type { IntegrationFormValues } from './types';
 
 interface TelegramTabProps {
@@ -58,20 +60,22 @@ export function TelegramTab({
         render={({ field }) => (
           <FormItem>
             <FormLabel>Responding Agent</FormLabel>
-            <Select onValueChange={field.onChange} value={field.value || ''}>
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an agent for incoming messages" />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                {agents.map((agent) => (
-                  <SelectItem key={agent.name} value={agent.name}>
-                    {agent.agent_name || agent.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <FormControl>
+              <LinkFieldControl value={field.value} linkTo={linkRoutes.agent}>
+                <Select onValueChange={field.onChange} value={field.value || ''}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an agent for incoming messages" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agents.map((agent) => (
+                      <SelectItem key={agent.name} value={agent.name}>
+                        {agent.agent_name || agent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </LinkFieldControl>
+            </FormControl>
             <FormDescription>
               The HUF agent that responds to messages received by this Telegram bot.
             </FormDescription>
