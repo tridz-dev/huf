@@ -110,11 +110,17 @@ def create_app_planner_agent():
         return
 
     # Resolve any available provider
-    providers = frappe.get_all("AI Provider", filters={"disabled": 0}, fields=["name"])
+    try:
+        providers = frappe.get_all("AI Provider", filters={"disabled": 0}, fields=["name"])
+    except Exception:
+        return  # Schema not ready yet — silently skip
     if not providers:
         return  # No provider yet — agent will be created when first provider is added
     provider = providers[0]["name"]
-    model = frappe.get_value("AI Model", {"provider": provider, "disabled": 0}, "name")
+    try:
+        model = frappe.get_value("AI Model", {"provider": provider, "disabled": 0}, "name")
+    except Exception:
+        return
     if not model:
         return
 
