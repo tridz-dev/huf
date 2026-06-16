@@ -8,7 +8,12 @@
  "field_order": [
   "model_name",
   "provider",
-  "modalities"
+  "modalities",
+  "pricing_section",
+  "use_custom_pricing",
+  "input_cost_per_1m_tokens",
+  "output_cost_per_1m_tokens",
+  "cached_input_cost_per_1m_tokens"
  ],
  "fields": [
   {
@@ -34,12 +39,49 @@
    "in_list_view": 1,
    "label": "Modalities",
    "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings"
+  },
+  {
+   "fieldname": "pricing_section",
+   "fieldtype": "Section Break",
+   "label": "Custom Pricing (Optional)",
+   "description": "Enable custom prices to override LiteLLM's automatic pricing lookup. When disabled, LiteLLM's built-in price table is used as fallback. Values are in USD per 1 million tokens."
+  },
+  {
+   "fieldname": "use_custom_pricing",
+   "fieldtype": "Check",
+   "label": "Enable Custom Pricing",
+   "description": "Check this to activate the custom prices below. When unchecked, LiteLLM's automatic pricing is used regardless of what is entered below.",
+   "default": "0"
+  },
+  {
+   "fieldname": "input_cost_per_1m_tokens",
+   "fieldtype": "Float",
+   "label": "Input Cost per 1M Tokens (USD)",
+   "description": "Cost in USD per 1 million prompt/input tokens. E.g. enter 2.50 for $2.50 per 1M tokens. Enter 0 for free/self-hosted models.",
+   "precision": "8",
+   "depends_on": "eval:doc.use_custom_pricing"
+  },
+  {
+   "fieldname": "output_cost_per_1m_tokens",
+   "fieldtype": "Float",
+   "label": "Output Cost per 1M Tokens (USD)",
+   "description": "Cost in USD per 1 million completion/output tokens. E.g. enter 10.00 for $10.00 per 1M tokens.",
+   "precision": "8",
+   "depends_on": "eval:doc.use_custom_pricing"
+  },
+  {
+   "fieldname": "cached_input_cost_per_1m_tokens",
+   "fieldtype": "Float",
+   "label": "Cached Input Cost per 1M Tokens (USD)",
+   "description": "Optional. Cost for prompt cache reads (cache hits) in USD per 1M tokens. E.g. Anthropic charges $0.30/1M for cache reads vs $3.00/1M for regular input. Leave as 0 if not applicable.",
+   "precision": "8",
+   "depends_on": "eval:doc.use_custom_pricing"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-11 12:20:30.191336",
+ "modified": "2026-06-01 12:20:30.191336",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "AI Model",

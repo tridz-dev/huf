@@ -26,6 +26,7 @@ from litellm import InternalServerError, RateLimitError, APIError, BadRequestErr
 from litellm.utils import trim_messages
 from huf.ai.tool_serializer import serialize_tools
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
+from huf.ai.cost_calculator import calculate_cost
 
 
 class SimpleResult:
@@ -430,9 +431,24 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         raise e
 
                 try:
-                    current_cost = completion_cost(completion_response=response)
-                    total_cost += float(current_cost)
-                    
+                    # --- Round token counts for cost calculation ---
+                    round_usage = response.usage
+                    round_input  = int(getattr(round_usage, "prompt_tokens", 0) or 0)
+                    round_output = int(getattr(round_usage, "completion_tokens", 0) or 0)
+                    round_cached = 0
+                    if hasattr(round_usage, "prompt_tokens_details") and round_usage.prompt_tokens_details:
+                        _d = round_usage.prompt_tokens_details
+                        round_cached = int(
+                            (getattr(_d, "cached_tokens", None) or getattr(_d, "cache_hit_tokens", None) or 0)
+                        )
+                    round_cost, _cost_source = calculate_cost(
+                        model_name=model,
+                        input_tokens=round_input,
+                        output_tokens=round_output,
+                        cached_tokens=round_cached,
+                        litellm_response=response,
+                    )
+                    total_cost += round_cost
                 except Exception:
                     pass
 
@@ -1065,12 +1081,33 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
              stream_usage = stream_usage.dict()
         elif stream_usage and hasattr(stream_usage, "model_dump"):
              stream_usage = stream_usage.model_dump()
-             
+
+        # Calculate cost from streaming usage
+        stream_cost = 0.0
+        if stream_usage and isinstance(stream_usage, dict):
+            try:
+                s_input   = int(stream_usage.get("prompt_tokens", 0) or 0)
+                s_output  = int(stream_usage.get("completion_tokens", 0) or 0)
+                s_cached  = 0
+                s_details = stream_usage.get("prompt_tokens_details") or {}
+                if isinstance(s_details, dict):
+                    s_cached = int(s_details.get("cached_tokens", 0) or s_details.get("cache_hit_tokens", 0) or 0)
+                stream_cost, _src = calculate_cost(
+                    model_name=model,
+                    input_tokens=s_input,
+                    output_tokens=s_output,
+                    cached_tokens=s_cached,
+                )
+            except Exception:
+                pass
+
         yield {
             "type": "complete",
             "full_response": full_response or "Agent stopped after max rounds.",
-            "usage": stream_usage
+            "usage": stream_usage,
+            "cost": stream_cost,
         }
+
 
     except Exception as e:
         frappe.log_error(message=f"LiteLLM Streaming Error: {str(e)}", title="LiteLLM Streaming")
