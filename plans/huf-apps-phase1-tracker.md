@@ -4,10 +4,10 @@ Updated by orchestrator at each checkpoint. Sub-agents must not edit this file d
 
 ## Status
 Overall: IN PROGRESS
-Last checkpoint: PRE-FLIGHT
+Last checkpoint: CHECKPOINT 0
 
 ## Phase Completion
-- [ ] P0 Foundation (DocType + installer backend)
+- [x] P0 Foundation (DocType + installer backend)
 - [ ] P1 Backend wiring (hooks + install.py + app_tools)
 - [ ] P2 Frontend services + routing
 - [ ] P3 Frontend pages
@@ -17,12 +17,12 @@ Last checkpoint: PRE-FLIGHT
 
 ## File Checklist
 ### Create
-- [ ] huf/huf/doctype/huf_app/__init__.py
-- [ ] huf/huf/doctype/huf_app/huf_app.py
-- [ ] huf/huf/doctype/huf_app/huf_app.json
-- [ ] huf/huf/doctype/huf_app/huf_app_list.json
-- [ ] huf/ai/app_installer.py
-- [ ] huf/ai/app_tools.py
+- [x] huf/huf/doctype/huf_app/__init__.py
+- [x] huf/huf/doctype/huf_app/huf_app.py
+- [x] huf/huf/doctype/huf_app/huf_app.json
+- [x] huf/huf/doctype/huf_app/huf_app_list.json
+- [x] huf/ai/app_installer.py
+- [x] huf/ai/app_tools.py
 - [ ] frontend/src/services/appApi.ts
 - [ ] frontend/src/pages/AppRegistryPage.tsx
 - [ ] frontend/src/pages/AppPlannerPage.tsx

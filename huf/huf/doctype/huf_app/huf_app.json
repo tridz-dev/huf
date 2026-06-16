@@ -1,0 +1,24 @@
+{
+  "name": "Huf App",
+  "module": "Huf",
+  "doctype": "DocType",
+  "is_submittable": 0,
+  "track_changes": 0,
+  "fields": [
+    {"fieldname": "app_id",       "fieldtype": "Data",      "label": "App ID",       "reqd": 1, "unique": 1, "in_list_view": 1},
+    {"fieldname": "label",        "fieldtype": "Data",      "label": "Label",        "reqd": 1, "in_list_view": 1},
+    {"fieldname": "description",  "fieldtype": "Small Text","label": "Description"},
+    {"fieldname": "icon",         "fieldtype": "Data",      "label": "Icon"},
+    {"fieldname": "shell",        "fieldtype": "Select",    "label": "Shell",
+      "options": "chat\ndashboard\nlist",                   "reqd": 1, "in_list_view": 1},
+    {"fieldname": "agent",        "fieldtype": "Link",      "label": "Agent",        "options": "Agent"},
+    {"fieldname": "manifest_json","fieldtype": "JSON",      "label": "Manifest JSON"},
+    {"fieldname": "status",       "fieldtype": "Select",    "label": "Status",
+      "options": "Active\nDisabled",                        "default": "Active", "in_list_view": 1}
+  ],
+  "autoname": "field:app_id",
+  "title_field": "label",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}
+  ]
+}
