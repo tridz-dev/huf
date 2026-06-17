@@ -75,8 +75,7 @@ website_route_rules = [
 
 # Register custom page renderer for SSE streaming and docs
 page_renderer = [
-    "huf.ai.agent_stream_renderer.AgentStreamRenderer",
-    "huf.www.docs_renderer.DocsRenderer",
+    "huf.ai.agent_stream_renderer.AgentStreamRenderer"
 ]
 
 

@@ -27,6 +27,7 @@ export interface StreamChunk {
   conversation_id?: string;
   success?: boolean;
   agent_run_id?: string;
+  agent_message_id?: string;
   session_id?: string;
   provider?: string;
   error?: string;
@@ -190,6 +191,7 @@ export async function sendMessage(
       response: data.response ?? data.full_response ?? '',
       conversation_id: data.conversation_id,
       agent_run_id: data.agent_run_id,
+      agent_message_id: data.agent_message_id,
       session_id: data.session_id,
       provider: data.provider,
       structured: null as unknown,
@@ -202,6 +204,7 @@ export async function sendMessage(
           response: runShape.response,
           conversation_id: data.conversation_id ?? '',
           agent_run_id: data.agent_run_id ?? '',
+          agent_message_id: data.agent_message_id ?? '',
           session_id: data.session_id ?? '',
           provider: data.provider ?? '',
           structured: null,
@@ -213,6 +216,7 @@ export async function sendMessage(
       message: {
         success: true,
         conversation_id: data.conversation_id ?? '',
+        agent_message_id: data.agent_message_id ?? '',
         run: runShape,
       },
     } as NewConversationResponse;

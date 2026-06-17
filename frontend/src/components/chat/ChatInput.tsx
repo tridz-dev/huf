@@ -91,9 +91,30 @@ export function ChatInput({
             if (!useStreaming && responseText) {
                 params.updateAssistantContent(responseText);
             }
-            return { conversationId };
+            const agentMessageId =
+                (msg?.agent_message_id as string) ||
+                ((msg?.run as Record<string, unknown>)?.agent_message_id as string) ||
+                undefined;
+            return { conversationId, agentMessageId };
         },
         [agentName]
+    );
+
+    const syncAssistantMessageId = useCallback(
+        (tempId: string, realId: string, content?: string) => {
+            setMessages((prev) =>
+                prev.map((msg) => {
+                    if (msg.key !== tempId) return msg;
+                    const existingContent = content ?? msg.versions[0]?.content ?? '';
+                    return {
+                        ...msg,
+                        key: realId,
+                        versions: [{ id: realId, content: existingContent }],
+                    };
+                })
+            );
+        },
+        [setMessages]
     );
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -136,12 +157,15 @@ export function ChatInput({
 
         try {
             if (!chatId) isCreatingConversationRef.current = true;
-            const { conversationId } = await runAgentAndUpdateAssistant({
+            const { conversationId, agentMessageId } = await runAgentAndUpdateAssistant({
                 message: messageText,
                 conversationId: chatId ?? undefined,
                 assistantMessageId,
                 updateAssistantContent,
             });
+            if (agentMessageId) {
+                syncAssistantMessageId(assistantMessageId, agentMessageId);
+            }
             onStatusChange('ready');
             if (conversationId && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = conversationId;
@@ -162,7 +186,7 @@ export function ChatInput({
         } finally {
             setIsSubmitting(false);
         }
-    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant]);
+    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId]);
 
     const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
         const filename = `recording-${Date.now()}.webm`;
@@ -219,12 +243,15 @@ export function ChatInput({
                 scrollToBottomAfterPaint?.(false);
             };
             try {
-                await runAgentAndUpdateAssistant({
+                const { agentMessageId } = await runAgentAndUpdateAssistant({
                     message: res.transcript,
                     conversationId: res.conversation_id,
                     assistantMessageId,
                     updateAssistantContent,
                 });
+                if (agentMessageId) {
+                    syncAssistantMessageId(assistantMessageId, agentMessageId);
+                }
                 onStatusChange('ready');
                 if (res.conversation_id && onConversationCreated) {
                     newlyCreatedConversationIdRef.current = res.conversation_id;
@@ -249,7 +276,7 @@ export function ChatInput({
             });
             throw err;
         }
-    }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant]);
+    }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId]);
 
     const handleTranscriptionChange = useCallback((text: string) => {
         if (isAudioRecordingFlowRef.current) {

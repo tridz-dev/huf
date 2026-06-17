@@ -19,6 +19,7 @@ import {
 	type ReactNode,
 	type ComponentType,
 } from 'react';
+import { toast } from 'sonner';
 import JsxParser from 'react-jsx-parser';
 
 // Recharts components for chart rendering
@@ -522,6 +523,29 @@ export interface JSXPreviewExportProps {
 	filename?: string;
 }
 
+function isInsideExportIgnore(node: Element): boolean {
+	return Boolean(node.closest('[data-export-ignore="true"]'));
+}
+
+function getExportableSvg(container: HTMLElement): SVGElement | null {
+	const rechartsSurface = container.querySelector('.recharts-surface');
+	if (rechartsSurface instanceof SVGElement && !isInsideExportIgnore(rechartsSurface)) {
+		return rechartsSurface;
+	}
+
+	const candidates = Array.from(container.querySelectorAll('svg')).filter(
+		(svg) => !isInsideExportIgnore(svg)
+	);
+
+	if (candidates.length === 0) return null;
+
+	return candidates.reduce((largest, svg) => {
+		const largestArea = largest.clientWidth * largest.clientHeight;
+		const svgArea = svg.clientWidth * svg.clientHeight;
+		return svgArea > largestArea ? svg : largest;
+	});
+}
+
 export function JSXPreviewExport({
 	className,
 	filename = 'chart',
@@ -562,25 +586,21 @@ export function JSXPreviewExport({
 	const exportToSvg = useCallback(() => {
 		if (!containerRef.current) return;
 
-		// Find SVG elements in the container
-		const svgElements = containerRef.current.querySelectorAll('svg');
-		if (svgElements.length === 0) {
-			console.warn('No SVG elements found to export');
+		const sourceSvg = getExportableSvg(containerRef.current);
+		if (!sourceSvg) {
+			toast.warning('No chart SVG found to export');
 			return;
 		}
 
-		// Clone the first SVG (usually the chart)
-		const svg = svgElements[0].cloneNode(true) as SVGElement;
+		const svg = sourceSvg.cloneNode(true) as SVGElement;
 
-		// Set dimensions if not present
 		if (!svg.getAttribute('width')) {
-			svg.setAttribute('width', svgElements[0].clientWidth.toString());
+			svg.setAttribute('width', sourceSvg.clientWidth.toString());
 		}
 		if (!svg.getAttribute('height')) {
-			svg.setAttribute('height', svgElements[0].clientHeight.toString());
+			svg.setAttribute('height', sourceSvg.clientHeight.toString());
 		}
 
-		// Serialize and download
 		const serializer = new XMLSerializer();
 		const svgString = serializer.serializeToString(svg);
 		const blob = new Blob([svgString], { type: 'image/svg+xml' });
