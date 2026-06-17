@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { IntegrationsProvider } from '../contexts/IntegrationsContext';
 import { IntegrationsPage } from './IntegrationsPage';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
-import { IntegrationsHeaderActions } from '../components/IntegrationsHeaderActions';
 
 export { IntegrationsPageWrapper };
 export default IntegrationsPageWrapper;
@@ -17,9 +15,7 @@ function IntegrationsPageWrapper() {
 
   return (
     <IntegrationsProvider onAddProvider={handleAddProvider}>
-      <UnifiedLayout headerActions={<IntegrationsHeaderActions />}>
-        <IntegrationsPage addProviderKey={addProviderKey} />
-      </UnifiedLayout>
+      <IntegrationsPage addProviderKey={addProviderKey} />
     </IntegrationsProvider>
   );
 }
