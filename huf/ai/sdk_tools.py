@@ -1793,10 +1793,11 @@ async def _process_with_vision_model(
     model: str,
     api_key: str
 ):
-    """Process image using LiteLLM vision models."""
+    """Process image/PDF using LiteLLM vision models."""
     import base64
 
     import litellm
+    from huf.ai.providers.litellm import _litellm_completion_with_retry
 
     try:
         # Read file and encode to base64
@@ -1831,12 +1832,12 @@ async def _process_with_vision_model(
             }
         ]
 
-        # Call LiteLLM completion with vision
-        response = await asyncio.to_thread(
-            litellm.completion,
+        # Call LiteLLM completion with vision (with transient-error retry)
+        response = await _litellm_completion_with_retry(
             model=model,
             messages=messages,
-            api_key=api_key
+            api_key=api_key,
+            timeout=180
         )
 
         extracted_text = response.choices[0].message.content
@@ -1934,9 +1935,10 @@ async def handle_ocr_document(
         # Determine strategy
         strategy = _determine_ocr_strategy(file_path, file_type)
 
-        # Override strategy for Google/Gemini: Use Vision (Multimodal) for PDFs too
+        # Override strategy for providers that support vision-based PDF reading:
+        # Use Vision (Multimodal) for PDFs instead of OCR endpoints.
         provider_name = provider_doc.provider_name.lower()
-        if provider_name in ["google", "gemini"] and (strategy == "ocr" or file_path.lower().endswith(".pdf")):
+        if provider_name in ["google", "gemini", "openai", "anthropic"] and (strategy == "ocr" or file_path.lower().endswith(".pdf")):
             strategy = "vision"
 
         # Determine model
