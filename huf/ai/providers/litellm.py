@@ -27,6 +27,7 @@ from litellm.utils import trim_messages
 from huf.ai.tool_serializer import serialize_tools
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.cost_calculator import calculate_cost
+from huf.ai.conversation_manager import repair_message_sequence
 
 
 # Default request timeout for LiteLLM completion calls (seconds)
@@ -59,58 +60,6 @@ def _is_transient_litellm_error(exc: Exception) -> bool:
     if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
         return True
     return False
-
-
-def _sanitize_message_sequence(messages: list) -> list:
-    """
-    Ensure OpenAI-compatible message ordering for tool calls.
-
-    OpenAI requires that every message with role 'tool' is a response to a
-    preceding assistant message that declared a matching 'tool_calls' entry.
-    History trimming, FIFO slicing or summarization can drop the assistant
-    message while leaving its tool results behind, which causes:
-
-        Invalid parameter: messages with role 'tool' must be a response to a
-        preceeding message with 'tool_calls'.
-
-    This helper drops orphaned tool messages so the request is always valid.
-    """
-    if not messages:
-        return messages
-
-    declared_tool_call_ids = set()
-    sanitized = []
-    dropped = 0
-
-    for msg in messages:
-        if not isinstance(msg, dict):
-            sanitized.append(msg)
-            continue
-
-        role = msg.get("role")
-        if role == "assistant":
-            tool_calls = msg.get("tool_calls") or []
-            for tc in tool_calls:
-                tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-                if tc_id:
-                    declared_tool_call_ids.add(tc_id)
-            sanitized.append(msg)
-        elif role == "tool":
-            tool_call_id = msg.get("tool_call_id")
-            if tool_call_id and tool_call_id in declared_tool_call_ids:
-                sanitized.append(msg)
-            else:
-                dropped += 1
-        else:
-            sanitized.append(msg)
-
-    if dropped:
-        frappe.log_error(
-            f"Dropped {dropped} orphaned tool message(s) without matching assistant tool_calls",
-            "LiteLLM Message Sanitizer"
-        )
-
-    return sanitized
 
 
 async def _litellm_completion_with_retry(**completion_kwargs):
@@ -449,7 +398,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 # Continue with untrimmed messages if trimming fails
                 pass
 
-            messages = _sanitize_message_sequence(messages)
+            messages = repair_message_sequence(
+                messages,
+                conversation_name=context.get("conversation_id") if context else None,
+            )
             completion_kwargs["messages"] = messages
 
             if context and context.get("response_format"):
@@ -909,7 +861,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
             pass
 
-        messages = _sanitize_message_sequence(messages)
+        messages = repair_message_sequence(
+            messages,
+            conversation_name=context.get("conversation_id") if context else None,
+        )
         completion_kwargs["messages"] = messages
 
         if top_p:
@@ -1087,6 +1042,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     msg_doc.context_summary = result_summary
                                                     msg_doc.reference_doctype = "Agent Tool Call"
                                                     msg_doc.reference_name = tool_call_doc
+                                                    msg_doc.tool_call_id = call_id
+                                                    msg_doc.tool_calls = json.dumps([tool_call])
                                                     msg_doc.save(ignore_permissions=True)
 
                                                 tool_result_for_socket = (
