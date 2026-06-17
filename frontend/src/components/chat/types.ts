@@ -20,4 +20,5 @@ export type MessageType = {
     result: string | undefined;
     error: string | undefined;
   }[];
+  injected_memories?: string[];
 };

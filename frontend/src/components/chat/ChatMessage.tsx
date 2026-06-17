@@ -25,6 +25,7 @@ import {
 	AudioPlayerVolumeRange,
 } from '@/components/ai-elements/audio-player';
 import type { LoadingType } from './ChatInput';
+import { MemoryContextBadge } from '../memory/MemoryContextBadge';
 
 const frappeUrl = import.meta.env.VITE_FRAPPE_URL || window.location.origin;
 
@@ -92,6 +93,9 @@ export function ChatMessage({
                         <span className="text-xs text-zinc-400">
                             {timeDisplay}
                         </span>
+                    )}
+                    {message.injected_memories && message.injected_memories.length > 0 && (
+                        <MemoryContextBadge memoryRecordNames={message.injected_memories} />
                     )}
                 </div>
                 

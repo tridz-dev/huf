@@ -89,6 +89,36 @@ class AgentManager:
                 "Knowledge Tool Error",
             )
 
+        # Add memory tools if agent has memory enabled
+        try:
+            if getattr(self.agent_doc, "enable_memory", False):
+                from huf.ai.memory_tools import (
+                    handle_save_memory_record,
+                    handle_search_memory_records
+                )
+                from agents import function_tool
+
+                if getattr(self.agent_doc, "enable_memory_search_tool", True):
+                    @function_tool
+                    def search_memory_records(query: str = None, record_type: str = None, scope_type: str = None, status: str = None, limit: int = 10) -> str:
+                        """Search through saved memory records. Use to recall facts, preferences, prior decisions, or any stored information."""
+                        res = handle_search_memory_records(query=query, record_type=record_type, scope_type=scope_type, status=status, limit=limit)
+                        return json.dumps(res, default=str)
+                    self.tools.append(search_memory_records)
+
+                if getattr(self.agent_doc, "enable_memory_write_tool", True):
+                    @function_tool
+                    def save_memory_record(title: str, summary_text: str, record_type: str = "Fact", scope_type: str = "Conversation", scope_key: str = None, data_json: dict = None, status: str = "Draft", visibility: str = "Private", tags: str = None, confidence: float = 0.0, importance_score: float = 0.0) -> str:
+                        """Save a new memory record. Use this to store facts, preferences, decisions, observations, or other information."""
+                        res = handle_save_memory_record(title=title, summary_text=summary_text, record_type=record_type, scope_type=scope_type, scope_key=scope_key, data_json=data_json, status=status, visibility=visibility, tags=tags, confidence=confidence, importance_score=importance_score)
+                        return json.dumps(res, default=str)
+                    self.tools.append(save_memory_record)
+        except Exception as e:
+            frappe.log_error(
+                f"Error loading memory tools: {str(e)}",
+                "Memory Tool Error",
+            )
+
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
         api_key = self.settings.get_password("api_key")
@@ -258,6 +288,28 @@ class AgentManager:
                     Example: set_conversation_data(name="course_preferences", value={"primary": "CS", "alternatives": ["Math", "Physics"]})
                 4. MEMORY CHECK: Check 'load_conversation_data' before asking redundant questions.
             """
+
+        if getattr(self.agent_doc, "enable_memory", False):
+            instructions += """
+    
+                SYSTEM INSTRUCTION - LONG-TERM MEMORY:
+                You have access to a persistent memory system across sessions.
+                1. AUTOMATIC RECALL: Use the 'search_memory_records' tool whenever the user refers to past interactions, preferences, or context.
+                2. PROACTIVE SAVING: Use the 'save_memory_record' tool when the user shares new facts, preferences, or important details about themselves or a project.
+                3. ACCURACY: When saving, provide a clear 'title' and detailed 'summary_text'. Set 'record_type' and 'scope_type' appropriately.
+            """
+            
+            # Policy enforcement: retrieval injection
+            if getattr(self.agent_doc, "memory_policy", None):
+                try:
+                    policy = frappe.get_doc("Memory Policy", self.agent_doc.memory_policy)
+                    if policy.inject_mode == "Always":
+                        from huf.ai.memory_tools import get_injected_memory_text
+                        injected_memory = get_injected_memory_text(self.agent_doc.name, policy)
+                        if injected_memory:
+                            instructions += f"\n\n[INJECTED RELEVANT MEMORY]\n{injected_memory}\n"
+                except Exception as e:
+                    frappe.log_error(title="Memory Injection Failed", message=str(e))
 
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
@@ -625,6 +677,99 @@ def generate_conversation_title(conversation_name, agent_name):
             
     except Exception as e:
         frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
+
+@frappe.whitelist()
+def run_background_memory_extraction(conversation_name, agent_name):
+    """
+    Background job to extract memory from conversation transcripts.
+    """
+    try:
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        if not getattr(agent_doc, "enable_memory", False) or not getattr(agent_doc, "memory_policy", None):
+            return
+            
+        policy = frappe.get_doc("Memory Policy", agent_doc.memory_policy)
+        if policy.capture_mode not in ["Automatic", "Agent Suggested"]:
+            return
+            
+        conv_manager = ConversationManager(agent_name=agent_name)
+        history = conv_manager.get_conversation_history(conversation_name, limit=15)
+        if not history:
+            return
+            
+        prompt = f"""
+        Review the following recent conversation. Extract any new, durable Facts, Preferences, or Decisions about the user or the context.
+        Only extract information that is explicitly stated or strongly implied and is worth remembering across sessions.
+        Output ONLY valid JSON matching this schema:
+        {{
+            "memories": [
+                {{
+                    "title": "Short descriptive title (max 5 words)",
+                    "summary_text": "Detailed summary of the fact/preference",
+                    "record_type": "Fact|Preference|Decision",
+                    "confidence": 0.0-1.0 (float, e.g. 0.9 for explicit, 0.5 for implied),
+                    "importance_score": 0.0-1.0 (float, e.g. 0.9 for critical context, 0.3 for minor details)
+                }}
+            ]
+        }}
+        If there is nothing new to remember, output {{"memories": []}}
+        
+        Conversation:
+        {json.dumps(history, indent=2)}
+        """
+        
+        provider = agent_doc.provider
+        model = agent_doc.model
+        
+        # Phase 4: Use Learning Agent if configured
+        if getattr(policy, "learning_agent", None):
+            learning_agent = frappe.get_doc("Agent", policy.learning_agent)
+            provider = learning_agent.provider
+            model = learning_agent.model
+            
+        from huf.ai.providers.litellm import get_simple_completion
+        
+        messages = [{"role": "user", "content": prompt}]
+        
+        result_text = _run_async_safely(
+            get_simple_completion(model, messages, provider)
+        )
+        if not result_text:
+            return
+            
+        # Clean up markdown code blocks if present
+        result_text = result_text.strip()
+        if result_text.startswith("```json"):
+            result_text = result_text[7:]
+        elif result_text.startswith("```"):
+            result_text = result_text[3:]
+        if result_text.endswith("```"):
+            result_text = result_text[:-3]
+            
+        import json
+        data = json.loads(result_text)
+        memories = data.get("memories", [])
+        
+        if memories:
+            from huf.ai.memory_tools import save_memory_record
+            for mem in memories:
+                save_memory_record(
+                    title=mem.get("title"),
+                    summary_text=mem.get("summary_text"),
+                    record_type=mem.get("record_type", "Fact"),
+                    scope_type="User", # Default to User for auto-extraction
+                    scope_key=frappe.db.get_value("Agent Conversation", conversation_name, "owner") or frappe.session.user,
+                    status="Draft" if policy.approval_required else policy.default_status,
+                    confidence=mem.get("confidence", 0.5),
+                    importance_score=mem.get("importance_score", 0.5),
+                    source_type="Extracted",
+                    conversation_id=conversation_name,
+                    agent_name=agent_name
+                )
+            frappe.db.commit()
+            
+    except Exception as e:
+        frappe.log_error(title="Memory Extraction Error", message=f"Extraction failed: {str(e)}")
 
 @frappe.whitelist(allow_guest=True)
 def run_agent_sync(
@@ -1157,6 +1302,15 @@ def run_agent_sync(
                     conversation_name=conversation.name,
                     agent_name=agent_name
                 )
+                
+        # Phase 3: Post-Run Extraction
+        if getattr(agent_doc, "enable_memory", False) and getattr(agent_doc, "memory_policy", None):
+            frappe.enqueue(
+                "huf.ai.agent_integration.run_background_memory_extraction",
+                queue="default",
+                conversation_name=conversation.name,
+                agent_name=agent_name
+            )
 
         structured = None
         try:
@@ -1716,6 +1870,18 @@ async def run_agent_stream(
                                     conversation_name=conversation.name,
                                     agent_name=agent_name
                                 )
+                    except Exception:
+                        pass
+                    
+                    # Phase 3: Post-Run Extraction for streaming chat
+                    try:
+                        if getattr(agent_doc, "enable_memory", False) and getattr(agent_doc, "memory_policy", None):
+                            frappe.enqueue(
+                                "huf.ai.agent_integration.run_background_memory_extraction",
+                                queue="default",
+                                conversation_name=conversation.name,
+                                agent_name=agent_name
+                            )
                     except Exception:
                         pass
                     

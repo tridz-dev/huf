@@ -1,4 +1,4 @@
-import { Cpu, Settings, Loader2 } from 'lucide-react';
+import { Cpu, Settings, Loader2, Plus } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
+import { FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getModels, getModel, updateModel, createModel, getProviders, getModalityOptions } from '../services/providerApi';
 import { useEffect, useState } from 'react';
@@ -193,87 +193,99 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   };
 
   return (
-    <PageLayout
-      subtitle="Manage AI models and their capabilities"
-      filters={
+    <div className="flex flex-col h-full overflow-hidden p-6 gap-6">
+      <div className="flex-none flex items-start justify-between">
+        <div className="mb-4">
+          <h1 className="text-2xl font-semibold tracking-tight">AI Models</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage AI models and their capabilities</p>
+        </div>
+        <Button onClick={handleAddModel} size="sm">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Model
+        </Button>
+      </div>
+
+      <div className="flex-none">
         <FilterBar
           searchPlaceholder="Search models..."
           searchValue={search}
           onSearchChange={setSearch}
         />
-      }
-    >
-      {error && !initialLoading && (
-        <div className="text-center py-12">
-          <p className="text-destructive mb-4">Failed to load models</p>
-          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching models.'}</p>
-        </div>
-      )}
-      <GridView
-        items={models}
-        columns={{ sm: 1, md: 2, lg: 3 }}
-        loading={initialLoading}
-        emptyState={
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        {error && !initialLoading && (
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No models found.</p>
+            <p className="text-destructive mb-4">Failed to load models</p>
+            <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching models.'}</p>
           </div>
-        }
-        renderItem={(model) => (
-          <Card key={model.name} className="h-full flex flex-col">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Cpu className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">{model.model_name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {model.provider}
-                    </CardDescription>
+        )}
+        <GridView
+          items={models}
+          columns={{ sm: 1, md: 2, lg: 3 }}
+          loading={initialLoading}
+          emptyState={
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">No models found.</p>
+            </div>
+          }
+          renderItem={(model) => (
+            <Card key={model.name} className="h-full flex flex-col">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Cpu className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">{model.model_name}</CardTitle>
+                      <CardDescription className="text-xs">
+                        {model.provider}
+                      </CardDescription>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1">
-              <div className="flex flex-wrap gap-2">
-                {model.modalities ? (
-                  model.modalities.split(',').map(m => (
-                    <Badge key={m} variant="secondary" className="text-xs">
-                      {m.trim()}
-                    </Badge>
-                  ))
-                ) : (
-                  <Badge variant="outline" className="text-xs">Text</Badge>
-                )}
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 gap-2"
-                onClick={() => handleConfigure(model)}
-              >
-                <Settings className="w-4 h-4" />
-                Configure
-              </Button>
-            </CardFooter>
-          </Card>
+              </CardHeader>
+              <CardContent className="flex-1">
+                <div className="flex flex-wrap gap-2">
+                  {model.modalities ? (
+                    model.modalities.split(',').map(m => (
+                      <Badge key={m} variant="secondary" className="text-xs">
+                        {m.trim()}
+                      </Badge>
+                    ))
+                  ) : (
+                    <Badge variant="outline" className="text-xs">Text</Badge>
+                  )}
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-2"
+                  onClick={() => handleConfigure(model)}
+                >
+                  <Settings className="w-4 h-4" />
+                  Configure
+                </Button>
+              </CardFooter>
+            </Card>
+          )}
+          keyExtractor={(model) => model.name}
+        />
+        <LoadMoreButton
+          hasMore={hasMore}
+          loading={loadingMore}
+          onLoadMore={loadMore}
+          disabled={!!search || initialLoading}
+        />
+        {!hasMore && models.length > 0 && (
+          <div className="text-center py-4 text-sm text-muted-foreground">
+            {total !== undefined ? `Showing all ${total} models` : 'No more models to load'}
+          </div>
         )}
-        keyExtractor={(model) => model.name}
-      />
-      <LoadMoreButton
-        hasMore={hasMore}
-        loading={loadingMore}
-        onLoadMore={loadMore}
-        disabled={!!search || initialLoading}
-      />
-      {!hasMore && models.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
-          {total !== undefined ? `Showing all ${total} models` : 'No more models to load'}
-        </div>
-      )}
+      </div>
 
       {/* Configure Model Modal */}
       <Dialog open={configureModalOpen} onOpenChange={setConfigureModalOpen}>
@@ -373,6 +385,6 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </PageLayout>
+    </div>
   );
 }

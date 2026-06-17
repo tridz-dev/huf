@@ -1,28 +1,75 @@
-import { type LucideIcon } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ChevronRight, type LucideIcon } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar"
 
-export function NavMain({
-  items,
-  label,
-}: {
+export interface NavSection {
+  label?: string
   items: {
     title: string
-    url: string
+    url?: string
     icon?: LucideIcon
+    capability?: string | null
+    items?: {
+      title: string
+      url: string
+      capability?: string | null
+    }[]
   }[]
-  label?: string
+}
+
+export function NavMain({
+  sections,
+}: {
+  sections: NavSection[]
 }) {
   const location = useLocation()
-  const { isMobile, setOpenMobile } = useSidebar()
+  const { isMobile, setOpenMobile, state } = useSidebar()
+  const [openItem, setOpenItem] = useState<string | null>(null)
+
+  // Auto-open active menu on route change
+  useEffect(() => {
+    let foundActive = false
+    for (const section of sections) {
+      for (const item of section.items) {
+        if (item.items && item.items.length > 0) {
+          const isSubItemActive = item.items.some(
+            (subItem) => location.pathname === subItem.url || location.pathname.startsWith(subItem.url + '/')
+          )
+          if (isSubItemActive) {
+            setOpenItem(item.title)
+            foundActive = true
+            break
+          }
+        }
+      }
+      if (foundActive) break
+    }
+  }, [location.pathname, sections])
 
   const handleNavClick = () => {
     if (isMobile) {
@@ -31,25 +78,110 @@ export function NavMain({
   }
 
   return (
-    <SidebarGroup>
-      {label && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
-      <SidebarMenu>
-        {items.map((item) => {
-          const isActive = location.pathname === item.url ||
-            (item.url !== '/' && location.pathname.startsWith(item.url))
+    <>
+      {sections.map((section, index) => (
+        <SidebarGroup key={index}>
+          {section.label && <SidebarGroupLabel>{section.label}</SidebarGroupLabel>}
+          <SidebarMenu>
+            {section.items.map((item) => {
+              // Check if any sub-item is active
+              const isSubItemActive = item.items?.some((subItem) => location.pathname === subItem.url || location.pathname.startsWith(subItem.url + '/')) || false
+              const isActive = Boolean(isSubItemActive || (item.url && (location.pathname === item.url || (item.url !== '/' && location.pathname.startsWith(item.url + '/')))))
 
-          return (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
-                <NavLink to={item.url} onClick={handleNavClick}>
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
-                </NavLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )
-        })}
-      </SidebarMenu>
-    </SidebarGroup>
+              if (item.items && item.items.length > 0) {
+                if (state === "collapsed") {
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <SidebarMenuButton tooltip={item.title} isActive={isActive}>
+                            {item.icon && <item.icon />}
+                            <span>{item.title}</span>
+                          </SidebarMenuButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="right" align="start" sideOffset={16} className="w-48">
+                          <DropdownMenuLabel>{item.title}</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {item.items.map((subItem) => {
+                            const isSubActive = location.pathname === subItem.url || location.pathname.startsWith(subItem.url + '/')
+                            return (
+                              <DropdownMenuItem key={subItem.title} asChild>
+                                <NavLink to={subItem.url} onClick={handleNavClick} className={isSubActive ? "bg-accent text-accent-foreground font-medium" : ""}>
+                                  {subItem.title}
+                                </NavLink>
+                              </DropdownMenuItem>
+                            )
+                          })}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </SidebarMenuItem>
+                  )
+                }
+
+                return (
+                  <Collapsible
+                    key={item.title}
+                    asChild
+                    open={openItem === item.title}
+                    onOpenChange={(isOpen) => {
+                      if (isOpen) {
+                        setOpenItem(item.title)
+                      } else if (openItem === item.title) {
+                        setOpenItem(null)
+                      }
+                    }}
+                    className="group/collapsible"
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton tooltip={item.title} isActive={isActive}>
+                          {item.icon && <item.icon />}
+                          <span>{item.title}</span>
+                          <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.items.map((subItem) => {
+                            const isSubActive = location.pathname === subItem.url || location.pathname.startsWith(subItem.url + '/')
+                            return (
+                              <SidebarMenuSubItem key={subItem.title}>
+                                <SidebarMenuSubButton asChild isActive={isSubActive}>
+                                  <NavLink to={subItem.url} onClick={handleNavClick}>
+                                    <span>{subItem.title}</span>
+                                  </NavLink>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            )
+                          })}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                )
+              }
+
+              return (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
+                    {item.url ? (
+                      <NavLink to={item.url} onClick={handleNavClick}>
+                        {item.icon && <item.icon />}
+                        <span>{item.title}</span>
+                      </NavLink>
+                    ) : (
+                      <div>
+                        {item.icon && <item.icon />}
+                        <span>{item.title}</span>
+                      </div>
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+      ))}
+    </>
   )
 }

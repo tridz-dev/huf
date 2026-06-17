@@ -143,6 +143,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
       kind: event.kind,
       generatedImage: event.generated_image,
       generatedAudio: event.generated_audio,
+      injected_memories: event.injected_memories,
       versions: updated[messageIndex].versions.map((v) =>
         v.id === event.message_id ? { ...v, content: event.content || v.content } : v
       ),
@@ -156,6 +157,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
     kind: event.kind,
     generatedImage: event.generated_image,
     generatedAudio: event.generated_audio,
+    injected_memories: event.injected_memories,
     versions: [
       {
         id: event.message_id,
@@ -192,6 +194,7 @@ export function mergeConversationItemsIntoMessages(
       generatedImage: item.generatedImage,
       generatedAudio: item.generatedAudio,
       voiceMessage: item.voiceMessage,
+      injected_memories: item.injectedMemories,
       versions: [
         {
           id: item.id,
