@@ -19,7 +19,7 @@ from .tool_functions import (
     cancel_document,
 	delete_document,
 )
-from .conversation_manager import ConversationManager
+from .conversation_manager import ConversationManager, safe_history_slice, safe_history_split
 from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name
@@ -542,9 +542,9 @@ def run_background_summarization(conversation_name, agent_name):
 
         stored_summary = conv_manager.get_stored_summary(conversation_name)
         
-        # Calculate overflow
+        # Calculate overflow, ensuring we don't split tool-call pairs
         overflow_count = len(history) - history_limit
-        to_summarize = history[:overflow_count]
+        to_summarize, _remaining = safe_history_split(history, overflow_count)
         
         from huf.ai.providers.litellm import get_simple_completion
         summary_model = agent_doc.summary_model or agent_doc.model
@@ -840,7 +840,7 @@ def run_agent_sync(
                 history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
         elif context_strategy == "FIFO":
             if len(history) > history_limit:
-                history = history[-history_limit:]
+                history = safe_history_slice(history, history_limit)
         
         # Inject Conversation Data Snapshot if enabled and auto-injection is not disabled (defaults to 1 if not specified)
         if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:

@@ -2,6 +2,55 @@ import frappe
 from frappe.utils import now
 import json
 
+
+def _is_tool_message(msg) -> bool:
+    """Return True if the context message represents a tool result."""
+    return isinstance(msg, dict) and msg.get("role") == "tool"
+
+
+def safe_history_slice(history: list, limit: int) -> list:
+    """
+    Return the last `limit` messages without splitting tool-call pairs.
+
+    OpenAI requires every role='tool' message to follow an assistant message
+    that declared the matching tool_call. A naive slice can drop the assistant
+    message while keeping its tool results, causing BadRequestError. This
+    helper shifts the cut point backward until it no longer starts inside a
+    tool-call result group.
+    """
+    if not history or len(history) <= limit:
+        return history
+
+    cut_index = len(history) - limit
+    # Move cut point backward while it would start on an orphaned tool message
+    while cut_index > 0 and _is_tool_message(history[cut_index]):
+        cut_index -= 1
+
+    return history[cut_index:]
+
+
+def safe_history_split(history: list, split_index: int) -> tuple:
+    """
+    Split history into (left, right) at a boundary that does not break
+    assistant/tool-call pairs. The right (remaining) part is guaranteed not
+    to start with an orphaned tool message.
+    """
+    if not history:
+        return [], []
+
+    if split_index <= 0:
+        return [], list(history)
+
+    if split_index >= len(history):
+        return list(history), []
+
+    # Move split backward while it would leave the right side starting with a tool message
+    while split_index > 0 and _is_tool_message(history[split_index]):
+        split_index -= 1
+
+    return history[:split_index], history[split_index:]
+
+
 class ConversationManager:
     def __init__(self, agent_name, channel=None, external_id=None, session_id=None):
         self.agent_name = agent_name
@@ -295,8 +344,7 @@ class ConversationManager:
             return None, history
 
         split_index = int(len(history) * ratio)
-        to_summarize = history[:split_index]
-        remaining = history[split_index:]
+        to_summarize, remaining = safe_history_split(history, split_index)
 
         summary_prompt = "Summarize the following conversation history concisely, capturing key information, context, and decisions. Maintain the flow of information."
         
