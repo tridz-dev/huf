@@ -27,6 +27,22 @@ from datetime import datetime, timedelta
 from .tool_registry import PermissionAwareToolRegistry
 MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
 
+# Guest-allowed tools of these types MUST pin a reference_doctype; otherwise the
+# LLM could supply an arbitrary doctype and, combined with the guest
+# ignore_permissions bypass, reach data outside the tool's intended scope.
+_GUEST_DOCTYPE_PINNED_TYPES = {
+    "Get Document",
+    "Get Multiple Documents",
+    "Get List",
+    "Create Document",
+    "Create Multiple Documents",
+    "Update Document",
+    "Update Multiple Documents",
+    "Delete Document",
+    "Delete Multiple Documents",
+    "Attach File to Document",
+}
+
 
 def _frappe_run_context_dict(ctx) -> dict:
     """Huf run context may be a dict or an Agents SDK ToolContext wrapping that dict."""
@@ -345,6 +361,14 @@ def create_function_tool(
                     del args_dict["ignore_permissions"]
 
                 if allowed_for_guest and frappe.session.user == "Guest":
+                    if tool_type in _GUEST_DOCTYPE_PINNED_TYPES and not _extra_args.get("reference_doctype"):
+                        return json.dumps({
+                            "error": (
+                                "This tool is not available for guest access: it has no "
+                                "fixed target doctype configured."
+                            ),
+                            "denied": True,
+                        })
                     args_dict["ignore_permissions"] = True
 
                 if _function.__name__ in ["handle_get_request", "handle_post_request"]:
