@@ -190,10 +190,11 @@ export function ArtifactRenderer({
 			case 'svg':
 				return (
 					<div className="flex flex-col gap-2">
-						<div
+						<iframe
+							srcDoc={artifact.content}
+							sandbox=""
 							className="flex items-center justify-center p-4 bg-white rounded border"
-							// biome-ignore lint/security/noDangerouslySetInnerHtml: SVG rendering requires innerHTML
-							dangerouslySetInnerHTML={{ __html: artifact.content }}
+							title={artifact.title || 'SVG Preview'}
 						/>
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
