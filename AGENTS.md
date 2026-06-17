@@ -201,10 +201,25 @@ Represents a single message within a conversation.
 | Label          | Fieldname      | Type      | Description                                                              |
 | :------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
 | **Conversation** | `conversation` | Link      | Link to the parent `Agent Conversation`.                                 |
-| **Role**         | `role`         | Select    | The role of the message sender (`user`, `agent`, or `system`).           |
+| **Role**         | `role`         | Select    | The role of the message sender (`user`, `agent`, `tool`, or `system`).   |
 | **Content**      | `content`      | Long Text | The text content of the message.                                         |
-| **Kind**         | `kind`         | Select    | The type of message (`Message`, `Tool Call`, `Tool Result`, `Error`).    |
-| **Run**          | `run`          | Link      | Link to the `Agent Run` that generated this message.                     |
+| **Kind**         | `kind`         | Select    | The type of message (`Message`, `Tool Call`, `Tool Result`, `Image`, `Audio`, `Status`, `Error`). |
+| **Run**          | `agent_run`    | Link      | Link to the `Agent Run` that generated this message.                     |
+| **Tool Call**    | `tool_call`    | Link      | Link to the `Agent Tool Call` record.                                    |
+| **Tool Call ID** | `tool_call_id` | Data      | LLM-generated `tool_call.id` (e.g. `call_123`). Used to pair assistant tool_calls with role=`tool` results. |
+| **Tool Calls**   | `tool_calls`   | JSON      | Full assistant `tool_calls` payload persisted as JSON.                   |
+| **Tool Name**    | `tool_name`    | Data      | Fetched from `tool_call.tool`.                                           |
+| **Tool Args**    | `tool_args`    | JSON      | Fetched from `tool_call.tool_args`.                                      |
+| **Tool Status**  | `tool_status`  | Data      | Fetched from `tool_call.status`.                                         |
+| **Record Kind**  | `record_kind`  | Select    | Classification: `message`, `tool_call`, `tool_result`, `retrieval_context`, etc. |
+| **Context Policy** | `context_policy` | Select | How the message is included in future context (`include_full`, `include_summary`, `include_reference`, `exclude`, etc.). |
+| **Raw Payload**  | `raw_payload`  | JSON      | Optional raw provider payload for debugging/auditing.                    |
+
+**Tool-Call Protocol:**
+- Assistant messages that request tools are stored with `role=agent`, `kind=Tool Call`, `tool_call_id`, and `tool_calls`.
+- Tool result messages are stored with `role=tool`, `kind=Tool Result`, and the matching `tool_call_id`.
+- When history is loaded, `ConversationManager._message_to_context()` rebuilds the OpenAI/LiteLLM message sequence so every `role=tool` message is paired with a preceding assistant `tool_calls` entry.
+- `repair_message_sequence()` is run just before each LiteLLM call to repair or drop orphaned tool messages caused by trimming, FIFO slicing, summarisation, or legacy data.
 
 #### 7. Agent Run
 
@@ -513,9 +528,11 @@ This file handles the persistence of conversation history.
 
 -   **Class: `ConversationManager`**
     -   `get_or_create_conversation(self, ...)`: Finds the active `Agent Conversation` for a given session or creates a new one.
-    -   `add_message(self, ...)`: Creates a new `Agent Message` document and links it to the current conversation.
-    -   `get_conversation_history(self, ...)`: Fetches the last N messages from the conversation to provide context to the AI.
-    -   `persist_conversation(self, ...)`: Saves conversation state and ensures database commits for real-time updates.
+    -   `add_message(self, ...)`: Creates a new `Agent Message` document and links it to the current conversation. Accepts `tool_call` (link to `Agent Tool Call`), `tool_call_id` (LLM call id), `tool_calls` (assistant payload), and `raw_payload`.
+    -   `get_conversation_history(self, ...)`: Fetches the last N messages from the conversation, applies context policies, and rebuilds OpenAI-compatible assistant/tool-call pairs.
+    -   `safe_history_slice(history, limit)` / `safe_history_split(history, split_index)`: Truncate history at tool-call group boundaries so assistant/tool-call pairs are never split.
+    -   `repair_message_sequence(messages, conversation_name)`: Validates and repairs the OpenAI message sequence before every LiteLLM call. Drops unfulfilled assistant tool_calls, repairs orphaned tool results from `Agent Tool Call` records when possible, and logs every repair/drop action.
+    -   `summarize_conversation(self, ...)`: Summarises older history while preserving tool-call group boundaries.
 
 #### `sdk_tools.py`
 
@@ -585,6 +602,7 @@ This file implements the unified LiteLLM provider that handles all LLM interacti
     -   **Error Handling**: Specific handling for `InternalServerError`, `RateLimitError`, and general `APIError`.
     -   **Parameter Handling**: Automatically drops unsupported parameters for models with restrictions (e.g., gpt-5 models only support temperature=1).
     -   **API Key Management**: Handles API key setup for different providers, including special handling for OpenRouter (requires environment variable).
+    -   **Tool-Call Sequence Repair**: After `litellm.utils.trim_messages()` and before every completion call, it runs `repair_message_sequence()` from `conversation_manager.py` to guarantee OpenAI-compatible assistant/tool-call pairing.
 -   **Function: `_normalize_model_name(model, provider)`**
     -   Normalizes model names to LiteLLM format by adding provider prefix.
     -   Handles provider aliases (e.g., `gemini` → `google`, `grok` → `xai`).
