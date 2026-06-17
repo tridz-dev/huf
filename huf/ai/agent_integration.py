@@ -904,11 +904,10 @@ def run_agent_sync(
 
                 tool_name = getattr(raw, "name", "Unknown Tool")
                 tool_args = getattr(raw, "arguments", "{}")
+                call_id = getattr(raw, "id", None)
                 
                 tool_type = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "types")
                 if tool_type == "Client Side Tool":
-                    call_id = getattr(raw, "id", None)
-                     
                     client_side_tool_calls.append({
                          "id": call_id,
                          "type": "function", 
@@ -929,7 +928,13 @@ def run_agent_sync(
                     agent=agent_name, 
                     run_name=run_doc.name,
                     kind="Tool Call",
-                    tool_call_id=tool_call_id 
+                    tool_call=tool_call_id,
+                    tool_call_id=call_id,
+                    tool_calls=[{
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": tool_args}
+                    }]
                 )
                 safe_commit()
 
@@ -965,7 +970,8 @@ def run_agent_sync(
                         agent=agent_name,
                         run_name=run_doc.name,
                         kind="Tool Result",
-                        tool_call_id=updated_tool_call_id,
+                        tool_call=updated_tool_call_id,
+                        tool_call_id=tool_call_doc.call_id,
                         record_kind="tool_result",
                         context_policy="include_reference" if use_reference else "include_full",
                         context_summary=tool_result_summary,
@@ -1546,6 +1552,7 @@ async def run_agent_stream(
 
                         tool_name = getattr(raw_item, "name", "Unknown Tool")
                         tool_args = getattr(raw_item, "arguments", "{}")
+                        call_id = tool_call.get("id")
                         
                         msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
                         
@@ -1558,7 +1565,13 @@ async def run_agent_stream(
                             agent=agent_name,
                             run_name=run_doc.name,
                             kind="Tool Call",
-                            tool_call_id=tool_call_id
+                            tool_call=tool_call_id,
+                            tool_call_id=call_id,
+                            tool_calls=[{
+                                "id": call_id,
+                                "type": "function",
+                                "function": {"name": tool_name, "arguments": tool_args}
+                            }]
                         )
                         safe_commit()
                         
