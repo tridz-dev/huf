@@ -111,7 +111,7 @@ cost = (input_tokens  / 1_000_000) × input_cost_per_1m_tokens
      + (cached_tokens / 1_000_000) × cached_input_cost_per_1m_tokens  # if set
 ```
 
-**Cache behaviour:** Custom pricing is cached in Redis (10-minute TTL). The cache is auto-invalidated whenever an AI Model document is saved. After `bench migrate`, all custom prices are registered into LiteLLM's in-memory registry via `sync_all_model_pricing()`.
+**Cache behaviour:** Custom pricing is cached in Redis (10-minute TTL). The cache is auto-invalidated whenever an AI Model document is saved.
 
 #### 3. Agent Tool Function
 

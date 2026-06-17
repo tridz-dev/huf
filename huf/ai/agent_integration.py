@@ -2,7 +2,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 import litellm
-from litellm import token_counter, completion_cost
+from litellm import token_counter
 
 import frappe
 from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
@@ -22,6 +22,7 @@ from .tool_functions import (
 from .conversation_manager import ConversationManager
 from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
+from huf.ai.providers.litellm import _normalize_model_name
 
 
 class AgentManager:
@@ -1045,20 +1046,23 @@ def run_agent_sync(
                 cost = getattr(result, "cost", 0)
                 if not cost:
                     from huf.ai.cost_calculator import calculate_cost
-                    
+
+                    pricing_model = _normalize_model_name(resolved_model, resolved_provider)
+
                     mock_response = {
                         "usage": {
                             "prompt_tokens": input_tokens,
                             "completion_tokens": output_tokens,
                             "total_tokens": input_tokens + output_tokens
                         },
-                        # Pass exactly the resolved model (e.g. gpt-4o) so litellm native pricing works without openai/ prefix errors
-                        "model": resolved_model 
+                        # Use the normalized model name (e.g. openai/gpt-4o) so LiteLLM's
+                        # built-in price table can resolve it.
+                        "model": pricing_model
                     }
-                    
+
                     if cached_tokens > 0:
                         mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
-                        
+
                     cost, _source = calculate_cost(
                         model_name=resolved_model,
                         input_tokens=input_tokens,
@@ -1600,9 +1604,8 @@ async def run_agent_stream(
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
-                            from huf.ai.providers.litellm import _normalize_model_name
                             pricing_model = _normalize_model_name(resolved_model, resolved_provider)
-                            
+
                             msgs_for_count = history + [{"role": "user", "content": prompt}]
                             input_tokens = token_counter(model=pricing_model, messages=msgs_for_count)
                             output_tokens = token_counter(model=pricing_model, text=full_response)
@@ -1614,9 +1617,8 @@ async def run_agent_stream(
                         # Prefer cost directly from the chunk (calculated by provider)
                         cost = chunk.get("cost")
                         if not cost:
-                            from huf.ai.providers.litellm import _normalize_model_name
                             from huf.ai.cost_calculator import calculate_cost
-                            
+
                             pricing_model = _normalize_model_name(resolved_model, resolved_provider)
                             
                             mock_response = {
