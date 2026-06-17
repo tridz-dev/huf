@@ -1658,7 +1658,9 @@ async def run_agent_stream(
                         frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
 
                     # Save final response
-                    conv_manager.add_message(conversation, "agent", full_response, resolved_provider, resolved_model, agent_name, run_doc.name)
+                    final_message = conv_manager.add_message(
+                        conversation, "agent", full_response, resolved_provider, resolved_model, agent_name, run_doc.name
+                    )
                     
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Success",
@@ -1724,6 +1726,7 @@ async def run_agent_stream(
                     chunk["response"] = full_response
                     chunk["success"] = True
                     chunk["agent_run_id"] = run_doc.name
+                    chunk["agent_message_id"] = final_message.name
                     chunk["session_id"] = conv_manager.session_id
                     chunk["provider"] = resolved_provider
                     yield chunk
