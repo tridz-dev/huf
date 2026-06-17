@@ -1,5 +1,5 @@
+import ipaddress
 import json
-import re
 import socket
 from urllib.parse import urlparse
 
@@ -10,9 +10,34 @@ from requests.exceptions import RequestException
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}
 MAX_RESPONSE_SIZE = 10 * 1024 * 1024  # 10MB
 
-_PRIVATE_IP_PATTERN = re.compile(
-	r"^(127\.|10\.|172\.1[6-9]\.|172\.2[0-9]\.|172\.3[0-1]\.|192\.168\.|0\.|169\.254\.)"
-)
+def _is_public_ip(ip_str: str) -> bool:
+	"""Return True only if ip_str is a routable public address.
+
+	Unwraps IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) before classifying,
+	and rejects loopback/private/link-local/reserved/multicast/unspecified
+	for both IPv4 and IPv6.
+	"""
+	try:
+		addr = ipaddress.ip_address(ip_str)
+	except ValueError:
+		# Not a parseable IP — fail closed.
+		return False
+
+	# Unwrap IPv4-mapped IPv6 so ::ffff:127.0.0.1 is judged as 127.0.0.1.
+	mapped = getattr(addr, "ipv4_mapped", None)
+	if mapped is not None:
+		addr = mapped
+
+	if (
+		addr.is_private
+		or addr.is_loopback
+		or addr.is_link_local
+		or addr.is_reserved
+		or addr.is_multicast
+		or addr.is_unspecified
+	):
+		return False
+	return True
 
 
 def validate_url(url):
@@ -30,7 +55,9 @@ def validate_url(url):
 	if not parsed.hostname:
 		return False, "Invalid URL: no hostname"
 
-	# Resolve hostname to check actual IP addresses (prevents DNS rebinding)
+	# Resolve hostname and reject if any resolved IP is private/internal.
+	# NOTE: this does not prevent DNS rebinding — the request below re-resolves
+	# independently. Rebinding mitigation is a known follow-up (see plan 002 notes).
 	try:
 		addr_info = socket.getaddrinfo(parsed.hostname, None)
 		ips = {info[4][0] for info in addr_info}
@@ -38,7 +65,7 @@ def validate_url(url):
 		return False, f"Cannot resolve hostname: {parsed.hostname}"
 
 	for ip in ips:
-		if _PRIVATE_IP_PATTERN.match(ip) or ip in ("::1", "0.0.0.0"):
+		if not _is_public_ip(ip):
 			return False, "Requests to private/internal addresses are not allowed"
 
 	return True, None
@@ -124,8 +151,35 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		if json_data is not None:
 			request_kwargs["json"] = json_data
 
-		# Make the request
-		response = requests.request(method, final_url, **request_kwargs)
+		# Make the request, following redirects manually so each hop is
+		# re-validated against the SSRF guard (allow_redirects=False).
+		request_kwargs["allow_redirects"] = False
+		current_url = final_url
+		max_redirects = 5
+		for _hop in range(max_redirects + 1):
+			response = requests.request(method, current_url, **request_kwargs)
+			if response.status_code not in (301, 302, 303, 307, 308):
+				break
+			location = response.headers.get("Location")
+			if not location:
+				break
+			# Resolve relative redirects against the current URL.
+			next_url = requests.compat.urljoin(current_url, location)
+			is_valid, error_msg = validate_url(next_url)
+			if not is_valid:
+				return {
+					"success": False,
+					"error": f"Redirect blocked: {error_msg}",
+					"suggestion": "The server attempted to redirect to a private/internal address.",
+				}
+			current_url = next_url
+		else:
+			# Loop exhausted without breaking — too many redirects.
+			return {
+				"success": False,
+				"error": "Too many redirects (max 5)",
+				"suggestion": "The URL redirects in a loop or exceeds the redirect limit.",
+			}
 
 		# Check response size — pre-check via Content-Length header, then verify actual content
 		content_length = response.headers.get("Content-Length")
@@ -157,7 +211,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 			"status_code": response.status_code,
 			"headers": dict(response.headers),
 			"data": response_data,
-			"final_url": final_url,
+			"final_url": current_url,
 		}
 
 		# Add guidance for the AI if it's an error
