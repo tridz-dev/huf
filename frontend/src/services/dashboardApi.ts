@@ -3,6 +3,17 @@ import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { fetchDocCount } from './utilsApi';
 import { AgentRunDoc } from './agentRunApi';
+import { getFlowDefinitions, listFlowRuns } from './flowApi';
+import { mapBackendStatusToFrontend } from './flowSerializer';
+import type { FlowStatus } from '@/types/flow.types';
+
+export interface DashboardFlowItem {
+  id: string;
+  name: string;
+  status: FlowStatus;
+  runCount: number;
+  lastRunAt: string | null;
+}
 
 /**
  * Agent Run document for metrics calculation
@@ -90,5 +101,37 @@ export async function getRecentAgentRuns(): Promise<AgentRunDoc[]> {
     return runs as AgentRunDoc[];
   } catch (error) {
     handleFrappeError(error, 'Error fetching recent agent runs');
+  }
+}
+
+/**
+ * Fetch active flows with run stats for the dashboard preview
+ */
+export async function getDashboardActiveFlows(limit = 10): Promise<DashboardFlowItem[]> {
+  try {
+    const items = await getFlowDefinitions();
+    const active = items
+      .filter((f) => f.status === 'Active')
+      .slice(0, limit);
+
+    return Promise.all(
+      active.map(async (flow) => {
+        const [runCount, recentRuns] = await Promise.all([
+          fetchDocCount(doctype['Flow Run'], [['flow_id', '=', flow.flow_id]]),
+          listFlowRuns(flow.flow_id, undefined, 1),
+        ]);
+
+        return {
+          id: flow.flow_id,
+          name: flow.flow_name,
+          status: mapBackendStatusToFrontend(flow.status),
+          runCount: runCount ?? 0,
+          lastRunAt: recentRuns[0]?.started_at ?? null,
+        };
+      })
+    );
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching dashboard active flows');
+    return [];
   }
 }

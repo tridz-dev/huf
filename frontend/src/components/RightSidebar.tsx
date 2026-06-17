@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
+import { linkRoutes } from '@/lib/link-routes';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,9 +76,11 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
       .then((result) => {
         const items = Array.isArray(result) ? result : result.items;
         setAgents(
-          (items || []).map((a: { name: string; agent_name?: string }) => ({
+          (items || []).map((a: { name: string; agent_name?: string; model?: string }) => ({
             value: a.name,
-            label: a.agent_name || a.name,
+            label: a.model
+              ? `${a.agent_name || a.name} · ${a.model}`
+              : a.agent_name || a.name,
           }))
         );
       })
@@ -521,6 +524,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                         disabled={loadingAgents}
                         searchPlaceholder="Search agents..."
                         emptyText="No agent found."
+                        linkTo={linkRoutes.agent}
                       />
                     </div>
                     <div>
@@ -650,6 +654,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                         disabled={loadingAgents}
                         searchPlaceholder="Search agents..."
                         emptyText="No agent found."
+                        linkTo={linkRoutes.agent}
                       />
                     </div>
                     <div>

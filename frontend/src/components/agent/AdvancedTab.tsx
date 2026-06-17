@@ -1,6 +1,8 @@
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { LinkFieldControl } from '@/components/ui/link-field-control';
+import { linkRoutes } from '@/lib/link-routes';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { UseFormReturn } from 'react-hook-form';
@@ -113,23 +115,25 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Summary Model</FormLabel>
-                  <Select
-                    onValueChange={(v) => field.onChange(v || undefined)}
-                    value={field.value || ''}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Default (main agent model)" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {allModels.map((m) => (
-                        <SelectItem key={m.name} value={m.name}>
-                          {m.model_name || m.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
+                      <Select
+                        onValueChange={(v) => field.onChange(v || undefined)}
+                        value={field.value || ''}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Default (main agent model)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allModels.map((m) => (
+                            <SelectItem key={m.name} value={m.name}>
+                              {m.model_name || m.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </LinkFieldControl>
+                  </FormControl>
                   <FormDescription>
                     Optional lightweight model used only when compressing older messages (Summarize strategy).
                   </FormDescription>
@@ -386,23 +390,25 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
             render={({ field }) => (
               <FormItem>
 								<FormLabel>{IMAGE_MODEL_LABEL}</FormLabel>
-                <Select
-                  onValueChange={(v) => field.onChange(v || undefined)}
-                  value={field.value || ''}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-											<SelectValue placeholder={IMAGE_MODEL_PLACEHOLDER} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {imageModels.map((m) => (
-                      <SelectItem key={m.name} value={m.name}>
-                        {m.model_name || m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
+                    <Select
+                      onValueChange={(v) => field.onChange(v || undefined)}
+                      value={field.value || ''}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={IMAGE_MODEL_PLACEHOLDER} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {imageModels.map((m) => (
+                          <SelectItem key={m.name} value={m.name}>
+                            {m.model_name || m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </LinkFieldControl>
+                </FormControl>
 								<FormDescription>{IMAGE_MODEL_DESCRIPTION}</FormDescription>
                 <FormMessage />
               </FormItem>
@@ -415,23 +421,25 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
             render={({ field }) => (
               <FormItem>
 								<FormLabel>{TTS_MODEL_LABEL}</FormLabel>
-                <Select
-                  onValueChange={(v) => field.onChange(v || undefined)}
-                  value={field.value || ''}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-											<SelectValue placeholder={TTS_MODEL_PLACEHOLDER} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {ttsModels.map((m) => (
-                      <SelectItem key={m.name} value={m.name}>
-                        {m.model_name || m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
+                    <Select
+                      onValueChange={(v) => field.onChange(v || undefined)}
+                      value={field.value || ''}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={TTS_MODEL_PLACEHOLDER} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ttsModels.map((m) => (
+                          <SelectItem key={m.name} value={m.name}>
+                            {m.model_name || m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </LinkFieldControl>
+                </FormControl>
 								<FormDescription>{TTS_MODEL_DESCRIPTION}</FormDescription>
                 <FormMessage />
               </FormItem>
@@ -459,23 +467,25 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
             render={({ field }) => (
               <FormItem>
 								<FormLabel>{STT_MODEL_LABEL}</FormLabel>
-                <Select
-                  onValueChange={(v) => field.onChange(v || undefined)}
-                  value={field.value || ''}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-											<SelectValue placeholder={STT_MODEL_PLACEHOLDER} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {sttModels.map((m) => (
-                      <SelectItem key={m.name} value={m.name}>
-                        {m.model_name || m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
+                    <Select
+                      onValueChange={(v) => field.onChange(v || undefined)}
+                      value={field.value || ''}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={STT_MODEL_PLACEHOLDER} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sttModels.map((m) => (
+                          <SelectItem key={m.name} value={m.name}>
+                            {m.model_name || m.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </LinkFieldControl>
+                </FormControl>
 								<FormDescription>{STT_MODEL_DESCRIPTION}</FormDescription>
                 <FormMessage />
               </FormItem>

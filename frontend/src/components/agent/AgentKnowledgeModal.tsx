@@ -23,6 +23,7 @@ import { knowledgeModes } from '@/data/knowledge';
 import { getKnowledgeSources } from '@/services/knowledgeApi';
 import type { AgentKnowledgeRow } from '@/types/agent.types';
 import type { ComboboxOption } from '@/components/ui/combobox';
+import { linkRoutes } from '@/lib/link-routes';
 
 interface AgentKnowledgeModalProps {
   open: boolean;
@@ -111,6 +112,7 @@ export function AgentKnowledgeModal({
               placeholder="Select knowledge source..."
               searchPlaceholder="Search knowledge sources..."
               emptyText="No knowledge sources found."
+              linkTo={linkRoutes.knowledgeSource}
             />
           </div>
 
