@@ -721,13 +721,10 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
         doc = frappe.get_doc({"doctype": reference_doctype, **kwargs})
         doc.insert(ignore_permissions=ignore_permissions)
 
-        doc_dict = doc.as_dict()
-        import datetime
-        for k, v in doc_dict.items():
-            if isinstance(v, (datetime.datetime, datetime.date, datetime.time)):
-                doc_dict[k] = str(v)
+        # Return a concise dictionary to prevent polluting the LLM context with a huge document payload
+        result_dict = {"name": doc.name, "creation": str(doc.creation)}
 
-        return {"success": True, "result": doc_dict, "message": f"{reference_doctype} created"}
+        return {"success": True, "result": result_dict, "message": f"{reference_doctype} created"}
     except Exception as e:
         frappe.log_error("SDK Functions Debug", f"Error in handle_create_document: {e!s}")
         return {"success": False, "error": str(e)}
@@ -926,9 +923,15 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
         doc.save(ignore_permissions=ignore_permissions)
         frappe.db.commit()
 
+        # Build a concise result dict
+        result_dict = {"name": doc.name, "modified": str(doc.modified)}
+        # Add the fields that were updated so the LLM has explicit confirmation
+        for field in data.keys():
+             result_dict[field] = getattr(doc, field, data.get(field))
+
         return {
             "success": True,
-            "result": doc.as_dict(),
+            "result": result_dict,
             "message": f"{reference_doctype} {document_id} updated successfully.",
         }
     except Exception as e:
