@@ -745,13 +745,10 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
         doc = frappe.get_doc({"doctype": reference_doctype, **kwargs})
         doc.insert(ignore_permissions=ignore_permissions)
 
-        doc_dict = doc.as_dict()
-        import datetime
-        for k, v in doc_dict.items():
-            if isinstance(v, (datetime.datetime, datetime.date, datetime.time)):
-                doc_dict[k] = str(v)
+        # Return a concise dictionary to prevent polluting the LLM context with a huge document payload
+        result_dict = {"name": doc.name, "creation": str(doc.creation)}
 
-        return {"success": True, "result": doc_dict, "message": f"{reference_doctype} created"}
+        return {"success": True, "result": result_dict, "message": f"{reference_doctype} created"}
     except Exception as e:
         frappe.log_error("SDK Functions Debug", f"Error in handle_create_document: {e!s}")
         return {"success": False, "error": str(e)}
@@ -950,9 +947,15 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
         doc.save(ignore_permissions=ignore_permissions)
         frappe.db.commit()
 
+        # Build a concise result dict
+        result_dict = {"name": doc.name, "modified": str(doc.modified)}
+        # Add the fields that were updated so the LLM has explicit confirmation
+        for field in data.keys():
+             result_dict[field] = getattr(doc, field, data.get(field))
+
         return {
             "success": True,
-            "result": doc.as_dict(),
+            "result": result_dict,
             "message": f"{reference_doctype} {document_id} updated successfully.",
         }
     except Exception as e:
@@ -1817,10 +1820,11 @@ async def _process_with_vision_model(
     model: str,
     api_key: str
 ):
-    """Process image using LiteLLM vision models."""
+    """Process image/PDF using LiteLLM vision models."""
     import base64
 
     import litellm
+    from huf.ai.providers.litellm import _litellm_completion_with_retry
 
     try:
         # Read file and encode to base64
@@ -1855,12 +1859,12 @@ async def _process_with_vision_model(
             }
         ]
 
-        # Call LiteLLM completion with vision
-        response = await asyncio.to_thread(
-            litellm.completion,
+        # Call LiteLLM completion with vision (with transient-error retry)
+        response = await _litellm_completion_with_retry(
             model=model,
             messages=messages,
-            api_key=api_key
+            api_key=api_key,
+            timeout=180
         )
 
         extracted_text = response.choices[0].message.content
@@ -1958,9 +1962,10 @@ async def handle_ocr_document(
         # Determine strategy
         strategy = _determine_ocr_strategy(file_path, file_type)
 
-        # Override strategy for Google/Gemini: Use Vision (Multimodal) for PDFs too
+        # Override strategy for providers that support vision-based PDF reading:
+        # Use Vision (Multimodal) for PDFs instead of OCR endpoints.
         provider_name = provider_doc.provider_name.lower()
-        if provider_name in ["google", "gemini"] and (strategy == "ocr" or file_path.lower().endswith(".pdf")):
+        if provider_name in ["google", "gemini", "openai", "anthropic"] and (strategy == "ocr" or file_path.lower().endswith(".pdf")):
             strategy = "vision"
 
         # Determine model

@@ -2,7 +2,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 import litellm
-from litellm import token_counter, completion_cost
+from litellm import token_counter
 
 import frappe
 from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
@@ -19,9 +19,10 @@ from .tool_functions import (
     cancel_document,
 	delete_document,
 )
-from .conversation_manager import ConversationManager
+from .conversation_manager import ConversationManager, safe_history_slice, safe_history_split
 from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
+from huf.ai.providers.litellm import _normalize_model_name
 
 
 class AgentManager:
@@ -541,9 +542,9 @@ def run_background_summarization(conversation_name, agent_name):
 
         stored_summary = conv_manager.get_stored_summary(conversation_name)
         
-        # Calculate overflow
+        # Calculate overflow, ensuring we don't split tool-call pairs
         overflow_count = len(history) - history_limit
-        to_summarize = history[:overflow_count]
+        to_summarize, _remaining = safe_history_split(history, overflow_count)
         
         from huf.ai.providers.litellm import get_simple_completion
         summary_model = agent_doc.summary_model or agent_doc.model
@@ -839,7 +840,7 @@ def run_agent_sync(
                 history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
         elif context_strategy == "FIFO":
             if len(history) > history_limit:
-                history = history[-history_limit:]
+                history = safe_history_slice(history, history_limit)
         
         # Inject Conversation Data Snapshot if enabled and auto-injection is not disabled (defaults to 1 if not specified)
         if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:
@@ -903,11 +904,10 @@ def run_agent_sync(
 
                 tool_name = getattr(raw, "name", "Unknown Tool")
                 tool_args = getattr(raw, "arguments", "{}")
+                call_id = getattr(raw, "id", None)
                 
                 tool_type = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "types")
                 if tool_type == "Client Side Tool":
-                    call_id = getattr(raw, "id", None)
-                     
                     client_side_tool_calls.append({
                          "id": call_id,
                          "type": "function", 
@@ -928,7 +928,13 @@ def run_agent_sync(
                     agent=agent_name, 
                     run_name=run_doc.name,
                     kind="Tool Call",
-                    tool_call_id=tool_call_id 
+                    tool_call=tool_call_id,
+                    tool_call_id=call_id,
+                    tool_calls=[{
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": tool_args}
+                    }]
                 )
                 safe_commit()
 
@@ -964,7 +970,8 @@ def run_agent_sync(
                         agent=agent_name,
                         run_name=run_doc.name,
                         kind="Tool Result",
-                        tool_call_id=updated_tool_call_id,
+                        tool_call=updated_tool_call_id,
+                        tool_call_id=tool_call_doc.call_id,
                         record_kind="tool_result",
                         context_policy="include_reference" if use_reference else "include_full",
                         context_summary=tool_result_summary,
@@ -1045,20 +1052,23 @@ def run_agent_sync(
                 cost = getattr(result, "cost", 0)
                 if not cost:
                     from huf.ai.cost_calculator import calculate_cost
-                    
+
+                    pricing_model = _normalize_model_name(resolved_model, resolved_provider)
+
                     mock_response = {
                         "usage": {
                             "prompt_tokens": input_tokens,
                             "completion_tokens": output_tokens,
                             "total_tokens": input_tokens + output_tokens
                         },
-                        # Pass exactly the resolved model (e.g. gpt-4o) so litellm native pricing works without openai/ prefix errors
-                        "model": resolved_model 
+                        # Use the normalized model name (e.g. openai/gpt-4o) so LiteLLM's
+                        # built-in price table can resolve it.
+                        "model": pricing_model
                     }
-                    
+
                     if cached_tokens > 0:
                         mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
-                        
+
                     cost, _source = calculate_cost(
                         model_name=resolved_model,
                         input_tokens=input_tokens,
@@ -1542,6 +1552,7 @@ async def run_agent_stream(
 
                         tool_name = getattr(raw_item, "name", "Unknown Tool")
                         tool_args = getattr(raw_item, "arguments", "{}")
+                        call_id = tool_call.get("id")
                         
                         msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
                         
@@ -1554,7 +1565,13 @@ async def run_agent_stream(
                             agent=agent_name,
                             run_name=run_doc.name,
                             kind="Tool Call",
-                            tool_call_id=tool_call_id
+                            tool_call=tool_call_id,
+                            tool_call_id=call_id,
+                            tool_calls=[{
+                                "id": call_id,
+                                "type": "function",
+                                "function": {"name": tool_name, "arguments": tool_args}
+                            }]
                         )
                         safe_commit()
                         
@@ -1600,9 +1617,8 @@ async def run_agent_stream(
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
-                            from huf.ai.providers.litellm import _normalize_model_name
                             pricing_model = _normalize_model_name(resolved_model, resolved_provider)
-                            
+
                             msgs_for_count = history + [{"role": "user", "content": prompt}]
                             input_tokens = token_counter(model=pricing_model, messages=msgs_for_count)
                             output_tokens = token_counter(model=pricing_model, text=full_response)
@@ -1614,9 +1630,8 @@ async def run_agent_stream(
                         # Prefer cost directly from the chunk (calculated by provider)
                         cost = chunk.get("cost")
                         if not cost:
-                            from huf.ai.providers.litellm import _normalize_model_name
                             from huf.ai.cost_calculator import calculate_cost
-                            
+
                             pricing_model = _normalize_model_name(resolved_model, resolved_provider)
                             
                             mock_response = {

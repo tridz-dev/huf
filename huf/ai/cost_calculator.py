@@ -127,9 +127,9 @@ def _calculate_from_custom_pricing(
     Apply the standard token-cost formula using custom pricing.
 
     Industry standard formula:
-      cost = (input  / 1M) × input_price
-           + (output / 1M) × output_price
-           + (cached / 1M) × cached_price    (if cached_price is set)
+      cost = (input  / 1M) * input_price
+           + (output / 1M) * output_price
+           + (cached / 1M) * cached_price    (if cached_price is set)
 
     For cached tokens: if no explicit cached_price is configured we do NOT
     double-charge them — they are already counted inside input_tokens by the
@@ -200,137 +200,18 @@ def calculate_cost(
     if litellm_response is not None:
         try:
             from litellm import completion_cost
-            
-            unregister_model_pricing_with_litellm(model_name)
 
             litellm_cost = completion_cost(completion_response=litellm_response)
             if litellm_cost and float(litellm_cost) > 0:
                 return float(litellm_cost), "litellm"
         except Exception as e:
-            frappe.log_error(f"LiteLLM auto-lookup failed for '{model_name}': {str(e)}", "Cost Calculator Priority 2")
-            pass
+            frappe.log_error(
+                f"LiteLLM auto-lookup failed for '{model_name}': {str(e)}",
+                "Cost Calculator Priority 2",
+            )
 
     # ── Priority 3: Unknown ──────────────────────────────────────────────────
     return 0.0, "unknown"
-
-
-def register_model_pricing_with_litellm(model_name: str, pricing: dict):
-    """
-    Register custom pricing into LiteLLM's in-memory price registry.
-
-    This ensures that litellm.completion_cost() also respects HUF's custom
-    prices, making the two cost paths consistent.
-
-    LiteLLM registry format uses cost-per-token (not per-1M), so we divide.
-    """
-    if not model_name or not pricing:
-        return
-
-    try:
-        import litellm
-
-        input_price_per_1m = pricing.get("input_cost_per_1m_tokens")
-        output_price_per_1m = pricing.get("output_cost_per_1m_tokens")
-
-        if input_price_per_1m is None or output_price_per_1m is None:
-            return
-
-        model_info = {
-            "input_cost_per_token": float(input_price_per_1m) / 1_000_000,
-            "output_cost_per_token": float(output_price_per_1m) / 1_000_000,
-        }
-
-        cached_price_per_1m = pricing.get("cached_input_cost_per_1m_tokens")
-        if cached_price_per_1m is not None:
-            model_info["cache_read_input_token_cost"] = float(cached_price_per_1m) / 1_000_000
-
-        litellm.register_model({model_name: model_info})
-
-    except Exception as e:
-        frappe.log_error(
-            f"Failed to register '{model_name}' pricing with LiteLLM: {str(e)}",
-            "Cost Calculator",
-        )
-
-def unregister_model_pricing_with_litellm(model_name: str):
-    """
-    Remove custom pricing from LiteLLM's in-memory price registry and restore the original.
-    This forces LiteLLM to fall back to its own built-in JSON pricing table.
-    """
-    if not model_name:
-        return
-        
-    try:
-        import litellm
-        import json
-        import os
-        
-        # LiteLLM's original prices are stored in this JSON file
-        json_file_path = os.path.join(os.path.dirname(litellm.__file__), "model_prices_and_context_window.json")
-        
-        if os.path.exists(json_file_path):
-            with open(json_file_path, "r") as f:
-                original_prices = json.load(f)
-                
-            # If the model originally existed in LiteLLM, restore its original config.
-            # Otherwise, it was purely a custom model, so pop it completely.
-            if model_name in original_prices:
-                litellm.model_cost[model_name] = original_prices[model_name]
-            elif model_name in litellm.model_cost:
-                litellm.model_cost.pop(model_name, None)
-        else:
-            # Fallback if json not found for some reason
-            litellm.model_cost.pop(model_name, None)
-            
-    except Exception as e:
-        frappe.log_error(
-            f"Failed to unregister '{model_name}' pricing with LiteLLM: {str(e)}",
-            "Cost Calculator",
-        )
-
-
-def sync_all_model_pricing():
-    """
-    Sync all AI Models that have custom pricing into LiteLLM's in-memory
-    price registry.
-
-    Called from install.after_migrate() so that the registry is always
-    populated after a server restart or bench migrate.
-    """
-    try:
-        models = frappe.get_all(
-            "AI Model",
-            filters={"use_custom_pricing": 1},
-            fields=[
-                "name",
-                "model_name",
-                "input_cost_per_1m_tokens",
-                "output_cost_per_1m_tokens",
-                "cached_input_cost_per_1m_tokens",
-            ],
-        )
-
-        synced = 0
-        for m in models:
-            pricing = {
-                "input_cost_per_1m_tokens": m.input_cost_per_1m_tokens,
-                "output_cost_per_1m_tokens": m.output_cost_per_1m_tokens,
-                "cached_input_cost_per_1m_tokens": m.get("cached_input_cost_per_1m_tokens"),
-            }
-            register_model_pricing_with_litellm(m.name, pricing)
-            synced += 1
-
-        if synced:
-            frappe.log_error(
-                f"Synced custom pricing for {synced} AI Model(s) into LiteLLM registry.",
-                "Cost Calculator Sync",
-            )
-
-    except Exception as e:
-        frappe.log_error(
-            f"sync_all_model_pricing failed: {str(e)}",
-            "Cost Calculator Sync Error",
-        )
 
 
 def invalidate_model_pricing_cache(model_name: str):

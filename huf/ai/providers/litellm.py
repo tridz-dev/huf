@@ -22,11 +22,16 @@ from types import SimpleNamespace
 
 import frappe
 import litellm
-from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, completion_cost, ContextWindowExceededError
+from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, ContextWindowExceededError
 from litellm.utils import trim_messages
 from huf.ai.tool_serializer import serialize_tools
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.cost_calculator import calculate_cost
+from huf.ai.conversation_manager import repair_message_sequence
+
+
+# Default request timeout for LiteLLM completion calls (seconds)
+_DEFAULT_LITELLM_TIMEOUT = 180
 
 
 class SimpleResult:
@@ -42,6 +47,42 @@ class SimpleResult:
 # High-performance in-memory cache for provider capabilities
 # Stores capability flags to avoid Redis hits on every request
 _L1_CAPABILITY_CACHE = {}
+
+
+def _is_transient_litellm_error(exc: Exception) -> bool:
+    """Return True for transient network errors that a retry may resolve."""
+    msg = str(exc).lower()
+    if any(k in msg for k in (
+        "broken pipe", "connection reset", "connection aborted",
+        "connection error", "unexpected eof", "remote end closed",
+    )):
+        return True
+    if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+        return True
+    return False
+
+
+async def _litellm_completion_with_retry(**completion_kwargs):
+    """Call litellm.completion with transient-error retries and backoff."""
+    max_retries = completion_kwargs.pop("_huf_max_retries", 2)
+    base_delay = completion_kwargs.pop("_huf_base_delay", 0.5)
+
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            return await asyncio.to_thread(litellm.completion, **completion_kwargs)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < max_retries and _is_transient_litellm_error(exc):
+                delay = base_delay * (2 ** attempt)
+                frappe.log_error(
+                    f"LiteLLM transient error (attempt {attempt + 1}/{max_retries + 1}): {exc}. Retrying in {delay}s",
+                    "LiteLLM Retry"
+                )
+                await asyncio.sleep(delay)
+                continue
+            raise
+    raise last_exc
 
 
 def _get_prompt_cache_options(context: dict | None) -> dict:
@@ -91,6 +132,44 @@ async def _execute_tool_call(tool, args_json, context=None, tool_call_id=None):
 def _find_tool(agent, tool_name):
     """Find a tool by name in the agent's tools"""
     return next((t for t in agent.tools if t.name == tool_name), None)
+
+
+def _get_agent_max_context_chars(agent_doc) -> int:
+    """Return the agent's configured tool-result context threshold."""
+    try:
+        value = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
+    except Exception:
+        value = 2000
+    # Enforce a sensible floor so truncation notices still fit.
+    return max(value, 500)
+
+
+def _truncate_tool_result_for_context(result_content, max_context_chars: int = 2000) -> str:
+    """
+    Truncate a tool result before feeding it back to the LLM in the same run.
+
+    Large tool results (e.g. full document payloads returned by custom functions)
+    explode the context window and can confuse the agent into calling the same
+    tool repeatedly.  We keep the full result in the Agent Tool Call record for
+    audit / reference; the in-context copy is capped to ``max_context_chars``.
+    """
+    if result_content is None:
+        return ""
+    if not isinstance(result_content, str):
+        result_content = str(result_content)
+
+    # Defensive floor in case this helper is ever called directly.
+    max_context_chars = max(max_context_chars, 500)
+
+    if len(result_content) <= max_context_chars:
+        return result_content
+
+    notice = (
+        f"\n\n... [Tool result truncated from {len(result_content)} characters "
+        f"to {max_context_chars} characters to protect the context window.]"
+    )
+    keep = max(max_context_chars - len(notice), 200)
+    return result_content[:keep] + notice
 
 
 def _normalize_model_name(model: str, provider: str) -> str:
@@ -234,6 +313,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
             cache_system_message = bool(agent_doc.get("cache_system_message", 0))
             cache_conversation_history = bool(agent_doc.get("cache_conversation_history", 0))
+
+        max_context_chars = _get_agent_max_context_chars(agent_doc)
         
         # Check if model supports prompt caching
         model_supports_caching = False
@@ -346,16 +427,22 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             completion_kwargs = {
                 "model": normalized_model,
                 "temperature": temperature,
+                "timeout": _DEFAULT_LITELLM_TIMEOUT,
             }
 
-            # Trim messages to fit context window
+            # Trim messages to fit context window, then sanitize tool-call pairs
             try:
                 messages = trim_messages(messages=messages, model=normalized_model)
-                completion_kwargs["messages"] = messages
             except Exception as e:
                 frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
                 # Continue with untrimmed messages if trimming fails
                 pass
+
+            messages = repair_message_sequence(
+                messages,
+                conversation_name=context.get("conversation_id") if context else None,
+            )
+            completion_kwargs["messages"] = messages
 
             if context and context.get("response_format"):
                 completion_kwargs["response_format"] = context.get("response_format")
@@ -393,9 +480,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # LiteLLM call
             try:
                 try:
-                    response = await asyncio.to_thread(
-                        litellm.completion, **completion_kwargs
-                    )
+                    response = await _litellm_completion_with_retry(**completion_kwargs)
                 except BadRequestError as e:
                     err_msg = str(e).lower()
                     conflict_keywords = [
@@ -424,9 +509,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         completion_kwargs.pop("tools", None)
                         completion_kwargs.pop("tool_choice", None)
                         
-                        response = await asyncio.to_thread(
-                            litellm.completion, **completion_kwargs
-                        )
+                        response = await _litellm_completion_with_retry(**completion_kwargs)
                     else:
                         raise e
 
@@ -580,7 +663,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "name": tool_name,
-                        "content": str(result_content),
+                        "content": _truncate_tool_result_for_context(result_content, max_context_chars),
                     }
                 )
 
@@ -620,20 +703,17 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
             "model": normalized_model,
             "messages": messages,
             "temperature": 0.3,
+            "timeout": _DEFAULT_LITELLM_TIMEOUT,
         }
         
         _setup_api_key(provider_name, api_key, completion_kwargs)
         
         try:
-            response = await asyncio.to_thread(
-                litellm.completion, **completion_kwargs
-            )
+            response = await _litellm_completion_with_retry(**completion_kwargs)
         except BadRequestError as e:
             if "unsupported value" in str(e).lower() and "temperature" in str(e).lower():
                 completion_kwargs.pop("temperature", None)
-                response = await asyncio.to_thread(
-                    litellm.completion, **completion_kwargs
-                )
+                response = await _litellm_completion_with_retry(**completion_kwargs)
             else:
                 raise e
         
@@ -810,16 +890,22 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "messages": messages,
             "temperature": temperature,
             "stream": True,  # Enable streaming
-            "stream_options": {"include_usage": True} # Request usage stats in stream
+            "stream_options": {"include_usage": True}, # Request usage stats in stream
+            "timeout": _DEFAULT_LITELLM_TIMEOUT,
         }
         
-        # Trim messages to fit context window
+        # Trim messages to fit context window, then sanitize tool-call pairs
         try:
             messages = trim_messages(messages=messages, model=normalized_model)
-            completion_kwargs["messages"] = messages
         except Exception as e:
             frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
             pass
+
+        messages = repair_message_sequence(
+            messages,
+            conversation_name=context.get("conversation_id") if context else None,
+        )
+        completion_kwargs["messages"] = messages
 
         if top_p:
             completion_kwargs["top_p"] = top_p
@@ -845,9 +931,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             try:
                 # Use LiteLLM completion with stream=True
                 # LiteLLM completion() supports streaming when stream=True
-                stream = await asyncio.to_thread(
-                    litellm.completion, **completion_kwargs
-                )
+                stream = await _litellm_completion_with_retry(**completion_kwargs)
 
                 # Buffer for tool calls
                 current_tool_calls = {}
@@ -998,6 +1082,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     msg_doc.context_summary = result_summary
                                                     msg_doc.reference_doctype = "Agent Tool Call"
                                                     msg_doc.reference_name = tool_call_doc
+                                                    msg_doc.tool_call_id = call_id
+                                                    msg_doc.tool_calls = json.dumps([tool_call])
                                                     msg_doc.save(ignore_permissions=True)
 
                                                 tool_result_for_socket = (
@@ -1035,7 +1121,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                         "role": "tool",
                                         "tool_call_id": tool_call["id"],
                                         "name": tool_name,
-                                        "content": str(result_content),
+                                        "content": _truncate_tool_result_for_context(result_content, max_context_chars),
                                     }
                                 )
 
