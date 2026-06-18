@@ -57,6 +57,11 @@
   "enable_conversation_data",
   "inject_conversation_data",
   "autonaming_of_conversation_title",
+  "memory_section",
+  "enable_memory",
+  "memory_policy",
+  "enable_memory_search_tool",
+  "enable_memory_write_tool",
   "column_break_ctx",
   "summary_ratio",
   "summary_model",
@@ -517,6 +522,43 @@
    "fieldname": "inject_conversation_data",
    "fieldtype": "Check",
    "label": "Inject Conversation Data into Prompt"
+  },
+  {
+   "description": "Configure Scoped Memory for this agent.",
+   "fieldname": "memory_section",
+   "fieldtype": "Section Break",
+   "label": "Memory Settings"
+  },
+  {
+   "default": "0",
+   "description": "Enable long-term, scoped memory for this agent.",
+   "fieldname": "enable_memory",
+   "fieldtype": "Check",
+   "label": "Enable Memory"
+  },
+  {
+   "depends_on": "eval:doc.enable_memory==1",
+   "description": "Policy governing memory capture and retrieval.",
+   "fieldname": "memory_policy",
+   "fieldtype": "Link",
+   "label": "Memory Policy",
+   "options": "Memory Policy"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_memory==1",
+   "description": "Automatically provide the agent with a tool to search memory records.",
+   "fieldname": "enable_memory_search_tool",
+   "fieldtype": "Check",
+   "label": "Enable Memory Search Tool"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_memory==1",
+   "description": "Automatically provide the agent with a tool to save new memory records.",
+   "fieldname": "enable_memory_write_tool",
+   "fieldtype": "Check",
+   "label": "Enable Memory Write Tool"
   },
   {
    "fieldname": "image_generation_section",

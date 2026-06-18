@@ -154,6 +154,16 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_set_conversation_data"
                     elif function_doc.types == "Load Conversation Data":
                         function_path = "huf.ai.sdk_tools.handle_load_conversation_data"
+                    elif function_doc.types == "Save Memory Record":
+                        function_path = "huf.ai.memory_tools.handle_save_memory_record"
+                    elif function_doc.types == "Search Memory Records":
+                        function_path = "huf.ai.memory_tools.handle_search_memory_records"
+                    elif function_doc.types == "Get Memory Record":
+                        function_path = "huf.ai.memory_tools.handle_get_memory_record"
+                    elif function_doc.types == "Archive Memory Record":
+                        function_path = "huf.ai.memory_tools.handle_archive_memory_record"
+                    elif function_doc.types == "Promote Memory to Knowledge":
+                        function_path = "huf.ai.memory_tools.handle_promote_memory_to_knowledge"
 
                     else:
                         continue

@@ -59,6 +59,13 @@ Always cite the source when using information from search results.""",
 				"required": False,
 				"description": "Maximum number of results to return (default: 5)",
 			},
+			{
+				"label": "Filters",
+				"fieldname": "filters",
+				"type": "json",
+				"required": False,
+				"description": "Optional dictionary of metadata filters (e.g. {\"author\": \"safwan\"}). Keys can match columns or custom metadata fields.",
+			},
 		],
 	}
 
@@ -68,6 +75,7 @@ def handle_knowledge_search(
 	query: str,
 	knowledge_source: Optional[str] = None,
 	top_k: int = 5,
+	filters: Optional[dict] = None,
 ) -> str:
 	"""
 	Handle knowledge_search tool call from agent.
@@ -113,10 +121,18 @@ def handle_knowledge_search(
 
 	# Perform search (ignore_permissions=True: agent has explicit knowledge linkage)
 	try:
+		if isinstance(filters, str):
+			import json
+			try:
+				filters = json.loads(filters)
+			except Exception:
+				filters = None
+				
 		results = knowledge_search(
 			query=query,
 			knowledge_source=knowledge_source,
 			top_k=top_k,
+			filters=filters,
 			ignore_permissions=True,
 		)
 
