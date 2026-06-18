@@ -134,6 +134,44 @@ def _find_tool(agent, tool_name):
     return next((t for t in agent.tools if t.name == tool_name), None)
 
 
+def _get_agent_max_context_chars(agent_doc) -> int:
+    """Return the agent's configured tool-result context threshold."""
+    try:
+        value = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
+    except Exception:
+        value = 2000
+    # Enforce a sensible floor so truncation notices still fit.
+    return max(value, 500)
+
+
+def _truncate_tool_result_for_context(result_content, max_context_chars: int = 2000) -> str:
+    """
+    Truncate a tool result before feeding it back to the LLM in the same run.
+
+    Large tool results (e.g. full document payloads returned by custom functions)
+    explode the context window and can confuse the agent into calling the same
+    tool repeatedly.  We keep the full result in the Agent Tool Call record for
+    audit / reference; the in-context copy is capped to ``max_context_chars``.
+    """
+    if result_content is None:
+        return ""
+    if not isinstance(result_content, str):
+        result_content = str(result_content)
+
+    # Defensive floor in case this helper is ever called directly.
+    max_context_chars = max(max_context_chars, 500)
+
+    if len(result_content) <= max_context_chars:
+        return result_content
+
+    notice = (
+        f"\n\n... [Tool result truncated from {len(result_content)} characters "
+        f"to {max_context_chars} characters to protect the context window.]"
+    )
+    keep = max(max_context_chars - len(notice), 200)
+    return result_content[:keep] + notice
+
+
 def _normalize_model_name(model: str, provider: str) -> str:
     """
     Normalize model name to LiteLLM format.
@@ -275,6 +313,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
             cache_system_message = bool(agent_doc.get("cache_system_message", 0))
             cache_conversation_history = bool(agent_doc.get("cache_conversation_history", 0))
+
+        max_context_chars = _get_agent_max_context_chars(agent_doc)
         
         # Check if model supports prompt caching
         model_supports_caching = False
@@ -623,7 +663,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "name": tool_name,
-                        "content": str(result_content),
+                        "content": _truncate_tool_result_for_context(result_content, max_context_chars),
                     }
                 )
 
@@ -1081,7 +1121,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                         "role": "tool",
                                         "tool_call_id": tool_call["id"],
                                         "name": tool_name,
-                                        "content": str(result_content),
+                                        "content": _truncate_tool_result_for_context(result_content, max_context_chars),
                                     }
                                 )
 
