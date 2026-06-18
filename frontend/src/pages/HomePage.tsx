@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Info, Loader2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { cn } from '../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
@@ -222,47 +222,52 @@ function HomePage() {
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 space-y-6">
+        {/* HUF Page head */}
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="font-display font-bold text-[38px] uppercase text-ink leading-none tracking-tight">
+            Dashboard
+          </h1>
+          <p className="font-body text-steel text-[14px] mt-1">
             Monitor your agents, flows, and system performance
           </p>
         </div>
 
-        {/* Metrics Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <TooltipProvider>
-            {metricsData.map((metric) => (
-              <Card key={metric.id}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
+        {/* HUF Gauge Strip — single bordered instrument strip, not 4 floating cards */}
+        <TooltipProvider>
+          <div className="border border-ink flex divide-x divide-line">
+            {metricsData.map((metric, i) => (
+              <div key={metric.id} className={cn('flex-1 p-4', i === metricsData.length - 1 && 'border-r-0')}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-steel">
                     {metric.title}
-                  </CardTitle>
+                  </span>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                      <Info className="h-3.5 w-3.5 text-steel-soft cursor-help" strokeWidth={1.6} />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p className="max-w-xs">{metric.tooltip}</p>
+                      <p className="max-w-xs font-mono text-[11px]">{metric.tooltip}</p>
                     </TooltipContent>
                   </Tooltip>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xs text-muted-foreground mb-2">
-                    {metric.subtitle}
-                  </div>
-                  <div className="text-2xl font-bold flex items-center gap-2">
-                    {metricsLoading && metric.value === '...' ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      metric.value
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+                <div className="font-mono text-[9.5px] text-steel-soft mb-2">{metric.subtitle}</div>
+                <div className={cn(
+                  'font-display font-bold text-[38px] leading-none',
+                  metric.id === 'cost' ? 'text-signal-ink' : 'text-ink',
+                )}>
+                  {metricsLoading && metric.value === '...' ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-steel" />
+                  ) : (
+                    metric.value
+                  )}
+                </div>
+                {metric.id === 'cost' && !metricsLoading && (
+                  <span className="font-mono text-[9px] text-signal-ink">↑ flagged</span>
+                )}
+              </div>
             ))}
-          </TooltipProvider>
-        </div>
+          </div>
+        </TooltipProvider>
 
         {/* Tabbed Interface */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">

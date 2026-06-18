@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700&family=Archivo:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -14,98 +16,95 @@
 
 @layer base {
   :root {
-    --radius: 0.65rem;
-    --background: 100% 0 0;
-    --foreground: 14.1% 0.005 285.823;
-    --card: 100% 0 0;
-    --card-foreground: 14.1% 0.005 285.823;
-    --popover: 100% 0 0;
-    --popover-foreground: 14.1% 0.005 285.823;
-    --primary: 54.1% 0.281 293.009;
-    --primary-foreground: 96.9% 0.016 293.756;
-    --secondary: 96.7% 0.001 286.375;
-    --secondary-foreground: 21% 0.006 285.885;
-    --muted: 96.7% 0.001 286.375;
-    --muted-foreground: 55.2% 0.016 285.938;
-    --accent: 96.7% 0.001 286.375;
-    --accent-foreground: 21% 0.006 285.885;
-    --destructive: 57.7% 0.245 27.325;
-    --destructive-foreground: 96.9% 0.016 293.756;
-    --border: 92% 0.004 286.32;
-    --input: 92% 0.004 286.32;
-    --ring: 70.2% 0.183 293.541;
-    --chart-1: 81.1% 0.111 293.571;
-    --chart-2: 60.6% 0.25 292.717;
-    --chart-3: 54.1% 0.281 293.009;
-    --chart-4: 49.1% 0.27 292.581;
-    --chart-5: 43.2% 0.232 292.759;
-    --sidebar: 98.5% 0 0;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-    --sidebar-background: 0 0% 98%;
-    /* Audio player / media-chrome: resolved colors for high contrast */
-    --color-background: oklch(var(--background));
-    --color-foreground: oklch(var(--foreground));
-    --color-primary: oklch(var(--primary));
-    --color-secondary: oklch(var(--secondary));
-    --color-accent: oklch(var(--accent));
-    --color-border: oklch(var(--border));
-    --color-muted-foreground: oklch(var(--muted-foreground));
+    /* HUF Design System v1.0 — Instrument / Control-Room */
+
+    /* Surfaces */
+    --paper:      #F2F3EF;
+    --paper-deep: #E9EBE4;
+    --panel:      #FBFCFA;
+
+    /* Text & lines */
+    --ink:        #15181C;
+    --ink-soft:   #2A2F36;
+    --steel:      #5A636F;
+    --steel-soft: #8A929C;
+    --line:       #D7DACF;
+    --line-marketing: #C7CCC0;
+    --line-dark:  #343A42;
+
+    /* Signal */
+    --signal:     #E8531F;
+    --signal-ink: #BC3E0F;
+    --good:       #3F7A4E;
+
+    /* Shape */
+    --r: 2px;
+
+    /* Typography */
+    --display: 'Big Shoulders Display', sans-serif;
+    --body:    'Archivo', sans-serif;
+    --mono:    'Martian Mono', monospace;
+
+    /* shadcn compatibility — mapped to HUF tokens */
+    --radius: 2px;
+    --background: #F2F3EF;
+    --foreground: #15181C;
+    --card: #FBFCFA;
+    --card-foreground: #15181C;
+    --popover: #FBFCFA;
+    --popover-foreground: #15181C;
+    --primary: #15181C;
+    --primary-foreground: #F2F3EF;
+    --secondary: #E9EBE4;
+    --secondary-foreground: #15181C;
+    --muted: #E9EBE4;
+    --muted-foreground: #5A636F;
+    --accent: #E9EBE4;
+    --accent-foreground: #15181C;
+    --destructive: #C0392B;
+    --destructive-foreground: #F2F3EF;
+    --border: #D7DACF;
+    --input: #D7DACF;
+    --ring: #E8531F;
+
+    /* Sidebar */
+    --sidebar-background: #E9EBE4;
+    --sidebar-foreground: #15181C;
+    --sidebar-primary: #15181C;
+    --sidebar-primary-foreground: #F2F3EF;
+    --sidebar-accent: #FBFCFA;
+    --sidebar-accent-foreground: #15181C;
+    --sidebar-border: #D7DACF;
+    --sidebar-ring: #E8531F;
+
+    /* Audio player resolved colors */
+    --color-background: #F2F3EF;
+    --color-foreground: #15181C;
+    --color-primary: #15181C;
+    --color-secondary: #E9EBE4;
+    --color-accent: #E9EBE4;
+    --color-border: #D7DACF;
+    --color-muted-foreground: #5A636F;
   }
 
-  .dark {
-    --background: 14.1% 0.005 285.823;
-    --foreground: 98.5% 0 0;
-    --card: 21% 0.006 285.885;
-    --card-foreground: 98.5% 0 0;
-    --popover: 21% 0.006 285.885;
-    --popover-foreground: 98.5% 0 0;
-    --primary: 60.6% 0.25 292.717;
-    --primary-foreground: 96.9% 0.016 293.756;
-    --secondary: 27.4% 0.006 286.033;
-    --secondary-foreground: 98.5% 0 0;
-    --muted: 27.4% 0.006 286.033;
-    --muted-foreground: 70.5% 0.015 286.067;
-    --accent: 27.4% 0.006 286.033;
-    --accent-foreground: 98.5% 0 0;
-    --destructive: 70.4% 0.191 22.216;
-    --destructive-foreground: 96.9% 0.016 293.756;
-    --border: 100% 0 0 / 10%;
-    --input: 100% 0 0 / 15%;
-    --ring: 38% 0.189 293.745;
-    --chart-1: 81.1% 0.111 293.571;
-    --chart-2: 60.6% 0.25 292.717;
-    --chart-3: 54.1% 0.281 293.009;
-    --chart-4: 49.1% 0.27 292.581;
-    --chart-5: 43.2% 0.232 292.759;
-    --sidebar: 21% 0.006 285.885;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-    --sidebar-background: 240 5.9% 10%;
-  }
+  @keyframes blink { 50% { opacity: .2; } }
+  @keyframes drop  { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
   * {
-    @apply border-border;
+    border-color: var(--line);
+    box-sizing: border-box;
   }
-  
+
   html, body {
-    @apply bg-background text-foreground;
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
     margin: 0;
     padding: 0;
     height: 100%;
     width: 100%;
   }
-  
+
   #root {
     height: 100%;
     width: 100%;
@@ -113,18 +112,17 @@
 }
 
 @layer components {
-  /* Sonner Toast – design system vars only, one palette (no dark theme overrides) */
+  /* Sonner Toast — HUF design system vars */
 
   [data-sonner-toaster],
   [data-sonner-toaster][data-sonner-theme="dark"] {
     --width: 356px;
     --border-radius: calc(var(--radius) + 0.5rem);
-    --normal-bg: oklch(var(--card));
-    --normal-border: oklch(var(--border));
-    --normal-text: oklch(var(--card-foreground));
+    --normal-bg: var(--card);
+    --normal-border: var(--border);
+    --normal-text: var(--card-foreground);
   }
 
-  /* Close button on the right for LTR */
   [data-sonner-toaster][dir="ltr"] {
     --toast-close-button-start: unset;
     --toast-close-button-end: 0.5rem;
@@ -137,10 +135,9 @@
 
   [data-sonner-toast][data-styled="true"] [data-description],
   [data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast] [data-description] {
-    color: oklch(var(--muted-foreground));
+    color: var(--muted-foreground);
   }
 
-  /* Type accents: card bg + left border (no richColors) */
   [data-sonner-toast][data-type="success"] {
     border-left: 3px solid rgb(16 185 129 / 0.5);
   }
@@ -149,10 +146,10 @@
   }
 
   [data-sonner-toast][data-type="error"] {
-    border-left: 3px solid oklch(var(--destructive) / 0.5);
+    border-left: 3px solid color-mix(in srgb, var(--destructive) 50%, transparent);
   }
   [data-sonner-toast][data-type="error"] [data-icon] {
-    color: oklch(var(--destructive));
+    color: var(--destructive);
   }
 
   [data-sonner-toast][data-type="warning"] {
@@ -169,26 +166,24 @@
     color: rgb(59 130 246);
   }
 
-  /* Action / cancel – design system colors */
   [data-sonner-toast][data-styled="true"] [data-button] {
-    background: oklch(var(--primary));
-    color: oklch(var(--primary-foreground));
+    background: var(--primary);
+    color: var(--primary-foreground);
     border-radius: calc(var(--radius) - 2px);
   }
   [data-sonner-toast][data-styled="true"] [data-button]:hover {
-    background: oklch(var(--primary) / 0.9);
+    background: color-mix(in srgb, var(--primary) 90%, transparent);
   }
 
   [data-sonner-toast][data-styled="true"] [data-cancel] {
-    background: oklch(var(--muted));
-    color: oklch(var(--muted-foreground));
+    background: var(--muted);
+    color: var(--muted-foreground);
     border-radius: calc(var(--radius) - 2px);
   }
   [data-sonner-toast][data-styled="true"] [data-cancel]:hover {
-    background: oklch(var(--muted) / 0.8);
+    background: color-mix(in srgb, var(--muted) 80%, transparent);
   }
 
-  /* Close button – reserve space, align with Sonner’s layout */
   [data-sonner-toast][data-styled="true"] {
     padding-right: 2.5rem;
   }
@@ -197,14 +192,14 @@
     height: 1.75rem;
     min-width: 1.75rem;
     min-height: 1.75rem;
-    color: oklch(var(--muted-foreground));
-    background: oklch(var(--card));
-    border-color: oklch(var(--border));
+    color: var(--muted-foreground);
+    background: var(--card);
+    border-color: var(--border);
   }
   [data-sonner-toast] [data-close-button]:hover,
   [data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast] [data-close-button]:hover {
-    background: oklch(var(--muted));
-    border-color: oklch(var(--border));
+    background: var(--muted);
+    border-color: var(--border);
   }
   [data-sonner-toast] [data-close-button] svg {
     width: 1.125rem;
