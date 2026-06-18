@@ -186,11 +186,9 @@
   },
   {
    "fieldname": "tool_call_id",
-   "fieldtype": "Data",
-   "hidden": 1,
+   "fieldtype": "Long Text",
    "label": "Tool Call ID",
-   "read_only": 1,
-   "search_index": 1
+   "read_only": 1
   },
   {
    "fieldname": "tool_calls",
@@ -332,7 +330,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-17 14:55:28.143716",
+ "modified": "2026-06-18 12:46:03.437770",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",
