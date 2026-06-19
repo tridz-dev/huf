@@ -625,6 +625,32 @@ GOOGLE_DRIVE_TOOLS = [
 ]
 
 
+GOOGLE_MEET_TOOLS = [
+	{
+		"tool_name": "google_meet_create_space",
+		"description": "Create a Google Meet meeting space and return a joinable link. Requires Google OAuth credentials with Meet scope.",
+		"function_path": "huf.ai.tools.google_meet.handle_create_meet_space",
+		"category": "Google Tools",
+		"parameters": [
+			_p("access_type", description="Access level: OPEN, TRUSTED, or RESTRICTED (default: OPEN)"),
+		],
+	},
+	{
+		"tool_name": "google_meet_create_event",
+		"description": "Create a Google Calendar event with an auto-generated Google Meet conference. Requires Google OAuth credentials with Calendar scope.",
+		"function_path": "huf.ai.tools.google_meet.handle_create_meet_event",
+		"category": "Google Tools",
+		"parameters": [
+			_p("title", required=True, description="Meeting title"),
+			_p("start_date", required=True, description="Start datetime (ISO 8601)"),
+			_p("end_date", required=True, description="End datetime (ISO 8601)"),
+			_p("description", description="Event description"),
+			_p("timezone", description="Timezone (default: UTC)"),
+		],
+	},
+]
+
+
 # ---------------------------------------------------------------------------
 # Master list
 # ---------------------------------------------------------------------------
@@ -647,4 +673,5 @@ ALL_INTEGRATION_TOOLS = (
 	+ GOOGLE_CALENDAR_TOOLS
 	+ GOOGLE_MAPS_TOOLS
 	+ GOOGLE_DRIVE_TOOLS
+	+ GOOGLE_MEET_TOOLS
 )

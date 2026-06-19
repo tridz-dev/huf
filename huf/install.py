@@ -855,6 +855,16 @@ def register_integration_services():
 				{"key": "api_key", "label": "Google Maps API Key", "required": True}
 			]
 		},
+		{
+			"service_name": "google_meet",
+			"category": "Google",
+			"description": "Google Meet meeting space creation",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
 	]
 	
 	# Create or update each service
