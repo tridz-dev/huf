@@ -7,90 +7,59 @@ import { MessageResponse } from '@/components/ai-elements/message';
 import { ArtifactRenderer } from './ArtifactRenderer';
 import { WebPreviewRenderer } from './WebPreviewRenderer';
 import { JSXPreviewRenderer } from './JSXPreviewRenderer';
-import { parseArtifacts, hasArtifacts } from '@/utils/artifactParser';
-import { parseWebPreviews, hasWebPreviews } from '@/utils/webPreviewParser';
-import { parseJSXPreviews, hasJSXPreviews } from '@/utils/jsxPreviewParser';
-import type { ParsedArtifact, ParsedWebPreview, ParsedJSXPreview } from '@/types/artifact.types';
-
-/**
- * Decode HTML entities in content to handle escaped tags like &lt;web-preview&gt;.
- * Uses pure string replacement instead of the DOM parser to avoid mutation-XSS.
- */
-function decodeHtmlEntities(text: string): string {
-	// Decode &amp; last to avoid double-decoding inputs like &amp;lt;.
-	return text
-		.replace(/&lt;/g, '<')
-		.replace(/&gt;/g, '>')
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;/g, "'")
-		.replace(/&amp;/g, '&');
-}
+import { hasArtifacts } from '@/utils/artifactParser';
+import { hasWebPreviews } from '@/utils/webPreviewParser';
+import { hasJSXPreviews } from '@/utils/jsxPreviewParser';
+import { parseMessagePreviewContent } from '@/utils/messageContentParser';
+import { decodeHtmlEntities } from '@/utils/decodeHtmlEntities';
 
 interface MessageContentWithArtifactsProps {
 	content: string;
-	messageKey: string;
+	/** Agent Message document name for preview links */
+	messageId: string;
 }
 
-export function MessageContentWithArtifacts({ content, messageKey }: MessageContentWithArtifactsProps) {
-	// Decode HTML entities first (handles &lt;web-preview&gt; → <web-preview>)
+export function MessageContentWithArtifacts({ content, messageId }: MessageContentWithArtifactsProps) {
 	const decodedContent = decodeHtmlEntities(content);
 
-	// Check if content has artifacts, web previews, or JSX previews
 	const contentHasArtifacts = hasArtifacts(decodedContent);
 	const contentHasWebPreviews = hasWebPreviews(decodedContent);
 	const contentHasJSXPreviews = hasJSXPreviews(decodedContent);
 
-	// If no special content, render as plain markdown
 	if (!contentHasArtifacts && !contentHasWebPreviews && !contentHasJSXPreviews) {
 		return <MessageResponse>{content}</MessageResponse>;
 	}
 
-	// Parse in order: JSX previews → web previews → artifacts
-	// This prevents nested tags from being captured incorrectly
-	let textContent = decodedContent;
-	let artifacts: ParsedArtifact[] = [];
-	let webPreviews: ParsedWebPreview[] = [];
-	let jsxPreviews: ParsedJSXPreview[] = [];
-
-	if (contentHasJSXPreviews) {
-		const parsed = parseJSXPreviews(textContent);
-		textContent = parsed.text;
-		jsxPreviews = parsed.previews;
-	}
-
-	if (contentHasWebPreviews) {
-		const parsed = parseWebPreviews(textContent);
-		textContent = parsed.text;
-		webPreviews = parsed.previews;
-	}
-
-	if (contentHasArtifacts) {
-		const parsed = parseArtifacts(textContent);
-		textContent = parsed.text;
-		artifacts = parsed.artifacts;
-	}
+	const parsed = parseMessagePreviewContent(content);
+	const { textContent, jsxPreviews, webPreviews, artifacts } = parsed;
 
 	return (
 		<>
-			{/* Render text content if any remains */}
 			{textContent && textContent.trim() && (
 				<MessageResponse>{textContent}</MessageResponse>
 			)}
 
-		{/* Render JSX previews */}
-		{jsxPreviews.map((preview, idx) => (
-			<JSXPreviewRenderer key={`${messageKey}-jsx-${idx}`} preview={preview} messageId={messageKey} />
-		))}
+			{jsxPreviews.map((preview, idx) => (
+				<JSXPreviewRenderer
+					key={`${messageId}-jsx-${idx}`}
+					preview={preview}
+					messageId={messageId}
+					previewContent={parsed}
+				/>
+			))}
 
-		{/* Render web previews */}
-		{webPreviews.map((preview, idx) => (
-			<WebPreviewRenderer key={`${messageKey}-preview-${idx}`} preview={preview} />
-		))}
+			{webPreviews.map((preview, idx) => (
+				<WebPreviewRenderer key={`${messageId}-preview-${idx}`} preview={preview} />
+			))}
 
-		{/* Render artifacts */}
-		{artifacts.map((artifact) => (
-			<ArtifactRenderer key={`${messageKey}-${artifact.id}`} artifact={artifact} messageId={messageKey} />
-		))}
+			{artifacts.map((artifact) => (
+				<ArtifactRenderer
+					key={`${messageId}-${artifact.id}`}
+					artifact={artifact}
+					messageId={messageId}
+					previewContent={parsed}
+				/>
+			))}
 		</>
 	);
 }

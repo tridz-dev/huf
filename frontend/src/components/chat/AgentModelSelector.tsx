@@ -136,8 +136,21 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
                     }}
                     value={m.id}
                   >
-                    {m.chefSlug && <ModelSelectorLogo provider={m.chefSlug} />}
-                    <ModelSelectorName>{m.name}</ModelSelectorName>
+                    {m.agent_color ? (
+                      <span
+                        className="size-4 rounded-full shrink-0 border border-border"
+                        style={{ backgroundColor: m.agent_color }}
+                        aria-hidden
+                      />
+                    ) : m.chefSlug ? (
+                      <ModelSelectorLogo provider={m.chefSlug} />
+                    ) : null}
+                    <div className="flex flex-col min-w-0">
+                      <ModelSelectorName>{m.name}</ModelSelectorName>
+                      {m.model && (
+                        <span className="text-xs text-muted-foreground truncate">{m.model}</span>
+                      )}
+                    </div>
                     <ModelSelectorLogoGroup>
                       {m.providers.map((provider) => (
                         <ModelSelectorLogo key={provider} provider={provider} />

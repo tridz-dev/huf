@@ -140,6 +140,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
     const updated = [...prev];
     updated[messageIndex] = {
       ...updated[messageIndex],
+      key: event.message_id,
       kind: event.kind,
       generatedImage: event.generated_image,
       generatedAudio: event.generated_audio,

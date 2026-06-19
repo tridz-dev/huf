@@ -85,11 +85,33 @@ Defines a specific AI model available from a provider. Model names are automatic
 | :----------- | :----------- | :--- | :---------------------------------------- |
 | **Model Name** | `model_name` | Data | The name of the model (e.g., `gpt-4-turbo`, `claude-3-opus`, `gpt-5-mini`). Can be specified in user-friendly format - the system automatically adds provider prefix. Alternatively, use LiteLLM format (e.g., `openai/gpt-4-turbo`) for explicit provider specification. |
 | **Provider**   | `provider`   | Link | A link to the `AI Provider` DocType. The provider name is used to determine the provider prefix for model normalization.      |
+| **Input Cost per 1M Tokens (USD)** | `input_cost_per_1m_tokens` | Float | *Optional.* Custom input/prompt token price in USD per million tokens. E.g. `2.5` for $2.50/1M. Leave blank to use LiteLLM's automatic pricing. Set to `0` for free/self-hosted models. |
+| **Output Cost per 1M Tokens (USD)** | `output_cost_per_1m_tokens` | Float | *Optional.* Custom output/completion token price in USD per million tokens. Must be set together with `input_cost_per_1m_tokens`. |
+| **Cached Input Cost per 1M Tokens (USD)** | `cached_input_cost_per_1m_tokens` | Float | *Optional.* Price for prompt cache reads (cache hits) in USD per million tokens. E.g. Anthropic charges $0.30/1M for cache reads vs $3.00/1M for regular input. Leave blank if the model/provider does not charge separately for cache reads. |
 
 **Model Name Normalization:**
 - User-friendly names: `gpt-4-turbo` → automatically normalized to `openai/gpt-4-turbo`
 - Provider prefix mapping: `gemini` → `google`, `grok` → `xai`
 - LiteLLM format: `openai/gpt-4-turbo` → used as-is (no normalization needed)
+
+**Custom Pricing System:**
+
+Huf includes a production-ready, 3-tier cost calculation priority system (see `huf/ai/cost_calculator.py`):
+
+| Priority | Source | When active |
+| :------- | :----- | :---------- |
+| **1 — Custom** | `input_cost_per_1m_tokens` + `output_cost_per_1m_tokens` fields on AI Model | Both fields are set (including `0` for free models) |
+| **2 — LiteLLM Auto** | `litellm.completion_cost()` built-in price table | No custom price set, model is known to LiteLLM |
+| **3 — Unknown** | `0.0` (no silent errors) | Model is unknown to both HUF and LiteLLM |
+
+**Formula (industry standard):**
+```
+cost = (input_tokens  / 1_000_000) × input_cost_per_1m_tokens
+     + (output_tokens / 1_000_000) × output_cost_per_1m_tokens
+     + (cached_tokens / 1_000_000) × cached_input_cost_per_1m_tokens  # if set
+```
+
+**Cache behaviour:** Custom pricing is cached in Redis (10-minute TTL). The cache is auto-invalidated whenever an AI Model document is saved.
 
 #### 3. Agent Tool Function
 
@@ -179,10 +201,25 @@ Represents a single message within a conversation.
 | Label          | Fieldname      | Type      | Description                                                              |
 | :------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
 | **Conversation** | `conversation` | Link      | Link to the parent `Agent Conversation`.                                 |
-| **Role**         | `role`         | Select    | The role of the message sender (`user`, `agent`, or `system`).           |
+| **Role**         | `role`         | Select    | The role of the message sender (`user`, `agent`, `tool`, or `system`).   |
 | **Content**      | `content`      | Long Text | The text content of the message.                                         |
-| **Kind**         | `kind`         | Select    | The type of message (`Message`, `Tool Call`, `Tool Result`, `Error`).    |
-| **Run**          | `run`          | Link      | Link to the `Agent Run` that generated this message.                     |
+| **Kind**         | `kind`         | Select    | The type of message (`Message`, `Tool Call`, `Tool Result`, `Image`, `Audio`, `Status`, `Error`). |
+| **Run**          | `agent_run`    | Link      | Link to the `Agent Run` that generated this message.                     |
+| **Tool Call**    | `tool_call`    | Link      | Link to the `Agent Tool Call` record.                                    |
+| **Tool Call ID** | `tool_call_id` | Data      | LLM-generated `tool_call.id` (e.g. `call_123`). Used to pair assistant tool_calls with role=`tool` results. |
+| **Tool Calls**   | `tool_calls`   | JSON      | Full assistant `tool_calls` payload persisted as JSON.                   |
+| **Tool Name**    | `tool_name`    | Data      | Fetched from `tool_call.tool`.                                           |
+| **Tool Args**    | `tool_args`    | JSON      | Fetched from `tool_call.tool_args`.                                      |
+| **Tool Status**  | `tool_status`  | Data      | Fetched from `tool_call.status`.                                         |
+| **Record Kind**  | `record_kind`  | Select    | Classification: `message`, `tool_call`, `tool_result`, `retrieval_context`, etc. |
+| **Context Policy** | `context_policy` | Select | How the message is included in future context (`include_full`, `include_summary`, `include_reference`, `exclude`, etc.). |
+| **Raw Payload**  | `raw_payload`  | JSON      | Optional raw provider payload for debugging/auditing.                    |
+
+**Tool-Call Protocol:**
+- Assistant messages that request tools are stored with `role=agent`, `kind=Tool Call`, `tool_call_id`, and `tool_calls`.
+- Tool result messages are stored with `role=tool`, `kind=Tool Result`, and the matching `tool_call_id`.
+- When history is loaded, `ConversationManager._message_to_context()` rebuilds the OpenAI/LiteLLM message sequence so every `role=tool` message is paired with a preceding assistant `tool_calls` entry.
+- `repair_message_sequence()` is run just before each LiteLLM call to repair or drop orphaned tool messages caused by trimming, FIFO slicing, summarisation, or legacy data.
 
 #### 7. Agent Run
 
@@ -351,7 +388,7 @@ Categorization DocType for organizing and grouping agent tools by type or purpos
 
 #### 15. Knowledge Source
 
-A portable, indexed container for knowledge that agents can access. It uses SQLite FTS5 for keyword-based search.
+A portable, indexed container for knowledge that agents can access. It supports keyword search via SQLite FTS5, and vector-based semantic search via SQLite Vec or ChromaDB.
 
 -   **Python Class**: `KnowledgeSource(Document)`
 -   **File**: `huf/huf/doctype/knowledge_source/knowledge_source.py`
@@ -362,17 +399,25 @@ A portable, indexed container for knowledge that agents can access. It uses SQLi
 | :--- | :--- | :--- | :--- |
 | **Source Name** | `source_name` | Data | Unique identifier for the knowledge source. |
 | **Description** | `description` | Small Text | Human-readable description. |
-| **Knowledge Type** | `knowledge_type` | Select | Backend type (currently `sqlite_fts` only). |
+| **Knowledge Type** | `knowledge_type` | Select | Backend type: `sqlite_fts` (keyword), `sqlite_vec` (local vector), or `chroma` (vector store). |
+| **Embedding Model** | `embedding_model` | Data | LiteLLM model identifier for generating embeddings (e.g. `openai/text-embedding-3-small`). Required for vector backends. |
+| **Vector Dimension** | `vector_dimension` | Int | Output dimensions matching the embedding model (default: 1536). Required for vector backends. |
+| **Embedding Provider** | `embedding_provider` | Link | AI Provider used for API key resolution during embedding calls. |
+| **Chroma Mode** | `chroma_mode` | Select | Storage mode for ChromaDB: `File` (local database file) or `Server` (HttpClient). |
+| **Chroma Host** | `chroma_host` | Data | Host name/IP of remote Chroma server (default: localhost). |
+| **Chroma Port** | `chroma_port` | Int | Port of remote Chroma server (default: 8000). |
+| **Use SSL (HTTPS)** | `chroma_ssl` | Check | Active flag for SSL/HTTPS connection. |
 | **Chunk Size** | `chunk_size` | Int | Number of characters per chunk for indexing (default: 512). |
-| **Status** | `status` | Select | Current state (`Pending`, `Indexing`, `Ready`, `Error`). |
+| **Chunk Overlap** | `chunk_overlap` | Int | Character overlap between chunks (default: 50). |
+| **Status** | `status` | Select | Current state (`Pending`, `Indexing`, `Ready`, `Error`, `Rebuilding`). |
 | **Storage Mode** | `storage_mode` | Select | How source files are stored (default: `Frappe File`). |
 
 **Features:**
--   **Rebuild Index**: Clears and rebuilds the SQLite FTS artifact from inputs.
+-   **Rebuild Index**: Clears and rebuilds the knowledge index from raw inputs.
 -   **Test Search**: Allows testing search queries directly from the Desk UI.
 -   **Modes**:
-    -   **Mandatory**: Context is automatically injected into the agent's system prompt (best for rules, guidelines).
-    -   **Optional**: Agents use the `knowledge_search` tool to query the source on demand (best for large reference/docs).
+     -   **Mandatory**: Context is automatically injected into the agent's system prompt (best for rules, guidelines).
+     -   **Optional**: Agents use the `knowledge_search` tool to query the source on demand (best for large reference/docs).
 
 #### 16. Knowledge Input
 
@@ -408,6 +453,141 @@ Child table used in the `Agent` DocType to bind Knowledge Sources.
 | **Mode** | `mode` | Select | `Mandatory` (auto-injected into prompt) or `Optional` (accessible via `knowledge_search` tool). |
 | **Priority** | `priority` | Int | Retrieval priority (higher = first). |
 | **Token Budget** | `token_budget` | Int | Max tokens to inject from this source (for `Mandatory` mode). |
+
+#### 18. Agent Prompt
+
+Reusable prompt templates with version control, allowing agents to use centralized instruction templates instead of local instructions.
+
+-   **Python Class**: `AgentPrompt(Document)`
+-   **File**: `huf/huf/doctype/agent_prompt/agent_prompt.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Title** | `title` | Data | Descriptive title of the prompt template. |
+| **Slug** | `slug` | Data | URL-friendly identifier, unique. |
+| **Category** | `category` | Link | Grouping category (`Agent Prompt Category`). |
+| **Description** | `description` | Small Text | Internal description. |
+| **Is Active** | `is_active` | Check | Whether template is available. |
+| **Is System** | `is_system` | Check | System-shipped vs user-created. |
+| **Visibility** | `visibility` | Select | Public, App, or Private. |
+| **Prompt Body** | `prompt_body` | Code | The actual system prompt or instructions template. |
+| **Version** | `version` | Int | Version number, auto-incremented. |
+| **Is Latest** | `is_latest` | Check | Marks the active latest version in prompt lineage. |
+
+#### 19. Agent Prompt Category
+
+Category classification for grouping and organizing prompt templates.
+
+-   **Python Class**: `AgentPromptCategory(Document)`
+-   **File**: `huf/huf/doctype/agent_prompt_category/agent_prompt_category.py`
+
+#### 20. Huf Data Table
+
+Registry entry for custom, user-defined data tables. HUF allows dynamically creating database DocTypes (prefixed with `HF `) with custom schemas.
+
+-   **Python Class**: `HufDataTable(Document)`
+-   **File**: `huf/huf/doctype/huf_data_table/huf_data_table.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Table Name** | `table_name` | Data | Name of the table. |
+| **DocType Name** | `doctype_name` | Data | Auto-generated name of the Frappe DocType (`HF {table_name}`). |
+| **Description** | `description` | Small Text | Description of the table's purpose. |
+| **Icon** | `icon` | Data | Icon class used in the sidebar and UI lists. |
+| **Field Count** | `field_count` | Int | Number of data fields. |
+| **Autoname Method** | `autoname_method` | Select | E.g., Prompt-derived, Autoincrement, Field. |
+| **Title Field Name** | `title_field_name` | Data | The field used as the row title. |
+
+#### 21. Integration Service
+
+Catalog of external integrations (Slack, Gmail, GitHub, ERPNext, etc.) that HUF agents can authenticate with.
+
+-   **Python Class**: `IntegrationService(Document)`
+-   **File**: `huf/huf/doctype/integration_service/integration_service.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Service Name** | `service_name` | Data | Unique key (e.g., "slack", "github"). |
+| **Category** | `category` | Select | Communication, Project Management, Finance, Developer, etc. |
+| **Description** | `description` | Small Text | Short explanation. |
+| **Documentation URL** | `documentation_url` | Data | Setup guidelines URL. |
+| **Required Credentials** | `required_credentials` | JSON | Schema array specifying credential keys and types. |
+| **Is Built-in** | `is_builtin` | Check | System-level integration service. |
+
+#### 22. Integration Settings
+
+Specific configuration instances storing connection settings and credentials for a given integration service.
+
+-   **Python Class**: `IntegrationSettings(Document)`
+-   **File**: `huf/huf/doctype/integration_settings/integration_settings.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Integration Service** | `service` | Link | Link to `Integration Service`. |
+| **Is Active** | `is_active` | Check | Active flag. |
+| **Is Default** | `is_default` | Check | Use as the fallback credential set. |
+| **Credentials** | `credentials` | Table | Table of keys and password values (`Integration Credential`). |
+| **Recipients** | `recipients` | Table | Pre-resolved ID map (`Integration Recipient`). |
+
+#### 23. Integration Credential
+
+Child table containing credential key-value pairs. Values are stored securely using encrypted password fields.
+
+-   **Python Class**: `IntegrationCredential(Document)`
+-   **File**: `huf/huf/doctype/integration_credential/integration_credential.py`
+
+#### 24. Integration Recipient
+
+Child table containing mappings of human names to channel/user IDs (e.g., resolving "General Channel" to Slack ID `C12345`).
+
+-   **Python Class**: `IntegrationRecipient(Document)`
+-   **File**: `huf/huf/doctype/integration_recipient/integration_recipient.py`
+
+#### 25. Huf Role
+
+Custom capability-based Huf role used to configure permissions on the HUF dashboard.
+
+-   **Python Class**: `HufRole(Document)`
+-   **File**: `huf/huf/doctype/huf_role/huf_role.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Role Name** | `role_name` | Data | Role identifier. |
+| **Role Description** | `role_description` | Small Text | Explanation. |
+| **Permissions** | `permissions` | Table | Child table linking capabilities (`Huf Role Permission`). |
+
+#### 26. Huf Role Permission
+
+Child table mapping allowed capability strings (e.g., `agent.create`, `flows.use`) to Huf Roles.
+
+-   **Python Class**: `HufRolePermission(Document)`
+-   **File**: `huf/huf/doctype/huf_role_permission/huf_role_permission.py`
+
+#### 27. Huf User Role
+
+Assigns custom capability-based Huf Roles to Users.
+
+-   **Python Class**: `HufUserRole(Document)`
+-   **File**: `huf/huf/doctype/huf_user_role/huf_user_role.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **User** | `user` | Link | User link. |
+| **Huf Role** | `huf_role` | Link | Huf Role link. |
+| **Enabled** | `enabled` | Check | Active flag. |
+
 
 ### Standard Tools (System Available)
 
@@ -491,9 +671,11 @@ This file handles the persistence of conversation history.
 
 -   **Class: `ConversationManager`**
     -   `get_or_create_conversation(self, ...)`: Finds the active `Agent Conversation` for a given session or creates a new one.
-    -   `add_message(self, ...)`: Creates a new `Agent Message` document and links it to the current conversation.
-    -   `get_conversation_history(self, ...)`: Fetches the last N messages from the conversation to provide context to the AI.
-    -   `persist_conversation(self, ...)`: Saves conversation state and ensures database commits for real-time updates.
+    -   `add_message(self, ...)`: Creates a new `Agent Message` document and links it to the current conversation. Accepts `tool_call` (link to `Agent Tool Call`), `tool_call_id` (LLM call id), `tool_calls` (assistant payload), and `raw_payload`.
+    -   `get_conversation_history(self, ...)`: Fetches the last N messages from the conversation, applies context policies, and rebuilds OpenAI-compatible assistant/tool-call pairs.
+    -   `safe_history_slice(history, limit)` / `safe_history_split(history, split_index)`: Truncate history at tool-call group boundaries so assistant/tool-call pairs are never split.
+    -   `repair_message_sequence(messages, conversation_name)`: Validates and repairs the OpenAI message sequence before every LiteLLM call. Drops unfulfilled assistant tool_calls, repairs orphaned tool results from `Agent Tool Call` records when possible, and logs every repair/drop action.
+    -   `summarize_conversation(self, ...)`: Summarises older history while preserving tool-call group boundaries.
 
 #### `sdk_tools.py`
 
@@ -563,6 +745,7 @@ This file implements the unified LiteLLM provider that handles all LLM interacti
     -   **Error Handling**: Specific handling for `InternalServerError`, `RateLimitError`, and general `APIError`.
     -   **Parameter Handling**: Automatically drops unsupported parameters for models with restrictions (e.g., gpt-5 models only support temperature=1).
     -   **API Key Management**: Handles API key setup for different providers, including special handling for OpenRouter (requires environment variable).
+    -   **Tool-Call Sequence Repair**: After `litellm.utils.trim_messages()` and before every completion call, it runs `repair_message_sequence()` from `conversation_manager.py` to guarantee OpenAI-compatible assistant/tool-call pairing.
 -   **Function: `_normalize_model_name(model, provider)`**
     -   Normalizes model names to LiteLLM format by adding provider prefix.
     -   Handles provider aliases (e.g., `gemini` → `google`, `grok` → `xai`).
@@ -1388,7 +1571,7 @@ The React frontend supports MCP server management:
 -   ❌ An MCP Gateway/Proxy
 -   ❌ An OAuth broker (simple header-based auth only)
 
-## Flow Engine (v0.1)
+## Flow Engine (v0.2)
 
 The Flow Engine provides graph-based workflow orchestration that reuses existing Huf primitives (Agent Run, Conversation, Messages, Tools) and adds only what's necessary to coordinate multi-step flows.
 
@@ -1426,7 +1609,7 @@ Stores the complete workflow graph definition as JSON.
 - Node IDs must be unique
 - Edges must reference valid node IDs
 - Entry node must exist
-- Only allowed node types (v0.1): `trigger.webhook`, `agent.run`, `tool.call`, `router.llm`, `human.approval`, `end`
+- Only allowed node types (v0.2): `trigger.webhook`, `trigger.schedule`, `trigger.doc-event`, `agent.run`, `tool.call`, `router.llm`, `human.approval`, `http_request`, `condition`, `transform`, `loop`, `end`
 - Expression edges must have a condition string
 
 #### Flow Run
@@ -1469,15 +1652,21 @@ Existing Agent Run with additional flow linkage fields.
 | **Flow ID** | `flow_id` | Data | Convenience field |
 | **Run Kind** | `run_kind` | Select | `agent`, `tool`, `orchestrator` |
 
-### Node Types (v0.1)
+### Node Types (v0.2)
 
 | Type | Description |
 |:-----|:------------|
 | `trigger.webhook` | Creates FlowRun from webhook payload |
+| `trigger.schedule` | Scheduled time-based triggers |
+| `trigger.doc-event` | Triggers based on Frappe lifecycle hooks |
 | `agent.run` | Runs a Huf agent via run_agent_sync |
-| `tool.call` | Deterministic tool execution (no LLM) |
+| `tool.call` | Deterministic tool execution (no LLM) with variable interpolation |
 | `router.llm` | LLM-based routing among candidate edges |
 | `human.approval` | Pause for human approve/reject |
+| `http_request` | Executes custom HTTP request |
+| `condition` | Evaluating boolean expressions |
+| `transform` | Transforms context data using copy/map/template |
+| `loop` | Iterates over an array in context |
 | `end` | Marks flow success |
 
 ### Edge Types
@@ -1533,9 +1722,69 @@ Registered via `huf_tools` hook so agents can interact with flows:
 ### Security
 
 - **Expression edges**: AST-based restricted evaluator; no imports, no function calls, no attribute access
-- **Router/orchestrator**: LLM output constrained to valid candidate edges
 - **Human approval**: User/role verification before approve/reject
 - **Hop limit**: Safety guard against infinite loops (default 100)
+
+## Subsystems and Advanced Architectures
+
+### 1. Capability-Based Permissions (RBAC)
+
+HUF implements a capability-based Role-Based Access Control (RBAC) layer on top of standard Frappe permissions. This permits modular security checks inside the HUF dashboard and API endpoints without directly exposing dynamic database mutations.
+
+#### Mental Model and Role Mapping
+- **Huf Role**: Grouping of capabilities. Seeding defines:
+  - `Huf Admin`: All capabilities.
+  - `Huf Manager`: Full edit access to agents, tools, knowledge, and flows.
+  - `Huf User`: Access to use agents, chat, knowledge, tools, and flows.
+  - `Huf Viewer`: Read-only access to agents and own chats.
+- **Frappe Role Mapping**: Under the hood, Huf Roles map 1-to-1 with Frappe Roles (`System Manager`, `Huf Manager`, `Huf User`, `Huf Viewer`).
+- **Enforcement**:
+  - Verification is done by checking capabilities using `huf.permissions.has_capability(user, capability)`.
+  - Frontend checks permissions on load by querying `/api/method/huf.permissions.get_me`.
+
+### 2. Dynamic Custom Data Tables
+
+The `Huf Data Table` subsystem allows users to build and manage custom database schemas (dynamic DocTypes) directly from the HUF dashboard.
+- **Table Registry**: Creates a record in the `Huf Data Table` DocType.
+- **Dynamic DocTypes**: Dynamically constructs and inserts a custom Frappe DocType prefixed with `HF {table_name}` containing custom fields, search fields, and naming options (e.g., Autoincrement).
+- **APIs (`api.py`)**: Methods for creating (`create_data_table`), updating schemas (`update_data_table`), deleting dynamic tables (`delete_data_table`), and counting rows.
+
+### 3. App Seeding Framework
+
+The seeding framework automatically discovers and seeds HUF resources (prompts, tools, knowledge sources, agents, and triggers) from installed Frappe apps:
+- **Scanner**: Scans each app's package or root path for a `huf/` folder.
+- **Seed Folders**: Organizes resources into `prompts/`, `tools/`, `knowledge/`, `agents/`, and `triggers/` containing `.json` seed files (or JSON lists).
+- **Triggers**: Seeding runs automatically during migration hooks (`after_migrate`), app installation (`after_app_install`), or manually from the UI via the `seed_all_apps` API.
+
+### 4. Persistent Conversation Data (Memory State)
+
+Agents are equipped with key-value variable memory stored inside the `conversation_data` JSON field of `Agent Conversation` records.
+- **Toggle**: `inject_conversation_data` on `Agent` determines if memory variables are automatically appended to the LLM system prompt.
+- **Memory Tools**: Agents can retrieve, set, and load memory states using:
+  - `get_conversation_data`: Returns the value of a specific variable.
+  - `set_conversation_data`: Stores a value in conversation data, with metadata and injection flags.
+  - `load_conversation_data`: Loads the entire state.
+
+### 5. File Attachments Trigger and OCR
+
+The Document Event trigger system in HUF supports file ingestion and automatic text extraction:
+- **Trigger Attachments**: Defined in `file_attachments` on `Agent Trigger`, linking fields or child table fields containing files.
+- **OCR Processing**: At execution time, the hooks verify if files are images or text. Non-image files (PDFs, docs) are processed via `handle_ocr_document` to extract text, which is appended to the agent's prompt under `Attached File Content (OCR Extracted)`. Images are passed directly for multimodal vision models.
+
+### 6. Audio, STT, and Dedicated Models
+
+HUF supports dedicated audio capabilities with separate provider/model routing:
+- **Speech-to-Text (STT) Resolution**: The three-tier model resolution follows:
+  1. `model` argument passed to the transcription tool.
+  2. `agent.stt_model` configuration on the Agent document.
+  3. Main provider default STT model or whisper-1.
+- **TTS Model**: Configured via `agent.tts_model`, allowing cross-provider Audio Generation (e.g. ElevenLabs voice with OpenAI agent).
+
+### 7. Prompt Caching
+
+HUF integrates prompt caching to save token costs on supported models:
+- **Model Check**: Checks model support by checking the LiteLLM pricing metadata for the field `cache_read_input_token_cost`.
+- **Toggle**: Users can toggle `enable_prompt_caching` in `Agent` settings to automatically apply prompt caching block headers on supported providers (Anthropic, Deepseek, OpenAI, Bedrock).
 
 ## Development and Coding Guidelines
 

@@ -20,18 +20,32 @@ import {
 	TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { ParsedJSXPreview } from '@/types/artifact.types';
+import type { ParsedMessageContent } from '@/utils/messageContentParser';
+import { writePreviewCache } from '@/utils/previewCache';
 
 interface JSXPreviewRendererProps {
 	preview: ParsedJSXPreview;
 	/** Agent Message document name — enables the "Open" button */
 	messageId?: string;
+	/** Parsed message content for same-session full-screen preview */
+	previewContent?: ParsedMessageContent;
 }
 
-export function JSXPreviewRenderer({ preview, messageId }: JSXPreviewRendererProps) {
+export function JSXPreviewRenderer({ preview, messageId, previewContent }: JSXPreviewRendererProps) {
 	const handleOpen = useCallback(() => {
 		if (!messageId) return;
+		if (previewContent) {
+			writePreviewCache(messageId, previewContent);
+		} else {
+			writePreviewCache(messageId, {
+				textContent: '',
+				jsxPreviews: [preview],
+				webPreviews: [],
+				artifacts: [],
+			});
+		}
 		window.open(`/huf/view/${messageId}`, '_blank', 'noopener');
-	}, [messageId]);
+	}, [messageId, previewContent, preview]);
 
 	return (
 		<JSXPreview

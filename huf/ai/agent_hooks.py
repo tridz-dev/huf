@@ -167,6 +167,12 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
             clean_doc = doc.copy() if isinstance(doc, dict) else doc.as_dict()
             for key in ["_user_tags", "_comments", "_assign", "_liked_by", "docstatus", "password"]:
                 clean_doc.pop(key, None)
+
+            # Standard truncation: Truncate individual massive fields to maintain valid JSON
+            MAX_FIELD_LENGTH = 10000
+            for k, v in list(clean_doc.items()):
+                if isinstance(v, str) and len(v) > MAX_FIELD_LENGTH:
+                    clean_doc[k] = v[:MAX_FIELD_LENGTH] + f"\n... [Content truncated. Full length: {len(v)} chars. Use get_document tool to retrieve full content if needed.]"
             
             json_string = json.dumps(clean_doc, indent=2, default=str)
             prompt += f"""

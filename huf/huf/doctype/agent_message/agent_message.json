@@ -37,6 +37,9 @@
   "column_break_agaw",
   "tool_status",
   "tool_args",
+  "tool_call_id",
+  "tool_calls",
+  "raw_payload",
   "voice_details_section",
   "voice_message",
   "generated_audio",
@@ -182,6 +185,26 @@
    "read_only": 1
   },
   {
+   "fieldname": "tool_call_id",
+   "fieldtype": "Long Text",
+   "label": "Tool Call ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tool_calls",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Tool Calls",
+   "read_only": 1
+  },
+  {
+   "fieldname": "raw_payload",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Raw Provider Payload",
+   "read_only": 1
+  },
+  {
    "fieldname": "content_type",
    "fieldtype": "Select",
    "label": "Content Type",
@@ -307,7 +330,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-04 14:55:28.143716",
+ "modified": "2026-06-18 12:46:03.437770",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",

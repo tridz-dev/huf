@@ -7,6 +7,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { UseFormReturn } from 'react-hook-form';
 import { useMemo } from 'react';
 import { knowledgeTypes, knowledgeScopes, knowledgeStorageModes } from '@/data/knowledge';
+import { linkRoutes } from '@/lib/link-routes';
 import type { KnowledgeSourceFormValues } from './types';
 
 interface ProviderOption {
@@ -213,6 +214,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                       placeholder="Select AI Provider..."
                       searchPlaceholder="Search providers..."
                       emptyText="No providers found."
+                      linkTo={linkRoutes.aiProvider}
                     />
                   </FormControl>
                   <FormDescription>AI Provider used for API key resolution (optional)</FormDescription>

@@ -120,10 +120,14 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
         doc.update(data)
         doc.save()
 
+        result_dict = {"name": doc.name, "modified": str(doc.modified)}
+        for field in data.keys():
+            result_dict[field] = getattr(doc, field, data.get(field))
+
         return {
             "success": True,
             "message": f"{doctype} {document_id} updated successfully",
-            "document": doc.as_dict()
+            "document": result_dict
         }
     except Exception as e:
         frappe.log_error(f"Error updating {doctype} {document_id}: {e!s}")

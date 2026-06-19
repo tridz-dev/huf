@@ -14,7 +14,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Capability",
-   "options": "agent.use\nagent.create\nagent.edit\nagent.delete\nagent.view_all\nchat.use\nchat.view_own\nchat.view_all\nknowledge.use\nknowledge.create\nknowledge.manage\ntools.use\ntools.create\ntools.manage\nflows.use\nflows.create\nflows.manage\nsystem.providers.manage\nsystem.models.manage\nsystem.mcp.manage\nsystem.settings.manage\nusers.invite\nusers.manage\nroles.manage",
+   "options": "agent.use\nagent.create\nagent.edit\nagent.delete\nagent.view_all\nchat.use\nchat.view_own\nchat.view_all\nknowledge.use\nknowledge.create\nknowledge.manage\ntools.use\ntools.create\ntools.manage\nflows.use\nflows.create\nflows.manage\nsystem.providers.manage\nsystem.models.manage\nsystem.mcp.manage\nsystem.integrations.manage\nsystem.settings.manage\nusers.invite\nusers.manage\nroles.manage",
    "reqd": 1
   },
   {

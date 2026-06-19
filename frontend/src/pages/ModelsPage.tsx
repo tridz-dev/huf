@@ -1,4 +1,4 @@
-import { Cpu, Settings, Loader2 } from 'lucide-react';
+import { Cpu, Settings, Loader2, DollarSign } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -12,6 +12,7 @@ import {
 } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Switch } from '../components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -21,16 +22,66 @@ import {
 } from '../components/ui/select';
 import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getModels, getModel, updateModel, createModel, getProviders, getModalityOptions } from '../services/providerApi';
-import { useEffect, useState } from 'react';
+import {
+  getModels,
+  getModel,
+  updateModel,
+  createModel,
+  getProviders,
+  getModalityOptions,
+  buildProviderNameMap,
+  resolveProviderName,
+} from '../services/providerApi';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIModel, AIProvider } from '../types/agent.types';
+import { LinkFieldControl } from '../components/ui/link-field-control';
+import { linkRoutes } from '../lib/link-routes';
 
 interface ModelsPageProps {
   addModelKey?: number;
 }
 
+interface ModelFormData {
+  model_name: string;
+  provider: string;
+  modalities: string;
+  use_custom_pricing: boolean;
+  input_cost_per_1m_tokens: string;
+  output_cost_per_1m_tokens: string;
+  cached_input_cost_per_1m_tokens: string;
+}
+
+const emptyFormData: ModelFormData = {
+  model_name: '',
+  provider: '',
+  modalities: '',
+  use_custom_pricing: false,
+  input_cost_per_1m_tokens: '',
+  output_cost_per_1m_tokens: '',
+  cached_input_cost_per_1m_tokens: '',
+};
+
+function parseModalityBadges(modalities?: string): string[] {
+  if (!modalities?.trim()) return ['Text'];
+  return modalities.split(',').map((m) => m.trim()).filter(Boolean);
+}
+
+function formatPricingSummary(model: AIModel): string | null {
+  if (model.use_custom_pricing !== 1) return null;
+  const input = model.input_cost_per_1m_tokens;
+  const output = model.output_cost_per_1m_tokens;
+  if (input == null && output == null) return 'Custom pricing';
+  const parts: string[] = [];
+  if (input != null) parts.push(`In $${input}/1M`);
+  if (output != null) parts.push(`Out $${output}/1M`);
+  return parts.join(' · ');
+}
+
 export function ModelsPage({ addModelKey }: ModelsPageProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const configureHandledRef = useRef(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [modalityOptions, setModalityOptions] = useState<string[]>([]);
   const [configureModalOpen, setConfigureModalOpen] = useState(false);
@@ -38,11 +89,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [loadingModel, setLoadingModel] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    model_name: '',
-    provider: '',
-    modalities: '',
-  });
+  const [formData, setFormData] = useState<ModelFormData>(emptyFormData);
+
+  const providerMap = useMemo(() => buildProviderNameMap(providers), [providers]);
 
   const {
     items: models,
@@ -87,7 +136,6 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
     autoLoad: true,
   });
 
-  // Fetch providers and modality options
   useEffect(() => {
     getProviders().then((data) => {
       if (Array.isArray(data)) {
@@ -95,18 +143,17 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       } else {
         setProviders(data.items);
       }
-    }).catch((error) => {
-      console.error('Error fetching providers:', error);
+    }).catch((fetchError) => {
+      console.error('Error fetching providers:', fetchError);
     });
 
     getModalityOptions().then((options) => {
       setModalityOptions(options);
-    }).catch((error) => {
-      console.error('Error fetching modality options:', error);
+    }).catch((fetchError) => {
+      console.error('Error fetching modality options:', fetchError);
     });
   }, []);
 
-  // Show error toast when there's an error
   useEffect(() => {
     if (error) {
       toast.error('Failed to load models', {
@@ -119,15 +166,10 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   const handleAddModel = () => {
     setSelectedModel(null);
     setIsEditing(false);
-    setFormData({
-      model_name: '',
-      provider: '',
-      modalities: '',
-    });
+    setFormData(emptyFormData);
     setConfigureModalOpen(true);
   };
 
-  // Listen for add model trigger from header
   useEffect(() => {
     if (addModelKey && addModelKey > 0) {
       handleAddModel();
@@ -146,13 +188,83 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         model_name: details.model_name || '',
         provider: details.provider || '',
         modalities: details.modalities || '',
+        use_custom_pricing: details.use_custom_pricing === 1,
+        input_cost_per_1m_tokens:
+          details.input_cost_per_1m_tokens != null ? String(details.input_cost_per_1m_tokens) : '',
+        output_cost_per_1m_tokens:
+          details.output_cost_per_1m_tokens != null ? String(details.output_cost_per_1m_tokens) : '',
+        cached_input_cost_per_1m_tokens:
+          details.cached_input_cost_per_1m_tokens != null
+            ? String(details.cached_input_cost_per_1m_tokens)
+            : '',
       });
-    } catch (error) {
+    } catch (loadError) {
       toast.error('Failed to load model details');
-      console.error(error);
+      console.error(loadError);
     } finally {
       setLoadingModel(false);
     }
+  };
+
+  useEffect(() => {
+    const configureId = searchParams.get('configure');
+    if (!configureId || configureHandledRef.current) {
+      return;
+    }
+
+    configureHandledRef.current = true;
+    let cancelled = false;
+
+    const openFromDeepLink = async () => {
+      try {
+        const listMatch = models.find((model) => model.name === configureId);
+        if (listMatch) {
+          await handleConfigure(listMatch);
+        } else {
+          const details = await getModel(configureId);
+          await handleConfigure(details);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          toast.error('Failed to open model configuration');
+          console.error(loadError);
+        }
+      } finally {
+        if (!cancelled) {
+          setSearchParams({}, { replace: true });
+        }
+      }
+    };
+
+    openFromDeepLink();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const buildModelPayload = () => {
+    const payload: Record<string, unknown> = {
+      model_name: formData.model_name.trim(),
+      provider: formData.provider,
+      modalities: formData.modalities,
+      use_custom_pricing: formData.use_custom_pricing ? 1 : 0,
+    };
+
+    if (formData.use_custom_pricing) {
+      payload.input_cost_per_1m_tokens = formData.input_cost_per_1m_tokens
+        ? parseFloat(formData.input_cost_per_1m_tokens)
+        : 0;
+      payload.output_cost_per_1m_tokens = formData.output_cost_per_1m_tokens
+        ? parseFloat(formData.output_cost_per_1m_tokens)
+        : 0;
+      payload.cached_input_cost_per_1m_tokens = formData.cached_input_cost_per_1m_tokens
+        ? parseFloat(formData.cached_input_cost_per_1m_tokens)
+        : 0;
+    }
+
+    return payload;
   };
 
   const handleSave = async () => {
@@ -167,26 +279,19 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
 
     setSaving(true);
     try {
+      const payload = buildModelPayload();
       if (isEditing && selectedModel) {
-        await updateModel(selectedModel.name, {
-          model_name: formData.model_name.trim(),
-          provider: formData.provider,
-          modalities: formData.modalities,
-        });
+        await updateModel(selectedModel.name, payload);
         toast.success('Model updated successfully');
       } else {
-        await createModel({
-          model_name: formData.model_name.trim(),
-          provider: formData.provider,
-          modalities: formData.modalities,
-        });
+        await createModel(payload);
         toast.success('Model created successfully');
       }
       setConfigureModalOpen(false);
       reset();
-    } catch (error) {
+    } catch (saveError) {
       toast.error(`Failed to ${isEditing ? 'update' : 'create'} model`);
-      console.error(error);
+      console.error(saveError);
     } finally {
       setSaving(false);
     }
@@ -218,49 +323,55 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
             <p className="text-muted-foreground mb-4">No models found.</p>
           </div>
         }
-        renderItem={(model) => (
-          <Card key={model.name} className="h-full flex flex-col">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Cpu className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base">{model.model_name}</CardTitle>
-                    <CardDescription className="text-xs">
-                      {model.provider}
-                    </CardDescription>
+        renderItem={(model) => {
+          const pricingSummary = formatPricingSummary(model);
+
+          return (
+            <Card key={model.name} className="h-full flex flex-col">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Cpu className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">{model.model_name}</CardTitle>
+                      <CardDescription className="text-xs">
+                        {resolveProviderName(model.provider, providerMap)}
+                      </CardDescription>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1">
-              <div className="flex flex-wrap gap-2">
-                {model.modalities ? (
-                  model.modalities.split(',').map(m => (
-                    <Badge key={m} variant="secondary" className="text-xs">
-                      {m.trim()}
+              </CardHeader>
+              <CardContent className="flex-1 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {parseModalityBadges(model.modalities).map((modality) => (
+                    <Badge key={modality} variant="secondary" className="text-xs">
+                      {modality}
                     </Badge>
-                  ))
-                ) : (
-                  <Badge variant="outline" className="text-xs">Text</Badge>
+                  ))}
+                </div>
+                {model.use_custom_pricing === 1 && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <DollarSign className="w-3 h-3" />
+                    <span>{pricingSummary || 'Custom pricing'}</span>
+                  </div>
                 )}
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 gap-2"
-                onClick={() => handleConfigure(model)}
-              >
-                <Settings className="w-4 h-4" />
-                Configure
-              </Button>
-            </CardFooter>
-          </Card>
-        )}
+              </CardContent>
+              <CardFooter>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 gap-2"
+                  onClick={() => handleConfigure(model)}
+                >
+                  <Settings className="w-4 h-4" />
+                  Configure
+                </Button>
+              </CardFooter>
+            </Card>
+          );
+        }}
         keyExtractor={(model) => model.name}
       />
       <LoadMoreButton
@@ -275,9 +386,8 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         </div>
       )}
 
-      {/* Configure Model Modal */}
       <Dialog open={configureModalOpen} onOpenChange={setConfigureModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {isEditing ? `Configure ${selectedModel?.model_name || 'Model'}` : 'Add Model'}
@@ -311,21 +421,26 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 <Label htmlFor="provider">
                   Provider <span className="text-destructive">*</span>
                 </Label>
-                <Select
+                <LinkFieldControl
                   value={formData.provider}
-                  onValueChange={(value) => setFormData({ ...formData, provider: value })}
+                  linkTo={linkRoutes.aiProvider}
                 >
-                  <SelectTrigger id="provider">
-                    <SelectValue placeholder="Select a provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providers.map((p) => (
-                      <SelectItem key={p.name} value={p.name}>
-                        {p.provider_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <Select
+                    value={formData.provider}
+                    onValueChange={(value) => setFormData({ ...formData, provider: value })}
+                  >
+                    <SelectTrigger id="provider">
+                      <SelectValue placeholder="Select a provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {providers.map((p) => (
+                        <SelectItem key={p.name} value={p.name}>
+                          {p.provider_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </LinkFieldControl>
               </div>
 
               <div className="space-y-2">
@@ -345,6 +460,71 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="border-t pt-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="use_custom_pricing">Enable Custom Pricing</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Override LiteLLM automatic pricing (USD per 1M tokens)
+                    </p>
+                  </div>
+                  <Switch
+                    id="use_custom_pricing"
+                    checked={formData.use_custom_pricing}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, use_custom_pricing: checked })
+                    }
+                  />
+                </div>
+
+                {formData.use_custom_pricing && (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="input_cost">Input Cost per 1M Tokens (USD)</Label>
+                      <Input
+                        id="input_cost"
+                        type="number"
+                        min="0"
+                        step="0.00000001"
+                        placeholder="e.g. 2.50"
+                        value={formData.input_cost_per_1m_tokens}
+                        onChange={(e) =>
+                          setFormData({ ...formData, input_cost_per_1m_tokens: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="output_cost">Output Cost per 1M Tokens (USD)</Label>
+                      <Input
+                        id="output_cost"
+                        type="number"
+                        min="0"
+                        step="0.00000001"
+                        placeholder="e.g. 10.00"
+                        value={formData.output_cost_per_1m_tokens}
+                        onChange={(e) =>
+                          setFormData({ ...formData, output_cost_per_1m_tokens: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cached_input_cost">Cached Input Cost per 1M Tokens (USD)</Label>
+                      <Input
+                        id="cached_input_cost"
+                        type="number"
+                        min="0"
+                        step="0.00000001"
+                        placeholder="Optional, e.g. 0.30"
+                        value={formData.cached_input_cost_per_1m_tokens}
+                        onChange={(e) =>
+                          setFormData({ ...formData, cached_input_cost_per_1m_tokens: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
