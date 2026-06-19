@@ -504,24 +504,14 @@ def _run_async_safely(coro):
             if user:
                 frappe.set_user(user)
             try:
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
-                try:
-                    return new_loop.run_until_complete(coro)
-                finally:
-                    new_loop.close()
+                return asyncio.run(coro)
             finally:
                 frappe.destroy()
                 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             return executor.submit(_thread_worker).result()
     else:
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        try:
-            return new_loop.run_until_complete(coro)
-        finally:
-            new_loop.close()
+        return asyncio.run(coro)
 
 
 @frappe.whitelist()
