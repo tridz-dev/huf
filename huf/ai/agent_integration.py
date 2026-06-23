@@ -896,6 +896,7 @@ def run_agent_sync(
         new_items = getattr(result, "new_items", []) or []
 
         client_side_tool_calls = []
+        tool_call_message_map = {}  # call_id -> Agent Message name
 
         for item in new_items:
             if item.type == "tool_call_item":
@@ -936,6 +937,8 @@ def run_agent_sync(
                         "function": {"name": tool_name, "arguments": tool_args}
                     }]
                 )
+                if call_id:
+                    tool_call_message_map[call_id] = message_doc.name
                 safe_commit()
 
             elif item.type == "tool_call_output_item":
@@ -952,32 +955,55 @@ def run_agent_sync(
                     tool_call_doc = frappe.get_doc("Agent Tool Call", updated_tool_call_id)
                     tool_status = tool_call_doc.status or "Completed"
                     tool_name = tool_call_doc.tool or "Unknown Tool"
+                    call_id = tool_call_doc.call_id
 
-                    message_name = frappe.db.get_value("Agent Message", {"tool_call": updated_tool_call_id}, "name")
+                    # Update the original Tool Call message in place so request + result
+                    # are stored in a single Agent Message row.
+                    message_name = tool_call_message_map.get(call_id)
+                    if not message_name:
+                        message_name = frappe.db.get_value("Agent Message", {"tool_call": updated_tool_call_id}, "name")
 
-                    # Persist tool result with context policy (large results stored as reference only)
-                    tool_result_str = str(tool_result) if tool_result is not None else ""
-                    tool_result_summary = (tool_result_str[:200] + "...") if len(tool_result_str) > 200 else tool_result_str
-                    max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000))
-                    use_reference = len(tool_result_str) > max_context_chars
+                    tool_call_dict = {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": tool_call_doc.tool_args or "{}"}
+                    }
 
-                    conv_manager.add_message(
-                        conversation,
-                        role="tool",
-                        content=tool_result_str,
-                        provider=resolved_provider,
-                        model=resolved_model,
-                        agent=agent_name,
-                        run_name=run_doc.name,
-                        kind="Tool Result",
-                        tool_call=updated_tool_call_id,
-                        tool_call_id=tool_call_doc.call_id,
-                        record_kind="tool_result",
-                        context_policy="include_reference" if use_reference else "include_full",
-                        context_summary=tool_result_summary,
-                        reference_doctype="Agent Tool Call",
-                        reference_name=updated_tool_call_id
+                    from huf.ai.conversation_manager import update_tool_call_message
+                    updated = update_tool_call_message(
+                        message_name=message_name,
+                        tool_call_id=call_id,
+                        tool_call=[tool_call_dict],
+                        result_content=tool_result,
+                        agent_doc=agent_doc,
                     )
+
+                    if not updated:
+                        # Fallback: create a separate Tool Result message if the
+                        # original Tool Call message could not be updated.
+                        tool_result_str = str(tool_result) if tool_result is not None else ""
+                        tool_result_summary = (tool_result_str[:200] + "...") if len(tool_result_str) > 200 else tool_result_str
+                        max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000))
+                        use_reference = len(tool_result_str) > max_context_chars
+
+                        result_message = conv_manager.add_message(
+                            conversation,
+                            role="tool",
+                            content=tool_result_str,
+                            provider=resolved_provider,
+                            model=resolved_model,
+                            agent=agent_name,
+                            run_name=run_doc.name,
+                            kind="Tool Result",
+                            tool_call=updated_tool_call_id,
+                            tool_call_id=call_id,
+                            record_kind="tool_result",
+                            context_policy="include_reference" if use_reference else "include_full",
+                            context_summary=tool_result_summary,
+                            reference_doctype="Agent Tool Call",
+                            reference_name=updated_tool_call_id
+                        )
+                        message_name = result_message.name
 
                     # Emit socket event for tool call completed/failed
                     # Always emit, even if message not found (e.g., for image generation which creates its own message)
@@ -1434,6 +1460,8 @@ async def run_agent_stream(
         
         resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
 
+        tool_call_message_map = {}  # call_id -> Agent Message name (used by streaming provider)
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
@@ -1442,6 +1470,7 @@ async def run_agent_stream(
             "conversation_id": conversation.name,
             "agent_run_id": run_doc.name,
             "prompt_cache_options": resolved_prompt_cache,
+            "_tool_call_message_map": tool_call_message_map,
         }
         
         # SUMMARIZATION LOGIC
@@ -1556,7 +1585,7 @@ async def run_agent_stream(
                         
                         msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
                         
-                        conv_manager.add_message(
+                        message_doc = conv_manager.add_message(
                             conversation, 
                             role="agent", 
                             content=msg_content, 
@@ -1573,6 +1602,8 @@ async def run_agent_stream(
                                 "function": {"name": tool_name, "arguments": tool_args}
                             }]
                         )
+                        if call_id:
+                            tool_call_message_map[call_id] = message_doc.name
                         safe_commit()
                         
                     yield chunk
