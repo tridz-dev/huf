@@ -137,14 +137,27 @@ def get_user_huf_role(user: str | None = None) -> str | None:
 	if not user:
 		user = frappe.session.user
 
-	if user == "Administrator":
+	if user == "Administrator" or _is_system_manager(user):
 		return "Huf Admin"
 
-	return frappe.db.get_value(
+	huf_role = frappe.db.get_value(
 		"Huf User Role",
 		{"user": user, "enabled": 1},
 		"huf_role",
 	)
+	if huf_role:
+		return huf_role
+
+	# Fallback: check standard Frappe Roles if no Huf User Role record exists
+	user_roles = frappe.get_roles(user)
+	if "Huf Manager" in user_roles:
+		return "Huf Manager"
+	if "Huf User" in user_roles:
+		return "Huf User"
+	if "Huf Viewer" in user_roles:
+		return "Huf Viewer"
+
+	return None
 
 
 def get_user_capabilities(user: str | None = None) -> list[str]:
