@@ -94,14 +94,8 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
     if not matching:
         return
 
-
-    cache = frappe.cache()
     for agent in matching:
-        lock_key = f"huf:lock:{agent['agent']}:{doc.doctype}:{doc.name}:{method}"
-        if cache.get_value(lock_key):
-            continue
-        cache.set_value(lock_key, now_datetime().isoformat(), expires_in_sec=30)
-
+        # Evaluate condition immediately during the event phase
         condition = agent.get("condition")
         if condition:
             try:
@@ -110,23 +104,39 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
             except Exception as e:
                 frappe.log_error(f"Condition error in Agent {agent.get('agent')}: {e}")
                 continue
-        enqueue(
-            run_agent_for_doc,
-            queue="long",
-            job_id=f"run-agent-{agent['agent']}-{doc.doctype}-{doc.name}-{method}-{uuid4()}",
-            doc=doc.as_dict(),
-            agent_name=agent["agent"],
-            instructions=agent.get("instructions"),
-            event_name=method,
-            provider=agent.get("provider"),
-            model=agent.get("model"),
-            include_doc=False,
-            initiating_user=frappe.session.user,
-            channel_id="doc_event",
-            prompt_field=agent.get("prompt_field"),
-            file_attachments=agent.get("file_attachments")
-        )
 
+        # Create a deferred execution handler to queue the agent AFTER the transaction commits
+        def _queue_agent_after_commit(a=agent, d=doc, m=method, u=frappe.session.user):
+            # doc.name will now be final and populated
+            safe_name = d.name or str(id(d))
+            
+            # 1. Acquire execution lock using the final assigned name
+            lock_key = f"huf:lock:{a['agent']}:{d.doctype}:{safe_name}:{m}"
+            cache = frappe.cache()
+            if cache.get_value(lock_key):
+                return
+            cache.set_value(lock_key, now_datetime().isoformat(), expires_in_sec=30)
+            
+            # 2. Enqueue the background agent worker
+            enqueue(
+                run_agent_for_doc,
+                queue="long",
+                job_id=f"run-agent-{a['agent']}-{d.doctype}-{safe_name}-{m}-{uuid4()}",
+                doc=d.as_dict(),
+                agent_name=a["agent"],
+                instructions=a.get("instructions"),
+                event_name=m,
+                provider=a.get("provider"),
+                model=a.get("model"),
+                include_doc=False,
+                initiating_user=u,
+                channel_id="doc_event",
+                prompt_field=a.get("prompt_field"),
+                file_attachments=a.get("file_attachments")
+            )
+
+        # Register to run ONLY if the document successfully commits to the database
+        frappe.db.after_commit.add(_queue_agent_after_commit)
 
 def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model, include_doc=False, initiating_user=None, channel_id=None, prompt_field=None, file_attachments=None):
     """Background worker to run an agent when a Doc Event triggers"""
