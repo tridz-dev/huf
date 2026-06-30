@@ -13,6 +13,7 @@ import { McpHeaderActions } from './components/McpHeaderActions';
 import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
 import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
+import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
@@ -26,6 +27,8 @@ const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
 const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
 const AgentPromptFormPageWrapper = lazy(() => import('./pages/AgentPromptFormPageWrapper'));
+const AgentSummaryPromptsPage = lazy(() => import('./pages/AgentSummaryPromptsPage'));
+const AgentSummaryPromptFormPageWrapper = lazy(() => import('./pages/AgentSummaryPromptFormPageWrapper'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
@@ -191,6 +194,28 @@ function App() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <AgentPromptFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/summary-prompts"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<AgentSummaryPromptsHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentSummaryPromptsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/summary-prompts/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AgentSummaryPromptFormPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
