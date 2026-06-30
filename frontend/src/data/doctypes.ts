@@ -12,6 +12,8 @@ export const doctype = {
   "Agent Run": "Agent Run",
   "Agent Prompt": "Agent Prompt",
   "Agent Prompt Category": "Agent Prompt Category",
+  "Agent Summary Prompt": "Agent Summary Prompt",
+  "Agent Summary Prompt Category": "Agent Summary Prompt Category",
   "MCP Server": "MCP Server",
   "Integration Settings": "Integration Settings",
   "Integration Service": "Integration Service",
