@@ -75,15 +75,18 @@
   "column_break_wr4j",
   "enable_conversation_data",
   "inject_conversation_data",
+  "conversation_data_api_permission",
   "image_generation_section",
   "image_generation_model",
   "audio_generation_section",
   "tts_model",
+  "column_break_mwgf",
   "tts_voice",
   "audio_transcription_section",
   "stt_model",
   "huf_ui_section",
   "agent_color",
+  "column_break_fl05",
   "show_tool_execution_details",
   "permissions_tab",
   "allow_guest",
@@ -95,7 +98,11 @@
   "total_run",
   "seeding_metadata_section",
   "source_app",
-  "source_file"
+  "source_file",
+  "column_break_summary_model",
+  "compression_instructions_section",
+  "use_external_template",
+  "summary_local_prompt"
  ],
  "fields": [
   {
@@ -325,7 +332,7 @@
   },
   {
    "default": "Summarize",
-   "description": "How to handle conversation history when it exceeds the limit. 'Summarize' compresses old messages, 'FIFO' drops them.",
+   "description": "Choose 'Summarize' to compress old messages via an LLM, or 'FIFO' to simply drop the oldest messages.",
    "fieldname": "context_strategy",
    "fieldtype": "Select",
    "label": "Context Strategy",
@@ -333,19 +340,15 @@
   },
   {
    "default": "20",
-   "description": "Maximum number of messages to keep in active context before applying strategy.",
+   "description": "Max messages before strategy triggers.",
    "fieldname": "history_limit",
    "fieldtype": "Int",
    "label": "History Limit",
    "non_negative": 1
   },
   {
-   "fieldname": "column_break_ctx",
-   "fieldtype": "Column Break"
-  },
-  {
    "default": "0.7",
-   "description": "Ratio of history to summarize effectively. 0.7 means 70% of oldest messages.",
+   "description": "Fraction of history to compress (e.g., 0.7 = 70%).",
    "fieldname": "summary_ratio",
    "fieldtype": "Float",
    "label": "Summary Ratio",
@@ -353,7 +356,7 @@
    "precision": "2"
   },
   {
-   "description": "Optional: Lightweight model to use specifically for summarization tasks.",
+   "description": "Dedicated lightweight model for this task.",
    "fieldname": "summary_model",
    "fieldtype": "Link",
    "label": "Summary Model",
@@ -412,7 +415,7 @@
   },
   {
    "default": "20",
-   "description": "Maximum consecutive turns/steps the agent can take in a single run.",
+   "description": "Consecutive actions in a single run.",
    "fieldname": "max_turns",
    "fieldtype": "Int",
    "label": "Max Turns",
@@ -583,6 +586,14 @@
    "label": "Inject Conversation Data into Prompt"
   },
   {
+   "depends_on": "eval:doc.enable_conversation_data==1",
+   "description": "Select API access level. 'Read' allows reading only. 'Write' allows reading and writing.",
+   "fieldname": "conversation_data_api_permission",
+   "fieldtype": "Select",
+   "label": "Conversation Data API Permission",
+   "options": "\nRead\nWrite"
+  },
+  {
    "fieldname": "image_generation_section",
    "fieldtype": "Section Break",
    "label": "Image Generation"
@@ -691,7 +702,19 @@
    "label": "Agent Behaviors"
   },
   {
-   "fieldname": "column_break_wr4j",
+   "fieldname": "column_break_3mhl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_g3a9",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_mwgf",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_fl05",
    "fieldtype": "Column Break"
   }
  ],

@@ -2,6 +2,7 @@ import frappe
 from frappe.utils import now
 import json
 from collections import defaultdict
+from typing import Any
 
 
 def _is_tool_message(msg) -> bool:
@@ -134,6 +135,86 @@ def _synthesize_assistant_tool_call(tool_call_id: str, conversation_name: str | 
         }
     except Exception:
         return None
+
+
+def update_tool_call_message(
+    message_name: str,
+    tool_call_id: str,
+    tool_call: dict | list,
+    result_content: Any,
+    agent_doc=None,
+) -> bool:
+    """
+    Update an existing 'Tool Call' Agent Message with the tool result so the
+    request and result live in a single message row.
+
+    Args:
+        message_name: Name of the Agent Message to update.
+        tool_call_id: LLM-generated tool call id.
+        tool_call: Tool call payload (dict or list) to persist in tool_calls.
+        result_content: Raw result returned by the tool.
+        agent_doc: Agent DocType (used for max_context_chars threshold).
+
+    Returns:
+        True if the message was updated, False otherwise.
+    """
+    if not message_name:
+        return False
+
+    try:
+        msg_doc = frappe.get_doc("Agent Message", message_name)
+    except Exception as e:
+        frappe.log_error(
+            f"Could not load Agent Message '{message_name}' for tool result update: {e}",
+            "Tool Call Message Update"
+        )
+        return False
+
+    try:
+        if isinstance(result_content, str):
+            result_str = result_content
+        else:
+            result_str = json.dumps(result_content, default=str)
+
+        result_summary = (result_str[:200] + "...") if len(result_str) > 200 else result_str
+
+        max_context_chars = 2000
+        if agent_doc:
+            try:
+                max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
+            except Exception:
+                max_context_chars = 2000
+        max_context_chars = max(max_context_chars, 500)
+
+        use_reference = len(result_str) > max_context_chars
+
+        existing_content = msg_doc.content or ""
+        if "**Tool Result:**" not in existing_content:
+            msg_doc.content = existing_content + f"\n\n**Tool Result:**\n{result_str}"
+
+        msg_doc.kind = "Tool Result"
+        msg_doc.record_kind = "tool_result"
+        msg_doc.context_policy = "include_reference" if use_reference else "include_full"
+        msg_doc.context_summary = result_summary
+        msg_doc.reference_doctype = "Agent Tool Call"
+        if msg_doc.tool_call:
+            msg_doc.reference_name = msg_doc.tool_call
+        msg_doc.tool_call_id = tool_call_id
+        if tool_call is not None:
+            msg_doc.tool_calls = (
+                json.dumps(tool_call, default=str)
+                if not isinstance(tool_call, str)
+                else tool_call
+            )
+
+        msg_doc.save(ignore_permissions=True)
+        return True
+    except Exception as e:
+        frappe.log_error(
+            f"Error updating tool call message '{message_name}': {e}",
+            "Tool Call Message Update"
+        )
+        return False
 
 
 def repair_message_sequence(messages: list, conversation_name: str | None = None) -> list:
