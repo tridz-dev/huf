@@ -169,6 +169,21 @@ The main DocType for creating an AI agent.
 | **Slug**          | `slug`         | Data      | Provider slug (fetched from provider, hidden).                                                          |
 | **TTS Model**    | `tts_model`    | Link (AI Model) | Dedicated model for the `generate_audio` tool. When set, the API key is sourced from the *TTS model's own provider* (`AI Model → AI Provider`), enabling cross-provider TTS (e.g. main agent on OpenAI, TTS on ElevenLabs). Falls back to the main provider's default TTS model when unset. |
 | **TTS Voice**    | `tts_voice`    | Data      | Default voice identifier for the configured TTS model (e.g. `alloy`, `nova`, `21m00Tcm4TlvDq8ikWAM`). Overridden by a `voice` argument passed directly to the `generate_audio` tool call. |
+| **Context Strategy** | `context_strategy` | Select | How to handle conversation history when it exceeds the limit. `Summarize` compresses old messages, `FIFO` drops them, `None` keeps all. |
+| **History Limit** | `history_limit` | Int | Maximum number of messages to keep in active context before applying strategy. |
+| **Summary Ratio** | `summary_ratio` | Float | Ratio of history to summarize effectively. 0.7 means 70% of oldest messages. |
+| **Summary Model** | `summary_model` | Link | Optional lightweight `AI Model` used only when compressing older messages (Summarize strategy). |
+| **Summary Prompt Mode** | `summary_prompt_mode` | Select | `Local` uses the `summary_prompt` field. `Template` links to a reusable `Agent Summary Prompt` for conversation summarization. |
+| **Summary Prompt Template** | `summary_prompt_template` | Link | Reusable `Agent Summary Prompt` used for summarization when `summary_prompt_mode` is `Template`. |
+| **Lock Summary Prompt Version** | `summary_prompt_version_locked` | Check | Pins the agent to the attached summary prompt revision. |
+| **Summary Attached at Version** | `summary_template_version_at_attach` | Int | Read-only snapshot of the summary prompt version when attached. |
+| **Summary Prompt** | `summary_prompt` | Code | Local custom summary prompt. Supports `{summary_data}` placeholder. Falls back to a system default. |
+| **Max Knowledge Tokens** | `max_knowledge_tokens` | Int | Maximum tokens to use for injected knowledge context. |
+| **Max Context Characters** | `max_context_chars` | Int | Maximum characters allowed for tool results before truncating and applying `include_reference` context policy. |
+| **Max Turns** | `max_turns` | Int | Maximum consecutive turns/steps the agent can take in a single run. |
+| **Allow Conversation Data Management** | `enable_conversation_data` | Check | Enables key-value memory storage in the conversation context. |
+| **Inject Conversation Data into Prompt** | `inject_conversation_data` | Check | Auto-injects active memory items into the LLM system prompt on every turn. |
+| **Autonaming of Conversation Title** | `autonaming_of_conversation_title` | Check | Automatically updates the conversation title based on initial context. |
 
 **Note**: The `condition` field has been removed from Agent DocType. Conditional triggering is now handled via the `Agent Trigger` DocType.
 
@@ -483,7 +498,36 @@ Category classification for grouping and organizing prompt templates.
 -   **Python Class**: `AgentPromptCategory(Document)`
 -   **File**: `huf/huf/doctype/agent_prompt_category/agent_prompt_category.py`
 
-#### 20. Huf Data Table
+#### 20. Agent Summary Prompt
+
+Reusable summary prompt templates with version control, independent from `Agent Prompt`. Used by agents when the context strategy is `Summarize`.
+
+-   **Python Class**: `AgentSummaryPrompt(Document)`
+-   **File**: `huf/huf/doctype/agent_summary_prompt/agent_summary_prompt.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Title** | `title` | Data | Descriptive title of the summary prompt template. |
+| **Slug** | `slug` | Data | URL-friendly identifier, unique. |
+| **Category** | `category` | Link | Grouping category (`Agent Summary Prompt Category`). |
+| **Description** | `description` | Small Text | Internal description. |
+| **Is Active** | `is_active` | Check | Whether template is available. |
+| **Is System** | `is_system` | Check | System-shipped vs user-created. |
+| **Visibility** | `visibility` | Select | Public, App, or Private. |
+| **Prompt Body** | `prompt_body` | Code | The summary prompt template. Supports `{summary_data}` placeholder. |
+| **Version** | `version` | Int | Version number, auto-incremented. |
+| **Is Latest** | `is_latest` | Check | Marks the active latest version in prompt lineage. |
+
+#### 21. Agent Summary Prompt Category
+
+Category classification for grouping and organizing summary prompt templates.
+
+-   **Python Class**: `AgentSummaryPromptCategory(Document)`
+-   **File**: `huf/huf/doctype/agent_summary_prompt_category/agent_summary_prompt_category.py`
+
+#### 22. Huf Data Table
 
 Registry entry for custom, user-defined data tables. HUF allows dynamically creating database DocTypes (prefixed with `HF `) with custom schemas.
 
