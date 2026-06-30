@@ -530,6 +530,8 @@ def run_background_summarization(conversation_name, agent_name):
     Background job to summarize conversation history.
     """
     try:
+        from huf.ai.prompt_resolver import resolve_summary_prompt
+
         agent_doc = frappe.get_doc("Agent", agent_name)
         conv_manager = ConversationManager(agent_name=agent_name)
         
@@ -558,18 +560,12 @@ def run_background_summarization(conversation_name, agent_name):
             "existing_summary": stored_summary or "None",
             "new_messages_to_incorporate": to_summarize
         }
-        
-        summary_prompt = f"""
-        You are maintaining a rolling summary of a conversation.
-        
-        1. Update the 'Existing Summary' by incorporating the 'New Messages'.
-        2. Keep the summary concise but retain key details (names, decisions, technical context).
-        3. Output ONLY the new summary text.
 
-        Data:
-        {json.dumps(summary_input_data, indent=2)}
-        """
-        
+        summary_prompt_template = resolve_summary_prompt(agent_doc)
+        summary_prompt = summary_prompt_template.replace(
+            "{summary_data}", json.dumps(summary_input_data, indent=2)
+        )
+
         messages = [{"role": "user", "content": summary_prompt}]
         
         # Run completion (sync in this background job context or safely in thread if nested)
@@ -1451,6 +1447,8 @@ async def run_agent_stream(
 
         if to_summarize:
             try:
+                from huf.ai.prompt_resolver import resolve_summary_prompt
+
                 summary_agent = Agent(
                     name=agent_name, 
                     instructions="You are a helpful assistant. Summarize the provided conversation history concisely, capturing key decisions and context.",
@@ -1460,9 +1458,12 @@ async def run_agent_stream(
                 )
                 
                 summary_input = json.dumps(to_summarize, indent=2)
-                summary_prompt = f"Summarize this conversation history:\n{summary_input}"
+                summary_prompt_template = resolve_summary_prompt(agent_doc)
+                summary_prompt = summary_prompt_template.format(
+                    summary_data=summary_input
+                )
 
-                sum_context = {"agent_name": agent_name, "is_system_op": True} 
+                sum_context = {"agent_name": agent_name, "is_system_op": True}
                 sum_result = await RunProvider.run(summary_agent, summary_prompt, resolved_provider, resolved_model, sum_context)
                 summary_text = getattr(sum_result, "final_output", "Could not generate summary.")
 
