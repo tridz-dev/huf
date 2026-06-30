@@ -757,6 +757,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             except Exception:
                 pass
 
+        max_context_chars = _get_agent_max_context_chars(agent_doc)
+
         # Get API key
         provider_doc = frappe.get_doc("AI Provider", provider)
         api_key = provider_doc.get_password("api_key")
@@ -1050,6 +1052,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                     if context and context.get("conversation_id"):
                                         conv_id = context.get("conversation_id")
                                         call_id = tool_call.get("id")
+                                        agent_run_id = context.get("agent_run_id")
                                         try:
                                             tool_call_doc = frappe.db.get_value("Agent Tool Call", {
                                                 "conversation": conv_id,
@@ -1066,25 +1069,54 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     tc_doc.tool_result = {"output": str(result_content)[:140000]}
                                                 tc_doc.save(ignore_permissions=True)
 
-                                                message_name = frappe.db.get_value("Agent Message", {"tool_call": tool_call_doc}, "name")
+                                                # Find the Agent Message to update. Prefer the in-memory
+                                                # map passed via context, then fall back to DB lookups.
+                                                tool_call_message_map = context.get("_tool_call_message_map") or {}
+                                                message_name = tool_call_message_map.get(call_id)
+
+                                                if not message_name and tool_call_doc:
+                                                    message_name = frappe.db.get_value(
+                                                        "Agent Message", {"tool_call": tool_call_doc}, "name"
+                                                    )
+
+                                                if not message_name and call_id:
+                                                    message_name = frappe.db.get_value(
+                                                        "Agent Message", {"tool_call_id": call_id}, "name"
+                                                    )
+
+                                                if not message_name and call_id and agent_run_id:
+                                                    message_name = frappe.db.get_value(
+                                                        "Agent Message",
+                                                        {
+                                                            "conversation": conv_id,
+                                                            "agent_run": agent_run_id,
+                                                            "kind": "Tool Call",
+                                                            "tool_call_id": call_id,
+                                                        },
+                                                        "name",
+                                                        order_by="creation desc",
+                                                    )
+
                                                 if message_name:
-                                                    msg_doc = frappe.get_doc("Agent Message", message_name)
-                                                    result_str = json.dumps(result_content) if not isinstance(result_content, str) else str(result_content)
-                                                    
-                                                    result_summary = (result_str[:200] + "...") if len(result_str) > 200 else result_str
-                                                    max_context_chars = int(getattr(agent, "max_context_chars", 2000)) if agent else 2000
-                                                    use_reference = len(result_str) > max_context_chars
-                                                    
-                                                    msg_doc.content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
-                                                    msg_doc.kind = "Tool Result"
-                                                    msg_doc.record_kind = "tool_result"
-                                                    msg_doc.context_policy = "include_reference" if use_reference else "include_full"
-                                                    msg_doc.context_summary = result_summary
-                                                    msg_doc.reference_doctype = "Agent Tool Call"
-                                                    msg_doc.reference_name = tool_call_doc
-                                                    msg_doc.tool_call_id = call_id
-                                                    msg_doc.tool_calls = json.dumps([tool_call])
-                                                    msg_doc.save(ignore_permissions=True)
+                                                    from huf.ai.conversation_manager import update_tool_call_message
+                                                    updated = update_tool_call_message(
+                                                        message_name=message_name,
+                                                        tool_call_id=call_id,
+                                                        tool_call=[tool_call],
+                                                        result_content=result_content,
+                                                        agent_doc=agent_doc,
+                                                    )
+                                                    if not updated:
+                                                        message_name = None
+                                                        frappe.log_error(
+                                                            f"Failed to update tool call message for call_id={call_id}, tool_call_doc={tool_call_doc}",
+                                                            "Tool Call Message Update"
+                                                        )
+                                                else:
+                                                    frappe.log_error(
+                                                        f"No Agent Message found for tool call call_id={call_id}, tool_call_doc={tool_call_doc}",
+                                                        "Tool Call Message Update"
+                                                    )
 
                                                 tool_result_for_socket = (
                                                     result_content
@@ -1111,8 +1143,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                 if getattr(frappe.local, "_realtime_log", None) is None:
                                                     frappe.local._realtime_log = []
                                                 frappe.db.commit()
-                                        except Exception:
-                                            pass
+                                        except Exception as e:
+                                            frappe.log_error(
+                                                f"Error updating tool call result for call_id={call_id}: {e}",
+                                                "Tool Call Message Update"
+                                            )
                                 else:
                                     result_content = f"Tool '{tool_name}' not found."
 
