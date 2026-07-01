@@ -20,7 +20,6 @@ from .tool_functions import (
     get_value, set_value, get_report_result,attach_file_to_document
 )
 import re
-import hashlib
 from datetime import datetime, timedelta
 
 
@@ -1704,180 +1703,6 @@ async def handle_generate_image(
         return {"success": False, "error": str(e)}
 
 
-def _determine_ocr_strategy(file_path: str, file_type: str) -> str:
-    """Determine OCR strategy based on file type."""
-    # Check file extension if type not clear
-    ext = file_path.lower().split('.')[-1] if '.' in file_path else ""
-
-    # PDF and documents - use OCR endpoint
-    if file_type in ["pdf", "application/pdf"] or ext == "pdf":
-        return "ocr"
-
-    # Images - use vision models
-    if file_type.startswith("image/") or ext in ["jpg", "jpeg", "png", "webp", "gif"]:
-        return "vision"
-
-    # Default to vision for unknown types
-    return "vision"
-
-
-def _get_default_ocr_model(provider_name: str, strategy: str) -> str:
-    """Get default OCR/Vision model for a provider."""
-    if strategy == "ocr":
-        # OCR endpoint models
-        defaults = {
-            "mistral": "mistral/mistral-ocr-latest",
-            "azure": "azure_ai/ocr",
-            "google": "vertex_ai/ocr",
-            "vertex_ai": "vertex_ai/ocr",
-        }
-    else:
-        # Vision models
-        defaults = {
-            "mistral": "mistral/mistral-small-latest",
-            "openai": "gpt-4o",
-            "google": "gemini/gemini-2.5-flash",
-            "gemini": "gemini/gemini-2.5-flash",
-            "anthropic": "claude-3-5-sonnet-20241022",
-        }
-
-    return defaults.get(provider_name.lower())
-
-
-async def _process_with_ocr_endpoint(
-    file_path: str,
-    model: str,
-    api_key: str,
-    pages: str = None,
-    include_images: bool = False
-):
-    """Process document using LiteLLM OCR endpoint."""
-    import base64
-
-    import litellm
-
-    try:
-        # Read file and encode to base64
-        with open(file_path, "rb") as f:
-            file_content = f.read()
-            base64_content = base64.b64encode(file_content).decode('utf-8')
-
-        # Determine document type
-        ext = file_path.lower().split('.')[-1]
-        mime_type = "application/pdf" if ext == "pdf" else f"image/{ext}"
-
-        # Build OCR parameters
-        ocr_params = {
-            "model": model,
-            "document": {
-                "type": "document_url",
-                "document_url": f"data:{mime_type};base64,{base64_content}"
-            },
-            "api_key": api_key
-        }
-
-        # Add optional parameters
-        if pages:
-            # Convert comma-separated string to list of integers
-            page_list = [int(p.strip()) for p in pages.split(",")]
-            ocr_params["pages"] = page_list
-
-        if include_images:
-            ocr_params["include_image_base64"] = True
-
-        # Call LiteLLM OCR
-        response = await asyncio.to_thread(
-            litellm.ocr,
-            **ocr_params
-        )
-
-        # Extract text from all pages
-        all_text = []
-        pages_data = []
-
-        for page in response.pages:
-            all_text.append(f"## Page {page.index + 1}\n\n{page.markdown}")
-            pages_data.append({
-                "index": page.index,
-                "text": page.markdown,
-                "dimensions": page.dimensions if hasattr(page, 'dimensions') else None
-            })
-
-        combined_text = "\n\n".join(all_text)
-
-        return {
-            "success": True,
-            "text": combined_text,
-            "pages": pages_data
-        }
-
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-async def _process_with_vision_model(
-    file_path: str,
-    model: str,
-    api_key: str
-):
-    """Process image/PDF using LiteLLM vision models."""
-    import base64
-
-    import litellm
-    from huf.ai.providers.litellm import _litellm_completion_with_retry
-
-    try:
-        # Read file and encode to base64
-        with open(file_path, "rb") as f:
-            file_content = f.read()
-            base64_image = base64.b64encode(file_content).decode('utf-8')
-
-        # Determine image type
-        ext = file_path.lower().split('.')[-1]
-
-        if ext == "pdf":
-            mime_type = "application/pdf"
-        elif ext in ["jpg", "jpeg", "png", "webp", "gif"]:
-            mime_type = f"image/{ext}"
-        else:
-            mime_type = "image/jpeg"
-
-        # Build vision request
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Extract all text from this image. Preserve formatting, structure, and layout. Return the text in markdown format."
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": f"data:{mime_type};base64,{base64_image}"
-                    }
-                ]
-            }
-        ]
-
-        # Call LiteLLM completion with vision (with transient-error retry)
-        response = await _litellm_completion_with_retry(
-            model=model,
-            messages=messages,
-            api_key=api_key,
-            timeout=180
-        )
-
-        extracted_text = response.choices[0].message.content
-
-        return {
-            "success": True,
-            "text": extracted_text,
-            "pages": [{"index": 0, "text": extracted_text}]
-        }
-
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
 @frappe.whitelist()
 async def handle_ocr_document(
     file_id: str = None,
@@ -1890,194 +1715,57 @@ async def handle_ocr_document(
     **kwargs
 ):
     """
-    Extract text from documents and images using OCR.
-    
-    Intelligently routes to:
-    - LiteLLM OCR endpoint for PDFs (multi-page documents)
-    - Vision models for single images (better context understanding)
-    
+    Extract text from documents and images using OCR / document parsing.
+
+    Supports any common document or image format:
+    - PDFs: LiteLLM OCR endpoint, local PDF extraction, or vision models (provider dependent)
+    - Images (jpg, png, webp, gif, etc.): vision models
+    - Office/text documents (docx, txt, md, html, csv, json, etc.): local extractors
+
     Args:
-        file_id: File document ID (preferred)
-        file_url: File URL/path (alternative)
+        file_id: File document ID (preferred and most reliable)
+        file_url: File URL/path (alternative; supports /files/ and /private/files/)
         pages: Comma-separated page numbers (e.g., "0,1,2") - PDFs only
-        include_images: Extract images from document (PDFs only)
-        model: Optional model override
+        include_images: Extract embedded images as base64 - PDFs with OCR endpoint only
+        model: Optional OCR/vision model override
         agent_name: Automatically passed from context
         conversation_id: Automatically passed from context
-    
+
     Returns:
         dict: {
             "success": bool,
             "text": str,              # Extracted text in markdown
-            "pages": list,            # Page-by-page breakdown (PDFs)
-            "strategy": str,          # "ocr" or "vision"
+            "pages": list,            # Page-by-page breakdown
+            "strategy": str,          # "ocr", "vision", "local", "local_pdf"
             "file_id": str,
+            "file_name": str,
+            "file_hash": str,         # SHA-256 of processed file (for verification)
             "message_id": str,
-            "model": str
+            "model": str,
+            "error": str
         }
     """
     try:
-        # Get agent configuration from context
+        from huf.ai.ocr_engine import extract_document
+
         if not agent_name:
             return {"success": False, "error": "Agent name not found in context"}
 
         agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
 
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
+        result = await extract_document(
+            agent_doc=agent_doc,
+            file_id=file_id,
+            file_url=file_url,
+            pages=pages,
+            include_images=bool(include_images),
+            model=model,
+            create_message=True,
+            conversation_id=conversation_id,
+            agent_run_id=kwargs.get("agent_run_id"),
+        )
 
-        # Get file
-        file_doc = None
-        if file_id:
-            try:
-                file_doc = frappe.get_doc("File", file_id)
-            except Exception as e:
-                return {"success": False, "error": f"File not found: {e!s}"}
-        elif file_url:
-            # Try to find file by URL
-            file_path = file_url.replace("/files/", "")
-            file_doc = frappe.db.get_value("File",
-                {"file_url": file_url},
-                ["name"], as_dict=True)
-            if file_doc:
-                file_doc = frappe.get_doc("File", file_doc.name)
-            else:
-                # Try by file name
-                file_doc = frappe.db.get_value("File",
-                    {"file_name": file_path},
-                    ["name"], as_dict=True)
-                if file_doc:
-                    file_doc = frappe.get_doc("File", file_doc.name)
-
-        if not file_doc:
-            return {"success": False, "error": "Either file_id or file_url is required"}
-
-        # Get file path and type
-        file_path = file_doc.get_full_path()
-        file_type = file_doc.file_type or ""
-        file_name = file_doc.file_name or ""
-
-        # Determine strategy
-        strategy = _determine_ocr_strategy(file_path, file_type)
-
-        # Override strategy for providers that support vision-based PDF reading:
-        # Use Vision (Multimodal) for PDFs instead of OCR endpoints.
-        provider_name = provider_doc.provider_name.lower()
-        if provider_name in ["google", "gemini", "openai", "anthropic"] and (strategy == "ocr" or file_path.lower().endswith(".pdf")):
-            strategy = "vision"
-
-        # Determine model
-        ocr_model = None
-        if model:
-            ocr_model = model
-        else:
-            provider_name = provider_doc.provider_name.lower()
-            ocr_model = _get_default_ocr_model(provider_name, strategy)
-
-        if not ocr_model:
-            return {
-                "success": False,
-                "error": f"OCR not supported for provider '{provider_doc.provider_name}' with strategy '{strategy}'. Please provide a model parameter."
-            }
-
-        # Normalize model name
-        from huf.ai.providers.litellm import _normalize_model_name
-        normalized_model = _normalize_model_name(ocr_model, agent_doc.provider)
-
-        # Route to appropriate method
-        if strategy == "ocr":
-            result = await _process_with_ocr_endpoint(
-                file_path, normalized_model, api_key, pages, include_images
-            )
-        else:
-            result = await _process_with_vision_model(
-                file_path, normalized_model, api_key
-            )
-
-        if not result["success"]:
-            return result
-
-        extracted_text = result["text"]
-        pages_data = result.get("pages", [])
-
-        # Create Agent Message with extracted text
-        message_doc = None
-        if conversation_id:
-            try:
-                # Get conversation_index
-                last_index = frappe.db.sql("""
-                    SELECT MAX(conversation_index) as last_index
-                    FROM `tabAgent Message`
-                    WHERE conversation = %s
-                """, (conversation_id,), as_dict=1)
-
-                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-
-                # Create Agent Message
-                message_doc = frappe.get_doc({
-                    "doctype": "Agent Message",
-                    "conversation": conversation_id,
-                    "role": "agent",
-                    "content": f"Extracted text from {file_name}:\n\n{extracted_text[:500]}{'...' if len(extracted_text) > 500 else ''}",
-                    "kind": "Message",
-                    "agent": agent_name,
-                    "provider": agent_doc.provider,
-                    "model": agent_doc.model,
-                    "agent_run": kwargs.get("agent_run_id"),
-                    "conversation_index": conversation_index,
-                    "is_agent_message": 1,
-                    "user": "Agent"
-                })
-                message_doc.insert(ignore_permissions=True)
-
-                # Update conversation
-                frappe.db.sql("""
-                    UPDATE `tabAgent Conversation`
-                    SET total_messages = %s, last_activity = NOW()
-                    WHERE name = %s
-                """, (conversation_index, conversation_id))
-
-                frappe.db.commit()
-
-                # Emit socket event
-                try:
-                    frappe.publish_realtime(
-                        event=f'conversation:{conversation_id}',
-                        message={
-                            "type": "new_agent_message",
-                            "conversation_id": conversation_id,
-                            "message_id": message_doc.name,
-                            "kind": "Message",
-                            "content": message_doc.content,
-                            "conversation_index": conversation_index,
-                        },
-                        user=frappe.session.user,
-                        after_commit=False
-                    )
-                except Exception as e:
-                    frappe.log_error(
-                        f"Error emitting new_agent_message socket event: {e!s}",
-                        "OCR Socket Event"
-                    )
-            except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for OCR: {e!s}",
-                    "OCR Message Creation"
-                )
-
-        return {
-            "success": True,
-            "text": extracted_text,
-            "pages": pages_data,
-            "strategy": strategy,
-            "file_id": file_doc.name,
-            "file_name": file_name,
-            "message_id": message_doc.name if message_doc else None,
-            "model": normalized_model,
-            "conversation_id": conversation_id
-        }
+        return result.as_dict()
 
     except Exception as e:
         frappe.log_error(f"OCR error: {e!s}", "OCR Tool")
