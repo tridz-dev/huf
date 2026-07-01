@@ -5,9 +5,23 @@ This module provides a unified interface for knowledge storage backends.
 Supported: SQLite FTS (keyword search), SQLite Vec (vector search), ChromaDB (vector search)
 """
 
+import re
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+
+_SAFE_KEY = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+def validate_filter_key(key: str) -> str:
+	"""Validate a metadata filter key to prevent SQL injection.
+	
+	Filter keys are interpolated directly into SQL (e.g. json_extract(c.metadata, '$.{key}')).
+	Only alphanumeric characters and underscores are allowed.
+	"""
+	if not _SAFE_KEY.match(key or ""):
+		raise ValueError(f"Invalid filter key: {key!r}")
+	return key
 
 
 @dataclass

@@ -223,6 +223,7 @@ class SQLiteVecBackend(KnowledgeBackend):
 			api_base=embed_config.get("api_base"),
 		)
 
+		from . import validate_filter_key
 		filter_clauses = []
 		params: List[Any] = [json.dumps(query_embedding), top_k]
 
@@ -232,6 +233,7 @@ class SQLiteVecBackend(KnowledgeBackend):
 				if key in top_level_cols:
 					filter_clauses.append(f"c.{key} = ?")
 				else:
+					validate_filter_key(key)
 					filter_clauses.append(f"json_extract(c.metadata, '$.{key}') = ?")
 				params.append(value)
 

@@ -249,6 +249,7 @@ class SQLiteHybridBackend(KnowledgeBackend):
 			return []
 
 		from huf.ai.knowledge.embedding import get_embedding, resolve_embedding_config
+		from . import validate_filter_key
 
 		embed_config = resolve_embedding_config(self.knowledge_source)
 		query_embedding = get_embedding(
@@ -261,8 +262,7 @@ class SQLiteHybridBackend(KnowledgeBackend):
 		safe_fts_query = self._escape_fts_query(query)
 
 		filter_clauses = []
-		# Parameters for vector match, fts match, and k limit
-		params: List[Any] = [json.dumps(query_embedding), safe_fts_query, top_k]
+		filter_values: List[Any] = []
 
 		if filters:
 			top_level_cols = ["input_id", "input_type", "source_title", "chunk_index"]
@@ -271,14 +271,20 @@ class SQLiteHybridBackend(KnowledgeBackend):
 					filter_clauses.append(f"c.{key} = ?")
 				else:
 					# Phase 5: Advanced metadata filtering via JSON extract
+					validate_filter_key(key)
 					filter_clauses.append(f"json_extract(c.metadata, '$.{key}') = ?")
-				params.append(value)
+				filter_values.append(value)
 
 		where_sql = ""
 		if filter_clauses:
 			where_sql = " AND " + " AND ".join(filter_clauses)
 
+		# Param order must match SQL placeholder order:
+		# vec MATCH ? → fts MATCH ? → {filter ?s} → LIMIT ?
+		params: List[Any] = [json.dumps(query_embedding), safe_fts_query] + filter_values + [top_k]
+
 		# Reciprocal Rank Fusion (RRF) Implementation
+		# Use LEFT JOIN + UNION to emulate FULL OUTER JOIN (compatible with SQLite < 3.39)
 		# k = 60 is standard for RRF
 		with self._get_connection(readonly=True) as conn:
 			cursor = conn.execute(
@@ -298,11 +304,19 @@ class SQLiteHybridBackend(KnowledgeBackend):
 					LIMIT 100
 				),
 				combined AS (
+					-- Rows present in vec_results (with or without fts match)
 					SELECT 
-						COALESCE(v.rowid, f.rowid) as rowid,
+						v.rowid as rowid,
 						COALESCE(1.0 / (60 + v.rnk), 0.0) + COALESCE(1.0 / (60 + f.rnk), 0.0) as rrf_score
 					FROM vec_results v
-					FULL OUTER JOIN fts_results f ON v.rowid = f.rowid
+					LEFT JOIN fts_results f ON v.rowid = f.rowid
+					UNION
+					-- Rows only in fts_results (not in vec_results)
+					SELECT 
+						f.rowid as rowid,
+						(1.0 / (60 + f.rnk)) as rrf_score
+					FROM fts_results f
+					WHERE f.rowid NOT IN (SELECT rowid FROM vec_results)
 				)
 				SELECT
 					c.chunk_id,
