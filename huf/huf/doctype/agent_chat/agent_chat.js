@@ -43,8 +43,8 @@ function render_chat_ui(frm) {
                     
                     <!-- Audio Input -->
                     <input type="file" accept="audio/*" class="audio-file-input" style="display:none;" />
-                    <!-- Doc/Image Input -->
-                    <input type="file" accept="image/*,application/pdf" class="doc-file-input" style="display:none;" />
+                    <!-- Document/Image Input -->
+                    <input type="file" accept="image/*,.pdf,.docx,.doc,.txt,.md,.html,.htm,.csv,.json,.xml,.log,.xlsx,.xls,.pptx,.ppt" class="doc-file-input" style="display:none;" />
                     
                     <button class="doc-upload-btn btn" title="Upload Document/Image">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
