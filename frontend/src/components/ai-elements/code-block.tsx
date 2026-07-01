@@ -36,12 +36,22 @@ const CodeBlockContext = createContext<CodeBlockContextType>({
   code: "",
 });
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function highlightCode(code: string, language: string) {
   const grammar = Prism.languages[language] || Prism.languages.javascript || Prism.languages.markup;
   try {
     return Prism.highlight(code, grammar, language);
   } catch (e) {
-    return code;
+    // Escape the raw code so it is rendered as text, not HTML.
+    return escapeHtml(code);
   }
 }
 
@@ -71,7 +81,7 @@ export const CodeBlock = ({
         <div className="relative">
           <pre
             className={`language-${language} overflow-x-auto p-4 text-sm font-mono m-0`}
-            dangerouslySetInnerHTML={{ __html: html || code }}
+            dangerouslySetInnerHTML={{ __html: html }}
           />
           {children && (
             <div className="absolute top-2 right-2 flex items-center gap-2">

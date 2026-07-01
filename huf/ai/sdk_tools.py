@@ -1370,19 +1370,38 @@ def handle_load_conversation_data(conversation_id: str = None, **kwargs):
         return {"success": False, "error": str(e)}
 
 
+ALLOWED_RESULT_CONTEXT_DOCTYPES = frozenset({
+    "Agent Tool Call",
+    "Agent Context Artifact",
+})
+
+
 def handle_get_result_context(reference_doctype: str, reference_name: str, **kwargs):
     """
     Get the full result context of an out-of-band message reference by its handle.
+
+    Only explicitly allow-listed DocTypes are exposed, and the caller must have
+    Frappe read permission on the requested document.
     """
     try:
         if not reference_doctype or not reference_name:
             return {"success": False, "error": "Both reference_doctype and reference_name are required."}
-            
+
+        if reference_doctype not in ALLOWED_RESULT_CONTEXT_DOCTYPES:
+            frappe.log_error(
+                f"get_result_context rejected for {reference_doctype}",
+                "Security: get_result_context allow-list"
+            )
+            return {"success": False, "error": f"DocType '{reference_doctype}' is not accessible via get_result_context."}
+
         if not frappe.db.exists(reference_doctype, reference_name):
             return {"success": False, "error": f"Document {reference_name} of type {reference_doctype} not found."}
-            
+
         doc = frappe.get_doc(reference_doctype, reference_name)
-        
+
+        if not frappe.has_permission(reference_doctype, "read", doc=doc):
+            return {"success": False, "error": f"You do not have permission to read {reference_doctype} {reference_name}."}
+
         # If it's Agent Tool Call, retrieve the tool_result
         if reference_doctype == "Agent Tool Call":
             return {
@@ -1393,9 +1412,9 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
                 "tool_result": doc.tool_result,
                 "error_message": doc.error_message
             }
-        
+
         # If it's Agent Context Artifact, retrieve payload
-        elif reference_doctype == "Agent Context Artifact":
+        if reference_doctype == "Agent Context Artifact":
             return {
                 "success": True,
                 "artifact_type": doc.artifact_type,
@@ -1404,9 +1423,9 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
                 "reference_doctype": doc.reference_doctype,
                 "reference_name": doc.reference_name
             }
-            
-        # For other general doctypes, retrieve as dict
-        return {"success": True, "result": doc.as_dict()}
+
+        # Unreachable because of the allow-list, but kept as defense-in-depth.
+        return {"success": False, "error": "Unexpected DocType."}
     except Exception as e:
         frappe.log_error(f"Error in handle_get_result_context: {str(e)}", "SDK Functions Debug")
         return {"success": False, "error": str(e)}
@@ -1809,15 +1828,6 @@ def _get_default_tts_model(provider_name: str) -> str:
 
     return defaults.get(provider_name.lower())
 
-_TTS_ENV_VAR_PROVIDERS: dict[str, str] = {
-    "google":     "GEMINI_API_KEY",
-    "gemini":     "GEMINI_API_KEY",
-    "vertex_ai":  "GEMINI_API_KEY",
-    "elevenlabs": "ELEVENLABS_API_KEY",
-    "minimax":    "MINIMAX_API_KEY",
-}
-
-
 def _resolve_tts_config(
     agent_doc,
     tool_model: str | None = None,
@@ -2123,11 +2133,7 @@ async def handle_generate_audio(
             "voice": voice,
         }
 
-        if provider_name in _TTS_ENV_VAR_PROVIDERS:
-            import os
-            os.environ[_TTS_ENV_VAR_PROVIDERS[provider_name]] = api_key
-        else:
-            speech_params["api_key"] = api_key
+        speech_params["api_key"] = api_key
 
         if speed != 1.0:
             speech_params["speed"] = speed
@@ -2407,10 +2413,6 @@ async def handle_transcribe_audio(
                     ]
                 }
             ]
-
-            import os
-            env_var = _TTS_ENV_VAR_PROVIDERS.get(provider_name, "GEMINI_API_KEY")
-            os.environ[env_var] = api_key
 
             try:
                 response = await asyncio.to_thread(

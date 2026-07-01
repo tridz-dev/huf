@@ -196,11 +196,41 @@ def delete_document(doctype: str, document_id: str):
 
 def delete_documents(doctype: str, document_ids: list):
 	"""
-	Delete documents from the database
+	Delete documents from the database.
+
+	Each document is checked individually for delete permission. Unauthorized
+	or failed deletions are reported without stopping the batch.
 	"""
+	deleted = []
+	failed = []
+
 	for document_id in document_ids:
-		frappe.delete_doc(doctype, document_id)
-	return {"document_ids": document_ids, "message": "Documents deleted", "doctype": doctype}
+		if not frappe.has_permission(doctype, "delete", doc=document_id):
+			failed.append({
+				"name": document_id,
+				"error": f"You do not have delete permission on {doctype} {document_id}",
+				"permission_denied": True,
+			})
+			continue
+
+		try:
+			frappe.delete_doc(doctype, document_id)
+			deleted.append(document_id)
+		except frappe.PermissionError as e:
+			failed.append({
+				"name": document_id,
+				"error": str(e),
+				"permission_denied": True,
+			})
+		except Exception as e:
+			failed.append({"name": document_id, "error": str(e)})
+
+	return {
+		"doctype": doctype,
+		"deleted": deleted,
+		"failed": failed,
+		"message": f"Deleted {len(deleted)} of {len(document_ids)} documents.",
+	}
 
 
 def submit_document(doctype: str, document_id: str):

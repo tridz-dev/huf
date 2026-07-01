@@ -260,6 +260,11 @@ class AgentManager:
                 4. MEMORY CHECK: Check 'load_conversation_data' before asking redundant questions.
             """
 
+        if self.agent_doc.allow_chat:
+            from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
+
+            instructions += CHART_ARTIFACT_INSTRUCTIONS
+
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
             top_p=self.agent_doc.top_p
