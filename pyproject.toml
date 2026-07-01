@@ -19,6 +19,8 @@ dependencies = [
     "llama-index-vector-stores-chroma",
     "pypdf",
     "python-docx",
+    "openpyxl",
+    "python-pptx",
     "beautifulsoup4",
     "aiohttp",
 ]
