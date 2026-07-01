@@ -93,6 +93,7 @@ import {
 
 import { cn } from '@/lib/utils';
 import { extractJsxAndBindings } from '@/utils/jsxPreambleParser';
+import { fixCommonJsxMistakes } from '@/utils/jsxPostProcessor';
 
 // Common colors for charts
 const CHART_COLORS = [
@@ -317,6 +318,9 @@ const availableComponents: Record<string, ComponentType<any>> = {
 	
 	// Basic HTML-like components
 	Fragment: ({ children }: { children: ReactNode }) => <>{children}</>,
+	div: (({ children, ...props }) => <div {...props}>{children}</div>) as ComponentType<any>,
+	span: (({ children, ...props }) => <span {...props}>{children}</span>) as ComponentType<any>,
+	p: (({ children, ...props }) => <p {...props}>{children}</p>) as ComponentType<any>,
 };
 
 // Default bindings available in JSX
@@ -461,6 +465,8 @@ export function JSXPreviewContent({
 		[jsx]
 	);
 
+	const fixedJsx = useMemo(() => fixCommonJsxMistakes(jsxBody), [jsxBody]);
+
 	if (error) {
 		return renderError ? (
 			<>{renderError(error)}</>
@@ -469,8 +475,8 @@ export function JSXPreviewContent({
 		);
 	}
 
-	// Process JSX for streaming (after preamble extraction)
-	const processedJsx = isStreaming ? autoCompleteJsx(jsxBody) : jsxBody;
+	// Process JSX for streaming (after preamble extraction and syntax fixes)
+	const processedJsx = isStreaming ? autoCompleteJsx(fixedJsx) : fixedJsx;
 
 	if (!processedJsx || !processedJsx.trim()) {
 		return (
