@@ -141,6 +141,14 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
 def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model, include_doc=False, initiating_user=None, channel_id=None, prompt_field=None, file_attachments=None):
     """Background worker to run an agent when a Doc Event triggers"""
 
+    # Background jobs may not carry the original session user. Run the agent as the
+    # user who triggered the document event so permission checks pass.
+    if initiating_user and frappe.session.user != initiating_user:
+        try:
+            frappe.set_user(initiating_user)
+        except Exception:
+            pass
+
     custom_instruction = None
     if prompt_field:
         custom_instruction = doc.get(prompt_field)
@@ -231,14 +239,18 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
             for f_url in file_urls_to_process:
                 if any(f["file_url"] == f_url for f in files):
                     continue
-                
+
                 filename = f_url.split("/")[-1]
                 is_image = 0
                 mime_type, _ = mimetypes.guess_type(filename)
                 if mime_type and mime_type.startswith("image/"):
                     is_image = 1
-                
+
+                # Resolve File document ID to avoid ambiguous file_name lookups later
+                file_id = frappe.db.get_value("File", {"file_url": f_url}, "name")
+
                 files.append({
+                    "file_id": file_id,
                     "filename": filename,
                     "file_url": f_url,
                     "is_image": is_image
@@ -257,12 +269,16 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                     if not file.get("is_image"):
                         ocr_result = loop.run_until_complete(
                             handle_ocr_document(
+                                file_id=file.get("file_id"),
                                 file_url=file["file_url"],
                                 agent_name=agent_name
                             )
                         )
                         if ocr_result and ocr_result.get("success"):
-                            extracted_content.append(f"--- File: {file['filename']} ---\n{ocr_result.get('text')}\n")
+                            extracted_content.append(
+                                f"--- File: {file['filename']} (hash: {ocr_result.get('file_hash', 'n/a')}) ---\n"
+                                f"{ocr_result.get('text')}\n"
+                            )
             except Exception as e:
                 frappe.log_error(f"Doc Event OCR Error: {str(e)}", "Agent Hooks OCR")
             finally:
