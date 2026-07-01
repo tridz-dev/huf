@@ -639,15 +639,31 @@ Huf comes with several built-in tools that are automatically registered during i
 
 #### 1. ocr_document
 
-Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents.
+Extract text from documents and images using OCR / document parsing. Supports PDFs, images, scanned documents, Word/Excel/PowerPoint documents (DOCX/XLSX/PPTX), plain text files (TXT/MD/CSV/JSON/XML/LOG), and HTML. The tool automatically picks the best extraction strategy:
+
+-   **LiteLLM OCR endpoint** for PDFs on providers that expose one (Mistral, Azure, Google/Gemini/Vertex). This is the standard, preferred path.
+-   **Local PDF extraction** via `pypdf`/`PyPDF2` for providers without a LiteLLM OCR endpoint (e.g. OpenAI, Anthropic) or when the OCR endpoint fails.
+-   **Local extractors** for text-based documents (DOCX, XLSX, PPTX, TXT, MD, HTML, CSV, JSON, XML, LOG) — fast and no API cost.
+-   **Vision models** for images only.
+
+To avoid processing a stale file, always pass `file_id` (the Frappe File document name) when possible. `file_url` is supported as a fallback and resolves both `/files/` and `/private/files/` paths, choosing the newest file record when multiple files share the same name. The result includes a `file_hash` (SHA-256) so callers can verify the processed file.
 
 -   **Function**: `huf.ai.sdk_tools.handle_ocr_document`
+-   **Core engine**: `huf.ai.ocr_engine.extract_document`
 -   **Parameters**:
     -   `file_id` (string): File document ID from Frappe (preferred).
-    -   `file_url` (string): File URL/path (alternative).
+    -   `file_url` (string): File URL/path (alternative). Example: `/files/invoice.pdf` or `/private/files/invoice.pdf`.
     -   `pages` (string): Comma-separated page numbers to process (e.g., '0,1,2'). Leave empty for all pages. Only for PDFs.
-    -   `include_images` (boolean): Extract images from document as base64. Only for PDFs with OCR endpoint.
-    -   `model` (string): Optional OCR/Vision model override.
+    -   `include_images` (boolean): Extract embedded images as base64. Only for PDFs with OCR endpoint.
+    -   `model` (string): Optional OCR/vision model override.
+-   **Returns**:
+    -   `success` (boolean)
+    -   `text` (string): Extracted text in markdown.
+    -   `pages` (list): Page-by-page breakdown.
+    -   `strategy` (string): One of `local`, `local_pdf`, `ocr`, `vision`.
+    -   `file_id`, `file_name`, `file_hash` (string): Processed file metadata.
+    -   `model` (string): Model actually used.
+    -   `error` (string): Error message if `success` is false.
 
 #### 2. generate_image
 
@@ -1813,7 +1829,7 @@ Agents are equipped with key-value variable memory stored inside the `conversati
 
 The Document Event trigger system in HUF supports file ingestion and automatic text extraction:
 - **Trigger Attachments**: Defined in `file_attachments` on `Agent Trigger`, linking fields or child table fields containing files.
-- **OCR Processing**: At execution time, the hooks verify if files are images or text. Non-image files (PDFs, docs) are processed via `handle_ocr_document` to extract text, which is appended to the agent's prompt under `Attached File Content (OCR Extracted)`. Images are passed directly for multimodal vision models.
+- **OCR Processing**: At execution time, the hooks resolve each attached file to its Frappe `File` record (to avoid stale lookups) and route non-image files through `handle_ocr_document`. The extracted text is appended to the agent's prompt under `Attached File Content (OCR Extracted)` and includes a content hash for verification. Images are passed directly for multimodal vision models. Supported document types include PDF, DOCX, XLSX, PPTX, TXT, MD, HTML, CSV, JSON, XML, LOG, and common image formats.
 
 ### 6. Audio, STT, and Dedicated Models
 
