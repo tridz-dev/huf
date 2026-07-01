@@ -8,6 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { UseFormReturn } from 'react-hook-form';
 import type { AgentFormValues } from './types';
 import type { AIModel } from '@/types/agent.types';
+import { Combobox } from '@/components/ui/combobox';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Plus } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import type { AgentPromptOption } from './PromptTemplateSection';
 import {
 	MODEL_MODALITY_IMAGE,
 	MODEL_MODALITY_TTS,
@@ -29,17 +35,32 @@ import {
 interface AdvancedTabProps {
   form: UseFormReturn<AgentFormValues>;
   allModels: AIModel[];
+  summaryPromptOptions: AgentPromptOption[];
+  loadingSummaryPrompts?: boolean;
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
   return (model.modalities || '').trim() === required;
 }
 
-export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
+export function AdvancedTab({
+  form,
+  allModels,
+  summaryPromptOptions,
+  loadingSummaryPrompts = false,
+}: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
 	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
 	const sttModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_STT));
 	const contextStrategy = form.watch('context_strategy');
+	const summaryPromptMode = form.watch('summary_prompt_mode');
+	const navigate = useNavigate();
+	const location = useLocation();
+	const selectedSummaryPrompt = summaryPromptOptions.find((option) => option.value === form.watch('summary_prompt_template'));
+	const summaryPromptComboboxOptions = summaryPromptOptions.map((option) => ({
+		...option,
+		subtitle: option.version ? `Version ${option.version}` : undefined,
+	}));
 
   return (
     <div className="space-y-6">
@@ -136,6 +157,170 @@ export function AdvancedTab({ form, allModels }: AdvancedTabProps) {
                   </FormControl>
                   <FormDescription>
                     Optional lightweight model used only when compressing older messages (Summarize strategy).
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {contextStrategy === 'Summarize' && (
+            <FormField
+              control={form.control}
+              name="summary_prompt_mode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Summary Prompt Mode</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select mode" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Local">Local</SelectItem>
+                      <SelectItem value="Template">Template</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Use a local summary prompt or link to a reusable Agent Summary Prompt template.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {contextStrategy === 'Summarize' && summaryPromptMode === 'Template' && (
+            <FormField
+              control={form.control}
+              name="summary_prompt_template"
+              render={({ field }) => (
+                <FormItem id="summary-prompt-template-field" className="sm:col-span-2">
+                  <FormLabel>Summary Prompt Template</FormLabel>
+                  <div className="flex items-center gap-2">
+                    <FormControl>
+                      <Combobox
+                        options={summaryPromptComboboxOptions}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder={loadingSummaryPrompts ? 'Loading templates...' : 'Select an Agent Summary Prompt'}
+                        disabled={loadingSummaryPrompts}
+                        searchPlaceholder="Search summary templates..."
+                        emptyText="No active summary prompt templates found."
+                        linkTo={linkRoutes.agentSummaryPrompt}
+                      />
+                    </FormControl>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        (() => {
+                          const returnTo = `${location.pathname}#advanced`;
+                          const selectedPromptField = 'summary_prompt_template';
+                          try {
+                            localStorage.setItem(
+                              'agentSummaryPromptCreateReturnTo',
+                              JSON.stringify({ returnTo, selectedPromptField })
+                            );
+                          } catch {
+                            // ignore storage failures
+                          }
+                          navigate('/summary-prompts/new', {
+                            state: {
+                              returnTo,
+                              selectedPromptField,
+                              showTab: 'advanced',
+                            },
+                          });
+                        })()
+                      }
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      New
+                    </Button>
+                  </div>
+                  <FormDescription>
+                    Pick an active summary prompt template from the shared library. The backend records the current
+                    version when you attach it.
+                  </FormDescription>
+                  {selectedSummaryPrompt && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      {selectedSummaryPrompt.version ? (
+                        <Badge variant="outline">Current template v{selectedSummaryPrompt.version}</Badge>
+                      ) : null}
+                      {selectedSummaryPrompt.isLatest ? <Badge variant="secondary">Latest</Badge> : null}
+                      {selectedSummaryPrompt.description ? (
+                        <span className="text-sm text-muted-foreground">{selectedSummaryPrompt.description}</span>
+                      ) : null}
+                    </div>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {contextStrategy === 'Summarize' && summaryPromptMode === 'Template' && (
+            <FormField
+              control={form.control}
+              name="summary_prompt_version_locked"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                  <div className="space-y-0.5 pr-4">
+                    <FormLabel className="text-base">Lock Summary Prompt Version</FormLabel>
+                    <FormDescription>
+                      Keep this agent pinned to the attached summary prompt version instead of following the
+                      latest template updates automatically.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          )}
+
+          {contextStrategy === 'Summarize' && summaryPromptMode === 'Template' && (
+            <FormField
+              control={form.control}
+              name="summary_template_version_at_attach"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Summary Attached at Version</FormLabel>
+                  <FormControl>
+                    <div className="flex min-h-10 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+                      {field.value ?? 'Will be recorded after template attachment'}
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    Read-only snapshot captured by the backend when a summary prompt template is attached or changed.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {contextStrategy === 'Summarize' && summaryPromptMode === 'Local' && (
+            <FormField
+              control={form.control}
+              name="summary_prompt"
+              render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                  <FormLabel>Summary Prompt</FormLabel>
+                  <FormControl>
+                    <textarea
+                      className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      placeholder="Enter the prompt used to summarize conversation history..."
+                      {...field}
+                      value={field.value || ''}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Custom prompt for summarizing conversation history. Use {'{summary_data}'} as a placeholder
+                    for the JSON input containing existing_summary and new_messages_to_incorporate.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

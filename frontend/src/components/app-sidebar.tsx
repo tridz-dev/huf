@@ -47,6 +47,12 @@ const allNavItems = [
     capability: "agent.use",
   },
   {
+    title: "Agent Summary Prompts",
+    url: "/summary-prompts",
+    icon: ScrollText,
+    capability: "agent.use",
+  },
+  {
     title: "Executions",
     url: "/executions",
     icon: Zap,
