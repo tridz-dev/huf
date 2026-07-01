@@ -41,6 +41,7 @@
   "prompt_version_locked",
   "template_version_at_attach",
   "copied_from_prompt",
+  "copied_from_summary_prompt",
   "instruction_section",
   "instructions",
   "tools_and_mcp_tab",
@@ -54,49 +55,50 @@
   "context_settings_section",
   "context_strategy",
   "history_limit",
-  "column_break_9svx",
+  "column_break_jrdw",
   "max_turns",
-  "summarisation_engine_section",
+  "summarization_engine_section",
   "summary_ratio",
-  "column_break_5vwr",
+  "summary_prompt_mode",
+  "summary_prompt",
+  "summary_prompt_template",
+  "summary_template_version_at_attach",
+  "column_break_summary_prompt",
   "summary_model",
+  "summary_prompt_version_locked",
   "knowledge_and_tools_section",
   "max_knowledge_tokens",
-  "column_break_3mhl",
+  "column_break_mwgf",
   "max_context_chars",
   "agent_behaviors_section",
   "autonaming_of_conversation_title",
   "enable_conversation_data",
-  "column_break_g3a9",
+  "column_break_fl05",
   "inject_conversation_data",
   "conversation_data_api_permission",
   "image_generation_section",
   "image_generation_model",
   "audio_generation_section",
   "tts_model",
-  "column_break_mwgf",
+  "column_break_dq1z",
   "tts_voice",
   "audio_transcription_section",
   "stt_model",
   "huf_ui_section",
   "agent_color",
-  "column_break_fl05",
+  "column_break_g3a9",
   "show_tool_execution_details",
   "permissions_tab",
   "allow_guest",
   "allowed_users",
-  "column_break_dq1z",
+  "column_break_3mhl",
   "allowed_roles",
   "metadata_tab",
   "last_run",
   "total_run",
   "seeding_metadata_section",
   "source_app",
-  "source_file",
-  "column_break_summary_model",
-  "compression_instructions_section",
-  "use_external_template",
-  "summary_local_prompt"
+  "source_file"
  ],
  "fields": [
   {
@@ -189,6 +191,15 @@
    "hidden": 1,
    "label": "Copied From Prompt",
    "options": "Agent Prompt",
+   "read_only": 1
+  },
+  {
+   "description": "If this agent was detached from a summary prompt template, this tracks the original summary prompt for traceability.",
+   "fieldname": "copied_from_summary_prompt",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Copied From Summary Prompt",
+   "options": "Agent Summary Prompt",
    "read_only": 1
   },
   {
@@ -346,6 +357,49 @@
    "fieldtype": "Link",
    "label": "Summary Model",
    "options": "AI Model"
+  },
+  {
+   "default": "Local",
+   "description": "How this agent's conversation summary prompt is managed. 'Local' uses the summary prompt field below. 'Template' links to a reusable Agent Summary Prompt.",
+   "fieldname": "summary_prompt_mode",
+   "fieldtype": "Select",
+   "label": "Summary Prompt Mode",
+   "options": "Local\nTemplate"
+  },
+  {
+   "depends_on": "eval:doc.summary_prompt_mode=='Template'",
+   "description": "Link to a reusable summary prompt template from the Agent Summary Prompt library for conversation summarization.",
+   "fieldname": "summary_prompt_template",
+   "fieldtype": "Link",
+   "label": "Summary Prompt Template",
+   "options": "Agent Summary Prompt"
+  },
+  {
+   "fieldname": "column_break_summary_prompt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.summary_prompt_mode=='Template'",
+   "description": "If checked, this agent will stay on the summary prompt version it was attached to, ignoring newer versions.",
+   "fieldname": "summary_prompt_version_locked",
+   "fieldtype": "Check",
+   "label": "Lock Summary Prompt Version"
+  },
+  {
+   "depends_on": "eval:doc.summary_prompt_mode=='Template'",
+   "description": "The version number of the summary prompt template when it was attached to this agent.",
+   "fieldname": "summary_template_version_at_attach",
+   "fieldtype": "Int",
+   "label": "Summary Attached at Version",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.summary_prompt_mode=='Local'",
+   "description": "The prompt used to summarize conversation history when the context strategy is 'Summarize'. Leave blank to use the system default.",
+   "fieldname": "summary_prompt",
+   "fieldtype": "Code",
+   "label": "Summary Prompt"
   },
   {
    "default": "4000",
@@ -622,47 +676,20 @@
    "read_only": 1
   },
   {
-   "fieldname": "column_break_9svx",
+   "fieldname": "column_break_jrdw",
    "fieldtype": "Column Break"
   },
   {
    "description": "Configure the model and prompts used to compress conversation history. These settings are only active when using the Summarize strategy.",
-   "fieldname": "summarisation_engine_section",
+   "fieldname": "summarization_engine_section",
    "fieldtype": "Section Break",
-   "label": "Summarisation Engine"
-  },
-  {
-   "fieldname": "column_break_summary_model",
-   "fieldtype": "Column Break"
-  },
-  {
-   "description": "Control how the model summarizes the context.",
-   "fieldname": "compression_instructions_section",
-   "fieldtype": "Section Break",
-   "label": "Compression Instructions"
-  },
-  {
-   "default": "0",
-   "fieldname": "use_external_template",
-   "fieldtype": "Check",
-   "label": "Use external template"
-  },
-  {
-   "depends_on": "eval:doc.use_external_template==0",
-   "description": "Write custom instructions here... e.g., 'Summarize the conversation but strictly retain all mentioned dates and action items.'",
-   "fieldname": "summary_local_prompt",
-   "fieldtype": "Code",
-   "label": "LOCAL PROMPT"
-  },
-  {
-   "fieldname": "column_break_5vwr",
-   "fieldtype": "Column Break"
+   "label": "Summarization Engine"
   },
   {
    "description": "Set strict boundaries on how much external data the agent can pull into its context window at once.",
    "fieldname": "knowledge_and_tools_section",
    "fieldtype": "Section Break",
-   "label": "Knowledge and Tools"
+   "label": "Knowledge And Tools"
   },
   {
    "description": "Enable or disable background tasks and auxiliary capabilities related to context management.",
@@ -690,7 +717,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-24 16:17:35.737691",
+ "modified": "2026-06-30 18:59:30.376271",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

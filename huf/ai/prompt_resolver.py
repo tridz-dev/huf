@@ -15,6 +15,16 @@ import frappe
 from frappe import _
 
 
+DEFAULT_SUMMARY_PROMPT = """You are maintaining a rolling summary of a conversation.
+
+1. Update the 'Existing Summary' by incorporating the 'New Messages'.
+2. Keep the summary concise but retain key details (names, decisions, technical context).
+3. Output ONLY the new summary text.
+
+Data:
+{summary_data}"""
+
+
 def resolve_prompt(agent_doc):
 	"""Return the effective prompt text for an agent.
 
@@ -43,6 +53,29 @@ def resolve_prompt(agent_doc):
 	return agent_doc.instructions or None
 
 
+def resolve_summary_prompt(agent_doc):
+	"""Return the effective summary prompt text for an agent.
+
+	Follows the same Template / Local / version-lock semantics as
+	``resolve_prompt``.  When no custom summary prompt is configured,
+	returns the system default template.
+
+	Args:
+		agent_doc: A loaded Agent document.
+
+	Returns:
+		str: The resolved summary prompt body.
+	"""
+	mode = getattr(agent_doc, "summary_prompt_mode", None) or "Local"
+
+	if mode == "Template":
+		return _resolve_summary_template_prompt(agent_doc)
+
+	# Local mode — use the agent's local summary prompt if provided,
+	# otherwise fall back to the system default.
+	return agent_doc.summary_prompt or DEFAULT_SUMMARY_PROMPT
+
+
 def _resolve_template_prompt(agent_doc):
 	"""Resolve prompt from the linked Agent Prompt template."""
 	prompt_name = agent_doc.agent_prompt
@@ -57,7 +90,28 @@ def _resolve_template_prompt(agent_doc):
 	return prompt_body or agent_doc.instructions or None
 
 
-def _get_locked_version_body(prompt_name, target_version):
+def _resolve_summary_template_prompt(agent_doc):
+	"""Resolve summary prompt from the linked Agent Summary Prompt template."""
+	prompt_name = agent_doc.summary_prompt_template
+	if not prompt_name:
+		return agent_doc.summary_prompt or DEFAULT_SUMMARY_PROMPT
+
+	if (
+		getattr(agent_doc, "summary_prompt_version_locked", 0)
+		and getattr(agent_doc, "summary_template_version_at_attach", None)
+	):
+		body = _get_locked_version_body(
+			prompt_name,
+			agent_doc.summary_template_version_at_attach,
+			doctype="Agent Summary Prompt",
+		)
+		return body or agent_doc.summary_prompt or DEFAULT_SUMMARY_PROMPT
+
+	prompt_body = frappe.db.get_value("Agent Summary Prompt", prompt_name, "prompt_body")
+	return prompt_body or agent_doc.summary_prompt or DEFAULT_SUMMARY_PROMPT
+
+
+def _get_locked_version_body(prompt_name, target_version, doctype="Agent Prompt"):
 	"""Walk the version lineage to find the exact version body.
 
 	The ``prompt_name`` on the Agent may point to the latest version.
@@ -67,7 +121,7 @@ def _get_locked_version_body(prompt_name, target_version):
 	"""
 	# First check if the linked prompt itself is the right version
 	prompt_doc_data = frappe.db.get_value(
-		"Agent Prompt", prompt_name, ["prompt_body", "version", "prompt_group"], as_dict=True
+		doctype, prompt_name, ["prompt_body", "version", "prompt_group"], as_dict=True
 	)
 	if not prompt_doc_data:
 		return None
@@ -78,7 +132,7 @@ def _get_locked_version_body(prompt_name, target_version):
 	# Look up the correct version within the same prompt group
 	if prompt_doc_data.prompt_group:
 		match = frappe.db.get_value(
-			"Agent Prompt",
+			doctype,
 			{"prompt_group": prompt_doc_data.prompt_group, "version": target_version},
 			"prompt_body",
 		)
