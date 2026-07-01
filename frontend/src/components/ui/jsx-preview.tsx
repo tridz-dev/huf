@@ -16,6 +16,7 @@ import {
 	useState,
 	useCallback,
 	useRef,
+	useMemo,
 	type ReactNode,
 	type ComponentType,
 } from 'react';
@@ -91,6 +92,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { extractJsxAndBindings } from '@/utils/jsxPreambleParser';
 
 // Common colors for charts
 const CHART_COLORS = [
@@ -454,6 +456,11 @@ export function JSXPreviewContent({
 }: JSXPreviewContentProps) {
 	const { jsx, isStreaming, error, setError } = useJSXPreview();
 
+	const { jsx: jsxBody, bindings: extractedBindings } = useMemo(
+		() => extractJsxAndBindings(jsx),
+		[jsx]
+	);
+
 	if (error) {
 		return renderError ? (
 			<>{renderError(error)}</>
@@ -462,8 +469,8 @@ export function JSXPreviewContent({
 		);
 	}
 
-	// Process JSX for streaming
-	const processedJsx = isStreaming ? autoCompleteJsx(jsx) : jsx;
+	// Process JSX for streaming (after preamble extraction)
+	const processedJsx = isStreaming ? autoCompleteJsx(jsxBody) : jsxBody;
 
 	if (!processedJsx || !processedJsx.trim()) {
 		return (
@@ -478,7 +485,7 @@ export function JSXPreviewContent({
 			<JsxParser
 				jsx={processedJsx}
 				components={{ ...availableComponents, ...components }}
-				bindings={{ ...defaultBindings, ...bindings }}
+				bindings={{ ...defaultBindings, ...extractedBindings, ...bindings }}
 				renderError={(err) => {
 					setError(new Error(err.error));
 					return null;
