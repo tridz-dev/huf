@@ -36,6 +36,69 @@ frappe.ui.form.on("MCP Server", {
                 });
             }, __("Actions"));
         }
+
+        // OAuth: show Connect/Disconnect and status badge
+        if (frm.doc.auth_type === "oauth" && !frm.is_new()) {
+            frm.events.render_oauth_status(frm);
+        }
+    },
+
+    render_oauth_status(frm) {
+        const status = frm.doc.oauth_status || "Not Connected";
+        const colours = { "Connected": "green", "Token Expired": "orange", "Not Connected": "red" };
+        const colour = colours[status] || "red";
+        frm.get_field("oauth_status").$wrapper
+            .find(".control-value")
+            .html(`<span class="indicator-pill ${colour}">${status}</span>`);
+    },
+
+    oauth_connect_button(frm) {
+        if (!frm.doc.oauth_authorization_endpoint || !frm.doc.oauth_token_endpoint || !frm.doc.oauth_client_id) {
+            frappe.msgprint({
+                title: __("Missing Configuration"),
+                message: __("Please fill in Authorization Endpoint, Token Endpoint, and Client ID before connecting."),
+                indicator: "orange"
+            });
+            return;
+        }
+        frappe.call({
+            method: "huf.ai.mcp_oauth.start_oauth_flow",
+            args: { server_name: frm.doc.name },
+            freeze: true,
+            freeze_message: __("Preparing OAuth flow…"),
+            callback(r) {
+                if (r.message && r.message.auth_url) {
+                    const win = window.open(r.message.auth_url, "_blank", "width=600,height=700");
+                    // Poll for the window to close, then refresh form
+                    const poll = setInterval(() => {
+                        if (!win || win.closed) {
+                            clearInterval(poll);
+                            frm.reload_doc();
+                        }
+                    }, 1000);
+                } else {
+                    frappe.msgprint({ title: __("Error"), message: r.message?.error || __("Could not start OAuth flow."), indicator: "red" });
+                }
+            }
+        });
+    },
+
+    oauth_disconnect_button(frm) {
+        frappe.confirm(__("Disconnect this MCP Server from OAuth? Tokens will be deleted."), () => {
+            frappe.call({
+                method: "huf.ai.mcp_oauth.disconnect_oauth",
+                args: { server_name: frm.doc.name },
+                freeze: true,
+                callback(r) {
+                    if (r.message?.success) {
+                        frappe.show_alert({ message: __("Disconnected"), indicator: "green" });
+                        frm.reload_doc();
+                    } else {
+                        frappe.msgprint({ title: __("Error"), message: r.message?.error, indicator: "red" });
+                    }
+                }
+            });
+        });
     },
 
     sync_tools_button(frm) {

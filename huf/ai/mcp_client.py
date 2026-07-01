@@ -294,6 +294,21 @@ async def _execute_mcp_tool_http(
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, json=payload, headers=headers) as response:
                 if response.status != 200:
+                    if response.status == 401 and mcp_server.auth_type == "oauth":
+                        # Token may have just expired; refresh and retry once
+                        from huf.ai.mcp_oauth import refresh_oauth_token
+                        try:
+                            refresh_oauth_token(mcp_server.name)
+                            headers = _build_mcp_headers(mcp_server)
+                            async with session.post(url, json=payload, headers=headers) as retry_response:
+                                if retry_response.status == 200:
+                                    result = await retry_response.json()
+                                    if "error" in result:
+                                        return {"error": result["error"].get("message", "Unknown MCP error"), "success": False}
+                                    return result.get("result", result)
+                        except Exception as refresh_exc:
+                            frappe.log_error(f"OAuth retry failed: {refresh_exc}", "MCP OAuth Retry")
+                        return {"error": "OAuth token invalid or expired. Reconnect via the MCP Server form.", "success": False}
                     error_text = await response.text()
                     return {
                         "error": f"MCP server returned status {response.status}: {error_text}",
@@ -334,13 +349,23 @@ def _build_mcp_headers(mcp_server) -> dict:
     
     # Add authentication header
     if mcp_server.auth_type and mcp_server.auth_type != "none":
-        auth_value = mcp_server.get_password("auth_header_value")
-        
-        if auth_value and mcp_server.auth_header_name:
-            if mcp_server.auth_type == "bearer_token":
-                headers[mcp_server.auth_header_name] = f"Bearer {auth_value}"
-            else:
-                headers[mcp_server.auth_header_name] = auth_value
+        if mcp_server.auth_type == "oauth":
+            # Delegate to mcp_oauth — handles proactive refresh
+            from huf.ai.mcp_oauth import get_valid_access_token
+            try:
+                token = get_valid_access_token(mcp_server.name)
+                headers["Authorization"] = f"Bearer {token}"
+            except ValueError as exc:
+                frappe.log_error(str(exc), "MCP OAuth Header Error")
+                # Proceed without auth header; server will return 401
+        else:
+            auth_value = mcp_server.get_password("auth_header_value")
+            
+            if auth_value and mcp_server.auth_header_name:
+                if mcp_server.auth_type == "bearer_token":
+                    headers[mcp_server.auth_header_name] = f"Bearer {auth_value}"
+                else:
+                    headers[mcp_server.auth_header_name] = auth_value
     
     # Add custom headers
     if mcp_server.custom_headers:

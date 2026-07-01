@@ -70,6 +70,7 @@ website_route_rules = [
         "from_route": "/huf/docs/<path:app_path>", 
         "to_route": "huf/docs/<path:app_path>"
     },
+    {"from_route": "/mcp-oauth-callback", "to_route": "mcp_oauth_callback"},
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
 ]
 
@@ -237,7 +238,8 @@ scheduler_events = {
         ]
     },
     "hourly": [
-        "huf.ai.mcp_client.auto_sync_mcp_server_tools"
+        "huf.ai.mcp_client.auto_sync_mcp_server_tools",
+        "huf.ai.mcp_oauth.auto_refresh_oauth_tokens"
     ]
 }
 
