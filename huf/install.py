@@ -119,13 +119,10 @@ def after_migrate():
 		remove_deprecated_gemini_audio_tools()
 		create_ocr_document_tool()
 		create_flow_tools()
-<<<<<<< feature/scoped-memory-implementation
 		create_memory_tools()
 		create_default_memory_policies()
-=======
 		register_integration_services()
 		sync_tool_types()
->>>>>>> develop
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
 		frappe.log_error(
