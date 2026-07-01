@@ -1405,7 +1405,11 @@ async def run_agent_stream(
         # Legacy: Lock to current model
         frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
         
-        history = conv_manager.get_conversation_history(conversation.name, limit=1000)
+        context_strategy = agent_doc.context_strategy or "Summarize"
+        history_limit = agent_doc.history_limit or 20
+        fetch_limit = history_limit + 10
+        
+        history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
         
         # Create Agent Run document
         run_doc = frappe.get_doc({
@@ -1459,37 +1463,15 @@ async def run_agent_stream(
             "_tool_call_message_map": tool_call_message_map,
         }
         
-        # SUMMARIZATION LOGIC
-        to_summarize, remaining = conv_manager.summarize_conversation(
-            conversation.name, history, resolved_provider, resolved_model, agent_name, limit=20
-        )
+        stored_summary = conv_manager.get_stored_summary(conversation.name)
+        
+        if context_strategy == "Summarize":
+            if stored_summary:
+                history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
+        elif context_strategy == "FIFO":
+            if len(history) > history_limit:
+                history = safe_history_slice(history, history_limit)
 
-        if to_summarize:
-            try:
-                from huf.ai.prompt_resolver import resolve_summary_prompt
-
-                summary_agent = Agent(
-                    name=agent_name, 
-                    instructions="You are a helpful assistant. Summarize the provided conversation history concisely, capturing key decisions and context.",
-                    model=agent.model,
-                    tools=[],
-                    model_settings=agent.model_settings,
-                )
-                
-                summary_input = json.dumps(to_summarize, indent=2)
-                summary_prompt_template = resolve_summary_prompt(agent_doc)
-                summary_prompt = summary_prompt_template.format(
-                    summary_data=summary_input
-                )
-
-                sum_context = {"agent_name": agent_name, "is_system_op": True}
-                sum_result = await RunProvider.run(summary_agent, summary_prompt, resolved_provider, resolved_model, sum_context)
-                summary_text = getattr(sum_result, "final_output", "Could not generate summary.")
-
-                history = [{"role": "system", "content": f"Previous Conversation Summary: {summary_text}"}] + remaining
-            except Exception as e:
-                frappe.log_error(f"Summarization failed: {str(e)}", "Agent Summarization Error")
-                pass
 
         if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:
              try:
@@ -1757,6 +1739,19 @@ async def run_agent_stream(
                                 )
                     except Exception:
                         pass
+                        
+                    if context_strategy == "Summarize":
+                        if len(history) >= history_limit:
+                            frappe.enqueue(
+                                "huf.ai.agent_integration.run_background_summarization",
+                                queue="default", 
+                                conversation_name=conversation.name,
+                                agent_name=agent_name
+                            )
+                            
+                    # Force commit to ensure enqueued background jobs are pushed to Redis
+                    # This is necessary because streaming generators might not trigger the standard Frappe auto-commit lifecycle.
+                    safe_commit()
                     
                     # Normalize complete event to match REST run_agent_sync response shape
                     chunk["conversation_id"] = conversation.name
