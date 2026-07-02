@@ -20,7 +20,9 @@ services:
   mariadb:
     container_name: fasterdocker-run-mariadb
     image: ${MARIADB_IMAGE:-mariadb:10.11.11}
-    platform: ${DOCKER_PLATFORM:-linux/arm64}
+    # Use host platform by default; override with DOCKER_PLATFORM if you need to
+    # pin to a specific architecture (e.g. linux/amd64 or linux/arm64).
+    platform: ${DOCKER_PLATFORM:-}
     # Wait for the frappe service to copy the physical snapshot before starting.
     entrypoint:
       - /bin/bash
@@ -54,6 +56,7 @@ services:
   frappe:
     container_name: fasterdocker-run-frappe
     image: ${HUF_DEMO_IMAGE:-ghcr.io/tridz-dev/huf-demo}:${HUF_IMAGE_TAG:-latest}
+    platform: ${DOCKER_PLATFORM:-}
     environment:
       SITE_NAME: ${SITE_NAME:-huf.localhost}
       FRAPPE_SITE_NAME_HEADER: ${SITE_NAME:-huf.localhost}

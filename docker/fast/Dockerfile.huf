@@ -45,6 +45,9 @@ RUN ./env/bin/pip install --no-cache-dir -e ./apps/huf
 # the final bench environment before assets are built.
 RUN ./env/bin/pip install --no-cache-dir "click~=8.3.1"
 
+# Register HUF in sites/apps.txt so bench build creates the assets symlink.
+RUN ls -1 apps > sites/apps.txt
+
 # Build bench assets (CSS/JS bundles) so sites/assets contains Frappe + HUF assets.
 RUN bench build
 

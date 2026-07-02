@@ -7,7 +7,7 @@ services:
   mariadb:
     container_name: fasterdocker-build-demo-mariadb
     image: ${MARIADB_IMAGE:-mariadb:10.11.11}
-    platform: ${DOCKER_PLATFORM:-linux/arm64}
+    platform: ${DOCKER_PLATFORM:-}
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -28,6 +28,7 @@ services:
   seed-restore:
     container_name: fasterdocker-build-demo-seed-restore
     image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    platform: ${DOCKER_PLATFORM:-}
     environment:
       SEED_STRATEGY: sql
       SITE_NAME: ${SITE_NAME:-huf.localhost}

@@ -222,15 +222,19 @@ These capabilities are in final development and will ship soon:
 
 ### Try with Docker
 
+The fastest way to try HUF is the single-image demo:
+
 ```bash
 git clone https://github.com/tridz-dev/huf.git
 cd huf/docker
-docker compose up
+docker compose up --wait
 ```
 
-Open http://localhost:8000 and login:
+Open http://localhost:8000/huf and login:
 - **User:** Administrator
-- **Password:** admin
+- **Password:** fasterdocker-admin
+
+The compose file pulls a prebuilt multi-arch image (`ghcr.io/tridz-dev/huf-demo`) that works on both Apple Silicon (`linux/arm64`) and Intel/AMD Linux (`linux/amd64`). While the image is being published you can build it locally; see [`docker/fast/README.md`](docker/fast/README.md).
 
 ### Install on Existing Bench
 
