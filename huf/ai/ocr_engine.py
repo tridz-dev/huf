@@ -399,9 +399,9 @@ async def _process_with_vision_model(
 
         content_list = [{"type": "text", "text": prompt_text}]
 
-        if ext == "pdf" and "gpt" in model.lower():
-            # OpenAI does not natively support base64 PDF in the vision endpoint.
-            # We must render the PDF pages as images.
+        if ext == "pdf":
+            # Native base64 PDF support is inconsistent across providers.
+            # We universally render the PDF pages as images to ensure perfect extraction.
             try:
                 import pypdfium2 as pdfium
                 import io
@@ -414,16 +414,25 @@ async def _process_with_vision_model(
                     buffer = io.BytesIO()
                     pil_image.save(buffer, format="JPEG", quality=85)
                     b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-                    content_list.append({"type": "image_url", "image_url": f"data:image/jpeg;base64,{b64}"})
+                    content_list.append({
+                        "type": "image_url", 
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+                    })
             except ImportError:
                 # Fallback if pypdfium2 somehow isn't available
                 with open(file_path, "rb") as f:
                     base64_doc = base64.b64encode(f.read()).decode("utf-8")
-                content_list.append({"type": "image_url", "image_url": f"data:{mime_type};base64,{base64_doc}"})
+                content_list.append({
+                    "type": "image_url", 
+                    "image_url": {"url": f"data:{mime_type};base64,{base64_doc}"}
+                })
         else:
             with open(file_path, "rb") as f:
                 base64_image = base64.b64encode(f.read()).decode("utf-8")
-            content_list.append({"type": "image_url", "image_url": f"data:{mime_type};base64,{base64_image}"})
+            content_list.append({
+                "type": "image_url", 
+                "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}
+            })
 
         messages = [
             {
