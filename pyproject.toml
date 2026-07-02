@@ -23,6 +23,7 @@ dependencies = [
     "python-pptx",
     "beautifulsoup4",
     "aiohttp",
+    "pypdfium2>=4.26.0",
 ]
 
 [build-system]
