@@ -234,6 +234,8 @@ Open http://localhost:8000/huf and login:
 - **User:** Administrator
 - **Password:** fasterdocker-admin
 
+The image ships with a disabled **Demo Assistant** agent and a **Demo Assistant Prompt**. Enable the agent and add your OpenAI API key to start chatting.
+
 The compose file pulls a prebuilt multi-arch image (`ghcr.io/tridz-dev/huf-demo`) that works on both Apple Silicon (`linux/arm64`) and Intel/AMD Linux (`linux/amd64`). While the image is being published you can build it locally; see [`docker/fast/README.md`](docker/fast/README.md).
 
 ### Install on Existing Bench
