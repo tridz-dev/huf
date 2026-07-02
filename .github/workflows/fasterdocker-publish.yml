@@ -1,0 +1,105 @@
+name: Publish FasterDocker images
+
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      huf_image_tag:
+        description: 'Tag for HUF app and seed images (e.g. 06655cf or v0.11.0)'
+        required: true
+        default: 'latest'
+      frappe_version:
+        description: 'Frappe version tag for the runtime image'
+        required: true
+        default: '16.25.0'
+
+env:
+  REGISTRY: ghcr.io
+  FRAPPE_RUNTIME_IMAGE: ghcr.io/tridz-dev/huf-frappe-runtime
+  HUF_APP_IMAGE: ghcr.io/tridz-dev/huf-app
+  SEED_IMAGE: ghcr.io/tridz-dev/huf-site-seed-sql
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tags
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "huf_tag=${{ github.event.inputs.huf_image_tag }}" >> "$GITHUB_OUTPUT"
+            echo "frappe_tag=${{ github.event.inputs.frappe_version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "huf_tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            echo "frappe_tag=16.25.0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push Frappe runtime image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/fast/Dockerfile.runtime
+          push: true
+          tags: |
+            ${{ env.FRAPPE_RUNTIME_IMAGE }}:${{ steps.tags.outputs.frappe_tag }}
+            ${{ env.FRAPPE_RUNTIME_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push HUF app image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/fast/Dockerfile.huf
+          push: true
+          build-args: |
+            FRAPPE_RUNTIME_IMAGE=${{ env.FRAPPE_RUNTIME_IMAGE }}:${{ steps.tags.outputs.frappe_tag }}
+          tags: |
+            ${{ env.HUF_APP_IMAGE }}:${{ steps.tags.outputs.huf_tag }}
+            ${{ env.HUF_APP_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The seed image needs generated artifacts from the bake compose.
+      # Start bake services, export the SQL dump and sites folder, then build the seed image.
+      - name: Bake site seed artifacts
+        env:
+          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+          HUF_APP_IMAGE: ${{ env.HUF_APP_IMAGE }}
+        run: |
+          set -euo pipefail
+          export COMPOSE_PROJECT_NAME=fasterdocker-bake
+          docker compose -f docker/compose.bake.yml up --abort-on-container-exit --exit-code-from site-baker
+          ./docker/fast/bake-seed.sh sql
+
+      - name: Build and push SQL seed image
+        uses: docker/build-push-action@v5
+        with:
+          context: docker/fast/.bake-output
+          file: docker/fast/Dockerfile.seed
+          push: true
+          tags: |
+            ${{ env.SEED_IMAGE }}:${{ steps.tags.outputs.huf_tag }}
+            ${{ env.SEED_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
