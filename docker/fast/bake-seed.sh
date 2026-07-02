@@ -44,7 +44,6 @@ SEED_IMAGE="huf-site-seed-${STRATEGY}:${HUF_IMAGE_TAG}"
 log "Building seed image: ${SEED_IMAGE}"
 
 docker build \
-  --build-arg BASE_IMAGE="${MARIADB_IMAGE}" \
   -f "${SCRIPT_DIR}/Dockerfile.seed" \
   -t "${SEED_IMAGE}" \
   "${SCRIPT_DIR}"

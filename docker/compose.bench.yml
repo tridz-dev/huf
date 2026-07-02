@@ -2,6 +2,8 @@
 #
 # One HUF/Frappe container running `bench start`, plus MariaDB and a single
 # Redis. No nginx frontend, no split web/worker/socketio/scheduler containers.
+# The HUF app image bundles the SQL seed, so the bench container self-seeds on
+# first boot — no separate seed-init image or container is required.
 #
 # Usage:
 #   export HUF_IMAGE_TAG=$(git rev-parse --short HEAD)
@@ -70,27 +72,6 @@ services:
     networks:
       - fasterdocker
 
-  seed-init:
-    container_name: fasterdocker-seed-init
-    image: ${SEED_IMAGE:-huf-site-seed-sql}:${HUF_IMAGE_TAG:-latest}
-    environment:
-      SEED_STRATEGY: sql
-      SITE_NAME: ${SITE_NAME:-huf.localhost}
-      DB_HOST: mariadb
-      DB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-fasterdocker-mysql-root}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-fasterdocker-admin}
-      SEED_SOURCE_DIR: /seed
-      SEED_TARGET_DIR: /seed-target
-    volumes:
-      - sites:/seed-target/sites
-    depends_on:
-      mariadb:
-        condition: service_healthy
-    networks:
-      - fasterdocker
-    command: ["/seed/init-seed.sh"]
-    restart: "no"
-
   bench:
     container_name: fasterdocker-run-bench
     image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
@@ -99,17 +80,10 @@ services:
     volumes:
       - sites:/home/frappe/frappe-bench/sites
       - logs:/home/frappe/frappe-bench/logs
-      # Mount the bench-start helper so the existing prebuilt image can be used
-      # without a rebuild. When the image is rebuilt with the helper copied in,
-      # this bind is harmless because the same file is present at the same path.
-      # Path is relative to this compose file (docker/compose.bench.yml).
-      - ./fast/bench-start.sh:/usr/local/bin/bench-start.sh:ro
     ports:
       - "${BENCH_WEB_PUBLISH_PORT:-8000}:8000"
       - "${BENCH_SOCKETIO_PUBLISH_PORT:-9000}:9000"
     depends_on:
-      seed-init:
-        condition: service_completed_successfully
       mariadb:
         condition: service_healthy
       redis:

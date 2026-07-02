@@ -5,19 +5,21 @@
 #
 # This image contains Frappe framework v16.25.0, bench, Python and Node
 # toolchains, and the production process layout. It does not contain HUF.
+#
+# NOTE: Chromium and wkhtmltopdf are intentionally omitted to keep the image
+# small for demo/trial use. PDF/print generation will not work.
 
 ARG PYTHON_VERSION=3.14.2
 ARG DEBIAN_BASE=bookworm
 FROM python:${PYTHON_VERSION}-slim-${DEBIAN_BASE} AS base
 
-ARG WKHTMLTOPDF_VERSION=0.12.6.1-3
-ARG WKHTMLTOPDF_DISTRO=bookworm
-ARG INSTALL_CHROMIUM=true
 ARG NODE_VERSION=24.13.0
 
 ENV NVM_DIR=/home/frappe/.nvm
 ENV PATH=${NVM_DIR}/versions/node/v${NODE_VERSION}/bin/:${PATH}
 
+# Runtime packages only. Build dependencies are added in the builder stage and
+# are not present in the final runtime image.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
       curl \
@@ -30,19 +32,16 @@ RUN apt-get update \
       libharfbuzz0b \
       libpangoft2-1.0-0 \
       libpangocairo-1.0-0 \
-      restic \
-      gpg \
       mariadb-client \
+      redis-tools \
       less \
-      libpq-dev \
-      postgresql-client \
       wait-for-it \
       jq \
       media-types \
-      # Build dependencies for pysqlite3 on ARM64 and for Python wheels
-      build-essential \
-      libsqlite3-dev \
-      pkg-config \
+      # Runtime libraries needed by compiled Python wheels (e.g. pysqlite3)
+      libsqlite3-0 \
+      libpq5 \
+      libmariadb3 \
     && mkdir -p ${NVM_DIR} \
     && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash \
     && . ${NVM_DIR}/nvm.sh \
@@ -54,19 +53,9 @@ RUN apt-get update \
     && rm -rf ${NVM_DIR}/.cache \
     && echo 'export NVM_DIR="/home/frappe/.nvm"' >>/home/frappe/.bashrc \
     && echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >>/home/frappe/.bashrc \
-    && if [ "$(uname -m)" = "aarch64" ]; then export ARCH=arm64; fi \
-    && if [ "$(uname -m)" = "x86_64" ]; then export ARCH=amd64; fi \
-    && downloaded_file=wkhtmltox_${WKHTMLTOPDF_VERSION}.${WKHTMLTOPDF_DISTRO}_${ARCH}.deb \
-    && curl -sLO https://github.com/wkhtmltopdf/packaging/releases/download/$WKHTMLTOPDF_VERSION/$downloaded_file \
-    && apt-get install -y ./$downloaded_file \
-    && rm $downloaded_file \
-    && if [ "$INSTALL_CHROMIUM" != "false" ]; then \
-         DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y chromium-headless-shell; \
-       fi \
     && rm -rf /var/lib/apt/lists/* \
     && rm -fr /etc/nginx/sites-enabled/default \
     && mkdir -p /etc/nginx/snippets \
-    && pip3 install --no-cache-dir frappe-bench \
     && sed -i '/user www-data/d' /etc/nginx/nginx.conf \
     && sed -i 's|access_log /var/log/nginx/access.log;|access_log /tmp/nginx/access.log;|' /etc/nginx/nginx.conf \
     && sed -i 's|error_log /var/log/nginx/error.log;|error_log /tmp/nginx/error.log notice;|' /etc/nginx/nginx.conf \
@@ -83,6 +72,9 @@ RUN apt-get update \
     && chown -R frappe:frappe /var/log/nginx \
     && chown -R frappe:frappe /var/lib/nginx
 
+# Install bench CLI at runtime (pure-Python wheel, no build tools required).
+RUN pip3 install --no-cache-dir frappe-bench
+
 # Nginx template and entrypoint for the frontend service
 COPY docker/fast/resources/nginx/nginx-template.conf /templates/nginx/frappe.conf.template
 COPY docker/fast/resources/nginx/nginx-entrypoint.sh /usr/local/bin/nginx-entrypoint.sh
@@ -91,8 +83,13 @@ RUN chmod 755 /usr/local/bin/nginx-entrypoint.sh
 
 FROM base AS builder
 
+# Build-only packages. These are used to compile Python wheels and run
+# `bench init`; they do not end up in the final image.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+      build-essential \
+      libsqlite3-dev \
+      pkg-config \
       wget \
       libcairo2-dev \
       libpango1.0-dev \
@@ -106,12 +103,8 @@ RUN apt-get update \
       libsasl2-dev \
       libtiff5-dev \
       libwebp-dev \
-      redis-tools \
-      rlwrap \
-      tk8.6-dev \
       cron \
       gcc \
-      build-essential \
       libbz2-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -131,7 +124,14 @@ RUN bench init \
       /home/frappe/frappe-bench \
     && cd /home/frappe/frappe-bench \
     && echo "{}" > sites/common_site_config.json \
-    && find apps -mindepth 1 -path "*/.git" | xargs rm -fr
+    && find apps -mindepth 1 -path "*/.git" -prune -exec rm -rf {} + \
+    && rm -rf /home/frappe/.cache \
+    && rm -rf /home/frappe/frappe-bench/.cache
+
+# Cleanup as root because bench/yarn may have left root-owned files under /tmp.
+USER root
+RUN rm -rf /tmp/* /var/tmp/*
+USER frappe
 
 FROM base AS runtime
 

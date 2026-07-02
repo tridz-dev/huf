@@ -15,6 +15,8 @@ frontend/node_modules
 .env
 .env.example
 .DS_Store
-# Exclude bake output but keep the directory placeholder.
-docker/fast/.bake-output/*
-!docker/fast/.bake-output/.gitkeep
+# Bake output is small (~500 KB) and is bundled into the huf-app image so the
+# container can self-seed on first boot. Keep it in the Docker context; git
+# ignores it via .gitignore.
+# docker/fast/.bake-output/*
+# !docker/fast/.bake-output/.gitkeep

@@ -4,6 +4,10 @@
 # Contains apps/huf with valid Frappe app layout, built frontend assets,
 # installed Python dependencies, and the HUF-specific runtime entrypoints.
 # No install/build/network operations happen at runtime.
+#
+# This image also bundles the SQL seed (dump + sites folder) so a single
+# `docker compose up` can restore the seeded site on first boot without a
+# separate seed-init container or image.
 
 ARG FRAPPE_RUNTIME_IMAGE=huf-frappe-runtime:16.25.0
 FROM ${FRAPPE_RUNTIME_IMAGE} AS builder
@@ -21,6 +25,10 @@ COPY --chown=frappe:frappe frontend ./apps/huf/frontend
 # Copy bake helper into the image so compose.bake.yml can use it without
 # mounting host paths.
 COPY --chown=frappe:frappe docker/fast/bake-site.sh /usr/local/bin/bake-site.sh
+
+# Copy seed artifacts into the image so the app container can self-seed on
+# first boot. The .bake-output directory is produced by bake-seed.sh.
+COPY --chown=frappe:frappe docker/fast/.bake-output /seed
 
 # Build frontend assets.
 RUN cd apps/huf/frontend \
@@ -47,7 +55,8 @@ RUN rm -rf apps/huf/frontend/node_modules \
            apps/huf/.git \
            apps/frappe/.git \
            .cache \
-           /tmp/*
+           /tmp/* \
+           /home/frappe/.cache
 USER frappe
 
 FROM ${FRAPPE_RUNTIME_IMAGE} AS huf-app
@@ -67,6 +76,12 @@ COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench/sites/assets
 # Bring in the bake helper.
 COPY --from=builder --chown=frappe:frappe /usr/local/bin/bake-site.sh /usr/local/bin/bake-site.sh
 RUN chmod 755 /usr/local/bin/bake-site.sh
+
+# Bring in the bundled seed artifacts and init script so the app container can
+# self-seed on first boot.
+COPY --from=builder --chown=frappe:frappe /seed /seed
+COPY --chown=frappe:frappe docker/fast/init-seed.sh /usr/local/bin/init-seed.sh
+RUN chmod 755 /usr/local/bin/init-seed.sh
 
 # Ensure sites/apps.txt lists the installed apps.
 RUN ls -1 apps > sites/apps.txt

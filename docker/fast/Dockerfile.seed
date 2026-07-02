@@ -1,26 +1,19 @@
 # FasterDocker seed image.
 #
-# The seed image is based on the exact MariaDB image used at bake time so that
-# the mysql client and server binaries match. It contains the pre-baked seed
-# artifacts under /seed:
-#
-#   /seed/sql/huf.sql.gz           (SQL dump strategy)
-#   /seed/mysql-data/              (physical snapshot strategy)
-#   /seed/sites/                   (sites folder)
-#   /seed/metadata.json            (version/digest/architecture info)
+# The seed image is intentionally minimal. It only needs the MariaDB client
+# (to restore the SQL dump) and jq (to read site_config.json/metadata.json).
+# It does NOT need the full MariaDB server, which would add ~400 MB.
 #
 # Build context is docker/fast/ (the directory containing this Dockerfile).
 # Seed data is read from ./.bake-output/.
 
-ARG BASE_IMAGE=mariadb:10.11.11
-FROM ${BASE_IMAGE}
+FROM alpine:latest
 
-# Install jq so init-seed.sh can read site_config.json and metadata.json.
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y jq \
-    && rm -rf /var/lib/apt/lists/*
+# Install mariadb-client and jq. These are small and sufficient for restoring
+# the SQL dump and reading JSON metadata.
+RUN apk add --no-cache mariadb-client jq bash gzip
 
-COPY --chown=mysql:mysql .bake-output/ /seed/
+COPY --chown=1000:1000 .bake-output/ /seed/
 COPY --chmod=755 init-seed.sh physical-mariadb-entrypoint.sh /seed/
 
 # Verify expected layout at build time.

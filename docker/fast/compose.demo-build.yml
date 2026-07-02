@@ -1,0 +1,48 @@
+# Temporary compose environment used by build-demo.sh to generate a physical
+# MariaDB data snapshot. Not intended for end-user use.
+
+name: fasterdocker-build
+
+services:
+  mariadb:
+    container_name: fasterdocker-build-demo-mariadb
+    image: ${MARIADB_IMAGE:-mariadb:10.11.11}
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-fasterdocker-mysql-root}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 20s
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  seed-restore:
+    container_name: fasterdocker-build-demo-seed-restore
+    image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      SEED_STRATEGY: sql
+      SITE_NAME: ${SITE_NAME:-huf.localhost}
+      DB_HOST: mariadb
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-fasterdocker-mysql-root}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-fasterdocker-admin}
+      SEED_SOURCE_DIR: /seed
+      SEED_TARGET_DIR: /tmp/seed-target
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    # The huf-app entrypoint already runs init-seed.sh before exec'ing the CMD.
+    # A no-op command lets the entrypoint do the restore and then exit.
+    command: ["true"]
+    restart: "no"
+
+volumes:
+  mariadb-data:
