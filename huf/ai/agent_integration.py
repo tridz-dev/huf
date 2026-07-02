@@ -89,35 +89,11 @@ class AgentManager:
                 "Knowledge Tool Error",
             )
 
-        # Add memory tools if agent has memory enabled
-        try:
-            if getattr(self.agent_doc, "enable_memory", False):
-                from huf.ai.memory_tools import (
-                    handle_save_memory_record,
-                    handle_search_memory_records
-                )
-                from agents import function_tool
-
-                if getattr(self.agent_doc, "enable_memory_search_tool", True):
-                    @function_tool
-                    def search_memory_records(query: str = None, record_type: str = None, scope_type: str = None, status: str = None, limit: int = 10) -> str:
-                        """Search through saved memory records. Use to recall facts, preferences, prior decisions, or any stored information."""
-                        res = handle_search_memory_records(query=query, record_type=record_type, scope_type=scope_type, status=status, limit=limit)
-                        return json.dumps(res, default=str)
-                    self.tools.append(search_memory_records)
-
-                if getattr(self.agent_doc, "enable_memory_write_tool", True):
-                    @function_tool
-                    def save_memory_record(title: str, summary_text: str, record_type: str = "Fact", scope_type: str = "Conversation", scope_key: str = None, data_json: dict = None, status: str = "Draft", visibility: str = "Private", tags: str = None, confidence: float = 0.0, importance_score: float = 0.0) -> str:
-                        """Save a new memory record. Use this to store facts, preferences, decisions, observations, or other information."""
-                        res = handle_save_memory_record(title=title, summary_text=summary_text, record_type=record_type, scope_type=scope_type, scope_key=scope_key, data_json=data_json, status=status, visibility=visibility, tags=tags, confidence=confidence, importance_score=importance_score)
-                        return json.dumps(res, default=str)
-                    self.tools.append(save_memory_record)
-        except Exception as e:
-            frappe.log_error(
-                f"Error loading memory tools: {str(e)}",
-                "Memory Tool Error",
-            )
+        # Note: Memory tools (save_memory_record, search_memory_records) are provided
+        # exclusively via Agent Tool Function records created by create_memory_tools().
+        # The sdk_tools path (create_agent_tools) already injects conversation_id/agent_name
+        # from run context, so no inline closures are needed or safe here.
+        # P0-7: Removed unsafe inline closures that called handlers without run context.
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
@@ -303,11 +279,15 @@ class AgentManager:
             if getattr(self.agent_doc, "memory_policy", None):
                 try:
                     policy = frappe.get_doc("Memory Policy", self.agent_doc.memory_policy)
-                    if policy.inject_mode == "Always":
-                        from huf.ai.memory_tools import get_injected_memory_text
-                        injected_memory = get_injected_memory_text(self.agent_doc.name, policy)
-                        if injected_memory:
-                            instructions += f"\n\n[INJECTED RELEVANT MEMORY]\n{injected_memory}\n"
+                    # P1-8: Pass conversation_id so Conversation-scoped memories inject.
+                    # Memory content is wrapped in a prompt-injection-resistant envelope
+                    # inside get_injected_memory_text.
+                    from huf.ai.memory_tools import get_injected_memory_text
+                    injected_memory = get_injected_memory_text(
+                        self.agent_doc.name, policy, conversation_id=getattr(self, '_conversation_id', None)
+                    )
+                    if injected_memory:
+                        instructions += f"\n\n{injected_memory}\n"
                 except Exception as e:
                     frappe.log_error(title="Memory Injection Failed", message=str(e))
 
@@ -678,7 +658,9 @@ def generate_conversation_title(conversation_name, agent_name):
     except Exception as e:
         frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
 
-@frappe.whitelist()
+# P1-5: @frappe.whitelist() removed — this function is only called via frappe.enqueue()
+# (dotted path), which does not require whitelisting. Being whitelisted allowed any
+# authenticated user to trigger arbitrary extraction / spend LLM budget.
 def run_background_memory_extraction(conversation_name, agent_name):
     """
     Background job to extract memory from conversation transcripts.
@@ -697,9 +679,28 @@ def run_background_memory_extraction(conversation_name, agent_name):
         if not history:
             return
             
+        # P1-6: Fetch existing active/draft memory titles to avoid re-extracting known facts
+        conv_owner = frappe.db.get_value("Agent Conversation", conversation_name, "owner") or frappe.session.user
+        existing_titles = frappe.get_all(
+            "Memory Record",
+            filters={
+                "scope_type": "User",
+                "scope_key": conv_owner,
+                "status": ["in", ["Active", "Draft"]],
+                "agent": agent_name,
+            },
+            fields=["title"],
+            limit_page_length=50,
+            order_by="modified desc",
+        )
+        existing_titles_text = ""
+        if existing_titles:
+            titles_list = "\n".join(f"- {r['title']}" for r in existing_titles)
+            existing_titles_text = f"\n\nAlready stored memories (do NOT repeat or re-extract these):\n{titles_list}"
+
         prompt = f"""
         Review the following recent conversation. Extract any new, durable Facts, Preferences, or Decisions about the user or the context.
-        Only extract information that is explicitly stated or strongly implied and is worth remembering across sessions.
+        Only extract information that is explicitly stated or strongly implied and is worth remembering across sessions.{existing_titles_text}
         Output ONLY valid JSON matching this schema:
         {{
             "memories": [
@@ -746,7 +747,7 @@ def run_background_memory_extraction(conversation_name, agent_name):
         if result_text.endswith("```"):
             result_text = result_text[:-3]
             
-        import json
+        # json is imported at module top; local import removed (P0-2 fix)
         data = json.loads(result_text)
         memories = data.get("memories", [])
         
@@ -1274,10 +1275,13 @@ def run_agent_sync(
                 )
                 
         # Phase 3: Post-Run Extraction
+        # P1-6: Use job_id with deduplicate=True to avoid hammering extraction on every turn
         if getattr(agent_doc, "enable_memory", False) and getattr(agent_doc, "memory_policy", None):
             frappe.enqueue(
                 "huf.ai.agent_integration.run_background_memory_extraction",
                 queue="default",
+                job_id=f"memory_extract_{conversation.name}",
+                deduplicate=True,
                 conversation_name=conversation.name,
                 agent_name=agent_name
             )
@@ -1838,9 +1842,12 @@ async def run_agent_stream(
                     # Phase 3: Post-Run Extraction for streaming chat
                     try:
                         if getattr(agent_doc, "enable_memory", False) and getattr(agent_doc, "memory_policy", None):
+                            # P1-6: Deduplicate extraction jobs to avoid one LLM call per turn
                             frappe.enqueue(
                                 "huf.ai.agent_integration.run_background_memory_extraction",
                                 queue="default",
+                                job_id=f"memory_extract_{conversation.name}",
+                                deduplicate=True,
                                 conversation_name=conversation.name,
                                 agent_name=agent_name
                             )
