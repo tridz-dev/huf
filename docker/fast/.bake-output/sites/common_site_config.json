@@ -1,6 +1,0 @@
-{
- "db_host": "mariadb-bake",
- "redis_cache": "redis://redis-cache-bake:6379",
- "redis_queue": "redis://redis-queue-bake:6379",
- "redis_socketio": "redis://redis-queue-bake:6379"
-}
