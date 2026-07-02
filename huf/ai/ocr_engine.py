@@ -200,11 +200,13 @@ def _determine_strategy(mime_type: str, ext: str, provider_name: str) -> str:
         return "vision"
 
     if _is_pdf(mime_type, ext):
+        # Providers with strong multimodal PDF support via vision (or via pypdfium2)
+        if provider in {"google", "gemini", "vertex_ai", "anthropic", "openai"}:
+            return "vision"
         # Providers with a standard LiteLLM OCR endpoint
-        if provider in {"mistral", "azure", "google", "gemini", "vertex_ai"}:
+        if provider in {"mistral", "azure"}:
             return "ocr"
-        # OpenAI, Anthropic and others do not have a LiteLLM OCR endpoint for PDFs.
-        # Use standard local PDF extraction (pypdf/PyPDF2).
+        # Others fallback to standard local PDF extraction (pypdf/PyPDF2).
         return "local_pdf"
 
     if _has_local_extractor(mime_type, ext):
@@ -384,25 +386,49 @@ async def _process_with_vision_model(
         )
 
     try:
-        with open(file_path, "rb") as f:
-            base64_image = base64.b64encode(f.read()).decode("utf-8")
-
         ext = os.path.splitext(file_path)[1].lower().lstrip(".")
         mime_type = "application/pdf" if ext == "pdf" else f"image/{ext}"
 
         prompt_text = (
             f"Extract all text from the attached file '{file_name or os.path.basename(file_path)}'. "
-            "Preserve formatting, structure, and layout. Return the text in markdown format. "
+            "You MUST extract EVERYTHING. Do not summarize or omit any information. "
+            "Include all headers, titles, form fields, stamps, logos with text, table contents, footers, and small print. "
+            "Preserve the formatting, structure, and layout as closely as possible. Return the extracted text in markdown format. "
             "If the file contains no text, state that explicitly."
         )
+
+        content_list = [{"type": "text", "text": prompt_text}]
+
+        if ext == "pdf" and "gpt" in model.lower():
+            # OpenAI does not natively support base64 PDF in the vision endpoint.
+            # We must render the PDF pages as images.
+            try:
+                import pypdfium2 as pdfium
+                import io
+
+                pdf = pdfium.PdfDocument(file_path)
+                for i in range(min(len(pdf), 15)):  # Limit to 15 pages for safety
+                    page = pdf[i]
+                    bitmap = page.render(scale=2)  # ~144 DPI
+                    pil_image = bitmap.to_pil()
+                    buffer = io.BytesIO()
+                    pil_image.save(buffer, format="JPEG", quality=85)
+                    b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                    content_list.append({"type": "image_url", "image_url": f"data:image/jpeg;base64,{b64}"})
+            except ImportError:
+                # Fallback if pypdfium2 somehow isn't available
+                with open(file_path, "rb") as f:
+                    base64_doc = base64.b64encode(f.read()).decode("utf-8")
+                content_list.append({"type": "image_url", "image_url": f"data:{mime_type};base64,{base64_doc}"})
+        else:
+            with open(file_path, "rb") as f:
+                base64_image = base64.b64encode(f.read()).decode("utf-8")
+            content_list.append({"type": "image_url", "image_url": f"data:{mime_type};base64,{base64_image}"})
 
         messages = [
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt_text},
-                    {"type": "image_url", "image_url": f"data:{mime_type};base64,{base64_image}"},
-                ],
+                "content": content_list,
             }
         ]
 
