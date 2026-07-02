@@ -1,0 +1,27 @@
+# FasterDocker seed image.
+#
+# The seed image is based on the exact MariaDB image used at bake time so that
+# the mysql client and server binaries match. It contains the pre-baked seed
+# artifacts under /seed:
+#
+#   /seed/sql/huf.sql.gz           (SQL dump strategy)
+#   /seed/mysql-data/              (physical snapshot strategy)
+#   /seed/sites/                   (sites folder)
+#   /seed/metadata.json            (version/digest/architecture info)
+#
+# Build context is docker/fast/ (the directory containing this Dockerfile).
+# Seed data is read from ./.bake-output/.
+
+ARG BASE_IMAGE=mariadb:10.11.11
+FROM ${BASE_IMAGE}
+
+# Install jq so init-seed.sh can read site_config.json and metadata.json.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y jq \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --chown=mysql:mysql .bake-output/ /seed/
+COPY --chmod=755 init-seed.sh physical-mariadb-entrypoint.sh /seed/
+
+# Verify expected layout at build time.
+RUN test -f /seed/metadata.json || (echo "ERROR: /seed/metadata.json missing" >&2; exit 1)

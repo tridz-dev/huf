@@ -1,0 +1,100 @@
+# FasterDocker HUF app image.
+#
+# Layers on top of huf-frappe-runtime:16.25.0.
+# Contains apps/huf with valid Frappe app layout, built frontend assets,
+# installed Python dependencies, and the HUF-specific runtime entrypoints.
+# No install/build/network operations happen at runtime.
+
+ARG FRAPPE_RUNTIME_IMAGE=huf-frappe-runtime:16.25.0
+FROM ${FRAPPE_RUNTIME_IMAGE} AS builder
+
+USER frappe
+WORKDIR /home/frappe/frappe-bench
+
+# Copy the HUF Frappe app root files into apps/huf/.
+# The repository root contains huf/ (Python package), frontend/ (React app),
+# pyproject.toml, README.md, LICENSE, and package.json/yarn.lock wrappers.
+COPY --chown=frappe:frappe pyproject.toml README.md LICENSE package.json yarn.lock ./apps/huf/
+COPY --chown=frappe:frappe huf ./apps/huf/huf
+COPY --chown=frappe:frappe frontend ./apps/huf/frontend
+
+# Copy bake helper into the image so compose.bake.yml can use it without
+# mounting host paths.
+COPY --chown=frappe:frappe docker/fast/bake-site.sh /usr/local/bin/bake-site.sh
+
+# Build frontend assets.
+RUN cd apps/huf/frontend \
+    && yarn install --frozen-lockfile \
+    && yarn build \
+    && rm -rf node_modules \
+    && cd /home/frappe/frappe-bench
+
+# Install HUF Python dependencies into the bench virtualenv.
+RUN ./env/bin/pip install --no-cache-dir -e ./apps/huf
+
+# HUF currently pulls Click 8.1.8 via transitive dependencies, but Frappe
+# v16.25.0 expects Click ~= 8.3.1. Restore the framework-compatible version in
+# the final bench environment before assets are built.
+RUN ./env/bin/pip install --no-cache-dir "click~=8.3.1"
+
+# Build bench assets (CSS/JS bundles) so sites/assets contains Frappe + HUF assets.
+RUN bench build
+
+# Clean up build-only artifacts to keep the image layer small.
+# Run as root because bench build can leave root-owned files under /tmp.
+USER root
+RUN rm -rf apps/huf/frontend/node_modules \
+           apps/huf/.git \
+           apps/frappe/.git \
+           .cache \
+           /tmp/*
+USER frappe
+
+FROM ${FRAPPE_RUNTIME_IMAGE} AS huf-app
+
+USER frappe
+WORKDIR /home/frappe/frappe-bench
+
+# Bring in the installed virtualenv with Frappe + HUF dependencies.
+COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench/env ./env
+
+# Bring in the HUF app source.
+COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench/apps/huf ./apps/huf
+
+# Replace the runtime image's baked Frappe assets with Frappe + HUF assets.
+COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench/sites/assets /home/frappe/frappe-bench/assets
+
+# Bring in the bake helper.
+COPY --from=builder --chown=frappe:frappe /usr/local/bin/bake-site.sh /usr/local/bin/bake-site.sh
+RUN chmod 755 /usr/local/bin/bake-site.sh
+
+# Ensure sites/apps.txt lists the installed apps.
+RUN ls -1 apps > sites/apps.txt
+
+VOLUME ["/home/frappe/frappe-bench/sites", "/home/frappe/frappe-bench/logs"]
+
+USER root
+
+# Dev/test single-container bench-start helper (used by compose.bench.yml).
+COPY docker/fast/bench-start.sh /usr/local/bin/bench-start.sh
+RUN chmod 755 /usr/local/bin/bench-start.sh
+
+# Override the frontend nginx entrypoint in the final app image so frontend
+# fixes do not require a separate runtime-image rebuild.
+COPY docker/fast/resources/nginx/nginx-entrypoint.sh /usr/local/bin/nginx-entrypoint.sh
+RUN chmod 755 /usr/local/bin/nginx-entrypoint.sh
+
+# Redirect nginx logs from Docker stdout/stderr aliases to real files so the
+# frontend service can run unprivileged as frappe. The Debian nginx package
+# uses bare "stderr"/"stdout" tokens in the default nginx.conf.
+RUN rm -f /var/log/nginx/access.log /var/log/nginx/error.log \
+    && touch /var/log/nginx/access.log /var/log/nginx/error.log \
+    && chown frappe:frappe /var/log/nginx/access.log /var/log/nginx/error.log \
+    && sed -i 's|error_log stderr|error_log /var/log/nginx/error.log|' /etc/nginx/nginx.conf \
+    && sed -i 's|access_log stdout|access_log /var/log/nginx/access.log|' /etc/nginx/nginx.conf
+
+COPY docker/fast/resources/core/main-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["start.sh"]

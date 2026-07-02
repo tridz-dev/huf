@@ -1,0 +1,16 @@
+2026-07-01 23:36:00,566 ERROR frappe Failed to capture exception
+Site: huf.localhost
+Form Dict: {}
+Traceback (most recent call last):
+  File "/home/frappe/frappe-bench/apps/frappe/frappe/utils/sentry.py", line 117, in capture_exception
+    set_scope(scope)
+    ~~~~~~~~~^^^^^^^
+  File "/home/frappe/frappe-bench/apps/frappe/frappe/utils/sentry.py", line 70, in set_scope
+    path = frappe.request.path
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/frappe/frappe-bench/apps/frappe/frappe/utils/local.py", line 66, in __getattr__
+    return getattr(self._get_current_object(), name)
+                   ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/frappe/frappe-bench/apps/frappe/frappe/utils/local.py", line 55, in _get_current_object
+    raise RuntimeError("object is not bound") from None
+RuntimeError: object is not bound

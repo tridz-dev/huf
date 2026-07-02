@@ -1,0 +1,14 @@
+{
+  "created_at": "2026-07-01T23:36:01Z",
+  "frappe_version": "v16.25.0",
+  "huf_version": "0.11.0",
+  "site_name": "huf.localhost",
+  "mariadb_image": "mariadb:10.11.11",
+  "mariadb_digest": "mariadb@sha256:96be0d3dfbeb07bc420e5fb8a6dc05c492676f1f89980a497a55e6fbbba3f1c4",
+  "mariadb_version": "10.11.14",
+  "architecture": "aarch64",
+  "seed_strategies": [
+    "sql",
+    "physical"
+  ]
+}

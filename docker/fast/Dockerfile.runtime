@@ -1,0 +1,161 @@
+# FasterDocker base Frappe v16.25.0 runtime image.
+#
+# Based on official frappe_docker production patterns:
+#   https://github.com/frappe/frappe_docker
+#
+# This image contains Frappe framework v16.25.0, bench, Python and Node
+# toolchains, and the production process layout. It does not contain HUF.
+
+ARG PYTHON_VERSION=3.14.2
+ARG DEBIAN_BASE=bookworm
+FROM python:${PYTHON_VERSION}-slim-${DEBIAN_BASE} AS base
+
+ARG WKHTMLTOPDF_VERSION=0.12.6.1-3
+ARG WKHTMLTOPDF_DISTRO=bookworm
+ARG INSTALL_CHROMIUM=true
+ARG NODE_VERSION=24.13.0
+
+ENV NVM_DIR=/home/frappe/.nvm
+ENV PATH=${NVM_DIR}/versions/node/v${NODE_VERSION}/bin/:${PATH}
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+      curl \
+      git \
+      vim \
+      nginx \
+      gettext-base \
+      file \
+      libpango-1.0-0 \
+      libharfbuzz0b \
+      libpangoft2-1.0-0 \
+      libpangocairo-1.0-0 \
+      restic \
+      gpg \
+      mariadb-client \
+      less \
+      libpq-dev \
+      postgresql-client \
+      wait-for-it \
+      jq \
+      media-types \
+      # Build dependencies for pysqlite3 on ARM64 and for Python wheels
+      build-essential \
+      libsqlite3-dev \
+      pkg-config \
+    && mkdir -p ${NVM_DIR} \
+    && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash \
+    && . ${NVM_DIR}/nvm.sh \
+    && nvm install ${NODE_VERSION} \
+    && nvm use v${NODE_VERSION} \
+    && npm install -g yarn \
+    && corepack enable pnpm \
+    && nvm alias default v${NODE_VERSION} \
+    && rm -rf ${NVM_DIR}/.cache \
+    && echo 'export NVM_DIR="/home/frappe/.nvm"' >>/home/frappe/.bashrc \
+    && echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >>/home/frappe/.bashrc \
+    && if [ "$(uname -m)" = "aarch64" ]; then export ARCH=arm64; fi \
+    && if [ "$(uname -m)" = "x86_64" ]; then export ARCH=amd64; fi \
+    && downloaded_file=wkhtmltox_${WKHTMLTOPDF_VERSION}.${WKHTMLTOPDF_DISTRO}_${ARCH}.deb \
+    && curl -sLO https://github.com/wkhtmltopdf/packaging/releases/download/$WKHTMLTOPDF_VERSION/$downloaded_file \
+    && apt-get install -y ./$downloaded_file \
+    && rm $downloaded_file \
+    && if [ "$INSTALL_CHROMIUM" != "false" ]; then \
+         DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y chromium-headless-shell; \
+       fi \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -fr /etc/nginx/sites-enabled/default \
+    && mkdir -p /etc/nginx/snippets \
+    && pip3 install --no-cache-dir frappe-bench \
+    && sed -i '/user www-data/d' /etc/nginx/nginx.conf \
+    && sed -i 's|access_log /var/log/nginx/access.log;|access_log /tmp/nginx/access.log;|' /etc/nginx/nginx.conf \
+    && sed -i 's|error_log /var/log/nginx/error.log;|error_log /tmp/nginx/error.log notice;|' /etc/nginx/nginx.conf \
+    && sed -i 's|pid /run/nginx.pid;|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf \
+    && sed -i '1i daemon off;' /etc/nginx/nginx.conf \
+    && useradd -ms /bin/bash frappe \
+    && mkdir -p /tmp/nginx \
+    && touch /tmp/nginx.pid /tmp/nginx/access.log /tmp/nginx/error.log \
+    && chown -R frappe:frappe /tmp/nginx \
+    && chown -R frappe:frappe /home/frappe \
+    && chown -R frappe:frappe /etc/nginx/conf.d \
+    && chown -R frappe:frappe /etc/nginx/nginx.conf \
+    && chown -R frappe:frappe /etc/nginx/snippets \
+    && chown -R frappe:frappe /var/log/nginx \
+    && chown -R frappe:frappe /var/lib/nginx
+
+# Nginx template and entrypoint for the frontend service
+COPY docker/fast/resources/nginx/nginx-template.conf /templates/nginx/frappe.conf.template
+COPY docker/fast/resources/nginx/nginx-entrypoint.sh /usr/local/bin/nginx-entrypoint.sh
+COPY docker/fast/resources/nginx/security_headers.conf /etc/nginx/snippets/security_headers.conf
+RUN chmod 755 /usr/local/bin/nginx-entrypoint.sh
+
+FROM base AS builder
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+      wget \
+      libcairo2-dev \
+      libpango1.0-dev \
+      libjpeg-dev \
+      libgif-dev \
+      librsvg2-dev \
+      libffi-dev \
+      liblcms2-dev \
+      libldap2-dev \
+      libmariadb-dev \
+      libsasl2-dev \
+      libtiff5-dev \
+      libwebp-dev \
+      redis-tools \
+      rlwrap \
+      tk8.6-dev \
+      cron \
+      gcc \
+      build-essential \
+      libbz2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+USER frappe
+
+ARG FRAPPE_VERSION=v16.25.0
+ARG FRAPPE_PATH=https://github.com/frappe/frappe
+
+# Do not create /home/frappe/frappe-bench beforehand; bench init creates it.
+RUN bench init \
+      --frappe-branch=${FRAPPE_VERSION} \
+      --frappe-path=${FRAPPE_PATH} \
+      --no-procfile \
+      --no-backups \
+      --skip-redis-config-generation \
+      --verbose \
+      /home/frappe/frappe-bench \
+    && cd /home/frappe/frappe-bench \
+    && echo "{}" > sites/common_site_config.json \
+    && find apps -mindepth 1 -path "*/.git" | xargs rm -fr
+
+FROM base AS runtime
+
+USER frappe
+
+COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench /home/frappe/frappe-bench
+
+WORKDIR /home/frappe/frappe-bench
+
+# Move assets to image-layer storage; entrypoint symlinks them into sites volume.
+RUN cp -r /home/frappe/frappe-bench/sites/assets /home/frappe/frappe-bench/assets \
+    && rm -rf /home/frappe/frappe-bench/sites/assets
+
+VOLUME [ \
+  "/home/frappe/frappe-bench/sites", \
+  "/home/frappe/frappe-bench/logs" \
+]
+
+USER root
+
+COPY docker/fast/resources/core/main-entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/fast/resources/core/start.sh /usr/local/bin/start.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/start.sh
+
+USER frappe
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["start.sh"]

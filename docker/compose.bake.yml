@@ -1,0 +1,104 @@
+# FasterDocker seed bake environment
+#
+# Usage:
+#   export HUF_IMAGE_TAG=$(git rev-parse --short HEAD)
+#   docker compose -p fasterdocker -f docker/compose.bake.yml up --build
+#   ./docker/fast/bake-seed.sh sql
+#   # or
+#   ./docker/fast/bake-seed.sh physical
+#
+# This compose runs the site-baker container that:
+#   1. Starts with the prebuilt huf-app image.
+#   2. Waits for MariaDB/Redis.
+#   3. Creates site huf.localhost.
+#   4. Installs HUF.
+#   5. Runs migrate.
+#   6. Exports SQL dump and sites folder to /bake-output.
+#
+# The bake-seed.sh helper then builds the seed image from /bake-output.
+
+name: fasterdocker
+
+services:
+  mariadb-bake:
+    container_name: fasterdocker-run-mariadb-bake
+    image: ${MARIADB_IMAGE:-mariadb:10.11.11}
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-fasterdocker-mysql-root}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - mariadb-bake-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - fasterdocker-bake
+
+  redis-cache-bake:
+    container_name: fasterdocker-run-redis-cache-bake
+    image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 2s
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fasterdocker-bake
+
+  redis-queue-bake:
+    container_name: fasterdocker-run-redis-queue-bake
+    image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 2s
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fasterdocker-bake
+
+  site-baker:
+    container_name: fasterdocker-build-site-baker
+    image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      SITE_NAME: ${SITE_NAME:-huf.localhost}
+      DB_HOST: mariadb-bake
+      DB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-fasterdocker-mysql-root}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-fasterdocker-admin}
+      REDIS_CACHE: redis://redis-cache-bake:6379
+      REDIS_QUEUE: redis://redis-queue-bake:6379
+      REDIS_SOCKETIO: redis://redis-queue-bake:6379
+      BAKE_OUTPUT_DIR: /bake-output
+    volumes:
+      - type: bind
+        source: ./fast/.bake-output
+        target: /bake-output
+      - mariadb-bake-data:/var/lib/mysql:ro
+    depends_on:
+      mariadb-bake:
+        condition: service_healthy
+      redis-cache-bake:
+        condition: service_healthy
+      redis-queue-bake:
+        condition: service_healthy
+    command: ["/usr/local/bin/bake-site.sh"]
+    networks:
+      - fasterdocker-bake
+    restart: "no"
+
+volumes:
+  mariadb-bake-data:
+
+networks:
+  fasterdocker-bake:
+    driver: bridge
