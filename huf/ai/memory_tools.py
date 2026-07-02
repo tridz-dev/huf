@@ -229,13 +229,20 @@ def get_injected_memory_text(agent_name, policy, conversation_id=None):
 
 	P1-8: Wrap injected content in a data-not-instructions envelope to
 	      prevent prompt-injection attacks from user-authored memory content.
+	P2-1: Respect policy.enabled — disabled policies do nothing.
+	P2-3: Tool Only mode means agent can call search tool but nothing auto-injects.
 	"""
 	if not policy:
 		return None
 
-	# P1-4: Support "Relevant Only" inject mode (treat like "Always" but note the intent)
-	# "Never" → skip; any other mode → inject
-	if policy.inject_mode == "Never" or (policy.inject_mode not in ("Always", "Relevant Only")):
+	# P2-1: Respect disabled policies
+	if not getattr(policy, "enabled", True):
+		return None
+
+	# P2-3: Modes that do NOT auto-inject into the system prompt:
+	# - "Never": no injection at all
+	# - "Tool Only": agent uses the search tool manually; nothing pre-injected
+	if policy.inject_mode in ("Never", "Tool Only") or policy.inject_mode not in ("Always", "Relevant Only"):
 		return None
 
 	limit = policy.max_records or 5
@@ -370,3 +377,33 @@ handle_get_memory_record = get_memory_record
 handle_search_memory_records = search_memory_records
 handle_archive_memory_record = archive_memory_record
 handle_promote_memory_to_knowledge = promote_memory_to_knowledge
+
+
+def expire_stale_memory_records():
+	"""Daily scheduler hook — flip status to Expired for records past their effective_until.
+
+	P2-10: Proactively marks stale records as Expired so they don't accumulate as Active.
+	Read-time filtering in search_memory_records remains as defense in depth.
+	"""
+	try:
+		now = now_datetime()
+		# Find Active records with a past effective_until
+		expired = frappe.get_all(
+			"Memory Record",
+			filters={
+				"status": "Active",
+				"effective_until": ["<", now],
+			},
+			fields=["name"],
+			limit_page_length=500,
+		)
+		for row in expired:
+			frappe.db.set_value("Memory Record", row["name"], "status", "Expired", update_modified=False)
+		if expired:
+			frappe.db.commit()
+			frappe.log_error(
+				f"Expired {len(expired)} stale Memory Records",
+				"Memory Expiry"
+			)
+	except Exception as e:
+		frappe.log_error(f"Memory expiry scheduler failed: {str(e)}", "Memory Expiry Error")

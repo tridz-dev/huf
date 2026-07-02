@@ -216,8 +216,11 @@ class AgentManager:
         return None
 
 
-    def create_agent(self) -> Agent:
-        """Create main agent """
+    def create_agent(self, conversation_id: str = None) -> Agent:
+        """Create main agent
+        
+        P2-2: Accept conversation_id so Conversation-scoped memory injection works.
+        """
 
         if not self.agent_doc.model:
             frappe.throw(_("Agent model is not configured"))
@@ -284,7 +287,7 @@ class AgentManager:
                     # inside get_injected_memory_text.
                     from huf.ai.memory_tools import get_injected_memory_text
                     injected_memory = get_injected_memory_text(
-                        self.agent_doc.name, policy, conversation_id=getattr(self, '_conversation_id', None)
+                        self.agent_doc.name, policy, conversation_id=conversation_id
                     )
                     if injected_memory:
                         instructions += f"\n\n{injected_memory}\n"
@@ -671,6 +674,9 @@ def run_background_memory_extraction(conversation_name, agent_name):
             return
             
         policy = frappe.get_doc("Memory Policy", agent_doc.memory_policy)
+        # P2-1: Respect disabled policies
+        if not getattr(policy, "enabled", True):
+            return
         if policy.capture_mode not in ["Automatic", "Agent Suggested"]:
             return
             
@@ -680,7 +686,14 @@ def run_background_memory_extraction(conversation_name, agent_name):
             return
             
         # P1-6: Fetch existing active/draft memory titles to avoid re-extracting known facts
-        conv_owner = frappe.db.get_value("Agent Conversation", conversation_name, "owner") or frappe.session.user
+        # P2-5: Use conversation owner; bail out if none found rather than silently scoping to Administrator
+        conv_owner = frappe.db.get_value("Agent Conversation", conversation_name, "owner")
+        if not conv_owner or conv_owner in ("Administrator", "Guest"):
+            frappe.log_error(
+                f"Memory extraction skipped for {conversation_name}: no valid conversation owner (got {conv_owner!r})",
+                "Memory Extraction Skipped"
+            )
+            return
         existing_titles = frappe.get_all(
             "Memory Record",
             filters={
@@ -759,7 +772,8 @@ def run_background_memory_extraction(conversation_name, agent_name):
                     summary_text=mem.get("summary_text"),
                     record_type=mem.get("record_type", "Fact"),
                     scope_type="User", # Default to User for auto-extraction
-                    scope_key=frappe.db.get_value("Agent Conversation", conversation_name, "owner") or frappe.session.user,
+                    # P2-5: Use conv_owner already validated above (not re-queried with Administrator fallback)
+                    scope_key=conv_owner,
                     status="Draft" if policy.approval_required else policy.default_status,
                     confidence=mem.get("confidence", 0.5),
                     importance_score=mem.get("importance_score", 0.5),
@@ -936,7 +950,7 @@ def run_agent_sync(
             manager.agent_doc.agent_prompt = resolved_prompt_template
             manager.agent_doc.prompt_version_locked = 0
                 
-        agent = manager.create_agent()
+        agent = manager.create_agent(conversation_id=conversation.name)
 
         # Build knowledge context for mandatory sources
         knowledge_context = None
@@ -1548,7 +1562,7 @@ async def run_agent_stream(
                 "prompt_version_locked": 0
             })
             
-        agent = manager.create_agent()
+        agent = manager.create_agent(conversation_id=conversation.name)
         
         resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
 

@@ -156,7 +156,9 @@
    "fieldtype": "Select",
    "label": "Source Type",
    "options": "Conversation\nRun\nManual\nEvent\nScheduled\nImported\nTool Output\nExtracted",
-   "reqd": 1
+   "reqd": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
   },
   {
    "fieldname": "source_message",
