@@ -236,7 +236,9 @@ Open http://localhost:8000/huf and login:
 
 The image ships with a disabled **Demo Assistant** agent and a **Demo Assistant Prompt**. Enable the agent and add your OpenAI API key to start chatting.
 
-The compose file pulls a prebuilt multi-arch image (`ghcr.io/tridz-dev/huf-demo`) that works on both Apple Silicon (`linux/arm64`) and Intel/AMD Linux (`linux/amd64`). While the image is being published you can build it locally; see [`docker/fast/README.md`](docker/fast/README.md).
+The compose file pulls a prebuilt image (`ghcr.io/tridz-dev/huf-demo`) that currently supports **Apple Silicon and ARM64 Linux (`linux/arm64`)**. Intel/AMD (`linux/amd64`) support is pending.
+
+> **Note:** The GHCR package is currently private. Until it is made public, run `docker login ghcr.io` first (you only need read access). To build the image locally instead, see [`docker/fast/README.md`](docker/fast/README.md).
 
 ### Install on Existing Bench
 
