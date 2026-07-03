@@ -220,9 +220,9 @@ These capabilities are in final development and will ship soon:
 
 ## Quick Start
 
-### Try with Docker
+### Try with Docker (demo / trial only)
 
-The fastest way to try HUF is the single-image demo:
+The fastest way to try HUF is the single-image demo. It is **not meant for production or active development** — it bundles a pre-seeded site, uses hardcoded demo credentials, and runs everything inside one container for simplicity.
 
 ```bash
 git clone https://github.com/tridz-dev/huf.git
@@ -236,9 +236,9 @@ Open http://localhost:8000/huf and login:
 
 The image ships with a disabled **Demo Assistant** agent and a **Demo Assistant Prompt**. Enable the agent and add your OpenAI API key to start chatting.
 
-The compose file pulls a prebuilt multi-arch image (`ghcr.io/tridz-dev/huf-demo`) that supports both **Apple Silicon / ARM64 Linux (`linux/arm64`)** and **Intel/AMD Linux (`linux/amd64`)**.
+The compose file pulls a prebuilt multi-arch image (`ghcr.io/tridz-dev/huf-demo`) that supports both **Apple Silicon / ARM64 Linux (`linux/arm64`)** and **Intel/AMD Linux (`linux/amd64`)**. Docker automatically pulls the correct architecture for your host.
 
-> **Note:** The GHCR package is currently private. Until it is made public, run `docker login ghcr.io` first (you only need read access). To build the image locally instead, see [`docker/fast/README.md`](docker/fast/README.md).
+For development or production-style Docker setups, see [`docker/fast/README.md`](docker/fast/README.md).
 
 ### Install on Existing Bench
 

@@ -2,7 +2,7 @@
 
 This directory contains the Docker assets for warm-booting HUF on Frappe v16.25.0.
 
-The fastest way for end users to try HUF is the single-image demo in [`docker/docker-compose.yml`](../docker-compose.yml):
+The fastest way for end users to **try** HUF is the single-image demo in [`docker/docker-compose.yml`](../docker-compose.yml). It is intended for demo/trial use only — it bundles a pre-seeded site and runs everything in one container.
 
 ```bash
 git clone https://github.com/tridz-dev/huf.git
@@ -13,6 +13,8 @@ docker compose up --wait
 Then open http://localhost:8000/huf.
 
 There is no local build, `bench init`, `new-site`, `install-app`, or seed step once the published image is available.
+
+For local development or production-parity validation, see the other compose profiles below instead of `docker-compose.yml`.
 
 ## Platform support
 
@@ -44,7 +46,7 @@ Current published tags:
 - `ghcr.io/tridz-dev/huf-demo:976c22a-arm64` — `linux/arm64`
 - `ghcr.io/tridz-dev/huf-demo:976c22a-amd64` — `linux/amd64`
 
-> **Note:** The GHCR package is currently private. Until it is made public, run `docker login ghcr.io` before pulling. To build locally instead, see [Building locally](#building-locally).
+To build locally instead, see [Building locally](#building-locally).
 
 ## Quick start (single-image demo)
 
