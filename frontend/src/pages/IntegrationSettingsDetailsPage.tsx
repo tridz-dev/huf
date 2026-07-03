@@ -20,6 +20,7 @@ import { GeneralTab } from '@/components/integrations/GeneralTab';
 import { CredentialsTab } from '@/components/integrations/CredentialsTab';
 import { RecipientsTab } from '@/components/integrations/RecipientsTab';
 import { TelegramTab } from '@/components/integrations/TelegramTab';
+import { GoogleMeetTab } from '@/components/integrations/GoogleMeetTab';
 import { integrationFormSchema, type IntegrationFormValues } from '@/components/integrations/types';
 import {
   createIntegrationSetting,
@@ -110,6 +111,18 @@ export function IntegrationSettingsDetailsPage() {
           fields: ['telegram_agent', 'telegram_auto_setup_webhook'],
           default: false,
           disabled: isNew,
+        },
+      };
+    }
+
+    if ((isNew ? initialService : watchService) === 'google_meet') {
+      return {
+        ...base,
+        google_meet: {
+          label: 'Google Meet',
+          fields: [],
+          default: false,
+          disabled: false,
         },
       };
     }
@@ -447,6 +460,12 @@ export function IntegrationSettingsDetailsPage() {
                     settingUpWebhook={settingUpWebhook}
                     onSetupWebhook={handleSetupWebhook}
                   />
+                </TabsContent>
+              )}
+
+              {'google_meet' in tabConfig && (
+                <TabsContent value="google_meet" className="space-y-4">
+                  <GoogleMeetTab />
                 </TabsContent>
               )}
             </Tabs>
