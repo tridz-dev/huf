@@ -16,16 +16,16 @@ There is no local build, `bench init`, `new-site`, `install-app`, or seed step o
 
 ## Platform support
 
-The demo image is published for `linux/arm64` (Apple Silicon and ARM64 Linux). `linux/amd64` (Intel/AMD Linux) support is pending.
+The demo image is published as a multi-arch manifest for `linux/amd64` (Intel/AMD Linux) and `linux/arm64` (Apple Silicon and ARM64 Linux). Docker pulls the correct architecture automatically.
 
 - **macOS with Apple Silicon**: tested locally with OrbStack.
-- **Intel/AMD Linux**: not yet published; Dockerfile and build scripts were verified to build successfully for `linux/amd64` via cross-platform build on the Apple Silicon host. Runtime testing on Intel hardware is pending.
-- **Windows**: not tested; WSL2 with Docker on ARM64 Windows should work. Intel/AMD Windows will need the pending `linux/amd64` image.
+- **Intel/AMD Linux**: built for `linux/amd64` via Docker Rosetta on an Apple Silicon host and verified to boot and serve `/huf`. Runtime testing on native Intel hardware is pending.
+- **Windows**: not tested; WSL2 with Docker should pull the matching architecture.
 
 Override the platform explicitly if needed:
 
 ```bash
-export DOCKER_PLATFORM=linux/arm64
+export DOCKER_PLATFORM=linux/amd64   # or linux/arm64
 docker compose up --wait
 ```
 
@@ -39,9 +39,10 @@ ghcr.io/tridz-dev/huf-demo:<sha>
 
 Current published tags:
 
-- `ghcr.io/tridz-dev/huf-demo:latest` — `linux/arm64` only
-- `ghcr.io/tridz-dev/huf-demo:976c22a` — `linux/arm64` only
+- `ghcr.io/tridz-dev/huf-demo:latest` — multi-arch (`linux/amd64`, `linux/arm64`)
+- `ghcr.io/tridz-dev/huf-demo:976c22a` — multi-arch (`linux/amd64`, `linux/arm64`)
 - `ghcr.io/tridz-dev/huf-demo:976c22a-arm64` — `linux/arm64`
+- `ghcr.io/tridz-dev/huf-demo:976c22a-amd64` — `linux/amd64`
 
 > **Note:** The GHCR package is currently private. Until it is made public, run `docker login ghcr.io` before pulling. To build locally instead, see [Building locally](#building-locally).
 
