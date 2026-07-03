@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2 } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Mic } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -86,6 +86,12 @@ const allNavItems = [
     title: "Integrations",
     url: "/integrations",
     icon: Link2,
+    capability: "system.integrations.manage",
+  },
+  {
+    title: "Voice Settings",
+    url: "/settings/voice",
+    icon: Mic,
     capability: "system.integrations.manage",
   },
   {

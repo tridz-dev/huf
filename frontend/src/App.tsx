@@ -44,6 +44,7 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
+const VoiceSettingsPage = lazy(() => import('./pages/VoiceSettingsPage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
@@ -227,6 +228,18 @@ function App() {
                 <UnifiedLayout headerActions={<DataHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <DataPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/voice"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <VoiceSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

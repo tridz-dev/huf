@@ -22,6 +22,9 @@ export const doctype = {
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",
   "Huf Data Table": "Huf Data Table",
+  "Elevenlabs Settings": "Elevenlabs Settings",
+  "Groq Settings": "Groq Settings",
+  "OpenAI Settings": "OpenAI Settings",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];
