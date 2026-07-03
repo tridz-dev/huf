@@ -268,4 +268,9 @@ export interface AgentDoc {
   tts_model?: string | null;
   tts_voice?: string | null;
   stt_model?: string | null;
+
+  // Document upload / OCR
+  allow_file_upload?: number; // 0 or 1
+  enable_ocr?: number; // 0 or 1
+  max_upload_size_mb?: number | null;
 }

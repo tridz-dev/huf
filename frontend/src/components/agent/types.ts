@@ -65,6 +65,11 @@ export const agentFormSchema = z.object({
   tts_model: z.string().optional(),
   tts_voice: z.string().optional(),
   stt_model: z.string().optional(),
+
+  // Document upload / OCR
+  allow_file_upload: z.boolean().optional(),
+  enable_ocr: z.boolean().optional(),
+  max_upload_size_mb: z.number().int().positive().optional(),
 }).superRefine((values, ctx) => {
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({

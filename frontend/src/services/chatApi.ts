@@ -354,6 +354,39 @@ export async function transcribeAudio(
   }
 }
 
+export interface UploadFileParams {
+  filename: string;
+  b64data: string;
+  agent: string;
+  conversation?: string;
+}
+
+export interface UploadFileResponse {
+  success: boolean;
+  conversation_id?: string;
+  message_id?: string;
+  text?: string;
+  file_name?: string;
+  error?: string;
+}
+
+export async function uploadFileAndProcess(
+  params: UploadFileParams
+): Promise<UploadFileResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_chat.upload_file_and_process_web', {
+      filename: params.filename,
+      b64data: params.b64data,
+      agent: params.agent,
+      conversation: params.conversation ?? undefined,
+    });
+    return (result?.message ?? result) as UploadFileResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error uploading file');
+    return { success: false, error: 'Error uploading file' };
+  }
+}
+
 /**
  * Start a new conversation
  */

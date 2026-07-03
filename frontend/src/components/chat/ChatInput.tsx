@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CornerDownLeft, Plus } from "lucide-react";
+import { CornerDownLeft, Plus, Paperclip, X, Loader2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { ShortcutKey } from "../ui/shortcut-key";
@@ -10,7 +10,7 @@ import {
   streamingAvailable,
   setStreamingAvailable,
 } from "@/services/streamChatApi";
-import { transcribeAudio } from "@/services/chatApi";
+import { transcribeAudio, uploadFileAndProcess } from "@/services/chatApi";
 import { SpeechInput } from "@/components/ai-elements/speech-input";
 import type { MessageType } from './types';
 
@@ -27,6 +27,7 @@ interface ChatInputProps {
     setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>;
     isModelMismatch?: boolean;
     scrollToBottomAfterPaint?: (instant?: boolean) => void;
+    allowFileUpload?: boolean;
 }
 
 export function ChatInput({ 
@@ -40,12 +41,15 @@ export function ChatInput({
     setMessages,
     isModelMismatch = false,
     scrollToBottomAfterPaint,
+    allowFileUpload = false,
 }: ChatInputProps) {
     const navigate = useNavigate();
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const isAudioRecordingFlowRef = useRef(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [pendingFile, setPendingFile] = useState<{ name: string; status: 'uploading' | 'error'; error?: string } | null>(null);
     
     const MIN_HEIGHT = 60;
     const MAX_HEIGHT = 200;
@@ -286,6 +290,57 @@ export function ChatInput({
         setMessage((prev) => (prev ? `${prev} ${text}` : text));
     }, []);
 
+    const handleFileSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !agentName) return;
+
+        setPendingFile({ name: file.name, status: 'uploading' });
+
+        const reader = new FileReader();
+        const b64 = await new Promise<string>((resolve, reject) => {
+            reader.onloadend = () => {
+                const result = reader.result as string;
+                resolve(result.includes(',') ? result.split(',')[1] : result ?? '');
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+
+        try {
+            const res = await uploadFileAndProcess({
+                filename: file.name,
+                b64data: b64,
+                agent: agentName,
+                conversation: chatId ?? undefined,
+            });
+
+            if (!res?.success) {
+                setPendingFile({ name: file.name, status: 'error', error: res?.error || 'Upload failed' });
+                return;
+            }
+
+            setPendingFile(null);
+            if (res.text) {
+                setMessage((prev) => {
+                    const notice = `[Uploaded: ${file.name}]\n\n${res.text}`;
+                    return prev ? `${prev}\n\n${notice}` : notice;
+                });
+            }
+            if (res.conversation_id && !chatId && onConversationCreated) {
+                newlyCreatedConversationIdRef.current = res.conversation_id;
+                onConversationCreated(res.conversation_id, agentName);
+            }
+            textareaRef.current?.focus();
+        } catch (err) {
+            setPendingFile({
+                name: file.name,
+                status: 'error',
+                error: err instanceof Error ? err.message : 'Upload failed',
+            });
+        }
+    }, [agentName, chatId, onConversationCreated, newlyCreatedConversationIdRef]);
+
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -404,6 +459,22 @@ export function ChatInput({
                         }}
                         disabled={isSubmitting || isModelMismatch}
                     />
+                    {pendingFile && (
+                        <div className="px-3 pb-1 w-full">
+                            <div className={`flex items-center gap-x-2 text-xs rounded-md border px-2 py-1 w-fit max-w-full ${pendingFile.status === 'error' ? 'border-destructive text-destructive' : 'border-zinc-200 text-zinc-500'}`}>
+                                {pendingFile.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
+                                <span className="truncate">{pendingFile.status === 'error' ? (pendingFile.error || pendingFile.name) : pendingFile.name}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setPendingFile(null)}
+                                    className="shrink-0"
+                                    aria-label="Dismiss file"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
                         <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
                             Use
@@ -412,6 +483,28 @@ export function ChatInput({
                             </ShortcutKey>
                             for new line
                         </span>
+                        {allowFileUpload && (
+                            <>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    className="hidden"
+                                    onChange={handleFileSelected}
+                                    disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="shrink-0 rounded-full"
+                                    disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    aria-label="Attach file"
+                                >
+                                    <Paperclip />
+                                </Button>
+                            </>
+                        )}
                         {!message.trim() && (
                             <SpeechInput
                                 onTranscriptionChange={handleTranscriptionChange}
