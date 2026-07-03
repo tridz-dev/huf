@@ -8,6 +8,10 @@ export type AIModel = {
   model_name: string;
   provider: string;
   modalities?: string;
+  use_custom_pricing?: number;
+  input_cost_per_1m_tokens?: number | null;
+  output_cost_per_1m_tokens?: number | null;
+  cached_input_cost_per_1m_tokens?: number | null;
 };
 
 export type ToolType =
@@ -247,6 +251,11 @@ export interface AgentDoc {
   context_strategy?: string | null; // Summarize, FIFO, or None
   summary_model?: string | null; // AI Model name for summarization when strategy is Summarize
   summary_ratio?: number | null; // Ratio of history to summarize (0-1)
+  summary_prompt_mode?: 'Local' | 'Template';
+  summary_prompt_template?: string | null;
+  summary_prompt_version_locked?: number; // 0 or 1
+  summary_template_version_at_attach?: number;
+  summary_prompt?: string | null;
   history_limit?: number | null; // Maximum number of messages to keep
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
   max_turns?: number | null; // Maximum consecutive turns/steps

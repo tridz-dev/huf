@@ -39,6 +39,11 @@ export const agentFormSchema = z.object({
   context_strategy: z.string().optional(),
   summary_model: z.string().optional(),
   summary_ratio: z.number().optional(),
+  summary_prompt_mode: z.enum(["Local", "Template"]).default("Local"),
+  summary_prompt_template: z.string().optional(),
+  summary_prompt_version_locked: z.boolean().optional(),
+  summary_template_version_at_attach: z.number().optional(),
+  summary_prompt: z.string().optional(),
   history_limit: z.number().optional(),
   max_knowledge_tokens: z.number().optional(),
   max_turns: z.number().optional(),
@@ -66,6 +71,13 @@ export const agentFormSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["agent_prompt"],
       message: 'Select an Agent Prompt when using Template mode',
+    });
+  }
+  if (values.summary_prompt_mode === "Template" && !values.summary_prompt_template?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["summary_prompt_template"],
+      message: 'Select an Agent Summary Prompt when using Template mode for Summary Prompt',
     });
   }
 });

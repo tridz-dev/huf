@@ -157,13 +157,20 @@ class AgentStreamRenderer(BaseRenderer):
 		def stream_generator() -> Generator[str, None, None]:
 			"""Wrapper to convert async generator to sync generator for Werkzeug Response."""
 			loop = None
+			created_loop = False
 			try:
 				# Try to get existing event loop
 				try:
 					loop = asyncio.get_event_loop()
+					if loop.is_closed():
+						loop = None
 				except RuntimeError:
+					loop = None
+					
+				if loop is None:
 					loop = asyncio.new_event_loop()
 					asyncio.set_event_loop(loop)
+					created_loop = True
 				
 				# Create async generator
 				async_gen = run_agent_stream(
@@ -199,12 +206,20 @@ class AgentStreamRenderer(BaseRenderer):
 				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}"}
 				yield f"data: {json.dumps(error_data)}\n\n"
 			finally:
-				# Don't close loop if it was already running
-				if loop and loop != asyncio.get_event_loop():
+				# Close the loop if we created it AND unset it to prevent leaking closed loops!
+				if created_loop and loop:
 					try:
+						# Clean up pending tasks
+						pending = asyncio.all_tasks(loop)
+						for task in pending:
+							task.cancel()
+						if pending:
+							loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
 						loop.close()
 					except Exception:
 						pass
+					finally:
+						asyncio.set_event_loop(None)
 		
 		response = Response(
 			stream_generator(),

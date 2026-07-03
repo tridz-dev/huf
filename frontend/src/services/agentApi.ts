@@ -32,11 +32,19 @@ const AGENT_LIST_FIELDS = [
   'name',
   'agent_name',
   'description',
+  'provider',
   'model',
   'disabled',
   'last_run',
   'total_run',
   'agent_color',
+  'allow_chat',
+  'prompt_mode',
+  'agent_prompt',
+  'enable_multi_run',
+  'enable_prompt_caching',
+  'allow_guest',
+  'modified',
 ];
 
 /**
@@ -47,6 +55,9 @@ const AGENT_MODEL_FIELDS = [
   'agent_name',
   'chef',
   'slug',
+  'model',
+  'agent_color',
+  'description',
 ];
 
 /**
@@ -96,6 +107,7 @@ export interface GetAgentsParams {
   start?: number;
   search?: string;
   status?: 'active' | 'disabled' | 'all';
+  chat?: 'all' | 'chat' | 'no_chat';
 }
 
 /**
@@ -130,6 +142,7 @@ export async function getAgents(
       start = (page - 1) * limit,
       search,
       status,
+      chat,
     } = params;
 
     // Build filters
@@ -137,6 +150,12 @@ export async function getAgents(
 
     if (status && status !== 'all' && (status === 'disabled' || status === 'active')) {
       filters.push(['disabled', '=', status === 'disabled' ? 1 : 0]);
+    }
+
+    if (chat === 'chat') {
+      filters.push(['allow_chat', '=', 1]);
+    } else if (chat === 'no_chat') {
+      filters.push(['allow_chat', '=', 0]);
     }
 
     // Build search filters if provided
@@ -345,6 +364,9 @@ export interface AgentModelItem {
   chef: string;
   chefSlug: string;
   providers: string[];
+  model?: string;
+  agent_color?: string | null;
+  description?: string | null;
 }
 
 /**
@@ -453,6 +475,9 @@ export async function getAgentModels(
       chef: agent.chef || '',
       chefSlug: agent.slug || '',
       providers: agent.slug ? [agent.slug] : [],
+      model: agent.model || '',
+      agent_color: agent.agent_color || null,
+      description: agent.description || null,
     }));
 
     const hasMore = mappedModels.length > limit;

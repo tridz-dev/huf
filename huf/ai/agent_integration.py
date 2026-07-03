@@ -2,7 +2,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 import litellm
-from litellm import token_counter, completion_cost
+from litellm import token_counter
 
 import frappe
 from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
@@ -19,9 +19,10 @@ from .tool_functions import (
     cancel_document,
 	delete_document,
 )
-from .conversation_manager import ConversationManager
+from .conversation_manager import ConversationManager, safe_history_slice, safe_history_split
 from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
+from huf.ai.providers.litellm import _normalize_model_name
 
 
 class AgentManager:
@@ -258,6 +259,11 @@ class AgentManager:
                     Example: set_conversation_data(name="course_preferences", value={"primary": "CS", "alternatives": ["Math", "Physics"]})
                 4. MEMORY CHECK: Check 'load_conversation_data' before asking redundant questions.
             """
+
+        if self.agent_doc.allow_chat:
+            from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
+
+            instructions += CHART_ARTIFACT_INSTRUCTIONS
 
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
@@ -503,24 +509,14 @@ def _run_async_safely(coro):
             if user:
                 frappe.set_user(user)
             try:
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
-                try:
-                    return new_loop.run_until_complete(coro)
-                finally:
-                    new_loop.close()
+                return asyncio.run(coro)
             finally:
                 frappe.destroy()
                 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             return executor.submit(_thread_worker).result()
     else:
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        try:
-            return new_loop.run_until_complete(coro)
-        finally:
-            new_loop.close()
+        return asyncio.run(coro)
 
 
 @frappe.whitelist()
@@ -529,6 +525,8 @@ def run_background_summarization(conversation_name, agent_name):
     Background job to summarize conversation history.
     """
     try:
+        from huf.ai.prompt_resolver import resolve_summary_prompt
+
         agent_doc = frappe.get_doc("Agent", agent_name)
         conv_manager = ConversationManager(agent_name=agent_name)
         
@@ -541,9 +539,9 @@ def run_background_summarization(conversation_name, agent_name):
 
         stored_summary = conv_manager.get_stored_summary(conversation_name)
         
-        # Calculate overflow
+        # Calculate overflow, ensuring we don't split tool-call pairs
         overflow_count = len(history) - history_limit
-        to_summarize = history[:overflow_count]
+        to_summarize, _remaining = safe_history_split(history, overflow_count)
         
         from huf.ai.providers.litellm import get_simple_completion
         summary_model = agent_doc.summary_model or agent_doc.model
@@ -557,18 +555,12 @@ def run_background_summarization(conversation_name, agent_name):
             "existing_summary": stored_summary or "None",
             "new_messages_to_incorporate": to_summarize
         }
-        
-        summary_prompt = f"""
-        You are maintaining a rolling summary of a conversation.
-        
-        1. Update the 'Existing Summary' by incorporating the 'New Messages'.
-        2. Keep the summary concise but retain key details (names, decisions, technical context).
-        3. Output ONLY the new summary text.
 
-        Data:
-        {json.dumps(summary_input_data, indent=2)}
-        """
-        
+        summary_prompt_template = resolve_summary_prompt(agent_doc)
+        summary_prompt = summary_prompt_template.replace(
+            "{summary_data}", json.dumps(summary_input_data, indent=2)
+        )
+
         messages = [{"role": "user", "content": summary_prompt}]
         
         # Run completion (sync in this background job context or safely in thread if nested)
@@ -839,7 +831,7 @@ def run_agent_sync(
                 history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
         elif context_strategy == "FIFO":
             if len(history) > history_limit:
-                history = history[-history_limit:]
+                history = safe_history_slice(history, history_limit)
         
         # Inject Conversation Data Snapshot if enabled and auto-injection is not disabled (defaults to 1 if not specified)
         if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:
@@ -895,6 +887,7 @@ def run_agent_sync(
         new_items = getattr(result, "new_items", []) or []
 
         client_side_tool_calls = []
+        tool_call_message_map = {}  # call_id -> Agent Message name
 
         for item in new_items:
             if item.type == "tool_call_item":
@@ -903,11 +896,10 @@ def run_agent_sync(
 
                 tool_name = getattr(raw, "name", "Unknown Tool")
                 tool_args = getattr(raw, "arguments", "{}")
+                call_id = getattr(raw, "id", None)
                 
                 tool_type = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "types")
                 if tool_type == "Client Side Tool":
-                    call_id = getattr(raw, "id", None)
-                     
                     client_side_tool_calls.append({
                          "id": call_id,
                          "type": "function", 
@@ -928,8 +920,16 @@ def run_agent_sync(
                     agent=agent_name, 
                     run_name=run_doc.name,
                     kind="Tool Call",
-                    tool_call_id=tool_call_id 
+                    tool_call=tool_call_id,
+                    tool_call_id=call_id,
+                    tool_calls=[{
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": tool_args}
+                    }]
                 )
+                if call_id:
+                    tool_call_message_map[call_id] = message_doc.name
                 safe_commit()
 
             elif item.type == "tool_call_output_item":
@@ -946,31 +946,55 @@ def run_agent_sync(
                     tool_call_doc = frappe.get_doc("Agent Tool Call", updated_tool_call_id)
                     tool_status = tool_call_doc.status or "Completed"
                     tool_name = tool_call_doc.tool or "Unknown Tool"
+                    call_id = tool_call_doc.call_id
 
-                    message_name = frappe.db.get_value("Agent Message", {"tool_call": updated_tool_call_id}, "name")
+                    # Update the original Tool Call message in place so request + result
+                    # are stored in a single Agent Message row.
+                    message_name = tool_call_message_map.get(call_id)
+                    if not message_name:
+                        message_name = frappe.db.get_value("Agent Message", {"tool_call": updated_tool_call_id}, "name")
 
-                    # Persist tool result with context policy (large results stored as reference only)
-                    tool_result_str = str(tool_result) if tool_result is not None else ""
-                    tool_result_summary = (tool_result_str[:200] + "...") if len(tool_result_str) > 200 else tool_result_str
-                    max_context_chars = int(getattr(self.agent_doc, "max_context_chars", 2000))
-                    use_reference = len(tool_result_str) > max_context_chars
+                    tool_call_dict = {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": tool_call_doc.tool_args or "{}"}
+                    }
 
-                    conv_manager.add_message(
-                        conversation,
-                        role="tool",
-                        content=tool_result_str,
-                        provider=resolved_provider,
-                        model=resolved_model,
-                        agent=agent_name,
-                        run_name=run_doc.name,
-                        kind="Tool Result",
-                        tool_call_id=updated_tool_call_id,
-                        record_kind="tool_result",
-                        context_policy="include_reference" if use_reference else "include_full",
-                        context_summary=tool_result_summary,
-                        reference_doctype="Agent Tool Call",
-                        reference_name=updated_tool_call_id
+                    from huf.ai.conversation_manager import update_tool_call_message
+                    updated = update_tool_call_message(
+                        message_name=message_name,
+                        tool_call_id=call_id,
+                        tool_call=[tool_call_dict],
+                        result_content=tool_result,
+                        agent_doc=agent_doc,
                     )
+
+                    if not updated:
+                        # Fallback: create a separate Tool Result message if the
+                        # original Tool Call message could not be updated.
+                        tool_result_str = str(tool_result) if tool_result is not None else ""
+                        tool_result_summary = (tool_result_str[:200] + "...") if len(tool_result_str) > 200 else tool_result_str
+                        max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000))
+                        use_reference = len(tool_result_str) > max_context_chars
+
+                        result_message = conv_manager.add_message(
+                            conversation,
+                            role="tool",
+                            content=tool_result_str,
+                            provider=resolved_provider,
+                            model=resolved_model,
+                            agent=agent_name,
+                            run_name=run_doc.name,
+                            kind="Tool Result",
+                            tool_call=updated_tool_call_id,
+                            tool_call_id=call_id,
+                            record_kind="tool_result",
+                            context_policy="include_reference" if use_reference else "include_full",
+                            context_summary=tool_result_summary,
+                            reference_doctype="Agent Tool Call",
+                            reference_name=updated_tool_call_id
+                        )
+                        message_name = result_message.name
 
                     # Emit socket event for tool call completed/failed
                     # Always emit, even if message not found (e.g., for image generation which creates its own message)
@@ -1039,6 +1063,39 @@ def run_agent_sync(
                 cached_tokens = getattr(usage, "cached_tokens", None) or 0
             
             cached_tokens = cached_tokens or 0
+            
+            try:
+                # Prefer cost directly from the result
+                cost = getattr(result, "cost", 0)
+                if not cost:
+                    from huf.ai.cost_calculator import calculate_cost
+
+                    pricing_model = _normalize_model_name(resolved_model, resolved_provider)
+
+                    mock_response = {
+                        "usage": {
+                            "prompt_tokens": input_tokens,
+                            "completion_tokens": output_tokens,
+                            "total_tokens": input_tokens + output_tokens
+                        },
+                        # Use the normalized model name (e.g. openai/gpt-4o) so LiteLLM's
+                        # built-in price table can resolve it.
+                        "model": pricing_model
+                    }
+
+                    if cached_tokens > 0:
+                        mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+
+                    cost, _source = calculate_cost(
+                        model_name=resolved_model,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cached_tokens=cached_tokens,
+                        litellm_response=mock_response
+                    )
+            except Exception as e:
+                frappe.log_error(f"Cost calculation failed for {resolved_model} in sync: {e}", "Agent Sync Cost")
+                cost = 0.0
 
             try:
                 total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
@@ -1353,7 +1410,11 @@ async def run_agent_stream(
         # Legacy: Lock to current model
         frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
         
-        history = conv_manager.get_conversation_history(conversation.name, limit=1000)
+        context_strategy = agent_doc.context_strategy or "Summarize"
+        history_limit = agent_doc.history_limit or 20
+        fetch_limit = history_limit + 10
+        
+        history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
         
         # Create Agent Run document
         run_doc = frappe.get_doc({
@@ -1394,6 +1455,8 @@ async def run_agent_stream(
         
         resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
 
+        tool_call_message_map = {}  # call_id -> Agent Message name (used by streaming provider)
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
@@ -1402,34 +1465,18 @@ async def run_agent_stream(
             "conversation_id": conversation.name,
             "agent_run_id": run_doc.name,
             "prompt_cache_options": resolved_prompt_cache,
+            "_tool_call_message_map": tool_call_message_map,
         }
         
-        # SUMMARIZATION LOGIC
-        to_summarize, remaining = conv_manager.summarize_conversation(
-            conversation.name, history, resolved_provider, resolved_model, agent_name, limit=20
-        )
+        stored_summary = conv_manager.get_stored_summary(conversation.name)
+        
+        if context_strategy == "Summarize":
+            if stored_summary:
+                history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
+        elif context_strategy == "FIFO":
+            if len(history) > history_limit:
+                history = safe_history_slice(history, history_limit)
 
-        if to_summarize:
-            try:
-                summary_agent = Agent(
-                    name=agent_name, 
-                    instructions="You are a helpful assistant. Summarize the provided conversation history concisely, capturing key decisions and context.",
-                    model=agent.model,
-                    tools=[],
-                    model_settings=agent.model_settings,
-                )
-                
-                summary_input = json.dumps(to_summarize, indent=2)
-                summary_prompt = f"Summarize this conversation history:\n{summary_input}"
-
-                sum_context = {"agent_name": agent_name, "is_system_op": True} 
-                sum_result = await RunProvider.run(summary_agent, summary_prompt, resolved_provider, resolved_model, sum_context)
-                summary_text = getattr(sum_result, "final_output", "Could not generate summary.")
-
-                history = [{"role": "system", "content": f"Previous Conversation Summary: {summary_text}"}] + remaining
-            except Exception as e:
-                frappe.log_error(f"Summarization failed: {str(e)}", "Agent Summarization Error")
-                pass
 
         if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:
              try:
@@ -1512,10 +1559,11 @@ async def run_agent_stream(
 
                         tool_name = getattr(raw_item, "name", "Unknown Tool")
                         tool_args = getattr(raw_item, "arguments", "{}")
+                        call_id = tool_call.get("id")
                         
                         msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
                         
-                        conv_manager.add_message(
+                        message_doc = conv_manager.add_message(
                             conversation, 
                             role="agent", 
                             content=msg_content, 
@@ -1524,8 +1572,16 @@ async def run_agent_stream(
                             agent=agent_name,
                             run_name=run_doc.name,
                             kind="Tool Call",
-                            tool_call_id=tool_call_id
+                            tool_call=tool_call_id,
+                            tool_call_id=call_id,
+                            tool_calls=[{
+                                "id": call_id,
+                                "type": "function",
+                                "function": {"name": tool_name, "arguments": tool_args}
+                            }]
                         )
+                        if call_id:
+                            tool_call_message_map[call_id] = message_doc.name
                         safe_commit()
                         
                     yield chunk
@@ -1570,9 +1626,8 @@ async def run_agent_stream(
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
-                            from huf.ai.providers.litellm import _normalize_model_name
                             pricing_model = _normalize_model_name(resolved_model, resolved_provider)
-                            
+
                             msgs_for_count = history + [{"role": "user", "content": prompt}]
                             input_tokens = token_counter(model=pricing_model, messages=msgs_for_count)
                             output_tokens = token_counter(model=pricing_model, text=full_response)
@@ -1581,25 +1636,32 @@ async def run_agent_stream(
                             frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
                             
                     try:
-                        from huf.ai.providers.litellm import _normalize_model_name
-                        pricing_model = _normalize_model_name(resolved_model, resolved_provider)
-                        
-                        mock_response = {
-                            "usage": {
-                                "prompt_tokens": input_tokens,
-                                "completion_tokens": output_tokens,
-                                "total_tokens": input_tokens + output_tokens
-                            },
-                            "model": pricing_model
-                        }
-                        
-                        if cached_tokens > 0:
-                            mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                        # Prefer cost directly from the chunk (calculated by provider)
+                        cost = chunk.get("cost")
+                        if not cost:
+                            from huf.ai.cost_calculator import calculate_cost
+
+                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
                             
-                        cost = litellm.completion_cost(
-                            completion_response=mock_response,
-                            model=pricing_model
-                        )
+                            mock_response = {
+                                "usage": {
+                                    "prompt_tokens": input_tokens,
+                                    "completion_tokens": output_tokens,
+                                    "total_tokens": input_tokens + output_tokens
+                                },
+                                "model": pricing_model
+                            }
+                            
+                            if cached_tokens > 0:
+                                mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+                                
+                            cost, _source = calculate_cost(
+                                model_name=resolved_model,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                cached_tokens=cached_tokens,
+                                litellm_response=mock_response
+                            )
 
                     except Exception as e:
                         frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")
@@ -1620,7 +1682,9 @@ async def run_agent_stream(
                         frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
 
                     # Save final response
-                    conv_manager.add_message(conversation, "agent", full_response, resolved_provider, resolved_model, agent_name, run_doc.name)
+                    final_message = conv_manager.add_message(
+                        conversation, "agent", full_response, resolved_provider, resolved_model, agent_name, run_doc.name
+                    )
                     
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Success",
@@ -1680,12 +1744,26 @@ async def run_agent_stream(
                                 )
                     except Exception:
                         pass
+                        
+                    if context_strategy == "Summarize":
+                        if len(history) >= history_limit:
+                            frappe.enqueue(
+                                "huf.ai.agent_integration.run_background_summarization",
+                                queue="default", 
+                                conversation_name=conversation.name,
+                                agent_name=agent_name
+                            )
+                            
+                    # Force commit to ensure enqueued background jobs are pushed to Redis
+                    # This is necessary because streaming generators might not trigger the standard Frappe auto-commit lifecycle.
+                    safe_commit()
                     
                     # Normalize complete event to match REST run_agent_sync response shape
                     chunk["conversation_id"] = conversation.name
                     chunk["response"] = full_response
                     chunk["success"] = True
                     chunk["agent_run_id"] = run_doc.name
+                    chunk["agent_message_id"] = final_message.name
                     chunk["session_id"] = conv_manager.session_id
                     chunk["provider"] = resolved_provider
                     yield chunk

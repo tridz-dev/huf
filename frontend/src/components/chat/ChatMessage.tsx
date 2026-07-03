@@ -155,7 +155,7 @@ export function ChatMessage({
                                     {message.versions[0]?.content && (
                                         <MessageContentWithArtifacts
                                             content={message.versions[0].content}
-                                            messageKey={message.key}
+                                            messageId={message.versions[0]?.id ?? message.key}
                                         />
                                     )}
                                 </div>
@@ -165,7 +165,7 @@ export function ChatMessage({
                                   !message.tools) && (
                                 <MessageContentWithArtifacts
                                     content={message.versions[0]?.content || ''}
-                                    messageKey={message.key}
+                                    messageId={message.versions[0]?.id ?? message.key}
                                 />
                             )}
                         </MessageContent>

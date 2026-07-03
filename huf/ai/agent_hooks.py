@@ -94,14 +94,8 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
     if not matching:
         return
 
-
-    cache = frappe.cache()
     for agent in matching:
-        lock_key = f"huf:lock:{agent['agent']}:{doc.doctype}:{doc.name}:{method}"
-        if cache.get_value(lock_key):
-            continue
-        cache.set_value(lock_key, now_datetime().isoformat(), expires_in_sec=30)
-
+        # Evaluate condition immediately during the event phase
         condition = agent.get("condition")
         if condition:
             try:
@@ -110,26 +104,50 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
             except Exception as e:
                 frappe.log_error(f"Condition error in Agent {agent.get('agent')}: {e}")
                 continue
-        enqueue(
-            run_agent_for_doc,
-            queue="long",
-            job_id=f"run-agent-{agent['agent']}-{doc.doctype}-{doc.name}-{method}-{uuid4()}",
-            doc=doc.as_dict(),
-            agent_name=agent["agent"],
-            instructions=agent.get("instructions"),
-            event_name=method,
-            provider=agent.get("provider"),
-            model=agent.get("model"),
-            include_doc=False,
-            initiating_user=frappe.session.user,
-            channel_id="doc_event",
-            prompt_field=agent.get("prompt_field"),
-            file_attachments=agent.get("file_attachments")
-        )
 
+        # Create a deferred execution handler to queue the agent AFTER the transaction commits
+        def _queue_agent_after_commit(a=agent, d=doc, m=method, u=frappe.session.user):
+            # doc.name will now be final and populated
+            safe_name = d.name or str(id(d))
+            
+            # 1. Acquire execution lock using the final assigned name
+            lock_key = f"huf:lock:{a['agent']}:{d.doctype}:{safe_name}:{m}"
+            cache = frappe.cache()
+            if cache.get_value(lock_key):
+                return
+            cache.set_value(lock_key, now_datetime().isoformat(), expires_in_sec=30)
+            
+            # 2. Enqueue the background agent worker
+            enqueue(
+                run_agent_for_doc,
+                queue="long",
+                job_id=f"run-agent-{a['agent']}-{d.doctype}-{safe_name}-{m}-{uuid4()}",
+                doc=d.as_dict(),
+                agent_name=a["agent"],
+                instructions=a.get("instructions"),
+                event_name=m,
+                provider=a.get("provider"),
+                model=a.get("model"),
+                include_doc=False,
+                initiating_user=u,
+                channel_id="doc_event",
+                prompt_field=a.get("prompt_field"),
+                file_attachments=a.get("file_attachments")
+            )
+
+        # Register to run ONLY if the document successfully commits to the database
+        frappe.db.after_commit.add(_queue_agent_after_commit)
 
 def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model, include_doc=False, initiating_user=None, channel_id=None, prompt_field=None, file_attachments=None):
     """Background worker to run an agent when a Doc Event triggers"""
+
+    # Background jobs may not carry the original session user. Run the agent as the
+    # user who triggered the document event so permission checks pass.
+    if initiating_user and frappe.session.user != initiating_user:
+        try:
+            frappe.set_user(initiating_user)
+        except Exception:
+            pass
 
     custom_instruction = None
     if prompt_field:
@@ -167,6 +185,12 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
             clean_doc = doc.copy() if isinstance(doc, dict) else doc.as_dict()
             for key in ["_user_tags", "_comments", "_assign", "_liked_by", "docstatus", "password"]:
                 clean_doc.pop(key, None)
+
+            # Standard truncation: Truncate individual massive fields to maintain valid JSON
+            MAX_FIELD_LENGTH = 10000
+            for k, v in list(clean_doc.items()):
+                if isinstance(v, str) and len(v) > MAX_FIELD_LENGTH:
+                    clean_doc[k] = v[:MAX_FIELD_LENGTH] + f"\n... [Content truncated. Full length: {len(v)} chars. Use get_document tool to retrieve full content if needed.]"
             
             json_string = json.dumps(clean_doc, indent=2, default=str)
             prompt += f"""
@@ -215,14 +239,18 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
             for f_url in file_urls_to_process:
                 if any(f["file_url"] == f_url for f in files):
                     continue
-                
+
                 filename = f_url.split("/")[-1]
                 is_image = 0
                 mime_type, _ = mimetypes.guess_type(filename)
                 if mime_type and mime_type.startswith("image/"):
                     is_image = 1
-                
+
+                # Resolve File document ID to avoid ambiguous file_name lookups later
+                file_id = frappe.db.get_value("File", {"file_url": f_url}, "name")
+
                 files.append({
+                    "file_id": file_id,
                     "filename": filename,
                     "file_url": f_url,
                     "is_image": is_image
@@ -241,12 +269,16 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                     if not file.get("is_image"):
                         ocr_result = loop.run_until_complete(
                             handle_ocr_document(
+                                file_id=file.get("file_id"),
                                 file_url=file["file_url"],
                                 agent_name=agent_name
                             )
                         )
                         if ocr_result and ocr_result.get("success"):
-                            extracted_content.append(f"--- File: {file['filename']} ---\n{ocr_result.get('text')}\n")
+                            extracted_content.append(
+                                f"--- File: {file['filename']} (hash: {ocr_result.get('file_hash', 'n/a')}) ---\n"
+                                f"{ocr_result.get('text')}\n"
+                            )
             except Exception as e:
                 frappe.log_error(f"Doc Event OCR Error: {str(e)}", "Agent Hooks OCR")
             finally:

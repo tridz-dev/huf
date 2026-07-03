@@ -11,7 +11,7 @@ http:
     data: |-
       {
         "provider_name":"Demo Provider",
-        "api_key":"2134567934"
+        "api_key":"{{API_KEY}}"
       }
   auth: inherit
 

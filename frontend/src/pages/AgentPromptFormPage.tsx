@@ -34,6 +34,26 @@ import { CategoryTab } from '@/components/category/CategoryTab';
 import { CategoryModal } from '@/components/category/CategoryModal';
 import { getCategories } from '@/services/categoryApi';
 
+const HUF_PATH_PREFIX = '/huf/';
+
+function isInternalPath(path: string): boolean {
+  try {
+    const url = new URL(path, window.location.origin);
+    // Reject absolute URLs, protocol-relative URLs, and different origins.
+    if (url.origin !== window.location.origin) return false;
+    // Reject dangerous schemes.
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+    // Strip javascript: / data: even if encoded.
+    const decoded = decodeURIComponent(path);
+    if (/^(javascript|data|vbscript):/i.test(decoded)) return false;
+    // Allow only paths under the Huf app prefix. `new URL` normalizes `..` so
+    // paths like /huf/agents/../../evil are rejected.
+    return url.pathname.startsWith(HUF_PATH_PREFIX);
+  } catch {
+    return false;
+  }
+}
+
 const agentPromptFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   slug: z.string().optional(),
@@ -263,7 +283,7 @@ export function AgentPromptFormPage() {
         const returnTo = state?.returnTo || fallback?.returnTo;
         const selectedPromptField = state?.selectedPromptField || fallback?.selectedPromptField;
 
-        if (returnTo) {
+        if (returnTo && isInternalPath(returnTo)) {
           navigate(returnTo, {
             state: {
               selectedPrompt: created.name,
@@ -310,7 +330,7 @@ export function AgentPromptFormPage() {
       const returnTo = state?.returnTo || fallback?.returnTo;
       const selectedPromptField = state?.selectedPromptField || fallback?.selectedPromptField;
 
-      if (returnTo) {
+      if (returnTo && isInternalPath(returnTo)) {
         navigate(returnTo, {
           state: {
             selectedPrompt: updated.name,

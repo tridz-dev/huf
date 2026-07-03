@@ -32,9 +32,8 @@ import {
 import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
 import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType } from '../../types/flow.types';
-import { Agent } from '../../types/agent.types';
 import { getAgents, getDocTypes } from '../../services/agentApi';
-import { AgentDoc } from '../../types/agent.types';
+import type { AgentDoc } from '../../types/agent.types';
 import { Combobox } from '../ui/combobox';
 import { toast } from 'sonner';
 
@@ -85,7 +84,7 @@ export function NodeSelectionModal({
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>(
     initialTriggerConfig || { type: undefined }
   );
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agents, setAgents] = useState<AgentDoc[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
@@ -110,30 +109,7 @@ export function NodeSelectionModal({
       setLoadingAgents(true);
       getAgents().then((result) => {
         const agentDocs = Array.isArray(result) ? result : result.items;
-        // Map AgentDoc[] to Agent[] format expected by the component
-        const mappedAgents: Agent[] = agentDocs.map((doc: AgentDoc) => ({
-          name: doc.name,
-          agent_name: doc.agent_name || doc.name,
-          provider: '',
-          model: doc.model || '',
-          instructions: '',
-          temperature: 1,
-          top_p: 1,
-          disabled: doc.disabled === 1,
-          allow_chat: true,
-          persist_conversation: true,
-          triggers: [],
-          tags: [],
-          category: undefined,
-          visibility: 'Global',
-          environment: 'Prod',
-          status: (doc.disabled === 1 ? 'Disabled' : 'Active') as Agent['status'],
-          tools: [],
-          stats: { conversations: 0, lastRunAt: '', successRate: 0, avgCost: 0, avgLatencyMs: 0, token24h: { input: 0, output: 0, total: 0 } },
-          created_at: '',
-          updated_at: '',
-        }));
-        setAgents(mappedAgents);
+        setAgents(agentDocs);
         setLoadingAgents(false);
       }).catch(() => {
         setLoadingAgents(false);
@@ -533,10 +509,20 @@ export function NodeSelectionModal({
                           Available Agents
                         </h3>
                         <div className="space-y-2">
-                          {agents.filter((agent) =>
-                            agent.agent_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            agent.instructions.toLowerCase().includes(searchQuery.toLowerCase())
-                          ).map((agent) => (
+                          {agents.filter((agent) => {
+                            const query = searchQuery.toLowerCase();
+                            const summary = agent.description || '';
+                            return (
+                              (agent.agent_name || agent.name).toLowerCase().includes(query) ||
+                              summary.toLowerCase().includes(query) ||
+                              (agent.model || '').toLowerCase().includes(query) ||
+                              (agent.provider || '').toLowerCase().includes(query)
+                            );
+                          }).map((agent) => {
+                            const status = agent.disabled === 1 ? 'Disabled' : 'Active';
+                            const summary = agent.description?.slice(0, 120) || 'No description';
+
+                            return (
                             <button
                               key={agent.name}
                               className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === agent.name
@@ -549,31 +535,41 @@ export function NodeSelectionModal({
                                   type: 'app-trigger',
                                   integration: 'agent' as any,
                                   event: 'run_agent',
-                                  config: { agentId: agent.name, agentName: agent.agent_name }
+                                  config: { agentId: agent.name, agentName: agent.agent_name || agent.name }
                                 });
                               }}
                             >
                               <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
-                                <Bot className="w-4 h-4 text-primary" />
+                                {agent.agent_color ? (
+                                  <span
+                                    className="w-4 h-4 rounded-full border border-border"
+                                    style={{ backgroundColor: agent.agent_color }}
+                                  />
+                                ) : (
+                                  <Bot className="w-4 h-4 text-primary" />
+                                )}
                               </div>
                               <div className="text-left flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <div className="text-sm font-medium">{agent.agent_name}</div>
-                                  {agent.status && (
-                                    <Badge variant={agent.status === 'Active' ? 'default' : 'secondary'} className="text-xs">
-                                      {agent.status}
-                                    </Badge>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <div className="text-sm font-medium">{agent.agent_name || agent.name}</div>
+                                  <Badge variant={status === 'Active' ? 'default' : 'secondary'} className="text-xs">
+                                    {status}
+                                  </Badge>
+                                  {agent.allow_chat === 1 && (
+                                    <Badge variant="outline" className="text-xs">Chat</Badge>
                                   )}
                                 </div>
                                 <div className="text-xs text-muted-foreground line-clamp-1">
-                                  {agent.instructions}
+                                  {summary}
                                 </div>
                                 <div className="text-xs text-muted-foreground mt-1">
-                                  {agent.model} • {agent.category || 'General'}
+                                  {agent.provider || 'Unknown provider'} • {agent.model || 'Unknown model'}
+                                  {agent.prompt_mode === 'Template' ? ' • Template' : ''}
                                 </div>
                               </div>
                             </button>
-                          ))}
+                          );
+                          })}
                         </div>
                       </div>
                     )

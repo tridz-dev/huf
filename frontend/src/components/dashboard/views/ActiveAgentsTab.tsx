@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getAgents } from '@/services/agentApi';
 import type { AgentDoc } from '@/types/agent.types';
 import { Loader2, Zap } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 interface ActiveAgentsTabProps {
   agents?: AgentDoc[];
@@ -84,14 +85,33 @@ export function ActiveAgentsTab({ agents: providedAgents, loading: providedLoadi
                 className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
                 onClick={() => handleAgentClick(agent.name)}
               >
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{agent.agent_name || agent.name}</div>
-                  <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-                    <span>{agent.model || 'Unknown'}</span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {agent.agent_color && (
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0 border border-border"
+                      style={{ backgroundColor: agent.agent_color }}
+                      aria-hidden
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate flex items-center gap-2">
+                      {agent.agent_name || agent.name}
+                      {agent.allow_chat === 1 && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                          Chat
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
+                      <span>{agent.provider || 'Unknown provider'}</span>
+                      <span>•</span>
+                      <span>{agent.model || 'Unknown model'}</span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
                         <Zap className="w-4 h-4" />
-                        {agent.total_run || 0}</span>
+                        {agent.total_run || 0}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

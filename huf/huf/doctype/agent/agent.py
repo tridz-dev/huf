@@ -107,6 +107,7 @@ def get_cacheable_models(provider: str, model: str = None) -> dict:
 class Agent(Document):
     def validate(self):
         self._validate_prompt()
+        self._validate_summary_prompt()
 
         if self.allow_chat == 1 and self.persist_conversation == 0:
             frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
@@ -218,6 +219,24 @@ class Agent(Document):
         if self.agent_prompt:
             version = frappe.db.get_value("Agent Prompt", self.agent_prompt, "version")
             self.template_version_at_attach = version or 1
+
+    def _validate_summary_prompt(self):
+        """Validate summary prompt configuration based on summary_prompt_mode."""
+        mode = self.summary_prompt_mode or "Local"
+
+        if mode == "Template":
+            if not self.summary_prompt_template:
+                frappe.throw(_("Please select an Agent Summary Prompt when using Template mode for Summary Prompt."))
+            if self.has_value_changed("summary_prompt_template") or not self.summary_template_version_at_attach:
+                self._record_summary_template_version()
+
+    def _record_summary_template_version(self):
+        """Snapshot the current version of the linked Agent Summary Prompt."""
+        if self.summary_prompt_template:
+            version = frappe.db.get_value(
+                "Agent Summary Prompt", self.summary_prompt_template, "version"
+            )
+            self.summary_template_version_at_attach = version or 1
 
     def get_indicator(doc):
         if doc.disabled:

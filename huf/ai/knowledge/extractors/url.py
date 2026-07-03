@@ -24,7 +24,24 @@ class URLExtractor(TextExtractor):
 			if not is_valid:
 				raise ValueError(f"URL blocked: {error_msg}")
 
-			response = requests.get(url, headers=headers, timeout=30)
+			current_url = url
+			response = None
+			for _hop in range(6):  # initial + up to 5 redirects
+				response = requests.get(
+					current_url, headers=headers, timeout=30, allow_redirects=False
+				)
+				if response.status_code not in (301, 302, 303, 307, 308):
+					break
+				location = response.headers.get("Location")
+				if not location:
+					break
+				next_url = requests.compat.urljoin(current_url, location)
+				is_valid, error_msg = validate_url(next_url)
+				if not is_valid:
+					raise ValueError(f"Redirect blocked: {error_msg}")
+				current_url = next_url
+			else:
+				raise ValueError("Too many redirects")
 			response.raise_for_status()
 
 			# Parse HTML

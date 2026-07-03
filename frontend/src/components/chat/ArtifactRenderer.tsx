@@ -32,6 +32,8 @@ import {
 	ExternalLinkIcon,
 } from 'lucide-react';
 import type { ParsedArtifact, ArtifactType } from '@/types/artifact.types';
+import type { ParsedMessageContent } from '@/utils/messageContentParser';
+import { writePreviewCache } from '@/utils/previewCache';
 import { cn } from '@/lib/utils';
 import { Mermaid } from '@/components/ui/mermaid';
 import { JSXPreview, JSXPreviewContent, JSXPreviewExport } from '@/components/ui/jsx-preview';
@@ -42,6 +44,8 @@ interface ArtifactRendererProps {
 	className?: string;
 	/** Agent Message document name — enables "Open" for jsx/chart artifacts */
 	messageId?: string;
+	/** Parsed message content for same-session full-screen preview */
+	previewContent?: ParsedMessageContent;
 }
 
 // Map artifact types to icons
@@ -84,6 +88,7 @@ export function ArtifactRenderer({
 	onClose,
 	className,
 	messageId,
+	previewContent,
 }: ArtifactRendererProps) {
 	const [isFullscreen, setIsFullscreen] = useState(false);
 	const [isCopied, setIsCopied] = useState(false);
@@ -154,8 +159,18 @@ export function ArtifactRenderer({
 
 	const handleOpenPreview = useCallback(() => {
 		if (!messageId) return;
+		if (previewContent) {
+			writePreviewCache(messageId, previewContent);
+		} else if (artifact.type === 'jsx' || artifact.type === 'chart') {
+			writePreviewCache(messageId, {
+				textContent: '',
+				jsxPreviews: [],
+				webPreviews: [],
+				artifacts: [artifact],
+			});
+		}
 		window.open(`/huf/view/${messageId}`, '_blank', 'noopener');
-	}, [messageId]);
+	}, [messageId, previewContent, artifact]);
 
 	const renderContent = () => {
 		switch (artifact.type) {
@@ -190,10 +205,11 @@ export function ArtifactRenderer({
 			case 'svg':
 				return (
 					<div className="flex flex-col gap-2">
-						<div
+						<iframe
+							srcDoc={artifact.content}
+							sandbox=""
 							className="flex items-center justify-center p-4 bg-white rounded border"
-							// biome-ignore lint/security/noDangerouslySetInnerHtml: SVG rendering requires innerHTML
-							dangerouslySetInnerHTML={{ __html: artifact.content }}
+							title={artifact.title || 'SVG Preview'}
 						/>
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">

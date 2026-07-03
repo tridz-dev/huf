@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta
 from huf.ai.conversation_manager import ConversationManager
 from frappe.utils.file_manager import save_file
+from frappe.rate_limiter import rate_limit
 
 SETTINGS_DOCTYPE = "Elevenlabs Settings"
 
@@ -35,13 +36,11 @@ def health():
         "settings": {
             "hasAgentId": bool(agent_id),
             "hasApiKey": bool(api_key),
-            "agentIdLength": len(agent_id) if agent_id else 0,
-            "apiKeyLength": len(api_key) if api_key else 0,
         },
     }
 
-
 @frappe.whitelist(allow_guest=True)
+@rate_limit(limit=10, seconds=60)
 def get_signed_url():
     agent_id, api_key = _get_settings()
 
@@ -79,9 +78,39 @@ def get_signed_url():
 
 
 @frappe.whitelist(allow_guest=True)
+@rate_limit(limit=10, seconds=60)
 def get_agent_id():
     agent_id, _ = _get_settings()
     return {"agentId": agent_id}
+
+
+def _verify_webhook_signature(secret, sig_header, raw_body):
+    """Return True only if sig_header carries a valid, unexpired HMAC for raw_body.
+
+    Fails closed: returns False if the secret is unset, the header is missing or
+    malformed, the timestamp is outside the 5-minute window, or the signature
+    does not match. Never raises.
+    """
+    if not secret or not sig_header:
+        return False
+    try:
+        parts = sig_header.split(",")
+        t_part = parts[0].split("=")[1]
+        v0_part = parts[1].split("=")[1]
+    except (IndexError, AttributeError):
+        return False
+    try:
+        if int(time.time()) - int(t_part) > 300:
+            return False
+    except (ValueError, TypeError):
+        return False
+    payload_to_sign = f"{t_part}.".encode("utf-8") + raw_body
+    calculated = hmac.new(
+        key=secret.encode("utf-8"),
+        msg=payload_to_sign,
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(v0_part, calculated)
 
 
 @frappe.whitelist(allow_guest=True)
@@ -103,30 +132,11 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
         frappe.log_error("Webhook Secret missing in Elevenlabs Settings", "Huf Webhook")
         return {"status": "error", "message": "Configuration error"}
 
+    raw_body = request.get_data()
     sig_header = request.headers.get("elevenlabs-signature")
-    if sig_header:
-        try:
-            parts = sig_header.split(",")
-            t_part = parts[0].split("=")[1]
-            v0_part = parts[1].split("=")[1]
-
-            if int(time.time()) - int(t_part) > 300:
-                frappe.throw("Timestamp expired", exc=frappe.PermissionError)
-
-            raw_body = request.get_data()
-            payload_to_sign = f"{t_part}.".encode("utf-8") + raw_body
-
-            calculated = hmac.new(
-                key=secret.encode("utf-8"),
-                msg=payload_to_sign,
-                digestmod=hashlib.sha256,
-            ).hexdigest()
-
-            if not hmac.compare_digest(v0_part, calculated):
-                frappe.throw("Invalid Signature", exc=frappe.PermissionError)
-        except Exception as e:
-            frappe.log_error(f"Signature Failed: {str(e)}", "ElevenLabs Security")
-            return {"status": "forbidden"}
+    if not _verify_webhook_signature(secret, sig_header, raw_body):
+        frappe.log_error("ElevenLabs webhook signature verification failed", "ElevenLabs Security")
+        return {"status": "forbidden"}
 
     if type != "post_call_transcription" or not data:
         return {"status": "ignored"}

@@ -1,52 +1,106 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { getDashboardActiveFlows, type DashboardFlowItem } from '@/services/dashboardApi';
+import { formatTimeAgo } from '@/utils/time';
+import type { FlowStatus } from '@/types/flow.types';
 
-interface Flow {
-  id: string;
-  name: string;
-  status: 'active';
-  runs: number;
-  last_run: string;
+interface ActiveFlowsTabProps {
+  flows?: DashboardFlowItem[];
+  loading?: boolean;
 }
 
-const activeFlows: Flow[] = [
-  { id: '1', name: 'Webform Handler', status: 'active', runs: 523, last_run: '2 minutes ago' },
-  { id: '2', name: 'Email Automation', status: 'active', runs: 389, last_run: '5 minutes ago' },
-  { id: '3', name: 'Slack Notification', status: 'active', runs: 234, last_run: '12 minutes ago' },
-  { id: '4', name: 'Data Processing', status: 'active', runs: 156, last_run: '1 hour ago' },
-  { id: '5', name: 'Customer Onboarding', status: 'active', runs: 98, last_run: '3 hours ago' },
-];
+function getStatusVariant(status: FlowStatus): 'default' | 'secondary' | 'outline' {
+  switch (status) {
+    case 'active':
+      return 'default';
+    case 'paused':
+      return 'secondary';
+    default:
+      return 'outline';
+  }
+}
 
-export function ActiveFlowsTab() {
+function getStatusLabel(status: FlowStatus): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+export function ActiveFlowsTab({ flows: providedFlows, loading: providedLoading }: ActiveFlowsTabProps) {
+  const navigate = useNavigate();
+  const [flows, setFlows] = useState<DashboardFlowItem[]>(providedFlows || []);
+  const [loading, setLoading] = useState(providedLoading ?? true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (providedFlows !== undefined) {
+      setFlows(providedFlows);
+      setLoading(providedLoading ?? false);
+      return;
+    }
+
+    async function fetchActiveFlows() {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await getDashboardActiveFlows(10);
+        setFlows(data);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch flows'));
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchActiveFlows();
+  }, [providedFlows, providedLoading]);
+
+  const handleFlowClick = (flowId: string) => {
+    navigate(`/flows/${flowId}`);
+  };
+
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+      <CardHeader>
         <CardTitle>Active Flows</CardTitle>
-        <Badge variant="secondary" className="flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3" />
-          Coming Soon
-        </Badge>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {activeFlows.map((flow) => (
-            <div
-              key={flow.id}
-              className="flex items-center justify-between p-3 rounded-lg border opacity-60"
-            >
-              <div className="flex-1">
-                <div className="font-medium">{flow.name}</div>
-                <div className="text-sm text-muted-foreground">
-                  {flow.runs} runs • Last run {flow.last_run}
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-8 text-destructive">
+            <p>Failed to load flows</p>
+            <p className="text-sm text-muted-foreground mt-1">{error.message}</p>
+          </div>
+        ) : flows.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No active flows
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {flows.map((flow) => (
+              <div
+                key={flow.id}
+                className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                onClick={() => handleFlowClick(flow.id)}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{flow.name}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {flow.runCount} runs • Last run {formatTimeAgo(flow.lastRunAt)}
+                  </div>
                 </div>
+                <Badge variant={getStatusVariant(flow.status)}>
+                  {getStatusLabel(flow.status)}
+                </Badge>
               </div>
-              <Badge variant="default">Active</Badge>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
-

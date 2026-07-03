@@ -151,6 +151,9 @@ export interface AgentWithCount {
   conversationCount: number;
   last_updated?: string;
   agent_color?: string | null;
+  provider?: string;
+  model?: string;
+  allow_chat?: number;
 }
 
 /**
@@ -161,14 +164,23 @@ export async function getAgentsWithConversationCounts(): Promise<AgentWithCount[
   try {
     // Fetch all agents sorted by last updated (modified field)
     const agents = await db.getDocList(doctype.Agent, {
-      fields: ['name', 'agent_name', 'modified', 'agent_color'],
+      fields: ['name', 'agent_name', 'modified', 'agent_color', 'provider', 'model', 'allow_chat'],
+      filters: [['allow_chat', '=', 1]],
       orderBy: { field: 'modified', order: 'asc' },
       limit: 1000, // Reasonable limit for agents
     });
 
     // Fetch conversation count for each agent
     const agentsWithCounts: AgentWithCount[] = await Promise.all(
-      (agents as Array<{ name: string; agent_name: string; modified?: string }>).map(async (agent) => {
+      (agents as Array<{
+        name: string;
+        agent_name: string;
+        modified?: string;
+        agent_color?: string | null;
+        provider?: string;
+        model?: string;
+        allow_chat?: number;
+      }>).map(async (agent) => {
         const count = await fetchDocCount(doctype['Agent Conversation'], [
           ['agent', '=', agent.name],
           ['channel', '=', 'Chat'],
@@ -178,7 +190,10 @@ export async function getAgentsWithConversationCounts(): Promise<AgentWithCount[
           agent_name: agent.agent_name || agent.name,
           conversationCount: count || 0,
           last_updated: agent.modified,
-          agent_color: (agent as any).agent_color || null,
+          agent_color: agent.agent_color || null,
+          provider: agent.provider,
+          model: agent.model,
+          allow_chat: agent.allow_chat,
         };
       })
     );
