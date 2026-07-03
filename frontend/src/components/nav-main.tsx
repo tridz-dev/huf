@@ -42,8 +42,8 @@ export function NavMain({
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
                 <NavLink to={item.url} onClick={handleNavClick}>
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
+                  {item.icon && <item.icon strokeWidth={1.6} />}
+                  <span className="font-body text-[13.5px]">{item.title}</span>
                 </NavLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
