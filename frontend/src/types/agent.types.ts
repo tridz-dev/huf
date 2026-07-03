@@ -261,6 +261,7 @@ export interface AgentDoc {
   max_turns?: number | null; // Maximum consecutive turns/steps
   enable_conversation_data?: number; // 0 or 1
   inject_conversation_data?: number; // 0 or 1
+  conversation_data_api_permission?: '' | 'Read' | 'Write';
   autonaming_of_conversation_title?: number; // 0 or 1
 
   // Advanced model overrides

@@ -478,6 +478,33 @@ export function AdvancedTab({
             />
           )}
 
+          {form.watch('enable_conversation_data') && (
+            <FormField
+              control={form.control}
+              name="conversation_data_api_permission"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Conversation Data API Permission</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Read">Read</SelectItem>
+                      <SelectItem value="Write">Write</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Controls whether the whitelisted conversation data APIs can read only, or read and write, for this agent's conversations.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
           <FormField
             control={form.control}
             name="autonaming_of_conversation_title"
