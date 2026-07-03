@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700&family=Archivo:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -42,8 +42,8 @@
 
     /* Typography */
     --display: 'Big Shoulders Display', sans-serif;
-    --body:    'Archivo', sans-serif;
-    --mono:    'Martian Mono', monospace;
+    --body:    'IBM Plex Sans', sans-serif;
+    --mono:    'IBM Plex Mono', monospace;
 
     /* shadcn compatibility — mapped to HUF tokens */
     --radius: 2px;
@@ -117,7 +117,7 @@
   [data-sonner-toaster],
   [data-sonner-toaster][data-sonner-theme="dark"] {
     --width: 356px;
-    --border-radius: calc(var(--radius) + 0.5rem);
+    --border-radius: var(--radius);
     --normal-bg: var(--card);
     --normal-border: var(--border);
     --normal-text: var(--card-foreground);
@@ -130,7 +130,8 @@
   }
 
   [data-sonner-toast][data-styled="true"] {
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    box-shadow: none;
+    border: 1px solid var(--border);
   }
 
   [data-sonner-toast][data-styled="true"] [data-description],
@@ -139,31 +140,31 @@
   }
 
   [data-sonner-toast][data-type="success"] {
-    border-left: 3px solid rgb(16 185 129 / 0.5);
+    border-left: 3px solid var(--good);
   }
   [data-sonner-toast][data-type="success"] [data-icon] {
-    color: rgb(16 185 129);
+    color: var(--good);
   }
 
   [data-sonner-toast][data-type="error"] {
-    border-left: 3px solid color-mix(in srgb, var(--destructive) 50%, transparent);
+    border-left: 3px solid var(--destructive);
   }
   [data-sonner-toast][data-type="error"] [data-icon] {
     color: var(--destructive);
   }
 
   [data-sonner-toast][data-type="warning"] {
-    border-left: 3px solid rgb(245 158 11 / 0.5);
+    border-left: 3px solid var(--signal);
   }
   [data-sonner-toast][data-type="warning"] [data-icon] {
-    color: rgb(245 158 11);
+    color: var(--signal);
   }
 
   [data-sonner-toast][data-type="info"] {
-    border-left: 3px solid rgb(59 130 246 / 0.5);
+    border-left: 3px solid var(--steel);
   }
   [data-sonner-toast][data-type="info"] [data-icon] {
-    color: rgb(59 130 246);
+    color: var(--steel);
   }
 
   [data-sonner-toast][data-styled="true"] [data-button] {

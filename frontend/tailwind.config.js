@@ -1,5 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // HUF design system is light-mode only (no .dark surface tokens are defined) —
+  // disable the dark variant so stray `dark:` classes stay documented no-ops
+  // instead of reacting to OS-level prefers-color-scheme.
+  darkMode: false,
   content: [
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
@@ -73,13 +77,27 @@ export default {
         lg:      '2px',
         md:      '2px',
         sm:      '2px',
+        full:    '2px',
+        xl:      '2px',
+        '2xl':   '2px',
+        '3xl':   '2px',
         none:    '0',
+      },
+      boxShadow: {
+        DEFAULT: 'none',
+        sm:      'none',
+        md:      'none',
+        lg:      'none',
+        xl:      'none',
+        '2xl':   'none',
+        inner:   'none',
+        none:    'none',
       },
       fontFamily: {
         display: ['Big Shoulders Display', 'sans-serif'],
-        body:    ['Archivo', 'sans-serif'],
-        mono:    ['Martian Mono', 'monospace'],
-        sans:    ['Archivo', 'sans-serif'],
+        body:    ['IBM Plex Sans', 'sans-serif'],
+        mono:    ['IBM Plex Mono', 'monospace'],
+        sans:    ['IBM Plex Sans', 'sans-serif'],
       },
       keyframes: {
         blink: { '50%': { opacity: '.2' } },
