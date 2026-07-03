@@ -10,6 +10,7 @@ export const doctype = {
   "Agent Conversation": "Agent Conversation",
   "Agent Message": "Agent Message",
   "Agent Run": "Agent Run",
+  "Agent Run Feedback": "Agent Run Feedback",
   "Agent Prompt": "Agent Prompt",
   "Agent Prompt Category": "Agent Prompt Category",
   "Agent Summary Prompt": "Agent Summary Prompt",

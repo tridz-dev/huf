@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, ArrowUpDown, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { RunFeedbackActions } from '@/components/executions/RunFeedbackActions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { AgentRunDoc } from '@/services/agentRunApi';
@@ -361,6 +362,13 @@ function AgentRunDetailPage() {
               <div className="rounded-md bg-muted p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
                 {run.response || 'No response recorded.'}
               </div>
+              {run.response && (
+                <RunFeedbackActions
+                  agentRunId={run.name}
+                  agent={run.agent}
+                  conversation={run.conversation ?? undefined}
+                />
+              )}
             </CardContent>
           </Card>
         </div>
