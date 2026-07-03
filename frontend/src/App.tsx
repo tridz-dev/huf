@@ -36,6 +36,8 @@ const IntegrationsPageWrapper = lazy(() => import('./pages/IntegrationsPageWrapp
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPage = lazy(() => import('./pages/AgentRunDetailPage'));
+const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
+const AgentContextArtifactDetailPage = lazy(() => import('./pages/AgentContextArtifactDetailPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
@@ -357,6 +359,30 @@ function App() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <AgentRunDetailPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifacts"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentContextArtifactsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifacts/:artifactId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentContextArtifactDetailPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

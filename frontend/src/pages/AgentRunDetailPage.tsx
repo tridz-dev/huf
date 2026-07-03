@@ -11,6 +11,7 @@ import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { getAgentRunStatusVariant } from '@/utils/status';
+import { getArtifacts, type AgentContextArtifactDoc } from '@/services/agentContextArtifactApi';
 import {
   ColumnDef,
   flexRender,
@@ -46,6 +47,54 @@ async function fetchAgentRunDetail(name: string): Promise<AgentRunDetail | null>
     handleFrappeError(error, `Error fetching agent run ${name}`);
     return null;
   }
+}
+
+function RunArtifactsPanel({ runId }: { runId: string }) {
+  const [artifacts, setArtifacts] = useState<AgentContextArtifactDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const result = await getArtifacts({ agent_run: runId, limit: 20 });
+      if (!cancelled) {
+        setArtifacts(result.data);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [runId]);
+
+  if (loading || artifacts.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Artifacts</CardTitle>
+        <CardDescription>Context artifacts recorded for this run.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {artifacts.map((artifact) => (
+          <Link
+            key={artifact.name}
+            to={`/artifacts/${artifact.name}`}
+            className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-muted/50"
+          >
+            <div className="min-w-0">
+              <div className="truncate font-medium">{artifact.summary || artifact.name}</div>
+              <div className="text-xs text-muted-foreground">{artifact.visibility}</div>
+            </div>
+            <Badge variant="secondary" className="shrink-0">
+              {artifact.artifact_type || 'Unknown'}
+            </Badge>
+          </Link>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }
 
 export { AgentRunDetailPage };
@@ -364,6 +413,8 @@ function AgentRunDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        <RunArtifactsPanel runId={run.name} />
 
         {/* Agent Orchestration Table */}
         {childRuns.length > 0 && (
