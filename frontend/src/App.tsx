@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -44,7 +44,7 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
-const VoiceSettingsPage = lazy(() => import('./pages/VoiceSettingsPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
@@ -234,17 +234,19 @@ function App() {
             }
           />
           <Route
-            path="/settings/voice"
+            path="/settings"
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
-                    <VoiceSettingsPage />
+                    <SettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
           />
+          <Route path="/settings/agent" element={<Navigate to="/settings#agent" replace />} />
+          <Route path="/settings/voice" element={<Navigate to="/settings#voice" replace />} />
           <Route
             path="/data/new"
             element={

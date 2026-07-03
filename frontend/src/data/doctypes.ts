@@ -25,6 +25,7 @@ export const doctype = {
   "Elevenlabs Settings": "Elevenlabs Settings",
   "Groq Settings": "Groq Settings",
   "OpenAI Settings": "OpenAI Settings",
+  "Agent Settings": "Agent Settings",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];

@@ -26,8 +26,8 @@ import { getProviders } from '@/services/providerApi';
 import type { AIProvider } from '@/types/agent.types';
 import type { ElevenlabsSettingsDoc, HttpProviderSettingsDoc } from '@/types/integration.types';
 
-export { VoiceSettingsPage };
-export default VoiceSettingsPage;
+export { VoiceSettingsTab };
+export default VoiceSettingsTab;
 
 function isValidUrl(value: string): boolean {
   if (!value) return true;
@@ -273,7 +273,7 @@ function ElevenlabsForm({
   );
 }
 
-function VoiceSettingsPage() {
+function VoiceSettingsTab() {
   const [loading, setLoading] = useState(true);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [openai, setOpenai] = useState<HttpProviderSettingsDoc>({});
@@ -299,21 +299,17 @@ function VoiceSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold">Voice Settings</h1>
-          <p className="text-sm text-muted-foreground">
-            Configure speech-to-text and voice agent providers used across HUF.
-          </p>
-        </div>
+    <div className="max-w-4xl space-y-6">
+        <p className="text-sm text-muted-foreground">
+          Configure speech-to-text and voice agent providers used across HUF.
+        </p>
 
         <Tabs defaultValue="openai">
           <TabsList>
@@ -359,7 +355,6 @@ function VoiceSettingsPage() {
             />
           </TabsContent>
         </Tabs>
-      </div>
     </div>
   );
 }
