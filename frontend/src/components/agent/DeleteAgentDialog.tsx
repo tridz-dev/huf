@@ -25,13 +25,14 @@ export function DeleteAgentDialog({
   loading,
 }: DeleteAgentDialogProps) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open={open} onOpenChange={(next) => { if (!loading) onOpenChange(next); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete "{agentName}"?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently delete the agent, including its triggers and tool
-            configuration. This action cannot be undone.
+            This will permanently delete the agent and its tool configuration.
+            Any triggers linked to this agent will be left orphaned. This
+            action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

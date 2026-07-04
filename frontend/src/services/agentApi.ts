@@ -388,9 +388,26 @@ export async function duplicateAgent(name: string): Promise<AgentDoc> {
         ([key]) => !excludedFields.includes(key)
       )
     );
+    const baseName = (source as AgentDoc).agent_name;
+    const nameExists = async (candidate: string): Promise<boolean> => {
+      const matches = await db.getDocList(doctype.Agent, {
+        filters: [['agent_name', '=', candidate]] as any,
+        fields: ['name'],
+        limit: 1,
+      });
+      return matches.length > 0;
+    };
+
+    let candidateName = `${baseName} (Copy)`;
+    let suffix = 2;
+    while (await nameExists(candidateName)) {
+      candidateName = `${baseName} (Copy ${suffix})`;
+      suffix += 1;
+    }
+
     const copy = await db.createDoc(doctype.Agent, {
       ...rest,
-      agent_name: `${(source as AgentDoc).agent_name} (Copy)`,
+      agent_name: candidateName,
     });
     return copy as AgentDoc;
   } catch (error) {
