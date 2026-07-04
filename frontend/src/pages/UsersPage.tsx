@@ -49,7 +49,7 @@ const ROLE_COLOURS: Record<string, string> = {
 };
 
 function roleBadgeClass(role: string): string {
-  return ROLE_COLOURS[role] ?? 'bg-purple-100 text-purple-800';
+  return ROLE_COLOURS[role] ?? 'bg-muted text-muted-foreground';
 }
 
 // ---------------------------------------------------------------------------
