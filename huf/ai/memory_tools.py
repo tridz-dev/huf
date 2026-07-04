@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 
 import frappe
 from frappe import _
@@ -76,14 +75,11 @@ def _can_read_memory(row, conversation_id=None, agent_name=None) -> bool:
 
 
 def _can_write_memory(scope_type, scope_key_value=None, agent_name=None, conversation_id=None, policy=None) -> bool:
-	if _is_manager():
-		return True
 	if frappe.session.user == "Guest":
 		return False
-	if scope_type in WRITE_BLOCKED_SCOPES_FOR_NON_MANAGER:
-		return False
 
-	# P1-4: Enforce policy write switches if a policy is in play
+	# P1-4: Enforce policy write switches FIRST whenever a policy is in play.
+	# A disabled switch denies the write even for managers.
 	if policy:
 		if scope_type == "User" and not getattr(policy, "allow_user_scope_write", True):
 			return False
@@ -97,6 +93,12 @@ def _can_write_memory(scope_type, scope_key_value=None, agent_name=None, convers
 		if not getattr(policy, "allow_agent_write", True):
 			return False
 
+	# Role-based rules apply after policy checks pass (or when no policy).
+	if _is_manager():
+		return True
+	if scope_type in WRITE_BLOCKED_SCOPES_FOR_NON_MANAGER:
+		return False
+
 	if scope_type == "User":
 		return scope_key_value == frappe.session.user
 	if scope_type == "Agent":
@@ -105,20 +107,6 @@ def _can_write_memory(scope_type, scope_key_value=None, agent_name=None, convers
 		# Caller must own the conversation
 		return _owns_conversation(scope_key_value or conversation_id)
 	return False
-
-
-def _is_expired(row) -> bool:
-	"""Return True if the memory record has passed its effective_until date."""
-	getter = row.get if isinstance(row, dict) else lambda k, d=None: getattr(row, k, d)
-	effective_until = getter("effective_until")
-	if not effective_until:
-		return False
-	try:
-		if isinstance(effective_until, str):
-			effective_until = datetime.fromisoformat(effective_until)
-		return effective_until < now_datetime()
-	except Exception:
-		return False
 
 
 @frappe.whitelist()
@@ -270,10 +258,6 @@ def get_injected_memory_text(agent_name, policy, conversation_id=None):
 		if len(lines) >= limit:
 			break
 
-		# P1-7: Skip expired records (defense in depth — search also filters)
-		if _is_expired(row):
-			continue
-
 		# Only inject Active records (Draft approval flow is correct — keep it)
 		if row.get("status") != "Active":
 			continue
@@ -317,9 +301,16 @@ def search_memory_records(query=None, record_type=None, scope_type=None, status=
 	if scope_type:
 		filters["scope_type"] = scope_type
 
+	# N3: Push expiry filter into SQL — keep records with no TTL or future TTL.
+	or_filters = [
+		["Memory Record", "effective_until", "is", "not set"],
+		["Memory Record", "effective_until", ">=", now_datetime()],
+	]
+
 	rows = frappe.get_all(
 		"Memory Record",
 		filters=filters,
+		or_filters=or_filters,
 		fields=["name", "title", "record_type", "scope_type", "scope_key", "visibility", "status", "summary_text", "confidence", "importance_score", "tags", "agent", "conversation", "knowledge_source", "projection_status", "modified", "effective_until"],
 		order_by="importance_score desc, modified desc",
 		limit_page_length=max_rows * 4,
@@ -329,9 +320,6 @@ def search_memory_records(query=None, record_type=None, scope_type=None, status=
 	results = []
 	for row in rows:
 		if not _can_read_memory(row, conversation_id, agent_name):
-			continue
-		# P1-7: Filter expired memories at read time (defense in depth)
-		if _is_expired(row):
 			continue
 		haystack = " ".join(str(row.get(field) or "") for field in ["title", "summary_text", "record_type", "tags"]).lower()
 		if query_lower and query_lower not in haystack:

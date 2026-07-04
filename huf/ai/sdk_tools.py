@@ -98,6 +98,33 @@ def create_agent_tools(agent) -> list[FunctionTool]:
 
     allowed_tool_docs = PermissionAwareToolRegistry.get_allowed_tools(agent, frappe.session.user)
 
+    # B2: Auto-wire memory tools from Agent flags when scoped memory is enabled.
+    # Dedupe against tools already linked in the agent's child table.
+    if getattr(agent, "enable_memory", False):
+        existing_tool_names = {getattr(d, "tool_name", None) for d in allowed_tool_docs}
+        auto_memory_tool_names = []
+        if getattr(agent, "enable_memory_search_tool", False):
+            auto_memory_tool_names.extend(["search_memory_records", "get_memory_record"])
+        if getattr(agent, "enable_memory_write_tool", False):
+            auto_memory_tool_names.extend(["save_memory_record", "archive_memory_record"])
+
+        for tool_name in auto_memory_tool_names:
+            if tool_name in existing_tool_names:
+                continue
+            try:
+                if not frappe.db.exists("Agent Tool Function", {"tool_name": tool_name}):
+                    continue
+                memory_tool_doc = frappe.get_doc("Agent Tool Function", {"tool_name": tool_name})
+                if getattr(memory_tool_doc, "tool_type", None) != "Memory":
+                    continue
+                allowed_tool_docs.append(memory_tool_doc)
+                existing_tool_names.add(tool_name)
+            except Exception as e:
+                frappe.log_error(
+                    f"Error auto-wiring memory tool '{tool_name}': {e!s}",
+                    "Memory Tool Wiring"
+                )
+
     for function_doc in allowed_tool_docs:
             try:
 

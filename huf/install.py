@@ -1079,7 +1079,8 @@ def create_default_memory_policies():
             "inject_mode": "Relevant Only",
             "max_records": 5,
             "token_budget": 1500,
-            "auto_promote_to_knowledge": 0
+            "auto_promote_to_knowledge": 0,
+            "allow_agent_write": 0
         },
         {
             "policy_name": "Conversational",
@@ -1090,7 +1091,8 @@ def create_default_memory_policies():
             "inject_mode": "Always",
             "max_records": 10,
             "token_budget": 2000,
-            "auto_promote_to_knowledge": 0
+            "auto_promote_to_knowledge": 0,
+            "allow_agent_write": 1
         },
         {
             "policy_name": "Research",
@@ -1103,7 +1105,8 @@ def create_default_memory_policies():
             "token_budget": 4000,
             "auto_promote_to_knowledge": 1,
             "promotion_min_confidence": 0.5,
-            "promotion_min_importance": 0.5
+            "promotion_min_importance": 0.5,
+            "allow_agent_write": 1
         },
         {
             "policy_name": "Operational",
@@ -1114,7 +1117,8 @@ def create_default_memory_policies():
             "inject_mode": "Tool Only",
             "max_records": 10,
             "token_budget": 1000,
-            "auto_promote_to_knowledge": 0
+            "auto_promote_to_knowledge": 0,
+            "allow_agent_write": 1
         }
     ]
 

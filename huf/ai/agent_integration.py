@@ -686,14 +686,37 @@ def run_background_memory_extraction(conversation_name, agent_name):
                 "Memory Extraction Skipped"
             )
             return
+        # B4: Build permitted scopes from policy write switches; fall back to all scopes if no policy.
+        if policy:
+            permitted_scopes = []
+            if getattr(policy, "allow_user_scope_write", True):
+                permitted_scopes.append("User")
+            if getattr(policy, "allow_agent_scope_write", True):
+                permitted_scopes.append("Agent")
+            if getattr(policy, "allow_role_scope_write", False):
+                permitted_scopes.append("Role")
+            if getattr(policy, "allow_site_scope_write", False):
+                permitted_scopes.append("Site")
+            if not permitted_scopes:
+                permitted_scopes = ["User"]
+        else:
+            permitted_scopes = ["Conversation", "User", "Agent", "Role", "Site", "Global"]
+
+        dedup_filters = {
+            "scope_type": ["in", permitted_scopes],
+            "status": ["in", ["Active", "Draft"]],
+            "agent": agent_name,
+        }
+        dedup_or_filters = []
+        if "User" in permitted_scopes:
+            # Keep user-context dedup: include non-User scopes broadly, but User-scope records only for this owner.
+            dedup_or_filters.append(["Memory Record", "scope_type", "!=", "User"])
+            dedup_or_filters.append(["Memory Record", "scope_key", "=", conv_owner])
+
         existing_titles = frappe.get_all(
             "Memory Record",
-            filters={
-                "scope_type": "User",
-                "scope_key": conv_owner,
-                "status": ["in", ["Active", "Draft"]],
-                "agent": agent_name,
-            },
+            filters=dedup_filters,
+            or_filters=dedup_or_filters or None,
             fields=["title"],
             limit_page_length=50,
             order_by="modified desc",
@@ -727,11 +750,24 @@ def run_background_memory_extraction(conversation_name, agent_name):
         provider = agent_doc.provider
         model = agent_doc.model
 
-        # Phase 4: Use Learning Agent if configured
-        if getattr(policy, "learning_agent", None):
-            learning_agent = frappe.get_doc("Agent", policy.learning_agent)
-            provider = learning_agent.provider
-            model = learning_agent.model
+        # B5: Use Learning Agent only if it exists and is enabled; otherwise fall back to primary agent.
+        learning_agent_name = getattr(policy, "learning_agent", None)
+        if learning_agent_name:
+            if frappe.db.exists("Agent", learning_agent_name):
+                learning_agent_doc = frappe.get_doc("Agent", learning_agent_name)
+                if not getattr(learning_agent_doc, "disabled", False):
+                    provider = learning_agent_doc.provider
+                    model = learning_agent_doc.model
+                else:
+                    frappe.log_error(
+                        f"Memory extraction: learning agent '{learning_agent_name}' is disabled; falling back to primary agent '{agent_name}'.",
+                        "Memory Extraction Warning"
+                    )
+            else:
+                frappe.log_error(
+                    f"Memory extraction: learning agent '{learning_agent_name}' not found; falling back to primary agent '{agent_name}'.",
+                    "Memory Extraction Warning"
+                )
 
         from huf.ai.providers.litellm import get_simple_completion
 
