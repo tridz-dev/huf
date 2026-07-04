@@ -1,13 +1,26 @@
 import json
 
 import frappe
+from frappe import _
 
+from huf.permissions import has_capability
+
+from .permissions import sync_data_table_permissions
 from .validators import (
 	LAYOUT_FIELD_TYPES,
 	get_search_fields,
 	resolve_autoname,
 	validate_and_prepare_fields,
 )
+
+
+def _require_data_manage():
+	"""Throw if the current user cannot manage data tables."""
+	if not has_capability(frappe.session.user, "data.tables.manage"):
+		frappe.throw(
+			_("You don't have permission to manage data tables."),
+			frappe.PermissionError,
+		)
 
 
 @frappe.whitelist()
@@ -20,6 +33,8 @@ def create_data_table(
 	title_field: str = "",
 ) -> dict:
 	"""Create a new data table (DocType + registry entry)."""
+	_require_data_manage()
+
 	if isinstance(fields, str):
 		fields = json.loads(fields)
 
@@ -90,6 +105,10 @@ def create_data_table(
 	)
 	registry.insert(ignore_permissions=True)
 
+	# Sync permissions so all roles with data.* capabilities get access
+	# to this new table immediately.
+	sync_data_table_permissions()
+
 	frappe.db.commit()
 
 	return {
@@ -110,6 +129,8 @@ def update_data_table(
 	icon: str | None = None,
 ) -> dict:
 	"""Update table structure (add/remove/reorder fields, update metadata)."""
+	_require_data_manage()
+
 	registry = frappe.get_doc("Huf Data Table", name)
 
 	if fields is not None:
@@ -143,6 +164,8 @@ def update_data_table(
 @frappe.whitelist()
 def delete_data_table(name: str) -> dict:
 	"""Delete a data table and all its records."""
+	_require_data_manage()
+
 	registry = frappe.get_doc("Huf Data Table", name)
 	doctype_name = registry.doctype_name
 
@@ -218,3 +241,14 @@ def get_table_schema(name: str) -> dict:
 		"title_field_name": registry.title_field_name,
 		"fields": fields,
 	}
+
+
+@frappe.whitelist()
+def apply_data_permissions() -> dict:
+	"""
+	Rebuild DocType permissions for all data tables.
+
+	Called by the Huf Role on_update hook whenever role capabilities change.
+	"""
+	sync_data_table_permissions()
+	return {"success": True}

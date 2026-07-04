@@ -56,6 +56,13 @@ CAPABILITIES: dict[str, str] = {
 	"system.mcp.manage": "Manage MCP Servers",
 	"system.integrations.manage": "Manage Integrations",
 	"system.settings.manage": "Manage Settings",
+	# --- Data ---
+	"data.tables.manage": "Manage Data Tables",
+	"data.records.create": "Create Data Records",
+	"data.records.view_own": "View Own Data Records",
+	"data.records.view_all": "View All Data Records",
+	"data.records.edit_own": "Edit/Delete Own Data Records",
+	"data.records.edit_all": "Edit/Delete Any Data Record",
 	# --- Users & Roles ---
 	"users.invite": "Invite Users",
 	"users.manage": "Manage Users",
@@ -84,6 +91,10 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"flows.use",
 		"flows.create",
 		"flows.manage",
+		"data.tables.manage",
+		"data.records.create",
+		"data.records.view_all",
+		"data.records.edit_all",
 	],
 	"Huf User": [
 		"agent.use",
@@ -92,10 +103,14 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"knowledge.use",
 		"tools.use",
 		"flows.use",
+		"data.records.create",
+		"data.records.view_all",
+		"data.records.edit_own",
 	],
 	"Huf Viewer": [
 		"agent.use",
 		"chat.view_own",
+		"data.records.view_own",
 	],
 }
 
