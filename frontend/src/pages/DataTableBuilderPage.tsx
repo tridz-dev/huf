@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Save, Loader2, Settings2 } from 'lucide-react';
+import { Save, Loader2, Settings2, Shield } from 'lucide-react';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import { Button } from '@/components/ui/button';
 import { TableBuilderCanvas } from '@/components/data-table/TableBuilderCanvas';
 import { FieldConfigPanel } from '@/components/data-table/FieldConfigPanel';
@@ -129,6 +130,8 @@ export function DataTableBuilderPage() {
 	const navigate = useNavigate();
 	const isEdit = !!tableId && tableId !== 'new';
 
+	const { hasCapability, isLoading: permissionsLoading } = usePermissions();
+
 	const [state, dispatch] = useReducer(builderReducer, initialState);
 	const [saving, setSaving] = useState(false);
 	const [loading, setLoading] = useState(isEdit);
@@ -237,6 +240,20 @@ export function DataTableBuilderPage() {
 			setSaving(false);
 		}
 	};
+
+	if (!permissionsLoading && !hasCapability('data.tables.manage')) {
+		return (
+			<div className="flex items-center justify-center h-full">
+				<div className="text-center max-w-md p-6">
+					<Shield className="w-10 h-10 mx-auto text-muted-foreground mb-4" />
+					<h2 className="text-lg font-semibold mb-2">Access Denied</h2>
+					<p className="text-sm text-muted-foreground">
+						You don't have permission to manage data tables.
+					</p>
+				</div>
+			</div>
+		);
+	}
 
 	if (loading) {
 		return (

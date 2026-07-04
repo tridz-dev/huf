@@ -5,6 +5,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 from huf.permissions import CAPABILITIES, _bust_cache
+from huf.huf.doctype.huf_data_table.permissions import sync_data_table_permissions
 
 
 class HufRole(Document):
@@ -44,6 +45,17 @@ class HufRole(Document):
 
 	def on_update(self):
 		self._bust_users_cache()
+		self._sync_data_table_permissions()
+
+	def _sync_data_table_permissions(self):
+		"""Update data table DocType permissions when this role's capabilities change."""
+		try:
+			sync_data_table_permissions()
+		except Exception:
+			frappe.log_error(
+				title="Failed to sync data table permissions from Huf Role update",
+				message=frappe.get_traceback(),
+			)
 
 	def _bust_users_cache(self):
 		"""Bust the capability cache for every user assigned this role."""

@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2 } from "lucide-react"
+import { type LucideIcon } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -16,12 +17,20 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
+interface NavItem {
+  title: string
+  url: string
+  icon: LucideIcon
+  /** Single capability or any-of list. null means always visible. */
+  capability: string | string[] | null
+}
+
 /**
- * Each nav item may declare an optional `capability` string.
+ * Each nav item may declare an optional `capability` string or list.
  * If present the item is hidden from users who don't have that capability.
  * Items with capability === null are always visible (e.g. Dashboard).
  */
-const allNavItems = [
+const allNavItems: NavItem[] = [
   {
     title: "Dashboard",
     url: "/",
@@ -68,7 +77,11 @@ const allNavItems = [
     title: "Data",
     url: "/data",
     icon: Database,
-    capability: "agent.view_all",
+    capability: [
+      "data.tables.manage",
+      "data.records.view_own",
+      "data.records.view_all",
+    ],
   },
   {
     title: "Knowledge",
@@ -121,9 +134,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // sidebar doesn't flash/jump once capabilities resolve.
   const navItems = isLoading
     ? allNavItems.filter((item) => item.capability === null)
-    : allNavItems.filter(
-        (item) => item.capability === null || (item.capability && hasCapability(item.capability)),
-      )
+    : allNavItems.filter((item) => {
+        if (item.capability === null) return true
+        const caps = Array.isArray(item.capability) ? item.capability : [item.capability]
+        return caps.some((cap) => hasCapability(cap))
+      })
 
   return (
     <Sidebar collapsible="icon" {...props}>

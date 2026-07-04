@@ -13,6 +13,7 @@ const CATEGORY_ORDER = [
   { key: 'knowledge', label: 'Knowledge' },
   { key: 'tools', label: 'Tools' },
   { key: 'flows', label: 'Flows' },
+  { key: 'data', label: 'Data' },
   { key: 'system', label: 'System' },
   { key: 'users', label: 'Users' },
   { key: 'roles', label: 'Roles' },
