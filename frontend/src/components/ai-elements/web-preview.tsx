@@ -180,13 +180,16 @@ export const WebPreviewBody = ({
 }: WebPreviewBodyProps) => {
   const { url } = useWebPreview();
 
+  const rawSrc = src ?? url;
+  const safeSrc = rawSrc && isValidPreviewUrl(rawSrc) ? rawSrc : undefined;
+
   return (
     <div className="flex-1">
       <iframe
         className={cn("size-full", className)}
         sandbox="allow-scripts allow-forms allow-popups-to-escape-sandbox"
         referrerPolicy="no-referrer"
-        src={(src ?? url) || undefined}
+        src={safeSrc}
         title="Preview"
         {...props}
       />
