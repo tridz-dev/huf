@@ -461,7 +461,7 @@ export function ChatInput({
                     />
                     {pendingFile && (
                         <div className="px-3 pb-1 w-full">
-                            <div className={`flex items-center gap-x-2 text-xs rounded-md border px-2 py-1 w-fit max-w-full ${pendingFile.status === 'error' ? 'border-destructive text-destructive' : 'border-zinc-200 text-zinc-500'}`}>
+                            <div className={`flex items-center gap-x-2 text-xs rounded-md border px-2 py-1 w-fit max-w-full ${pendingFile.status === 'error' ? 'border-destructive text-destructive' : 'border-border text-muted-foreground'}`}>
                                 {pendingFile.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
                                 <span className="truncate">{pendingFile.status === 'error' ? (pendingFile.error || pendingFile.name) : pendingFile.name}</span>
                                 <button
