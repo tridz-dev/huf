@@ -345,7 +345,7 @@ def create_ocr_document_tool():
     if tool_exists:
         # Update existing tool
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
-        tool_doc.description = "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents."
+        tool_doc.description = "Extract text from documents and images using OCR. Supports PDFs, images, scanned documents, Word/Excel/PowerPoint documents (DOCX/XLSX/PPTX), text files (TXT/MD/CSV/JSON/XML/LOG), and HTML. Uses local extractors when possible, vision models for images, and OCR endpoints or vision models for PDFs."
         tool_doc.function_path = "huf.ai.sdk_tools.handle_ocr_document"
         tool_doc.tool_type = "OCR"
         try:
@@ -395,7 +395,7 @@ def create_ocr_document_tool():
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
-            "description": "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents.",
+            "description": "Extract text from documents and images using OCR. Supports PDFs, images, scanned documents, Word/Excel/PowerPoint documents (DOCX/XLSX/PPTX), text files (TXT/MD/CSV/JSON/XML/LOG), and HTML. Uses local extractors when possible, vision models for images, and OCR endpoints or vision models for PDFs.",
             "types": "Custom Function",
             "function_path": "huf.ai.sdk_tools.handle_ocr_document",
             "pass_parameters_as_json": 1,
@@ -857,6 +857,16 @@ def register_integration_services():
 			"description": "Google Maps directions and geocoding",
 			"required_credentials": [
 				{"key": "api_key", "label": "Google Maps API Key", "required": True}
+			]
+		},
+		{
+			"service_name": "google_meet",
+			"category": "Google",
+			"description": "Google Meet meeting space creation",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
 			]
 		},
 	]

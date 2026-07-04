@@ -52,7 +52,7 @@ class AgentStreamRenderer(BaseRenderer):
 			except Exception:
 				pass
 			return self._render_agent_stream(agent_name)
-			
+
 		elif self.path == "huf/stream":
 			return self._render_html_page()
 		else:
@@ -62,14 +62,14 @@ class AgentStreamRenderer(BaseRenderer):
 		"""Generate SSE stream for agent response."""
 		# Get prompt from query parameters or request body
 		prompt = frappe.form_dict.get("prompt") or frappe.form_dict.get("message", "")
-		
+
 		# Optional Overrides
 		provider = frappe.form_dict.get("provider")
 		model = frappe.form_dict.get("model")
 		prompt_template = frappe.form_dict.get("prompt_template")
 		prompt_version = frappe.form_dict.get("prompt_version")
 		prompt_cache_options = frappe.form_dict.get("prompt_cache_options")
-		
+
 		if not prompt:
 			# Try to get from POST body
 			try:
@@ -83,12 +83,12 @@ class AgentStreamRenderer(BaseRenderer):
 					if not prompt_cache_options: prompt_cache_options = body.get("prompt_cache_options")
 			except Exception:
 				pass
-		
+
 		if not prompt:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": "Prompt parameter required"}
 				yield f"data: {json.dumps(error_data)}\n\n"
-			
+
 			return Response(
 				error_generator(),
 				mimetype="text/event-stream",
@@ -98,7 +98,7 @@ class AgentStreamRenderer(BaseRenderer):
 					"X-Accel-Buffering": "no",
 				},
 			)
-		
+
 		# Get agent configuration
 		try:
 			agent_doc = frappe.get_doc("Agent", agent_name)
@@ -111,7 +111,7 @@ class AgentStreamRenderer(BaseRenderer):
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": f"Agent '{agent_name}' not found"}
 				yield f"data: {json.dumps(error_data)}\n\n"
-			
+
 			return Response(
 				error_generator(),
 				mimetype="text/event-stream",
@@ -125,7 +125,7 @@ class AgentStreamRenderer(BaseRenderer):
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": f"Error loading agent: {str(e)}"}
 				yield f"data: {json.dumps(error_data)}\n\n"
-			
+
 			return Response(
 				error_generator(),
 				mimetype="text/event-stream",
@@ -135,11 +135,11 @@ class AgentStreamRenderer(BaseRenderer):
 					"X-Accel-Buffering": "no",
 				},
 			)
-		
+
 		# Get optional parameters
 		channel_id = frappe.form_dict.get("channel_id", "sse_stream")
 		external_id = frappe.form_dict.get("external_id") or frappe.session.user
-		
+
 		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
 		create_new = frappe.form_dict.get("create_new", False)
 		try:
@@ -152,19 +152,26 @@ class AgentStreamRenderer(BaseRenderer):
 			pass
 
 		create_new = bool(create_new)
-		
+
 		# Create async generator wrapper
 		def stream_generator() -> Generator[str, None, None]:
 			"""Wrapper to convert async generator to sync generator for Werkzeug Response."""
 			loop = None
+			created_loop = False
 			try:
 				# Try to get existing event loop
 				try:
 					loop = asyncio.get_event_loop()
+					if loop.is_closed():
+						loop = None
 				except RuntimeError:
+					loop = None
+
+				if loop is None:
 					loop = asyncio.new_event_loop()
 					asyncio.set_event_loop(loop)
-				
+					created_loop = True
+
 				# Create async generator
 				async_gen = run_agent_stream(
 					agent_name=agent_name,
@@ -179,13 +186,13 @@ class AgentStreamRenderer(BaseRenderer):
 					prompt_version=prompt_version,
 					prompt_cache_options=prompt_cache_options
 				)
-				
+
 				# Convert async generator to sync
 				while True:
 					try:
 						chunk = loop.run_until_complete(async_gen.__anext__())
 						yield f"data: {json.dumps(chunk)}\n\n"
-						
+
 						# Check if stream is complete
 						if chunk.get("type") in ("complete", "error"):
 							break
@@ -199,13 +206,21 @@ class AgentStreamRenderer(BaseRenderer):
 				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}"}
 				yield f"data: {json.dumps(error_data)}\n\n"
 			finally:
-				# Don't close loop if it was already running
-				if loop and loop != asyncio.get_event_loop():
+				# Close the loop if we created it AND unset it to prevent leaking closed loops!
+				if created_loop and loop:
 					try:
+						# Clean up pending tasks
+						pending = asyncio.all_tasks(loop)
+						for task in pending:
+							task.cancel()
+						if pending:
+							loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
 						loop.close()
 					except Exception:
 						pass
-		
+					finally:
+						asyncio.set_event_loop(None)
+
 		response = Response(
 			stream_generator(),
 			mimetype="text/event-stream",
@@ -215,7 +230,7 @@ class AgentStreamRenderer(BaseRenderer):
 				"X-Accel-Buffering": "no",
 			},
 		)
-		
+
 		return response
 
 	def _render_ping(self):
@@ -331,22 +346,22 @@ class AgentStreamRenderer(BaseRenderer):
 <body>
 	<div class="container">
 		<h1>Huf Streaming Demo</h1>
-		
+
 		<div id="status"></div>
-		
+
 		<div class="form-group">
 			<label for="agent-name">Agent Name:</label>
 			<input type="text" id="agent-name" placeholder="Enter agent name..." />
 		</div>
-		
+
 		<div class="form-group">
 			<label for="prompt-input">Message:</label>
 			<textarea id="prompt-input" placeholder="Enter your message...">Hello! Can you help me?</textarea>
 		</div>
-		
+
 		<button id="stream-btn" onclick="streamResponse()">Stream Response</button>
 		<button onclick="stopStream()">Stop</button>
-		
+
 		<div id="response"></div>
 	</div>
 
@@ -366,12 +381,12 @@ class AgentStreamRenderer(BaseRenderer):
 		function streamResponse() {
 			const agentName = agentNameInput.value.trim();
 			const prompt = promptInput.value.trim();
-			
+
 			if (!agentName) {
 				alert('Please enter an agent name');
 				return;
 			}
-			
+
 			if (!prompt) {
 				alert('Please enter a message');
 				return;
@@ -396,7 +411,7 @@ class AgentStreamRenderer(BaseRenderer):
 			eventSource.onmessage = function(event) {
 				try {
 					const data = JSON.parse(event.data);
-					
+
 					if (data.type === 'delta') {
 						// Update response with accumulated content
 						responseDiv.textContent = data.full_response || '';
@@ -419,7 +434,7 @@ class AgentStreamRenderer(BaseRenderer):
 			// Handle errors
 			eventSource.onerror = function(error) {
 				console.error('SSE Error:', error);
-				
+
 				// Try to parse error from last message
 				try {
 					const lastEvent = eventSource.lastEventId;
@@ -427,7 +442,7 @@ class AgentStreamRenderer(BaseRenderer):
 				} catch (e) {
 					// Ignore
 				}
-				
+
 				updateStatus('Connection error', 'error');
 				eventSource.close();
 				streamBtn.disabled = false;

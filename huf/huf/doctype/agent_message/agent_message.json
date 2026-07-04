@@ -37,6 +37,9 @@
   "column_break_agaw",
   "tool_status",
   "tool_args",
+  "tool_call_id",
+  "tool_calls",
+  "raw_payload",
   "voice_details_section",
   "voice_message",
   "generated_audio",
@@ -48,137 +51,15 @@
  ],
  "fields": [
   {
-   "fieldname": "conversation",
-   "fieldtype": "Link",
-   "in_list_view": 1,
-   "label": "Conversation",
-   "options": "Agent Conversation",
-   "read_only": 1
-  },
-  {
-   "fieldname": "user",
-   "fieldtype": "Data",
-   "label": "User",
-   "read_only": 1
-  },
-  {
-   "fieldname": "conversation_index",
-   "fieldtype": "Int",
-   "label": "Index in Conversation",
-   "read_only": 1
+   "fieldname": "content_tab",
+   "fieldtype": "Tab Break",
+   "label": "Message"
   },
   {
    "fieldname": "content",
    "fieldtype": "Code",
    "label": "Content",
    "options": "Markdown",
-   "read_only": 1
-  },
-  {
-   "fieldname": "kind",
-   "fieldtype": "Select",
-   "label": "Kind",
-   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage\nAudio",
-   "read_only": 1
-  },
-  {
-   "default": "user",
-   "fieldname": "role",
-   "fieldtype": "Select",
-   "hidden": 1,
-   "label": "Role",
-   "options": "user\ntool\nagent\nsystem",
-   "read_only": 1
-  },
-  {
-   "fieldname": "session_id",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Session ID",
-   "read_only": 1
-  },
-  {
-   "default": "0",
-   "fieldname": "is_agent_message",
-   "fieldtype": "Check",
-   "label": "Is Agent Message",
-   "read_only": 1
-  },
-  {
-   "fieldname": "content_tab",
-   "fieldtype": "Tab Break",
-   "label": "Message"
-  },
-  {
-   "fieldname": "metadata_tab",
-   "fieldtype": "Tab Break",
-   "label": "Metadata"
-  },
-  {
-   "fieldname": "column_break_asyu",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "provider",
-   "fieldtype": "Link",
-   "label": "Provider",
-   "options": "AI Provider",
-   "read_only": 1
-  },
-  {
-   "fieldname": "model",
-   "fieldtype": "Link",
-   "label": "Model",
-   "options": "AI Model",
-   "read_only": 1
-  },
-  {
-   "fieldname": "agent",
-   "fieldtype": "Link",
-   "label": "Agent",
-   "options": "Agent",
-   "read_only": 1
-  },
-  {
-   "fieldname": "agent_run",
-   "fieldtype": "Link",
-   "label": "Run",
-   "options": "Agent Run",
-   "read_only": 1
-  },
-  {
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "hidden": 1,
-   "label": "Status",
-   "options": "\nStarted\nQueues\nCompleted\nFailed"
-  },
-  {
-   "fieldname": "tool_call",
-   "fieldtype": "Link",
-   "label": "Tool Calll",
-   "options": "Agent Tool Call",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "tool_call.tool",
-   "fieldname": "tool_name",
-   "fieldtype": "Data",
-   "label": "Tool Name",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "tool_call.tool_args",
-   "fieldname": "tool_args",
-   "fieldtype": "JSON",
-   "label": "Tool Args",
-   "read_only": 1
-  },
-  {
-   "fetch_from": "tool_call.status",
-   "fieldname": "tool_status",
-   "fieldtype": "Data",
-   "label": "Tool Status",
    "read_only": 1
   },
   {
@@ -196,41 +77,9 @@
    "read_only": 1
   },
   {
-   "depends_on": "eval:doc.kind == \"Audio\";",
-   "fieldname": "generated_audio",
-   "fieldtype": "Attach",
-   "label": "Generated Audio",
-   "read_only": 1
-  },
-  {
-   "depends_on": "eval:doc.kind == \"Audio\";",
-   "description": "AI Model used for Text-to-Speech in this audio message.",
-   "fieldname": "tts_model",
-   "fieldtype": "Link",
-   "label": "TTS Model",
-   "options": "AI Model",
-   "read_only": 1
-  },
-  {
-   "description": "Voice to use for TTS (e.g. alloy, echo, onyx).",
-   "fieldname": "tts_voice",
-   "fieldtype": "Data",
-   "label": "TTS Voice",
-   "read_only": 1
-  },
-  {
-   "description": "AI model used for Speech-to-Text transcription in this audio message.",
-   "fieldname": "stt_model",
-   "fieldtype": "Link",
-   "label": "STT Model",
-   "options": "AI Model",
-   "read_only": 1
-  },
-  {
-   "fieldname": "voice_message",
-   "fieldtype": "Attach",
-   "label": "Voice Message",
-   "read_only": 1
+   "fieldname": "metadata_tab",
+   "fieldtype": "Tab Break",
+   "label": "Metadata"
   },
   {
    "fieldname": "conversation_details_section",
@@ -238,13 +87,84 @@
    "label": "Conversation Details"
   },
   {
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "label": "Provider",
+   "options": "AI Provider",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Conversation",
+   "options": "Agent Conversation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversation_index",
+   "fieldtype": "Int",
+   "label": "Index in Conversation",
+   "read_only": 1
+  },
+  {
    "fieldname": "column_break_jcev",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "label": "Model",
+   "options": "AI Model",
+   "read_only": 1
+  },
+  {
+   "fieldname": "user",
+   "fieldtype": "Data",
+   "label": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "label": "Run",
+   "options": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "session_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Session ID",
+   "read_only": 1
   },
   {
    "fieldname": "ai_context_section",
    "fieldtype": "Section Break",
    "label": "AI Context"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_agent_message",
+   "fieldtype": "Check",
+   "label": "Is Agent Message",
+   "read_only": 1
+  },
+  {
+   "default": "user",
+   "fieldname": "role",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Role",
+   "options": "user\ntool\nagent\nsystem",
+   "read_only": 1
   },
   {
    "fieldname": "context_policy",
@@ -259,26 +179,9 @@
    "options": "message\ntool_call\ntool_result\nretrieval_context\nresult_snapshot\nartifact\nsummary\nstatus\nerror\ndebug_trace"
   },
   {
-   "fieldname": "context_summary",
-   "fieldtype": "Small Text",
-   "label": "Context Summary"
-  },
-  {
-   "fieldname": "reference_doctype",
-   "fieldtype": "Data",
-   "label": "Reference DocType"
-  },
-  {
    "fieldname": "reference_name",
    "fieldtype": "Data",
    "label": "Reference Name"
-  },
-  {
-   "default": "user_visible",
-   "fieldname": "visibility",
-   "fieldtype": "Select",
-   "label": "Visibility",
-   "options": "user_visible\nmodel_visible\nui_only\naudit_only\ndeveloper_only"
   },
   {
    "fieldname": "token_estimate",
@@ -290,24 +193,144 @@
    "fieldtype": "Column Break"
   },
   {
+   "fieldname": "kind",
+   "fieldtype": "Select",
+   "label": "Kind",
+   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage\nAudio",
+   "read_only": 1
+  },
+  {
+   "fieldname": "context_summary",
+   "fieldtype": "Small Text",
+   "label": "Context Summary"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Data",
+   "label": "Reference DocType"
+  },
+  {
+   "default": "user_visible",
+   "fieldname": "visibility",
+   "fieldtype": "Select",
+   "label": "Visibility",
+   "options": "user_visible\nmodel_visible\nui_only\naudit_only\ndeveloper_only"
+  },
+  {
    "fieldname": "tool_call__details_section",
    "fieldtype": "Section Break",
    "label": "Tool Call  Details"
+  },
+  {
+   "fieldname": "tool_call",
+   "fieldtype": "Link",
+   "label": "Tool Calll",
+   "options": "Agent Tool Call",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "tool_call.tool",
+   "fieldname": "tool_name",
+   "fieldtype": "Data",
+   "label": "Tool Name",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_agaw",
    "fieldtype": "Column Break"
   },
   {
+   "fetch_from": "tool_call.status",
+   "fieldname": "tool_status",
+   "fieldtype": "Data",
+   "label": "Tool Status",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "tool_call.tool_args",
+   "fieldname": "tool_args",
+   "fieldtype": "JSON",
+   "label": "Tool Args",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tool_call_id",
+   "fieldtype": "Long Text",
+   "label": "Tool Call ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "tool_calls",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Tool Calls",
+   "read_only": 1
+  },
+  {
+   "fieldname": "raw_payload",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Raw Provider Payload",
+   "read_only": 1
+  },
+  {
    "fieldname": "voice_details_section",
    "fieldtype": "Section Break",
    "label": "Voice Details"
+  },
+  {
+   "fieldname": "voice_message",
+   "fieldtype": "Attach",
+   "label": "Voice Message",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.kind == \"Audio\";",
+   "fieldname": "generated_audio",
+   "fieldtype": "Attach",
+   "label": "Generated Audio",
+   "read_only": 1
+  },
+  {
+   "description": "Voice to use for TTS (e.g. alloy, echo, onyx).",
+   "fieldname": "tts_voice",
+   "fieldtype": "Data",
+   "label": "TTS Voice",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_asyu",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval:doc.kind == \"Audio\";",
+   "description": "AI Model used for Text-to-Speech in this audio message.",
+   "fieldname": "tts_model",
+   "fieldtype": "Link",
+   "label": "TTS Model",
+   "options": "AI Model",
+   "read_only": 1
+  },
+  {
+   "description": "AI model used for Speech-to-Text transcription in this audio message.",
+   "fieldname": "stt_model",
+   "fieldtype": "Link",
+   "label": "STT Model",
+   "options": "AI Model",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Status",
+   "options": "\nStarted\nQueues\nCompleted\nFailed"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-04 14:55:28.143716",
+ "modified": "2026-07-04 10:39:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Message",

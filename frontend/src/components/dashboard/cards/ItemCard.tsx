@@ -26,11 +26,13 @@ interface ItemCardProps {
   title: string;
   description?: string;
   icon?: LucideIcon;
+  avatarColor?: string | null;
   status?: {
     label: string;
     variant?: BadgeVariant;
   };
   metadata?: MetadataItem[];
+  badges?: Array<{ label: string; variant?: BadgeVariant }>;
   actions?: ActionButton[];
   menuActions?: ActionButton[];
   menuIcon?: LucideIcon;
@@ -43,8 +45,10 @@ export function ItemCard({
   title,
   description,
   icon: TitleIcon,
+  avatarColor,
   status,
   metadata = [],
+  badges = [],
   actions = [],
   menuActions = [],
   menuIcon: MenuIcon = MoreVertical,
@@ -57,6 +61,13 @@ export function ItemCard({
       <div className="flex flex-col flex-1">
         <CardHeader className="pb-3">
           <CardTitle className="text-xl font-semibold line-clamp-1 flex items-center gap-2">
+            {avatarColor && (
+              <span
+                className="w-3 h-3 rounded-full shrink-0 border border-border"
+                style={{ backgroundColor: avatarColor }}
+                aria-hidden
+              />
+            )}
             {TitleIcon && <TitleIcon className="w-5 h-5 shrink-0 text-muted-foreground" />}
             {title}
           </CardTitle>
@@ -87,6 +98,16 @@ export function ItemCard({
                     </div>
                     <span className="font-medium">{item.value}</span>
                   </div>
+                ))}
+              </div>
+            )}
+
+            {badges.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {badges.map((badge) => (
+                  <Badge key={badge.label} variant={badge.variant || 'secondary'} className="text-xs">
+                    {badge.label}
+                  </Badge>
                 ))}
               </div>
             )}

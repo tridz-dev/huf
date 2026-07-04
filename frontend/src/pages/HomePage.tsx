@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { Button } from '../components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { ActiveAgentsTab, ActiveFlowsTab, RecentExecutionsTab } from '../components/dashboard';
-import { getAgentRunsCountLast7Days, getAgentRunsForMetrics, getRecentAgentRuns, type AgentRunMetricsDoc } from '../services/dashboardApi';
+import { getAgentRunsCountLast7Days, getAgentRunsForMetrics, getRecentAgentRuns, getDashboardActiveFlows, type AgentRunMetricsDoc, type DashboardFlowItem } from '../services/dashboardApi';
 import type { AgentRunDoc } from '../services/agentRunApi';
 import { getAgents } from '../services/agentApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -134,12 +134,14 @@ function HomePage() {
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [agentRuns, setAgentRuns] = useState<AgentRunDoc[]>([]);
   const [agentRunsLoading, setAgentRunsLoading] = useState(true);
+  const [flows, setFlows] = useState<DashboardFlowItem[]>([]);
+  const [flowsLoading, setFlowsLoading] = useState(true);
 
   useEffect(() => {
     async function fetchAllData() {
       try {
         // Fetch all data in parallel
-        const [totalRuns, runsData, agentsData, recentRuns] = await Promise.all([
+        const [totalRuns, runsData, agentsData, recentRuns, flowsData] = await Promise.all([
           getAgentRunsCountLast7Days(),
           getAgentRunsForMetrics(),
           getAgents({
@@ -148,6 +150,7 @@ function HomePage() {
             page: 1,
           }),
           getRecentAgentRuns(),
+          getDashboardActiveFlows(10),
         ]);
 
         // Process metrics
@@ -169,12 +172,16 @@ function HomePage() {
 
         // Set agent runs
         setAgentRuns(recentRuns);
+
+        // Set flows
+        setFlows(flowsData);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
         setMetricsLoading(false);
         setAgentsLoading(false);
         setAgentRunsLoading(false);
+        setFlowsLoading(false);
       }
     }
 
@@ -274,6 +281,15 @@ function HomePage() {
                 Show More
               </Button>
             )}
+            {activeTab === 'flows' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/flows')}
+              >
+                Show More
+              </Button>
+            )}
           </div>
 
           {/* Agents Tab */}
@@ -283,7 +299,7 @@ function HomePage() {
 
           {/* Flows Tab */}
           <TabsContent value="flows" className="space-y-4">
-            <ActiveFlowsTab />
+            <ActiveFlowsTab flows={flows} loading={flowsLoading} />
           </TabsContent>
 
           {/* Executions Tab */}

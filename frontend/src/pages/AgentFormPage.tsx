@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
+import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolTypes, getToolFunction, updateToolFunction, getToolFunctionsByName } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -92,6 +93,11 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     context_strategy: agent.context_strategy || undefined,
     summary_model: agent.summary_model || undefined,
     summary_ratio: agent.summary_ratio !== undefined && agent.summary_ratio !== null ? agent.summary_ratio : undefined,
+    summary_prompt_mode: agent.summary_prompt_mode || 'Local',
+    summary_prompt_template: agent.summary_prompt_template || '',
+    summary_prompt_version_locked: agent.summary_prompt_version_locked === 1,
+    summary_template_version_at_attach: agent.summary_template_version_at_attach !== undefined ? agent.summary_template_version_at_attach : undefined,
+    summary_prompt: agent.summary_prompt || '',
     history_limit: agent.history_limit !== undefined && agent.history_limit !== null ? agent.history_limit : undefined,
     max_knowledge_tokens:
       agent.max_knowledge_tokens !== undefined && agent.max_knowledge_tokens !== null ? agent.max_knowledge_tokens : undefined,
@@ -162,6 +168,11 @@ export function AgentFormPage() {
        'context_strategy',
         'summary_model',
         'summary_ratio',
+        'summary_prompt_mode',
+        'summary_prompt_template',
+        'summary_prompt_version_locked',
+        'summary_template_version_at_attach',
+        'summary_prompt',
         'history_limit',
         'max_knowledge_tokens',
         'max_turns',
@@ -228,6 +239,8 @@ export function AgentFormPage() {
   const [allModels, setAllModels] = useState<AIModel[]>([]);
   const [promptOptions, setPromptOptions] = useState<AgentPromptOption[]>([]);
   const [loadingPrompts, setLoadingPrompts] = useState(false);
+  const [summaryPromptOptions, setSummaryPromptOptions] = useState<AgentPromptOption[]>([]);
+  const [loadingSummaryPrompts, setLoadingSummaryPrompts] = useState(false);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
@@ -287,6 +300,11 @@ export function AgentFormPage() {
         context_strategy: undefined,
         summary_model: undefined,
         summary_ratio: undefined,
+        summary_prompt_mode: "Local",
+        summary_prompt_template: '',
+        summary_prompt_version_locked: false,
+        summary_template_version_at_attach: undefined,
+        summary_prompt: '',
         history_limit: undefined,
         max_knowledge_tokens: undefined,
         max_turns: undefined,
@@ -480,6 +498,52 @@ export function AgentFormPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadSummaryPromptOptions = async () => {
+      setLoadingSummaryPrompts(true);
+      try {
+        const prompts = await db.getDocList('Agent Summary Prompt', {
+          fields: ['name', 'title', 'version', 'is_latest', 'description'],
+          filters: [['is_active', '=', 1]],
+          limit: 500,
+          orderBy: { field: 'modified', order: 'desc' },
+        }) as PromptListRow[];
+
+        if (cancelled) {
+          return;
+        }
+
+        setSummaryPromptOptions(
+          prompts.map((prompt) => ({
+            value: prompt.name,
+            label: prompt.title || prompt.name,
+            description: prompt.description || undefined,
+            version: typeof prompt.version === 'number' ? prompt.version : undefined,
+            isLatest: prompt.is_latest === 1,
+          }))
+        );
+      } catch (error) {
+        console.error('Error loading summary prompt templates:', error);
+        if (!cancelled) {
+          setSummaryPromptOptions([]);
+          toast.error('Failed to load Agent Summary Prompt templates');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSummaryPrompts(false);
+        }
+      }
+    };
+
+    loadSummaryPromptOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const state = location.state as { selectedPrompt?: string; showTab?: string; selectedPromptField?: string } | null;
     if (state?.selectedPrompt) {
       setPendingSelectedPrompt(state.selectedPrompt);
@@ -500,11 +564,15 @@ export function AgentFormPage() {
     const run = async () => {
       setResolvingPendingPrompt(true);
       try {
-        const promptExists = promptOptions.some((option) => option.value === pendingSelectedPrompt);
+        const isSummaryPrompt = fieldName === 'summary_prompt_template';
+        const existingOptions = isSummaryPrompt ? summaryPromptOptions : promptOptions;
+        const promptExists = existingOptions.some((option) => option.value === pendingSelectedPrompt);
 
         // Ensure the selector's option list contains the newly created prompt.
         if (!promptExists) {
-          const promptDoc = await getAgentPrompt(pendingSelectedPrompt);
+          const promptDoc = isSummaryPrompt
+            ? await getAgentSummaryPrompt(pendingSelectedPrompt)
+            : await getAgentPrompt(pendingSelectedPrompt);
 
           if (promptDoc?.is_active === 1) {
             const option: AgentPromptOption = {
@@ -515,7 +583,8 @@ export function AgentFormPage() {
               isLatest: promptDoc.is_latest === 1,
             };
 
-            setPromptOptions((prev) => {
+            const setOptions = isSummaryPrompt ? setSummaryPromptOptions : setPromptOptions;
+            setOptions((prev) => {
               if (prev.some((p) => p.value === option.value)) return prev;
               return [option, ...prev];
             });
@@ -526,6 +595,9 @@ export function AgentFormPage() {
         if (fieldName === 'agent_prompt' && form.getValues('prompt_mode') !== 'Template') {
           form.setValue('prompt_mode', 'Template', { shouldDirty: true });
         }
+        if (fieldName === 'summary_prompt_template' && form.getValues('summary_prompt_mode') !== 'Template') {
+          form.setValue('summary_prompt_mode', 'Template', { shouldDirty: true });
+        }
 
         // Attach/select the created prompt in the form.
         form.setValue(fieldName as any, pendingSelectedPrompt as any, { shouldDirty: true });
@@ -533,7 +605,7 @@ export function AgentFormPage() {
         setPendingSelectedPrompt(null);
         setPendingSelectedPromptField(null);
 
-        if (fieldName === 'agent_prompt') {
+        if (fieldName === 'agent_prompt' || fieldName === 'summary_prompt_template') {
           setPendingScrollToPromptField(true);
         }
 
@@ -557,6 +629,7 @@ export function AgentFormPage() {
     pendingSelectedPromptField,
     resolvingPendingPrompt,
     promptOptions,
+    summaryPromptOptions,
     form,
     location.pathname,
     location.search,
@@ -585,6 +658,8 @@ export function AgentFormPage() {
 
   const watchPromptMode = form.watch('prompt_mode');
   const watchAgentPrompt = form.watch('agent_prompt');
+  const watchSummaryPromptMode = form.watch('summary_prompt_mode');
+  const watchSummaryPromptTemplate = form.watch('summary_prompt_template');
 
   useEffect(() => {
     // Don't clear prompt selection while we're applying an incoming selection from navigation.
@@ -601,6 +676,22 @@ export function AgentFormPage() {
       form.setValue('template_version_at_attach', undefined, { shouldDirty: false });
     }
   }, [watchPromptMode, watchAgentPrompt, form, pendingSelectedPrompt]);
+
+  useEffect(() => {
+    // Don't clear prompt selection while we're applying an incoming selection from navigation.
+    if (pendingSelectedPrompt) return;
+    if (watchSummaryPromptMode === 'Local') {
+      form.setValue('summary_prompt_template', '', { shouldDirty: false });
+      form.setValue('summary_prompt_version_locked', false, { shouldDirty: false });
+      form.setValue('summary_template_version_at_attach', undefined, { shouldDirty: false });
+      return;
+    }
+
+    if (watchSummaryPromptMode === 'Template' && !watchSummaryPromptTemplate) {
+      form.setValue('summary_prompt_version_locked', false, { shouldDirty: false });
+      form.setValue('summary_template_version_at_attach', undefined, { shouldDirty: false });
+    }
+  }, [watchSummaryPromptMode, watchSummaryPromptTemplate, form, pendingSelectedPrompt]);
 
   useEffect(() => {
     if (watchPromptMode !== 'Template' || !watchAgentPrompt) {
@@ -621,11 +712,33 @@ export function AgentFormPage() {
   }, [watchPromptMode, watchAgentPrompt, promptOptions, form]);
 
   useEffect(() => {
-    if (!pendingScrollToPromptField) return;
-    if (activeTab !== 'general') return;
-    if (watchPromptMode !== 'Template') return;
+    if (watchSummaryPromptMode !== 'Template' || !watchSummaryPromptTemplate) {
+      return;
+    }
 
-    const el = document.getElementById('agent-prompt-field');
+    const selectedPrompt = summaryPromptOptions.find((option) => option.value === watchSummaryPromptTemplate);
+    if (!selectedPrompt || typeof selectedPrompt.version !== 'number') {
+      return;
+    }
+
+    const currentVersion = form.getValues('summary_template_version_at_attach');
+    if (currentVersion === selectedPrompt.version) {
+      return;
+    }
+
+    form.setValue('summary_template_version_at_attach', selectedPrompt.version, { shouldDirty: true });
+  }, [watchSummaryPromptMode, watchSummaryPromptTemplate, summaryPromptOptions, form]);
+
+  useEffect(() => {
+    if (!pendingScrollToPromptField) return;
+
+    let el: HTMLElement | null = null;
+    if (activeTab === 'general' && watchPromptMode === 'Template') {
+      el = document.getElementById('agent-prompt-field');
+    } else if (activeTab === 'advanced' && watchSummaryPromptMode === 'Template') {
+      el = document.getElementById('summary-prompt-template-field');
+    }
+
     if (el) {
       // Wait a couple frames for the tab content to finish rendering.
       requestAnimationFrame(() => {
@@ -636,7 +749,7 @@ export function AgentFormPage() {
     }
 
     setPendingScrollToPromptField(false);
-  }, [pendingScrollToPromptField, activeTab, watchPromptMode]);
+  }, [pendingScrollToPromptField, activeTab, watchPromptMode, watchSummaryPromptMode]);
 
   // Load agent data when id is available (only for edit mode)
   useEffect(() => {
@@ -674,6 +787,11 @@ export function AgentFormPage() {
             context_strategy: data.context_strategy || undefined,
             summary_model: data.summary_model || undefined,
             summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
+            summary_prompt_mode: data.summary_prompt_mode || 'Local',
+            summary_prompt_template: data.summary_prompt_template || '',
+            summary_prompt_version_locked: data.summary_prompt_version_locked === 1,
+            summary_template_version_at_attach: data.summary_template_version_at_attach !== undefined ? data.summary_template_version_at_attach : undefined,
+            summary_prompt: data.summary_prompt || '',
             history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
             max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
             max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
@@ -837,6 +955,11 @@ export function AgentFormPage() {
         context_strategy: values.context_strategy || undefined,
         summary_model: values.summary_model || undefined,
         summary_ratio: values.summary_ratio !== undefined ? values.summary_ratio : undefined,
+        summary_prompt_mode: values.summary_prompt_mode || 'Local',
+        summary_prompt_template: values.summary_prompt_template || '',
+        summary_prompt_version_locked: values.summary_prompt_version_locked ? 1 : 0,
+        summary_template_version_at_attach: values.summary_template_version_at_attach !== undefined ? values.summary_template_version_at_attach : undefined,
+        summary_prompt: values.summary_prompt || '',
         history_limit: values.history_limit !== undefined ? values.history_limit : undefined,
         max_knowledge_tokens: values.max_knowledge_tokens !== undefined ? values.max_knowledge_tokens : undefined,
         max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
@@ -903,6 +1026,11 @@ export function AgentFormPage() {
           context_strategy: newAgent.context_strategy || undefined,
           summary_model: newAgent.summary_model || undefined,
           summary_ratio: newAgent.summary_ratio !== undefined && newAgent.summary_ratio !== null ? newAgent.summary_ratio : undefined,
+          summary_prompt_mode: newAgent.summary_prompt_mode || 'Local',
+          summary_prompt_template: newAgent.summary_prompt_template || '',
+          summary_prompt_version_locked: newAgent.summary_prompt_version_locked === 1,
+          summary_template_version_at_attach: newAgent.summary_template_version_at_attach !== undefined ? newAgent.summary_template_version_at_attach : undefined,
+          summary_prompt: newAgent.summary_prompt || '',
           history_limit: newAgent.history_limit !== undefined && newAgent.history_limit !== null ? newAgent.history_limit : undefined,
           max_knowledge_tokens: newAgent.max_knowledge_tokens !== undefined && newAgent.max_knowledge_tokens !== null ? newAgent.max_knowledge_tokens : undefined,
           max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
@@ -960,6 +1088,11 @@ form.reset({
   context_strategy: values.context_strategy,
   summary_model: values.summary_model,
   summary_ratio: values.summary_ratio,
+  summary_prompt_mode: values.summary_prompt_mode,
+  summary_prompt_template: values.summary_prompt_template,
+  summary_prompt_version_locked: values.summary_prompt_version_locked,
+  summary_template_version_at_attach: values.summary_template_version_at_attach,
+  summary_prompt: values.summary_prompt,
   history_limit: values.history_limit,
   max_knowledge_tokens: values.max_knowledge_tokens,
   max_turns: values.max_turns,
@@ -1527,7 +1660,12 @@ setAllowChat(values.allow_chat);
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-4">
-                <AdvancedTab form={form} allModels={allModels} />
+                <AdvancedTab
+                  form={form}
+                  allModels={allModels}
+                  summaryPromptOptions={summaryPromptOptions}
+                  loadingSummaryPrompts={loadingSummaryPrompts}
+                />
               </TabsContent>
             </Tabs>
           </form>

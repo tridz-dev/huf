@@ -11,6 +11,8 @@ import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
 import { InstructionsTextarea } from './InstructionsTextarea';
 import { PromptTemplateSection, type AgentPromptOption } from './PromptTemplateSection';
+import { LinkFieldControl } from '@/components/ui/link-field-control';
+import { linkRoutes } from '@/lib/link-routes';
 
 interface GeneralTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -95,26 +97,28 @@ export function GeneralTab({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Provider</FormLabel>
-                <Select
-                  onValueChange={(value) => {
-                    field.onChange(value);
-                    form.setValue('model', '');
-                  }}
-                  value={field.value || undefined}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select provider" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {providers.map((provider) => (
-                      <SelectItem key={provider.name} value={provider.name}>
-                        {provider.provider_name || provider.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <LinkFieldControl value={field.value} linkTo={linkRoutes.aiProvider}>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        form.setValue('model', '');
+                      }}
+                      value={field.value || undefined}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {providers.map((provider) => (
+                          <SelectItem key={provider.name} value={provider.name}>
+                            {provider.provider_name || provider.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </LinkFieldControl>
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -126,22 +130,24 @@ export function GeneralTab({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Model</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!watchProvider}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select model" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {models
-                      .filter((model) => model.provider === watchProvider)
-                      .map((model) => (
-                        <SelectItem key={model.name} value={model.name}>
-                          {model.model_name || model.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel} disabled={!watchProvider}>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!watchProvider}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {models
+                          .filter((model) => model.provider === watchProvider)
+                          .map((model) => (
+                            <SelectItem key={model.name} value={model.name}>
+                              {model.model_name || model.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </LinkFieldControl>
+                </FormControl>
                 <FormDescription>Filtered by selected provider</FormDescription>
                 <FormMessage />
               </FormItem>
