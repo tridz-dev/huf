@@ -32,10 +32,10 @@ const AgentSummaryPromptFormPageWrapper = lazy(() => import('./pages/AgentSummar
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
-const IntegrationsPageWrapper = lazy(() => import('./pages/IntegrationsPageWrapper'));
+const AiProvidersPageWrapper = lazy(() => import('./pages/AiProvidersPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const Executions = lazy(() => import('./pages/Executions'));
-const AgentRunDetailPage = lazy(() => import('./pages/AgentRunDetailPage'));
+const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
@@ -281,7 +281,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
-                  <IntegrationsPageWrapper />
+                  <AiProvidersPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
@@ -354,28 +354,14 @@ function App() {
             path="/executions/:runId"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <AgentRunDetailPage />
-                  </Suspense>
-                </UnifiedLayout>
+                <Suspense fallback={<PageLoader />}>
+                  <AgentRunDetailPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
           <Route
             path="/settings"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <NotFoundPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/help"
             element={
               <ProtectedRoute>
                 <UnifiedLayout>

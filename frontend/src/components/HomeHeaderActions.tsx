@@ -30,11 +30,11 @@ export function HomeHeaderActions() {
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={handleNewFlow}>
           <Workflow className="w-4 h-4 mr-2" />
-          New Flow
+          Open Flows
         </DropdownMenuItem>
         <DropdownMenuItem onClick={handleNewAgent}>
           <Bot className="w-4 h-4 mr-2" />
-          New Agent
+          Open Agents
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

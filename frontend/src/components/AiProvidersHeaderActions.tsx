@@ -1,9 +1,9 @@
 import { Plus } from 'lucide-react';
 import { Button } from './ui/button';
-import { useIntegrations } from '../contexts/IntegrationsContext';
+import { useAiProviders } from '../contexts/AiProvidersContext';
 
-export function IntegrationsHeaderActions() {
-  const { onAddProvider } = useIntegrations();
+export function AiProvidersHeaderActions() {
+  const { onAddProvider } = useAiProviders();
 
   return (
     <Button onClick={onAddProvider} size="sm">

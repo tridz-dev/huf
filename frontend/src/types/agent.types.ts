@@ -64,7 +64,7 @@ export type AgentEnvironment = "Dev" | "Prod";
 export type AgentStatus = "Draft" | "Active" | "Archived";
 
 export type ScheduledInterval = "Hourly" | "Daily" | "Weekly" | "Monthly" | "Yearly";
-export type DocEventType = "before_insert" | "after_insert" | "validate" | "before_save" | "after_save" | "before_submit" | "on_submit" | "after_submit" | "on_cancel" | "before_rename" | "after_rename" | "on_trash" | "after_delete";
+export type DocEventType = "before_insert" | "after_insert" | "validate" | "before_save" | "after_save" | "before_submit" | "on_submit" | "on_update" | "after_submit" | "on_cancel" | "before_rename" | "after_rename" | "on_trash" | "after_delete";
 export type TriggerType = "Schedule" | "Doc Event" | "Webhook" | "App Event" | "Manual";
 
 export type AgentTrigger = {

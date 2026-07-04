@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2 } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Shield } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -105,6 +105,12 @@ const allNavItems = [
     url: "/users",
     icon: Users,
     capability: "users.manage",
+  },
+  {
+    title: "Roles",
+    url: "/roles",
+    icon: Shield,
+    capability: "roles.manage",
   },
 ]
 
