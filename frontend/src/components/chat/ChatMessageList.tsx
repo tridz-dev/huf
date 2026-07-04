@@ -40,7 +40,7 @@ export function ChatMessageList({
     const [isModelMismatch, setIsModelMismatch] = useState(false);
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
 
-    const { agentName, agentColor, showToolExecutionDetails, allowFileUpload } = useChatAgentIdentity(chatId, searchParams);
+    const { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb } = useChatAgentIdentity(chatId, searchParams);
 
     // Check for model mismatch between conversation and agent
     useEffect(() => {
@@ -329,6 +329,7 @@ export function ChatMessageList({
                 isModelMismatch={isModelMismatch}
                 scrollToBottomAfterPaint={scrollToBottomAfterPaint}
                 allowFileUpload={allowFileUpload}
+                maxUploadSizeMb={maxUploadSizeMb}
             />
             </div>
         </div>

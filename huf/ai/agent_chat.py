@@ -569,6 +569,9 @@ def upload_file_and_process_web(
         except frappe.DoesNotExistError:
             conv = None
 
+        if conv and conv.owner != frappe.session.user:
+            frappe.throw(_("You do not have permission to upload to this conversation."), frappe.PermissionError)
+
     if not conv:
         cm = ConversationManager(agent_name=agent, channel="Chat")
         conv = cm.create_new_conversation()
@@ -583,10 +586,10 @@ def upload_file_and_process_web(
         "content": f"Uploaded file: {filename}",
         "user": frappe.session.user,
     })
-    msg.insert(ignore_permissions=True)
+    msg.insert()
 
     try:
-        saved_file = save_file(filename, file_bytes, "Agent Message", msg.name, is_private=False)
+        saved_file = save_file(filename, file_bytes, "Agent Message", msg.name, is_private=True)
     except Exception as e:
         frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
         return {"success": False, "error": "Could not save file to database."}

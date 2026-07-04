@@ -12,6 +12,7 @@ import {
 } from "@/services/streamChatApi";
 import { transcribeAudio, uploadFileAndProcess } from "@/services/chatApi";
 import { SpeechInput } from "@/components/ai-elements/speech-input";
+import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import type { MessageType } from './types';
 
 export type LoadingType = 'default' | 'transcribing';
@@ -28,6 +29,7 @@ interface ChatInputProps {
     isModelMismatch?: boolean;
     scrollToBottomAfterPaint?: (instant?: boolean) => void;
     allowFileUpload?: boolean;
+    maxUploadSizeMb?: number | null;
 }
 
 export function ChatInput({ 
@@ -42,6 +44,7 @@ export function ChatInput({
     isModelMismatch = false,
     scrollToBottomAfterPaint,
     allowFileUpload = false,
+    maxUploadSizeMb,
 }: ChatInputProps) {
     const navigate = useNavigate();
     const [message, setMessage] = useState('');
@@ -295,6 +298,12 @@ export function ChatInput({
         e.target.value = '';
         if (!file || !agentName) return;
 
+        const sizeLimitMb = maxUploadSizeMb ?? 25;
+        if (file.size > sizeLimitMb * 1024 * 1024) {
+            toast.error(`File exceeds the maximum size of ${sizeLimitMb} MB.`);
+            return;
+        }
+
         setPendingFile({ name: file.name, status: 'uploading' });
 
         const reader = new FileReader();
@@ -316,17 +325,11 @@ export function ChatInput({
             });
 
             if (!res?.success) {
-                setPendingFile({ name: file.name, status: 'error', error: res?.error || 'Upload failed' });
+                setPendingFile({ name: file.name, status: 'error', error: res?.error || getFrappeErrorMessage(res?.error) || 'Upload failed' });
                 return;
             }
 
             setPendingFile(null);
-            if (res.text) {
-                setMessage((prev) => {
-                    const notice = `[Uploaded: ${file.name}]\n\n${res.text}`;
-                    return prev ? `${prev}\n\n${notice}` : notice;
-                });
-            }
             if (res.conversation_id && !chatId && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = res.conversation_id;
                 onConversationCreated(res.conversation_id, agentName);
@@ -336,10 +339,10 @@ export function ChatInput({
             setPendingFile({
                 name: file.name,
                 status: 'error',
-                error: err instanceof Error ? err.message : 'Upload failed',
+                error: getFrappeErrorMessage(err) || (err instanceof Error ? err.message : 'Upload failed'),
             });
         }
-    }, [agentName, chatId, onConversationCreated, newlyCreatedConversationIdRef]);
+    }, [agentName, chatId, maxUploadSizeMb, onConversationCreated, newlyCreatedConversationIdRef]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -488,6 +491,7 @@ export function ChatInput({
                                 <input
                                     ref={fileInputRef}
                                     type="file"
+                                    accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.xml,.html,.htm"
                                     className="hidden"
                                     onChange={handleFileSelected}
                                     disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
