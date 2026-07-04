@@ -16,7 +16,12 @@ interface UnsavedChangesDialogProps {
 
 export function UnsavedChangesDialog({ blocker }: UnsavedChangesDialogProps) {
 	return (
-		<AlertDialog open={blocker.state === 'blocked'}>
+		<AlertDialog
+			open={blocker.state === 'blocked'}
+			onOpenChange={(open) => {
+				if (!open) blocker.reset?.();
+			}}
+		>
 			<AlertDialogContent>
 				<AlertDialogHeader>
 					<AlertDialogTitle>Unsaved changes</AlertDialogTitle>
