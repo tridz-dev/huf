@@ -23,21 +23,21 @@ export function ToolTemplateCard({ template, onClick }: ToolTemplateCardProps) {
       onClick={onClick}
       className={cn(
         'cursor-pointer group relative flex flex-col items-start p-5',
-        'bg-white border border-gray-200 rounded-xl',
-        'hover:border-purple-500 hover:shadow-md transition-all'
+        'bg-card border border-border rounded-xl',
+        'hover:border-primary hover:shadow-md transition-all'
       )}
     >
       <div
         className={cn(
-          'h-10 w-10 rounded-lg bg-gray-50 text-purple-600',
+          'h-10 w-10 rounded-lg bg-muted text-primary',
           'flex items-center justify-center mb-4',
-          'group-hover:bg-purple-50 transition-colors'
+          'group-hover:bg-primary/10 transition-colors'
         )}
       >
         <Icon className="w-6 h-6" aria-hidden="true" />
       </div>
-      <h3 className="font-semibold text-gray-900 mb-1">{template.name}</h3>
-      <p className="text-sm text-gray-500 leading-relaxed">{template.description}</p>
+      <h3 className="font-semibold text-foreground mb-1">{template.name}</h3>
+      <p className="text-sm text-muted-foreground leading-relaxed">{template.description}</p>
     </div>
   );
 }

@@ -45,7 +45,7 @@ export function ParameterCard({
   };
 
   return (
-    <Card className="border-gray-200">
+    <Card className="border-border">
       <CardContent className="p-4 space-y-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-medium text-sm">Parameter {index + 1}</h4>

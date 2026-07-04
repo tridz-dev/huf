@@ -166,7 +166,7 @@ export function FlowsHeaderActions() {
       <Button
         variant="secondary"
         size="sm"
-        className="gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800"
+        className="gap-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
         onClick={handleRun}
         disabled={!activeFlow || isRunning}
       >

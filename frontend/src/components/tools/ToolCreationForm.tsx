@@ -387,7 +387,7 @@ export function ToolCreationForm({
           variant="outline"
           size="sm"
           onClick={() => setEditingParameterIndex(null)}
-          className="bg-white"
+          className="bg-background"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Tool Settings
@@ -423,8 +423,8 @@ export function ToolCreationForm({
       {/* CORE CONFIGURATION Section */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-3">
-          <Settings className="w-5 h-5 text-gray-600" />
-          <h3 className="font-semibold text-gray-900">CORE CONFIGURATION</h3>
+          <Settings className="w-5 h-5 text-muted-foreground" />
+          <h3 className="font-semibold text-foreground">CORE CONFIGURATION</h3>
         </div>
 
         <FormField
@@ -496,8 +496,8 @@ export function ToolCreationForm({
       {/* OPERATION DETAILS Section */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-5 h-5 text-gray-600" />
-          <h3 className="font-semibold text-gray-900">OPERATION DETAILS</h3>
+          <Zap className="w-5 h-5 text-muted-foreground" />
+          <h3 className="font-semibold text-foreground">OPERATION DETAILS</h3>
         </div>
 
         <FormField
@@ -691,7 +691,7 @@ export function ToolCreationForm({
       {selectedType && shouldShowField('http_headers', selectedType) && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">HTTP Headers</h3>
+            <h3 className="font-semibold text-foreground">HTTP Headers</h3>
             <Button
               type="button"
               variant="outline"
@@ -726,7 +726,7 @@ export function ToolCreationForm({
       {/* Parameters Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900">Parameters</h3>
+          <h3 className="font-semibold text-foreground">Parameters</h3>
           <div className="flex items-center gap-2">
             {selectedType === 'Custom Function' && (
               <Button
@@ -811,7 +811,7 @@ export function ToolCreationForm({
 
       {/* Optional Fields Section */}
       <div className="space-y-4 pt-1">
-        <h3 className="font-semibold text-gray-900">Additional Settings</h3>
+        <h3 className="font-semibold text-foreground">Additional Settings</h3>
 
         <FormField
           control={form.control}
@@ -913,14 +913,14 @@ export function ToolCreationForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-7 px-1">
         {editingParameterIndex === null && (
-          <div className="sticky top-0 z-10 bg-white border-b pb-3 -mx-1 px-1 mb-4">
+          <div className="sticky top-0 z-10 bg-background border-b pb-3 -mx-1 px-1 mb-4">
             <div className="flex items-center justify-between gap-4">
               <Button
                 type="button"
                 variant="outline"
                 onClick={onBack}
                 disabled={loading}
-                className="bg-white shrink-0"
+                className="bg-background shrink-0"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
