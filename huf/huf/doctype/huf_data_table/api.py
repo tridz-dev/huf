@@ -1,4 +1,5 @@
 import json
+import re
 
 import frappe
 from frappe import _
@@ -23,6 +24,23 @@ def _require_data_manage():
 		)
 
 
+def _require_data_view():
+	"""Throw if the current user has no data-table access at all."""
+	user = frappe.session.user
+	if not any(
+		has_capability(user, cap)
+		for cap in (
+			"data.tables.manage",
+			"data.records.view_own",
+			"data.records.view_all",
+		)
+	):
+		frappe.throw(
+			_("You don't have permission to view data tables."),
+			frappe.PermissionError,
+		)
+
+
 @frappe.whitelist()
 def create_data_table(
 	table_name: str,
@@ -41,6 +59,10 @@ def create_data_table(
 	table_name = table_name.strip()
 	if not table_name:
 		frappe.throw("Table name is required")
+	if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,139}", table_name):
+		frappe.throw(
+			"Table name may only contain letters, numbers, spaces, underscores, and hyphens."
+		)
 
 	doctype_name = f"HF {table_name}"
 
@@ -191,6 +213,8 @@ def get_table_record_counts(names: str | list[str]) -> dict:
 	Standard REST can't count records across dynamic DocTypes,
 	so this helper exists for the listing page enrichment.
 	"""
+	_require_data_view()
+
 	if isinstance(names, str):
 		names = json.loads(names)
 
@@ -208,6 +232,8 @@ def get_table_record_counts(names: str | list[str]) -> dict:
 @frappe.whitelist()
 def get_table_schema(name: str) -> dict:
 	"""Get complete table schema (fields with all properties)."""
+	_require_data_view()
+
 	registry = frappe.get_doc("Huf Data Table", name)
 	meta = frappe.get_meta(registry.doctype_name)
 
@@ -250,5 +276,6 @@ def apply_data_permissions() -> dict:
 
 	Called by the Huf Role on_update hook whenever role capabilities change.
 	"""
+	_require_data_manage()
 	sync_data_table_permissions()
 	return {"success": True}
