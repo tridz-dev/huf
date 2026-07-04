@@ -12,7 +12,7 @@ interface ProtectedRouteProps {
   capability?: string;
 }
 
-function AccessDenied() {
+function AccessDenied({ capability }: { capability?: string }) {
   return (
     <div className="flex min-h-screen items-center justify-center p-6 bg-background">
       <Card className="w-full max-w-md text-center">
@@ -20,7 +20,9 @@ function AccessDenied() {
           <ShieldAlert className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h1 className="text-2xl font-semibold text-foreground mb-2">Access Denied</h1>
           <p className="text-muted-foreground mb-6">
-            You don't have permission to view this page. Contact your administrator if you think this is a mistake.
+            {capability
+              ? `You need the "${capability}" permission to view this page. Contact your administrator if you think this is a mistake.`
+              : "You don't have permission to view this page. Contact your administrator if you think this is a mistake."}
           </p>
           <Button asChild variant="outline">
             <Link to="/">Go to Dashboard</Link>
@@ -49,7 +51,7 @@ export function ProtectedRoute({ children, capability }: ProtectedRouteProps) {
       return <AuthenticatingPage />;
     }
     if (!hasCapability(capability)) {
-      return <AccessDenied />;
+      return <AccessDenied capability={capability} />;
     }
   }
 
