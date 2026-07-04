@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2 } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, Users, BookOpen, Cpu, Link2 } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -21,90 +21,98 @@ import {
  * If present the item is hidden from users who don't have that capability.
  * Items with capability === null are always visible (e.g. Dashboard).
  */
-const allNavItems = [
+const navGroups = [
   {
-    title: "Dashboard",
-    url: "/",
-    icon: Home,
-    capability: null,
+    label: null,
+    items: [
+      {
+        title: "Dashboard",
+        url: "/",
+        icon: Home,
+        capability: null,
+      },
+    ],
   },
   {
-    title: "Agents",
-    url: "/agents",
-    icon: Bot,
-    capability: "agent.use",
+    label: "Build",
+    items: [
+      {
+        title: "Agents",
+        url: "/agents",
+        icon: Bot,
+        capability: "agent.use",
+      },
+      {
+        title: "Flows",
+        url: "/flows",
+        icon: Workflow,
+        capability: "flows.use",
+      },
+      {
+        title: "Knowledge",
+        url: "/knowledge",
+        icon: BookOpen,
+        capability: "agent.use",
+      },
+      {
+        title: "Data",
+        url: "/data",
+        icon: Database,
+        capability: "agent.view_all",
+      },
+    ],
   },
   {
-    title: "Chat",
-    url: "/chat",
-    icon: MessageSquare,
-    capability: "chat.use",
+    label: "Operate",
+    items: [
+      {
+        title: "Chat",
+        url: "/chat",
+        icon: MessageSquare,
+        capability: "chat.use",
+      },
+      {
+        title: "Executions",
+        url: "/executions",
+        icon: Zap,
+        capability: "agent.use",
+      },
+    ],
   },
   {
-    title: "Agent Prompts",
-    url: "/prompts",
-    icon: ScrollText,
-    capability: "agent.use",
-  },
-  {
-    title: "Agent Summary Prompts",
-    url: "/summary-prompts",
-    icon: ScrollText,
-    capability: "agent.use",
-  },
-  {
-    title: "Executions",
-    url: "/executions",
-    icon: Zap,
-    capability: "agent.use",
-  },
-  {
-    title: "Flows",
-    url: "/flows",
-    icon: Workflow,
-    capability: "flows.use",
-  },
-  {
-    title: "Data",
-    url: "/data",
-    icon: Database,
-    capability: "agent.view_all",
-  },
-  {
-    title: "Knowledge",
-    url: "/knowledge",
-    icon: BookOpen,
-    capability: "agent.use",
-  },
-  {
-    title: "MCP Servers",
-    url: "/mcp",
-    icon: Server,
-    capability: "system.mcp.manage",
-  },
-  {
-    title: "Integrations",
-    url: "/integrations",
-    icon: Link2,
-    capability: "system.integrations.manage",
-  },
-  {
-    title: "AI Providers",
-    url: "/providers",
-    icon: Plug,
-    capability: "system.providers.manage",
-  },
-  {
-    title: "Models",
-    url: "/models",
-    icon: Cpu,
-    capability: "system.providers.manage",
-  },
-  {
-    title: "Users",
-    url: "/users",
-    icon: Users,
-    capability: "users.manage",
+    label: "Admin",
+    items: [
+      {
+        title: "AI Providers",
+        url: "/providers",
+        icon: Plug,
+        capability: "system.providers.manage",
+      },
+      {
+        title: "Models",
+        url: "/models",
+        icon: Cpu,
+        capability: "system.providers.manage",
+      },
+      {
+        title: "MCP Servers",
+        url: "/mcp",
+        icon: Server,
+        capability: "system.mcp.manage",
+      },
+      {
+        title: "Integrations",
+        url: "/integrations",
+        icon: Link2,
+        capability: "system.integrations.manage",
+      },
+      {
+        title: "Users",
+        url: "/users",
+        icon: Users,
+        capability: "users.manage",
+      },
+    ],
   },
 ]
 
@@ -119,11 +127,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   // While permissions are loading show only uncapability-gated items so the
   // sidebar doesn't flash/jump once capabilities resolve.
-  const navItems = isLoading
-    ? allNavItems.filter((item) => item.capability === null)
-    : allNavItems.filter(
-        (item) => item.capability === null || (item.capability && hasCapability(item.capability)),
-      )
+  const visibleGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: isLoading
+        ? group.items.filter((item) => item.capability === null)
+        : group.items.filter(
+            (item) =>
+              item.capability === null || (item.capability && hasCapability(item.capability)),
+          ),
+    }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -131,7 +145,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <AppSidebarHeader />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navItems} />
+        {visibleGroups.map((group) => (
+          <NavMain
+            key={group.label ?? "dashboard"}
+            items={group.items}
+            label={group.label ?? undefined}
+          />
+        ))}
         {showChatList && <ChatSidebarContent />}
       </SidebarContent>
       <SidebarFooter>

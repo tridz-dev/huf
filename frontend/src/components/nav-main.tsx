@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom"
 
 import {
   SidebarGroup,
+  SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
@@ -33,8 +34,9 @@ export function NavMain({
   return (
     <SidebarGroup>
       {label && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
-      <SidebarMenu>
-        {items.map((item) => {
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {items.map((item) => {
           const isActive = location.pathname === item.url ||
             (item.url !== '/' && location.pathname.startsWith(item.url))
 
@@ -48,8 +50,9 @@ export function NavMain({
               </SidebarMenuButton>
             </SidebarMenuItem>
           )
-        })}
-      </SidebarMenu>
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
     </SidebarGroup>
   )
 }
