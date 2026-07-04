@@ -4,7 +4,7 @@ import { UnifiedLayout } from '../layouts/UnifiedLayout';
 import AgentRunDetailPage from './AgentRunDetailPage';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
-import { handleFrappeError } from '@/lib/frappe-error';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { AgentRunDoc } from '@/services/agentRunApi';
 
 export { AgentRunDetailPageWrapper };
@@ -25,7 +25,7 @@ function AgentRunDetailPageWrapper() {
         const doc = (await db.getDoc(doctype['Agent Run'], runId)) as AgentRunDoc;
         setRunName(doc.name || runId);
       } catch (error) {
-        handleFrappeError(error, `Error fetching agent run ${runId}`);
+        console.error(`Error fetching agent run ${runId}:`, getFrappeErrorMessage(error));
         setRunName(runId || 'Agent Run');
       }
     })();
