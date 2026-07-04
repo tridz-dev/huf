@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useBlocker, type Location } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
@@ -29,6 +29,7 @@ import type { AgentPromptOption } from '../components/agent/PromptTemplateSectio
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
 import { AgentKnowledgeModal } from '../components/agent/AgentKnowledgeModal';
+import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
@@ -388,6 +389,23 @@ export function AgentFormPage() {
   }, [knowledgeSources, initialKnowledgeSources, isNew]);
 
   const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
+
+  // Deliberately excludes `isNew` (unlike showSaveButton) - a blank new-agent form
+  // has nothing to lose, so it shouldn't block navigation until the user actually changes something.
+  const hasUnsavedChanges = isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
+
+  const shouldBlock = useCallback(
+    ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+      if (!hasUnsavedChanges) return false;
+      return (
+        currentLocation.pathname !== nextLocation.pathname ||
+        currentLocation.search !== nextLocation.search
+      );
+    },
+    [hasUnsavedChanges]
+  );
+
+  const blocker = useBlocker(shouldBlock);
 
   // Load trigger types on mount
   useEffect(() => {
@@ -1732,6 +1750,8 @@ setAllowChat(values.allow_chat);
         toolName={editingToolId || undefined}
         currentAgentName={isNew ? undefined : id}
       />
+
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

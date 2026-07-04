@@ -1,11 +1,9 @@
 import * as React from "react"
 import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2 } from "lucide-react"
-import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { AppSidebarHeader } from "@/components/app-sidebar-header"
-import { ChatSidebarContent } from "@/components/chat/ChatSidebarContent"
 import { usePermissions } from "@/contexts/PermissionsContext"
 import {
   Sidebar,
@@ -13,7 +11,6 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar"
 
 /**
@@ -109,13 +106,7 @@ const allNavItems = [
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const location = useLocation()
-  const { isMobile } = useSidebar()
   const { hasCapability, isLoading } = usePermissions()
-  const isChatPage = location.pathname.startsWith('/chat')
-
-  // Show chat list in sidebar on mobile when on chat page
-  const showChatList = isMobile && isChatPage
 
   // While permissions are loading show only uncapability-gated items so the
   // sidebar doesn't flash/jump once capabilities resolve.
@@ -132,7 +123,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navItems} />
-        {showChatList && <ChatSidebarContent />}
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

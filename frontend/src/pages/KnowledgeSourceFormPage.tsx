@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useBlocker, type Location } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
@@ -24,6 +24,7 @@ import {
 } from '../components/knowledge/types';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
+import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 
 export { KnowledgeSourceFormPage };
 export default KnowledgeSourceFormPage;
@@ -137,6 +138,22 @@ function KnowledgeSourceFormPage() {
   const [initialDisabled, setInitialDisabled] = useState(false);
   const disabledChanged = watchDisabled !== initialDisabled;
   const showSaveButton = isNew || isDirty || disabledChanged;
+  // Deliberately excludes `isNew` - a blank new-source form has nothing to
+  // lose, so it shouldn't block navigation until the user actually changes something.
+  const hasUnsavedChanges = isDirty || disabledChanged;
+
+  const shouldBlock = useCallback(
+    ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+      if (!hasUnsavedChanges) return false;
+      return (
+        currentLocation.pathname !== nextLocation.pathname ||
+        currentLocation.search !== nextLocation.search
+      );
+    },
+    [hasUnsavedChanges]
+  );
+
+  const blocker = useBlocker(shouldBlock);
 
   const loadSource = useCallback(
     async (name: string) => {
@@ -306,6 +323,8 @@ function KnowledgeSourceFormPage() {
             onSourceChanged={handleSourceChanged}
           />
         )}
+
+        <UnsavedChangesDialog blocker={blocker} />
       </div>
     </div>
   );

@@ -52,7 +52,7 @@ const IntegrationSettingsDetailsPageWrapper = lazy(
 );
 
 import { useEffect } from 'react';
-import { createFrappeSocket } from './utils/socket';
+import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
   setStreamingAvailable,
@@ -62,82 +62,23 @@ const RolesPage = lazy(() => import('./pages/RolesPage'));
 
 function App() {
   useEffect(() => {
-    const connectionDescription =
-      'Some features may be disabled or not work as expected. Please refresh the page to retry.';
-
-    const siteName = (window as any).frappe?.boot?.sitename;
-    const hasPort = !!window.location?.port;
-    const port = hasPort ? (window as any).frappe?.boot?.socketio_port : '';
-
     console.log("Checking streaming availability");
     checkStreamingAvailable().then((ok) => {
       console.log("Streaming available:", ok);
       setStreamingAvailable(ok);
       if (!ok) {
         toast.error("Streaming not working", {
-          description: connectionDescription,
+          description: 'Some features may be disabled or not work as expected. Please refresh the page to retry.',
           duration: 5000,
         });
       }
     });
-
-    if (!siteName) {
-      toast.error("Socket connection failed", {
-        description: connectionDescription,
-        duration: 5000,
-      });
-      console.warn("Site name not available yet, socket connection will be skipped");
-      return;
-    }
-
-    console.log("Creating socket connection for site:", siteName);
-    const socket = createFrappeSocket({ siteName, port });
-
-    socket.on("connect", () => {
-      console.log("✅ Connected to Frappe websocket!");
-    });
-
-    socket.on("connect_error", (error) => {
-      console.error("❌ Socket connection error:", error);
-      toast.error("Socket connection failed", {
-        description: connectionDescription,
-        duration: 5000,
-      });
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.warn("⚠️ Socket disconnected:", reason);
-    });
-
-    socket.on("tool_call_started", (data) => {
-      console.log("📡 Realtime event - tool_call_started:", data);
-    });
-
-    // Flow real-time events forwarding
-    const flowEvents = [
-      'flow_node_start',
-      'flow_node_end',
-      'flow_paused',
-      'flow_completed',
-      'flow_error'
-    ];
-
-    flowEvents.forEach(eventName => {
-      socket.on(eventName, (data) => {
-        console.log(`📡 Realtime event - ${eventName}:`, data);
-        window.dispatchEvent(new CustomEvent(`frappe:${eventName}`, { detail: data }));
-      });
-    });
-
-    return () => {
-      console.log("Cleaning up socket connection");
-      socket.disconnect();
-    };
   }, []);
 
 
   return (
     <BrowserRouter basename="/huf">
+      <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
         <Suspense fallback={<AuthenticatingPage />}>
@@ -497,6 +438,7 @@ function App() {
         <Toaster />
         </PermissionsProvider>
       </UserProvider>
+      </SocketProvider>
     </BrowserRouter>
   );
 }
