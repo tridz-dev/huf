@@ -48,8 +48,12 @@ def _require_data_manage():
 
 
 def _require_data_view():
+	"""Throw if the current user has no data-table access at all."""
 	if not _has_any_capability(_VIEW_CAPABILITIES):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+		frappe.throw(
+			_("You don't have permission to view data tables."),
+			frappe.PermissionError,
+		)
 
 
 def _require_write():
@@ -138,6 +142,10 @@ def create_data_table(
 	table_name = table_name.strip()
 	if not table_name:
 		frappe.throw("Table name is required")
+	if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,139}", table_name):
+		frappe.throw(
+			"Table name may only contain letters, numbers, spaces, underscores, and hyphens."
+		)
 
 	doctype_name = f"HF {table_name}"
 
