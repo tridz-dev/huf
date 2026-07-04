@@ -31,6 +31,14 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/console')) return 'Console';
     if (path.startsWith('/help')) return 'Help';
     if (path.startsWith('/chat')) return 'Chat';
+    if (path.startsWith('/executions')) return 'Executions';
+    if (path.startsWith('/knowledge')) return 'Knowledge';
+    if (path.startsWith('/mcp')) return 'MCP Servers';
+    if (path.startsWith('/prompts')) return 'Agent Prompts';
+    if (path.startsWith('/summary-prompts')) return 'Agent Summary Prompts';
+    if (path.startsWith('/users')) return 'Users';
+    if (path.startsWith('/roles')) return 'Roles';
+    if (path.startsWith('/models')) return 'Models';
     return 'HufAI';
   };
 

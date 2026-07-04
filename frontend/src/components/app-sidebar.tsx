@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, ChevronRight } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, ChevronRight, Shield } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -133,6 +133,12 @@ const settingsNavItems = [
     url: "/mcp",
     icon: Server,
     capability: "system.mcp.manage",
+  },
+  {
+    title: "Roles",
+    url: "/roles",
+    icon: Shield,
+    capability: "roles.manage",
   },
 ]
 

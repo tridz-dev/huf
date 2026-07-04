@@ -21,11 +21,11 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIProvider, AIModel } from '../types/agent.types';
 
-interface IntegrationsPageProps {
+interface AiProvidersPageProps {
   addProviderKey?: number;
 }
 
-export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
+export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const configureHandledRef = useRef(false);
   const [models, setModels] = useState<AIModel[]>([]);
