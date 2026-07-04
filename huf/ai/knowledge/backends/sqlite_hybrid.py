@@ -275,20 +275,55 @@ class SQLiteHybridBackend(KnowledgeBackend):
 					filter_clauses.append(f"json_extract(c.metadata, '$.{key}') = ?")
 				filter_values.append(value)
 
-		where_sql = ""
+		# Build CTE fragments conditionally.
+		# When filters are present we JOIN chunks inside each CTE so {where_sql}
+		# can reference c.* and json_extract(c.metadata, ...).  When filters are
+		# absent we keep the original pre-B6 shape (no JOIN, no where_sql) to
+		# avoid relying on vec0 KNN + JOIN behavior that could not be verified.
 		if filter_clauses:
 			where_sql = " AND " + " AND ".join(filter_clauses)
-
-		# B6: Apply metadata filters inside both CTEs before LIMIT.
-		# Param order must match SQL placeholder order:
-		# vec MATCH ? → {filter ?s} → fts MATCH ? → {filter ?s} → LIMIT ?
-		params: List[Any] = (
-			[json.dumps(query_embedding)]
-			+ filter_values
-			+ [safe_fts_query]
-			+ filter_values
-			+ [top_k]
-		)
+			vec_cte_sql = f"""
+				SELECT v.rowid, v.distance,
+					   row_number() over (order by v.distance asc) as rnk
+				FROM chunks_vec v
+				JOIN chunks c ON c.rowid = v.rowid
+				WHERE v.embedding MATCH ?
+				{where_sql}
+				LIMIT 100
+			"""
+			fts_cte_sql = f"""
+				SELECT f.rowid, bm25(chunks_fts, 1.0, 0.75) as bm25_score,
+					   row_number() over (order by bm25(chunks_fts, 1.0, 0.75) asc) as rnk
+				FROM chunks_fts f
+				JOIN chunks c ON c.rowid = f.rowid
+				WHERE f.chunks_fts MATCH ?
+				{where_sql}
+				LIMIT 100
+			"""
+			params: List[Any] = (
+				[json.dumps(query_embedding)]
+				+ filter_values
+				+ [safe_fts_query]
+				+ filter_values
+				+ [top_k]
+			)
+		else:
+			where_sql = ""
+			vec_cte_sql = """
+				SELECT rowid, distance,
+					   row_number() over (order by distance asc) as rnk
+				FROM chunks_vec
+				WHERE embedding MATCH ?
+				LIMIT 100
+			"""
+			fts_cte_sql = """
+				SELECT rowid, bm25(chunks_fts, 1.0, 0.75) as bm25_score,
+					   row_number() over (order by bm25(chunks_fts, 1.0, 0.75) asc) as rnk
+				FROM chunks_fts
+				WHERE chunks_fts MATCH ?
+				LIMIT 100
+			"""
+			params = [json.dumps(query_embedding), safe_fts_query, top_k]
 
 		# Reciprocal Rank Fusion (RRF) Implementation
 		# Use LEFT JOIN + UNION to emulate FULL OUTER JOIN (compatible with SQLite < 3.39)
@@ -296,24 +331,8 @@ class SQLiteHybridBackend(KnowledgeBackend):
 		with self._get_connection(readonly=True) as conn:
 			cursor = conn.execute(
 				f"""
-				WITH vec_results AS (
-					SELECT v.rowid, v.distance,
-						   row_number() over (order by v.distance asc) as rnk
-					FROM chunks_vec v
-					JOIN chunks c ON c.rowid = v.rowid
-					WHERE v.embedding MATCH ?
-					{where_sql}
-					LIMIT 100
-				),
-				fts_results AS (
-					SELECT f.rowid, bm25(chunks_fts, 1.0, 0.75) as bm25_score,
-						   row_number() over (order by bm25(chunks_fts, 1.0, 0.75) asc) as rnk
-					FROM chunks_fts f
-					JOIN chunks c ON c.rowid = f.rowid
-					WHERE f.chunks_fts MATCH ?
-					{where_sql}
-					LIMIT 100
-				),
+				WITH vec_results AS ({vec_cte_sql}),
+					fts_results AS ({fts_cte_sql}),
 				combined AS (
 					-- Rows present in vec_results (with or without fts match)
 					SELECT 

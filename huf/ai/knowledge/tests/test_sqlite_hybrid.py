@@ -61,64 +61,95 @@ class TestSQLiteHybridStatic(unittest.TestCase):
         with open(SQLITE_HYBRID_PATH, "r", encoding="utf-8") as f:
             return f.read()
 
-    def test_param_placeholder_count_matches_derived_params(self):
-        """B6 static regression: SQL placeholder count must match params list.
-
-        The B6 fix moved metadata filters inside both CTEs. Param order is:
-        [embedding] + filter_values + [fts_query] + filter_values + [top_k]
-        For N filters, SQL has N placeholders in vec CTE, N in fts CTE, plus 3
-        positional params (vec MATCH, fts MATCH, LIMIT). Total placeholders
-        must equal 2*N + 3.
-        """
-        source = self._read_search_source()
+    def _extract_search_method(self, source: str) -> str:
         match = re.search(
-            r'cursor = conn\.execute\(\s*f"""(.*?)"""\s*,\s*params\s*,?\s*\)',
+            r'def search\([\s\S]*?\) -> List\[ChunkResult\]:\s*([\s\S]*?)(?=\n\s+def |\n\s+@|\Z)',
             source,
+        )
+        self.assertIsNotNone(match, "Could not locate search() method body")
+        return match.group(1)
+
+    def _extract_cte_branches(self, method_body: str):
+        """Return (if_block, else_block) for the CTE-building if/else pair.
+
+        The inner else: inside the filter loop is at deeper indentation, so we
+        anchor the match to the same indentation as ``if filter_clauses:``.
+        """
+        match = re.search(
+            r'(\n\s+)if filter_clauses:\s*(.*?)(\1else:)\s*(.*?)(?=\n\s+with self\._get_connection)',
+            method_body,
             re.DOTALL,
         )
-        self.assertIsNotNone(match, "Could not locate search SQL in sqlite_hybrid.py")
-        sql_template = match.group(1)
+        self.assertIsNotNone(match, "Could not locate CTE-building if/else blocks")
+        return match.group(2), match.group(4)
 
-        # Count literal ? placeholders in the SQL template (excluding {where_sql}).
-        template_placeholders = sql_template.count("?")
-        # The template should contain exactly 3 literal ?s:
-        # vec MATCH ?, fts MATCH ?, final LIMIT ?
-        self.assertEqual(template_placeholders, 3,
-                         f"Expected 3 base placeholders, got {template_placeholders}")
+    def test_unfiltered_branch_uses_original_pre_b6_shape(self):
+        """When filters are empty, keep the original vec/fts CTE shape (no JOIN, no where_sql)."""
+        method_body = self._extract_search_method(self._read_search_source())
+        _if_block, else_block = self._extract_cte_branches(method_body)
 
-        # Simulate N filter clauses and verify total placeholder count.
+        # No chunks JOIN and no {where_sql} interpolation in the unfiltered CTEs.
+        self.assertNotIn("JOIN chunks c", else_block)
+        self.assertNotIn("{where_sql}", else_block)
+        self.assertIn("FROM chunks_vec", else_block)
+        self.assertIn("FROM chunks_fts", else_block)
+        self.assertIn("WHERE embedding MATCH ?", else_block)
+        self.assertIn("WHERE chunks_fts MATCH ?", else_block)
+        self.assertIn("LIMIT 100", else_block)
+        # Param order for the unfiltered branch.
+        normalized = " ".join(else_block.split())
+        self.assertIn(
+            "params = [json.dumps(query_embedding), safe_fts_query, top_k]",
+            normalized,
+        )
+
+    def test_filtered_branch_joins_chunks_and_applies_filters(self):
+        """When filters are non-empty, JOIN chunks and apply metadata filters inside both CTEs."""
+        method_body = self._extract_search_method(self._read_search_source())
+        if_block, _else_block = self._extract_cte_branches(method_body)
+
+        # Both CTEs JOIN chunks so filter expressions can reference c.* / c.metadata.
+        self.assertEqual(if_block.count("JOIN chunks c"), 2)
+        self.assertIn("{where_sql}", if_block)
+        self.assertIn("v.embedding MATCH ?", if_block)
+        self.assertIn("f.chunks_fts MATCH ?", if_block)
+        self.assertIn("LIMIT 100", if_block)
+        # Param order for the filtered branch.
+        normalized = " ".join(if_block.split())
+        self.assertIn(
+            "[json.dumps(query_embedding)] + filter_values + [safe_fts_query] + filter_values + [top_k]",
+            normalized,
+        )
+
+    def test_placeholder_count_matches_params_in_both_branches(self):
+        """SQL placeholder count must equal length of params list in both branches."""
+        method_body = self._extract_search_method(self._read_search_source())
+        if_block, else_block = self._extract_cte_branches(method_body)
+
+        # Unfiltered branch: vec MATCH ? + fts MATCH ? + final LIMIT ? = 3.
+        else_placeholders = else_block.count("?") + 1  # + final LIMIT ?
+        self.assertEqual(else_placeholders, 3)
+
+        # Filtered branch: simulate expansion for N = 0, 1, 3 filters.
+        vec_match = re.search(r'vec_cte_sql\s*=\s*f"""(.*?)"""', if_block, re.DOTALL)
+        fts_match = re.search(r'fts_cte_sql\s*=\s*f"""(.*?)"""', if_block, re.DOTALL)
+        self.assertIsNotNone(vec_match, "Could not extract filtered vec_cte_sql template")
+        self.assertIsNotNone(fts_match, "Could not extract filtered fts_cte_sql template")
+        vec_template = vec_match.group(1)
+        fts_template = fts_match.group(1)
+
         for n in (0, 1, 3):
             clauses = [f"c.field_{i} = ?" for i in range(n)]
             where_sql = "" if not clauses else " AND " + " AND ".join(clauses)
-            expanded = sql_template.replace("{where_sql}", where_sql)
-            total = expanded.count("?")
-            expected = 3 + 2 * n
+            vec_total = vec_template.replace("{where_sql}", where_sql).count("?")
+            fts_total = fts_template.replace("{where_sql}", where_sql).count("?")
+            # vec + fts + final LIMIT ?
+            total = vec_total + fts_total + 1
+            expected = 2 * n + 3
             self.assertEqual(
                 total, expected,
-                f"For {n} filters expected {expected} placeholders, got {total}"
+                f"Filtered branch with {n} filters expected {expected} placeholders, got {total}"
             )
-
-    def test_vec_cte_has_join_and_limit(self):
-        """B6 fix joined chunks inside the vec KNN CTE and kept LIMIT."""
-        source = self._read_search_source()
-        match = re.search(r'WITH vec_results AS \((.*?)\),\s*fts_results AS', source, re.DOTALL)
-        self.assertIsNotNone(match)
-        vec_cte = match.group(1)
-        self.assertIn("JOIN chunks c", vec_cte)
-        self.assertIn("LIMIT 100", vec_cte)
-        self.assertIn("v.embedding MATCH ?", vec_cte)
-        self.assertIn("{where_sql}", vec_cte)
-
-    def test_fts_cte_has_join_and_limit(self):
-        """B6 fix joined chunks inside the FTS CTE and kept LIMIT."""
-        source = self._read_search_source()
-        match = re.search(r'fts_results AS \((.*?)\),\s*combined AS', source, re.DOTALL)
-        self.assertIsNotNone(match)
-        fts_cte = match.group(1)
-        self.assertIn("JOIN chunks c", fts_cte)
-        self.assertIn("LIMIT 100", fts_cte)
-        self.assertIn("f.chunks_fts MATCH ?", fts_cte)
-        self.assertIn("{where_sql}", fts_cte)
 
 
 @unittest.skipUnless(
