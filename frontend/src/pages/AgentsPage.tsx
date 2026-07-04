@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { getAgents } from '../services/agentApi';
 import { formatTimeAgo } from '../utils/time';
 import type { AgentDoc } from '../types/agent.types';
@@ -62,6 +63,7 @@ export default AgentsPage;
 
 function AgentsPage() {
   const navigate = useNavigate();
+  const { hasCapability } = usePermissions();
 
   const {
     items: agents,
@@ -190,11 +192,15 @@ function AgentsPage() {
               ]}
               badges={getAgentBadges(agent)}
               actions={[
-                {
-                  icon: Settings,
-                  label: 'Configure',
-                  onClick: () => navigate(`/agents/${agent.name}`),
-                },
+                ...(hasCapability('agent.edit')
+                  ? [
+                      {
+                        icon: Settings,
+                        label: 'Configure',
+                        onClick: () => navigate(`/agents/${agent.name}`),
+                      },
+                    ]
+                  : []),
                 {
                   icon: Activity,
                   label: 'View Logs',
