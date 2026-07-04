@@ -269,7 +269,7 @@ function App() {
           <Route
             path="/models"
             element={
-              <ProtectedRoute capability="system.providers.manage">
+              <ProtectedRoute capability="system.models.manage">
                 <Suspense fallback={<PageLoader />}>
                   <ModelsPageWrapper />
                 </Suspense>

@@ -176,7 +176,7 @@ export function DataTableBuilderPage() {
 			const newField: DataTableFieldDef = {
 				fieldname,
 				fieldtype: type,
-				label: isLayout ? '' : '',
+				label: '',
 				...(isLayout ? {} : { in_list_view: state.fields.filter(
 					(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
 				).length < 4 ? 1 : 0 as 0 | 1 }),
