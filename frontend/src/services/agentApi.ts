@@ -356,6 +356,49 @@ export async function updateAgent(name: string, data: Partial<AgentDoc>): Promis
 }
 
 /**
+ * Delete an agent document
+ */
+export async function deleteAgent(name: string): Promise<void> {
+  try {
+    await db.deleteDoc(doctype.Agent, name);
+  } catch (error) {
+    handleFrappeError(error, `Error deleting agent ${name}`);
+  }
+}
+
+/**
+ * Duplicate an agent document (copies all fields except identity/stats fields)
+ */
+export async function duplicateAgent(name: string): Promise<AgentDoc> {
+  try {
+    const source = await db.getDoc(doctype.Agent, name);
+    const excludedFields = [
+      'name',
+      'owner',
+      'creation',
+      'modified',
+      'modified_by',
+      'last_run',
+      'total_run',
+      'idx',
+      'docstatus',
+    ];
+    const rest = Object.fromEntries(
+      Object.entries(source as Record<string, unknown>).filter(
+        ([key]) => !excludedFields.includes(key)
+      )
+    );
+    const copy = await db.createDoc(doctype.Agent, {
+      ...rest,
+      agent_name: `${(source as AgentDoc).agent_name} (Copy)`,
+    });
+    return copy as AgentDoc;
+  } catch (error) {
+    handleFrappeError(error, `Error duplicating agent ${name}`);
+  }
+}
+
+/**
  * Model selector item (agent as model)
  */
 export interface AgentModelItem {
