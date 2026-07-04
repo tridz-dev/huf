@@ -207,7 +207,7 @@ function AgentsPage() {
                   onClick: () => navigate(`/executions?agents=${encodeURIComponent(agent.name)}`),
                 },
               ]}
-              onClick={() => navigate(`/agents/${agent.name}`)}
+              onClick={hasCapability('agent.edit') ? () => navigate(`/agents/${agent.name}`) : undefined}
             />
           );
         }}
