@@ -67,7 +67,7 @@ export function EmptyChatState() {
                 
                 {recentAgents.length > 0 && (
                     <div className="space-y-3">
-                        <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                             Recently used agents
                         </p>
                         <div className="flex flex-wrap gap-2 justify-center">
@@ -82,7 +82,7 @@ export function EmptyChatState() {
                                         variant="outline"
                                         size="sm"
                                         onClick={() => handleRecentAgentClick(agent.name)}
-                                        className="gap-2 hover:bg-zinc-100"
+                                        className="gap-2 hover:bg-muted"
                                     >
                                         <ChatAvatar 
                                             variant="listing_ai" 
@@ -90,7 +90,7 @@ export function EmptyChatState() {
                                         >
                                             {getInitials(agent.agent_name)}
                                         </ChatAvatar>
-                                        <span className="text-xs font-medium text-zinc-700">
+                                        <span className="text-xs font-medium text-foreground">
                                             {agent.agent_name}
                                         </span>
                                     </Button>
