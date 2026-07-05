@@ -59,6 +59,39 @@ jobs:
             echo "huf_tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Build native Frappe runtime base image
+        # build-demo.sh (via Dockerfile.huf) expects huf-frappe-runtime:16.25.0
+        # to already exist locally. On a fresh runner it doesn't, and without
+        # this step Docker tries (and fails) to pull it from Docker Hub.
+        run: |
+          set -euo pipefail
+          docker build -f docker/fast/Dockerfile.runtime -t huf-frappe-runtime:16.25.0 .
+
+      - name: Bake site seed
+        # docker/fast/.bake-output is gitignored (repo only ships a .gitkeep),
+        # so a fresh checkout has no seed. Build a seed-less huf-app first,
+        # use it to bake a real site via compose.bake.yml, then build the seed
+        # image and rebuild huf-app so the seed is actually embedded before
+        # build-demo.sh runs. Mirrors the manual steps used to verify this
+        # locally on arm64.
+        env:
+          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+        run: |
+          set -euo pipefail
+          docker build -f docker/fast/Dockerfile.huf -t "huf-app:${HUF_IMAGE_TAG}" .
+          docker compose -p fasterdocker -f docker/compose.bake.yml up -d --build
+          trap 'docker compose -p fasterdocker -f docker/compose.bake.yml down -v --remove-orphans || true' EXIT
+          code="$(docker wait fasterdocker-build-site-baker)"
+          docker compose -p fasterdocker -f docker/compose.bake.yml logs site-baker
+          if [ "${code}" != "0" ]; then
+            echo "::error::site-baker exited with code ${code}"
+            exit 1
+          fi
+          docker compose -p fasterdocker -f docker/compose.bake.yml down -v --remove-orphans
+          trap - EXIT
+          ./docker/fast/bake-seed.sh sql
+          docker build -f docker/fast/Dockerfile.huf -t "huf-app:${HUF_IMAGE_TAG}" .
+
       - name: Build and push per-arch HUF demo image
         env:
           HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
