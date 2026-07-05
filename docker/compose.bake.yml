@@ -79,6 +79,10 @@ services:
       REDIS_QUEUE: redis://redis-queue-bake:6379
       REDIS_SOCKETIO: redis://redis-queue-bake:6379
       BAKE_OUTPUT_DIR: /bake-output
+      # huf-app's main-entrypoint.sh auto-runs init-seed.sh whenever a /seed
+      # directory exists in the image. That would fail here since this
+      # service's whole job is to *produce* the first seed (chicken-and-egg).
+      SKIP_SEED_INIT: "true"
     volumes:
       - type: bind
         source: ./fast/.bake-output

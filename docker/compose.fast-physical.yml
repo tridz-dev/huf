@@ -132,7 +132,7 @@ services:
       redis-socketio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "-H", "Host: huf.localhost", "http://localhost:8000/api/method/ping"]
+      test: ["CMD", "curl", "-fsS", "-H", "Host: ${SITE_NAME:-huf.localhost}", "http://localhost:8000/api/method/ping"]
       start_period: 10s
       interval: 5s
       timeout: 5s
@@ -271,7 +271,7 @@ services:
         condition: service_healthy
     command: ["/usr/local/bin/nginx-entrypoint.sh"]
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "-H", "Host: huf.localhost", "http://localhost:8080/api/method/ping"]
+      test: ["CMD", "curl", "-fsS", "-H", "Host: ${SITE_NAME:-huf.localhost}", "http://localhost:8080/api/method/ping"]
       start_period: 5s
       interval: 5s
       timeout: 5s
