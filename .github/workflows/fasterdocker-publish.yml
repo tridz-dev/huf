@@ -1,0 +1,106 @@
+name: Publish FasterDocker images
+
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      huf_image_tag:
+        description: 'Tag for HUF demo image (e.g. 06655cf or v0.11.0)'
+        required: true
+        default: 'latest'
+
+env:
+  REGISTRY: ghcr.io
+  HUF_DEMO_IMAGE: ghcr.io/tridz-dev/huf-demo
+
+jobs:
+  # Physical MariaDB snapshots are architecture-specific, so we build the demo
+  # image once per architecture on native runners and then assemble a manifest
+  # list. Using QEMU for the snapshot generation would be fragile and slow.
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            os: ubuntu-latest
+            suffix: amd64
+          - platform: linux/arm64
+            os: ubuntu-24.04-arm
+            suffix: arm64
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tags
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "huf_tag=${{ github.event.inputs.huf_image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "huf_tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push per-arch HUF demo image
+        env:
+          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+          HUF_DEMO_IMAGE: ${{ env.HUF_DEMO_IMAGE }}
+          DOCKER_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          ./docker/fast/build-demo.sh
+          docker tag "huf-demo:${HUF_IMAGE_TAG}" "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-${{ matrix.suffix }}"
+          docker push "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-${{ matrix.suffix }}"
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine tags
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "huf_tag=${{ github.event.inputs.huf_image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "huf_tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push manifest list
+        env:
+          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+          HUF_DEMO_IMAGE: ${{ env.HUF_DEMO_IMAGE }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            -t "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}" \
+            -t "${HUF_DEMO_IMAGE}:latest" \
+            "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-amd64" \
+            "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-arm64"
