@@ -20,10 +20,21 @@ at developers who want to build images locally or test specific boot strategies.
 - **Docker Engine >= 20.10.13** with the Compose V2 plugin (`docker compose`).
   The compose files use the Compose specification format and `docker compose up --wait`;
   the legacy `docker-compose` Python CLI is not required.
-- The `demo` variant pulls a **multi-architecture image** (`linux/amd64` and
-  `linux/arm64`) built with **native per-architecture runners**, not QEMU
-  emulation. This is required because the demo image bakes a physical MariaDB
-  snapshot, and MariaDB's on-disk data format is architecture-specific.
+- The `demo` variant's image is intended to be **multi-architecture**
+  (`linux/amd64` and `linux/arm64`) built with **native per-architecture
+  runners**, not QEMU emulation. This is required because the demo image
+  bakes a physical MariaDB snapshot, and MariaDB's on-disk data format is
+  architecture-specific.
+  > **Current status:** `ghcr.io/tridz-dev/huf-demo:9c6817b-arm64` is a
+  > freshly rebuilt, locally-verified native arm64 image containing the
+  > credential-rotation and `common_site_config.json` fixes from this pass.
+  > The matching native amd64 build (via `.github/workflows/fasterdocker-publish.yml`
+  > on `ubuntu-latest`) has not run yet — that workflow only becomes
+  > dispatchable once this branch is merged to `develop` (GitHub requires
+  > `workflow_dispatch` workflows to exist on the default branch to be
+  > triggered remotely). Until the merge + manifest run happens, `:latest`
+  > still points at the older, pre-fix image; pin `--tag 9c6817b-arm64`
+  > explicitly on arm64 machines if you want the fixed image now.
   `DOCKER_PLATFORM` can be set to force a specific architecture if your local
   engine supports it.
 
