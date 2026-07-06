@@ -48,7 +48,12 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # ghcr.io container packages have their own "Manage Actions access"
+          # list, separate from repo/org Actions permissions. This package
+          # was first created via a manual push (not GITHUB_TOKEN), so that
+          # list was never populated and GITHUB_TOKEN gets permission_denied.
+          # Use a PAT with write:packages that already has push rights instead.
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
 
       - name: Determine tags
         id: tags
@@ -115,7 +120,12 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # ghcr.io container packages have their own "Manage Actions access"
+          # list, separate from repo/org Actions permissions. This package
+          # was first created via a manual push (not GITHUB_TOKEN), so that
+          # list was never populated and GITHUB_TOKEN gets permission_denied.
+          # Use a PAT with write:packages that already has push rights instead.
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
 
       - name: Determine tags
         id: tags
