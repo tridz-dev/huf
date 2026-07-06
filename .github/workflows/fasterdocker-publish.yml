@@ -79,6 +79,13 @@ jobs:
         run: |
           set -euo pipefail
           docker build -f docker/fast/Dockerfile.huf -t "huf-app:${HUF_IMAGE_TAG}" .
+          # site-baker writes to this bind mount as UID 1000 (frappe). On a
+          # fresh Linux runner the checked-out directory is owned by the
+          # runner user, so mkdir inside the container fails with
+          # "Permission denied" (macOS Docker Desktop bind mounts don't
+          # enforce this, which is why it worked when verified locally).
+          mkdir -p docker/fast/.bake-output
+          chmod -R 0777 docker/fast/.bake-output
           docker compose -p fasterdocker -f docker/compose.bake.yml up -d --build
           trap 'docker compose -p fasterdocker -f docker/compose.bake.yml down -v --remove-orphans || true' EXIT
           code="$(docker wait fasterdocker-build-site-baker)"
