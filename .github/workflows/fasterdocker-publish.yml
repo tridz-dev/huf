@@ -122,6 +122,13 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Checkout
+        # Without this, `git rev-parse --short HEAD` in "Determine tags"
+        # below has no repo to read. It fails silently (the echo/output write
+        # still "succeeds"), producing an empty huf_tag and
+        # "ERROR: invalid reference format" from imagetools create.
+        uses: actions/checkout@v4
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
