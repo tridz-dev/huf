@@ -478,7 +478,7 @@ export interface AgentRunFeedbackParams {
 
 export async function createAgentRunFeedback(params: AgentRunFeedbackParams): Promise<void> {
   try {
-    await db.createDoc('Agent Run Feedback', {
+    await db.createDoc(doctype['Agent Run Feedback'], {
       agent: params.agent,
       feedback: params.feedback,
       comments: params.comments,
