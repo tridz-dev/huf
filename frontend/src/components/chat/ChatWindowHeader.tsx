@@ -9,6 +9,7 @@ import { getConversation } from "@/services/chatApi";
 import { getAgent } from "@/services/agentApi";
 import type { AgentDoc } from "@/types/agent.types";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
+import { ConversationDataPanel } from "@/components/conversation/ConversationDataPanel";
 
 interface ChatWindowHeaderProps {
     chatId?: string | null;
@@ -168,7 +169,13 @@ export function ChatWindowHeader({
                     )}
                 </div>
             </div>
-            <div>
+            <div className="flex items-center gap-2">
+                {chatId && agent.enable_conversation_data === 1 && (
+                    <ConversationDataPanel
+                        conversationId={chatId}
+                        canWrite={agent.conversation_data_api_permission === 'Write'}
+                    />
+                )}
                 <Link to={`/agents/${agent.name}`}>
                     <Button asChild variant="outline" className="gap-x-2 text-xs text-muted-foreground" size="sm">
                         <div>
