@@ -1731,6 +1731,7 @@ async def handle_ocr_document(
     model: str = None,
     agent_name: str = None,
     conversation_id: str = None,
+    create_message: bool = True,
     **kwargs
 ):
     """
@@ -1779,7 +1780,7 @@ async def handle_ocr_document(
             pages=pages,
             include_images=bool(include_images),
             model=model,
-            create_message=True,
+            create_message=create_message,
             conversation_id=conversation_id,
             agent_run_id=kwargs.get("agent_run_id"),
         )
