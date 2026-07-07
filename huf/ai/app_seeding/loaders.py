@@ -1,5 +1,50 @@
 import frappe
 
+
+def _validate_link_refs(doctype: str, data: dict) -> list:
+    """
+    Validate that all Link-field values in `data` reference existing documents.
+
+    Returns a flat list of missing reference strings:
+      - Main doc: "<Target Doctype>:<missing name>"
+      - Child table: "<Child Doctype>[<row_index>].<Target Doctype>:<missing name>"
+    """
+    missing = []
+
+    meta = frappe.get_meta(doctype)
+
+    # Main doc Link fields
+    for field in meta.get_link_fields():
+        value = data.get(field.fieldname)
+        if not value:
+            continue
+        target_doctype = field.options
+        if not frappe.db.exists(target_doctype, value):
+            missing.append(f"{target_doctype}:{value}")
+
+    # Child table Link fields
+    for table_field in meta.get_table_fields():
+        rows = data.get(table_field.fieldname)
+        if not isinstance(rows, list):
+            continue
+        child_doctype = table_field.options
+        child_meta = frappe.get_meta(child_doctype)
+        for row_index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            for field in child_meta.get_link_fields():
+                value = row.get(field.fieldname)
+                if not value:
+                    continue
+                target_doctype = field.options
+                if not frappe.db.exists(target_doctype, value):
+                    missing.append(
+                        f"{child_doctype}[{row_index}].{target_doctype}:{value}"
+                    )
+
+    return missing
+
+
 def _upsert_doc(doctype: str, key_field: str, data: dict, source_app: str, source_file: str) -> tuple:
     """
     Generic upsert for a seed document.
@@ -7,13 +52,17 @@ def _upsert_doc(doctype: str, key_field: str, data: dict, source_app: str, sourc
     key_val = data.get(key_field)
     if not key_val:
         return False, f"Missing {key_field}"
-        
+
+    missing_refs = _validate_link_refs(doctype, data)
+    if missing_refs:
+        return False, "Missing reference(s): " + ", ".join(missing_refs)
+
     docname = frappe.db.get_value(doctype, {key_field: key_val})
-    
+
     # Add provenance fields
     data["source_app"] = source_app
     data["source_file"] = source_file
-    
+
     try:
         if docname:
             doc = frappe.get_doc(doctype, docname)
