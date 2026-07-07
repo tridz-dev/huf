@@ -26,7 +26,3 @@ dist-ssr
 
 tsconfig.app.tsbuildinfo
 tsconfig.node.tsbuildinfo
-# Playwright
-/e2e/.auth/
-/playwright-report/
-/test-results/
