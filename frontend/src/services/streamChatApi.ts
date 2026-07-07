@@ -63,10 +63,19 @@ export async function checkStreamingAvailable(): Promise<boolean> {
   }
 }
 
+export interface StreamAgentFile {
+  file_id: string;
+  file_url: string;
+  filename: string;
+  is_image: number;
+}
+
 export interface StreamAgentParams {
   agentName: string;
   message: string;
   conversationId?: string;
+  skipUserMessage?: boolean;
+  files?: StreamAgentFile[];
 }
 
 /**
@@ -75,7 +84,7 @@ export interface StreamAgentParams {
 export async function* streamAgentResponse(
   params: StreamAgentParams
 ): AsyncGenerator<StreamChunk, StreamChunk | undefined, unknown> {
-  const { agentName, message, conversationId } = params;
+  const { agentName, message, conversationId, skipUserMessage, files } = params;
   const url = `${frappeUrl}/huf/stream/${encodeURIComponent(agentName)}`;
 
   const body: Record<string, unknown> = {
@@ -86,6 +95,12 @@ export async function* streamAgentResponse(
     body.conversation_id = conversationId;
   } else {
     body.create_new = true;
+  }
+  if (skipUserMessage) {
+    body.skip_user_message = true;
+  }
+  if (files?.length) {
+    body.files = files;
   }
 
   const res = await fetch(url, {
@@ -146,16 +161,26 @@ export type ChatResult = NewConversationResponse | SendMessageResponse;
 export interface SendMessageOptions {
   useStreaming: boolean;
   onDelta?: (text: string) => void;
+  skipUserMessage?: boolean;
+  files?: StreamAgentFile[];
 }
 
 /**
  * Unified sendMessage: same response shape for SSE and REST.
  */
 export async function sendMessage(
-  params: { agent: string; message: string; conversationId?: string },
+  params: {
+    agent: string;
+    message: string;
+    conversationId?: string;
+    skipUserMessage?: boolean;
+    files?: StreamAgentFile[];
+  },
   options: SendMessageOptions
 ): Promise<ChatResult> {
-  const { useStreaming, onDelta } = options;
+  const { useStreaming, onDelta, skipUserMessage, files } = options;
+  const streamSkip = params.skipUserMessage ?? skipUserMessage;
+  const streamFiles = params.files ?? files;
 
     if (useStreaming) {
     let lastComplete: StreamChunk | undefined;
@@ -163,6 +188,8 @@ export async function sendMessage(
       agentName: params.agent,
       message: params.message,
       conversationId: params.conversationId,
+      skipUserMessage: streamSkip,
+      files: streamFiles,
     })) {
       if (chunk.type === 'delta' && onDelta && chunk.full_response !== undefined) {
         onDelta(chunk.full_response);

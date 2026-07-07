@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CornerDownLeft, Plus, Paperclip, X, Loader2 } from "lucide-react";
+import { CornerDownLeft, Plus, Paperclip } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { ShortcutKey } from "../ui/shortcut-key";
@@ -10,8 +10,11 @@ import {
   streamingAvailable,
   setStreamingAvailable,
 } from "@/services/streamChatApi";
-import { transcribeAudio, uploadFileAndProcess } from "@/services/chatApi";
+import { transcribeAudio, prepareMessageWithFile, uploadFileAttachment } from "@/services/chatApi";
+import type { PrepareMessageWithFileFile } from "@/services/chatApi";
 import { SpeechInput } from "@/components/ai-elements/speech-input";
+import { ChatAttachmentCard } from "@/components/chat/ChatAttachmentCard";
+import { getFileTypeInfo } from "@/utils/fileTypeUtils";
 import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import type { MessageType } from './types';
 
@@ -52,7 +55,14 @@ export function ChatInput({
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const isAudioRecordingFlowRef = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [pendingFile, setPendingFile] = useState<{ name: string; status: 'uploading' | 'error'; error?: string } | null>(null);
+    const [pendingFile, setPendingFile] = useState<{
+        file: File;
+        name: string;
+        fileId?: string;
+        fileUrl?: string;
+        status: 'uploading' | 'ready' | 'error';
+        error?: string;
+    } | null>(null);
     
     const MIN_HEIGHT = 60;
     const MAX_HEIGHT = 200;
@@ -75,6 +85,8 @@ export function ChatInput({
             conversationId: string | undefined;
             assistantMessageId: string;
             updateAssistantContent: (content: string) => void;
+            skipUserMessage?: boolean;
+            files?: PrepareMessageWithFileFile[];
         }) => {
             const useStreaming = streamingAvailable;
             const response = await sendMessage(
@@ -82,10 +94,14 @@ export function ChatInput({
                     agent: agentName,
                     message: params.message,
                     conversationId: params.conversationId,
+                    skipUserMessage: params.skipUserMessage,
+                    files: params.files,
                 },
                 {
                     useStreaming,
                     onDelta: useStreaming ? params.updateAssistantContent : undefined,
+                    skipUserMessage: params.skipUserMessage,
+                    files: params.files,
                 }
             );
             const msg = response.message as Record<string, unknown>;
@@ -124,10 +140,131 @@ export function ChatInput({
         [setMessages]
     );
 
+    const readFileAsBase64 = useCallback((file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const result = reader.result as string;
+                resolve(result.includes(',') ? result.split(',')[1] : result ?? '');
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }, []);
+
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
-        
-        if (!message.trim() || !agentName || isSubmitting) {
+
+        const hasStagedFile = pendingFile?.status === 'ready' && !!pendingFile.fileId;
+        if ((!message.trim() && !hasStagedFile) || !agentName || isSubmitting || pendingFile?.status === 'uploading') {
+            return;
+        }
+
+        if (hasStagedFile && pendingFile?.fileId) {
+            const stagedFile = pendingFile.file;
+            const messageText = message.trim();
+            const displayContent = messageText || `📎 ${pendingFile.name}`;
+            const typeInfo = getFileTypeInfo(stagedFile);
+            const previewUrl = typeInfo.isImage ? URL.createObjectURL(stagedFile) : undefined;
+
+            setIsSubmitting(true);
+            onStatusChange('submitted');
+
+            const userMessageKey = `user-${Date.now()}`;
+            const userMessage: MessageType = {
+                key: userMessageKey,
+                from: 'user',
+                versions: [{ id: userMessageKey, content: displayContent }],
+                attachment: {
+                    name: pendingFile.name,
+                    label: typeInfo.label,
+                    previewUrl,
+                },
+            };
+            setMessages((prev) => [...prev, userMessage]);
+            setMessage('');
+            const sentFileId = pendingFile.fileId;
+            const sentFileName = pendingFile.name;
+            setPendingFile(null);
+
+            const assistantMessageId = `assistant-${Date.now()}`;
+            setMessages((prev) => [
+                ...prev,
+                { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
+            ]);
+
+            const updateAssistantContent = (content: string) => {
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.key === assistantMessageId
+                            ? { ...msg, versions: [{ id: assistantMessageId, content }] }
+                            : msg
+                    )
+                );
+                scrollToBottomAfterPaint?.(false);
+            };
+
+            try {
+                const prepareRes = await prepareMessageWithFile({
+                    file_id: sentFileId,
+                    filename: sentFileName,
+                    agent: agentName,
+                    conversation: chatId ?? undefined,
+                    message: messageText,
+                });
+
+                if (!prepareRes?.success || !prepareRes.agent_prompt) {
+                    throw new Error(
+                        typeof prepareRes?.error === 'string'
+                            ? prepareRes.error
+                            : getFrappeErrorMessage(prepareRes?.error) || 'Failed to prepare file'
+                    );
+                }
+
+                setPendingFile(null);
+                if (!chatId) isCreatingConversationRef.current = true;
+
+                const { conversationId, agentMessageId } = await runAgentAndUpdateAssistant({
+                    message: prepareRes.agent_prompt,
+                    conversationId: prepareRes.conversation_id ?? chatId ?? undefined,
+                    assistantMessageId,
+                    updateAssistantContent,
+                    skipUserMessage: true,
+                    files: prepareRes.files,
+                });
+
+                if (agentMessageId) {
+                    syncAssistantMessageId(assistantMessageId, agentMessageId);
+                }
+                onStatusChange('ready');
+                if (conversationId && onConversationCreated) {
+                    newlyCreatedConversationIdRef.current = conversationId;
+                    onConversationCreated(conversationId, agentName);
+                    setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
+                } else {
+                    isCreatingConversationRef.current = false;
+                }
+                setTimeout(() => textareaRef.current?.focus(), chatId ? 100 : 200);
+            } catch (error) {
+                if (streamingAvailable) setStreamingAvailable(false);
+                isCreatingConversationRef.current = false;
+                onStatusChange('error');
+                setPendingFile({
+                    file: stagedFile,
+                    name: sentFileName,
+                    fileId: sentFileId,
+                    status: 'error',
+                    error: error instanceof Error ? error.message : 'Failed to send file',
+                });
+                setMessages((prev) =>
+                    prev.filter((msg) => msg.key !== userMessageKey && msg.key !== assistantMessageId)
+                );
+                toast.error('Failed to send message with attachment', {
+                    description: error instanceof Error ? error.message : 'An error occurred',
+                });
+            } finally {
+                setIsSubmitting(false);
+            }
             return;
         }
 
@@ -193,7 +330,7 @@ export function ChatInput({
         } finally {
             setIsSubmitting(false);
         }
-    }, [message, agentName, chatId, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId]);
+    }, [message, agentName, chatId, pendingFile, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId]);
 
     const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
         const filename = `recording-${Date.now()}.webm`;
@@ -304,45 +441,45 @@ export function ChatInput({
             return;
         }
 
-        setPendingFile({ name: file.name, status: 'uploading' });
-
-        const reader = new FileReader();
-        const b64 = await new Promise<string>((resolve, reject) => {
-            reader.onloadend = () => {
-                const result = reader.result as string;
-                resolve(result.includes(',') ? result.split(',')[1] : result ?? '');
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
+        setPendingFile({ file, name: file.name, status: 'uploading' });
 
         try {
-            const res = await uploadFileAndProcess({
+            const b64 = await readFileAsBase64(file);
+            const res = await uploadFileAttachment({
                 filename: file.name,
                 b64data: b64,
                 agent: agentName,
-                conversation: chatId ?? undefined,
             });
 
-            if (!res?.success) {
-                setPendingFile({ name: file.name, status: 'error', error: res?.error || getFrappeErrorMessage(res?.error) || 'Upload failed' });
+            if (!res?.success || !res.file_id) {
+                setPendingFile({
+                    file,
+                    name: file.name,
+                    status: 'error',
+                    error: typeof res?.error === 'string'
+                        ? res.error
+                        : getFrappeErrorMessage(res?.error) || 'Upload failed',
+                });
                 return;
             }
 
-            setPendingFile(null);
-            if (res.conversation_id && !chatId && onConversationCreated) {
-                newlyCreatedConversationIdRef.current = res.conversation_id;
-                onConversationCreated(res.conversation_id, agentName);
-            }
+            setPendingFile({
+                file,
+                name: file.name,
+                fileId: res.file_id,
+                fileUrl: res.file_url,
+                status: 'ready',
+            });
             textareaRef.current?.focus();
         } catch (err) {
             setPendingFile({
+                file,
                 name: file.name,
                 status: 'error',
                 error: getFrappeErrorMessage(err) || (err instanceof Error ? err.message : 'Upload failed'),
             });
         }
-    }, [agentName, chatId, maxUploadSizeMb, onConversationCreated, newlyCreatedConversationIdRef]);
+    }, [agentName, maxUploadSizeMb, readFileAsBase64]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -463,19 +600,18 @@ export function ChatInput({
                         disabled={isSubmitting || isModelMismatch}
                     />
                     {pendingFile && (
-                        <div className="px-3 pb-1 w-full">
-                            <div className={`flex items-center gap-x-2 text-xs rounded-md border px-2 py-1 w-fit max-w-full ${pendingFile.status === 'error' ? 'border-destructive text-destructive' : 'border-border text-muted-foreground'}`}>
-                                {pendingFile.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
-                                <span className="truncate">{pendingFile.status === 'error' ? (pendingFile.error || pendingFile.name) : pendingFile.name}</span>
-                                <button
-                                    type="button"
-                                    onClick={() => setPendingFile(null)}
-                                    className="shrink-0"
-                                    aria-label="Dismiss file"
-                                >
-                                    <X className="h-3 w-3" />
-                                </button>
-                            </div>
+                        <div className="px-3 pt-2 w-full">
+                            <ChatAttachmentCard
+                                name={pendingFile.name}
+                                file={pendingFile.file}
+                                status={pendingFile.status}
+                                error={pendingFile.error}
+                                onRemove={
+                                    pendingFile.status !== 'uploading'
+                                        ? () => setPendingFile(null)
+                                        : undefined
+                                }
+                            />
                         </div>
                     )}
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
@@ -498,18 +634,18 @@ export function ChatInput({
                                 />
                                 <Button
                                     type="button"
-                                    variant="ghost"
+                                    variant="secondary"
                                     size="icon"
                                     className="shrink-0 rounded-full"
                                     disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
                                     onClick={() => fileInputRef.current?.click()}
                                     aria-label="Attach file"
                                 >
-                                    <Paperclip />
+                                    <Paperclip className="size-4" />
                                 </Button>
                             </>
                         )}
-                        {!message.trim() && (
+                        {!message.trim() && !pendingFile && (
                             <SpeechInput
                                 onTranscriptionChange={handleTranscriptionChange}
                                 onAudioRecorded={handleAudioRecorded}
@@ -520,7 +656,12 @@ export function ChatInput({
                         )}
                         <Button
                             type="submit"
-                            disabled={!message.trim() || isSubmitting || isModelMismatch}
+                            disabled={
+                                pendingFile?.status === 'uploading' ||
+                                ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
+                                    isSubmitting ||
+                                    isModelMismatch)
+                            }
                             size="icon"
                             className="shrink-0"
                         >
