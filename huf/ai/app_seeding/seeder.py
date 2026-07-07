@@ -52,19 +52,21 @@ def seed_app(app_name: str, huf_dir: Path) -> SeedResult:
                         result.skipped += 1
                         # Use a fallback name if the key isn't standard across all types
                         item_name = item.get('name') or item.get('title') or item.get('agent_name') or item.get('tool_name') or item.get('source_name') or file_path.name
-                        result.errors.append(f"Failed to seed {item_name}: {error}")
 
-                        missing_refs = []
-                        prefix = "Missing reference(s): "
-                        if error and error.startswith(prefix):
-                            refs_part = error[len(prefix):]
-                            missing_refs = refs_part.split(", ") if refs_part else []
+                        if isinstance(error, dict) and error.get("reason") == "missing_refs":
+                            missing_refs = error.get("missing_refs", [])
+                            error_str = "Missing reference(s): " + ", ".join(missing_refs)
+                        else:
+                            missing_refs = []
+                            error_str = str(error)
+
+                        result.errors.append(f"Failed to seed {item_name}: {error_str}")
 
                         result.skipped_records.append({
                             "app": app_name,
                             "file": source_file,
                             "record": item_name,
-                            "error": error,
+                            "error": error_str,
                             "missing_refs": missing_refs,
                         })
             except Exception as e:

@@ -8,10 +8,12 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import frappe
 
-from huf.ai.app_seeding.seeder import seed_app
+from huf.ai.app_seeding.loaders import _upsert_doc, _validate_link_refs
+from huf.ai.app_seeding.seeder import seed_app, seed_all_apps
 
 
 class TestSeedFKValidation(unittest.TestCase):
@@ -54,6 +56,8 @@ class TestSeedFKValidation(unittest.TestCase):
                 frappe.db.sql("DELETE FROM `tabAgent` WHERE agent_name = %s", agent_name)
                 frappe.db.sql("DELETE FROM `tabAgent Tool` WHERE parent = %s", agent_name)
                 frappe.db.sql("DELETE FROM `tabAgent Knowledge` WHERE parent = %s", agent_name)
+                frappe.db.sql("DELETE FROM `tabAgent User` WHERE parent = %s", agent_name)
+                frappe.db.sql("DELETE FROM `tabAgent Role` WHERE parent = %s", agent_name)
             except Exception:
                 pass
 
@@ -74,7 +78,8 @@ class TestSeedFKValidation(unittest.TestCase):
             json.dump(payload, f)
         return target_path
 
-    def _agent_payload(self, agent_name, provider, model, tools=None, knowledge=None):
+    def _agent_payload(self, agent_name, provider, model, tools=None, knowledge=None,
+                        allowed_users=None, allowed_roles=None):
         payload = {
             "agent_name": agent_name,
             "provider": provider,
@@ -85,6 +90,10 @@ class TestSeedFKValidation(unittest.TestCase):
             payload["tools"] = tools
         if knowledge is not None:
             payload["knowledge"] = knowledge
+        if allowed_users is not None:
+            payload["allowed_users"] = allowed_users
+        if allowed_roles is not None:
+            payload["allowed_roles"] = allowed_roles
         return payload
 
     def test_invalid_agent_missing_provider_model_is_skipped(self):
@@ -193,6 +202,136 @@ class TestSeedFKValidation(unittest.TestCase):
             any("Agent Tool Function" in ref and f"FK-Missing-Tool-{self.suffix}" in ref for ref in skipped["missing_refs"]),
             "Missing child-table tool reference should be reported",
         )
+
+    def test_loader_returns_structured_missing_refs_payload(self):
+        """AC5: loaders return missing refs as a structured payload;
+        seeder does not parse error strings."""
+        agent_name = f"FK-Structured-Agent-{self.suffix}"
+        data = {
+            "agent_name": agent_name,
+            "provider": self.invalid_provider,
+            "model": self.invalid_model,
+            "instructions": "test",
+        }
+
+        ok, error = _upsert_doc("Agent", "agent_name", data, self.test_app, "huf/agents/test.json")
+
+        self.assertFalse(ok)
+        self.assertIsInstance(error, dict)
+        self.assertEqual(error.get("reason"), "missing_refs")
+        self.assertIn(f"AI Provider:{self.invalid_provider}", error["missing_refs"])
+        self.assertIn(f"AI Model:{self.invalid_model}", error["missing_refs"])
+
+    def test_table_multiselect_references_are_validated(self):
+        """AC6: Table MultiSelect fields (Agent.allowed_users, Agent.allowed_roles)
+        are validated and missing values are reported."""
+        agent_name = f"FK-MultiSelect-Agent-{self.suffix}"
+        self._write_seed(
+            "agents",
+            "multiselect_agent.json",
+            self._agent_payload(
+                agent_name,
+                self.valid_provider,
+                self.valid_model,
+                allowed_users=[f"FK-Missing-User-{self.suffix}"],
+                allowed_roles=[f"FK-Missing-Role-{self.suffix}"],
+            ),
+        )
+
+        result = seed_app(self.test_app, self.huf_dir)
+
+        self.assertFalse(frappe.db.exists("Agent", agent_name))
+        self.assertEqual(result.skipped, 1)
+        skipped = result.skipped_records[0]
+        missing = skipped["missing_refs"]
+        self.assertTrue(
+            any("User" in ref and f"FK-Missing-User-{self.suffix}" in ref for ref in missing),
+            "Missing allowed_users reference should be reported",
+        )
+        self.assertTrue(
+            any("Role" in ref and f"FK-Missing-Role-{self.suffix}" in ref for ref in missing),
+            "Missing allowed_roles reference should be reported",
+        )
+
+    def test_dynamic_link_references_are_validated(self):
+        """AC6: Dynamic Link fields are validated and missing values are reported.
+        Uses Agent Context Artifact schema because no seeded DocType currently
+        carries a Dynamic Link field."""
+        missing = _validate_link_refs("Agent Context Artifact", {
+            "artifact_type": "JSON",
+            "reference_doctype": "Agent",
+            "reference_name": f"FK-Missing-Agent-{self.suffix}",
+        })
+
+        self.assertTrue(
+            any("Agent" in ref and f"FK-Missing-Agent-{self.suffix}" in ref for ref in missing),
+            "Missing Dynamic Link reference should be reported",
+        )
+
+    def test_migrate_emits_warning_logs_for_skipped_records(self):
+        """AC7: every skipped record produces a WARNING-level structured log during
+        migrate naming app, file, record, and missing refs."""
+        from huf.install import _log_seed_results
+
+        agent_name = f"FK-Logged-Agent-{self.suffix}"
+        self._write_seed(
+            "agents",
+            "logged_agent.json",
+            self._agent_payload(agent_name, self.invalid_provider, self.invalid_model),
+        )
+        result = seed_app(self.test_app, self.huf_dir)
+
+        logger = MagicMock()
+        _log_seed_results([result], logger)
+
+        warning_calls = [c for c in logger.warning.call_args_list]
+        self.assertTrue(warning_calls, "At least one warning log should be emitted")
+
+        per_record_logged = False
+        for call in warning_calls:
+            payload = json.loads(call.args[0])
+            if payload.get("record") == agent_name:
+                per_record_logged = True
+                self.assertEqual(payload["app"], self.test_app)
+                self.assertEqual(payload["file"], "huf/agents/logged_agent.json")
+                self.assertIn(f"AI Provider:{self.invalid_provider}", payload["missing_refs"])
+                self.assertIn(f"AI Model:{self.invalid_model}", payload["missing_refs"])
+
+        self.assertTrue(per_record_logged, "Per-record warning log should name app, file, record, and missing refs")
+
+    def test_sync_app_seeds_endpoint_returns_skipped_record_summaries(self):
+        """AC8: the Sync App Seeds backend endpoint returns per-record missing-ref
+        summaries so the Desk dialog can display them."""
+        agent_name = f"FK-UI-Agent-{self.suffix}"
+        self._write_seed(
+            "agents",
+            "ui_agent.json",
+            self._agent_payload(agent_name, self.invalid_provider, self.invalid_model),
+        )
+
+        # Patch scanner to discover our temp test app directory
+        from huf.ai.app_seeding import seeder as seeder_module
+        original_find_seed_dirs = seeder_module.find_seed_dirs
+        seeder_module.find_seed_dirs = lambda: {self.test_app: self.huf_dir}
+        try:
+            frappe.set_user("Administrator")
+            response = seed_all_apps()
+        finally:
+            seeder_module.find_seed_dirs = original_find_seed_dirs
+
+        self.assertEqual(response["status"], "success")
+        results = response.get("results", [])
+        self.assertTrue(results, "Response should include per-app results")
+
+        matching = [
+            rec for res in results
+            for rec in res.get("skipped_records", [])
+            if rec.get("record") == agent_name
+        ]
+        self.assertTrue(matching, "Skipped record summary should be returned")
+        rec = matching[0]
+        self.assertIn(f"AI Provider:{self.invalid_provider}", rec["missing_refs"])
+        self.assertIn(f"AI Model:{self.invalid_model}", rec["missing_refs"])
 
 
 if __name__ == "__main__":
