@@ -1,0 +1,29 @@
+# HUF's ffast config — the source of truth for regenerating docker/docker-compose.yml,
+# docker/fast/demo-entrypoint.sh, docker/try.sh, and docker/fast/.env.example via
+# https://github.com/OWNER/ffast (the standalone Frappe Docker/Compose generator this
+# project's docker/ demo variant was extracted into).
+#
+# ffast is not yet published to PyPI. Once it is:
+#   pip install ffast
+#   ffast generate --config docker/ffast.yaml --output docker
+# should reproduce the demo variant's docker-compose.yml, fast/demo-entrypoint.sh,
+# try.sh, and fast/.env.example byte-for-byte (verified in the ffast project's own
+# test pass against this exact config). docker-compose.yml and docker/README.md will
+# differ from the checked-in versions only in a couple of app-agnostic cosmetic lines
+# (ffast's generic usage comment vs. HUF's git-clone instructions) — that is expected.
+#
+# The bench/fast/fast-physical variants are not yet templatized in ffast; this repo's
+# docker/compose.{bench,fast,fast-physical}.yml remain hand-maintained for now.
+app_name: huf
+site_name: huf.localhost
+image_registry: ghcr.io
+image_repository: tridz-dev/huf-demo
+image_tag: latest
+container_prefix: fasterdocker-run
+ports:
+  web: 8000
+  socketio: 9000
+  frontend: 8080
+mariadb_image: mariadb:10.11.11
+project_name: huf
+output_directory: ./docker
