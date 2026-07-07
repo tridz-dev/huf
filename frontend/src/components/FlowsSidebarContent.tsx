@@ -118,7 +118,7 @@ export function FlowsSidebarContent() {
                               ? 'bg-green-500'
                               : flow.status === 'error'
                               ? 'bg-red-500'
-                              : 'bg-gray-400'
+                              : 'bg-muted-foreground'
                           }`}
                         />
                       </div>

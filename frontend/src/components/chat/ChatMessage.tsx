@@ -86,11 +86,11 @@ export function ChatMessage({
             </ChatAvatar>
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-zinc-900">
+                    <span className="text-sm font-medium text-foreground">
                         {isUser ? "You" : agentName}
                     </span>
                     {timeDisplay && (
-                        <span className="text-xs text-zinc-400">
+                        <span className="text-xs text-muted-foreground">
                             {timeDisplay}
                         </span>
                     )}

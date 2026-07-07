@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { updateConversationTitle } from "@/services/chatApi";
 
 const conversationTitleVariants = cva(
-    "px-1 w-full font-medium truncate text-zinc-900 bg-transparent outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-sm cursor-pointer",
+    "px-1 w-full font-medium truncate text-foreground bg-transparent outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-sm cursor-pointer",
     {
         variants:{
             variant:{

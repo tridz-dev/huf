@@ -561,9 +561,9 @@ export function ChatInput({
     if (isModelMismatch && chatId) {
         return (
             <div className="px-6 pb-6 pt-2">
-                <div className="w-full border border-zinc-200 rounded-xl bg-zinc-50 p-6">
+                <div className="w-full border border-border rounded-xl bg-muted p-6">
                     <div className="flex flex-col items-center justify-center gap-4 text-center">
-                        <p className="text-sm text-zinc-600">
+                        <p className="text-sm text-muted-foreground">
                             Model changed, please start a new conversation
                         </p>
                         <Button
@@ -582,7 +582,7 @@ export function ChatInput({
     return (
         <div className="px-6 pb-6 pt-2">
             <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-                <div className="w-full border border-zinc-200 rounded-xl shadow-2xl focus-within:ring-1 focus-within:ring-ring transition-all">
+                <div className="w-full border border-border rounded-xl shadow-none focus-within:ring-1 focus-within:ring-ring transition-all">
                     <Textarea
                         ref={textareaRef}
                         value={message}
@@ -615,7 +615,7 @@ export function ChatInput({
                         </div>
                     )}
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
-                        <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
+                        <span className="flex items-center gap-x-1 text-[10px] text-muted-foreground">
                             Use
                             <ShortcutKey>
                                 Shift + Enter
@@ -670,7 +670,7 @@ export function ChatInput({
                     </div>
                 </div>
             </form>
-            <p className="mt-3 text-[10px] text-zinc-400 text-center">AI output can be inaccurate. Double check important info.</p>
+            <p className="mt-3 text-[10px] text-muted-foreground text-center">AI output can be inaccurate. Double check important info.</p>
         </div>
     );
 }

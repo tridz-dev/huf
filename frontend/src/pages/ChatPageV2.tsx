@@ -72,7 +72,7 @@ function ChatPage() {
                         variant="ghost"
                         size="icon"
                         onClick={toggleSidebar}
-                        className="absolute top-4 left-4 z-20 h-8 w-8 text-zinc-500 hover:text-zinc-900"
+                        className="absolute top-4 left-4 z-20 h-8 w-8 text-muted-foreground hover:text-foreground"
                     >
                         {sidebarOpen ? (
                             <PanelLeftClose className="h-4 w-4" />
