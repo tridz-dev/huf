@@ -1186,6 +1186,8 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
             model=target_agent.model,
             parent_conversation_id=conversation_id,
             invoked_by_agent=agent_name_self,
+            channel_id=kwargs.get("channel_id"),
+            external_id=kwargs.get("external_id")
         )
 
         return {

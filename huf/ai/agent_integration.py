@@ -1119,7 +1119,7 @@ def run_agent_sync(
                 "cost": cost
             })
 
-        conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
+        message_doc = conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
 
         frappe.db.set_value("Agent Run", run_doc.name, {
             "status": "Success",
@@ -1130,6 +1130,29 @@ def run_agent_sync(
             "end_time": now_datetime()
         }, update_modified=True)
         safe_commit()
+
+        # Notify connected chat clients so background runs (e.g. sub-agent parent
+        # re-awaken) update the UI without requiring a manual refresh.
+        if message_doc:
+            try:
+                frappe.publish_realtime(
+                    event=f"conversation:{conversation.name}",
+                    message={
+                        "type": "new_agent_message",
+                        "conversation_id": conversation.name,
+                        "message_id": message_doc.name,
+                        "kind": message_doc.kind or "Message",
+                        "content": message_doc.content,
+                        "agent_run_id": run_doc.name,
+                        "conversation_index": message_doc.conversation_index,
+                    },
+                    user=frappe.session.user,
+                )
+            except Exception as socket_err:
+                frappe.log_error(
+                    f"Error emitting new_agent_message socket event: {socket_err!s}",
+                    "Agent Sync Socket Event"
+                )
 
         # Handle Sub-Agent Success Lifecycle Hook
         if parent_conversation_id and invoked_by_agent:
