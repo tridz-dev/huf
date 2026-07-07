@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Info, Loader2 } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { Skeleton } from '../components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
@@ -193,31 +194,38 @@ function HomePage() {
       id: 'total-runs',
       title: 'Total Agent Runs',
       subtitle: 'Last 7 days',
-      value: metricsLoading ? '...' : formatNumber(metrics.totalRuns),
+      value: formatNumber(metrics.totalRuns),
       tooltip: 'Total number of agent executions in the last 7 days',
     },
     {
       id: 'success-rate',
       title: 'Success Rate',
       subtitle: 'Last 7 days',
-      value: metricsLoading ? '...' : `${metrics.successRate.toFixed(1)}%`,
+      value: `${metrics.successRate.toFixed(1)}%`,
       tooltip: 'Percentage of successful agent runs without errors',
     },
     {
       id: 'avg-runtime',
       title: 'Avg Runtime',
       subtitle: 'Last 7 days',
-      value: metricsLoading ? '...' : formatDuration(metrics.avgRuntime),
+      value: formatDuration(metrics.avgRuntime),
       tooltip: 'Average execution time across all agent runs',
     },
     {
       id: 'cost',
       title: 'Total Cost',
       subtitle: 'Last 7 days',
-      value: metricsLoading ? '...' : formatCurrency(metrics.totalCost),
+      value: formatCurrency(metrics.totalCost),
       tooltip: 'Total API costs for LLM usage across all agents',
     },
   ];
+
+  const showMoreHref =
+    activeTab === 'agents'
+      ? '/agents'
+      : activeTab === 'flows'
+        ? '/flows'
+        : '/executions';
 
   return (
     <div className="h-full overflow-auto">
@@ -252,11 +260,11 @@ function HomePage() {
                 </div>
                 <div className="font-mono text-[9.5px] text-steel-soft mb-2">{metric.subtitle}</div>
                 <div className={cn(
-                  'font-display font-bold text-[38px] leading-none',
+                  'font-display font-bold text-[38px] leading-none min-h-[38px]',
                   metric.id === 'cost' ? 'text-signal-ink' : 'text-ink',
                 )}>
-                  {metricsLoading && metric.value === '...' ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-steel" />
+                  {metricsLoading ? (
+                    <Skeleton className="h-[38px] w-24" />
                   ) : (
                     metric.value
                   )}
@@ -277,24 +285,13 @@ function HomePage() {
               <TabsTrigger value="flows">Flows</TabsTrigger>
               <TabsTrigger value="executions">Executions</TabsTrigger>
             </TabsList>
-            {activeTab === 'agents' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/agents')}
-              >
-                Show More
-              </Button>
-            )}
-            {activeTab === 'flows' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/flows')}
-              >
-                Show More
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(showMoreHref)}
+            >
+              Show More
+            </Button>
           </div>
 
           {/* Agents Tab */}
