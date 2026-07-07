@@ -30,6 +30,8 @@ import {
   type AgentSummaryPromptDoc,
   type AgentSummaryPromptUsageAgent,
 } from '@/services/agentSummaryPromptApi';
+import { getSummaryPromptCategories } from '@/services/categoryApi';
+import { Combobox } from '@/components/ui/combobox';
 
 const agentSummaryPromptFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -38,6 +40,7 @@ const agentSummaryPromptFormSchema = z.object({
   is_active: z.boolean().default(true),
   visibility: z.enum(['Public', 'App', 'Private']).default('Private'),
   tags: z.string().optional(),
+  category: z.string().optional(),
   prompt_body: z.string().min(1, 'Prompt body is required'),
 });
 
@@ -51,6 +54,7 @@ function mapDocToFormValues(doc: AgentSummaryPromptDoc): AgentSummaryPromptFormV
     is_active: doc.is_active === 1,
     visibility: doc.visibility || 'Private',
     tags: doc.tags || '',
+    category: doc.category || '',
     prompt_body: doc.prompt_body || '',
   };
 }
@@ -72,6 +76,7 @@ export function AgentSummaryPromptFormPage() {
   const [newVersionTitle, setNewVersionTitle] = useState('');
   const [newVersionDescription, setNewVersionDescription] = useState('');
   const [dialogAction, setDialogAction] = useState<'new-version' | 'fork'>('new-version');
+  const [categoryOptions, setCategoryOptions] = useState<Array<{ value: string; label: string }>>([]);
 
   const form = useForm<AgentSummaryPromptFormValues>({
     resolver: zodResolver(agentSummaryPromptFormSchema),
@@ -82,9 +87,23 @@ export function AgentSummaryPromptFormPage() {
       is_active: true,
       visibility: 'Private',
       tags: '',
+      category: '',
       prompt_body: '',
     },
   });
+
+  useEffect(() => {
+    getSummaryPromptCategories()
+      .then((categories) =>
+        setCategoryOptions(
+          categories.map((category) => ({
+            value: category.name,
+            label: category.category_name || category.name,
+          })),
+        ),
+      )
+      .catch((error) => console.error('Error loading summary prompt categories:', error));
+  }, []);
 
   useEffect(() => {
     if (!id || isNew) {
@@ -177,6 +196,7 @@ export function AgentSummaryPromptFormPage() {
           is_active: values.is_active ? 1 : 0,
           visibility: values.visibility,
           tags: values.tags || undefined,
+          category: values.category || undefined,
           prompt_body: values.prompt_body,
         };
 
@@ -502,6 +522,17 @@ export function AgentSummaryPromptFormPage() {
                       <SelectItem value="Public">Public</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Combobox
+                    options={categoryOptions}
+                    value={form.watch('category') || ''}
+                    onValueChange={(value) => form.setValue('category', value, { shouldDirty: true })}
+                    placeholder="Select category..."
+                    searchPlaceholder="Search categories..."
+                    emptyText="No categories found."
+                  />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="description">Description</Label>
