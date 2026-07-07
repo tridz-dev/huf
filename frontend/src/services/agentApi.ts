@@ -219,6 +219,13 @@ export interface AgentTriggerDoc {
   webhook_slug?: string;
   app_name?: string;
   event_name?: string;
+  prompt_field?: string;
+  file_attachments?: Array<{
+    name?: string;
+    source_type?: string;
+    child_table?: string;
+    field_name?: string;
+  }>;
 }
 
 /**

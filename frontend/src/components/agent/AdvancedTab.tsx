@@ -397,6 +397,39 @@ export function AdvancedTab({
 
           <FormField
             control={form.control}
+            name="max_context_chars"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Context Characters</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    placeholder="2000"
+                    {...field}
+                    value={field.value?.toString() || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '') {
+                        field.onChange(undefined);
+                      } else {
+                        const numValue = parseInt(value, 10);
+                        if (!isNaN(numValue)) {
+                          field.onChange(numValue);
+                        }
+                      }
+                    }}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Maximum characters allowed for tool results before truncating and applying reference context policy.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="max_turns"
             render={({ field }) => (
               <FormItem>
@@ -457,6 +490,7 @@ export function AdvancedTab({
           />
 
           {form.watch('enable_conversation_data') && (
+            <>
             <FormField
               control={form.control}
               name="inject_conversation_data"
@@ -477,6 +511,35 @@ export function AdvancedTab({
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="conversation_data_api_permission"
+              render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                  <FormLabel>Conversation Data API Permission</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || ''}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select access level" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Read">Read</SelectItem>
+                      <SelectItem value="Write">Write</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Read allows fetching memory only. Write allows reading and writing via conversation data tools.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            </>
           )}
 
           <FormField
