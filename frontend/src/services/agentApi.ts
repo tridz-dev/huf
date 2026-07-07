@@ -204,6 +204,13 @@ export async function getAgent(name: string): Promise<AgentDoc> {
 /**
  * Agent Trigger document from Frappe (for editing)
  */
+export interface AgentTriggerAttachmentRow {
+  name?: string;
+  source_type: 'DocField' | 'Child Table Field';
+  child_table?: string;
+  field_name: string;
+}
+
 export interface AgentTriggerDoc {
   name: string;
   trigger_name: string;
@@ -215,17 +222,12 @@ export interface AgentTriggerDoc {
   reference_doctype?: string;
   doc_event?: string;
   condition?: string;
+  prompt_field?: string;
   webhook_key?: string;
   webhook_slug?: string;
   app_name?: string;
   event_name?: string;
-  prompt_field?: string;
-  file_attachments?: Array<{
-    name?: string;
-    source_type?: string;
-    child_table?: string;
-    field_name?: string;
-  }>;
+  file_attachments?: AgentTriggerAttachmentRow[];
 }
 
 /**
