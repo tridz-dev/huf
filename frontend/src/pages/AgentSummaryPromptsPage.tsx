@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowUpDown, Loader2 } from 'lucide-react';
+import { ArrowUpDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   ColumnDef,
@@ -9,7 +9,7 @@ import {
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout } from '@/components/dashboard';
+import { FilterBar, PageLayout, PageListFooter, SkeletonTable } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
@@ -181,9 +181,7 @@ export function AgentSummaryPromptsPage() {
     >
       <div className="w-full">
         {initialLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
+          <SkeletonTable columns={6} rows={10} />
         ) : (
           <div className="overflow-hidden rounded-md border">
             <Table>
@@ -228,18 +226,19 @@ export function AgentSummaryPromptsPage() {
         )}
       </div>
 
-      <LoadMoreButton
+      <PageListFooter
         hasMore={hasMore}
         loading={loadingMore}
         onLoadMore={loadMore}
         disabled={!!search || initialLoading}
+        endMessage={
+          !hasMore && prompts.length > 0
+            ? total !== undefined
+              ? `Showing all ${total} summary prompts`
+              : 'No more summary prompts to load'
+            : undefined
+        }
       />
-
-      {!hasMore && prompts.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
-          {total !== undefined ? `Showing all ${total} summary prompts` : 'No more summary prompts to load'}
-        </div>
-      )}
     </PageLayout>
   );
 }

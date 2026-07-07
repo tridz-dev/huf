@@ -16,6 +16,11 @@ import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderAction
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
+import {
+  DashboardPageLoader,
+  GridPageLoader,
+  TablePageLoader,
+} from './components/dashboard';
 import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
@@ -147,7 +152,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
+                  <Suspense fallback={<DashboardPageLoader />}>
                     <HomePage />
                   </Suspense>
                 </UnifiedLayout>
@@ -159,7 +164,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<AgentsHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
+                  <Suspense fallback={<GridPageLoader />}>
                     <AgentsPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -181,7 +186,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<AgentPromptsHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
+                  <Suspense fallback={<TablePageLoader columns={6} />}>
                     <AgentPromptsPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -203,7 +208,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<AgentSummaryPromptsHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
+                  <Suspense fallback={<TablePageLoader columns={6} />}>
                     <AgentSummaryPromptsPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -225,7 +230,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<DataHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
+                  <Suspense fallback={<GridPageLoader filterCount={1} />}>
                     <DataPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -292,7 +297,7 @@ function App() {
               <ProtectedRoute>
                 <FlowProvider>
                   <UnifiedLayout headerActions={<FlowsListHeaderActions />}>
-                    <Suspense fallback={<PageLoader />}>
+                    <Suspense fallback={<GridPageLoader filterCount={1} />}>
                       <FlowListPage />
                     </Suspense>
                   </UnifiedLayout>
@@ -343,7 +348,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
+                  <Suspense fallback={<TablePageLoader columns={6} filterCount={3} />}>
                     <Executions />
                   </Suspense>
                 </UnifiedLayout>
@@ -391,7 +396,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<KnowledgeHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
+                  <Suspense fallback={<GridPageLoader />}>
                     <KnowledgeSourcesPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -412,7 +417,7 @@ function App() {
             path="/integrations"
             element={
               <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
+                <Suspense fallback={<GridPageLoader filterCount={1} />}>
                   <IntegrationSettingsListingPageWrapper />
                 </Suspense>
               </ProtectedRoute>
@@ -433,7 +438,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<McpHeaderActions />}>
-                  <Suspense fallback={<PageLoader />}>
+                  <Suspense fallback={<GridPageLoader filterCount={1} />}>
                     <McpListingPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -465,7 +470,9 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<UsersHeaderActions />}>
-                  <UsersPage />
+                  <Suspense fallback={<TablePageLoader columns={4} filterCount={1} />}>
+                    <UsersPage />
+                  </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }

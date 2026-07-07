@@ -2,6 +2,16 @@ import { db } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { doctype } from '@/data/doctypes';
 
+type CategoryDoctype =
+  | typeof doctype['Agent Prompt Category']
+  | typeof doctype['Agent Summary Prompt Category'];
+
+function resolveCategoryDoctype(kind: 'prompt' | 'summary'): CategoryDoctype {
+  return kind === 'summary'
+    ? doctype['Agent Summary Prompt Category']
+    : doctype['Agent Prompt Category'];
+}
+
 export interface CategoryDoc {
   name: string;
   category_name: string;
@@ -19,9 +29,11 @@ export interface GetCategoriesParams {
 }
 
 export async function getCategories(
-  params?: GetCategoriesParams
+  params?: GetCategoriesParams,
+  kind: 'prompt' | 'summary' = 'prompt',
 ): Promise<CategoryDoc[]> {
   try {
+    const categoryDoctype = resolveCategoryDoctype(kind);
     const filters: Array<[string, string, unknown]> = [];
 
     if (params?.search && params.search.trim()) {
@@ -32,7 +44,7 @@ export async function getCategories(
       filters.push(['parent_category', '=', params.parent_category]);
     }
 
-    const response = await db.getDocList(doctype['Agent Prompt Category'], {
+    const response = await db.getDocList(categoryDoctype, {
       fields: [
         'name',
         'category_name',
@@ -54,9 +66,12 @@ export async function getCategories(
   }
 }
 
-export async function getCategory(name: string): Promise<CategoryDoc> {
+export async function getCategory(
+  name: string,
+  kind: 'prompt' | 'summary' = 'prompt',
+): Promise<CategoryDoc> {
   try {
-    const response = await db.getDoc(doctype['Agent Prompt Category'], name);
+    const response = await db.getDoc(resolveCategoryDoctype(kind), name);
     return response as CategoryDoc;
   } catch (error) {
     handleFrappeError(error);
@@ -65,13 +80,11 @@ export async function getCategory(name: string): Promise<CategoryDoc> {
 }
 
 export async function createCategory(
-  data: Partial<CategoryDoc>
+  data: Partial<CategoryDoc>,
+  kind: 'prompt' | 'summary' = 'prompt',
 ): Promise<CategoryDoc> {
   try {
-    const response = await db.createDoc(
-      doctype['Agent Prompt Category'],
-      data
-    );
+    const response = await db.createDoc(resolveCategoryDoctype(kind), data);
     return response as CategoryDoc;
   } catch (error) {
     handleFrappeError(error);
@@ -81,10 +94,12 @@ export async function createCategory(
 
 export async function updateCategory(
   name: string,
-  data: Partial<CategoryDoc>
+  data: Partial<CategoryDoc>,
+  kind: 'prompt' | 'summary' = 'prompt',
 ): Promise<CategoryDoc> {
   try {
     let targetName = name;
+    const categoryDoctype = resolveCategoryDoctype(kind);
 
     if (
       data.category_name &&
@@ -92,24 +107,15 @@ export async function updateCategory(
       data.category_name !== name
     ) {
       try {
-        await db.renameDoc(
-          doctype['Agent Prompt Category'],
-          name,
-          data.category_name
-        );
+        await db.renameDoc(categoryDoctype, name, data.category_name);
         targetName = data.category_name;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.warn('rename_doc failed, falling back to updateDoc', error);
-        // Some doctype configs may still not allow rename; continue with current name
         targetName = name;
       }
     }
 
-    const response = await db.updateDoc(
-      doctype['Agent Prompt Category'],
-      targetName,
-      data
-    );
+    const response = await db.updateDoc(categoryDoctype, targetName, data);
     return response as CategoryDoc;
   } catch (error) {
     handleFrappeError(error);
@@ -117,11 +123,17 @@ export async function updateCategory(
   }
 }
 
-export async function deleteCategory(name: string): Promise<void> {
+export async function deleteCategory(
+  name: string,
+  kind: 'prompt' | 'summary' = 'prompt',
+): Promise<void> {
   try {
-    await db.deleteDoc(doctype['Agent Prompt Category'], name);
+    await db.deleteDoc(resolveCategoryDoctype(kind), name);
   } catch (error) {
     handleFrappeError(error);
     throw error;
   }
 }
+
+export const getSummaryPromptCategories = (params?: GetCategoriesParams) =>
+  getCategories(params, 'summary');

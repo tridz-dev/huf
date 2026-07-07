@@ -196,18 +196,18 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
   }, [navigate]);
 
   return (
-    <div className="h-full min-w-80 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
+    <div className="h-full min-w-80 bg-sidebar flex flex-col overflow-hidden border-r border-border">
       <div className="shrink-0 px-3 pt-3 pb-2 sticky top-0 z-1 bg-sidebar">
         <ChatListHeader onAgentSelect={handleAgentSelect} onClose={onClose} />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
         <Tabs defaultValue="recents" value={activeTab} onValueChange={setActiveTab} className="space-y-2">
         <div className="sticky top-0 z-1 bg-sidebar">
-          <TabsList className="w-full h-8">
+          <TabsList variant="pill" layout="grid" cols={2} size="compact" className="w-full">
             {LIST_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.value}
-                className="w-1/2 space-x-1.5 text-xs font-medium h-7"
+                className="w-full space-x-1.5"
                 value={tab.value}
               >
                 <tab.icon className="w-3 h-3" />
@@ -225,7 +225,7 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
                     <Skeleton className="h-7 w-7 rounded-full" />
                     <Skeleton className="h-4 w-40" />
                   </div>
-                  <div className="ml-3 pl-3 border-l border-zinc-200 space-y-2">
+                  <div className="ml-3 pl-3 border-l border-border space-y-2">
                     <Skeleton className="h-10 w-full rounded-md" />
                     <Skeleton className="h-10 w-full rounded-md" />
                   </div>
@@ -337,24 +337,24 @@ function AgentConversationItem({
   return (
     <AccordionItem value={agent.name} className="border-b-0">
       <AccordionTrigger
-        className="group gap-2 mb-1 py-1 px-1 hover:bg-zinc-200 cursor-pointer select-none rounded-lg"
+        className="group gap-2 mb-1 py-1 px-1 hover:bg-muted cursor-pointer select-none rounded-lg"
         arrowPosition="left"
       >
         <div className="flex-1 flex gap-x-2 items-center">
           <ChatAvatar variant="listing_ai" color={agent.agent_color || undefined}>
             {getInitials(agent.agent_name)}
           </ChatAvatar>
-          <span className="text-sm font-medium truncate text-zinc-500 group-hover:text-zinc-900 transition-colors">
+          <span className="text-sm font-medium truncate text-muted-foreground group-hover:text-foreground transition-colors">
             {agent.agent_name}
           </span>
         </div>
-        <span className="text-[10px] min-w-6 text-zinc-400 bg-zinc-200 px-1.5 py-0.5 rounded-full border border-zinc-200 ml-auto">
+        <span className="text-[10px] min-w-6 text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full border border-border ml-auto">
           {agent.conversationCount}
         </span>
         <Button 
           size="icon" 
           variant="ghost" 
-          className="h-fit w-fit opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-300 rounded text-zinc-400 hover:text-zinc-900 transition-all ml-1"
+          className="h-fit w-fit opacity-0 group-hover:opacity-100 p-1 hover:bg-muted/80 rounded text-muted-foreground hover:text-foreground transition-all ml-1"
           onClick={handleNewConversation}
         >
           <Plus className="w-3.5 h-3.5" />
@@ -362,7 +362,7 @@ function AgentConversationItem({
         </Button>
       </AccordionTrigger>
 
-      <AccordionContent className="space-y-0.5 ml-3 pl-3 border-l border-zinc-200 overflow-hidden transition-all duration-300 opacity-100">
+      <AccordionContent className="space-y-0.5 ml-3 pl-3 border-l border-border overflow-hidden transition-all duration-300 opacity-100">
         {initialLoading ? (
           <div className="space-y-2 p-2">
             <Skeleton className="h-10 w-full rounded-md" />
@@ -400,8 +400,8 @@ function AgentConversationItem({
                     className={cn(
                       'group flex w-full text-left flex-col p-1 rounded-md cursor-pointer transition-all border-l-2',
                       isSelected
-                        ? 'bg-zinc-200 border-indigo-500'
-                        : 'bg-transparent border-transparent hover:bg-zinc-200 hover:border-zinc-200'
+                        ? 'bg-muted border-primary'
+                        : 'bg-transparent border-transparent hover:bg-muted hover:border-border'
                     )}
                   >
                     <ConversationTitle
@@ -413,7 +413,7 @@ function AgentConversationItem({
                       value={chat.title}
                       conversationId={chat.id}
                     />
-                    <p className="ps-1 text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
+                    <p className="ps-1 text-[10px] text-muted-foreground truncate mt-0.5 group-hover:text-muted-foreground">
                       {chat.timestampLabel ?? ''}
                     </p>
                   </Link>
@@ -429,7 +429,7 @@ function AgentConversationItem({
                 }}
                 disabled={loadingMore}
                 className={cn(
-                  'w-full text-xs text-zinc-500 hover:text-zinc-900 py-2 px-2 text-center transition-colors',
+                  'w-full text-xs text-muted-foreground hover:text-foreground py-2 px-2 text-center transition-colors',
                   loadingMore && 'opacity-50 cursor-not-allowed'
                 )}
               >
@@ -562,7 +562,7 @@ function RecentsConversationList({
               if (items.length === 0) return null;
               return (
                 <div key={label}>
-                  <span className="px-1 text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
+                  <span className="px-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                     {label}
                   </span>
                   <div className="mt-1 space-y-0.5">
@@ -589,8 +589,8 @@ function RecentsConversationList({
                             className={cn(
                               'group flex w-full text-left px-2 py-1.5 gap-2 items-center rounded-md cursor-pointer transition-all',
                               isSelected
-                                ? 'bg-zinc-200'
-                                : 'bg-transparent hover:bg-zinc-100'
+                                ? 'bg-muted'
+                                : 'bg-transparent hover:bg-muted'
                             )}
                           >
                             <ChatAvatar 
@@ -609,9 +609,9 @@ function RecentsConversationList({
                                 value={chat.title}
                                 conversationId={chat.id}
                               />
-                              <p className="ps-1 text-xs truncate text-zinc-500">{chat.agent}</p>
+                              <p className="ps-1 text-xs truncate text-muted-foreground">{chat.agent}</p>
                             </div>
-                            <span className="mb-1 flex-shrink-0 text-[10px] text-zinc-400 flex-shrink-0 self-end">
+                            <span className="mb-1 flex-shrink-0 text-[10px] text-muted-foreground flex-shrink-0 self-end">
                               {chat.timestampLabel ?? ''}
                             </span>
                           </Link>
@@ -652,7 +652,7 @@ function ChatListHeader({
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="-ml-1" />
-        <h1 className="font-semibold text-sm tracking-tight text-zinc-700">Chat</h1>
+        <h1 className="font-semibold text-sm tracking-tight text-foreground">Chat</h1>
       </div>
       <div className="flex items-center gap-1">
         {onAgentSelect && (
@@ -666,7 +666,7 @@ function ChatListHeader({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-zinc-500 hover:text-zinc-900"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={onClose}
           >
             <PanelLeftClose className="w-4 h-4" />

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { SkeletonListView } from './SkeletonListView';
+import { CheckCircle, XCircle } from 'lucide-react';
 import { getRecentAgentRuns } from '@/services/dashboardApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
 import { AgentRunDoc } from '@/services/agentRunApi';
@@ -80,11 +81,9 @@ export function RecentExecutionsTab({ runs: providedRuns, loading: providedLoadi
       <CardHeader>
         <CardTitle>Recent Executions</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-h-[520px]">
         {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-          </div>
+          <SkeletonListView count={10} />
         ) : error ? (
           <div className="text-center py-8 text-destructive">
             <p>Failed to load executions</p>

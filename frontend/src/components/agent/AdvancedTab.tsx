@@ -40,7 +40,8 @@ interface AdvancedTabProps {
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
-  return (model.modalities || '').trim() === required;
+  const modalities = (model.modalities || '').split(',').map(m => m.trim());
+  return modalities.includes(required);
 }
 
 export function AdvancedTab({
@@ -396,6 +397,39 @@ export function AdvancedTab({
 
           <FormField
             control={form.control}
+            name="max_context_chars"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Context Characters</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    placeholder="2000"
+                    {...field}
+                    value={field.value?.toString() || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '') {
+                        field.onChange(undefined);
+                      } else {
+                        const numValue = parseInt(value, 10);
+                        if (!isNaN(numValue)) {
+                          field.onChange(numValue);
+                        }
+                      }
+                    }}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Maximum characters allowed for tool results before truncating and applying reference context policy.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="max_turns"
             render={({ field }) => (
               <FormItem>
@@ -456,6 +490,7 @@ export function AdvancedTab({
           />
 
           {form.watch('enable_conversation_data') && (
+            <>
             <FormField
               control={form.control}
               name="inject_conversation_data"
@@ -476,6 +511,35 @@ export function AdvancedTab({
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="conversation_data_api_permission"
+              render={({ field }) => (
+                <FormItem className="sm:col-span-2">
+                  <FormLabel>Conversation Data API Permission</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || ''}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select access level" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Read">Read</SelectItem>
+                      <SelectItem value="Write">Write</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Read allows fetching memory only. Write allows reading and writing via conversation data tools.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            </>
           )}
 
           <FormField
@@ -676,6 +740,77 @@ export function AdvancedTab({
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name="allow_file_upload"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Allow File Upload</FormLabel>
+                  <FormDescription>
+                    Lets users attach documents or images in chat for this agent.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          {form.watch('allow_file_upload') && (
+            <>
+              <FormField
+                control={form.control}
+                name="enable_ocr"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Enable OCR</FormLabel>
+                      <FormDescription>
+                        Route uploaded documents through OCR extraction instead of vision/local extraction only. Requires the selected model to support the OCR modality.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="max_upload_size_mb"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Max Upload Size (MB)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        placeholder="25"
+                        {...field}
+                        value={field.value?.toString() || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '') {
+                            field.onChange(undefined);
+                          } else {
+                            const numValue = parseInt(value, 10);
+                            if (!isNaN(numValue)) {
+                              field.onChange(numValue);
+                            }
+                          }
+                        }}
+                      />
+                    </FormControl>
+                    <FormDescription>Capped by the global 25 MB limit.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

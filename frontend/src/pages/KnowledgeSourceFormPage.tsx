@@ -24,6 +24,7 @@ import {
 } from '../components/knowledge/types';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 export { KnowledgeSourceFormPage };
 export default KnowledgeSourceFormPage;
@@ -41,6 +42,10 @@ function mapDocToFormValues(doc: Partial<KnowledgeSourceDoc>): KnowledgeSourceFo
     embedding_model: doc.embedding_model || '',
     vector_dimension: doc.vector_dimension ?? 1536,
     embedding_provider: doc.embedding_provider || '',
+    chroma_mode: doc.chroma_mode || 'File',
+    chroma_host: doc.chroma_host || 'localhost',
+    chroma_port: doc.chroma_port ?? 8000,
+    chroma_ssl: doc.chroma_ssl === 1,
   };
 }
 
@@ -63,6 +68,10 @@ function KnowledgeSourceFormPage() {
         'embedding_model',
         'vector_dimension',
         'embedding_provider',
+        'chroma_mode',
+        'chroma_host',
+        'chroma_port',
+        'chroma_ssl',
       ],
       default: true,
       disabled: false,
@@ -184,6 +193,16 @@ function KnowledgeSourceFormPage() {
         embedding_model: values.embedding_model || '',
         vector_dimension: values.vector_dimension ?? 1536,
         embedding_provider: values.embedding_provider || '',
+        chroma_mode: values.knowledge_type === 'chroma' ? (values.chroma_mode || 'File') : undefined,
+        chroma_host: values.knowledge_type === 'chroma' && values.chroma_mode === 'Server'
+          ? (values.chroma_host || 'localhost')
+          : undefined,
+        chroma_port: values.knowledge_type === 'chroma' && values.chroma_mode === 'Server'
+          ? (values.chroma_port ?? 8000)
+          : undefined,
+        chroma_ssl: values.knowledge_type === 'chroma' && values.chroma_mode === 'Server'
+          ? (values.chroma_ssl ? 1 : 0)
+          : undefined,
       };
 
       if (isNew) {
@@ -215,6 +234,12 @@ function KnowledgeSourceFormPage() {
     () => createFormSubmitHandler(form, activeTab, tabFieldMapping, tabLabels, onSubmit),
     [form, activeTab, tabFieldMapping, tabLabels],
   );
+
+  useSaveShortcut({
+    onSave: handleFormSubmit,
+    enabled: showSaveButton,
+    isSubmitting: saving,
+  });
 
   const handleRebuildIndex = async () => {
     if (!id || isNew) return;
@@ -279,7 +304,7 @@ function KnowledgeSourceFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList layout="grid" cols={2}>
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
                     {config.label}

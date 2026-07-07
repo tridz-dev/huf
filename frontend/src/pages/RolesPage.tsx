@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck, Lock } from 'lucide-react';
 import { getHufRoles, type HufRole } from '@/services/permissionsApi';
+import { SkeletonGridView } from '@/components/dashboard';
 import { Badge } from '@/components/ui/badge';
 
 // ---------------------------------------------------------------------------
@@ -103,7 +104,7 @@ export default function RolesPage() {
         </div>
 
         {loading ? (
-          <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
+          <SkeletonGridView columns={{ sm: 1, md: 2 }} count={4} metadataRows={2} showBadges={false} />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {roles.map((role) => (

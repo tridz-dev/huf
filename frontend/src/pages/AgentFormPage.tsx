@@ -6,7 +6,7 @@ import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest, deleteAgent, duplicateAgent } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
@@ -21,6 +21,7 @@ import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { db } from '../lib/frappe-sdk';
 import { AgentHeader } from '../components/agent/AgentHeader';
 import { GeneralTab } from '../components/agent/GeneralTab';
+import { DeleteAgentDialog } from '../components/agent/DeleteAgentDialog';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
@@ -35,6 +36,7 @@ import type { MCPServerDoc } from '../services/mcpApi';
 import type { AgentKnowledgeRow } from '../types/agent.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { writeToolDetailsSetting } from '../components/chat/useChatAgentIdentity';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 type PromptListRow = {
   name: string;
@@ -101,9 +103,15 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     history_limit: agent.history_limit !== undefined && agent.history_limit !== null ? agent.history_limit : undefined,
     max_knowledge_tokens:
       agent.max_knowledge_tokens !== undefined && agent.max_knowledge_tokens !== null ? agent.max_knowledge_tokens : undefined,
+    max_context_chars:
+      agent.max_context_chars !== undefined && agent.max_context_chars !== null ? agent.max_context_chars : undefined,
     max_turns: agent.max_turns !== undefined && agent.max_turns !== null ? agent.max_turns : undefined,
     enable_conversation_data: agent.enable_conversation_data === 1,
     inject_conversation_data: agent.inject_conversation_data === 1,
+    conversation_data_api_permission:
+      agent.conversation_data_api_permission === 'Read' || agent.conversation_data_api_permission === 'Write'
+        ? agent.conversation_data_api_permission
+        : undefined,
     autonaming_of_conversation_title: agent.autonaming_of_conversation_title === 1,
     agent_color: agent.agent_color?.trim() || '',
     show_tool_execution_details: agent.show_tool_execution_details === 1,
@@ -111,6 +119,9 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
     stt_model: agent.stt_model || undefined,
+    allow_file_upload: agent.allow_file_upload === 1,
+    enable_ocr: agent.enable_ocr === 1,
+    max_upload_size_mb: agent.max_upload_size_mb ?? undefined,
   };
 }
 
@@ -175,9 +186,11 @@ export function AgentFormPage() {
         'summary_prompt',
         'history_limit',
         'max_knowledge_tokens',
+        'max_context_chars',
         'max_turns',
         'enable_conversation_data',
         'inject_conversation_data',
+        'conversation_data_api_permission',
         'autonaming_of_conversation_title',
         'agent_color',
         'show_tool_execution_details',
@@ -185,6 +198,9 @@ export function AgentFormPage() {
         'tts_model',
         'tts_voice',
         'stt_model',
+        'allow_file_upload',
+        'enable_ocr',
+        'max_upload_size_mb',
       ],
       default: false,
       disabled: false,
@@ -246,7 +262,6 @@ export function AgentFormPage() {
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
   const [triggerFilter, setTriggerFilter] = useState<string>('all');
   const [triggerStatusFilter, setTriggerStatusFilter] = useState<string>('all');
-  const [optimizingPrompt, setOptimizingPrompt] = useState(false);
   const [showToolsModal, setShowToolsModal] = useState(false);
   const [showToolFormModal, setShowToolFormModal] = useState(false);
   const [editingToolId, setEditingToolId] = useState<string | null>(null);
@@ -307,9 +322,11 @@ export function AgentFormPage() {
         summary_prompt: '',
         history_limit: undefined,
         max_knowledge_tokens: undefined,
+        max_context_chars: 2000,
         max_turns: undefined,
         enable_conversation_data: false,
         inject_conversation_data: true,
+        conversation_data_api_permission: undefined,
         autonaming_of_conversation_title: false,
         agent_color: '',
         show_tool_execution_details: false,
@@ -317,6 +334,9 @@ export function AgentFormPage() {
         tts_model: undefined,
         tts_voice: '',
         stt_model: undefined,
+        allow_file_upload: false,
+        enable_ocr: false,
+        max_upload_size_mb: undefined,
       },
   });
 
@@ -755,58 +775,7 @@ export function AgentFormPage() {
   useEffect(() => {
     if (id && !isNew) {
       getAgent(id).then((data: AgentDoc) => {
-        // Resolved merge conflict: prefer using the utility function when available, fallback to explicit mapping if not.
-        if (typeof mapAgentDocToFormValues === 'function') {
-          form.reset(mapAgentDocToFormValues(data));
-        } else {
-          form.reset({
-            agent_name: data.agent_name || '',
-            provider: data.provider || '',
-            model: data.model || '',
-            temperature: data.temperature ?? 1,
-            top_p: data.top_p ?? 1,
-            disabled: data.disabled === 1,
-            allow_chat: data.allow_chat === 1,
-            persist_conversation: data.persist_conversation === 1,
-            persist_user_history: data.persist_user_history === 1,
-            enable_multi_run: data.enable_multi_run === 1,
-            description: data.description || '',
-            instructions: data.instructions || '',
-            default_plan: data.default_plan || [],
-            prompt_mode: data.prompt_mode || 'Local',
-            agent_prompt: data.agent_prompt || '',
-            prompt_version_locked: data.prompt_version_locked === 1,
-            template_version_at_attach: data.template_version_at_attach !== undefined ? data.template_version_at_attach : undefined,
-            allow_guest: data.allow_guest === 1,
-            allowed_users: (data.allowed_users || []).map((row) => row.user).filter(Boolean),
-            allowed_roles: (data.allowed_roles || []).map((row) => row.role).filter(Boolean),
-            enable_prompt_caching: data.enable_prompt_caching === 1,
-            cache_control_type: data.cache_control_type || '',
-            cache_system_message: data.cache_system_message === 1,
-            cache_conversation_history: data.cache_conversation_history === 1,
-            context_strategy: data.context_strategy || undefined,
-            summary_model: data.summary_model || undefined,
-            summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
-            summary_prompt_mode: data.summary_prompt_mode || 'Local',
-            summary_prompt_template: data.summary_prompt_template || '',
-            summary_prompt_version_locked: data.summary_prompt_version_locked === 1,
-            summary_template_version_at_attach: data.summary_template_version_at_attach !== undefined ? data.summary_template_version_at_attach : undefined,
-            summary_prompt: data.summary_prompt || '',
-            history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
-            max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
-            max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
-            enable_conversation_data: data.enable_conversation_data === 1,
-            inject_conversation_data: data.inject_conversation_data === 1,
-            autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
-            agent_color: data.agent_color?.trim() || '',
-            show_tool_execution_details: data.show_tool_execution_details === 1,
-  
-            image_generation_model: data.image_generation_model || undefined,
-            tts_model: data.tts_model || undefined,
-            tts_voice: data.tts_voice || '',
-            stt_model: data.stt_model || undefined,
-          });
-        }
+        form.reset(mapAgentDocToFormValues(data));
         // Track initial disabled state and persisted allow_chat
         setInitialDisabled(data.disabled === 1);
         setAllowChat(data.allow_chat === 1);
@@ -962,9 +931,13 @@ export function AgentFormPage() {
         summary_prompt: values.summary_prompt || '',
         history_limit: values.history_limit !== undefined ? values.history_limit : undefined,
         max_knowledge_tokens: values.max_knowledge_tokens !== undefined ? values.max_knowledge_tokens : undefined,
+        max_context_chars: values.max_context_chars !== undefined ? values.max_context_chars : undefined,
         max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
         enable_conversation_data: values.enable_conversation_data ? 1 : 0,
         inject_conversation_data: values.inject_conversation_data ? 1 : 0,
+        conversation_data_api_permission: values.enable_conversation_data
+          ? (values.conversation_data_api_permission || undefined)
+          : undefined,
         autonaming_of_conversation_title: values.autonaming_of_conversation_title ? 1 : 0,
         agent_color: values.agent_color?.trim() || undefined,
         show_tool_execution_details: values.show_tool_execution_details ? 1 : 0,
@@ -973,6 +946,9 @@ export function AgentFormPage() {
         tts_model: values.tts_model || undefined,
         tts_voice: values.tts_voice || undefined,
         stt_model: values.stt_model || undefined,
+        allow_file_upload: values.allow_file_upload ? 1 : 0,
+        enable_ocr: values.enable_ocr ? 1 : 0,
+        max_upload_size_mb: values.max_upload_size_mb || undefined,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -998,53 +974,7 @@ export function AgentFormPage() {
         const newAgent = await createAgent(agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent created successfully!');
         // Reset form state with the created agent's values
-        form.reset({
-          agent_name: newAgent.agent_name || '',
-          provider: newAgent.provider || '',
-          model: newAgent.model || '',
-          temperature: newAgent.temperature ?? 1,
-          top_p: newAgent.top_p ?? 1,
-          disabled: newAgent.disabled === 1,
-          allow_chat: newAgent.allow_chat === 1,
-          persist_conversation: newAgent.persist_conversation === 1,
-          persist_user_history: newAgent.persist_user_history === 1,
-          enable_multi_run: newAgent.enable_multi_run === 1,
-          description: newAgent.description || '',
-          instructions: newAgent.instructions || '',
-          default_plan: newAgent.default_plan || [],
-          prompt_mode: newAgent.prompt_mode || 'Local',
-          agent_prompt: newAgent.agent_prompt || '',
-          prompt_version_locked: newAgent.prompt_version_locked === 1,
-          template_version_at_attach: newAgent.template_version_at_attach !== undefined ? newAgent.template_version_at_attach : undefined,
-          allow_guest: newAgent.allow_guest === 1,
-          allowed_users: (newAgent.allowed_users || []).map((row) => row.user).filter(Boolean),
-          allowed_roles: (newAgent.allowed_roles || []).map((row) => row.role).filter(Boolean),
-          enable_prompt_caching: newAgent.enable_prompt_caching === 1,
-          cache_control_type: newAgent.cache_control_type || '',
-          cache_system_message: newAgent.cache_system_message === 1,
-          cache_conversation_history: newAgent.cache_conversation_history === 1,
-          context_strategy: newAgent.context_strategy || undefined,
-          summary_model: newAgent.summary_model || undefined,
-          summary_ratio: newAgent.summary_ratio !== undefined && newAgent.summary_ratio !== null ? newAgent.summary_ratio : undefined,
-          summary_prompt_mode: newAgent.summary_prompt_mode || 'Local',
-          summary_prompt_template: newAgent.summary_prompt_template || '',
-          summary_prompt_version_locked: newAgent.summary_prompt_version_locked === 1,
-          summary_template_version_at_attach: newAgent.summary_template_version_at_attach !== undefined ? newAgent.summary_template_version_at_attach : undefined,
-          summary_prompt: newAgent.summary_prompt || '',
-          history_limit: newAgent.history_limit !== undefined && newAgent.history_limit !== null ? newAgent.history_limit : undefined,
-          max_knowledge_tokens: newAgent.max_knowledge_tokens !== undefined && newAgent.max_knowledge_tokens !== null ? newAgent.max_knowledge_tokens : undefined,
-          max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
-          enable_conversation_data: newAgent.enable_conversation_data === 1,
-          inject_conversation_data: newAgent.inject_conversation_data === 1,
-          autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
-          agent_color: newAgent.agent_color?.trim() || '',
-          show_tool_execution_details: newAgent.show_tool_execution_details === 1,
-
-          image_generation_model: newAgent.image_generation_model || undefined,
-          tts_model: newAgent.tts_model || undefined,
-          tts_voice: newAgent.tts_voice || '',
-          stt_model: newAgent.stt_model || undefined,
-        });
+        form.reset(mapAgentDocToFormValues(newAgent));
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
         setInitialKnowledgeSources([...knowledgeSources]);
@@ -1059,58 +989,8 @@ export function AgentFormPage() {
         toast.success('Agent updated successfully!');
         // Sync tool-details setting to other tabs via localStorage
         writeToolDetailsSetting(id, !!values.show_tool_execution_details);
-// Reset form state with the updated values to mark form as clean
-form.reset({
-  agent_name: values.agent_name,
-  provider: values.provider,
-  model: values.model,
-  temperature: values.temperature,
-  top_p: values.top_p,
-  disabled: values.disabled,
-  allow_chat: values.allow_chat,
-  persist_conversation: values.persist_conversation,
-  persist_user_history: values.persist_user_history,
-  enable_multi_run: values.enable_multi_run,
-  description: values.description,
-  instructions: values.instructions,
-  default_plan: values.default_plan || [],
-  prompt_mode: values.prompt_mode,
-  agent_prompt: values.agent_prompt,
-  prompt_version_locked: values.prompt_version_locked,
-  template_version_at_attach: values.template_version_at_attach,
-  allow_guest: values.allow_guest,
-  allowed_users: values.allowed_users || [],
-  allowed_roles: values.allowed_roles || [],
-  enable_prompt_caching: values.enable_prompt_caching,
-  cache_control_type: values.cache_control_type,
-  cache_system_message: values.cache_system_message,
-  cache_conversation_history: values.cache_conversation_history,
-  context_strategy: values.context_strategy,
-  summary_model: values.summary_model,
-  summary_ratio: values.summary_ratio,
-  summary_prompt_mode: values.summary_prompt_mode,
-  summary_prompt_template: values.summary_prompt_template,
-  summary_prompt_version_locked: values.summary_prompt_version_locked,
-  summary_template_version_at_attach: values.summary_template_version_at_attach,
-  summary_prompt: values.summary_prompt,
-  history_limit: values.history_limit,
-  max_knowledge_tokens: values.max_knowledge_tokens,
-  max_turns: values.max_turns,
-  enable_conversation_data: values.enable_conversation_data,
-  inject_conversation_data: values.inject_conversation_data,
-  autonaming_of_conversation_title: values.autonaming_of_conversation_title,
-  agent_color: values.agent_color,
-  show_tool_execution_details: values.show_tool_execution_details,
-
-  image_generation_model: values.image_generation_model,
-  tts_model: values.tts_model,
-  tts_voice: values.tts_voice,
-  stt_model: values.stt_model,
-});
-// Reset tools, disabled state, and persisted allow_chat after successful update
-setInitialTools([...selectedTools]);
-setInitialDisabled(values.disabled);
-setAllowChat(values.allow_chat);
+        // Reset form state with the updated values to mark form as clean
+        form.reset(values);
         if (id) {
           getAgent(id).then((updatedData: AgentDoc) => {
             form.reset(mapAgentDocToFormValues(updatedData));
@@ -1199,18 +1079,11 @@ setAllowChat(values.allow_chat);
     [form, activeTab, tabFieldMapping, tabLabels, onSubmit]
   );
 
-  const handleOptimizePrompt = () => {
-    setOptimizingPrompt((value) => value);
-    toast.info('Coming Soon!');
-    // setOptimizingPrompt(true);
-    // setTimeout(() => {
-    //   const currentInstructions = form.getValues('instructions');
-    //   const optimized = `${currentInstructions}\n\n[Optimized by AI]\n- Enhanced clarity and structure\n- Added specific examples\n- Improved constraint definition`;
-    //   form.setValue('instructions', optimized);
-    //   setOptimizingPrompt(false);
-    //   toast.success('Prompt optimized successfully!');
-    // }, 2000);
-  };
+  useSaveShortcut({
+    onSave: handleFormSubmit,
+    enabled: showSaveButton,
+    isSubmitting: saving,
+  });
 
   const [runningTest, setRunningTest] = useState(false);
 
@@ -1253,13 +1126,43 @@ setAllowChat(values.allow_chat);
     }
   };
 
-  const handleDuplicate = () => {
-    toast.info('Coming Soon!');
+  const [duplicating, setDuplicating] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDuplicate = async () => {
+    if (!id || isNew) return;
+    setDuplicating(true);
+    try {
+      const copy = await duplicateAgent(id);
+      toast.success('Agent duplicated');
+      navigate(`/agents/${copy.name}`);
+    } catch (error) {
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to duplicate agent');
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const handleDelete = () => {
-    toast.info('Deleting agent...');
-    navigate('/agents');
+    setShowDeleteDialog(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!id || isNew) return;
+    setDeleting(true);
+    try {
+      await deleteAgent(id);
+      toast.success('Agent deleted');
+      navigate('/agents');
+    } catch (error) {
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to delete agent');
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
+    }
   };
 
   const handleViewLogs = () => {
@@ -1493,6 +1396,13 @@ setAllowChat(values.allow_chat);
     event_name?: string;
     webhook_slug?: string;
     webhook_key?: string;
+    prompt_field?: string;
+    file_attachments?: Array<{
+      name?: string;
+      source_type: 'DocField' | 'Child Table Field';
+      child_table?: string;
+      field_name: string;
+    }>;
   }) => {
     if (!id || id === 'new') {
       toast.error('Please save the agent first before adding triggers');
@@ -1521,6 +1431,13 @@ setAllowChat(values.allow_chat);
         event_name: values.event_name,
         webhook_slug: values.webhook_slug,
         webhook_key: values.webhook_key,
+        prompt_field: values.prompt_field,
+        file_attachments: (values.file_attachments || []).map((row) => ({
+          ...(row.name ? { name: row.name } : {}),
+          source_type: row.source_type,
+          child_table: row.source_type === 'Child Table Field' ? row.child_table : undefined,
+          field_name: row.field_name,
+        })),
       };
 
       if (editingTrigger) {
@@ -1573,6 +1490,7 @@ setAllowChat(values.allow_chat);
           onSave={handleFormSubmit}
           onRunTest={handleRunTest}
           onDuplicate={handleDuplicate}
+          duplicating={duplicating}
           onViewLogs={handleViewLogs}
           onDelete={handleDelete}
           agentId={!isNew && id ? id : undefined}
@@ -1581,16 +1499,24 @@ setAllowChat(values.allow_chat);
           totalRun={agentStats.total_run}
         />
 
+        <DeleteAgentDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          agentName={form.watch('agent_name') || id || ''}
+          onConfirm={handleConfirmDelete}
+          loading={deleting}
+        />
+
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="flex h-auto w-full justify-start overflow-x-auto overflow-y-hidden p-1">
+              <TabsList layout="scroll" className="w-full">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
                     value={tabKey}
                     disabled={config.disabled}
-                    className="flex-1 shrink-0"
+                    className="min-w-0 shrink-0 flex-1 px-2 sm:min-w-[110px] sm:px-3"
                   >
                     {config.label}
                   </TabsTrigger>
@@ -1603,8 +1529,6 @@ setAllowChat(values.allow_chat);
                   providers={providers}
                   models={models}
                   watchProvider={watchProvider}
-                  optimizingPrompt={optimizingPrompt}
-                  onOptimizePrompt={handleOptimizePrompt}
                   promptOptions={promptOptions}
                   loadingPrompts={loadingPrompts}
                   showAddNewPrompt

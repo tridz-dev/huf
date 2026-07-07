@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
 import { getAgent } from "@/services/agentApi";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent } from '@/hooks/useChatSocket';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type SubAgentCompletedEvent, type SubAgentFailedEvent } from '@/hooks/useChatSocket';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { EmptyChatState } from './EmptyChatState';
@@ -40,7 +40,7 @@ export function ChatMessageList({
     const [isModelMismatch, setIsModelMismatch] = useState(false);
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
 
-    const { agentName, agentColor, showToolExecutionDetails } = useChatAgentIdentity(chatId, searchParams);
+    const { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb } = useChatAgentIdentity(chatId, searchParams);
 
     // Check for model mismatch between conversation and agent
     useEffect(() => {
@@ -156,10 +156,58 @@ export function ChatMessageList({
         setMessages((prev) => upsertAgentMessageFromSocket(prev, event));
     }, [chatId]);
 
+    // Handle sub-agent completion and failure
+    const handleSubAgentCompleted = useCallback((event: SubAgentCompletedEvent) => {
+        if (event.conversation_id !== chatId) return;
+        toast.success(`Sub-agent ${event.agent_name} completed successfully.`);
+        setMessages((prev) => prev.map(msg => {
+            if (!msg.tools || msg.tools.length === 0) return msg;
+            const updatedTools = msg.tools.map(tool => {
+                if (
+                    (tool.name === 'run_agent' || tool.name === 'Run Agent') &&
+                    tool.parameters?.target_agent_name === event.agent_name &&
+                    tool.status === 'output-available'
+                ) {
+                    return {
+                        ...tool,
+                        result: event.result || "Completed successfully"
+                    };
+                }
+                return tool;
+            });
+            return { ...msg, tools: updatedTools };
+        }));
+    }, [chatId]);
+
+    const handleSubAgentFailed = useCallback((event: SubAgentFailedEvent) => {
+        if (event.conversation_id !== chatId) return;
+        toast.error(`Sub-agent ${event.agent_name} failed: ${event.error || 'Unknown error'}`);
+        setMessages((prev) => prev.map(msg => {
+            if (!msg.tools || msg.tools.length === 0) return msg;
+            const updatedTools = msg.tools.map(tool => {
+                if (
+                    (tool.name === 'run_agent' || tool.name === 'Run Agent') &&
+                    tool.parameters?.target_agent_name === event.agent_name &&
+                    (tool.status === 'output-available' || tool.status === 'input-streaming')
+                ) {
+                    return {
+                        ...tool,
+                        status: 'output-error' as const,
+                        error: event.error || "Unknown error"
+                    };
+                }
+                return tool;
+            });
+            return { ...msg, tools: updatedTools };
+        }));
+    }, [chatId]);
+
     useChatSocket({
         conversationId: chatId,
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
+        onSubAgentCompleted: handleSubAgentCompleted,
+        onSubAgentFailed: handleSubAgentFailed,
     });
 
     // Show error toast when there's an error loading messages
@@ -328,6 +376,8 @@ export function ChatMessageList({
                 setMessages={setMessages}
                 isModelMismatch={isModelMismatch}
                 scrollToBottomAfterPaint={scrollToBottomAfterPaint}
+                allowFileUpload={allowFileUpload}
+                maxUploadSizeMb={maxUploadSizeMb}
             />
             </div>
         </div>

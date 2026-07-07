@@ -1,12 +1,15 @@
-import frappe
-import json
-from frappe import _
-from huf.ai.agent_integration import run_agent_sync, _run_async_safely
-from huf.ai.conversation_manager import ConversationManager
 import base64
+import json
+import mimetypes
+
+import frappe
+from frappe import _
 from frappe.utils.file_manager import save_file
+
 from huf.ai import sdk_tools
 from huf.ai import transcription_handler
+from huf.ai.agent_integration import _run_async_safely, run_agent_sync
+from huf.ai.conversation_manager import ConversationManager
 
 
 @frappe.whitelist()
@@ -511,6 +514,361 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
     except Exception as e:
         frappe.log_error(f"OCR Processing Error: {str(e)}")
         return {"success": False, "error": str(e)}
+
+
+@frappe.whitelist()
+def upload_file_and_process_web(
+    filename: str,
+    b64data: str,
+    agent: str,
+    conversation: str | None = None,
+):
+    """Web endpoint: save an uploaded document/image against a real Agent Conversation
+    and extract its text via OCR/vision, honoring the agent's upload capability flags.
+    """
+    if not b64data or not filename:
+        frappe.throw(_("Filename and file data are required"))
+
+    if not agent:
+        frappe.throw(_("agent is required"))
+
+    agent_doc = frappe.get_doc("Agent", agent)
+
+    if not agent_doc.get("allow_file_upload"):
+        return {"success": False, "error": _("File uploads are disabled for this agent.")}
+
+    if "," in b64data:
+        b64data = b64data.split(",", 1)[1]
+
+    try:
+        file_bytes = base64.b64decode(b64data)
+    except Exception:
+        frappe.throw(_("Invalid base64 data"))
+
+    max_upload_size_mb = agent_doc.get("max_upload_size_mb") or 25
+    max_upload_size_bytes = min(max_upload_size_mb, 25) * 1024 * 1024
+    if len(file_bytes) > max_upload_size_bytes:
+        return {
+            "success": False,
+            "error": _("File exceeds the maximum allowed size of {0} MB.").format(min(max_upload_size_mb, 25)),
+        }
+
+    model_name = agent_doc.get("model")
+    modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
+    supported = {m.strip() for m in modalities.split(",") if m.strip()}
+
+    is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
+    use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
+    use_vision = "Vision" in supported and is_image_or_pdf
+
+    if not use_ocr and not use_vision:
+        return {"success": False, "error": _("This model does not support file analysis.")}
+
+    # Ensure conversation exists (or create a new one)
+    conv = None
+    if conversation:
+        try:
+            conv = frappe.get_doc("Agent Conversation", conversation)
+        except frappe.DoesNotExistError:
+            conv = None
+
+        if conv and conv.owner != frappe.session.user:
+            frappe.throw(_("You do not have permission to upload to this conversation."), frappe.PermissionError)
+
+    if not conv:
+        cm = ConversationManager(agent_name=agent, channel="Chat")
+        conv = cm.create_new_conversation()
+
+    conversation_id = conv.name
+
+    msg = frappe.get_doc({
+        "doctype": "Agent Message",
+        "conversation": conversation_id,
+        "role": "user",
+        "kind": "Message",
+        "content": f"Uploaded file: {filename}",
+        "user": frappe.session.user,
+    })
+    msg.insert()
+
+    try:
+        saved_file = save_file(filename, file_bytes, "Agent Message", msg.name, is_private=True)
+    except Exception as e:
+        frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
+        return {"success": False, "error": "Could not save file to database."}
+
+    file_id = getattr(saved_file, "name", None) or (
+        saved_file.get("name") if isinstance(saved_file, dict) else None
+    )
+    if not file_id:
+        return {"success": False, "error": "File was saved but ID could not be retrieved."}
+
+    try:
+        result = _run_async_safely(
+            sdk_tools.handle_ocr_document(
+                file_id=file_id,
+                agent_name=agent,
+                conversation_id=conversation_id,
+            )
+        )
+    except Exception as e:
+        frappe.log_error(f"OCR Processing Error (web): {str(e)}")
+        return {"success": False, "error": str(e)}
+
+    if not result.get("success"):
+        return result
+
+    return {
+        "success": True,
+        "conversation_id": conversation_id,
+        "message_id": msg.name,
+        **result,
+    }
+
+
+def _validate_web_file_upload(agent: str, filename: str, file_bytes: bytes):
+    """Shared validation for web chat file uploads."""
+    if not agent:
+        frappe.throw(_("agent is required"))
+
+    agent_doc = frappe.get_doc("Agent", agent)
+
+    if not agent_doc.get("allow_file_upload"):
+        return None, {"success": False, "error": _("File uploads are disabled for this agent.")}
+
+    max_upload_size_mb = agent_doc.get("max_upload_size_mb") or 25
+    max_upload_size_bytes = min(max_upload_size_mb, 25) * 1024 * 1024
+    if len(file_bytes) > max_upload_size_bytes:
+        return None, {
+            "success": False,
+            "error": _("File exceeds the maximum allowed size of {0} MB.").format(min(max_upload_size_mb, 25)),
+        }
+
+    model_name = agent_doc.get("model")
+    modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
+    supported = {m.strip() for m in modalities.split(",") if m.strip()}
+
+    is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
+    use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
+    use_vision = "Vision" in supported and is_image_or_pdf
+
+    if not use_ocr and not use_vision:
+        return None, {"success": False, "error": _("This model does not support file analysis.")}
+
+    return agent_doc, None
+
+
+def _ensure_web_chat_conversation(agent: str, conversation: str | None = None):
+    conv = None
+    if conversation:
+        try:
+            conv = frappe.get_doc("Agent Conversation", conversation)
+        except frappe.DoesNotExistError:
+            conv = None
+
+        if conv and conv.owner != frappe.session.user:
+            frappe.throw(_("You do not have permission to upload to this conversation."), frappe.PermissionError)
+
+    if not conv:
+        cm = ConversationManager(agent_name=agent, channel="Chat")
+        conv = cm.create_new_conversation()
+
+    return conv
+
+
+@frappe.whitelist()
+def upload_file_attachment_web(filename: str, b64data: str, agent: str):
+    """Stage a chat attachment upload. Saves the file and returns file_id without OCR or agent run."""
+    if not b64data or not filename:
+        frappe.throw(_("Filename and file data are required"))
+
+    if "," in b64data:
+        b64data = b64data.split(",", 1)[1]
+
+    try:
+        file_bytes = base64.b64decode(b64data)
+    except Exception:
+        frappe.throw(_("Invalid base64 data"))
+
+    _, error = _validate_web_file_upload(agent, filename, file_bytes)
+    if error:
+        return error
+
+    try:
+        saved_file = save_file(filename, file_bytes, "Agent", agent, is_private=True)
+    except Exception as e:
+        frappe.log_error(message=f"Attachment upload failed (web): {e}", title="Attachment Upload Failed (web)")
+        return {"success": False, "error": "Could not save file to database."}
+
+    file_id = getattr(saved_file, "name", None) or (
+        saved_file.get("name") if isinstance(saved_file, dict) else None
+    )
+    file_url = getattr(saved_file, "file_url", None) or (
+        saved_file.get("file_url") if isinstance(saved_file, dict) else None
+    )
+    if not file_id:
+        return {"success": False, "error": "File was saved but ID could not be retrieved."}
+    if not file_url:
+        file_url = frappe.db.get_value("File", file_id, "file_url")
+
+    return {
+        "success": True,
+        "file_id": file_id,
+        "file_url": file_url,
+        "filename": filename,
+    }
+
+
+def _load_staged_chat_file(file_id: str, agent: str):
+    """Load a file staged via upload_file_attachment_web and re-attach it to a message."""
+    if not file_id:
+        frappe.throw(_("file_id is required"))
+
+    file_doc = frappe.get_doc("File", file_id)
+
+    if file_doc.owner != frappe.session.user:
+        frappe.throw(_("You do not have permission to use this file."), frappe.PermissionError)
+
+    if file_doc.attached_to_doctype == "Agent" and file_doc.attached_to_name != agent:
+        frappe.throw(_("This file does not belong to the selected agent."), frappe.PermissionError)
+
+    if file_doc.attached_to_doctype not in (None, "", "Agent"):
+        frappe.throw(_("This file has already been sent."), frappe.ValidationError)
+
+    return file_doc
+
+
+@frappe.whitelist()
+def prepare_message_with_file_web(
+    agent: str,
+    conversation: str | None = None,
+    message: str = "",
+    file_id: str | None = None,
+    filename: str | None = None,
+    b64data: str | None = None,
+):
+    """Attach a staged file to a conversation message and prepare the agent prompt without running the agent."""
+    if not file_id and (not b64data or not filename):
+        frappe.throw(_("Either file_id or filename and file data are required"))
+
+    file_bytes = None
+    if not file_id:
+        if "," in b64data:
+            b64data = b64data.split(",", 1)[1]
+        try:
+            file_bytes = base64.b64decode(b64data)
+        except Exception:
+            frappe.throw(_("Invalid base64 data"))
+
+        _, error = _validate_web_file_upload(agent, filename, file_bytes)
+        if error:
+            return error
+
+    conv = _ensure_web_chat_conversation(agent, conversation)
+    conversation_id = conv.name
+
+    resolved_filename = filename
+    resolved_file_id = file_id
+    resolved_file_url = None
+
+    if file_id:
+        file_doc = _load_staged_chat_file(file_id, agent)
+        resolved_filename = resolved_filename or file_doc.file_name
+        resolved_file_id = file_doc.name
+        resolved_file_url = file_doc.file_url
+    else:
+        resolved_filename = filename
+
+    display_content = (message or "").strip() or f"📎 {resolved_filename}"
+
+    msg = frappe.get_doc({
+        "doctype": "Agent Message",
+        "conversation": conversation_id,
+        "role": "user",
+        "kind": "Message",
+        "content": display_content,
+        "user": frappe.session.user,
+    })
+    msg.insert(ignore_permissions=True)
+
+    if file_id:
+        frappe.db.set_value(
+            "File",
+            resolved_file_id,
+            {
+                "attached_to_doctype": "Agent Message",
+                "attached_to_name": msg.name,
+            },
+        )
+    else:
+        try:
+            saved_file = save_file(resolved_filename, file_bytes, "Agent Message", msg.name, is_private=True)
+        except Exception as e:
+            frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
+            return {"success": False, "error": "Could not save file to database."}
+
+        resolved_file_id = getattr(saved_file, "name", None) or (
+            saved_file.get("name") if isinstance(saved_file, dict) else None
+        )
+        resolved_file_url = getattr(saved_file, "file_url", None) or (
+            saved_file.get("file_url") if isinstance(saved_file, dict) else None
+        )
+
+    if not resolved_file_id:
+        return {"success": False, "error": "File was saved but ID could not be retrieved."}
+    if not resolved_file_url:
+        resolved_file_url = frappe.db.get_value("File", resolved_file_id, "file_url")
+
+    mime_type, _ = mimetypes.guess_type(resolved_filename)
+    is_image = bool(mime_type and mime_type.startswith("image/"))
+
+    agent_prompt = display_content
+    files_payload = None
+
+    if is_image and resolved_file_url:
+        files_payload = [{
+            "file_id": resolved_file_id,
+            "file_url": resolved_file_url,
+            "filename": resolved_filename,
+            "is_image": 1,
+        }]
+    else:
+        try:
+            result = _run_async_safely(
+                sdk_tools.handle_ocr_document(
+                    file_id=resolved_file_id,
+                    agent_name=agent,
+                    conversation_id=conversation_id,
+                    create_message=False,
+                )
+            )
+        except Exception as e:
+            frappe.log_error(f"OCR Processing Error (web prepare): {str(e)}")
+            return {"success": False, "error": str(e)}
+
+        if not result.get("success"):
+            return result
+
+        extracted_text = result.get("text") or ""
+        file_hash = result.get("file_hash", "n/a")
+        if extracted_text:
+            agent_prompt = f"""{display_content}
+
+Attached File Content (OCR Extracted):
+The following text was extracted from attached files. Use this as context:
+
+--- File: {resolved_filename} (hash: {file_hash}) ---
+{extracted_text}
+"""
+
+    return {
+        "success": True,
+        "conversation_id": conversation_id,
+        "message_id": msg.name,
+        "agent_prompt": agent_prompt,
+        "files": files_payload,
+    }
+
 
 @frappe.whitelist()
 def add_message(

@@ -5,6 +5,8 @@ import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical } fro
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { SkeletonTable } from '@/components/dashboard';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DataRecordList } from '@/components/data-table/DataRecordList';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
 import {
@@ -152,8 +154,9 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 	if (loading || !schema) {
 		return (
-			<div className="flex items-center justify-center h-full">
-				<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+			<div className="h-full overflow-auto p-6 space-y-6 max-w-5xl mx-auto">
+				<Skeleton className="h-8 w-48" />
+				<SkeletonTable columns={5} rows={10} />
 			</div>
 		);
 	}

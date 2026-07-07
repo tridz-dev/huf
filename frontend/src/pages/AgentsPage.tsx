@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Calendar, Activity, Settings, Zap, Server } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
+import { PageLayout, FilterBar, GridView, ItemCard, PageListFooter } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgents } from '../services/agentApi';
 import { formatTimeAgo } from '../utils/time';
@@ -160,6 +160,7 @@ function AgentsPage() {
         items={agents}
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
+        skeletonCount={20}
         emptyState={
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">No agents found.</p>
@@ -207,17 +208,19 @@ function AgentsPage() {
         }}
         keyExtractor={(agent) => agent.name}
       />
-      <LoadMoreButton
+      <PageListFooter
         hasMore={hasMore}
         loading={loadingMore}
         onLoadMore={loadMore}
         disabled={!!search || initialLoading}
+        endMessage={
+          !hasMore && agents.length > 0
+            ? total !== undefined
+              ? `Showing all ${total} agents`
+              : 'No more agents to load'
+            : undefined
+        }
       />
-      {!hasMore && agents.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
-          {total !== undefined ? `Showing all ${total} agents` : 'No more agents to load'}
-        </div>
-      )}
     </PageLayout>
   );
 }

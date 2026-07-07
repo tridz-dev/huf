@@ -41,7 +41,7 @@ export function InstructionsTextarea({
   className = "min-h-[300px] font-mono resize-y",
   optimizingPrompt = false,
   onOptimizePrompt,
-  showOptimize = true,
+  showOptimize = false,
   showExpand = true,
   onExpand,
   modalTitle = "Instructions",

@@ -151,12 +151,19 @@ yarn build-docs       # Build documentation
 ```
 
 ### Docker Quick-Try
-For quick evaluation without a full Frappe bench setup:
+For quick evaluation without a full Frappe bench setup, use the fasterdocker
+multi-service compose stack documented in `docker/README.md`:
+
 ```bash
-cd docker
-docker compose up
+./docker/try.sh up
 ```
-This starts MariaDB, Redis, and Frappe with HUF pre-installed. Access at `http://localhost:8000` (admin/admin). First run takes 5-8 minutes for setup.
+
+Then open the URL printed by the script (default: `http://localhost:8000/huf`).
+Run `./docker/try.sh creds` to reprint the auto-rotated Administrator password.
+
+The legacy single-container setup (`docker/docker-compose.legacy.yml` and
+`docker/init.sh`) is no longer the recommended path. See `docker/README.md` for
+current variants, prerequisites, and the security model.
 
 ## Code Style and Conventions
 

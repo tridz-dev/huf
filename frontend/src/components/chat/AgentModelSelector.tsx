@@ -101,7 +101,7 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
           variant={showLabel ? "outline" : "ghost"}
           disabled={disabled}
           className={cn(
-            'text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900',
+            'text-muted-foreground hover:bg-muted hover:text-foreground',
             showLabel && 'gap-2',
             disabled && 'disabled:opacity-100'
           )}

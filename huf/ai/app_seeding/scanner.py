@@ -5,13 +5,11 @@ from pathlib import Path
 def find_seed_dirs() -> dict:
     """
     Returns {app_name: Path} for every installed app that has a huf/ seed dir.
-    Skips 'huf' itself.
+    The huf app itself can also ship demo seed data under huf/huf/.
     """
     result = {}
     installed_apps = frappe.get_installed_apps()
     for app in installed_apps:
-        if app == "huf":
-            continue
         try:
             # Check Python package root (e.g., apps/myapp/myapp/huf)
             app_path = frappe.get_app_path(app)
