@@ -562,6 +562,46 @@ export async function createAgentRunFeedback(params: AgentRunFeedbackParams): Pr
   }
 }
 
+/**
+ * Agent Run Feedback has no direct agent_run link, so the assistant's
+ * Agent Message for a run must be resolved via Agent Message.agent_run first.
+ */
+export async function getAgentMessageIdForRun(agentRunId: string): Promise<string | undefined> {
+  try {
+    const messages = await db.getDocList(doctype['Agent Message'], {
+      fields: ['name'],
+      filters: [['agent_run', '=', agentRunId], ['is_agent_message', '=', 1]],
+      limit: 1,
+      orderBy: { field: 'creation', order: 'desc' },
+    });
+    return messages[0]?.name;
+  } catch (error) {
+    handleFrappeError(error, 'Error resolving agent message for run');
+    return undefined;
+  }
+}
+
+export interface AgentRunFeedbackDoc {
+  name: string;
+  feedback: 'Thumbs Up' | 'Thumbs Down';
+  comments?: string;
+}
+
+export async function getExistingRunFeedback(agentMessageId: string): Promise<AgentRunFeedbackDoc | undefined> {
+  try {
+    const records = await db.getDocList(doctype['Agent Run Feedback'], {
+      fields: ['name', 'feedback', 'comments'],
+      filters: [['agent_message', '=', agentMessageId]],
+      limit: 1,
+      orderBy: { field: 'creation', order: 'desc' },
+    });
+    return records[0] as AgentRunFeedbackDoc | undefined;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching existing feedback');
+    return undefined;
+  }
+}
+
 export async function updateConversationTitle(conversationId:string,title:string){
   try{
     await db.updateDoc(doctype['Agent Conversation'],conversationId,{
