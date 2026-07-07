@@ -1,25 +1,17 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Settings, ChevronRight } from "lucide-react"
-import { NavLink, useLocation } from "react-router-dom"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2 } from "lucide-react"
+import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { AppSidebarHeader } from "@/components/app-sidebar-header"
 import { ChatSidebarContent } from "@/components/chat/ChatSidebarContent"
 import { usePermissions } from "@/contexts/PermissionsContext"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
@@ -122,12 +114,12 @@ const settingsNavItems = [
     icon: Server,
     capability: "system.mcp.manage",
   },
-  {
-    title: "Agent Defaults",
-    url: "/settings",
-    icon: Settings,
-    capability: "system.providers.manage",
-  },
+  // {
+  //   title: "Agent Defaults",
+  //   url: "/settings",
+  //   icon: Settings,
+  //   capability: "system.providers.manage",
+  // },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -149,7 +141,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const settingsItems = isLoading
     ? []
     : settingsNavItems.filter((item) => item.capability === null || hasCapability(item.capability))
-  const isSettingsActive = settingsItems.some((item) => location.pathname.startsWith(item.url))
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -157,41 +148,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <AppSidebarHeader />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navItems} />
-        {settingsItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarMenu>
-              <Collapsible defaultOpen={isSettingsActive} className="group/settings">
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="Settings" isActive={isSettingsActive}>
-                      <Settings />
-                      <span>Settings</span>
-                      <ChevronRight className="ml-auto transition-transform group-data-[state=open]/settings:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {settingsItems.map((item) => {
-                        const isActive = location.pathname.startsWith(item.url)
-                        return (
-                          <SidebarMenuSubItem key={item.title}>
-                            <SidebarMenuSubButton asChild isActive={isActive}>
-                              <NavLink to={item.url}>
-                                <item.icon />
-                                <span>{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        )
-                      })}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
+        <NavMain items={navItems} settingsItems={settingsItems} />
         {showChatList && <ChatSidebarContent />}
       </SidebarContent>
       <SidebarFooter>
