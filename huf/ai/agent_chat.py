@@ -512,6 +512,117 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
         frappe.log_error(f"OCR Processing Error: {str(e)}")
         return {"success": False, "error": str(e)}
 
+
+@frappe.whitelist()
+def upload_file_and_process_web(
+    filename: str,
+    b64data: str,
+    agent: str,
+    conversation: str | None = None,
+):
+    """Web endpoint: save an uploaded document/image against a real Agent Conversation
+    and extract its text via OCR/vision, honoring the agent's upload capability flags.
+    """
+    if not b64data or not filename:
+        frappe.throw(_("Filename and file data are required"))
+
+    if not agent:
+        frappe.throw(_("agent is required"))
+
+    agent_doc = frappe.get_doc("Agent", agent)
+
+    if not agent_doc.get("allow_file_upload"):
+        return {"success": False, "error": _("File uploads are disabled for this agent.")}
+
+    if "," in b64data:
+        b64data = b64data.split(",", 1)[1]
+
+    try:
+        file_bytes = base64.b64decode(b64data)
+    except Exception:
+        frappe.throw(_("Invalid base64 data"))
+
+    max_upload_size_mb = agent_doc.get("max_upload_size_mb") or 25
+    max_upload_size_bytes = min(max_upload_size_mb, 25) * 1024 * 1024
+    if len(file_bytes) > max_upload_size_bytes:
+        return {
+            "success": False,
+            "error": _("File exceeds the maximum allowed size of {0} MB.").format(min(max_upload_size_mb, 25)),
+        }
+
+    model_name = agent_doc.get("model")
+    modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
+    supported = {m.strip() for m in modalities.split(",") if m.strip()}
+
+    is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
+    use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
+    use_vision = "Vision" in supported and is_image_or_pdf
+
+    if not use_ocr and not use_vision:
+        return {"success": False, "error": _("This model does not support file analysis.")}
+
+    # Ensure conversation exists (or create a new one)
+    conv = None
+    if conversation:
+        try:
+            conv = frappe.get_doc("Agent Conversation", conversation)
+        except frappe.DoesNotExistError:
+            conv = None
+
+        if conv and conv.owner != frappe.session.user:
+            frappe.throw(_("You do not have permission to upload to this conversation."), frappe.PermissionError)
+
+    if not conv:
+        cm = ConversationManager(agent_name=agent, channel="Chat")
+        conv = cm.create_new_conversation()
+
+    conversation_id = conv.name
+
+    msg = frappe.get_doc({
+        "doctype": "Agent Message",
+        "conversation": conversation_id,
+        "role": "user",
+        "kind": "Message",
+        "content": f"Uploaded file: {filename}",
+        "user": frappe.session.user,
+    })
+    msg.insert()
+
+    try:
+        saved_file = save_file(filename, file_bytes, "Agent Message", msg.name, is_private=True)
+    except Exception as e:
+        frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
+        return {"success": False, "error": "Could not save file to database."}
+
+    file_id = getattr(saved_file, "name", None) or (
+        saved_file.get("name") if isinstance(saved_file, dict) else None
+    )
+    if not file_id:
+        return {"success": False, "error": "File was saved but ID could not be retrieved."}
+
+    try:
+        result = _run_async_safely(
+            sdk_tools.handle_ocr_document(
+                file_id=file_id,
+                agent_name=agent,
+                conversation_id=conversation_id,
+            )
+        )
+    except Exception as e:
+        frappe.log_error(f"OCR Processing Error (web): {str(e)}")
+        return {"success": False, "error": str(e)}
+
+    if not result.get("success"):
+        return result
+
+    return {
+        "success": True,
+        "conversation_id": conversation_id,
+        "message_id": msg.name,
+        **result,
+    }
+
+
 @frappe.whitelist()
 def add_message(
     conversation_id: str,
