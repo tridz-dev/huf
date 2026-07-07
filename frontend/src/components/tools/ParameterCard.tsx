@@ -133,12 +133,14 @@ export function ParameterCard({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor={`param-options-${index}`}>Options</Label>
-            <Input
+            <Textarea
               id={`param-options-${index}`}
               value={parameter.options || ''}
               onChange={(e) => handleChange('options', e.target.value)}
-              placeholder="Comma-separated options"
+              placeholder="One option per line"
+              className="min-h-[80px]"
             />
+            <p className="text-xs text-muted-foreground">Enter each option on its own line.</p>
           </div>
 
           <div className="flex items-center space-x-2 pt-8">

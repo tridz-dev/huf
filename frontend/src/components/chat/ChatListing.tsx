@@ -203,11 +203,11 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
         <Tabs defaultValue="recents" value={activeTab} onValueChange={setActiveTab} className="space-y-2">
         <div className="sticky top-0 z-1 bg-sidebar">
-          <TabsList className="w-full h-8">
+          <TabsList variant="pill" layout="grid" cols={2} size="compact" className="w-full">
             {LIST_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.value}
-                className="w-1/2 space-x-1.5 text-xs font-medium h-7"
+                className="w-full space-x-1.5"
                 value={tab.value}
               >
                 <tab.icon className="w-3 h-3" />

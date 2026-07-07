@@ -35,6 +35,7 @@ import type { MCPServerDoc } from '../services/mcpApi';
 import type { AgentKnowledgeRow } from '../types/agent.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { writeToolDetailsSetting } from '../components/chat/useChatAgentIdentity';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 type PromptListRow = {
   name: string;
@@ -1078,6 +1079,12 @@ export function AgentFormPage() {
     [form, activeTab, tabFieldMapping, tabLabels, onSubmit]
   );
 
+  useSaveShortcut({
+    onSave: handleFormSubmit,
+    enabled: showSaveButton,
+    isSubmitting: saving,
+  });
+
   const handleOptimizePrompt = () => {
     setOptimizingPrompt((value) => value);
     toast.info('Coming Soon!');
@@ -1477,13 +1484,13 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="flex h-auto w-full justify-start overflow-x-auto overflow-y-hidden p-1">
+              <TabsList layout="scroll" className="w-full">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
                     value={tabKey}
                     disabled={config.disabled}
-                    className="flex-1 shrink-0"
+                    className="min-w-0 shrink-0 flex-1 px-2 sm:min-w-[110px] sm:px-3"
                   >
                     {config.label}
                   </TabsTrigger>

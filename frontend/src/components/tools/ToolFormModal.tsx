@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog,
-  DialogContent,
-  DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import {
+  DialogScrollBody,
+  DialogScrollContent,
+  DialogScrollHeader,
+} from '../ui/dialog-scroll';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { ToolTemplateCard } from './ToolTemplateCard';
 import { ToolCreationForm } from './ToolCreationForm';
@@ -109,11 +112,12 @@ export function ToolFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl h-[80vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
+      <DialogScrollContent className="sm:max-w-5xl">
+        <DialogScrollHeader>
           <DialogTitle>{mode === 'edit' ? 'Edit Tool' : 'Add Tool'}</DialogTitle>
-        </DialogHeader>
+        </DialogScrollHeader>
 
+        <DialogScrollBody className="flex flex-col pb-4">
         {mode === 'create' && (
           <Tabs 
             value={createView === 'templates' ? 'templates' : 'form'} 
@@ -123,9 +127,9 @@ export function ToolFormModal({
                 setSelectedTemplate(null);
               }
             }}
-            className="px-6 flex flex-col flex-1 min-h-0 overflow-hidden"
+            className="flex flex-col min-h-0"
           >
-            <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+            <TabsList layout="grid" cols={2} className="flex-shrink-0">
               <TabsTrigger value="templates">Templates</TabsTrigger>
               <TabsTrigger value="form" disabled={!selectedTemplate}>Form</TabsTrigger>
             </TabsList>
@@ -169,9 +173,8 @@ export function ToolFormModal({
         )}
 
         {mode === 'edit' && displayTemplate && (
-          <div className="px-6 flex flex-col flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-            <div className="pb-4 px-1">
-              <ToolCreationForm
+          <div className="pb-4 px-1">
+            <ToolCreationForm
                 template={displayTemplate}
                 toolTypes={toolTypes}
                 onSubmit={handleFormSubmit}
@@ -182,10 +185,10 @@ export function ToolFormModal({
                 toolName={toolName}
                 currentAgentName={currentAgentName}
               />
-            </div>
           </div>
         )}
-      </DialogContent>
+        </DialogScrollBody>
+      </DialogScrollContent>
     </Dialog>
   );
 }

@@ -24,6 +24,7 @@ import {
 } from '../components/knowledge/types';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 export { KnowledgeSourceFormPage };
 export default KnowledgeSourceFormPage;
@@ -234,6 +235,12 @@ function KnowledgeSourceFormPage() {
     [form, activeTab, tabFieldMapping, tabLabels],
   );
 
+  useSaveShortcut({
+    onSave: handleFormSubmit,
+    enabled: showSaveButton,
+    isSubmitting: saving,
+  });
+
   const handleRebuildIndex = async () => {
     if (!id || isNew) return;
     setRebuilding(true);
@@ -297,7 +304,7 @@ function KnowledgeSourceFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList layout="grid" cols={2}>
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
                     {config.label}

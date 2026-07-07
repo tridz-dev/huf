@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DialogScrollBody,
+  DialogScrollContent,
+  DialogScrollHeader,
+} from '@/components/ui/dialog-scroll';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -188,15 +191,15 @@ export function SummaryPromptCategoriesModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0">
+      <DialogScrollContent className="max-w-2xl">
+        <DialogScrollHeader>
           <DialogTitle>Summary Prompt Categories</DialogTitle>
           <DialogDescription>
             Browse, create, and assign categories for agent summary prompts
           </DialogDescription>
-        </DialogHeader>
+        </DialogScrollHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-4 py-2">
+        <DialogScrollBody className="space-y-4 py-2">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {categories.length} {categories.length === 1 ? 'category' : 'categories'}
@@ -379,8 +382,8 @@ export function SummaryPromptCategoriesModal({
               })}
             </div>
           )}
-        </div>
-      </DialogContent>
+        </DialogScrollBody>
+      </DialogScrollContent>
     </Dialog>
   );
 }
