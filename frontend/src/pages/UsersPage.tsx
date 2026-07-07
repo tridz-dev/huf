@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { PageLayout, FilterBar } from '@/components/dashboard';
+import { PageLayout, FilterBar, SkeletonTable } from '@/components/dashboard';
 import { Switch } from '@/components/ui/switch';
 import {
   Table,
@@ -254,7 +254,7 @@ export default function UsersPage() {
       }
     >
       {loading ? (
-        <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
+        <SkeletonTable columns={4} rows={10} />
       ) : filteredUsers.length === 0 ? (
         <div className="text-sm text-muted-foreground py-12 text-center">No users found.</div>
       ) : (

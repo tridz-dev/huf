@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, ArrowUpDown, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { SkeletonTable } from '@/components/dashboard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { AgentRunDoc } from '@/services/agentRunApi';
@@ -376,9 +377,7 @@ function AgentRunDetailPage() {
             </CardHeader>
             <CardContent>
               {loadingChildRuns ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
+                <SkeletonTable columns={5} rows={5} />
               ) : (
                 <div className="overflow-hidden rounded-md border">
                   <Table>
