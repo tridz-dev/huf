@@ -42,6 +42,7 @@ import { toast } from 'sonner';
 import { useToolCreationOptions } from './useToolCreationOptions';
 import {
   buildMissingMandatoryParameters,
+  parseParameterOptions,
   createToolFormSchema,
   getDefaultToolFormValues,
   shouldShowField,
@@ -272,7 +273,7 @@ export function ToolCreationForm({
         property.description = param.description;
       }
       if (param.options?.trim()) {
-        property.enum = param.options.split(',').map((item) => item.trim()).filter(Boolean);
+        property.enum = parseParameterOptions(param.options);
       }
       properties[param.fieldname] = property;
       if (param.required) {
