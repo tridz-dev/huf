@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatTime } from './utils';
 import type { MessageType } from './types';
 import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
+import { ChatAttachmentCard } from './ChatAttachmentCard';
 import {
 	AudioPlayer,
 	AudioPlayerElement,
@@ -163,10 +164,20 @@ export function ChatMessage({
                                   message.from === 'assistant' && 
                                   (!message.versions[0]?.content || message.versions[0].content.trim() === '') && 
                                   !message.tools) && (
-                                <MessageContentWithArtifacts
-                                    content={message.versions[0]?.content || ''}
-                                    messageId={message.versions[0]?.id ?? message.key}
-                                />
+                                <>
+                                    {message.attachment && (
+                                        <ChatAttachmentCard
+                                            name={message.attachment.name}
+                                            label={message.attachment.label}
+                                            previewUrl={message.attachment.previewUrl}
+                                            className="mb-2 max-w-sm"
+                                        />
+                                    )}
+                                    <MessageContentWithArtifacts
+                                        content={message.versions[0]?.content || ''}
+                                        messageId={message.versions[0]?.id ?? message.key}
+                                    />
+                                </>
                             )}
                         </MessageContent>
                         {/* Actions for assistant messages */}
