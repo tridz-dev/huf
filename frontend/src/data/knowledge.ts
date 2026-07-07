@@ -6,12 +6,6 @@
 export const knowledgeTypes = [
   { label: 'SQLite FTS', value: 'sqlite_fts' },
   { label: 'SQLite Vec', value: 'sqlite_vec' },
-  { label: 'ChromaDB', value: 'chroma' },
-] as const;
-
-export const chromaModes = [
-  { label: 'File (local)', value: 'File' },
-  { label: 'Server (remote)', value: 'Server' },
 ] as const;
 
 export type KnowledgeTypeOption = (typeof knowledgeTypes)[number]['value'];

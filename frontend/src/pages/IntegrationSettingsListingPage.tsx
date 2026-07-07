@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Settings, Star } from 'lucide-react';
+import { AlertCircle, Settings, Star, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, PageListFooter } from '@/components/dashboard';
+import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import {
   getIntegrationSettings,
@@ -138,8 +138,6 @@ export function IntegrationSettingsListingPage({
         items={settings}
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
-        skeletonCount={20}
-        skeletonMetadataRows={3}
         emptyState={
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">No integrations configured yet.</p>
@@ -188,21 +186,25 @@ export function IntegrationSettingsListingPage({
         keyExtractor={(setting) => setting.name}
       />
 
-      <PageListFooter
+      <LoadMoreButton
         hasMore={hasMore}
         loading={loadingMore}
         onLoadMore={loadMore}
         disabled={!!search || initialLoading || categoryFilter !== 'all'}
-        endMessage={
-          categoryFilter !== 'all' && settings.length > 0
-            ? `${settings.length} integration${settings.length !== 1 ? 's' : ''} in this category`
-            : !hasMore && settings.length > 0
-              ? total !== undefined
-                ? `Showing all ${total} integrations`
-                : 'No more integrations to load'
-              : undefined
-        }
       />
+
+      {!hasMore && settings.length > 0 && categoryFilter === 'all' && (
+        <div className="text-center py-4 text-sm text-muted-foreground">
+          {total !== undefined ? `Showing all ${total} integrations` : 'No more integrations to load'}
+        </div>
+      )}
+
+      {categoryFilter !== 'all' && settings.length > 0 && (
+        <div className="text-center py-4 text-sm text-muted-foreground flex items-center justify-center gap-1">
+          <Users className="w-4 h-4" />
+          {settings.length} integration{settings.length !== 1 ? 's' : ''} in this category
+        </div>
+      )}
     </PageLayout>
   );
 }

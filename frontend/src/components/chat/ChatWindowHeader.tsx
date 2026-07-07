@@ -110,14 +110,14 @@ export function ChatWindowHeader({
 
     if (!agent) {
         return (
-            <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-border flex items-center justify-between bg-background/80 backdrop-blur-md sticky top-0 z-10">
+            <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
                 <div className="flex gap-x-3 items-center">
                     {showOpenSidebarBtn && (
                         <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            className="h-8 w-8 text-zinc-500 hover:text-zinc-900"
                             onClick={onToggleSidebar}
                         >
                             <PanelLeftOpen className="w-4 h-4" />
@@ -126,8 +126,8 @@ export function ChatWindowHeader({
                     )}
                     <ChatAvatar variant="chat_ai">?</ChatAvatar>
                     <div className="flex flex-col">
-                        <span className="font-semibold text-sm text-foreground">No agent selected</span>
-                        <span className="text-xs text-muted-foreground">Select an agent to start chatting</span>
+                        <span className="font-semibold text-sm text-zinc-900">No agent selected</span>
+                        <span className="text-xs text-zinc-500">Select an agent to start chatting</span>
                     </div>
                 </div>
             </header>
@@ -135,14 +135,14 @@ export function ChatWindowHeader({
     }
 
     return (
-        <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-border flex items-center justify-between bg-background/80 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
             <div className="flex gap-x-3 items-center">
                 {showOpenSidebarBtn && (
                     <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        className="h-8 w-8 text-zinc-500 hover:text-zinc-900"
                         onClick={onToggleSidebar}
                     >
                         <PanelLeftOpen className="w-4 h-4" />
@@ -154,15 +154,15 @@ export function ChatWindowHeader({
                 </ChatAvatar>
                 <div className="flex flex-col">
                     <div className="flex gap-x-2 items-center">
-                        <span className="font-semibold text-sm text-foreground">{agent.agent_name}</span>
+                        <span className="font-semibold text-sm text-zinc-900">{agent.agent_name}</span>
                         {(conversationModel || agent.model) && (
-                            <span className="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-[10px] font-medium text-primary">
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-medium text-indigo-400">
                                 {conversationModel || agent.model}
                             </span>
                         )}
                     </div>
                     {agent.description && (
-                        <span className="text-xs text-muted-foreground max-w-[200px] truncate">
+                        <span className="text-xs text-zinc-500 max-w-[200px] truncate">
                             {agent.description}
                         </span>
                     )}

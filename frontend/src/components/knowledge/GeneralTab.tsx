@@ -4,10 +4,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
-import { Switch } from '@/components/ui/switch';
 import { UseFormReturn } from 'react-hook-form';
 import { useMemo } from 'react';
-import { knowledgeTypes, knowledgeScopes, knowledgeStorageModes, chromaModes } from '@/data/knowledge';
+import { knowledgeTypes, knowledgeScopes, knowledgeStorageModes } from '@/data/knowledge';
 import { linkRoutes } from '@/lib/link-routes';
 import type { KnowledgeSourceFormValues } from './types';
 
@@ -24,8 +23,6 @@ interface GeneralTabProps {
 
 export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
   const watchKnowledgeType = form.watch('knowledge_type');
-  const watchChromaMode = form.watch('chroma_mode');
-  const isVectorBackend = watchKnowledgeType === 'sqlite_vec' || watchKnowledgeType === 'chroma';
 
   const providerOptions = useMemo(
     () => providers.map((p) => ({ value: p.name, label: p.provider_name || p.name })),
@@ -156,7 +153,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
         </CardContent>
       </Card>
 
-      {isVectorBackend && (
+      {watchKnowledgeType === 'sqlite_vec' && (
         <Card>
           <CardHeader>
             <CardTitle>Vector Settings</CardTitle>
@@ -225,96 +222,6 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                 </FormItem>
               )}
             />
-          </CardContent>
-        </Card>
-      )}
-
-      {watchKnowledgeType === 'chroma' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Chroma Connection Settings</CardTitle>
-            <CardDescription>Configure ChromaDB storage mode and server connection</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-6 sm:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="chroma_mode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Chroma Mode</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || 'File'}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select mode" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {chromaModes.map((mode) => (
-                        <SelectItem key={mode.value} value={mode.value}>
-                          {mode.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>File stores locally; Server connects to a remote Chroma instance.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {watchChromaMode === 'Server' && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="chroma_host"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Chroma Host</FormLabel>
-                      <FormControl>
-                        <Input placeholder="localhost" {...field} value={field.value ?? 'localhost'} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="chroma_port"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Chroma Port</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="8000"
-                          {...field}
-                          value={field.value ?? 8000}
-                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 8000)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="chroma_ssl"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Use SSL (HTTPS)</FormLabel>
-                        <FormDescription>Enable if your Chroma server uses HTTPS.</FormDescription>
-                      </div>
-                      <FormControl>
-                        <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
           </CardContent>
         </Card>
       )}

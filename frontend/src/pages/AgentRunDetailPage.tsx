@@ -2,8 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, ArrowUpDown, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { RunFeedbackActions } from '@/components/executions/RunFeedbackActions';
-import { SkeletonTable } from '@/components/dashboard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { AgentRunDoc } from '@/services/agentRunApi';
@@ -13,6 +11,7 @@ import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { getAgentRunStatusVariant } from '@/utils/status';
+import { getArtifacts, type AgentContextArtifactDoc } from '@/services/agentContextArtifactApi';
 import {
   ColumnDef,
   flexRender,
@@ -48,6 +47,54 @@ async function fetchAgentRunDetail(name: string): Promise<AgentRunDetail | null>
     handleFrappeError(error, `Error fetching agent run ${name}`);
     return null;
   }
+}
+
+function RunArtifactsPanel({ runId }: { runId: string }) {
+  const [artifacts, setArtifacts] = useState<AgentContextArtifactDoc[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const result = await getArtifacts({ agent_run: runId, limit: 20 });
+      if (!cancelled) {
+        setArtifacts(result.data);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [runId]);
+
+  if (loading || artifacts.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Artifacts</CardTitle>
+        <CardDescription>Context artifacts recorded for this run.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {artifacts.map((artifact) => (
+          <Link
+            key={artifact.name}
+            to={`/artifacts/${artifact.name}`}
+            className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-muted/50"
+          >
+            <div className="min-w-0">
+              <div className="truncate font-medium">{artifact.summary || artifact.name}</div>
+              <div className="text-xs text-muted-foreground">{artifact.visibility}</div>
+            </div>
+            <Badge variant="secondary" className="shrink-0">
+              {artifact.artifact_type || 'Unknown'}
+            </Badge>
+          </Link>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }
 
 export { AgentRunDetailPage };
@@ -363,16 +410,11 @@ function AgentRunDetailPage() {
               <div className="rounded-md bg-muted p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
                 {run.response || 'No response recorded.'}
               </div>
-              {run.response && (
-                <RunFeedbackActions
-                  agentRunId={run.name}
-                  agent={run.agent}
-                  conversation={run.conversation ?? undefined}
-                />
-              )}
             </CardContent>
           </Card>
         </div>
+
+        <RunArtifactsPanel runId={run.name} />
 
         {/* Agent Orchestration Table */}
         {childRuns.length > 0 && (
@@ -385,7 +427,9 @@ function AgentRunDetailPage() {
             </CardHeader>
             <CardContent>
               {loadingChildRuns ? (
-                <SkeletonTable columns={5} rows={5} />
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
               ) : (
                 <div className="overflow-hidden rounded-md border">
                   <Table>

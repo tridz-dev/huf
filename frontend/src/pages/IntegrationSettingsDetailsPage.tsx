@@ -38,7 +38,6 @@ import {
 } from '@/types/integration.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { createFormSubmitHandler, type TabFieldMapping } from '@/utils/formValidation';
-import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 export function IntegrationSettingsDetailsPage() {
   const { settingId } = useParams<{ settingId: string }>();
@@ -342,14 +341,6 @@ export function IntegrationSettingsDetailsPage() {
     [form, activeTab, tabFieldMapping, tabLabels, onSubmit],
   );
 
-  const showSaveButton = isNew || isDirty;
-
-  useSaveShortcut({
-    onSave: handleFormSubmit,
-    enabled: showSaveButton,
-    isSubmitting: saving,
-  });
-
   const handleDelete = async () => {
     if (!settingId || isNew) return;
 
@@ -410,7 +401,7 @@ export function IntegrationSettingsDetailsPage() {
           isActive={watchIsActive}
           isDefault={watchIsDefault}
           isNew={isNew}
-          showSaveButton={showSaveButton}
+          showSaveButton={isNew || isDirty}
           saving={saving}
           deleting={deleting}
           onSave={handleFormSubmit}
@@ -420,7 +411,7 @@ export function IntegrationSettingsDetailsPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList layout="grid" cols={tabCols}>
+              <TabsList className={`grid w-full grid-cols-${tabCols}`} style={{ gridTemplateColumns: `repeat(${tabCols}, minmax(0, 1fr))` }}>
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
                     {config.label}

@@ -1,14 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog,
+  DialogContent,
+  DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import {
-  DialogScrollBody,
-  DialogScrollContent,
-  DialogScrollFooter,
-  DialogScrollHeader,
-} from '../ui/dialog-scroll';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -457,14 +453,13 @@ export function NodeSelectionModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogScrollContent className="max-w-3xl">
-        <DialogScrollHeader>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {mainTab === 'triggers' ? 'Select Trigger' : 'Add Action'}
           </DialogTitle>
-        </DialogScrollHeader>
+        </DialogHeader>
 
-        <DialogScrollBody className="flex flex-col pb-4">
         <div className="relative mb-4 flex-shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -477,19 +472,19 @@ export function NodeSelectionModal({
 
         <Tabs value={mainTab} onValueChange={(v) => { setMainTab(v as MainTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
           {mode !== 'trigger' ? (
-            <TabsList layout="grid" cols={2} className="flex-shrink-0">
+            <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
               <TabsTrigger value="triggers">Triggers</TabsTrigger>
               <TabsTrigger value="actions">Actions</TabsTrigger>
             </TabsList>
           ) : (
-            <TabsList layout="grid" cols={1} className="flex-shrink-0">
+            <TabsList className="grid w-full grid-cols-1 flex-shrink-0">
               <TabsTrigger value="triggers">Triggers</TabsTrigger>
             </TabsList>
           )}
 
           <TabsContent value="triggers" className="flex-1 flex flex-col min-h-0 mt-4">
             <Tabs value={triggerSubTab} onValueChange={(v) => { setTriggerSubTab(v as TriggerSubTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
-              <TabsList layout="grid" cols={2} className="flex-shrink-0">
+              <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
                 <TabsTrigger value="explore">Explore</TabsTrigger>
                 <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
               </TabsList>
@@ -662,9 +657,8 @@ export function NodeSelectionModal({
             {renderActionCategory('Integrations', integrationActions)}
           </TabsContent>
         </Tabs>
-        </DialogScrollBody>
 
-        <DialogScrollFooter className="justify-end">
+        <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
@@ -673,8 +667,8 @@ export function NodeSelectionModal({
               Save Configuration
             </Button>
           )}
-        </DialogScrollFooter>
-      </DialogScrollContent>
+        </div>
+      </DialogContent>
     </Dialog>
   );
 }

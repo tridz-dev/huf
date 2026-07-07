@@ -390,10 +390,11 @@ async def _process_with_vision_model(
         mime_type = "application/pdf" if ext == "pdf" else f"image/{ext}"
 
         prompt_text = (
-            f"Analyze the attached file '{file_name or os.path.basename(file_path)}'. "
-            "1. Extract EVERYTHING if it contains text (headers, form fields, tables, etc.). Preserve formatting in markdown. "
-            "2. If it is an image, photograph, or diagram, provide a detailed description and explanation of its contents. "
-            "Do not omit any information."
+            f"Extract all text from the attached file '{file_name or os.path.basename(file_path)}'. "
+            "You MUST extract EVERYTHING. Do not summarize or omit any information. "
+            "Include all headers, titles, form fields, stamps, logos with text, table contents, footers, and small print. "
+            "Preserve the formatting, structure, and layout as closely as possible. Return the extracted text in markdown format. "
+            "If the file contains no text, state that explicitly."
         )
 
         content_list = [{"type": "text", "text": prompt_text}]

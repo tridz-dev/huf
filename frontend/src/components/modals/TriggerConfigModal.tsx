@@ -279,7 +279,7 @@ export function TriggerConfigModal({
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as ModalTab); setSelectedTrigger(null); setConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
-          <TabsList layout="grid" cols={4} className="flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-4 flex-shrink-0">
             <TabsTrigger value="explore">Explore</TabsTrigger>
             <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
             <TabsTrigger value="apps">Apps</TabsTrigger>

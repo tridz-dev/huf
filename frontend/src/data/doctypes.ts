@@ -10,7 +10,6 @@ export const doctype = {
   "Agent Conversation": "Agent Conversation",
   "Agent Message": "Agent Message",
   "Agent Run": "Agent Run",
-  "Agent Run Feedback": "Agent Run Feedback",
   "Agent Prompt": "Agent Prompt",
   "Agent Prompt Category": "Agent Prompt Category",
   "Agent Summary Prompt": "Agent Summary Prompt",
@@ -23,10 +22,7 @@ export const doctype = {
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",
   "Huf Data Table": "Huf Data Table",
-  "Elevenlabs Settings": "Elevenlabs Settings",
-  "Groq Settings": "Groq Settings",
-  "OpenAI Settings": "OpenAI Settings",
-  "Agent Settings": "Agent Settings",
+  "Agent Context Artifact": "Agent Context Artifact",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];

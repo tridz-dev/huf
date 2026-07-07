@@ -120,25 +120,6 @@ export const getDefaultToolFormValues = (
   http_headers: initialData?.http_headers || [],
 });
 
-export function parseParameterOptions(value: string): string[] {
-  const trimmed = value.trim();
-  if (!trimmed) return [];
-
-  if (value.includes('\n')) {
-    return value.split('\n').map((item) => item.trim()).filter(Boolean);
-  }
-
-  if (value.includes(',')) {
-    return value.split(',').map((item) => item.trim()).filter(Boolean);
-  }
-
-  return [trimmed];
-}
-
-export function normalizeParameterOptionsValue(value: string): string {
-  return parseParameterOptions(value).join('\n');
-}
-
 export const buildMissingMandatoryParameters = (
   metaFields: any[],
   currentParams: ParameterData[]
@@ -160,7 +141,7 @@ export const buildMissingMandatoryParameters = (
       type: mapFieldtypeToParamType(df.fieldtype),
       required: true,
       description: '',
-      options: df.fieldtype === 'Select' ? normalizeParameterOptionsValue(df.options || '') : '',
+      options: df.fieldtype === 'Select' ? df.options || '' : '',
       child_table_name: '',
     }));
 };

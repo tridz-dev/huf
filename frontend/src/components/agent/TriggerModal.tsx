@@ -4,15 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
   Dialog,
+  DialogContent,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DialogScrollBody,
-  DialogScrollContent,
-  DialogScrollFooter,
-  DialogScrollHeader,
-} from '@/components/ui/dialog-scroll';
 import {
   Form,
   FormControl,
@@ -34,7 +31,6 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { TriggerFieldsRenderer } from './TriggerFieldsRenderer';
-import { TriggerDocEventExtras } from './TriggerDocEventExtras';
 import { triggerFieldsConfig } from './TriggerFieldsConfig';
 import type { AgentTriggerDoc, TriggerTypeOption } from '@/services/agentApi';
 import type { TriggerType } from '@/types/agent.types';
@@ -90,13 +86,6 @@ const triggerFormSchema = z.object({
   event_name: z.string().optional(),
   webhook_slug: z.string().optional(),
   webhook_key: z.string().optional(),
-  prompt_field: z.string().optional(),
-  file_attachments: z.array(z.object({
-    name: z.string().optional(),
-    source_type: z.enum(['DocField', 'Child Table Field']),
-    child_table: z.string().optional(),
-    field_name: z.string().min(1, 'Field name is required'),
-  })).optional(),
 }).refine(
   (data) => validateTriggerFields(data).valid,
   (data) => {
@@ -140,7 +129,6 @@ export function TriggerModal({
       trigger_type: 'Schedule',
       active: true,
       interval_count: undefined,
-      file_attachments: [],
     },
   });
 
@@ -163,8 +151,6 @@ export function TriggerModal({
           event_name: editingTrigger.event_name,
           webhook_slug: editingTrigger.webhook_slug,
           webhook_key: editingTrigger.webhook_key,
-          prompt_field: editingTrigger.prompt_field,
-          file_attachments: editingTrigger.file_attachments || [],
         });
       } else {
         triggerForm.reset({
@@ -180,8 +166,6 @@ export function TriggerModal({
           event_name: undefined,
           webhook_slug: undefined,
           webhook_key: undefined,
-          prompt_field: undefined,
-          file_attachments: [],
         });
       }
     }
@@ -197,20 +181,15 @@ export function TriggerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogScrollContent className="sm:max-w-[600px]">
-        <DialogScrollHeader>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
           <DialogTitle>Configure Trigger</DialogTitle>
           <DialogDescription>
             {editingTrigger ? 'Edit trigger configuration' : 'Add a new trigger to this agent'}
           </DialogDescription>
-        </DialogScrollHeader>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        </DialogHeader>
         <Form {...triggerForm}>
-          <form
-            onSubmit={triggerForm.handleSubmit(handleSubmit, handleFormError)}
-            className="flex min-h-0 flex-1 flex-col overflow-hidden"
-          >
-            <DialogScrollBody className="space-y-4 pb-4">
+          <form onSubmit={triggerForm.handleSubmit(handleSubmit, handleFormError)} className="space-y-4">
             {/* Trigger Name Field - Only editable when adding */}
             {!editingTrigger && (
               <FormField
@@ -293,23 +272,17 @@ export function TriggerModal({
               />
             )}
 
-            {watchTriggerType === 'Doc Event' && (
-              <TriggerDocEventExtras control={triggerForm.control} />
-            )}
-            </DialogScrollBody>
-
-            <DialogScrollFooter>
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button type="submit">
                 {editingTrigger ? 'Update' : 'Add'} Trigger
               </Button>
-            </DialogScrollFooter>
+            </DialogFooter>
           </form>
         </Form>
-        </div>
-      </DialogScrollContent>
+      </DialogContent>
     </Dialog>
   );
 }

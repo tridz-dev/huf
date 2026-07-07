@@ -214,6 +214,15 @@ export interface AgentDoc {
   persist_conversation: number; // 0 or 1
   persist_user_history: number; // 0 or 1
   enable_multi_run: number; // 0 or 1
+  is_scheduled: number; // 0 or 1
+  scheduled_interval: ScheduledInterval | null;
+  interval_count: number | null;
+  last_execution: string | null;
+  next_execution: string | null;
+  reference_doctype: string | null;
+  condition: string | null;
+  is_doc_event: number; // 0 or 1
+  doc_event: DocEventType | null;
   description?: string | null;
   instructions: string;
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
@@ -249,11 +258,9 @@ export interface AgentDoc {
   summary_prompt?: string | null;
   history_limit?: number | null; // Maximum number of messages to keep
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
-  max_context_chars?: number | null; // Maximum characters for tool results before truncation
   max_turns?: number | null; // Maximum consecutive turns/steps
   enable_conversation_data?: number; // 0 or 1
   inject_conversation_data?: number; // 0 or 1
-  conversation_data_api_permission?: 'Read' | 'Write' | '' | null;
   autonaming_of_conversation_title?: number; // 0 or 1
 
   // Advanced model overrides
@@ -261,9 +268,4 @@ export interface AgentDoc {
   tts_model?: string | null;
   tts_voice?: string | null;
   stt_model?: string | null;
-
-  // Document upload / OCR
-  allow_file_upload?: number; // 0 or 1
-  enable_ocr?: number; // 0 or 1
-  max_upload_size_mb?: number | null;
 }

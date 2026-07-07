@@ -142,21 +142,16 @@ class AgentStreamRenderer(BaseRenderer):
 		
 		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
 		create_new = frappe.form_dict.get("create_new", False)
-		skip_user_message = frappe.form_dict.get("skip_user_message", False)
-		files = None
 		try:
 			if frappe.request.method == "POST":
 				body = frappe.request.get_json(force=True) or {}
 				if not conversation_id:
 					conversation_id = body.get("conversation_id") or body.get("conversation")
 				create_new = body.get("create_new", create_new)
-				skip_user_message = body.get("skip_user_message", skip_user_message)
-				files = body.get("files")
 		except Exception:
 			pass
 
 		create_new = bool(create_new)
-		skip_user_message = bool(skip_user_message)
 		
 		# Create async generator wrapper
 		def stream_generator() -> Generator[str, None, None]:
@@ -189,9 +184,7 @@ class AgentStreamRenderer(BaseRenderer):
 					create_new=create_new,
 					prompt_template=prompt_template,
 					prompt_version=prompt_version,
-					prompt_cache_options=prompt_cache_options,
-					skip_user_message=skip_user_message,
-					files=files,
+					prompt_cache_options=prompt_cache_options
 				)
 				
 				# Convert async generator to sync

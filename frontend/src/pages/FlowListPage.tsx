@@ -152,9 +152,6 @@ function FlowListPage() {
         items={data}
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={loading}
-        skeletonCount={20}
-        skeletonMetadataRows={3}
-        skeletonShowBadges={false}
         renderItem={(flow) => (
           <ItemCard
             title={flow.name}

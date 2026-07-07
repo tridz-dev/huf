@@ -30,9 +30,6 @@ import {
   type AgentSummaryPromptDoc,
   type AgentSummaryPromptUsageAgent,
 } from '@/services/agentSummaryPromptApi';
-import { getSummaryPromptCategories, type CategoryDoc } from '@/services/categoryApi';
-import { CategoryTab } from '@/components/category/CategoryTab';
-import { SummaryPromptCategoriesModal } from '@/components/category/SummaryPromptCategoriesModal';
 
 const agentSummaryPromptFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -41,7 +38,6 @@ const agentSummaryPromptFormSchema = z.object({
   is_active: z.boolean().default(true),
   visibility: z.enum(['Public', 'App', 'Private']).default('Private'),
   tags: z.string().optional(),
-  category: z.string().optional(),
   prompt_body: z.string().min(1, 'Prompt body is required'),
 });
 
@@ -55,7 +51,6 @@ function mapDocToFormValues(doc: AgentSummaryPromptDoc): AgentSummaryPromptFormV
     is_active: doc.is_active === 1,
     visibility: doc.visibility || 'Private',
     tags: doc.tags || '',
-    category: doc.category || '',
     prompt_body: doc.prompt_body || '',
   };
 }
@@ -71,26 +66,12 @@ export function AgentSummaryPromptFormPage() {
   const [usageAgents, setUsageAgents] = useState<AgentSummaryPromptUsageAgent[]>([]);
   const [docMeta, setDocMeta] = useState<Pick<
     AgentSummaryPromptDoc,
-    'name' | 'version' | 'is_latest' | 'previous_version' | 'forked_from' | 'category'
+    'name' | 'version' | 'is_latest' | 'previous_version' | 'forked_from'
   > | null>(null);
-  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<CategoryDoc | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<CategoryDoc | null>(null);
-  const [allCategories, setAllCategories] = useState<CategoryDoc[]>([]);
   const [newVersionDialogOpen, setNewVersionDialogOpen] = useState(false);
   const [newVersionTitle, setNewVersionTitle] = useState('');
   const [newVersionDescription, setNewVersionDescription] = useState('');
   const [dialogAction, setDialogAction] = useState<'new-version' | 'fork'>('new-version');
-
-  const refreshCategories = async () => {
-    const data = await getSummaryPromptCategories();
-    setAllCategories(data);
-  };
-
-  const handleCategorySelect = (category: CategoryDoc | null) => {
-    setSelectedCategory(category);
-    form.setValue('category', category?.name || '', { shouldDirty: true });
-  };
 
   const form = useForm<AgentSummaryPromptFormValues>({
     resolver: zodResolver(agentSummaryPromptFormSchema),
@@ -101,47 +82,9 @@ export function AgentSummaryPromptFormPage() {
       is_active: true,
       visibility: 'Private',
       tags: '',
-      category: '',
       prompt_body: '',
     },
   });
-
-  useEffect(() => {
-    getSummaryPromptCategories()
-      .then((categories) => setAllCategories(categories))
-      .catch((error) => console.error('Error loading summary prompt categories:', error));
-  }, []);
-
-  useEffect(() => {
-    if (allCategories.length > 0 && docMeta?.category) {
-      const match = allCategories.find((category) => category.name === docMeta.category);
-      if (match) {
-        setSelectedCategory(match);
-      }
-    }
-  }, [allCategories, docMeta?.category]);
-
-  useEffect(() => {
-    if (!docMeta?.name || loading) return;
-    if (docMeta.category && !selectedCategory && allCategories.length === 0) return;
-    if (selectedCategory?.name === docMeta.category) return;
-
-    const saveCategory = async () => {
-      try {
-        await updateAgentSummaryPrompt(docMeta.name, {
-          category: selectedCategory?.name || undefined,
-        });
-        setDocMeta((prev) =>
-          prev ? { ...prev, category: selectedCategory?.name || undefined } : prev,
-        );
-      } catch (error) {
-        console.error('Failed to save category:', error);
-        toast.error('Failed to save category changes');
-      }
-    };
-
-    saveCategory();
-  }, [selectedCategory, docMeta?.name, loading, docMeta?.category, allCategories.length]);
 
   useEffect(() => {
     if (!id || isNew) {
@@ -184,7 +127,6 @@ export function AgentSummaryPromptFormPage() {
           version: prompt.version,
           is_latest: prompt.is_latest,
           previous_version: prompt.previous_version,
-          category: prompt.category,
         });
 
         const [count, agents] = await Promise.all([
@@ -235,7 +177,6 @@ export function AgentSummaryPromptFormPage() {
           is_active: values.is_active ? 1 : 0,
           visibility: values.visibility,
           tags: values.tags || undefined,
-          category: values.category || undefined,
           prompt_body: values.prompt_body,
         };
 
@@ -593,20 +534,6 @@ export function AgentSummaryPromptFormPage() {
               </CardContent>
             </Card>
 
-            <CategoryTab
-              selectedCategory={selectedCategory}
-              description="Assign a category to your summary prompt"
-              onAddCategory={() => {
-                setEditingCategory(null);
-                setCategoryModalOpen(true);
-              }}
-              onRemoveCategory={() => handleCategorySelect(null)}
-              onEditCategory={(category) => {
-                setEditingCategory(category);
-                setCategoryModalOpen(true);
-              }}
-            />
-
             <Card>
               <CardHeader>
                 <CardTitle>Prompt Body</CardTitle>
@@ -644,22 +571,6 @@ export function AgentSummaryPromptFormPage() {
               </Card>
             ) : null}
           </form>
-          <SummaryPromptCategoriesModal
-            open={categoryModalOpen}
-            onOpenChange={(open) => {
-              setCategoryModalOpen(open);
-              if (!open) {
-                setEditingCategory(null);
-                refreshCategories().catch((error) =>
-                  console.error('Error refreshing summary prompt categories:', error),
-                );
-              }
-            }}
-            selectedCategoryName={selectedCategory?.name || form.watch('category') || null}
-            onSelectCategory={handleCategorySelect}
-            editCategory={editingCategory}
-            onEditComplete={() => setEditingCategory(null)}
-          />
           <AgentPromptNewVersionDialog
             open={newVersionDialogOpen}
             onOpenChange={setNewVersionDialogOpen}

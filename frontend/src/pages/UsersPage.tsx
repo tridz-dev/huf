@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { PageLayout, FilterBar, SkeletonTable } from '@/components/dashboard';
+import { PageLayout, FilterBar } from '@/components/dashboard';
 import { Switch } from '@/components/ui/switch';
 import {
   Table,
@@ -45,11 +45,11 @@ const ROLE_COLOURS: Record<string, string> = {
   'Huf Admin': 'bg-red-100 text-red-800',
   'Huf Manager': 'bg-blue-100 text-blue-800',
   'Huf User': 'bg-green-100 text-green-800',
-  'Huf Viewer': 'bg-muted text-muted-foreground',
+  'Huf Viewer': 'bg-gray-100 text-gray-700',
 };
 
 function roleBadgeClass(role: string): string {
-  return ROLE_COLOURS[role] ?? 'bg-muted text-muted-foreground';
+  return ROLE_COLOURS[role] ?? 'bg-purple-100 text-purple-800';
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +254,7 @@ export default function UsersPage() {
       }
     >
       {loading ? (
-        <SkeletonTable columns={4} rows={10} />
+        <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
       ) : filteredUsers.length === 0 ? (
         <div className="text-sm text-muted-foreground py-12 text-center">No users found.</div>
       ) : (

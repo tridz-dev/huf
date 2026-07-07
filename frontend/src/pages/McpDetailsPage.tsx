@@ -13,7 +13,6 @@ import { ConnectionTab } from '../components/mcp/ConnectionTab';
 import { ToolsTab } from '../components/mcp/ToolsTab';
 import { mcpFormSchema, type MCPFormValues, type MCPTool } from '../components/mcp/types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
-import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 export function McpDetailsPage() {
   const { mcpId } = useParams<{ mcpId: string }>();
@@ -253,12 +252,6 @@ export function McpDetailsPage() {
   // Show save button for new servers or when form is dirty
   const showSaveButton = isNew || isDirty;
 
-  useSaveShortcut({
-    onSave: handleFormSubmit,
-    enabled: showSaveButton,
-    isSubmitting: saving,
-  });
-
   // Handle tool sync (used by header button)
   const handleSyncTools = async () => {
     if (!mcpId || isNew) {
@@ -377,7 +370,7 @@ export function McpDetailsPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList layout="grid" cols={3}>
+              <TabsList className="grid w-full grid-cols-3">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
                     {config.label}

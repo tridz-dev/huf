@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2 } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -59,6 +59,12 @@ const allNavItems = [
     capability: "agent.use",
   },
   {
+    title: "Artifacts",
+    url: "/artifacts",
+    icon: Boxes,
+    capability: "agent.view_all",
+  },
+  {
     title: "Flows",
     url: "/flows",
     icon: Workflow,
@@ -77,19 +83,17 @@ const allNavItems = [
     capability: "agent.use",
   },
   {
-    title: "Users",
-    url: "/users",
-    icon: Users,
-    capability: "users.manage",
+    title: "MCP Servers",
+    url: "/mcp",
+    icon: Server,
+    capability: "system.mcp.manage",
   },
-]
-
-/**
- * Settings-adjacent pages are grouped under a single collapsible sidebar
- * entry instead of each getting a top-level item, to keep the primary nav
- * short. Same capability-gating rules as allNavItems.
- */
-const settingsNavItems = [
+  {
+    title: "Integrations",
+    url: "/integrations",
+    icon: Link2,
+    capability: "system.integrations.manage",
+  },
   {
     title: "AI Providers",
     url: "/providers",
@@ -103,23 +107,11 @@ const settingsNavItems = [
     capability: "system.providers.manage",
   },
   {
-    title: "Integrations",
-    url: "/integrations",
-    icon: Link2,
-    capability: "system.integrations.manage",
+    title: "Users",
+    url: "/users",
+    icon: Users,
+    capability: "users.manage",
   },
-  {
-    title: "MCP Servers",
-    url: "/mcp",
-    icon: Server,
-    capability: "system.mcp.manage",
-  },
-  // {
-  //   title: "Agent Defaults",
-  //   url: "/settings",
-  //   icon: Settings,
-  //   capability: "system.providers.manage",
-  // },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -138,9 +130,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     : allNavItems.filter(
         (item) => item.capability === null || (item.capability && hasCapability(item.capability)),
       )
-  const settingsItems = isLoading
-    ? []
-    : settingsNavItems.filter((item) => item.capability === null || hasCapability(item.capability))
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -148,7 +137,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <AppSidebarHeader />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navItems} settingsItems={settingsItems} />
+        <NavMain items={navItems} />
         {showChatList && <ChatSidebarContent />}
       </SidebarContent>
       <SidebarFooter>

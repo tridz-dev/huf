@@ -27,7 +27,7 @@ export function HttpHeaderCard({
   };
 
   return (
-    <Card className="border-border">
+    <Card className="border-gray-200">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-medium text-sm">Header {index + 1}</h4>

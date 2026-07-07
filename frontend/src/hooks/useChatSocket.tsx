@@ -26,31 +26,13 @@ export type NewAgentMessageEvent = {
     conversation_index?: number;
 };
 
-export type SubAgentCompletedEvent = {
-    type: 'sub_agent_completed';
-    conversation_id: string;
-    agent_name: string;
-    status: string;
-    result?: string;
-};
-
-export type SubAgentFailedEvent = {
-    type: 'sub_agent_failed';
-    conversation_id: string;
-    agent_name: string;
-    status: string;
-    error?: string;
-};
-
 type ChatSocketProps = {   
     conversationId: string | null;
     onToolUpdate?: (event: ToolCallEvent) => void;
     onNewMessage?: (event: NewAgentMessageEvent) => void;
-    onSubAgentCompleted?: (event: SubAgentCompletedEvent) => void;
-    onSubAgentFailed?: (event: SubAgentFailedEvent) => void;
 }
 
-export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onSubAgentCompleted, onSubAgentFailed }: ChatSocketProps) {
+export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: ChatSocketProps) {
     useEffect(() => {
         if (!conversationId) {
             return;
@@ -81,10 +63,6 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onSu
                 data.type === 'tool_call_failed'
             ) {
                 onToolUpdate?.(data as ToolCallEvent);
-            } else if (data.type === 'sub_agent_completed') {
-                onSubAgentCompleted?.(data as SubAgentCompletedEvent);
-            } else if (data.type === 'sub_agent_failed') {
-                onSubAgentFailed?.(data as SubAgentFailedEvent);
             }
         });
 
@@ -105,5 +83,5 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onSu
             socket.off(`conversation:${conversationId}`);
             socket.disconnect();
         };
-    }, [conversationId, onToolUpdate, onNewMessage, onSubAgentCompleted, onSubAgentFailed]);
+    }, [conversationId, onToolUpdate, onNewMessage]);
 }

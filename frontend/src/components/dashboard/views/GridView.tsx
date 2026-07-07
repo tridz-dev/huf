@@ -15,9 +15,6 @@ interface GridViewProps<T> {
   columns?: GridViewColumns;
   gap?: number;
   loading?: boolean;
-  skeletonCount?: number;
-  skeletonMetadataRows?: number;
-  skeletonShowBadges?: boolean;
   emptyState?: ReactNode;
   keyExtractor: (item: T) => string;
   className?: string;
@@ -105,24 +102,12 @@ export function GridView<T>({
   columns = defaultColumns,
   gap = 4,
   loading = false,
-  skeletonCount = 20,
-  skeletonMetadataRows = 4,
-  skeletonShowBadges = true,
   emptyState,
   keyExtractor,
   className,
 }: GridViewProps<T>) {
   if (loading) {
-    return (
-      <SkeletonGridView
-        columns={columns}
-        gap={gap}
-        count={skeletonCount}
-        metadataRows={skeletonMetadataRows}
-        showBadges={skeletonShowBadges}
-        className={className}
-      />
-    );
+    return <SkeletonGridView columns={columns} gap={gap} className={className} />;
   }
 
   if (items.length === 0) {

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -16,11 +16,6 @@ import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderAction
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
-import {
-  DashboardPageLoader,
-  GridPageLoader,
-  TablePageLoader,
-} from './components/dashboard';
 import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
@@ -41,6 +36,8 @@ const IntegrationsPageWrapper = lazy(() => import('./pages/IntegrationsPageWrapp
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPage = lazy(() => import('./pages/AgentRunDetailPage'));
+const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
+const AgentContextArtifactDetailPage = lazy(() => import('./pages/AgentContextArtifactDetailPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
@@ -49,7 +46,6 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
@@ -153,7 +149,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
-                  <Suspense fallback={<DashboardPageLoader />}>
+                  <Suspense fallback={<PageLoader />}>
                     <HomePage />
                   </Suspense>
                 </UnifiedLayout>
@@ -165,7 +161,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<AgentsHeaderActions />}>
-                  <Suspense fallback={<GridPageLoader />}>
+                  <Suspense fallback={<PageLoader />}>
                     <AgentsPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -187,7 +183,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<AgentPromptsHeaderActions />}>
-                  <Suspense fallback={<TablePageLoader columns={6} />}>
+                  <Suspense fallback={<PageLoader />}>
                     <AgentPromptsPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -209,7 +205,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<AgentSummaryPromptsHeaderActions />}>
-                  <Suspense fallback={<TablePageLoader columns={6} />}>
+                  <Suspense fallback={<PageLoader />}>
                     <AgentSummaryPromptsPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -231,27 +227,13 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<DataHeaderActions />}>
-                  <Suspense fallback={<GridPageLoader filterCount={1} />}>
+                  <Suspense fallback={<PageLoader />}>
                     <DataPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <SettingsPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/settings/agent" element={<Navigate to="/settings#agent" replace />} />
-          <Route path="/settings/voice" element={<Navigate to="/settings#voice" replace />} />
           <Route
             path="/data/new"
             element={
@@ -312,7 +294,7 @@ function App() {
               <ProtectedRoute>
                 <FlowProvider>
                   <UnifiedLayout headerActions={<FlowsListHeaderActions />}>
-                    <Suspense fallback={<GridPageLoader filterCount={1} />}>
+                    <Suspense fallback={<PageLoader />}>
                       <FlowListPage />
                     </Suspense>
                   </UnifiedLayout>
@@ -363,7 +345,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
-                  <Suspense fallback={<TablePageLoader columns={6} filterCount={3} />}>
+                  <Suspense fallback={<PageLoader />}>
                     <Executions />
                   </Suspense>
                 </UnifiedLayout>
@@ -377,6 +359,30 @@ function App() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <AgentRunDetailPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifacts"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentContextArtifactsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifacts/:artifactId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentContextArtifactDetailPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -411,7 +417,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<KnowledgeHeaderActions />}>
-                  <Suspense fallback={<GridPageLoader />}>
+                  <Suspense fallback={<PageLoader />}>
                     <KnowledgeSourcesPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -432,7 +438,7 @@ function App() {
             path="/integrations"
             element={
               <ProtectedRoute>
-                <Suspense fallback={<GridPageLoader filterCount={1} />}>
+                <Suspense fallback={<PageLoader />}>
                   <IntegrationSettingsListingPageWrapper />
                 </Suspense>
               </ProtectedRoute>
@@ -453,7 +459,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<McpHeaderActions />}>
-                  <Suspense fallback={<GridPageLoader filterCount={1} />}>
+                  <Suspense fallback={<PageLoader />}>
                     <McpListingPage />
                   </Suspense>
                 </UnifiedLayout>
@@ -485,9 +491,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<UsersHeaderActions />}>
-                  <Suspense fallback={<TablePageLoader columns={4} filterCount={1} />}>
-                    <UsersPage />
-                  </Suspense>
+                  <UsersPage />
                 </UnifiedLayout>
               </ProtectedRoute>
             }

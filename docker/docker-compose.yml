@@ -1,105 +1,37 @@
-# Fast, prebuilt HUF local demo setup.
-#
-# No build step, no `bench init`, no `new-site`, no `install-app`.
-# Just pull the prebuilt image and start.
-#
-# Usage:
-#   git clone https://github.com/tridz-dev/huf.git
-#   cd huf/docker
-#   docker compose up --wait
-#
-# Then open:
-#   http://localhost:8000/huf
-#
-# The first start copies a baked physical MariaDB snapshot into the empty
-# MariaDB volume. Subsequent starts reuse the existing volume and boot quickly.
-
 name: huf
 
 services:
   mariadb:
-    container_name: fasterdocker-run-mariadb
-    image: ${MARIADB_IMAGE:-mariadb:10.11.11}
-    # Use host platform by default; override with DOCKER_PLATFORM if you need to
-    # pin to a specific architecture (e.g. linux/amd64 or linux/arm64).
-    platform: ${DOCKER_PLATFORM:-}
-    # Wait for the frappe service to copy the physical snapshot before starting.
-    entrypoint:
-      - /bin/bash
-      - -c
-      - |
-        echo "[huf-mariadb] Waiting for physical snapshot marker..."
-        until test -f /var/lib/mysql/.fasterdocker-snapshot-ready; do
-          sleep 1
-        done
-        echo "[huf-mariadb] Snapshot marker found; starting MariaDB."
-        exec docker-entrypoint.sh mysqld
+    image: docker.io/mariadb:10.11
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --skip-character-set-client-handshake
       - --skip-innodb-read-only-compressed
     environment:
-      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-fasterdocker-mysql-root}
-      MARIADB_AUTO_UPGRADE: "1"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-huf_dev_mysql_root}
     volumes:
       - mariadb-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      start_period: 20s
-      interval: 5s
-      timeout: 5s
-      retries: 30
-    networks:
-      - huf
+
+  redis:
+    image: redis:alpine
 
   frappe:
-    container_name: fasterdocker-run-frappe
-    image: ${HUF_DEMO_IMAGE:-ghcr.io/tridz-dev/huf-demo}:${HUF_IMAGE_TAG:-latest}
-    platform: ${DOCKER_PLATFORM:-}
+    image: frappe/bench:latest
+    command: bash /workspace/init.sh
     environment:
-      SITE_NAME: ${SITE_NAME:-huf.localhost}
-      FRAPPE_SITE_NAME_HEADER: ${SITE_NAME:-huf.localhost}
-      DB_HOST: mariadb
-      DB_PORT: "3306"
-      REDIS_CACHE: redis://127.0.0.1:6379/0
-      REDIS_QUEUE: redis://127.0.0.1:6379/1
-      REDIS_SOCKETIO: redis://127.0.0.1:6379/2
-      FRAPPE_REDIS_CACHE: redis://127.0.0.1:6379/0
-      FRAPPE_REDIS_QUEUE: redis://127.0.0.1:6379/1
-      FRAPPE_REDIS_SOCKETIO: redis://127.0.0.1:6379/2
-      APP_NAME: ${APP_NAME:-huf}
-      BENCH_START_PORT: ${BENCH_START_PORT:-8000}
-      BENCH_WORKER_QUEUES: ${BENCH_WORKER_QUEUES:-default,short,long}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-fasterdocker-admin}
+      - SHELL=/bin/bash
+      - HUF_BRANCH=develop
+      - UV_HTTP_TIMEOUT=300
+    working_dir: /home/frappe
     volumes:
-      - mariadb-data:/var/lib/mysql
-      - sites:/home/frappe/frappe-bench/sites
-      - logs:/home/frappe/frappe-bench/logs
+      - .:/workspace
     ports:
-      - "${BENCH_WEB_PUBLISH_PORT:-8000}:8000"
-      - "${BENCH_SOCKETIO_PUBLISH_PORT:-9000}:9000"
-    # The frappe entrypoint copies the physical snapshot and then waits for
-    # MariaDB itself, so we do not block on MariaDB's healthcheck here. That
-    # avoids a deadlock because MariaDB waits for the snapshot marker that
-    # frappe creates.
+      - "8000:8000"
+      - "9000:9000"
     depends_on:
       - mariadb
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "-H", "Host: ${SITE_NAME:-huf.localhost}", "http://localhost:8000/api/method/ping"]
-      start_period: 30s
-      interval: 5s
-      timeout: 5s
-      retries: 30
-    networks:
-      - huf
-    command: ["/usr/local/bin/bench-start.sh"]
+      - redis
 
 volumes:
   mariadb-data:
-  sites:
-  logs:
-
-networks:
-  huf:
-    driver: bridge

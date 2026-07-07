@@ -18,7 +18,6 @@ interface CategoryTabProps {
   onAddCategory: () => void;
   onRemoveCategory: () => void;
   onEditCategory: (category: Category) => void;
-  description?: string;
 }
 
 export function CategoryTab({
@@ -26,7 +25,6 @@ export function CategoryTab({
   onAddCategory,
   onRemoveCategory,
   onEditCategory,
-  description = 'Assign a category to your prompt',
 }: CategoryTabProps) {
   const getCategoryIcon = (iconName?: string) => {
     if (!iconName) return Tag;
@@ -48,7 +46,7 @@ export function CategoryTab({
               Category
             </CardTitle>
             <CardDescription>
-              {description}
+              Assign a category to your prompt
             </CardDescription>
           </div>
 

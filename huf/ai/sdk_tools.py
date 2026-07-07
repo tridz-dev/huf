@@ -271,6 +271,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             )
             if tool: tools.append(tool)
 
+            if tool: tools.append(tool)
+
     existing_types = [t.name for t in tools] if tools else []
     if "get_result_context" not in existing_types:
         tool = create_function_tool(
@@ -1186,8 +1188,6 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
             model=target_agent.model,
             parent_conversation_id=conversation_id,
             invoked_by_agent=agent_name_self,
-            channel_id=kwargs.get("channel_id"),
-            external_id=kwargs.get("external_id")
         )
 
         return {
@@ -1731,7 +1731,6 @@ async def handle_ocr_document(
     model: str = None,
     agent_name: str = None,
     conversation_id: str = None,
-    create_message: bool = True,
     **kwargs
 ):
     """
@@ -1780,7 +1779,7 @@ async def handle_ocr_document(
             pages=pages,
             include_images=bool(include_images),
             model=model,
-            create_message=create_message,
+            create_message=True,
             conversation_id=conversation_id,
             agent_run_id=kwargs.get("agent_run_id"),
         )

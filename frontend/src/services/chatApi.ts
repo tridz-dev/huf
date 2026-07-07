@@ -354,111 +354,6 @@ export async function transcribeAudio(
   }
 }
 
-export interface UploadFileParams {
-  filename: string;
-  b64data: string;
-  agent: string;
-  conversation?: string;
-}
-
-export interface UploadFileResponse {
-  success: boolean;
-  conversation_id?: string;
-  message_id?: string;
-  text?: string;
-  file_name?: string;
-  error?: string;
-}
-
-export async function uploadFileAndProcess(
-  params: UploadFileParams
-): Promise<UploadFileResponse> {
-  try {
-    const result = await call.post('huf.ai.agent_chat.upload_file_and_process_web', {
-      filename: params.filename,
-      b64data: params.b64data,
-      agent: params.agent,
-      conversation: params.conversation ?? undefined,
-    });
-    return (result?.message ?? result) as UploadFileResponse;
-  } catch (error) {
-    handleFrappeError(error, 'Error uploading file');
-    return { success: false, error: 'Error uploading file' };
-  }
-}
-
-export interface UploadFileAttachmentParams {
-  filename: string;
-  b64data: string;
-  agent: string;
-}
-
-export interface UploadFileAttachmentResponse {
-  success: boolean;
-  file_id?: string;
-  file_url?: string;
-  filename?: string;
-  error?: string;
-}
-
-export async function uploadFileAttachment(
-  params: UploadFileAttachmentParams
-): Promise<UploadFileAttachmentResponse> {
-  try {
-    const result = await call.post('huf.ai.agent_chat.upload_file_attachment_web', {
-      filename: params.filename,
-      b64data: params.b64data,
-      agent: params.agent,
-    });
-    return (result?.message ?? result) as UploadFileAttachmentResponse;
-  } catch (error) {
-    handleFrappeError(error, 'Error uploading file');
-    return { success: false, error: 'Error uploading file' };
-  }
-}
-
-export interface PrepareMessageWithFileParams {
-  file_id: string;
-  filename: string;
-  agent: string;
-  conversation?: string;
-  message?: string;
-}
-
-export interface PrepareMessageWithFileFile {
-  file_id: string;
-  file_url: string;
-  filename: string;
-  is_image: number;
-}
-
-export interface PrepareMessageWithFileResponse {
-  success: boolean;
-  conversation_id?: string;
-  message_id?: string;
-  agent_prompt?: string;
-  files?: PrepareMessageWithFileFile[];
-  error?: string;
-}
-
-export async function prepareMessageWithFile(
-  params: PrepareMessageWithFileParams
-): Promise<PrepareMessageWithFileResponse> {
-  try {
-    const result = await call.post('huf.ai.agent_chat.prepare_message_with_file_web', {
-      file_id: params.file_id,
-      filename: params.filename,
-      agent: params.agent,
-      conversation: params.conversation ?? undefined,
-      message: params.message ?? '',
-    });
-    return (result?.message ?? result) as PrepareMessageWithFileResponse;
-  } catch (error) {
-    handleFrappeError(error, 'Error preparing file attachment');
-    return { success: false, error: 'Error preparing file attachment' };
-  }
-}
-
 /**
  * Start a new conversation
  */
@@ -550,7 +445,7 @@ export interface AgentRunFeedbackParams {
 
 export async function createAgentRunFeedback(params: AgentRunFeedbackParams): Promise<void> {
   try {
-    await db.createDoc(doctype['Agent Run Feedback'], {
+    await db.createDoc('Agent Run Feedback', {
       agent: params.agent,
       feedback: params.feedback,
       comments: params.comments,
@@ -559,46 +454,6 @@ export async function createAgentRunFeedback(params: AgentRunFeedbackParams): Pr
     });
   } catch (error) {
     handleFrappeError(error, 'Error submitting feedback');
-  }
-}
-
-/**
- * Agent Run Feedback has no direct agent_run link, so the assistant's
- * Agent Message for a run must be resolved via Agent Message.agent_run first.
- */
-export async function getAgentMessageIdForRun(agentRunId: string): Promise<string | undefined> {
-  try {
-    const messages = await db.getDocList(doctype['Agent Message'], {
-      fields: ['name'],
-      filters: [['agent_run', '=', agentRunId], ['is_agent_message', '=', 1]],
-      limit: 1,
-      orderBy: { field: 'creation', order: 'desc' },
-    });
-    return messages[0]?.name;
-  } catch (error) {
-    handleFrappeError(error, 'Error resolving agent message for run');
-    return undefined;
-  }
-}
-
-export interface AgentRunFeedbackDoc {
-  name: string;
-  feedback: 'Thumbs Up' | 'Thumbs Down';
-  comments?: string;
-}
-
-export async function getExistingRunFeedback(agentMessageId: string): Promise<AgentRunFeedbackDoc | undefined> {
-  try {
-    const records = await db.getDocList(doctype['Agent Run Feedback'], {
-      fields: ['name', 'feedback', 'comments'],
-      filters: [['agent_message', '=', agentMessageId]],
-      limit: 1,
-      orderBy: { field: 'creation', order: 'desc' },
-    });
-    return records[0] as AgentRunFeedbackDoc | undefined;
-  } catch (error) {
-    handleFrappeError(error, 'Error fetching existing feedback');
-    return undefined;
   }
 }
 

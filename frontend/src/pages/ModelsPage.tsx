@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { MultiSelectCombobox } from '../components/ui/multi-select-combobox';
 import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
@@ -446,15 +445,21 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="modalities">Modality</Label>
-                <MultiSelectCombobox
-                  options={modalityOptions.map(opt => ({ value: opt, label: opt }))}
-                  values={formData.modalities ? formData.modalities.split(',').map(m => m.trim()).filter(Boolean) : []}
-                  onValuesChange={(vals) => setFormData({ ...formData, modalities: vals.join(', ') })}
-                  placeholder="Select modalities..."
-                  searchPlaceholder="Search modalities..."
-                  emptyText="No modality found."
-                  className="w-full"
-                />
+                <Select
+                  value={formData.modalities}
+                  onValueChange={(value) => setFormData({ ...formData, modalities: value })}
+                >
+                  <SelectTrigger id="modalities">
+                    <SelectValue placeholder="Select a modality" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modalityOptions.map((opt) => (
+                      <SelectItem key={opt} value={opt}>
+                        {opt}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="border-t pt-4 space-y-4">

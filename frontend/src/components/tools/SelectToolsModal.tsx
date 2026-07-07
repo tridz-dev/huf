@@ -2,14 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import {
   Dialog,
+  DialogContent,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
-import {
-  DialogScrollContent,
-  DialogScrollFooter,
-  DialogScrollHeader,
-} from '../ui/dialog-scroll';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Combobox } from '../ui/combobox';
@@ -244,18 +242,18 @@ export function SelectToolsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogScrollContent className="sm:max-w-5xl">
-        <DialogScrollHeader>
+      <DialogContent className="sm:max-w-5xl h-[80vh] flex flex-col p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
           <DialogTitle>Add Tool</DialogTitle>
-        </DialogScrollHeader>
+        </DialogHeader>
 
         {/* Tabs */}
         <Tabs 
           value={activeTab} 
           onValueChange={(value) => setActiveTab(value as 'tool-library' | 'create-new')} 
-          className="flex min-h-0 flex-1 flex-col overflow-hidden px-6"
+          className="px-6 flex flex-col flex-1 min-h-0 overflow-hidden"
         >
-          <TabsList layout="grid" cols={2} className="flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
             <TabsTrigger value="tool-library">Tool Library</TabsTrigger>
             <TabsTrigger value="create-new">Create New</TabsTrigger>
           </TabsList>
@@ -326,6 +324,30 @@ export function SelectToolsModal({
                 ))
               )}
             </div>
+
+            {/* Footer */}
+            <DialogFooter className="flex items-center justify-between border-t pt-4 mt-4 flex-shrink-0">
+              <div className="text-sm text-muted-foreground">
+                {selectedCount > 0 ? (
+                  <>
+                    {selectedCount} tool{selectedCount > 1 ? 's' : ''} selected
+                    {selectedCount !== filteredTools.length && (
+                      <> • {filteredTools.length} total</>
+                    )}
+                  </>
+                ) : (
+                  <>{filteredTools.length} tool{filteredTools.length !== 1 ? 's' : ''} available</>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleAdd} disabled={selectedCount === 0}>
+                  Add {selectedCount > 0 && `(${selectedCount})`}
+                </Button>
+              </div>
+            </DialogFooter>
           </TabsContent>
 
           {/* Create New Tab */}
@@ -356,32 +378,7 @@ export function SelectToolsModal({
             ) : null}
           </TabsContent>
         </Tabs>
-
-        {activeTab === 'tool-library' && (
-          <DialogScrollFooter className="items-center justify-between sm:justify-between">
-            <div className="text-sm text-muted-foreground">
-              {selectedCount > 0 ? (
-                <>
-                  {selectedCount} tool{selectedCount > 1 ? 's' : ''} selected
-                  {selectedCount !== filteredTools.length && (
-                    <> • {filteredTools.length} total</>
-                  )}
-                </>
-              ) : (
-                <>{filteredTools.length} tool{filteredTools.length !== 1 ? 's' : ''} available</>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAdd} disabled={selectedCount === 0}>
-                Add {selectedCount > 0 && `(${selectedCount})`}
-              </Button>
-            </div>
-          </DialogScrollFooter>
-        )}
-      </DialogScrollContent>
+      </DialogContent>
     </Dialog>
   );
 }

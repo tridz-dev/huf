@@ -5,15 +5,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
+  DialogContent,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DialogScrollBody,
-  DialogScrollContent,
-  DialogScrollFooter,
-  DialogScrollHeader,
-} from '@/components/ui/dialog-scroll';
 import {
   Select,
   SelectContent,
@@ -97,15 +94,15 @@ export function AgentKnowledgeModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogScrollContent className="sm:max-w-md">
-        <DialogScrollHeader>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
           <DialogTitle>{initialData ? 'Edit Knowledge Link' : 'Add Knowledge Source'}</DialogTitle>
           <DialogDescription>
             Link a knowledge source to this agent for RAG-based retrieval.
           </DialogDescription>
-        </DialogScrollHeader>
+        </DialogHeader>
 
-        <DialogScrollBody className="space-y-4 py-2">
+        <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Knowledge Source *</Label>
             <Combobox
@@ -177,17 +174,17 @@ export function AgentKnowledgeModal({
               rows={2}
             />
           </div>
-        </DialogScrollBody>
+        </div>
 
-        <DialogScrollFooter>
+        <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button type="button" onClick={handleSave} disabled={!isValid}>
             {initialData ? 'Update' : 'Add'}
           </Button>
-        </DialogScrollFooter>
-      </DialogScrollContent>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
   );
 }

@@ -204,13 +204,6 @@ export async function getAgent(name: string): Promise<AgentDoc> {
 /**
  * Agent Trigger document from Frappe (for editing)
  */
-export interface AgentTriggerAttachmentRow {
-  name?: string;
-  source_type: 'DocField' | 'Child Table Field';
-  child_table?: string;
-  field_name: string;
-}
-
 export interface AgentTriggerDoc {
   name: string;
   trigger_name: string;
@@ -222,12 +215,10 @@ export interface AgentTriggerDoc {
   reference_doctype?: string;
   doc_event?: string;
   condition?: string;
-  prompt_field?: string;
   webhook_key?: string;
   webhook_slug?: string;
   app_name?: string;
   event_name?: string;
-  file_attachments?: AgentTriggerAttachmentRow[];
 }
 
 /**
@@ -361,66 +352,6 @@ export async function updateAgent(name: string, data: Partial<AgentDoc>): Promis
     return updatedAgent as AgentDoc;
   } catch (error) {
     handleFrappeError(error, `Error updating agent ${name}`);
-  }
-}
-
-/**
- * Delete an agent document
- */
-export async function deleteAgent(name: string): Promise<void> {
-  try {
-    await db.deleteDoc(doctype.Agent, name);
-  } catch (error) {
-    handleFrappeError(error, `Error deleting agent ${name}`);
-  }
-}
-
-/**
- * Duplicate an agent document (copies all fields except identity/stats fields)
- */
-export async function duplicateAgent(name: string): Promise<AgentDoc> {
-  try {
-    const source = await db.getDoc(doctype.Agent, name);
-    const excludedFields = [
-      'name',
-      'owner',
-      'creation',
-      'modified',
-      'modified_by',
-      'last_run',
-      'total_run',
-      'idx',
-      'docstatus',
-    ];
-    const rest = Object.fromEntries(
-      Object.entries(source as Record<string, unknown>).filter(
-        ([key]) => !excludedFields.includes(key)
-      )
-    );
-    const baseName = (source as AgentDoc).agent_name;
-    const nameExists = async (candidate: string): Promise<boolean> => {
-      const matches = await db.getDocList(doctype.Agent, {
-        filters: [['agent_name', '=', candidate]] as any,
-        fields: ['name'],
-        limit: 1,
-      });
-      return matches.length > 0;
-    };
-
-    let candidateName = `${baseName} (Copy)`;
-    let suffix = 2;
-    while (await nameExists(candidateName)) {
-      candidateName = `${baseName} (Copy ${suffix})`;
-      suffix += 1;
-    }
-
-    const copy = await db.createDoc(doctype.Agent, {
-      ...rest,
-      agent_name: candidateName,
-    });
-    return copy as AgentDoc;
-  } catch (error) {
-    handleFrappeError(error, `Error duplicating agent ${name}`);
   }
 }
 

@@ -1,14 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog,
+  DialogContent,
+  DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '../ui/dialog';
-import {
-  DialogScrollBody,
-  DialogScrollContent,
-  DialogScrollFooter,
-  DialogScrollHeader,
-} from '../ui/dialog-scroll';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
@@ -118,11 +115,11 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogScrollContent className="sm:max-w-[425px]">
-        <DialogScrollHeader>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
           <DialogTitle>Flow Settings</DialogTitle>
-        </DialogScrollHeader>
-        <DialogScrollBody className="grid gap-4 py-4">
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label htmlFor="name">Flow Name</Label>
             <Input
@@ -186,8 +183,8 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               />
             </div>
           </div>
-        </DialogScrollBody>
-        <DialogScrollFooter className="items-center justify-between sm:justify-between">
+        </div>
+        <DialogFooter className="sm:justify-between items-center border-t pt-4 mt-2">
           <Button
             variant="outline"
             size="sm"
@@ -207,8 +204,8 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               Save Changes
             </Button>
           </div>
-        </DialogScrollFooter>
-      </DialogScrollContent>
+        </DialogFooter>
+      </DialogContent>
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>

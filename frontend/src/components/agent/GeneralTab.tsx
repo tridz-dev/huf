@@ -13,13 +13,14 @@ import { InstructionsTextarea } from './InstructionsTextarea';
 import { PromptTemplateSection, type AgentPromptOption } from './PromptTemplateSection';
 import { LinkFieldControl } from '@/components/ui/link-field-control';
 import { linkRoutes } from '@/lib/link-routes';
-import { Link } from 'react-router-dom';
 
 interface GeneralTabProps {
   form: UseFormReturn<AgentFormValues>;
   providers: AIProvider[];
   models: AIModel[];
   watchProvider: string;
+  optimizingPrompt: boolean;
+  onOptimizePrompt: () => void;
   promptOptions: AgentPromptOption[];
   loadingPrompts: boolean;
   showAddNewPrompt?: boolean;
@@ -30,6 +31,8 @@ export function GeneralTab({
   providers,
   models,
   watchProvider,
+  optimizingPrompt,
+  onOptimizePrompt,
   promptOptions,
   loadingPrompts,
   showAddNewPrompt = true,
@@ -40,14 +43,9 @@ export function GeneralTab({
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
-          <div>
-            <CardTitle>LLM Configuration</CardTitle>
-            <CardDescription>Configure language model settings</CardDescription>
-          </div>
-          <Link to="/settings#agent" className="text-sm text-primary hover:underline shrink-0">
-            Edit defaults
-          </Link>
+        <CardHeader>
+          <CardTitle>LLM Configuration</CardTitle>
+          <CardDescription>Configure language model settings</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -236,7 +234,9 @@ export function GeneralTab({
                   <InstructionsTextarea
                     form={form}
                     field={field}
-                    showOptimize={false}
+                    optimizingPrompt={optimizingPrompt}
+                    onOptimizePrompt={onOptimizePrompt}
+                    showOptimize={true}
                     showExpand={true}
                   />
                   <FormMessage />

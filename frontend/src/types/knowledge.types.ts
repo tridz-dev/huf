@@ -1,4 +1,4 @@
-export type KnowledgeType = 'sqlite_fts' | 'sqlite_vec' | 'chroma';
+export type KnowledgeType = 'sqlite_fts' | 'sqlite_vec';
 export type KnowledgeScope = 'Site' | 'Workspace' | 'Agent' | 'Global';
 export type KnowledgeSourceStatus = 'Pending' | 'Indexing' | 'Ready' | 'Error' | 'Rebuilding';
 export type KnowledgeStorageMode = 'Frappe File';
@@ -27,16 +27,10 @@ export interface KnowledgeSourceDoc {
   knowledge_type: KnowledgeType;
   scope: KnowledgeScope;
 
-  // Vector settings (sqlite_vec / chroma)
+  // Vector settings (sqlite_vec only)
   embedding_model?: string | null;
   vector_dimension?: number | null;
   embedding_provider?: string | null;
-
-  // Chroma settings (chroma only)
-  chroma_mode?: 'File' | 'Server' | null;
-  chroma_host?: string | null;
-  chroma_port?: number | null;
-  chroma_ssl?: number | null;
 
   // Storage
   storage_mode: KnowledgeStorageMode;

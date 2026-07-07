@@ -9,7 +9,7 @@ import {
 	FilterBar,
 	GridView,
 	ItemCard,
-	PageListFooter,
+	LoadMoreButton,
 } from '../components/dashboard';
 import { DeleteTableDialog } from '../components/data-table/DeleteTableDialog';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
@@ -98,8 +98,6 @@ function DataPage() {
 				items={tables}
 				columns={{ sm: 1, md: 2, lg: 3 }}
 				loading={initialLoading}
-				skeletonCount={20}
-				skeletonMetadataRows={3}
 				emptyState={
 					<div className="text-center py-12">
 						<Database className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -147,19 +145,19 @@ function DataPage() {
 				)}
 				keyExtractor={(table) => table.name}
 			/>
-			<PageListFooter
+			<LoadMoreButton
 				hasMore={hasMore}
 				loading={loadingMore}
 				onLoadMore={loadMore}
 				disabled={!!search || initialLoading}
-				endMessage={
-					!hasMore && tables.length > 0
-						? total !== undefined
-							? `Showing all ${total} tables`
-							: 'No more tables to load'
-						: undefined
-				}
 			/>
+			{!hasMore && tables.length > 0 && (
+				<div className="text-center py-4 text-sm text-muted-foreground">
+					{total !== undefined
+						? `Showing all ${total} tables`
+						: 'No more tables to load'}
+				</div>
+			)}
 
 			<DeleteTableDialog
 				open={!!deleteTable}

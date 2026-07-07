@@ -1,13 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Dialog,
+  DialogContent,
+  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DialogScrollBody,
-  DialogScrollContent,
-  DialogScrollHeader,
-} from '@/components/ui/dialog-scroll';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -243,8 +240,8 @@ export function CategoryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogScrollContent className="sm:max-w-2xl">
-        <DialogScrollHeader>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
           <DialogTitle>
             {editingCategory
               ? `Edit Category: ${newCategoryData.category_name || editingCategory.category_name}`
@@ -252,11 +249,10 @@ export function CategoryModal({
               ? 'Add New Category'
               : 'Manage Categories'}
           </DialogTitle>
-        </DialogScrollHeader>
+        </DialogHeader>
 
-        <DialogScrollBody>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList variant="pill" layout="grid" cols={2}>
+          <TabsList className="grid grid-cols-2 bg-muted p-1 rounded-lg">
             <TabsTrigger value="list">Categories</TabsTrigger>
             <TabsTrigger value="create">{editingCategory ? 'Edit' : 'Add New'}</TabsTrigger>
           </TabsList>
@@ -598,8 +594,7 @@ export function CategoryModal({
             </div>
           </TabsContent>
         </Tabs>
-        </DialogScrollBody>
-      </DialogScrollContent>
+      </DialogContent>
     </Dialog>
   );
 }

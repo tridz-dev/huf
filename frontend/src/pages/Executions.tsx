@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowUpDown } from 'lucide-react';
-import { FilterBar, PageLayout, PageListFooter, SkeletonTable } from '@/components/dashboard';
+import { ArrowUpDown, Loader2 } from 'lucide-react';
+import { FilterBar, PageLayout, LoadMoreButton } from '@/components/dashboard';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgentRuns, type AgentRunDoc } from '@/services/agentRunApi';
@@ -304,7 +304,9 @@ export default function Executions() {
     >
       <div className="w-full">
         {initialLoading ? (
-          <SkeletonTable columns={5} rows={10} />
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
         ) : (
           <div className="overflow-hidden rounded-md border">
             <Table>
@@ -351,19 +353,18 @@ export default function Executions() {
         )}
       </div>
 
-      <PageListFooter
+      <LoadMoreButton
         hasMore={hasMore}
         loading={loadingMore}
         onLoadMore={loadMore}
         disabled={!!search || initialLoading}
-        endMessage={
-          !hasMore && runs.length > 0
-            ? total !== undefined
-              ? `Showing all ${total} executions`
-              : 'No more executions to load'
-            : undefined
-        }
       />
+
+      {!hasMore && runs.length > 0 && (
+        <div className="text-center py-4 text-sm text-muted-foreground">
+          {total !== undefined ? `Showing all ${total} executions` : 'No more executions to load'}
+        </div>
+      )}
     </PageLayout>
   );
 }

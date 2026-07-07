@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { flowService } from '../services/flowService';
 import type { FlowRunSummary } from '../services/flowApi';
-import { SkeletonListView } from '@/components/dashboard/views/SkeletonListView';
-import { RefreshCw, PlayCircle } from 'lucide-react';
+import { Loader2, RefreshCw, PlayCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 
@@ -57,7 +56,9 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
 
                 <div className="space-y-3">
                     {loading && runs.length === 0 ? (
-                        <SkeletonListView count={5} />
+                        <div className="flex justify-center p-8">
+                            <Loader2 className="animate-spin w-6 h-6 text-muted-foreground" />
+                        </div>
                     ) : runs.length === 0 ? (
                         <div className="text-center p-8 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
                             No runs found for this flow.
