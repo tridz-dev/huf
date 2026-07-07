@@ -46,6 +46,7 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
+const ConsolePage = lazy(() => import('./pages/ConsolePage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
@@ -229,6 +230,18 @@ function App() {
                 <UnifiedLayout headerActions={<DataHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <DataPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/console"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <ConsolePage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
