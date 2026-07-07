@@ -40,7 +40,8 @@ interface AdvancedTabProps {
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
-  return (model.modalities || '').trim() === required;
+  const modalities = (model.modalities || '').split(',').map(m => m.trim());
+  return modalities.includes(required);
 }
 
 export function AdvancedTab({
