@@ -35,7 +35,7 @@
   {
    "description": "Supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription, document OCR/vision).",
    "fieldname": "modalities",
-   "fieldtype": "MultiSelect",
+   "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Modalities",
    "options": "Text\nImage\nText-to-Speech\nTranscription\nEmbeddings\nVision\nOCR"
