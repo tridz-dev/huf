@@ -47,6 +47,28 @@ export interface IntegrationSettingsDoc {
   modified?: string;
 }
 
+export interface HttpProviderSettingsDoc {
+  name?: string;
+  provider?: string;
+  api_url?: string;
+  method?: 'POST' | 'GET';
+  auth_type?: 'Bearer Token' | 'API Key Header' | 'None';
+  file_param?: string;
+  enabled?: 0 | 1;
+  model?: string;
+  api_key?: string;
+  response_path?: string;
+  modified?: string;
+}
+
+export interface ElevenlabsSettingsDoc {
+  name?: string;
+  provider?: string;
+  agent_id?: string;
+  webhook_secret?: string;
+  modified?: string;
+}
+
 export function parseRequiredCredentials(
   json: string | CredentialSchemaItem[] | undefined | null,
 ): CredentialSchemaItem[] {

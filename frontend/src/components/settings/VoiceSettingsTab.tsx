@@ -134,7 +134,7 @@ function HttpProviderForm({
           <Label>Method</Label>
           <Select
             value={form.method || 'POST'}
-            onValueChange={(v) => setForm((f) => ({ ...f, method: v }))}
+            onValueChange={(v) => setForm((f) => ({ ...f, method: v as 'POST' | 'GET' }))}
           >
             <SelectTrigger>
               <SelectValue />
@@ -150,7 +150,7 @@ function HttpProviderForm({
           <Label>Auth Type</Label>
           <Select
             value={form.auth_type || 'Bearer Token'}
-            onValueChange={(v) => setForm((f) => ({ ...f, auth_type: v }))}
+            onValueChange={(v) => setForm((f) => ({ ...f, auth_type: v as 'Bearer Token' | 'API Key Header' | 'None' }))}
           >
             <SelectTrigger>
               <SelectValue />

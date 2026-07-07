@@ -466,3 +466,47 @@ export async function updateConversationTitle(conversationId:string,title:string
     handleFrappeError(e,"Error update conversation title")
   }
 }
+
+export interface AgentRunFeedbackDoc {
+  name: string;
+  agent: string;
+  feedback: 'Thumbs Up' | 'Thumbs Down';
+  comments?: string;
+  conversation?: string;
+  agent_message?: string;
+}
+
+export async function getAgentMessageIdForRun(agentRunId: string): Promise<string | undefined> {
+  try {
+    const messages = await db.getDocList(doctype['Agent Message'], {
+      fields: ['name'],
+      filters: [
+        ['agent_run', '=', agentRunId],
+        ['is_agent_message', '=', 1],
+      ],
+      orderBy: { field: 'creation', order: 'desc' },
+      limit: 1,
+    });
+
+    const first = (messages as Array<{ name: string }>)[0];
+    return first?.name;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching agent message for run');
+  }
+}
+
+export async function getExistingRunFeedback(
+  agentMessageId: string
+): Promise<AgentRunFeedbackDoc | undefined> {
+  try {
+    const feedback = await db.getDocList('Agent Run Feedback', {
+      fields: ['name', 'agent', 'feedback', 'comments', 'conversation', 'agent_message'],
+      filters: [['agent_message', '=', agentMessageId]],
+      limit: 1,
+    });
+
+    return (feedback as AgentRunFeedbackDoc[])[0];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching run feedback');
+  }
+}
