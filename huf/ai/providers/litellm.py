@@ -16,6 +16,7 @@ Features:
 """
 
 import asyncio
+import base64
 import json
 import os
 from types import SimpleNamespace
@@ -101,6 +102,59 @@ def _build_text_content(text: str, provider_name: str, cache_enabled: bool, cach
         return [{"type": "text", "text": text, "cache_control": {"type": cache_control_type}}]
 
     return [{"type": "text", "text": text}]
+
+
+def _file_dict_to_data_image_url(file_dict: dict) -> dict | None:
+    """Embed a local Frappe file as a base64 data URI for multimodal LLM calls.
+
+    Cloud providers cannot fetch localhost or authenticated /private/files/ URLs.
+    """
+    if not file_dict.get("is_image"):
+        return None
+
+    file_id = file_dict.get("file_id")
+    file_url = file_dict.get("file_url")
+    if not file_id and not file_url:
+        return None
+
+    try:
+        from huf.ai.ocr_engine import _mime_type_and_extension, _resolve_file_doc
+
+        file_doc = _resolve_file_doc(file_id=file_id, file_url=file_url)
+        file_path = file_doc.get_full_path()
+        if not os.path.exists(file_path):
+            frappe.log_error(f"Image file not found on disk: {file_path}", "LiteLLM Image Embed")
+            return None
+
+        mime_type, _ = _mime_type_and_extension(file_path, file_doc.file_type)
+        with open(file_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+        return {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}}
+    except Exception as e:
+        frappe.log_error(f"Failed to embed image for LLM: {e}", "LiteLLM Image Embed")
+        return None
+
+
+def _append_context_images_to_user_content(user_content, files: list):
+    """Append base64-embedded image parts from context files to user message content."""
+    image_parts = []
+    for file_dict in files:
+        part = _file_dict_to_data_image_url(file_dict)
+        if part:
+            image_parts.append(part)
+
+    if not image_parts:
+        return user_content
+
+    if isinstance(user_content, str):
+        user_content = [{"type": "text", "text": user_content}]
+    elif isinstance(user_content, list):
+        user_content = list(user_content)
+    else:
+        user_content = [{"type": "text", "text": str(user_content)}]
+
+    user_content.extend(image_parts)
+    return user_content
 
 
 async def _execute_tool_call(tool, args_json, context=None, tool_call_id=None):
@@ -373,20 +427,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             cache_control_type,
         )
         
-        # Append images if any are passed in context
+        # Append images if any are passed in context (embedded as base64 data URIs)
         if context and context.get("files"):
-            image_urls = []
-            for f in context.get("files"):
-                if f.get("is_image") and f.get("file_url"):
-                    url = f["file_url"]
-                    if url.startswith("/"):
-                        url = frappe.utils.get_url(url)
-                    image_urls.append({"type": "image_url", "image_url": {"url": url}})
-            
-            if image_urls:
-                if isinstance(user_content, str):
-                    user_content = [{"type": "text", "text": user_content}]
-                user_content.extend(image_urls)
+            user_content = _append_context_images_to_user_content(user_content, context.get("files"))
         
         messages.append({"role": "user", "content": user_content})
 
@@ -844,20 +887,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             cache_control_type,
         )
         
-        # Append images if any are passed in context
+        # Append images if any are passed in context (embedded as base64 data URIs)
         if context and context.get("files"):
-            image_urls = []
-            for f in context.get("files"):
-                if f.get("is_image") and f.get("file_url"):
-                    url = f["file_url"]
-                    if url.startswith("/"):
-                        url = frappe.utils.get_url(url)
-                    image_urls.append({"type": "image_url", "image_url": {"url": url}})
-            
-            if image_urls:
-                if isinstance(user_content, str):
-                    user_content = [{"type": "text", "text": user_content}]
-                user_content.extend(image_urls)
+            user_content = _append_context_images_to_user_content(user_content, context.get("files"))
         
         messages.append({"role": "user", "content": user_content})
 
