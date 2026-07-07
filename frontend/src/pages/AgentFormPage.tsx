@@ -6,7 +6,7 @@ import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest, deleteAgent, duplicateAgent } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
@@ -21,6 +21,7 @@ import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { db } from '../lib/frappe-sdk';
 import { AgentHeader } from '../components/agent/AgentHeader';
 import { GeneralTab } from '../components/agent/GeneralTab';
+import { DeleteAgentDialog } from '../components/agent/DeleteAgentDialog';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
@@ -246,7 +247,6 @@ export function AgentFormPage() {
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
   const [triggerFilter, setTriggerFilter] = useState<string>('all');
   const [triggerStatusFilter, setTriggerStatusFilter] = useState<string>('all');
-  const [optimizingPrompt, setOptimizingPrompt] = useState(false);
   const [showToolsModal, setShowToolsModal] = useState(false);
   const [showToolFormModal, setShowToolFormModal] = useState(false);
   const [editingToolId, setEditingToolId] = useState<string | null>(null);
@@ -1199,19 +1199,6 @@ setAllowChat(values.allow_chat);
     [form, activeTab, tabFieldMapping, tabLabels, onSubmit]
   );
 
-  const handleOptimizePrompt = () => {
-    setOptimizingPrompt((value) => value);
-    toast.info('Coming Soon!');
-    // setOptimizingPrompt(true);
-    // setTimeout(() => {
-    //   const currentInstructions = form.getValues('instructions');
-    //   const optimized = `${currentInstructions}\n\n[Optimized by AI]\n- Enhanced clarity and structure\n- Added specific examples\n- Improved constraint definition`;
-    //   form.setValue('instructions', optimized);
-    //   setOptimizingPrompt(false);
-    //   toast.success('Prompt optimized successfully!');
-    // }, 2000);
-  };
-
   const [runningTest, setRunningTest] = useState(false);
 
   const handleRunTest = async () => {
@@ -1253,13 +1240,43 @@ setAllowChat(values.allow_chat);
     }
   };
 
-  const handleDuplicate = () => {
-    toast.info('Coming Soon!');
+  const [duplicating, setDuplicating] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDuplicate = async () => {
+    if (!id || isNew) return;
+    setDuplicating(true);
+    try {
+      const copy = await duplicateAgent(id);
+      toast.success('Agent duplicated');
+      navigate(`/agents/${copy.name}`);
+    } catch (error) {
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to duplicate agent');
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const handleDelete = () => {
-    toast.info('Deleting agent...');
-    navigate('/agents');
+    setShowDeleteDialog(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!id || isNew) return;
+    setDeleting(true);
+    try {
+      await deleteAgent(id);
+      toast.success('Agent deleted');
+      navigate('/agents');
+    } catch (error) {
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to delete agent');
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
+    }
   };
 
   const handleViewLogs = () => {
@@ -1573,12 +1590,21 @@ setAllowChat(values.allow_chat);
           onSave={handleFormSubmit}
           onRunTest={handleRunTest}
           onDuplicate={handleDuplicate}
+          duplicating={duplicating}
           onViewLogs={handleViewLogs}
           onDelete={handleDelete}
           agentId={!isNew && id ? id : undefined}
           allowChat={allowChat}
           lastRun={agentStats.last_run}
           totalRun={agentStats.total_run}
+        />
+
+        <DeleteAgentDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          agentName={form.watch('agent_name') || id || ''}
+          onConfirm={handleConfirmDelete}
+          loading={deleting}
         />
 
         <Form {...form}>
@@ -1603,8 +1629,6 @@ setAllowChat(values.allow_chat);
                   providers={providers}
                   models={models}
                   watchProvider={watchProvider}
-                  optimizingPrompt={optimizingPrompt}
-                  onOptimizePrompt={handleOptimizePrompt}
                   promptOptions={promptOptions}
                   loadingPrompts={loadingPrompts}
                   showAddNewPrompt

@@ -19,8 +19,6 @@ interface GeneralTabProps {
   providers: AIProvider[];
   models: AIModel[];
   watchProvider: string;
-  optimizingPrompt: boolean;
-  onOptimizePrompt: () => void;
   promptOptions: AgentPromptOption[];
   loadingPrompts: boolean;
   showAddNewPrompt?: boolean;
@@ -31,8 +29,6 @@ export function GeneralTab({
   providers,
   models,
   watchProvider,
-  optimizingPrompt,
-  onOptimizePrompt,
   promptOptions,
   loadingPrompts,
   showAddNewPrompt = true,
@@ -234,9 +230,7 @@ export function GeneralTab({
                   <InstructionsTextarea
                     form={form}
                     field={field}
-                    optimizingPrompt={optimizingPrompt}
-                    onOptimizePrompt={onOptimizePrompt}
-                    showOptimize={true}
+                    showOptimize={false}
                     showExpand={true}
                   />
                   <FormMessage />
