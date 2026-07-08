@@ -194,7 +194,11 @@ def refresh_oauth_token(server_name: str) -> str:
             "refresh_token": refresh_token,
             "client_id": server.oauth_client_id,
         }
-        client_secret = server.get_password("oauth_client_secret")
+        client_secret = None
+        try:
+            client_secret = server.get_password("oauth_client_secret")
+        except Exception:
+            pass
         if client_secret:
             payload["client_secret"] = client_secret
 
@@ -272,7 +276,11 @@ def _exchange_code_for_tokens(server, code: str, code_verifier: str, redirect_ur
         "client_id": server.oauth_client_id,
         "code_verifier": code_verifier,
     }
-    client_secret = server.get_password("oauth_client_secret")
+    client_secret = None
+    try:
+        client_secret = server.get_password("oauth_client_secret")
+    except Exception:
+        pass
     if client_secret:
         payload["client_secret"] = client_secret
 
