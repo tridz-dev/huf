@@ -201,6 +201,7 @@ def refresh_oauth_token(server_name: str) -> str:
         response = requests.post(
             server.oauth_token_endpoint,
             data=payload,
+            headers={"Accept": "application/json"},
             timeout=15,
         )
         response.raise_for_status()
@@ -253,6 +254,12 @@ def _derive_code_challenge(verifier: str) -> str:
 def _get_redirect_uri() -> str:
     """Build the absolute OAuth callback URL for this site."""
     site_url = frappe.utils.get_url()
+    
+    # Strip internal frappe ports (like :8703) to match public callback URLs
+    parsed = urllib.parse.urlparse(site_url)
+    if parsed.port:
+        site_url = f"{parsed.scheme}://{parsed.hostname}"
+        
     return f"{site_url}/mcp-oauth-callback"
 
 
@@ -272,6 +279,7 @@ def _exchange_code_for_tokens(server, code: str, code_verifier: str, redirect_ur
     response = requests.post(
         server.oauth_token_endpoint,
         data=payload,
+        headers={"Accept": "application/json"},
         timeout=15,
     )
     response.raise_for_status()
