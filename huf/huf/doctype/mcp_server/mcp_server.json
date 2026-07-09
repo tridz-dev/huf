@@ -24,11 +24,13 @@
   "oauth_disconnect_button",
   "column_break_oauth",
   "oauth_scope",
+  "oauth_extra_authorize_params",
   "oauth_endpoints_section",
   "oauth_authorization_endpoint",
   "oauth_token_endpoint",
   "oauth_client_id",
   "oauth_client_secret",
+  "oauth_token_response_path",
   "oauth_tokens_section",
   "oauth_access_token",
   "oauth_refresh_token",
@@ -172,6 +174,13 @@
    "depends_on": "eval:doc.auth_type === 'oauth'"
   },
   {
+   "fieldname": "oauth_extra_authorize_params",
+   "fieldtype": "Small Text",
+   "label": "Extra Authorize Params (JSON)",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "description": "Additional URL parameters for the authorization endpoint (e.g. {\"user_scope\": \"...\", \"access_type\": \"offline\"})"
+  },
+  {
    "fieldname": "oauth_endpoints_section",
    "fieldtype": "Section Break",
    "label": "OAuth Endpoints",
@@ -205,6 +214,13 @@
    "label": "Client Secret",
    "depends_on": "eval:doc.auth_type === 'oauth'",
    "description": "Stored encrypted. Leave blank if using PKCE-only public client."
+  },
+  {
+   "fieldname": "oauth_token_response_path",
+   "fieldtype": "Data",
+   "label": "Token Response Path",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "description": "JSON path to access token if nested (e.g. authed_user.access_token). Defaults to access_token."
   },
   {
    "fieldname": "oauth_tokens_section",
