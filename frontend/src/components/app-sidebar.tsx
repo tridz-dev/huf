@@ -20,6 +20,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 /**
@@ -152,6 +153,7 @@ const settingsNavItems = [
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { hasCapability, isLoading } = usePermissions()
+  const { state: sidebarState, isMobile, setOpen } = useSidebar()
 
 	const filterItemsByCapability = <T extends { capability: string | null }>(items: T[]) => {
 		if (isLoading) {
@@ -172,6 +174,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     ? []
     : settingsNavItems.filter((item) => item.capability === null || hasCapability(item.capability))
   const isSettingsActive = settingsItems.some((item) => location.pathname.startsWith(item.url))
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(isSettingsActive)
+
+  React.useEffect(() => {
+    if (isSettingsActive) {
+      setIsSettingsOpen(true)
+    }
+  }, [isSettingsActive])
+
+  const handleSettingsClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    // In icon-collapsed desktop mode, open sidebar first so the submenu
+    // becomes visible immediately instead of appearing unresponsive.
+    if (!isMobile && sidebarState === "collapsed") {
+      event.preventDefault()
+      setOpen(true)
+      setIsSettingsOpen(true)
+    }
+  }
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -186,10 +205,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {settingsItems.length > 0 && (
           <SidebarGroup>
             <SidebarMenu>
-              <Collapsible defaultOpen={isSettingsActive} className="group/settings">
+              <Collapsible
+                open={isSettingsOpen}
+                onOpenChange={setIsSettingsOpen}
+                className="group/settings"
+              >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="Settings" isActive={isSettingsActive}>
+                    <SidebarMenuButton
+                      tooltip="Settings"
+                      isActive={isSettingsActive}
+                      onClick={handleSettingsClick}
+                    >
                       <Settings />
                       <span>Settings</span>
                       <ChevronRight className="ml-auto transition-transform group-data-[state=open]/settings:rotate-90" />
