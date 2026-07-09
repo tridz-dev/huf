@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -63,29 +63,13 @@ import {
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
 
-function App() {
-  useEffect(() => {
-    console.log("Checking streaming availability");
-    checkStreamingAvailable().then((ok) => {
-      console.log("Streaming available:", ok);
-      setStreamingAvailable(ok);
-      if (!ok) {
-        toast.error("Streaming not working", {
-          description: 'Some features may be disabled or not work as expected. Please refresh the page to retry.',
-          duration: 5000,
-        });
-      }
-    });
-  }, []);
-
-
+function AppShell() {
   return (
-    <BrowserRouter basename="/huf">
-      <SocketProvider>
+    <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
-        <Suspense fallback={<AuthenticatingPage />}>
-          <Routes>
+          <Suspense fallback={<AuthenticatingPage />}>
+            <Routes>
           <Route
             path="/"
             element={
@@ -458,14 +442,36 @@ function App() {
               </ProtectedRoute>
             }
           />
-          </Routes>
-        </Suspense>
-        <Toaster />
+            </Routes>
+          </Suspense>
+          <Toaster />
         </PermissionsProvider>
       </UserProvider>
-      </SocketProvider>
-    </BrowserRouter>
+    </SocketProvider>
   );
+}
+
+const router = createBrowserRouter(
+  [{ path: '*', element: <AppShell /> }],
+  { basename: '/huf' },
+);
+
+function App() {
+  useEffect(() => {
+    console.log("Checking streaming availability");
+    checkStreamingAvailable().then((ok) => {
+      console.log("Streaming available:", ok);
+      setStreamingAvailable(ok);
+      if (!ok) {
+        toast.error("Streaming not working", {
+          description: 'Some features may be disabled or not work as expected. Please refresh the page to retry.',
+          duration: 5000,
+        });
+      }
+    });
+  }, []);
+
+  return <RouterProvider router={router} />;
 }
 
 export default App;
