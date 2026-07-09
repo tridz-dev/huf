@@ -234,6 +234,29 @@ async def execute_mcp_tool(
 
 from typing import Callable, Any
 
+def _has_status_code(exc, code: str) -> bool:
+    if code in str(exc):
+        return True
+    if hasattr(exc, "exceptions"):
+        for sub_exc in exc.exceptions:
+            if _has_status_code(sub_exc, code):
+                return True
+    return False
+
+def _format_mcp_error(exc) -> str:
+    import httpx
+    if hasattr(exc, "exceptions"):
+        return " | ".join(_format_mcp_error(e) for e in exc.exceptions)
+    if isinstance(exc, httpx.HTTPStatusError):
+        msg = str(exc)
+        try:
+            if hasattr(exc.response, "text") and exc.response.text:
+                msg += f" (Response: {exc.response.text})"
+        except Exception:
+            pass # Ignore if streaming response not read
+        return msg
+    return str(exc)
+
 async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
     """
     Executes an async operation with an initialized MCP ClientSession.
@@ -245,8 +268,7 @@ async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
         return await _do_execute_mcp_session(mcp_server, headers, operation)
     except Exception as e:
         # If it's a 401 and we use OAuth, retry once
-        err_str = str(e).lower()
-        if mcp_server.auth_type == "oauth" and "401" in err_str:
+        if mcp_server.auth_type == "oauth" and _has_status_code(e, "401"):
             from huf.ai.mcp_oauth import refresh_oauth_token
             try:
                 refresh_oauth_token(mcp_server.name)
@@ -256,7 +278,7 @@ async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
             except Exception as refresh_exc:
                 frappe.log_error(f"OAuth retry failed: {refresh_exc}", "MCP OAuth Retry")
                 raise Exception("OAuth token invalid or expired. Reconnect via the MCP Server form.")
-        raise
+        raise Exception(_format_mcp_error(e))
 
 async def _do_execute_mcp_session(mcp_server, headers, operation):
     import httpx
