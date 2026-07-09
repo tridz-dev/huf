@@ -27,13 +27,16 @@ import {
  * If present the item is hidden from users who don't have that capability.
  * Items with capability === null are always visible (e.g. Dashboard).
  */
-const allNavItems = [
+const dashboardNavItems = [
   {
     title: "Dashboard",
     url: "/",
     icon: Home,
     capability: null,
   },
+]
+
+const buildNavItems = [
   {
     title: "Agents",
     url: "/agents",
@@ -41,34 +44,10 @@ const allNavItems = [
     capability: "agent.use",
   },
   {
-    title: "Chat",
-    url: "/chat",
-    icon: MessageSquare,
-    capability: "chat.use",
-  },
-  {
     title: "Agent Prompts",
     url: "/prompts",
     icon: ScrollText,
     capability: "agent.use",
-  },
-  {
-    title: "Agent Summary Prompts",
-    url: "/summary-prompts",
-    icon: ScrollText,
-    capability: "agent.use",
-  },
-  {
-    title: "Executions",
-    url: "/executions",
-    icon: Zap,
-    capability: "agent.use",
-  },
-  {
-    title: "Artifacts",
-    url: "/artifacts",
-    icon: Boxes,
-    capability: "agent.view_all",
   },
   {
     title: "Flows",
@@ -88,6 +67,30 @@ const allNavItems = [
     icon: BookOpen,
     capability: "agent.use",
   },
+]
+
+const operateNavItems = [
+	{
+		title: "Chat",
+		url: "/chat",
+		icon: MessageSquare,
+		capability: "chat.use",
+	},
+	{
+		title: "Executions",
+		url: "/executions",
+		icon: Zap,
+		capability: "agent.use",
+	},
+	{
+		title: "Artifacts",
+		url: "/artifacts",
+		icon: Boxes,
+		capability: "agent.view_all",
+	},
+]
+
+const peopleNavItems = [
   {
     title: "Users",
     url: "/users",
@@ -113,6 +116,12 @@ const settingsNavItems = [
     url: "/models",
     icon: Cpu,
     capability: "system.providers.manage",
+	},
+	{
+		title: "Agent Summary Prompts",
+		url: "/summary-prompts",
+		icon: ScrollText,
+		capability: "agent.use",
   },
   {
     title: "Console",
@@ -144,13 +153,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { hasCapability, isLoading } = usePermissions()
 
-  // While permissions are loading show only uncapability-gated items so the
-  // sidebar doesn't flash/jump once capabilities resolve.
-  const navItems = isLoading
-    ? allNavItems.filter((item) => item.capability === null)
-    : allNavItems.filter(
-        (item) => item.capability === null || (item.capability && hasCapability(item.capability)),
-      )
+	const filterItemsByCapability = <T extends { capability: string | null }>(items: T[]) => {
+		if (isLoading) {
+			return items.filter((item) => item.capability === null)
+		}
+		return items.filter(
+			(item) => item.capability === null || (item.capability && hasCapability(item.capability)),
+		)
+	}
+
+	// While permissions are loading show only uncapability-gated items so the
+	// sidebar doesn't flash/jump once capabilities resolve.
+	const dashboardItems = filterItemsByCapability(dashboardNavItems)
+	const buildItems = filterItemsByCapability(buildNavItems)
+	const operateItems = filterItemsByCapability(operateNavItems)
+	const peopleItems = filterItemsByCapability(peopleNavItems)
   const settingsItems = isLoading
     ? []
     : settingsNavItems.filter((item) => item.capability === null || hasCapability(item.capability))
@@ -162,7 +179,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <AppSidebarHeader />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navItems} />
+			{dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
+			{buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
+			{operateItems.length > 0 && <NavMain items={operateItems} label="Operate" />}
+			{peopleItems.length > 0 && <NavMain items={peopleItems} label="People" />}
         {settingsItems.length > 0 && (
           <SidebarGroup>
             <SidebarMenu>
