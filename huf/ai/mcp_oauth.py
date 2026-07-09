@@ -71,6 +71,14 @@ def start_oauth_flow(server_name: str) -> dict:
         }
         if server.oauth_scope:
             params["scope"] = server.oauth_scope
+            
+        if getattr(server, "oauth_extra_authorize_params", None):
+            try:
+                extra_params = json.loads(server.oauth_extra_authorize_params)
+                if isinstance(extra_params, dict):
+                    params.update(extra_params)
+            except Exception as e:
+                frappe.log_error(f"Invalid JSON in oauth_extra_authorize_params for {server_name}: {e}", "MCP OAuth")
 
         auth_url = server.oauth_authorization_endpoint + "?" + urllib.parse.urlencode(params)
         return {"auth_url": auth_url}
@@ -182,7 +190,10 @@ def refresh_oauth_token(server_name: str) -> str:
     Returns the new access token string.
     """
     server = frappe.get_doc("MCP Server", server_name)
-    refresh_token = server.get_password("oauth_refresh_token")
+    try:
+        refresh_token = server.get_password("oauth_refresh_token")
+    except Exception:
+        refresh_token = None
 
     if not refresh_token:
         _set_expired_status(server)
@@ -305,8 +316,23 @@ def _save_tokens(server, token_data: dict):
     """Persist access_token, refresh_token, expiry and status to the server doc."""
     expires_in = token_data.get("expires_in")
     expires_at = add_to_date(now_datetime(), seconds=int(expires_in)) if expires_in else None
+    
+    # Support custom token paths (e.g. authed_user.access_token) if configured
+    token_path = getattr(server, "oauth_token_response_path", None) or "access_token"
+    
+    access_token = token_data
+    for key in token_path.split("."):
+        if isinstance(access_token, dict) and key in access_token:
+            access_token = access_token.get(key)
+        else:
+            access_token = None
+            break
+            
+    # Fallback to standard root access_token if path extraction failed
+    if not access_token:
+        access_token = token_data.get("access_token")
 
-    server.oauth_access_token = token_data["access_token"]
+    server.oauth_access_token = access_token
     if token_data.get("refresh_token"):
         server.oauth_refresh_token = token_data["refresh_token"]
     server.oauth_token_expires_at = expires_at
