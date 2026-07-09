@@ -5,7 +5,6 @@ import { NavLink, useLocation } from "react-router-dom"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { AppSidebarHeader } from "@/components/app-sidebar-header"
-import { ChatSidebarContent } from "@/components/chat/ChatSidebarContent"
 import { usePermissions } from "@/contexts/PermissionsContext"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
@@ -21,7 +20,6 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar"
 
 /**
@@ -144,12 +142,7 @@ const settingsNavItems = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
-  const { isMobile } = useSidebar()
   const { hasCapability, isLoading } = usePermissions()
-  const isChatPage = location.pathname.startsWith('/chat')
-
-  // Show chat list in sidebar on mobile when on chat page
-  const showChatList = isMobile && isChatPage
 
   // While permissions are loading show only uncapability-gated items so the
   // sidebar doesn't flash/jump once capabilities resolve.
@@ -204,7 +197,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </SidebarGroup>
         )}
-        {showChatList && <ChatSidebarContent />}
       </SidebarContent>
       <SidebarFooter>
         <NavUser />

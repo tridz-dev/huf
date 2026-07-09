@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useBlocker, type Location } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Save, Loader2, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { createDataTable, updateDataTable, getTableSchema } from '@/services/dat
 import type { DataTableFieldDef, DataTableFieldType, DataTableSchema } from '@/types/dataTable.types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
 
 interface BuilderState {
 	tableName: string;
@@ -160,6 +161,19 @@ export function DataTableBuilderPage() {
 		window.addEventListener('beforeunload', handler);
 		return () => window.removeEventListener('beforeunload', handler);
 	}, [state.isDirty]);
+
+	const shouldBlock = useCallback(
+		({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+			if (!state.isDirty) return false;
+			return (
+				currentLocation.pathname !== nextLocation.pathname ||
+				currentLocation.search !== nextLocation.search
+			);
+		},
+		[state.isDirty]
+	);
+
+	const blocker = useBlocker(shouldBlock);
 
 	const handleAddField = useCallback(
 		(type: DataTableFieldType) => {
@@ -378,6 +392,8 @@ export function DataTableBuilderPage() {
 					{isEdit ? 'Save Changes' : 'Create Table'}
 				</Button>
 			</div>
+
+			<UnsavedChangesDialog blocker={blocker} />
 		</div>
 	);
 }
