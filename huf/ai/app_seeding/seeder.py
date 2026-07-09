@@ -1,7 +1,7 @@
 import json
 import frappe
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
 from .scanner import find_seed_dirs, get_seed_files
@@ -19,6 +19,7 @@ class SeedResult:
     seeded: int
     skipped: int
     errors: List[str]
+    skipped_records: List[dict] = field(default_factory=list)
 
 # Load order matters for dependency resolution
 LOAD_ORDER = [
@@ -51,7 +52,23 @@ def seed_app(app_name: str, huf_dir: Path) -> SeedResult:
                         result.skipped += 1
                         # Use a fallback name if the key isn't standard across all types
                         item_name = item.get('name') or item.get('title') or item.get('agent_name') or item.get('tool_name') or item.get('source_name') or file_path.name
-                        result.errors.append(f"Failed to seed {item_name}: {error}")
+
+                        if isinstance(error, dict) and error.get("reason") == "missing_refs":
+                            missing_refs = error.get("missing_refs", [])
+                            error_str = "Missing reference(s): " + ", ".join(missing_refs)
+                        else:
+                            missing_refs = []
+                            error_str = str(error)
+
+                        result.errors.append(f"Failed to seed {item_name}: {error_str}")
+
+                        result.skipped_records.append({
+                            "app": app_name,
+                            "file": source_file,
+                            "record": item_name,
+                            "error": error_str,
+                            "missing_refs": missing_refs,
+                        })
             except Exception as e:
                 result.skipped += 1
                 result.errors.append(f"Error parsing {file_path.name}: {e}")

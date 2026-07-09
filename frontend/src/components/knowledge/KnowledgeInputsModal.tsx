@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DialogScrollBody,
+  DialogScrollContent,
+  DialogScrollHeader,
+} from '@/components/ui/dialog-scroll';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -221,15 +224,15 @@ export function KnowledgeInputsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-        <DialogHeader className="flex-shrink-0">
+      <DialogScrollContent className="max-w-2xl">
+        <DialogScrollHeader>
           <DialogTitle>Knowledge Inputs</DialogTitle>
           <DialogDescription>
             Manage content inputs for this knowledge source
           </DialogDescription>
-        </DialogHeader>
+        </DialogScrollHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-4 py-2">
+        <DialogScrollBody className="space-y-4 py-2">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {inputs.length} {inputs.length === 1 ? 'input' : 'inputs'}
@@ -398,8 +401,8 @@ export function KnowledgeInputsModal({
               })}
             </div>
           )}
-        </div>
-      </DialogContent>
+        </DialogScrollBody>
+      </DialogScrollContent>
     </Dialog>
   );
 }

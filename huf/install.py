@@ -5,6 +5,8 @@
 Installation hooks for Huf app
 """
 
+import json
+
 import frappe
 from huf.utils import is_frappe_16
 
@@ -134,11 +136,27 @@ def after_migrate():
 	try:
 		from huf.ai.app_seeding.seeder import seed_all
 		results = list(seed_all())
-		for r in results:
-			if r.errors:
-				frappe.log_error(f"Seeding errors for {r.app}: {r.errors}", "App Seeding")
+		logger = frappe.logger("app_seeding")
+		_log_seed_results(results, logger)
 	except Exception as e:
 		frappe.log_error(f"App seeding failed: {e}", "App Seeding")
+
+
+def _log_seed_results(results, logger):
+	"""Emit WARNING-level structured logs for skipped seed records and per-app summaries."""
+	for r in results:
+		for rec in r.skipped_records:
+			logger.warning(json.dumps({
+				"app": rec["app"],
+				"file": rec["file"],
+				"record": rec["record"],
+				"missing_refs": rec.get("missing_refs", [])
+			}))
+		logger.warning(json.dumps({
+			"app": r.app,
+			"skipped_count": r.skipped,
+			"seeded_count": r.seeded
+		}))
 
 def create_demo_ai_providers():
     providers = [
