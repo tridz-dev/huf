@@ -104,6 +104,8 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     max_knowledge_tokens:
       agent.max_knowledge_tokens !== undefined && agent.max_knowledge_tokens !== null ? agent.max_knowledge_tokens : undefined,
     max_turns: agent.max_turns !== undefined && agent.max_turns !== null ? agent.max_turns : undefined,
+    max_context_chars:
+      agent.max_context_chars !== undefined && agent.max_context_chars !== null ? agent.max_context_chars : undefined,
     enable_conversation_data: agent.enable_conversation_data === 1,
     inject_conversation_data: agent.inject_conversation_data === 1,
     conversation_data_api_permission: agent.conversation_data_api_permission || '',
@@ -179,6 +181,7 @@ export function AgentFormPage() {
         'history_limit',
         'max_knowledge_tokens',
         'max_turns',
+        'max_context_chars',
         'enable_conversation_data',
         'inject_conversation_data',
         'conversation_data_api_permission',
@@ -312,6 +315,7 @@ export function AgentFormPage() {
         history_limit: undefined,
         max_knowledge_tokens: undefined,
         max_turns: undefined,
+        max_context_chars: undefined,
         enable_conversation_data: false,
         inject_conversation_data: true,
         conversation_data_api_permission: '',
@@ -862,6 +866,8 @@ export function AgentFormPage() {
             history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
             max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
             max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
+            max_context_chars:
+              data.max_context_chars !== undefined && data.max_context_chars !== null ? data.max_context_chars : undefined,
             enable_conversation_data: data.enable_conversation_data === 1,
             inject_conversation_data: data.inject_conversation_data === 1,
             conversation_data_api_permission: data.conversation_data_api_permission || '',
@@ -1031,6 +1037,7 @@ export function AgentFormPage() {
         history_limit: values.history_limit !== undefined ? values.history_limit : undefined,
         max_knowledge_tokens: values.max_knowledge_tokens !== undefined ? values.max_knowledge_tokens : undefined,
         max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
+        max_context_chars: values.max_context_chars !== undefined ? values.max_context_chars : undefined,
         enable_conversation_data: values.enable_conversation_data ? 1 : 0,
         inject_conversation_data: values.inject_conversation_data ? 1 : 0,
         conversation_data_api_permission: values.conversation_data_api_permission || undefined,
@@ -1103,6 +1110,8 @@ export function AgentFormPage() {
           history_limit: newAgent.history_limit !== undefined && newAgent.history_limit !== null ? newAgent.history_limit : undefined,
           max_knowledge_tokens: newAgent.max_knowledge_tokens !== undefined && newAgent.max_knowledge_tokens !== null ? newAgent.max_knowledge_tokens : undefined,
           max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
+          max_context_chars:
+            newAgent.max_context_chars !== undefined && newAgent.max_context_chars !== null ? newAgent.max_context_chars : undefined,
           enable_conversation_data: newAgent.enable_conversation_data === 1,
           inject_conversation_data: newAgent.inject_conversation_data === 1,
           conversation_data_api_permission: newAgent.conversation_data_api_permission || '',
@@ -1166,6 +1175,7 @@ form.reset({
   history_limit: values.history_limit,
   max_knowledge_tokens: values.max_knowledge_tokens,
   max_turns: values.max_turns,
+  max_context_chars: values.max_context_chars,
   enable_conversation_data: values.enable_conversation_data,
   inject_conversation_data: values.inject_conversation_data,
   conversation_data_api_permission: values.conversation_data_api_permission,

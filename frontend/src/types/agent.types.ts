@@ -259,6 +259,7 @@ export interface AgentDoc {
   history_limit?: number | null; // Maximum number of messages to keep
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
   max_turns?: number | null; // Maximum consecutive turns/steps
+  max_context_chars?: number | null; // Maximum characters for tool results before truncation
   enable_conversation_data?: number; // 0 or 1
   inject_conversation_data?: number; // 0 or 1
   conversation_data_api_permission?: '' | 'Read' | 'Write';
