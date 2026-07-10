@@ -29,7 +29,7 @@ export function DetailsTab({ form, isNew }: DetailsTabProps) {
                 <FormControl>
                   <Input placeholder="my-mcp-server" {...field} />
                 </FormControl>
-                <FormDescription>Unique name for this MCP server</FormDescription>
+                <FormDescription>Unique identifier for this MCP server (e.g., &apos;gmail&apos;, &apos;github&apos;, &apos;frappe-erp&apos;)</FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -106,7 +106,7 @@ export function DetailsTab({ form, isNew }: DetailsTabProps) {
                   onBlur={field.onBlur}
                 />
               </FormControl>
-              <FormDescription>Request timeout for MCP server calls (must be a positive integer)</FormDescription>
+              <FormDescription>Request timeout for MCP server calls</FormDescription>
               <FormMessage />
             </FormItem>
           )}

@@ -77,7 +77,7 @@ export function TelegramTab({
               </LinkFieldControl>
             </FormControl>
             <FormDescription>
-              The HUF agent that responds to messages received by this Telegram bot.
+              HUF Agent that will respond to messages received by this Telegram bot
             </FormDescription>
           </FormItem>
         )}
@@ -91,7 +91,7 @@ export function TelegramTab({
             <div className="space-y-0.5">
               <FormLabel>Auto setup webhook on save</FormLabel>
               <FormDescription>
-                Automatically register the webhook with Telegram when this integration is saved.
+                Automatically call setWebhook when this document is saved
               </FormDescription>
             </div>
             <FormControl>

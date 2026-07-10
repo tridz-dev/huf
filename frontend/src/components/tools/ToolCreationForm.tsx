@@ -12,6 +12,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -662,6 +663,9 @@ export function ToolCreationForm({
                     disabled={loading}
                   />
                 </FormControl>
+                <FormDescription>
+                  Optional base URL that will be prefixed to the URL provided by the agent
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
@@ -841,6 +845,7 @@ export function ToolCreationForm({
                   <SelectItem value="cancel">Cancel</SelectItem>
                 </SelectContent>
               </Select>
+              <FormDescription>Permission level required to use this tool</FormDescription>
               <FormMessage />
             </FormItem>
           )}

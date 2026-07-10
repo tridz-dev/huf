@@ -103,7 +103,7 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
               </SelectContent>
             </Select>
             <FormDescription>
-              Optional field on the reference DocType whose value becomes the user prompt.
+              Enter the fieldname from the Reference DocType that contains the user&apos;s instructions.
             </FormDescription>
             <FormMessage />
           </FormItem>
@@ -115,7 +115,7 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
           <div>
             <FormLabel>File Attachments</FormLabel>
             <FormDescription>
-              Fetch files from DocFields or child table fields for OCR processing at trigger time.
+              Fetch files from specific DocFields or Child Tables
             </FormDescription>
           </div>
           <Button

@@ -173,7 +173,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                       value={field.value ?? ''}
                     />
                   </FormControl>
-                  <FormDescription>LiteLLM model id (e.g. text-embedding-3-small)</FormDescription>
+                  <FormDescription>LiteLLM model identifier, e.g. openai/text-embedding-3-small</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -194,7 +194,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                       onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                     />
                   </FormControl>
-                  <FormDescription>Must match the embedding model dimension</FormDescription>
+                  <FormDescription>Must match the embedding model output dimensionality</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -217,7 +217,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                       linkTo={linkRoutes.aiProvider}
                     />
                   </FormControl>
-                  <FormDescription>AI Provider used for API key resolution (optional)</FormDescription>
+                  <FormDescription>AI Provider for API key resolution</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

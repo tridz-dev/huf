@@ -49,7 +49,7 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Allow Guest API Access</FormLabel>
                   <FormDescription>
-                    When enabled, Guest users can run this agent through whitelisted API endpoints.
+                    If checked, this agent can be run by Guest users (via API).
                   </FormDescription>
                 </div>
                 <FormControl>

@@ -64,7 +64,7 @@ export function ToolsTab({
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Enable Auto Sync</FormLabel>
                   <FormDescription>
-                    Automatically sync tools from the MCP server on a schedule
+                    Automatically sync tools periodically
                   </FormDescription>
                 </div>
                 <FormControl>

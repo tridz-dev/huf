@@ -460,14 +460,20 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription).
+                </p>
               </div>
 
               <div className="border-t pt-4 space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Enable custom prices to override LiteLLM&apos;s automatic pricing lookup. When disabled, LiteLLM&apos;s built-in price table is used as fallback. Values are in USD per 1 million tokens.
+                </p>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="use_custom_pricing">Enable Custom Pricing</Label>
                     <p className="text-xs text-muted-foreground">
-                      Override LiteLLM automatic pricing (USD per 1M tokens)
+                      Check this to activate the custom prices below. When unchecked, LiteLLM&apos;s automatic pricing is used regardless of what is entered below.
                     </p>
                   </div>
                   <Switch
@@ -483,6 +489,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <Label htmlFor="input_cost">Input Cost per 1M Tokens (USD)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Cost in USD per 1 million prompt/input tokens. E.g. enter 2.50 for $2.50 per 1M tokens. Enter 0 for free/self-hosted models.
+                      </p>
                       <Input
                         id="input_cost"
                         type="number"
@@ -497,6 +506,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="output_cost">Output Cost per 1M Tokens (USD)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Cost in USD per 1 million completion/output tokens. E.g. enter 10.00 for $10.00 per 1M tokens.
+                      </p>
                       <Input
                         id="output_cost"
                         type="number"
@@ -511,6 +523,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="cached_input_cost">Cached Input Cost per 1M Tokens (USD)</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Optional. Cost for prompt cache reads (cache hits) in USD per 1M tokens. E.g. Anthropic charges $0.30/1M for cache reads vs $3.00/1M for regular input. Leave as 0 if not applicable.
+                      </p>
                       <Input
                         id="cached_input_cost"
                         type="number"

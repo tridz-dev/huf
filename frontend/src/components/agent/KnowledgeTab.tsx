@@ -26,7 +26,7 @@ export function KnowledgeTab({
               <BookOpen className="w-5 h-5" />
               Knowledge Sources
             </CardTitle>
-            <CardDescription>Knowledge sources available to this agent for RAG-based retrieval</CardDescription>
+            <CardDescription>Knowledge sources this agent can access</CardDescription>
           </div>
           <Button size="sm" variant="outline" onClick={onAdd} type="button">
             <Plus className="w-4 h-4 mr-2" />

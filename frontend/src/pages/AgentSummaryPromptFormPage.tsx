@@ -482,6 +482,9 @@ export function AgentSummaryPromptFormPage() {
                     placeholder="Auto-generated from title"
                     disabled={!isNew}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    URL-friendly identifier for this summary prompt template. Auto-generated from title if left blank.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Visibility</Label>
@@ -502,6 +505,9 @@ export function AgentSummaryPromptFormPage() {
                       <SelectItem value="Public">Public</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Controls who can see and use this summary prompt template.
+                  </p>
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="description">Description</Label>
@@ -521,10 +527,16 @@ export function AgentSummaryPromptFormPage() {
                     onChange={(event) => form.setValue('tags', event.target.value, { shouldDirty: true })}
                     placeholder="Comma-separated tags"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Comma-separated tags for search and filtering.
+                  </p>
                 </div>
                 <div className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
                     <Label className="text-base">Active</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Whether this summary prompt template is active and available for use.
+                    </p>
                   </div>
                   <Switch
                     checked={form.watch('is_active')}
@@ -539,6 +551,9 @@ export function AgentSummaryPromptFormPage() {
                 <CardTitle>Prompt Body</CardTitle>
               </CardHeader>
               <CardContent>
+                <p className="text-xs text-muted-foreground mb-3">
+                  The summary prompt template content. This is the prompt text used to summarize conversation history.
+                </p>
                 <InstructionsTextarea
                   value={form.watch('prompt_body')}
                   onChange={(value) => form.setValue('prompt_body', value, { shouldDirty: true })}

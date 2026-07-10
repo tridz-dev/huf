@@ -74,7 +74,7 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
 			<Card>
 				<CardHeader>
 					<CardTitle>Conversation Settings</CardTitle>
-					<CardDescription>Configure conversation behavior</CardDescription>
+					<CardDescription>Configure conversation behaviour</CardDescription>
 				</CardHeader>
 				<CardContent className="grid gap-4 sm:grid-cols-2">
 					<FormField
@@ -144,8 +144,7 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Persist per User (Doc/Schedule)</FormLabel>
 									<FormDescription>
-										When checked, Doc Event and Scheduled runs create conversation history per
-										initiating user.
+										When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.
 									</FormDescription>
 								</div>
 								<FormControl className="ml-1">
@@ -163,7 +162,7 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Enable Multi Run</FormLabel>
 									<FormDescription>
-										When enabled, this agent can execute multiple runs.
+										Enables multi-step planning and execution. If enabled, the agent will analyze the request to create a step-by-step plan (or use a Default Plan) and execute them sequentially.
 									</FormDescription>
 								</div>
 								<FormControl>

@@ -67,7 +67,9 @@ export function AdvancedTab({
       <Card>
         <CardHeader>
           <CardTitle>Context Settings</CardTitle>
-          <CardDescription>Configure how the agent handles conversation history and context</CardDescription>
+          <CardDescription>
+            Define the rules for how the agent manages its memory window when a conversation grows long and approaches token limits.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
           <FormField
@@ -89,7 +91,7 @@ export function AdvancedTab({
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  How to handle conversation history when it exceeds the limit. 'Summarize' compresses old messages, 'FIFO' drops them.
+                  Choose &apos;Summarize&apos; to compress old messages via an LLM, or &apos;FIFO&apos; to simply drop the oldest messages.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -122,7 +124,7 @@ export function AdvancedTab({
                   />
                 </FormControl>
                 <FormDescription>
-                  Ratio of history to summarize effectively. 0.7 means 70% of oldest messages.
+                  Fraction of history to compress (e.g., 0.7 = 70%).
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -156,7 +158,7 @@ export function AdvancedTab({
                     </LinkFieldControl>
                   </FormControl>
                   <FormDescription>
-                    Optional lightweight model used only when compressing older messages (Summarize strategy).
+                    Dedicated lightweight model for this task.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -183,7 +185,7 @@ export function AdvancedTab({
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    Use a local summary prompt or link to a reusable Agent Summary Prompt template.
+                    How this agent&apos;s conversation summary prompt is managed. &apos;Local&apos; uses the summary prompt field below. &apos;Template&apos; links to a reusable Agent Summary Prompt.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -241,8 +243,7 @@ export function AdvancedTab({
                     </Button>
                   </div>
                   <FormDescription>
-                    Pick an active summary prompt template from the shared library. The backend records the current
-                    version when you attach it.
+                    Link to a reusable summary prompt template from the Agent Summary Prompt library for conversation summarization.
                   </FormDescription>
                   {selectedSummaryPrompt && (
                     <div className="flex flex-wrap items-center gap-2 pt-2">
@@ -270,8 +271,7 @@ export function AdvancedTab({
                   <div className="space-y-0.5 pr-4">
                     <FormLabel className="text-base">Lock Summary Prompt Version</FormLabel>
                     <FormDescription>
-                      Keep this agent pinned to the attached summary prompt version instead of following the
-                      latest template updates automatically.
+                      If checked, this agent will stay on the summary prompt version it was attached to, ignoring newer versions.
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -295,7 +295,7 @@ export function AdvancedTab({
                     </div>
                   </FormControl>
                   <FormDescription>
-                    Read-only snapshot captured by the backend when a summary prompt template is attached or changed.
+                    The version number of the summary prompt template when it was attached to this agent.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -319,8 +319,7 @@ export function AdvancedTab({
                     />
                   </FormControl>
                   <FormDescription>
-                    Custom prompt for summarizing conversation history. Use {'{summary_data}'} as a placeholder
-                    for the JSON input containing existing_summary and new_messages_to_incorporate.
+                    The prompt used to summarize conversation history when the context strategy is &apos;Summarize&apos;. Leave blank to use the system default.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -354,7 +353,7 @@ export function AdvancedTab({
                   />
                 </FormControl>
                 <FormDescription>
-                  Maximum number of messages to keep in active context before applying strategy.
+                  Max messages before strategy triggers.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -420,7 +419,7 @@ export function AdvancedTab({
                   />
                 </FormControl>
                 <FormDescription>
-                  Maximum consecutive turns/steps the agent can take in a single run.
+                  Consecutive actions in a single run.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -464,7 +463,7 @@ export function AdvancedTab({
                   <div className="space-y-0.5">
                     <FormLabel className="text-base">Inject Conversation Data into Prompt</FormLabel>
                     <FormDescription>
-                      Auto-injects all memory items into the LLM system prompt on every turn. Disabling this avoids <strong>Context Bloat</strong> (saving tokens/cost and improving latency) and lets the agent load data dynamically on-demand using the <code>get_conversation_data</code> tool.
+                      Auto-injects all active memory items into the LLM system prompt on every turn. Disabling this avoids &apos;Context Bloat&apos; (saving tokens/cost and improving speed) and allows on-demand access strictly through the &apos;get_conversation_data&apos; tool.
                     </FormDescription>
                   </div>
                   <FormControl>
@@ -497,7 +496,7 @@ export function AdvancedTab({
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    Controls whether the whitelisted conversation data APIs can read only, or read and write, for this agent's conversations.
+                    Select API access level. &apos;Read&apos; allows reading only. &apos;Write&apos; allows reading and writing.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -558,7 +557,7 @@ export function AdvancedTab({
                   />
                 </div>
                 <FormDescription>
-                  Background color for the agent avatar in chat. Include the # prefix.
+                  This color will be used to display as the background color of Agent Avatar in Agent Chat. Enter color code including #, ex: #6366F1
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -572,8 +571,9 @@ export function AdvancedTab({
               <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Show Tool Execution Details</FormLabel>
-                  <FormDescription>
-                    Enable to display tool execution status and responses in the agent output. This includes whether each tool call is completed and its corresponding result.
+                  <FormDescription className="whitespace-pre-line">
+                    {`Enable to display tool execution status and responses in the agent output.
+This includes whether each tool call is completed and its corresponding result.`}
                   </FormDescription>
                 </div>
                 <FormControl>

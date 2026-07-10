@@ -231,8 +231,7 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
                       />
                     </FormControl>
                     <FormDescription>
-                      Header name for authentication (e.g., 'Authorization', 'X-API-Key')
-                      {watchAuthType !== 'custom_header' && watchAuthType !== 'oauth' && ' (auto-filled based on auth type, but can be edited)'}
+                      Header name for authentication (e.g., &apos;Authorization&apos;, &apos;X-API-Key&apos;)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -312,7 +311,7 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>Space-separated OAuth scopes. Leave blank for provider default.</FormDescription>
+                  <FormDescription>Space-separated OAuth scopes (e.g. &apos;read write&apos;). Leave blank for provider default.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -331,7 +330,7 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>Additional URL parameters for the authorization endpoint as JSON.</FormDescription>
+                  <FormDescription>Additional URL parameters for the authorization endpoint (e.g. {`{"user_scope": "...", "access_type": "offline"}`})</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

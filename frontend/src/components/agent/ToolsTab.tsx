@@ -127,7 +127,7 @@ export function ToolsTab({
                 <Server className="w-5 h-5" />
                 Tools
               </CardTitle>
-              <CardDescription>Function tools available to this agent</CardDescription>
+              <CardDescription>The set of tools this agent is allowed to use to interact with the system.</CardDescription>
             </div>
             <Button size="sm" variant="outline" onClick={onAddTools} type="button">
               <Plus className="w-4 h-4 mr-2" />
@@ -215,7 +215,7 @@ export function ToolsTab({
                 <Plug className="w-5 h-5" />
                 Model Context Protocol (MCP)
               </CardTitle>
-              <CardDescription>Connected MCP servers for extended capabilities</CardDescription>
+              <CardDescription>Connect to external MCP servers for additional tool capabilities</CardDescription>
             </div>
             <Button
               type="button"

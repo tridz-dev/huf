@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -28,7 +29,7 @@ export function RecipientsTab({ form }: RecipientsTabProps) {
         <div>
           <h3 className="text-sm font-medium">Named Recipients</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Map friendly names to service-specific IDs (e.g. Telegram chat ID, Slack channel ID).
+            Define named recipients for this service. The agent can look up a recipient by name and get their service-specific ID (e.g. Telegram Chat ID, Slack User ID, Discord Channel ID).
           </p>
         </div>
         <Button
@@ -61,6 +62,9 @@ export function RecipientsTab({ form }: RecipientsTabProps) {
                     <FormControl>
                       <Input {...f} placeholder="e.g. Sales Alerts" />
                     </FormControl>
+                    <FormDescription>
+                      A human-friendly label for this recipient (e.g. John Doe, Sales Alerts, Engineering Team)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -74,6 +78,9 @@ export function RecipientsTab({ form }: RecipientsTabProps) {
                     <FormControl>
                       <Input {...f} placeholder="Service-specific ID" />
                     </FormControl>
+                    <FormDescription>
+                      Service-specific ID: Telegram Chat ID, Slack User/Channel ID, Discord Channel ID, email address, etc.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -87,6 +94,7 @@ export function RecipientsTab({ form }: RecipientsTabProps) {
                     <FormControl>
                       <Input {...f} placeholder="Frappe user email" />
                     </FormControl>
+                    <FormDescription>Optionally link to a Frappe User account</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
