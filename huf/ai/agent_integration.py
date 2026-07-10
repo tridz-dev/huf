@@ -618,6 +618,16 @@ def generate_conversation_title(conversation_name, agent_name):
     except Exception as e:
         frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
 
+def _history_without_pending_user_turn(history, skip_user_message: bool):
+	"""When the user message was already persisted (e.g. file prepare), drop it from history.
+
+	The current ``prompt`` carries the full agent turn (including OCR context).
+	"""
+	if skip_user_message and history and history[-1].get("role") == "user":
+		return history[:-1]
+	return history
+
+
 @frappe.whitelist(allow_guest=True)
 def run_agent_sync(
     agent_name: str,
@@ -639,6 +649,7 @@ def run_agent_sync(
     invoked_by_agent: str = None,
     prompt_cache_options=None,
     files=None,
+    skip_user_message: bool = False,
 ):
 
     if not agent_name:
@@ -690,6 +701,7 @@ def run_agent_sync(
     # Optimized history fetching with dynamic limit + buffer
     fetch_limit = (agent_doc.history_limit or 20) + 10
     history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
+    history = _history_without_pending_user_turn(history, skip_user_message)
     resolved_prompt_template = prompt_template
     if not resolved_prompt_template:
         if agent_doc.prompt_mode == "Local":
@@ -731,7 +743,7 @@ def run_agent_sync(
 
     run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert(ignore_permissions=True)
-    if prompt and not str(prompt).startswith("[SILENT_TRIGGER]"):
+    if prompt and not str(prompt).startswith("[SILENT_TRIGGER]") and not skip_user_message:
         conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
     run_doc.db_set("start_time", now_datetime())
     safe_commit()
@@ -1303,6 +1315,8 @@ async def run_agent_stream(
     parent_conversation_id: str = None,
     invoked_by_agent: str = None,
     prompt_cache_options=None,
+    skip_user_message: bool = False,
+    files=None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -1415,6 +1429,7 @@ async def run_agent_stream(
         fetch_limit = history_limit + 10
         
         history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
+        history = _history_without_pending_user_turn(history, skip_user_message)
         
         # Create Agent Run document
         run_doc = frappe.get_doc({
@@ -1428,7 +1443,8 @@ async def run_agent_stream(
             "provider": resolved_provider
         })
         run_doc.insert(ignore_permissions=True)
-        conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+        if not skip_user_message:
+            conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
         run_doc.db_set("start_time", now_datetime())
         safe_commit()
         
@@ -1466,6 +1482,7 @@ async def run_agent_stream(
             "agent_run_id": run_doc.name,
             "prompt_cache_options": resolved_prompt_cache,
             "_tool_call_message_map": tool_call_message_map,
+            "files": files,
         }
         
         stored_summary = conv_manager.get_stored_summary(conversation.name)
