@@ -22,7 +22,9 @@ interface KnowledgeSourceHeaderProps {
   rebuilding: boolean;
   refreshing: boolean;
   sourceStatus?: string;
+  fromAgent?: string;
   onSave: () => void;
+  onCancel?: () => void;
   onRebuildIndex: () => void;
   onRefresh: () => void;
   onOpenInputs: () => void;
@@ -37,7 +39,9 @@ export function KnowledgeSourceHeader({
   rebuilding,
   refreshing,
   sourceStatus,
+  fromAgent,
   onSave,
+  onCancel,
   onRebuildIndex,
   onRefresh,
   onOpenInputs,
@@ -62,6 +66,11 @@ export function KnowledgeSourceHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {fromAgent && onCancel && (
+          <Button size="sm" variant="outline" onClick={onCancel} type="button" disabled={saving}>
+            Cancel
+          </Button>
+        )}
         {!isNew && (
           <Button
             variant="outline"

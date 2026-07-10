@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useNavigate, useBlocker, type Location } from 'react-router-dom';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useBlocker, useSearchParams, type Location } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
@@ -26,6 +26,7 @@ import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
+import { linkKnowledgeToAgent } from '../services/agentApi';
 
 export { KnowledgeSourceFormPage };
 export default KnowledgeSourceFormPage;
@@ -49,6 +50,8 @@ function mapDocToFormValues(doc: Partial<KnowledgeSourceDoc>): KnowledgeSourceFo
 function KnowledgeSourceFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromAgent = searchParams.get('agent');
   const isNew = id === 'new';
 
   const tabConfig = {
@@ -128,6 +131,7 @@ function KnowledgeSourceFormPage() {
   const [inputsModalOpen, setInputsModalOpen] = useState(false);
   const [sourceDoc, setSourceDoc] = useState<KnowledgeSourceDoc | null>(null);
   const [providers, setProviders] = useState<AIProvider[]>([]);
+  const allowNavigationRef = useRef(false);
 
   const form = useForm<KnowledgeSourceFormValues>({
     resolver: zodResolver(knowledgeSourceFormSchema),
@@ -145,6 +149,7 @@ function KnowledgeSourceFormPage() {
 
   const shouldBlock = useCallback(
     ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+      if (allowNavigationRef.current) return false;
       if (!hasUnsavedChanges) return false;
       return (
         currentLocation.pathname !== nextLocation.pathname ||
@@ -206,11 +211,24 @@ function KnowledgeSourceFormPage() {
 
       if (isNew) {
         const created = await createKnowledgeSource(payload);
-        toast.success('Knowledge source created');
-        setSourceDoc(created);
         const formValues = mapDocToFormValues(created);
         form.reset(formValues);
         setInitialDisabled(formValues.disabled);
+
+        if (fromAgent) {
+          const linkedRow = await linkKnowledgeToAgent(fromAgent, created.name);
+          toast.success('Knowledge source created and linked to agent');
+          allowNavigationRef.current = true;
+          navigate(`/agents/${fromAgent}#knowledge`, {
+            state: { linkedKnowledge: linkedRow, showTab: 'knowledge' },
+            replace: true,
+          });
+          return;
+        }
+
+        toast.success('Knowledge source created');
+        setSourceDoc(created);
+        allowNavigationRef.current = true;
         navigate(`/knowledge/${created.name}`);
       } else if (id) {
         const updated = await updateKnowledgeSource(id, payload);
@@ -274,6 +292,10 @@ function KnowledgeSourceFormPage() {
     }
   };
 
+  const handleCancel = () => {
+    navigate(-1);
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -294,7 +316,9 @@ function KnowledgeSourceFormPage() {
           rebuilding={rebuilding}
           refreshing={refreshing}
           sourceStatus={sourceDoc?.status}
+          fromAgent={fromAgent || undefined}
           onSave={handleFormSubmit}
+          onCancel={fromAgent ? handleCancel : undefined}
           onRebuildIndex={handleRebuildIndex}
           onRefresh={handleRefresh}
           onOpenInputs={() => setInputsModalOpen(true)}
