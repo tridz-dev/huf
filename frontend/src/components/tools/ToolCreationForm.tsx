@@ -26,6 +26,7 @@ import { linkRoutes } from '@/lib/link-routes';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -342,7 +343,7 @@ export function ToolCreationForm({
         accessorKey: 'required',
         header: 'Req',
         cell: ({ row }) =>
-          row.original.required ? <Check className="w-4 h-4 text-green-600" /> : '-',
+          row.original.required ? <Check className="w-4 h-4 text-good" /> : '-',
       },
       {
         id: 'actions',
@@ -365,7 +366,7 @@ export function ToolCreationForm({
               onClick={() => handleDeleteParameter(row.index)}
               title="Delete parameter"
             >
-              <Trash2 className="w-4 h-4 text-red-600" />
+              <Trash2 className="w-4 h-4 text-destructive" />
             </Button>
           </div>
         ),
@@ -391,7 +392,7 @@ export function ToolCreationForm({
           variant="outline"
           size="sm"
           onClick={() => setEditingParameterIndex(null)}
-          className="bg-white"
+          className="shrink-0"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Tool Settings
@@ -427,8 +428,8 @@ export function ToolCreationForm({
       {/* CORE CONFIGURATION Section */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-3">
-          <Settings className="w-5 h-5 text-gray-600" />
-          <h3 className="font-semibold text-gray-900">CORE CONFIGURATION</h3>
+          <Settings className="w-5 h-5 text-muted-foreground" />
+          <h3 className="font-semibold text-foreground">Core configuration</h3>
         </div>
 
         <FormField
@@ -437,7 +438,7 @@ export function ToolCreationForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Tool Name<span className="text-red-500">*</span>
+                Tool Name<span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Input
@@ -457,7 +458,7 @@ export function ToolCreationForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Tool Category<span className="text-red-500">*</span>
+                Tool Category<span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Combobox
@@ -481,7 +482,7 @@ export function ToolCreationForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Description<span className="text-red-500">*</span>
+                Description<span className="text-destructive">*</span>
               </FormLabel>
               <FormControl>
                 <Textarea
@@ -500,8 +501,8 @@ export function ToolCreationForm({
       {/* OPERATION DETAILS Section */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-5 h-5 text-gray-600" />
-          <h3 className="font-semibold text-gray-900">OPERATION DETAILS</h3>
+          <Zap className="w-5 h-5 text-muted-foreground" />
+          <h3 className="font-semibold text-foreground">Operation details</h3>
         </div>
 
         <FormField
@@ -510,7 +511,7 @@ export function ToolCreationForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Operation Type<span className="text-red-500">*</span>
+                Operation Type<span className="text-destructive">*</span>
               </FormLabel>
               <Select
                 onValueChange={field.onChange}
@@ -543,7 +544,7 @@ export function ToolCreationForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Reference DocType<span className="text-red-500">*</span>
+                  Reference DocType<span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
                   <Combobox
@@ -569,7 +570,7 @@ export function ToolCreationForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Select Agent<span className="text-red-500">*</span>
+                  Select Agent<span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
                   <Combobox
@@ -698,7 +699,7 @@ export function ToolCreationForm({
       {selectedType && shouldShowField('http_headers', selectedType) && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-gray-900">HTTP Headers</h3>
+            <h3 className="font-semibold text-foreground">HTTP Headers</h3>
             <Button
               type="button"
               variant="outline"
@@ -733,7 +734,7 @@ export function ToolCreationForm({
       {/* Parameters Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900">Parameters</h3>
+          <h3 className="font-semibold text-foreground">Parameters</h3>
           <div className="flex items-center gap-2">
             {selectedType === 'Custom Function' && (
               <Button
@@ -809,16 +810,16 @@ export function ToolCreationForm({
         )}
 
         {showParamsPreview && (
-          <div className="rounded-lg border bg-black text-green-400 p-4">
-            <p className="text-xs uppercase tracking-wide text-green-300 mb-2">Parameters JSON Schema Preview</p>
-            <pre className="text-xs overflow-x-auto">{JSON.stringify(parameterSchema, null, 2)}</pre>
+          <div className="rounded-none border border-line bg-ink p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2 font-mono">Parameters JSON schema preview</p>
+            <pre className="text-xs overflow-x-auto font-mono text-muted-foreground">{JSON.stringify(parameterSchema, null, 2)}</pre>
           </div>
         )}
       </div>
 
       {/* Optional Fields Section */}
       <div className="space-y-4 pt-1">
-        <h3 className="font-semibold text-gray-900">Additional Settings</h3>
+        <h3 className="font-semibold text-foreground">Additional Settings</h3>
 
         <FormField
           control={form.control}
@@ -902,17 +903,17 @@ export function ToolCreationForm({
 
   const renderFunctionDefinitionView = () => (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-blue-50 p-4 text-sm text-blue-900 flex items-start gap-2">
-        <Braces className="w-4 h-4 mt-0.5" />
-        <div>
-          <p className="font-medium">Function Definition Preview</p>
-          <p className="text-blue-800">
+      <Alert>
+        <Braces className="h-4 w-4" />
+        <AlertDescription>
+          <p className="font-medium text-foreground">Function definition preview</p>
+          <p className="text-muted-foreground">
             This JSON is generated from your current tool settings and parameter definitions.
           </p>
-        </div>
-      </div>
-      <div className="rounded-lg border bg-black text-blue-300 p-4">
-        <pre className="text-xs overflow-x-auto">{JSON.stringify(functionDefinition, null, 2)}</pre>
+        </AlertDescription>
+      </Alert>
+      <div className="rounded-none border border-line bg-ink p-4">
+        <pre className="text-xs overflow-x-auto font-mono text-muted-foreground">{JSON.stringify(functionDefinition, null, 2)}</pre>
       </div>
     </div>
   );
@@ -921,19 +922,19 @@ export function ToolCreationForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-7 px-1">
         {editingParameterIndex === null && (
-          <div className="sticky top-0 z-10 bg-white border-b pb-3 -mx-1 px-1 mb-4">
+          <div className="sticky top-0 z-10 bg-background border-b border-line pb-3 -mx-1 px-1 mb-4">
             <div className="flex items-center justify-between gap-4">
               <Button
                 type="button"
                 variant="outline"
                 onClick={onBack}
                 disabled={loading}
-                className="bg-white shrink-0"
+                className="shrink-0"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
               </Button>
-              <div className="flex items-center gap-1 rounded-md border p-1">
+              <div className="flex items-center gap-1 rounded-none border border-line bg-muted/30 p-1">
                 <Button
                   type="button"
                   variant={configView === 'settings' ? 'secondary' : 'ghost'}
@@ -957,12 +958,12 @@ export function ToolCreationForm({
           </div>
         )}
         {editingParameterIndex === null && mode === 'edit' && sharedUsedBy.length > 0 && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-700" />
-            <p>
+          <Alert className="border-line bg-muted/50">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
               This is a shared tool. Changes will affect other agents using it: {sharedUsedBy.join(', ')}.
-            </p>
-          </div>
+            </AlertDescription>
+          </Alert>
         )}
 
         {configView === 'settings' ? renderSettingsView() : renderFunctionDefinitionView()}
@@ -992,7 +993,6 @@ export function ToolCreationForm({
           <Button
             type="submit"
             disabled={loading}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
           >
             {loading
               ? (mode === 'edit' ? 'Updating...' : 'Creating...')
