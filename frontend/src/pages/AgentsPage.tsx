@@ -8,7 +8,7 @@ import { getAgents } from '../services/agentApi';
 import { formatTimeAgo } from '../utils/time';
 import type { AgentDoc } from '../types/agent.types';
 import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
-import { isKnownBrand } from '@/utils/providerBrands';
+import { resolveProviderBrand } from '@/utils/providerBrands';
 
 const statusOptions = [
   { label: 'All Status', value: 'all' },
@@ -177,9 +177,11 @@ function AgentsPage() {
               description={agent.description?.slice(0, 100) || 'No description'}
               avatarColor={agent.agent_color}
               cornerBadge={
-                isKnownBrand(agent.provider_brand) ? (
-                  <ProviderBrandIcon brand={agent.provider_brand} size="sm" />
-                ) : undefined
+                <ProviderBrandIcon
+                  brand={resolveProviderBrand(agent.provider_brand, agent.provider)}
+                  size="sm"
+                  showFallback
+                />
               }
               status={{
                 label: status,

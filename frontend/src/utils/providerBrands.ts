@@ -51,3 +51,17 @@ export function suggestBrandFromProviderName(providerName: string): string | und
 
   return match?.id;
 }
+
+/** Resolve display brand from stored brand id and/or linked provider name. */
+export function resolveProviderBrand(
+  brandId?: string | null,
+  providerName?: string | null,
+): string | undefined {
+  if (isKnownBrand(brandId)) {
+    return brandId!;
+  }
+  if (providerName) {
+    return suggestBrandFromProviderName(providerName);
+  }
+  return undefined;
+}

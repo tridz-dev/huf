@@ -17,15 +17,15 @@ const CONTAINER_SIZE = {
 } as const;
 
 const LOGO_SIZE = {
-  xs: 'size-2.5',
-  sm: 'size-2.5',
-  md: 'size-3',
+  xs: 'size-3.5',
+  sm: 'size-4',
+  md: 'size-[18px]',
 } as const;
 
 const FALLBACK_ICON_SIZE = {
-  xs: 'size-2',
-  sm: 'size-2',
-  md: 'size-2.5',
+  xs: 'size-3',
+  sm: 'size-3',
+  md: 'size-3.5',
 } as const;
 
 const PILL_CLASS =
@@ -56,7 +56,7 @@ export function ProviderBrandIcon({
     <span className={cn(PILL_CLASS, CONTAINER_SIZE[size], className)} aria-hidden>
       <ModelSelectorLogo
         provider={brand!}
-        className={cn(LOGO_SIZE[size], 'brightness-0 invert')}
+        className={cn(LOGO_SIZE[size], 'object-contain brightness-0 invert')}
       />
     </span>
   );

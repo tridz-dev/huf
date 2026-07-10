@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import type { AIProvider, AIModel } from '../types/agent.types';
 import { ProviderBrandSelect } from '@/components/providers/ProviderBrandSelect';
 import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
-import { suggestBrandFromProviderName } from '@/utils/providerBrands';
+import { suggestBrandFromProviderName, resolveProviderBrand } from '@/utils/providerBrands';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 interface AiProvidersPageProps {
@@ -280,8 +280,8 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <ProviderBrandIcon
-                      brand={provider.provider_brand}
-                      size="xs"
+                      brand={resolveProviderBrand(provider.provider_brand, provider.provider_name)}
+                      size="sm"
                       showFallback
                     />
                     <div>
