@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/table';
 import { ParameterCard, type ParameterData } from './ParameterCard';
 import { HttpHeaderCard, type HttpHeaderData } from './HttpHeaderCard';
+import { SelectDocTypeFieldsDialog } from './SelectDocTypeFieldsDialog';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import type { AgentToolType, ToolType } from '@/types/agent.types';
 import { getDocTypeMeta } from '@/services/agentApi';
@@ -77,6 +78,7 @@ export function ToolCreationForm({
   const formSchema = useMemo(() => createToolFormSchema(template.toolTypes), [template.toolTypes]);
   const { loadingData, docTypeOptions, agentOptions } = useToolCreationOptions();
   const [fetchingCodeParams, setFetchingCodeParams] = useState(false);
+  const [showFieldSelector, setShowFieldSelector] = useState(false);
   const [configView, setConfigView] = useState<'settings' | 'function_definition'>('settings');
   const [editingParameterIndex, setEditingParameterIndex] = useState<number | null>(null);
   const [showParamsPreview, setShowParamsPreview] = useState(false);
@@ -204,6 +206,12 @@ export function ToolCreationForm({
         setEditingParameterIndex(editingParameterIndex - 1);
       }
     }
+  };
+
+  const handleAddParametersFromDocType = (newRows: ParameterData[]) => {
+    const current = (form.getValues('parameters') || []) as ParameterData[];
+    form.setValue('parameters', [...current, ...newRows], { shouldDirty: true });
+    toast.success('Fields added');
   };
 
   const handleAddHttpHeader = () => {
@@ -736,6 +744,17 @@ export function ToolCreationForm({
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-foreground">Parameters</h3>
           <div className="flex items-center gap-2">
+            {selectedReferenceDoctype && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFieldSelector(true)}
+                disabled={loading}
+              >
+                Select Fields from DocType
+              </Button>
+            )}
             {selectedType === 'Custom Function' && (
               <Button
                 type="button"
@@ -921,6 +940,15 @@ export function ToolCreationForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-7 px-1">
+        {selectedReferenceDoctype && (
+          <SelectDocTypeFieldsDialog
+            open={showFieldSelector}
+            onOpenChange={setShowFieldSelector}
+            doctypeName={selectedReferenceDoctype}
+            currentParameters={parameters}
+            onAddParameters={handleAddParametersFromDocType}
+          />
+        )}
         {editingParameterIndex === null && (
           <div className="sticky top-0 z-10 bg-background border-b border-line pb-3 -mx-1 px-1 mb-4">
             <div className="flex items-center justify-between gap-4">
