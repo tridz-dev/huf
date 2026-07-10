@@ -1,6 +1,7 @@
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ColumnDef,
@@ -259,6 +260,7 @@ export function ToolCreationForm({
   const httpHeaders = form.watch('http_headers') || [];
   const formToolName = form.watch('tool_name');
   const description = form.watch('description');
+  const autoAddToAgent = form.watch('auto_add_to_agent');
 
   const { parameterSchema, functionDefinition } = useMemo(() => {
     const properties: Record<string, Record<string, unknown>> = {};
@@ -961,15 +963,37 @@ export function ToolCreationForm({
         {configView === 'settings' ? renderSettingsView() : renderFunctionDefinitionView()}
 
         {/* Footer */}
-        <div className="flex items-center justify-end pt-4 border-t">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4 pt-4 border-t">
+          {mode === 'create' && (
+            <FormField
+              control={form.control}
+              name="auto_add_to_agent"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      disabled={loading}
+                    />
+                  </FormControl>
+                  <FormLabel className="font-normal text-sm cursor-pointer">
+                    Auto-add tool to this agent
+                  </FormLabel>
+                </FormItem>
+              )}
+            />
+          )}
           <Button
             type="submit"
             disabled={loading}
             className="bg-purple-600 hover:bg-purple-700 text-white"
           >
-            {loading 
-              ? (mode === 'edit' ? 'Updating...' : 'Creating...') 
-              : (mode === 'edit' ? 'Update Tool' : 'Create & Add Tool')
+            {loading
+              ? (mode === 'edit' ? 'Updating...' : 'Creating...')
+              : (mode === 'edit'
+                  ? 'Update Tool'
+                  : (autoAddToAgent ? 'Create & Add Tool' : 'Create Tool'))
             }
           </Button>
         </div>

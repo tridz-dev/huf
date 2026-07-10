@@ -53,6 +53,7 @@ export const createToolFormSchema = (availableToolTypes: ToolType[]) => {
         })
       )
       .optional(),
+    auto_add_to_agent: z.boolean().optional(),
   });
 };
 
@@ -118,6 +119,7 @@ export const getDefaultToolFormValues = (
   allowed_for_guest: initialData?.allowed_for_guest || false,
   parameters: initialData?.parameters || [],
   http_headers: initialData?.http_headers || [],
+  auto_add_to_agent: initialData?.auto_add_to_agent ?? true,
 });
 
 export function parseParameterOptions(value: string): string[] {
@@ -139,14 +141,22 @@ export function normalizeParameterOptionsValue(value: string): string {
   return parseParameterOptions(value).join('\n');
 }
 
+interface DocTypeField {
+  fieldname?: string;
+  label?: string;
+  fieldtype?: string;
+  reqd?: 0 | 1 | boolean;
+  options?: string;
+}
+
 export const buildMissingMandatoryParameters = (
-  metaFields: any[],
+  metaFields: DocTypeField[],
   currentParams: ParameterData[]
 ): ParameterData[] => {
   const existingFieldnames = new Set(currentParams.map((p) => p.fieldname));
 
   return metaFields
-    .filter((df: any) => {
+    .filter((df) => {
       if (!df?.fieldname) return false;
       if (!df.reqd) return false;
       if (SYSTEM_IGNORE_FIELDS.has(df.fieldname)) return false;
@@ -154,9 +164,9 @@ export const buildMissingMandatoryParameters = (
       if (existingFieldnames.has(df.fieldname)) return false;
       return true;
     })
-    .map((df: any) => ({
-      label: df.label || df.fieldname,
-      fieldname: df.fieldname,
+    .map((df) => ({
+      label: df.label || df.fieldname || '',
+      fieldname: df.fieldname || '',
       type: mapFieldtypeToParamType(df.fieldtype),
       required: true,
       description: '',

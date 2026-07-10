@@ -219,20 +219,24 @@ export function SelectToolsModal({
       const updatedTools = await getToolFunctions();
       setAllTools(updatedTools || []);
       
-      // Auto-select the newly created tool
-      const newSelectedIds = new Set(selectedToolIds);
-      newSelectedIds.add(newTool.name);
-      setSelectedToolIds(newSelectedIds);
-      
-      // Add the created tool to the agent
-      onAddTools([newTool]);
-      
+      if (data.auto_add_to_agent !== false) {
+        // Auto-select the newly created tool
+        const newSelectedIds = new Set(selectedToolIds);
+        newSelectedIds.add(newTool.name);
+        setSelectedToolIds(newSelectedIds);
+
+        // Add the created tool to the agent
+        onAddTools([newTool]);
+
+        toast.success('Tool created and added successfully!');
+      } else {
+        toast.success('Tool created successfully!');
+      }
+
       // Switch back to Tool Library tab and reset form view
       setActiveTab('tool-library');
       setCreateView('templates');
       setSelectedTemplate(null);
-      
-      toast.success('Tool created and added successfully!');
     } catch (error) {
       console.error('Error creating tool:', error);
       const errorMessage = getFrappeErrorMessage(error);
