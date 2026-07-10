@@ -11,6 +11,57 @@ from frappe import _, is_whitelisted
 from frappe.model.document import Document
 
 
+def _annotation_to_param_type(annotation):
+	if annotation == inspect.Parameter.empty:
+		return "string"
+	if annotation in (int,):
+		return "integer"
+	if annotation in (bool,):
+		return "boolean"
+	if annotation in (float,):
+		return "number"
+	if annotation in (dict, typing.Dict):
+		return "object"
+	if annotation in (list, typing.List):
+		return "array"
+	return "string"
+
+
+def _inspect_function_parameters(function_path):
+	try:
+		func = frappe.get_attr(function_path)
+	except Exception as e:
+		frappe.throw(_("Could not find function at {0}: {1}").format(function_path, str(e)))
+
+	parameters = []
+	for name, param in inspect.signature(func).parameters.items():
+		if name in ("self", "cls"):
+			continue
+
+		parameters.append(
+			{
+				"fieldname": name,
+				"label": name.replace("_", " ").title(),
+				"type": _annotation_to_param_type(param.annotation),
+				"required": 0 if param.default != inspect.Parameter.empty else 1,
+			}
+		)
+
+	return {
+		"parameters": parameters,
+		"pass_parameters_as_json": 1,
+	}
+
+
+@frappe.whitelist()
+def fetch_tool_parameters_from_code(function_path):
+	"""Return tool parameters inferred from a Python function signature (for React UI)."""
+	if not function_path:
+		frappe.throw(_("Please provide a Function Path first."))
+
+	return _inspect_function_parameters(function_path)
+
+
 class AgentToolFunction(Document):
 	def before_validate(self):
 		self.validate_reference_doctype()
@@ -717,41 +768,10 @@ class AgentToolFunction(Document):
 		if not self.function_path:
 			frappe.throw(_("Please provide a Function Path first."))
 
-		try:
-			func = frappe.get_attr(self.function_path)
-		except Exception as e:
-			frappe.throw(_("Could not find function at {0}: {1}").format(self.function_path, str(e)))
-
-		sig = inspect.signature(func)
+		result = _inspect_function_parameters(self.function_path)
 		self.set("parameters", [])
-
-		for name, param in sig.parameters.items():
-			if name in ["self", "cls"]:
-				continue
-
-			param_type = "string"
-			if param.annotation != inspect.Parameter.empty:
-				if param.annotation == int:
-					param_type = "integer"
-				elif param.annotation == bool:
-					param_type = "boolean"
-				elif param.annotation == float:
-					param_type = "number"
-				elif param.annotation == dict or param.annotation == dict:
-					param_type = "object"
-				elif param.annotation == list or param.annotation == list:
-					param_type = "array"
-
-			reqd = 1
-			if param.default != inspect.Parameter.empty:
-				reqd = 0
-
-			self.append("parameters", {
-				"fieldname": name,
-				"label": name.replace("_", " ").title(),
-				"type": param_type,
-				"required": reqd,
-			})
-		self.pass_parameters_as_json = 1
+		for param in result["parameters"]:
+			self.append("parameters", param)
+		self.pass_parameters_as_json = result["pass_parameters_as_json"]
 		self.save()
 		return _("Parameters fetched successfully.")
