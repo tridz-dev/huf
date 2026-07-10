@@ -1,6 +1,7 @@
 export type AIProvider = {
   name: string;
   provider_name: string;
+  provider_brand?: string;
 };
 
 export type AIModel = {
@@ -205,8 +206,7 @@ export interface AgentDoc {
   agent_name: string;
   provider: string;
   model: string;
-  chef?: string | null; // Chef/provider name (e.g., OpenAI, Anthropic)
-  slug?: string | null; // Provider slug (e.g., openai, anthropic)
+  provider_brand?: string | null;
   disabled: number; // 0 or 1
   temperature: number;
   top_p: number;

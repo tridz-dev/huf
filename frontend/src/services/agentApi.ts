@@ -2,6 +2,7 @@ import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AgentDoc } from '@/types/agent.types';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { getBrandLabel } from '@/utils/providerBrands';
 import { fetchPaginatedCount } from './utilsApi';
 
 /**
@@ -44,6 +45,7 @@ const AGENT_LIST_FIELDS = [
   'enable_multi_run',
   'enable_prompt_caching',
   'allow_guest',
+  'provider_brand',
   'modified',
 ];
 
@@ -53,8 +55,7 @@ const AGENT_LIST_FIELDS = [
 const AGENT_MODEL_FIELDS = [
   'name',
   'agent_name',
-  'chef',
-  'slug',
+  'provider_brand',
   'model',
   'agent_color',
   'description',
@@ -361,9 +362,8 @@ export async function updateAgent(name: string, data: Partial<AgentDoc>): Promis
 export interface AgentModelItem {
   id: string;
   name: string;
-  chef: string;
-  chefSlug: string;
-  providers: string[];
+  providerBrand: string;
+  providerBrandLabel: string;
   model?: string;
   agent_color?: string | null;
   description?: string | null;
@@ -472,9 +472,8 @@ export async function getAgentModels(
     const mappedModels: AgentModelItem[] = (agents as any[]).map((agent) => ({
       id: agent.name,
       name: agent.agent_name || agent.name,
-      chef: agent.chef || '',
-      chefSlug: agent.slug || '',
-      providers: agent.slug ? [agent.slug] : [],
+      providerBrand: agent.provider_brand || 'other',
+      providerBrandLabel: getBrandLabel(agent.provider_brand),
       model: agent.model || '',
       agent_color: agent.agent_color || null,
       description: agent.description || null,
