@@ -7,13 +7,16 @@ import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getMCPServers } from '../services/mcpApi';
 import { formatTimeAgo } from '../utils/time';
 import type { MCPServerDoc } from '../services/mcpApi';
+import type { BadgeVariant } from '@/utils/status';
 
-function getStatusVariant(enabled: 0 | 1): 'default' | 'secondary' {
-  return enabled === 1 ? 'default' : 'secondary';
-}
-
-function getStatusLabel(enabled: 0 | 1): 'enabled' | 'disabled' {
-  return enabled === 1 ? 'enabled' : 'disabled';
+function getMcpStatus(server: MCPServerDoc): { label: string; variant: BadgeVariant } {
+  if (server.enabled !== 1) return { label: 'disabled', variant: 'secondary' };
+  if (server.auth_type === 'oauth') {
+    if (server.oauth_status === 'Connected') return { label: 'connected', variant: 'success' };
+    if (server.oauth_status === 'Token Expired') return { label: 'token expired', variant: 'destructive' };
+    return { label: 'not connected', variant: 'outline' };
+  }
+  return { label: 'enabled', variant: 'success' };
 }
 
 export default function McpListingPage() {
@@ -100,14 +103,14 @@ export default function McpListingPage() {
           </div>
         }
         renderItem={(server) => {
-          const status = getStatusLabel(server.enabled);
+          const status = getMcpStatus(server);
           return (
             <ItemCard
               title={server.server_name || server.name}
               description={server.description?.slice(0, 100) || 'No description'}
               status={{
-                label: status,
-                variant: getStatusVariant(server.enabled),
+                label: status.label,
+                variant: status.variant,
               }}
               metadata={[
                 ...(server.tool_namespace ? [{ label: 'Namespace', value: server.tool_namespace, icon: Tag }] : []),

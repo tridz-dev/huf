@@ -25,7 +25,7 @@ const chatOptions = [
 function getStatusVariant(status: 'active' | 'disabled') {
   switch (status) {
     case 'active':
-      return 'default';
+      return 'success';
     case 'disabled':
       return 'secondary';
     default:

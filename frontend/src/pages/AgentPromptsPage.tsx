@@ -29,8 +29,8 @@ import {
 } from '@/services/agentPromptApi';
 import { formatTimeAgo } from '@/utils/time';
 
-function getStatusVariant(enabled: 0 | 1): 'default' | 'secondary' {
-  return enabled === 1 ? 'default' : 'secondary';
+function getStatusVariant(enabled: 0 | 1): 'success' | 'secondary' {
+  return enabled === 1 ? 'success' : 'secondary';
 }
 
 export function AgentPromptsPage() {

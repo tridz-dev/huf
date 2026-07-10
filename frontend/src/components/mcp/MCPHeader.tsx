@@ -35,6 +35,10 @@ export function MCPHeader({
   onSync,
   onTestConnection,
 }: MCPHeaderProps) {
+  const watchAuthType = form.watch('auth_type');
+  const watchOAuthStatus = form.watch('oauth_status');
+  const isOAuthConnected = watchAuthType === 'oauth' && watchOAuthStatus === 'Connected';
+
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="flex-1 space-y-2">
@@ -51,9 +55,12 @@ export function MCPHeader({
               {form.watch('server_name') || 'MCP Server'}
             </h1>
           )}
-          <Badge variant={watchEnabled ? 'default' : 'secondary'}>
+          <Badge variant={watchEnabled ? 'success' : 'secondary'}>
             {watchEnabled ? 'Enabled' : 'Disabled'}
           </Badge>
+          {isOAuthConnected && (
+            <Badge variant="success">Connected</Badge>
+          )}
           <Badge variant="outline">
             <Server className="w-3 h-3 mr-1" />
             MCP Server

@@ -6,23 +6,11 @@ import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { getRecentAgentRuns } from '@/services/dashboardApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
 import { AgentRunDoc } from '@/services/agentRunApi';
+import { getAgentRunStatusVariant } from '@/utils/status';
 
 interface RecentExecutionsTabProps {
   runs?: AgentRunDoc[];
   loading?: boolean;
-}
-
-/**
- * Get status badge variant based on status
- */
-function getStatusVariant(status?: string): 'default' | 'destructive' {
-  if (status === 'Success' || status === 'success') {
-    return 'default';
-  }
-  if (status === 'Failed' || status === 'failed') {
-    return 'destructive';
-  }
-  return 'default';
 }
 
 /**
@@ -101,9 +89,9 @@ export function RecentExecutionsTab({ runs: providedRuns, loading: providedLoadi
               const duration = calculateDuration(run.start_time, run.end_time);
               const timeAgo = formatTimeAgo(run.start_time);
               const statusColor = run.status === 'Success' || run.status === 'success' 
-                ? 'text-green-600' 
+                ? 'text-good' 
                 : run.status === 'Failed' || run.status === 'failed'
-                ? 'text-red-600'
+                ? 'text-destructive'
                 : 'text-muted-foreground';
 
               const isClickable = Boolean(run.conversation);
@@ -127,7 +115,7 @@ export function RecentExecutionsTab({ runs: providedRuns, loading: providedLoadi
                       </div>
                     </div>
                   </div>
-                  <Badge variant={getStatusVariant(run.status)}>
+                  <Badge variant={getAgentRunStatusVariant(run.status)}>
                     {run.status || 'Unknown'}
                   </Badge>
                 </div>

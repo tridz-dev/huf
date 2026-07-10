@@ -114,7 +114,7 @@ function DataPage() {
 						icon={table.icon ? TABLE_ICON_MAP[table.icon] ?? Table2 : Table2}
 						status={
 							table.is_active
-								? { label: 'Active', variant: 'default' }
+								? { label: 'Active', variant: 'success' }
 								: { label: 'Inactive', variant: 'secondary' }
 						}
 						metadata={[

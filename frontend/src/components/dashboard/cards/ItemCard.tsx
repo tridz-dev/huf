@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { BaseCard } from './BaseCard';
 import { cn } from '@/lib/utils';
 
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'success' | 'outline';
 
 interface MetadataItem {
   label: string;

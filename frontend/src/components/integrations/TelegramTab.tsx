@@ -33,11 +33,11 @@ interface TelegramTabProps {
   onSetupWebhook: () => void;
 }
 
-function getWebhookStatusVariant(status?: string): 'default' | 'secondary' | 'destructive' {
+function getWebhookStatusVariant(status?: string): 'default' | 'secondary' | 'destructive' | 'success' {
   if (!status) return 'secondary';
   const lower = status.toLowerCase();
   if (lower.includes('fail') || lower.includes('error')) return 'destructive';
-  if (lower.includes('configured') || lower.includes('already')) return 'default';
+  if (lower.includes('configured') || lower.includes('already')) return 'success';
   return 'secondary';
 }
 

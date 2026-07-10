@@ -12,10 +12,10 @@ interface ActiveFlowsTabProps {
   loading?: boolean;
 }
 
-function getStatusVariant(status: FlowStatus): 'default' | 'secondary' | 'outline' {
+function getStatusVariant(status: FlowStatus): 'success' | 'secondary' | 'outline' {
   switch (status) {
     case 'active':
-      return 'default';
+      return 'success';
     case 'paused':
       return 'secondary';
     default:

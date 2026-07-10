@@ -9,10 +9,10 @@ interface StatusTabProps {
   source: KnowledgeSourceDoc | null;
 }
 
-function getStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'success' | 'outline' {
   switch (status) {
     case 'Ready':
-      return 'default';
+      return 'success';
     case 'Indexing':
     case 'Rebuilding':
       return 'outline';

@@ -34,10 +34,10 @@ interface KnowledgeInputsModalProps {
   onSourceChanged: () => void;
 }
 
-function getInputStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getInputStatusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'success' | 'outline' {
   switch (status) {
     case 'Indexed':
-      return 'default';
+      return 'success';
     case 'Processing':
       return 'outline';
     case 'Error':

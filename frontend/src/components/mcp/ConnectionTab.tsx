@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { UseFormReturn } from 'react-hook-form';
 import { Plus, Trash2 } from 'lucide-react';
 import type { MCPFormValues } from './types';
@@ -17,6 +18,13 @@ import {
 } from '@/services/mcpApi';
 import { toast } from 'sonner';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import type { BadgeVariant } from '@/utils/status';
+
+function getOAuthStatusVariant(status?: string): BadgeVariant {
+  if (status === 'Connected') return 'success';
+  if (status === 'Token Expired') return 'destructive';
+  return 'outline';
+}
 
 interface ConnectionTabProps {
   form: UseFormReturn<MCPFormValues>;
@@ -271,9 +279,9 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
             <div className="flex flex-row items-center justify-between rounded-lg border p-4">
               <div className="space-y-0.5">
                 <p className="text-sm font-medium">OAuth Status</p>
-                <p className="text-sm text-muted-foreground">
+                <Badge variant={getOAuthStatusVariant(watchOAuthStatus)}>
                   {watchOAuthStatus || 'Not Connected'}
-                </p>
+                </Badge>
               </div>
               <div className="flex items-center gap-2">
                 {!isOAuthConnected && (

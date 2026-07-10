@@ -42,14 +42,14 @@ import {
 // ---------------------------------------------------------------------------
 
 const ROLE_COLOURS: Record<string, string> = {
-  'Huf Admin': 'bg-red-100 text-red-800',
-  'Huf Manager': 'bg-blue-100 text-blue-800',
-  'Huf User': 'bg-green-100 text-green-800',
-  'Huf Viewer': 'bg-gray-100 text-gray-700',
+  'Huf Admin': 'border-destructive/30 text-destructive bg-transparent',
+  'Huf Manager': 'border-signal/30 text-signal bg-transparent',
+  'Huf User': 'border-good/30 text-good bg-transparent',
+  'Huf Viewer': 'border-steel text-steel-soft bg-paper-deep',
 };
 
 function roleBadgeClass(role: string): string {
-  return ROLE_COLOURS[role] ?? 'bg-purple-100 text-purple-800';
+  return ROLE_COLOURS[role] ?? 'border-line text-steel bg-transparent';
 }
 
 // ---------------------------------------------------------------------------
@@ -309,7 +309,7 @@ export default function UsersPage() {
                     </DropdownMenu>
                   </TableCell>
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
-                    <Badge variant={u.enabled ? 'default' : 'secondary'}>
+                    <Badge variant={u.enabled ? 'success' : 'secondary'}>
                       {u.enabled ? 'Active' : 'Disabled'}
                     </Badge>
                   </TableCell>

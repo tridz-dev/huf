@@ -9,11 +9,11 @@ import { formatTimeAgo } from '../utils/time';
 import { knowledgeSourceFilterStatuses } from '../data/knowledge';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 
-function getStatusVariant(source: KnowledgeSourceDoc): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getStatusVariant(source: KnowledgeSourceDoc): 'default' | 'secondary' | 'destructive' | 'success' | 'outline' {
   if (source.disabled === 1) return 'secondary';
   switch (source.status) {
     case 'Ready':
-      return 'default';
+      return 'success';
     case 'Indexing':
     case 'Rebuilding':
       return 'outline';

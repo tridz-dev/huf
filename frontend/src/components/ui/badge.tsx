@@ -15,6 +15,8 @@ const badgeVariants = cva(
           'border-line bg-paper-deep text-steel',
         destructive:
           'border-destructive/30 bg-transparent text-destructive',
+        success:
+          'border-good/30 bg-transparent text-good',
         outline: 'border-line text-steel',
       },
     },

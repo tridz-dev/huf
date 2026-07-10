@@ -30,7 +30,7 @@ const categoryOptions = [
 function getStatusVariant(status: FlowMetadata['status']) {
   switch (status) {
     case 'active':
-      return 'default';
+      return 'success';
     case 'error':
       return 'destructive';
     case 'paused':
