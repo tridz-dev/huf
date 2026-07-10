@@ -137,6 +137,12 @@ const settingsNavItems = [
     capability: "system.integrations.manage",
   },
   {
+    title: "Integration Services",
+    url: "/integration-services",
+    icon: Boxes,
+    capability: "system.integrations.manage",
+  },
+  {
     title: "MCP Servers",
     url: "/mcp",
     icon: Server,

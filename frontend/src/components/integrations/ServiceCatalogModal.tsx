@@ -150,6 +150,19 @@ export function ServiceCatalogModal({ open, onOpenChange }: ServiceCatalogModalP
             </div>
           )}
         </div>
+
+        <div className="flex items-center justify-between gap-3 pt-2 border-t">
+          <button
+            type="button"
+            className="text-sm text-primary hover:underline"
+            onClick={() => {
+              onOpenChange(false);
+              navigate('/integration-services/new');
+            }}
+          >
+            Create custom service
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -53,6 +53,12 @@ const IntegrationSettingsListingPageWrapper = lazy(
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
+const IntegrationServicesListingPageWrapper = lazy(
+  () => import('./pages/IntegrationServicesListingPageWrapper'),
+);
+const IntegrationServiceFormPageWrapper = lazy(
+  () => import('./pages/IntegrationServiceFormPageWrapper'),
+);
 
 import { useEffect } from 'react';
 import { SocketProvider } from './contexts/SocketContext';
@@ -374,6 +380,26 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationSettingsDetailsPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integration-services"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationServicesListingPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integration-services/:serviceId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationServiceFormPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
