@@ -159,7 +159,7 @@ export function GeneralTab({
             control={form.control}
             name="temperature"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="sm:col-span-2">
                 <FormLabel>Temperature: {field.value}</FormLabel>
                 <FormControl>
                   <Slider min={0} max={2} step={0.1} value={[field.value]} onValueChange={(vals) => field.onChange(vals[0])} />
@@ -176,7 +176,7 @@ export function GeneralTab({
             control={form.control}
             name="top_p"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="sm:col-span-2">
                 <FormLabel>Top P: {field.value}</FormLabel>
                 <FormControl>
                   <Slider min={0} max={1} step={0.05} value={[field.value]} onValueChange={(vals) => field.onChange(vals[0])} />
