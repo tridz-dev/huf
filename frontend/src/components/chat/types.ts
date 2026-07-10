@@ -11,6 +11,11 @@ export type MessageType = {
   generatedImage?: string;
   generatedAudio?: string;
   voiceMessage?: string;
+  attachment?: {
+    name: string;
+    label: string;
+    previewUrl?: string;
+  };
   tools?: {
     tool_call_id: string;
     name: string;

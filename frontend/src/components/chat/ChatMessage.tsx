@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatTime } from './utils';
 import type { MessageType } from './types';
 import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
+import { ChatAttachmentCard } from './ChatAttachmentCard';
 import {
 	AudioPlayer,
 	AudioPlayerElement,
@@ -114,7 +115,6 @@ export function ChatMessage({
                     ))
                 ) : (
                     <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
-                        <div className="min-w-0 max-w-full overflow-x-auto">
                         <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
                             {/* Show loading state while message is generating */}
                             {(status === 'submitted' || status === 'streaming') && 
@@ -164,13 +164,22 @@ export function ChatMessage({
                                   message.from === 'assistant' && 
                                   (!message.versions[0]?.content || message.versions[0].content.trim() === '') && 
                                   !message.tools) && (
-                                <MessageContentWithArtifacts
-                                    content={message.versions[0]?.content || ''}
-                                    messageId={message.versions[0]?.id ?? message.key}
-                                />
+                                <>
+                                    {message.attachment && (
+                                        <ChatAttachmentCard
+                                            name={message.attachment.name}
+                                            label={message.attachment.label}
+                                            previewUrl={message.attachment.previewUrl}
+                                            className="mb-2 max-w-sm"
+                                        />
+                                    )}
+                                    <MessageContentWithArtifacts
+                                        content={message.versions[0]?.content || ''}
+                                        messageId={message.versions[0]?.id ?? message.key}
+                                    />
+                                </>
                             )}
                         </MessageContent>
-                        </div>
                         {/* Actions for assistant messages */}
                         {message.from === 'assistant' && message.versions[0]?.content && (!message.tools || !showToolExecutionDetails) && (
                             <div className="opacity-0 transition-opacity group-hover:opacity-100">

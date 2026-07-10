@@ -21,6 +21,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
   const [agentName, setAgentName] = useState<string>('');
   const [agentColor, setAgentColor] = useState<string | null>(null);
   const [showToolExecutionDetails, setShowToolExecutionDetails] = useState<boolean>(true);
+  const [allowFileUpload, setAllowFileUpload] = useState<boolean>(false);
+  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | null>(null);
   const agentNameRef = useRef<string>('');
 
   // Keep ref in sync so async callbacks see the latest value
@@ -48,12 +50,16 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
           if (!cancelled) {
             setAgentColor(agentData.agent_color || null);
             applyToolDetails(conversation.agent, agentData.show_tool_execution_details);
+            setAllowFileUpload(agentData.allow_file_upload === 1);
+            setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
           }
         } catch (error) {
           console.error('Failed to load agent color', error);
           if (!cancelled) {
             setAgentColor(null);
             setShowToolExecutionDetails(true);
+            setAllowFileUpload(false);
+            setMaxUploadSizeMb(null);
           }
         }
       } catch (error) {
@@ -69,6 +75,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         if (!cancelled) {
           setAgentColor(null);
           setShowToolExecutionDetails(true);
+          setAllowFileUpload(false);
+          setMaxUploadSizeMb(null);
         }
         return;
       }
@@ -78,12 +86,16 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         if (!cancelled) {
           setAgentColor(agentData.agent_color || null);
           applyToolDetails(agentFromQuery, agentData.show_tool_execution_details);
+          setAllowFileUpload(agentData.allow_file_upload === 1);
+          setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
         }
       } catch (error) {
         console.error('Failed to load agent color', error);
         if (!cancelled) {
           setAgentColor(null);
           setShowToolExecutionDetails(true);
+          setAllowFileUpload(false);
+          setMaxUploadSizeMb(null);
         }
       }
     }
@@ -129,6 +141,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         .then((agentData) => {
           if (cancelled) return;
           applyToolDetails(currentAgent, agentData.show_tool_execution_details);
+          setAllowFileUpload(agentData.allow_file_upload === 1);
+          setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
         })
         .catch(() => {
           // Non-critical – keep existing value
@@ -142,5 +156,5 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
     };
   }, [agentName, applyToolDetails]);
 
-  return { agentName, agentColor, showToolExecutionDetails };
+  return { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb };
 }
