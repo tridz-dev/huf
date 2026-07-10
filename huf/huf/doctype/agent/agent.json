@@ -10,8 +10,7 @@
   "llm_configuration_section",
   "agent_name",
   "provider",
-  "chef",
-  "slug",
+  "provider_brand",
   "temperature",
   "description",
   "column_break_df8m",
@@ -460,19 +459,11 @@
    "label": "Persist per User (Doc/Schedule)"
   },
   {
-   "description": "This is the provider standard name",
-   "fetch_from": "provider.chef",
-   "fieldname": "chef",
+   "fetch_from": "provider.provider_brand",
+   "fieldname": "provider_brand",
    "fieldtype": "Data",
    "hidden": 1,
-   "label": "Chef"
-  },
-  {
-   "fetch_from": "provider.slug",
-   "fieldname": "slug",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Slug"
+   "label": "Provider Brand"
   },
   {
    "default": "0",

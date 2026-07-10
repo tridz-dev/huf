@@ -1994,8 +1994,15 @@ def _resolve_stt_config(
         if model_doc:
             stt_provider_name = model_doc[0].provider
         elif "/" in tool_model:
-            provider_slug = tool_model.split("/")[0]
-            provs = frappe.get_all("AI Provider", filters={"slug": provider_slug}, fields=["name"])
+            from huf.ai.provider_brands import resolve_brand_from_litellm_prefix
+
+            provider_prefix = tool_model.split("/")[0]
+            provider_brand = resolve_brand_from_litellm_prefix(provider_prefix)
+            provs = frappe.get_all(
+                "AI Provider",
+                filters={"provider_brand": provider_brand},
+                fields=["name"],
+            )
             if provs:
                 stt_provider_name = provs[0].name
 
