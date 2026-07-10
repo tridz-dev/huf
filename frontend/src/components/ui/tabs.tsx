@@ -22,7 +22,7 @@ const tabsListVariants = cva('gap-0', {
       inline: '',
       grid: 'grid w-full',
       scroll:
-        'flex h-auto w-full justify-start overflow-x-auto overflow-y-hidden',
+        'flex h-auto w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-hidden',
     },
     size: {
       default: '',

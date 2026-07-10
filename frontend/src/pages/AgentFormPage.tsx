@@ -1693,7 +1693,7 @@ setAllowChat(values.allow_chat);
                     key={tabKey}
                     value={tabKey}
                     disabled={config.disabled}
-                    className="min-w-0 shrink-0 flex-1 px-2 sm:min-w-[110px] sm:px-3"
+                    className="shrink-0 px-3 sm:min-w-[110px]"
                   >
                     {config.label}
                   </TabsTrigger>
