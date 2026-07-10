@@ -30,6 +30,7 @@ import {
   type AgentSummaryPromptDoc,
   type AgentSummaryPromptUsageAgent,
 } from '@/services/agentSummaryPromptApi';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 const agentSummaryPromptFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -287,6 +288,12 @@ export function AgentSummaryPromptFormPage() {
       }
     }
   );
+
+  useSaveShortcut({
+    onSave: () => { void handleSave(); },
+    enabled: !loading,
+    isSubmitting: saving,
+  });
 
   const handleCreateNewVersion = () => {
     const currentValues = form.getValues();

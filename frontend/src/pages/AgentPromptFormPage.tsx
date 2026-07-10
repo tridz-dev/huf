@@ -33,6 +33,7 @@ import {
 import { CategoryTab } from '@/components/category/CategoryTab';
 import { CategoryModal } from '@/components/category/CategoryModal';
 import { getCategories } from '@/services/categoryApi';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 const HUF_PATH_PREFIX = '/huf/';
 
@@ -363,6 +364,12 @@ export function AgentPromptFormPage() {
       }
     }
   );
+
+  useSaveShortcut({
+    onSave: () => { void handleSave(); },
+    enabled: !loading,
+    isSubmitting: saving,
+  });
 
   const handleCreateNewVersion = () => {
     const currentValues = form.getValues();
