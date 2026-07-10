@@ -1,6 +1,7 @@
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
-import type { AgentDoc } from '@/types/agent.types';
+import type { AgentDoc, AgentKnowledgeRow } from '@/types/agent.types';
+import { getMCPServer, type MCPServerRef } from '@/services/mcpApi';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { getBrandLabel } from '@/utils/providerBrands';
 import { fetchPaginatedCount } from './utilsApi';
@@ -354,6 +355,138 @@ export async function updateAgent(name: string, data: Partial<AgentDoc>): Promis
   } catch (error) {
     handleFrappeError(error, `Error updating agent ${name}`);
   }
+}
+
+type AgentMcpServerChildRow = {
+  name?: string;
+  mcp_server: string;
+  enabled?: 0 | 1 | boolean;
+  server_url?: string;
+  tool_count?: number;
+  server_name?: string;
+  description?: string;
+};
+
+function toMcpEnabledFlag(value: 0 | 1 | boolean | undefined): 0 | 1 {
+  return value === 1 || value === true ? 1 : 0;
+}
+
+/**
+ * Link a knowledge source to an agent (persists immediately).
+ */
+export async function linkKnowledgeToAgent(
+  agentName: string,
+  knowledgeSource: string,
+  defaults?: Partial<AgentKnowledgeRow>,
+): Promise<AgentKnowledgeRow> {
+  const agent = await getAgent(agentName);
+  const existing = agent.agent_knowledge || [];
+
+  const alreadyLinked = existing.some((row) => row.knowledge_source === knowledgeSource);
+  if (alreadyLinked) {
+    const linked = existing.find((row) => row.knowledge_source === knowledgeSource)!;
+    return {
+      name: linked.name,
+      knowledge_source: linked.knowledge_source,
+      mode: linked.mode || 'Optional',
+      priority: linked.priority ?? 0,
+      max_chunks: linked.max_chunks ?? 5,
+      token_budget: linked.token_budget ?? 2000,
+      description: linked.description || undefined,
+    };
+  }
+
+  const newRow = {
+    knowledge_source: knowledgeSource,
+    mode: defaults?.mode || 'Optional',
+    priority: defaults?.priority ?? 0,
+    max_chunks: defaults?.max_chunks ?? 5,
+    token_budget: defaults?.token_budget ?? 2000,
+    description: defaults?.description || '',
+  };
+
+  const updated = await updateAgent(agentName, {
+    agent_knowledge: [
+      ...existing.map((row) => ({
+        ...(row.name ? { name: row.name } : {}),
+        knowledge_source: row.knowledge_source,
+        mode: row.mode || 'Optional',
+        priority: row.priority ?? 0,
+        max_chunks: row.max_chunks ?? 5,
+        token_budget: row.token_budget ?? 2000,
+        description: row.description || '',
+      })),
+      newRow,
+    ],
+  });
+
+  const linkedRow = (updated.agent_knowledge || []).find(
+    (row) => row.knowledge_source === knowledgeSource,
+  );
+
+  return {
+    name: linkedRow?.name,
+    knowledge_source: knowledgeSource,
+    mode: newRow.mode as 'Mandatory' | 'Optional',
+    priority: newRow.priority,
+    max_chunks: newRow.max_chunks,
+    token_budget: newRow.token_budget,
+    description: newRow.description || undefined,
+  };
+}
+
+/**
+ * Link an MCP server to an agent (persists immediately).
+ */
+export async function linkMcpServerToAgent(
+  agentName: string,
+  mcpServerName: string,
+): Promise<MCPServerRef> {
+  const agent = await getAgent(agentName);
+  const existing = (agent.agent_mcp_server || []) as AgentMcpServerChildRow[];
+
+  const alreadyLinked = existing.some((row) => row.mcp_server === mcpServerName);
+  if (alreadyLinked) {
+    const linked = existing.find((row) => row.mcp_server === mcpServerName)!;
+    const mcpServerDoc = await getMCPServer(mcpServerName);
+    return {
+      name: linked.name || '',
+      mcp_server: mcpServerName,
+      server_name: mcpServerDoc.server_name || mcpServerName,
+      description: mcpServerDoc.description || linked.description,
+      server_url: mcpServerDoc.server_url || linked.server_url || '',
+      enabled: toMcpEnabledFlag(linked.enabled),
+      mcp_enabled: mcpServerDoc.enabled === 1 ? 1 : 0,
+      tool_count: linked.tool_count || 0,
+    };
+  }
+
+  const updated = await updateAgent(agentName, {
+    agent_mcp_server: [
+      ...existing.map((row) => ({
+        ...(row.name ? { name: row.name } : {}),
+        mcp_server: row.mcp_server,
+        enabled: toMcpEnabledFlag(row.enabled),
+      })),
+      { mcp_server: mcpServerName, enabled: 1 as const },
+    ],
+  });
+
+  const linkedRow = ((updated.agent_mcp_server || []) as AgentMcpServerChildRow[]).find(
+    (row) => row.mcp_server === mcpServerName,
+  );
+
+  const mcpServerDoc = await getMCPServer(mcpServerName);
+  return {
+    name: linkedRow?.name || '',
+    mcp_server: mcpServerName,
+    server_name: mcpServerDoc.server_name || mcpServerName,
+    description: mcpServerDoc.description,
+    server_url: mcpServerDoc.server_url || '',
+    enabled: 1,
+    mcp_enabled: mcpServerDoc.enabled === 1 ? 1 : 0,
+    tool_count: linkedRow?.tool_count || 0,
+  };
 }
 
 /**
