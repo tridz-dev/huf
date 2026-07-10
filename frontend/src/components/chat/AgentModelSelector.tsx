@@ -8,7 +8,6 @@ import {
   ModelSelectorInput,
   ModelSelectorItem,
   ModelSelectorList,
-  ModelSelectorLogo,
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
@@ -122,37 +121,40 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
                 {models.map((model) => (
                   <ModelSelectorItem
                     key={model.id}
-                    className="relative gap-3 px-3 py-2.5"
+                    className="gap-3 px-3 py-2.5"
                     onSelect={() => {
                       onValueChange(model.id);
                       setOpen(false);
                     }}
                     value={model.id}
                   >
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-background">
-                      {model.agent_color ? (
+                    <div className="relative flex size-8 shrink-0 items-center justify-center">
+                      {isKnownBrand(model.providerBrand) ? (
+                        <ProviderBrandIcon brand={model.providerBrand} size="sm" />
+                      ) : model.agent_color ? (
                         <span
                           className="size-4 rounded-full border border-border"
                           style={{ backgroundColor: model.agent_color }}
                           aria-hidden
                         />
-                      ) : isKnownBrand(model.providerBrand) ? (
-                        <ModelSelectorLogo provider={model.providerBrand} className="size-4" />
+                      ) : (
+                        <span className="size-4 shrink-0" aria-hidden />
+                      )}
+                      {model.agent_color && isKnownBrand(model.providerBrand) ? (
+                        <span
+                          className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full border border-background ring-1 ring-border"
+                          style={{ backgroundColor: model.agent_color }}
+                          aria-hidden
+                        />
                       ) : null}
                     </div>
 
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5 pr-8">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <ModelSelectorName>{model.name}</ModelSelectorName>
                       {model.model ? (
                         <span className="text-xs text-muted-foreground truncate">{model.model}</span>
                       ) : null}
                     </div>
-
-                    {isKnownBrand(model.providerBrand) ? (
-                      <div className="absolute bottom-1.5 right-9 rounded-md border border-border bg-background p-0.5">
-                        <ProviderBrandIcon brand={model.providerBrand} />
-                      </div>
-                    ) : null}
 
                     {value === model.id ? (
                       <CheckIcon className="ml-auto size-4 shrink-0" />

@@ -61,7 +61,7 @@ export function ItemCard({
   return (
     <BaseCard onClick={onClick} className={cn('flex flex-col', className)}>
       {cornerBadge ? (
-        <div className="absolute bottom-3 right-3 z-10 rounded-md border border-border bg-background p-1 shadow-sm">
+        <div className="absolute bottom-3 right-3 z-10">
           {cornerBadge}
         </div>
       ) : null}

@@ -271,13 +271,11 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <ProviderBrandIcon
-                        brand={provider.provider_brand}
-                        size="md"
-                        showFallback
-                      />
-                    </div>
+                    <ProviderBrandIcon
+                      brand={provider.provider_brand}
+                      size="xs"
+                      showFallback
+                    />
                     <div>
                       <CardTitle className="text-base">{provider.provider_name}</CardTitle>
                       <CardDescription className="text-xs">

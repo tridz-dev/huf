@@ -178,7 +178,7 @@ function AgentsPage() {
               avatarColor={agent.agent_color}
               cornerBadge={
                 isKnownBrand(agent.provider_brand) ? (
-                  <ProviderBrandIcon brand={agent.provider_brand} size="md" />
+                  <ProviderBrandIcon brand={agent.provider_brand} size="sm" />
                 ) : undefined
               }
               status={{

@@ -50,7 +50,7 @@ export function ProviderBrandSelect({
           <SelectValue placeholder="Select provider brand">
             {displayValue ? (
               <span className="flex items-center gap-2">
-                <ProviderBrandIcon brand={displayValue} showFallback />
+                <ProviderBrandIcon brand={displayValue} size="xs" showFallback />
                 <span>{getBrandLabel(displayValue)}</span>
               </span>
             ) : (
@@ -62,7 +62,7 @@ export function ProviderBrandSelect({
           {brands.map((brand) => (
             <SelectItem key={brand.id} value={brand.id}>
               <span className="flex items-center gap-2">
-                <ProviderBrandIcon brand={brand.id} showFallback />
+                <ProviderBrandIcon brand={brand.id} size="xs" showFallback />
                 <span>{brand.label}</span>
               </span>
             </SelectItem>
