@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
@@ -14,10 +14,13 @@ import { ToolsTab } from '../components/mcp/ToolsTab';
 import { mcpFormSchema, type MCPFormValues, type MCPTool } from '../components/mcp/types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
+import { linkMcpServerToAgent } from '../services/agentApi';
 
 export function McpDetailsPage() {
   const { mcpId } = useParams<{ mcpId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromAgent = searchParams.get('agent');
   const isNew = mcpId === 'new';
 
   // Tab configuration - single source of truth
@@ -226,6 +229,17 @@ export function McpDetailsPage() {
       if (isNew) {
         // Create new MCP server
         const newMCP = await createMCPServer(mcpData);
+
+        if (fromAgent) {
+          const linkedServer = await linkMcpServerToAgent(fromAgent, newMCP.name);
+          toast.success('MCP server created and linked to agent');
+          navigate(`/agents/${fromAgent}#tools`, {
+            state: { linkedMcpServer: linkedServer, showTab: 'tools' },
+            replace: true,
+          });
+          return;
+        }
+
         toast.success('MCP server created successfully!');
         // Reset form state with the created server's values
         form.reset({
@@ -414,6 +428,10 @@ export function McpDetailsPage() {
     }
   };
 
+  const handleCancel = () => {
+    navigate(-1);
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -433,7 +451,9 @@ export function McpDetailsPage() {
           saving={saving}
           syncing={syncing}
           testingConnection={testingConnection}
+          fromAgent={fromAgent || undefined}
           onSave={handleFormSubmit}
+          onCancel={fromAgent ? handleCancel : undefined}
           onSync={handleSyncTools}
           onTestConnection={handleTestConnection}
         />

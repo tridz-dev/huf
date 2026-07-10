@@ -14,7 +14,9 @@ interface MCPHeaderProps {
   saving: boolean;
   syncing?: boolean;
   testingConnection?: boolean;
+  fromAgent?: string;
   onSave: () => void;
+  onCancel?: () => void;
   onSync?: () => void;
   onTestConnection?: () => void;
 }
@@ -27,7 +29,9 @@ export function MCPHeader({
   saving,
   syncing = false,
   testingConnection = false,
+  fromAgent,
   onSave,
+  onCancel,
   onSync,
   onTestConnection,
 }: MCPHeaderProps) {
@@ -57,6 +61,17 @@ export function MCPHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {fromAgent && onCancel && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onCancel}
+            type="button"
+            disabled={saving || syncing || testingConnection}
+          >
+            Cancel
+          </Button>
+        )}
         {!isNew && onSync && (
           <Button
             variant="outline"
