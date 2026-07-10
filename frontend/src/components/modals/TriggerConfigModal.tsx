@@ -300,8 +300,8 @@ export function TriggerConfigModal({
                         <button
                           key={trigger.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedTrigger === trigger.id
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50 hover:bg-accent'
+                            ? 'border-signal bg-panel'
+                            : 'border-line hover:border-ink hover:bg-paper-deep'
                             }`}
                           onClick={() => handleSelectTrigger(trigger.id)}
                         >
@@ -330,8 +330,8 @@ export function TriggerConfigModal({
                         <button
                           key={trigger.id}
                           className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedTrigger === trigger.id
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50 hover:bg-accent'
+                            ? 'border-signal bg-panel'
+                            : 'border-line hover:border-ink hover:bg-paper-deep'
                             }`}
                           onClick={() => handleSelectTrigger(trigger.id)}
                         >

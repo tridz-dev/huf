@@ -382,7 +382,6 @@ export function FlowCanvas({
               <Button
                 variant="default"
                 size="sm"
-                className="rounded-full shadow-lg bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={() => {
                   setModalMode('trigger');
                   setCurrentNodeId(null);
@@ -396,7 +395,7 @@ export function FlowCanvas({
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10 rounded-full bg-background/60 backdrop-blur-sm"
+              className="h-10 w-10"
               onClick={() => {
                 if (showLeftSidebar || showRightSidebar) {
                   onToggleLeftSidebar();
@@ -416,7 +415,7 @@ export function FlowCanvas({
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10 rounded-full bg-background/60 backdrop-blur-sm"
+              className="h-10 w-10"
               onClick={onToggleLeftSidebar}
             >
               <PanelLeftOpen className="w-4 h-4" />
@@ -428,7 +427,7 @@ export function FlowCanvas({
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10 rounded-full bg-background/60 backdrop-blur-sm"
+              className="h-10 w-10"
               onClick={onToggleRightSidebar}
             >
               <PanelRightOpen className="w-4 h-4" />

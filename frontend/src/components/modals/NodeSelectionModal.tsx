@@ -433,7 +433,7 @@ export function NodeSelectionModal({
             return (
               <button
                 key={action.id}
-                className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-accent transition-all"
+                className="flex items-center gap-3 p-3 rounded-lg border border-line hover:border-ink hover:bg-paper-deep transition-all"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -531,8 +531,8 @@ export function NodeSelectionModal({
                             <button
                               key={agent.name}
                               className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === agent.name
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border hover:border-primary/50 hover:bg-accent'
+                                ? 'border-signal bg-panel'
+                                : 'border-line hover:border-ink hover:bg-paper-deep'
                                 }`}
                               onClick={() => {
                                 setSelectedItem(agent.name);
@@ -592,8 +592,8 @@ export function NodeSelectionModal({
                                 <button
                                   key={trigger.id}
                                   className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedItem === trigger.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50 hover:bg-accent'
+                                    ? 'border-signal bg-panel'
+                                    : 'border-line hover:border-ink hover:bg-paper-deep'
                                     }`}
                                   onClick={() => handleSelectTrigger(trigger.id)}
                                 >
@@ -622,8 +622,8 @@ export function NodeSelectionModal({
                                 <button
                                   key={trigger.id}
                                   className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === trigger.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50 hover:bg-accent'
+                                    ? 'border-signal bg-panel'
+                                    : 'border-line hover:border-ink hover:bg-paper-deep'
                                     }`}
                                   onClick={() => handleSelectTrigger(trigger.id)}
                                 >

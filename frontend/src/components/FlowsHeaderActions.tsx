@@ -114,9 +114,9 @@ export function FlowsHeaderActions() {
           ) : saveState === 'error' ? (
             <Circle className="w-3.5 h-3.5 text-destructive" />
           ) : hasUnsavedChanges ? (
-            <Circle className="w-3.5 h-3.5 text-orange-400 fill-orange-400" />
+            <Circle className="w-3.5 h-3.5 text-signal fill-signal" />
           ) : (
-            <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-good" />
           )}
           <span className="text-xs font-medium">
             {saveState === 'saving' ? 'Saving...' :
@@ -164,9 +164,9 @@ export function FlowsHeaderActions() {
 
       {/* Run Button */}
       <Button
-        variant="secondary"
+        variant="outline"
         size="sm"
-        className="gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800"
+        className="gap-2"
         onClick={handleRun}
         disabled={!activeFlow || isRunning}
       >

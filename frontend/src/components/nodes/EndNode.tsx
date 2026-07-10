@@ -5,6 +5,8 @@ import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { useFlowContext } from '../../contexts/FlowContext';
+import { NODE_CARD_BASE, NODE_ICON_WELL } from './nodeStyles';
+import { cn } from '@/lib/utils';
 
 export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) => {
   const { deleteNode } = useFlowContext();
@@ -13,12 +15,14 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
       <Handle
         type="target"
         position={Position.Top}
-        className="w-3 h-3 !bg-green-500 border-2 border-white"
+        className="!bg-good border-2 border-panel w-3 h-3"
       />
       <Card
-        className={`w-64 p-4 transition-all duration-200 ${
-          selected ? 'ring-2 ring-green-500 shadow-lg' : 'shadow-md hover:shadow-lg'
-        } border-green-500 bg-green-50`}
+        className={cn(
+          NODE_CARD_BASE,
+          'border-good',
+          selected && 'ring-2 ring-signal border-signal'
+        )}
       >
         {selected && (
           <Button
@@ -35,13 +39,13 @@ export const EndNode = memo(({ id, data, selected }: NodeProps<FlowNodeData>) =>
           </Button>
         )}
         <div className="flex items-center gap-3 pr-6">
-          <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center text-green-600">
+          <div className={cn(NODE_ICON_WELL, 'text-good')}>
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-green-900 truncate">{data.label}</div>
+            <div className="text-sm font-medium text-foreground truncate">{data.label}</div>
             {data.description && (
-              <div className="text-xs text-green-700">{data.description}</div>
+              <div className="text-xs text-muted-foreground">{data.description}</div>
             )}
           </div>
         </div>
