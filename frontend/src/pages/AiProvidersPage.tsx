@@ -1,4 +1,4 @@
-import { Plug, Settings, Loader2 } from 'lucide-react';
+import { Settings, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -20,6 +20,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIProvider, AIModel } from '../types/agent.types';
+import { ProviderBrandSelect } from '@/components/providers/ProviderBrandSelect';
+import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
+import { suggestBrandFromProviderName } from '@/utils/providerBrands';
 
 interface AiProvidersPageProps {
   addProviderKey?: number;
@@ -37,8 +40,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   const [formData, setFormData] = useState({
     provider_name: '',
     api_key: '',
-    slug: '',
-    chef: '',
+    provider_brand: '',
   });
 
   const {
@@ -119,8 +121,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     setFormData({
       provider_name: '',
       api_key: '',
-      slug: '',
-      chef: '',
+      provider_brand: '',
     });
     setConfigureModalOpen(true);
   };
@@ -144,8 +145,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       setFormData({
         provider_name: details.provider_name || '',
         api_key: details.api_key || '',
-        slug: details.slug || '',
-        chef: details.chef || '',
+        provider_brand: details.provider_brand || '',
       });
     } catch (error) {
       toast.error('Failed to load provider details');
@@ -200,23 +200,24 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       return;
     }
 
+    const providerBrand =
+      formData.provider_brand ||
+      suggestBrandFromProviderName(formData.provider_name) ||
+      'other';
+
     setSaving(true);
     try {
       if (isEditing && selectedProvider) {
-        // Update existing provider
         await updateProvider(selectedProvider.name, {
           api_key: formData.api_key,
-          slug: formData.slug,
-          chef: formData.chef,
+          provider_brand: providerBrand,
         });
         toast.success('Provider updated successfully');
       } else {
-        // Create new provider
         await createProvider({
           provider_name: formData.provider_name.trim(),
           api_key: formData.api_key,
-          slug: formData.slug,
-          chef: formData.chef,
+          provider_brand: providerBrand,
         });
         toast.success('Provider created successfully');
       }
@@ -225,8 +226,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       setFormData({
         provider_name: '',
         api_key: '',
-        slug: '',
-        chef: '',
+        provider_brand: '',
       });
       // Refresh the list
       reset();
@@ -272,7 +272,11 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Plug className="w-5 h-5 text-primary" />
+                      <ProviderBrandIcon
+                        brand={provider.provider_brand}
+                        size="md"
+                        showFallback
+                      />
                     </div>
                     <div>
                       <CardTitle className="text-base">{provider.provider_name}</CardTitle>
@@ -370,27 +374,12 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="slug">Slug</Label>
-                <Input
-                  id="slug"
-                  type="text"
-                  placeholder="Enter slug"
-                  value={formData.slug}
-                  onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="chef">Chef</Label>
-                <Input
-                  id="chef"
-                  type="text"
-                  placeholder="Enter chef"
-                  value={formData.chef}
-                  onChange={(e) => setFormData({ ...formData, chef: e.target.value })}
-                />
-              </div>
+              <ProviderBrandSelect
+                value={formData.provider_brand}
+                onChange={(provider_brand) => setFormData({ ...formData, provider_brand })}
+                providerName={formData.provider_name}
+                required
+              />
             </div>
           )}
 
