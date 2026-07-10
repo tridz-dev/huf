@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { FormField, FormItem, FormLabel, FormControl, FormDescription } from '@/components/ui/form';
+import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { UseFormReturn } from 'react-hook-form';
 import type { MCPFormValues, MCPTool } from './types';
@@ -36,6 +37,7 @@ export function ToolsTab({
   syncing,
 }: ToolsTabProps) {
   const [selectedTool, setSelectedTool] = useState<MCPTool | null>(null);
+  const enableAutoSync = form.watch('enable_auto_sync');
 
   const handleToolClick = (tool: MCPTool) => {
     setSelectedTool(tool);
@@ -74,6 +76,29 @@ export function ToolsTab({
               </FormItem>
             )}
           />
+
+          {enableAutoSync && (
+            <FormField
+              control={form.control}
+              name="auto_sync_interval"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sync Interval (Hours)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="1"
+                      {...field}
+                      onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormDescription>Interval in hours to auto-sync tools</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
             <div>

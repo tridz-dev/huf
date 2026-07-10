@@ -30,13 +30,28 @@ export function McpDetailsPage() {
     },
     connection: {
       label: 'Connection',
-      fields: ['transport_type', 'server_url', 'auth_type', 'auth_header_name', 'auth_header_value'],
+      fields: [
+        'transport_type',
+        'server_url',
+        'auth_type',
+        'auth_header_name',
+        'auth_header_value',
+        'oauth_status',
+        'oauth_scope',
+        'oauth_extra_authorize_params',
+        'oauth_authorization_endpoint',
+        'oauth_token_endpoint',
+        'oauth_client_id',
+        'oauth_client_secret',
+        'oauth_token_response_path',
+        'custom_headers',
+      ],
       default: false,
       disabled: false,
     },
     tools: {
       label: 'Tools',
-      fields: ['enable_auto_sync'], // Tools tab has enable_auto_sync field
+      fields: ['enable_auto_sync', 'auto_sync_interval'], // Tools tab has sync settings
       default: false,
       disabled: isNew, // Disabled for new MCP creation
     },
@@ -45,7 +60,7 @@ export function McpDetailsPage() {
   // Extract derived values from tab config (memoized to avoid recreating on every render)
   const validTabs = useMemo(() => Object.keys(tabConfig), []);
   const defaultTab = useMemo(
-    () => Object.entries(tabConfig).find(([_, config]) => config.default)?.[0] || validTabs[0],
+    () => Object.entries(tabConfig).find(([, config]) => config.default)?.[0] || validTabs[0],
     [validTabs]
   );
   const tabFieldMapping: TabFieldMapping = useMemo(
@@ -111,7 +126,17 @@ export function McpDetailsPage() {
       auth_type: 'none',
       auth_header_name: '',
       auth_header_value: '',
+      oauth_status: 'Not Connected',
+      oauth_scope: '',
+      oauth_extra_authorize_params: '',
+      oauth_authorization_endpoint: '',
+      oauth_token_endpoint: '',
+      oauth_client_id: '',
+      oauth_client_secret: '',
+      oauth_token_response_path: '',
+      auto_sync_interval: 1,
       enable_auto_sync: false,
+      custom_headers: [],
     },
   });
 
@@ -134,7 +159,17 @@ export function McpDetailsPage() {
           auth_type: data.auth_type || 'none',
           auth_header_name: data.auth_header_name || '',
           auth_header_value: '', // Don't load the encrypted value
+          oauth_status: data.oauth_status || 'Not Connected',
+          oauth_scope: data.oauth_scope || '',
+          oauth_extra_authorize_params: data.oauth_extra_authorize_params || '',
+          oauth_authorization_endpoint: data.oauth_authorization_endpoint || '',
+          oauth_token_endpoint: data.oauth_token_endpoint || '',
+          oauth_client_id: data.oauth_client_id || '',
+          oauth_client_secret: '', // Don't load the encrypted value
+          oauth_token_response_path: data.oauth_token_response_path || '',
+          auto_sync_interval: data.auto_sync_interval ?? 1,
           enable_auto_sync: data.enable_auto_sync === 1,
+          custom_headers: data.custom_headers || [],
         });
         
         // Load last_sync
@@ -177,6 +212,15 @@ export function McpDetailsPage() {
         auth_header_name: values.auth_header_name || '',
         auth_header_value: values.auth_header_value || '',
         enable_auto_sync: values.enable_auto_sync ? 1 : 0,
+        auto_sync_interval: values.auto_sync_interval,
+        oauth_scope: values.oauth_scope || '',
+        oauth_extra_authorize_params: values.oauth_extra_authorize_params || '',
+        oauth_authorization_endpoint: values.oauth_authorization_endpoint || '',
+        oauth_token_endpoint: values.oauth_token_endpoint || '',
+        oauth_client_id: values.oauth_client_id || '',
+        oauth_client_secret: values.oauth_client_secret || '',
+        oauth_token_response_path: values.oauth_token_response_path || '',
+        custom_headers: values.custom_headers || [],
       };
 
       if (isNew) {
@@ -195,7 +239,17 @@ export function McpDetailsPage() {
           auth_type: newMCP.auth_type || 'none',
           auth_header_name: newMCP.auth_header_name || '',
           auth_header_value: '', // Don't reset the encrypted value
+          oauth_status: newMCP.oauth_status || 'Not Connected',
+          oauth_scope: newMCP.oauth_scope || '',
+          oauth_extra_authorize_params: newMCP.oauth_extra_authorize_params || '',
+          oauth_authorization_endpoint: newMCP.oauth_authorization_endpoint || '',
+          oauth_token_endpoint: newMCP.oauth_token_endpoint || '',
+          oauth_client_id: newMCP.oauth_client_id || '',
+          oauth_client_secret: '', // Don't reset the encrypted value
+          oauth_token_response_path: newMCP.oauth_token_response_path || '',
+          auto_sync_interval: newMCP.auto_sync_interval ?? 1,
           enable_auto_sync: newMCP.enable_auto_sync === 1,
+          custom_headers: newMCP.custom_headers || [],
         });
         
         // Load tools if available
@@ -221,7 +275,17 @@ export function McpDetailsPage() {
           auth_type: values.auth_type,
           auth_header_name: values.auth_header_name,
           auth_header_value: '', // Don't reset the encrypted value
+          oauth_status: values.oauth_status,
+          oauth_scope: values.oauth_scope,
+          oauth_extra_authorize_params: values.oauth_extra_authorize_params,
+          oauth_authorization_endpoint: values.oauth_authorization_endpoint,
+          oauth_token_endpoint: values.oauth_token_endpoint,
+          oauth_client_id: values.oauth_client_id,
+          oauth_client_secret: '', // Don't reset the encrypted value
+          oauth_token_response_path: values.oauth_token_response_path,
+          auto_sync_interval: values.auto_sync_interval,
           enable_auto_sync: values.enable_auto_sync,
+          custom_headers: values.custom_headers,
         });
         
         // Reload tools after update
@@ -390,7 +454,7 @@ export function McpDetailsPage() {
               </TabsContent>
 
               <TabsContent value="connection" className="space-y-4">
-                <ConnectionTab form={form} />
+                <ConnectionTab form={form} serverName={mcpId || ''} isNew={isNew} />
               </TabsContent>
 
               <TabsContent value="tools" className="space-y-4">

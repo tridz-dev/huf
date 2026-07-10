@@ -8,7 +8,7 @@ from frappe.model.document import Document
 class MCPServer(Document):
     def validate(self):
         """Validate MCP server configuration"""
-        if self.auth_type and self.auth_type != "none":
+        if self.auth_type and self.auth_type not in ("none", "oauth"):
             if not self.auth_header_name:
                 frappe.throw("Auth Header Name is required when authentication is enabled")
     

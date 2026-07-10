@@ -19,7 +19,7 @@ export interface MCPServerDoc {
     enabled: 0 | 1;
     transport_type: 'http' | 'sse';
     server_url: string;
-    auth_type?: 'none' | 'api_key' | 'bearer_token' | 'custom_header';
+    auth_type?: 'none' | 'api_key' | 'bearer_token' | 'custom_header' | 'oauth';
     auth_header_name?: string;
     auth_header_value?: string;
     tool_namespace?: string;
@@ -27,6 +27,22 @@ export interface MCPServerDoc {
     last_sync?: string;
     available_tools?: string;
     enable_auto_sync?: 0 | 1;
+    auto_sync_interval?: number;
+    oauth_status?: 'Not Connected' | 'Connected' | 'Token Expired';
+    oauth_scope?: string;
+    oauth_extra_authorize_params?: string;
+    oauth_authorization_endpoint?: string;
+    oauth_token_endpoint?: string;
+    oauth_client_id?: string;
+    oauth_client_secret?: string;
+    oauth_token_response_path?: string;
+    oauth_access_token?: string;
+    oauth_refresh_token?: string;
+    oauth_token_expires_at?: string;
+    custom_headers?: Array<{
+        header_name: string;
+        header_value: string;
+    }>;
     tools?: Array<{
         name: string;
         tool_name: string;
@@ -106,7 +122,7 @@ export async function getMCPServers(
         } = params;
 
         // Build filters
-        const filters: Array<[string, string, unknown]> = [];
+        const filters: Array<[string, string, string]> = [];
 
         // Build search filters if provided (search in server_name)
         if (search && search.trim()) {
@@ -126,6 +142,7 @@ export async function getMCPServers(
                 'timeout_seconds',
                 'last_sync',
             ],
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             filters: filters.length > 0 ? (filters as any) : undefined,
             limit: limit + 1, // Fetch one extra to check if there's more
             ...(start > 0 && { limit_start: start }), // Only include if start > 0
@@ -270,6 +287,52 @@ export async function syncMCPTools(serverName: string): Promise<{
 }
 
 /**
+ * Start OAuth 2.1 flow for an MCP server.
+ * Returns the authorization URL to open in a popup.
+ */
+export async function startMCPOAuthFlow(serverName: string): Promise<{ auth_url?: string; error?: string }> {
+    try {
+        const response = await call.post('huf.ai.mcp_oauth.start_oauth_flow', {
+            server_name: serverName,
+        });
+        return (response.message || {}) as { auth_url?: string; error?: string };
+    } catch (error) {
+        handleFrappeError(error);
+        throw error;
+    }
+}
+
+/**
+ * Disconnect OAuth tokens for an MCP server.
+ */
+export async function disconnectMCPOAuth(serverName: string): Promise<{ success?: boolean; error?: string }> {
+    try {
+        const response = await call.post('huf.ai.mcp_oauth.disconnect_oauth', {
+            server_name: serverName,
+        });
+        return (response.message || {}) as { success?: boolean; error?: string };
+    } catch (error) {
+        handleFrappeError(error);
+        throw error;
+    }
+}
+
+/**
+ * Get current OAuth connection status for an MCP server.
+ */
+export async function getMCPOAuthStatus(serverName: string): Promise<{ status?: string }> {
+    try {
+        const response = await call.post('huf.ai.mcp_oauth.get_oauth_status', {
+            server_name: serverName,
+        });
+        return (response.message || {}) as { status?: string };
+    } catch (error) {
+        handleFrappeError(error);
+        throw error;
+    }
+}
+
+/**
  * Update MCP tool enabled status
  * Note: In Frappe, child table updates require updating the entire array
  * We need to get the current tools, update the specific one, and save all
@@ -281,7 +344,7 @@ export async function updateMCPTool(serverName: string, toolName: string, enable
         const currentTools = (currentDoc as MCPServerDoc).tools || [];
         
         // Update the specific tool in the array
-        const updatedTools = currentTools.map((tool: any) => {
+        const updatedTools = currentTools.map((tool) => {
             if (tool.name === toolName) {
                 return { ...tool, enabled: enabled ? 1 : 0 };
             }
