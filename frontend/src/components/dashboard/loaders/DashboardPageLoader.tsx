@@ -13,9 +13,9 @@ export function DashboardPageLoader() {
           <Skeleton className="h-4 w-72 mt-2" />
         </div>
 
-        <div className="border border-ink flex divide-x divide-line">
+        <div className="border border-ink grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-line">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={`metric-skeleton-${index}`} className="flex-1 p-4 space-y-2">
+            <div key={`metric-skeleton-${index}`} className="p-4 min-w-0 space-y-2">
               <Skeleton className="h-3 w-24" />
               <Skeleton className="h-3 w-16" />
               <Skeleton className="h-[38px] w-24" />
@@ -24,7 +24,7 @@ export function DashboardPageLoader() {
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Tabs value="agents">
               <TabsList>
                 <TabsTrigger value="agents" disabled>

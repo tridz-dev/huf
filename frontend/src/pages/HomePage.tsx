@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Info, Loader2 } from 'lucide-react';
-import { cn } from '../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
@@ -234,9 +233,9 @@ function HomePage() {
 
         {/* HUF Gauge Strip — single bordered instrument strip, not 4 floating cards */}
         <TooltipProvider>
-          <div className="border border-ink flex divide-x divide-line">
-            {metricsData.map((metric, i) => (
-              <div key={metric.id} className={cn('flex-1 p-4', i === metricsData.length - 1 && 'border-r-0')}>
+          <div className="border border-ink grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-line">
+            {metricsData.map((metric) => (
+              <div key={metric.id} className="p-4 min-w-0">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-mono text-[10px] uppercase tracking-widest text-steel">
                     {metric.title}
@@ -251,7 +250,7 @@ function HomePage() {
                   </Tooltip>
                 </div>
                 <div className="font-mono text-[9.5px] text-steel-soft mb-2">{metric.subtitle}</div>
-                <div className="font-display font-bold text-[38px] leading-none text-ink">
+                <div className="font-display font-bold text-2xl sm:text-3xl lg:text-[38px] leading-none text-ink">
                   {metricsLoading && metric.value === '...' ? (
                     <Loader2 className="w-5 h-5 animate-spin text-steel" />
                   ) : (
@@ -265,7 +264,7 @@ function HomePage() {
 
         {/* Tabbed Interface */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <TabsList>
               <TabsTrigger value="agents">Agents</TabsTrigger>
               <TabsTrigger value="flows">Flows</TabsTrigger>
