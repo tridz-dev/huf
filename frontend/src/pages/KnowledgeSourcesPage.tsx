@@ -6,7 +6,7 @@ import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../co
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getKnowledgeSources } from '../services/knowledgeApi';
 import { formatTimeAgo } from '../utils/time';
-import { knowledgeSourceFilterStatuses } from '../data/knowledge';
+import { knowledgeSourceFilterStatuses, knowledgeTypeLabels } from '../data/knowledge';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 
 function getStatusVariant(source: KnowledgeSourceDoc): 'default' | 'secondary' | 'destructive' | 'success' | 'outline' {
@@ -128,7 +128,7 @@ function KnowledgeSourcesPage() {
                 variant: getStatusVariant(source),
               }}
               metadata={[
-                { label: 'Type', value: source.knowledge_type === 'sqlite_fts' ? 'FTS' : 'Vec', icon: Database },
+                { label: 'Type', value: knowledgeTypeLabels[source.knowledge_type] ?? source.knowledge_type, icon: Database },
                 { label: 'Chunks', value: (source.total_chunks ?? 0).toLocaleString() },
                 {
                   label: 'Last Indexed',

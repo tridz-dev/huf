@@ -88,7 +88,25 @@ export function StatusTab({ source }: StatusTabProps) {
               <p className="text-sm">{formatBytes(source.index_size_bytes)}</p>
             </div>
 
-            {source.sqlite_file_path && (
+            {source.knowledge_type === 'chroma' && (
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Chroma Connection</p>
+                {source.chroma_mode === 'Server' ? (
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono text-xs">
+                      {source.chroma_host || 'localhost'}:{source.chroma_port ?? 8000}
+                    </p>
+                    {source.chroma_ssl === 1 && (
+                      <Badge variant="outline">SSL</Badge>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm">Local ChromaDB (file-backed)</p>
+                )}
+              </div>
+            )}
+
+            {source.sqlite_file_path && source.knowledge_type !== 'chroma' && (
               <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">SQLite File</p>
                 <p className="text-sm font-mono text-xs break-all">{source.sqlite_file_path}</p>
