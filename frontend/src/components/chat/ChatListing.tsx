@@ -587,10 +587,10 @@ function RecentsConversationList({
                               }
                             }}
                             className={cn(
-                              'group flex w-full text-left px-2 py-1.5 gap-2 items-center rounded-md cursor-pointer transition-all',
+                              'group flex w-full text-left px-2 py-1.5 gap-2 items-center rounded-none cursor-pointer transition-all',
                               isSelected
-                                ? 'bg-paper-deep'
-                                : 'bg-transparent hover:bg-paper-deep'
+                                ? 'bg-panel border-l-2 border-signal'
+                                : 'bg-transparent hover:bg-panel'
                             )}
                           >
                             <ChatAvatar 
