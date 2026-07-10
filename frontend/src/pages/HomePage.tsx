@@ -251,19 +251,13 @@ function HomePage() {
                   </Tooltip>
                 </div>
                 <div className="font-mono text-[9.5px] text-steel-soft mb-2">{metric.subtitle}</div>
-                <div className={cn(
-                  'font-display font-bold text-[38px] leading-none',
-                  metric.id === 'cost' ? 'text-signal-ink' : 'text-ink',
-                )}>
+                <div className="font-display font-bold text-[38px] leading-none text-ink">
                   {metricsLoading && metric.value === '...' ? (
                     <Loader2 className="w-5 h-5 animate-spin text-steel" />
                   ) : (
                     metric.value
                   )}
                 </div>
-                {metric.id === 'cost' && !metricsLoading && (
-                  <span className="font-mono text-[9px] text-signal-ink">↑ flagged</span>
-                )}
               </div>
             ))}
           </div>
