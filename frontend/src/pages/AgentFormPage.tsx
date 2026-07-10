@@ -566,7 +566,52 @@ export function AgentFormPage() {
   }, []);
 
   useEffect(() => {
-    const state = location.state as { selectedPrompt?: string; showTab?: string; selectedPromptField?: string } | null;
+    const state = location.state as {
+      selectedPrompt?: string;
+      showTab?: string;
+      selectedPromptField?: string;
+      linkedKnowledge?: AgentKnowledgeRow;
+      linkedMcpServer?: MCPServerRef;
+    } | null;
+
+    if (state?.linkedKnowledge) {
+      const row = state.linkedKnowledge;
+      setKnowledgeSources((prev) => {
+        if (prev.some((ks) => ks.knowledge_source === row.knowledge_source)) {
+          return prev;
+        }
+        return [...prev, row];
+      });
+      setInitialKnowledgeSources((prev) => {
+        if (prev.some((ks) => ks.knowledge_source === row.knowledge_source)) {
+          return prev;
+        }
+        return [...prev, row];
+      });
+      setActiveTab('knowledge');
+      navigate(`${location.pathname}${location.search}#knowledge`, { replace: true, state: {} });
+      return;
+    }
+
+    if (state?.linkedMcpServer) {
+      const server = state.linkedMcpServer;
+      setMcpServers((prev) => {
+        if (prev.some((s) => s.mcp_server === server.mcp_server)) {
+          return prev;
+        }
+        return [...prev, server];
+      });
+      setInitialMcpServers((prev) => {
+        if (prev.some((s) => s.mcp_server === server.mcp_server)) {
+          return prev;
+        }
+        return [...prev, server];
+      });
+      setActiveTab('tools');
+      navigate(`${location.pathname}${location.search}#tools`, { replace: true, state: {} });
+      return;
+    }
+
     if (state?.selectedPrompt) {
       setPendingSelectedPrompt(state.selectedPrompt);
       setPendingSelectedPromptField(state.selectedPromptField || 'agent_prompt');
@@ -574,7 +619,7 @@ export function AgentFormPage() {
         setActiveTab(state.showTab);
       }
     }
-  }, [location.state]);
+  }, [location.state, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (!pendingSelectedPrompt) return;
@@ -1463,6 +1508,22 @@ setAllowChat(values.allow_chat);
     setShowKnowledgeModal(true);
   };
 
+  const handleCreateKnowledge = () => {
+    if (!id || id === 'new') {
+      toast.error('Please save the agent first before creating knowledge');
+      return;
+    }
+    navigate(`/knowledge/new?agent=${encodeURIComponent(id)}`);
+  };
+
+  const handleCreateMCP = () => {
+    if (!id || id === 'new') {
+      toast.error('Please save the agent first before creating MCP servers');
+      return;
+    }
+    navigate(`/mcp/new?agent=${encodeURIComponent(id)}`);
+  };
+
   const handleEditKnowledge = (index: number) => {
     setEditingKnowledgeIndex(index);
     setShowKnowledgeModal(true);
@@ -1671,6 +1732,7 @@ setAllowChat(values.allow_chat);
                   onEditTool={handleEditTool}
                   mcpServers={mcpServers}
                   onAddMCP={() => setShowMCPServersModal(true)}
+                  onCreateMCP={handleCreateMCP}
                   onRemoveMCP={handleRemoveMCPServer}
                   onToggleMCP={handleToggleMCPServer}
                   onSyncMCP={handleSyncMCPServer}
@@ -1682,6 +1744,7 @@ setAllowChat(values.allow_chat);
                 <KnowledgeTab
                   knowledgeSources={knowledgeSources}
                   onAdd={handleAddKnowledge}
+                  onCreate={handleCreateKnowledge}
                   onEdit={handleEditKnowledge}
                   onRemove={handleRemoveKnowledge}
                 />

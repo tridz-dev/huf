@@ -19,6 +19,7 @@ interface ToolsTabProps {
   // MCP Server props
   mcpServers?: MCPServerRef[];
   onAddMCP?: () => void;
+  onCreateMCP?: () => void;
   onRemoveMCP?: (serverId: string) => void;
   onToggleMCP?: (serverId: string, enabled: boolean) => void;
   onSyncMCP?: (serverId: string) => void;
@@ -33,6 +34,7 @@ export function ToolsTab({
   onEditTool,
   mcpServers = [],
   onAddMCP,
+  onCreateMCP,
   onRemoveMCP,
   onToggleMCP,
   onSyncMCP,
@@ -217,16 +219,30 @@ export function ToolsTab({
               </CardTitle>
               <CardDescription>Connect to external MCP servers for additional tool capabilities</CardDescription>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => handleMCPAction('add')}
-              disabled={mcpLoading}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Connect MCP
-            </Button>
+            <div className="flex items-center gap-2">
+              {onCreateMCP && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={onCreateMCP}
+                  disabled={mcpLoading}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create MCP
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => handleMCPAction('add')}
+                disabled={mcpLoading}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Connect MCP
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -241,14 +257,22 @@ export function ToolsTab({
               <p className="text-xs text-muted-foreground mb-4">
                 Connect external MCP servers to extend agent capabilities with tools like Gmail, GitHub, Slack, and more.
               </p>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => handleMCPAction('add')}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Connect MCP Server
-              </Button>
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                {onCreateMCP && (
+                  <Button variant="secondary" type="button" onClick={onCreateMCP}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create MCP
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => handleMCPAction('add')}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Connect MCP Server
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="">
