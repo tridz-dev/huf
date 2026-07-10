@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import type { AIModel, AIProvider } from '../types/agent.types';
 import { LinkFieldControl } from '../components/ui/link-field-control';
 import { linkRoutes } from '../lib/link-routes';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 interface ModelsPageProps {
   addModelKey?: number;
@@ -296,6 +297,13 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       setSaving(false);
     }
   };
+
+  useSaveShortcut({
+    onSave: handleSave,
+    enabled: configureModalOpen && !loadingModel,
+    isSubmitting: saving,
+    allowInDialog: true,
+  });
 
   return (
     <PageLayout

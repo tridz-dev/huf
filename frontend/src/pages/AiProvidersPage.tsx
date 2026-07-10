@@ -23,6 +23,7 @@ import type { AIProvider, AIModel } from '../types/agent.types';
 import { ProviderBrandSelect } from '@/components/providers/ProviderBrandSelect';
 import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
 import { suggestBrandFromProviderName } from '@/utils/providerBrands';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 interface AiProvidersPageProps {
   addProviderKey?: number;
@@ -237,6 +238,13 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       setSaving(false);
     }
   };
+
+  useSaveShortcut({
+    onSave: handleSave,
+    enabled: configureModalOpen && !loadingProvider,
+    isSubmitting: saving,
+    allowInDialog: true,
+  });
 
   return (
     <PageLayout
