@@ -9,7 +9,6 @@ import {
   ModelSelectorItem,
   ModelSelectorList,
   ModelSelectorLogo,
-  ModelSelectorLogoGroup,
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
@@ -17,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { getAgentModels, type AgentModelItem } from '@/services/agentApi';
+import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
+import { isKnownBrand } from '@/utils/providerBrands';
 
 interface AgentModelSelectorProps {
   value: string;
@@ -29,7 +30,6 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
   const [open, setOpen] = useState(false);
   const isInitialAutoSelectRef = useRef(true);
 
-  // Fetch agent models for selector
   const {
     items: agentModels,
     initialLoading: modelsLoading,
@@ -56,38 +56,30 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
     pageSize: 20,
     debounceMs: 300,
     autoLoad: true,
-    autoLoadMore: false, // Don't auto-load more, user can search
+    autoLoadMore: false,
   });
 
-  // Set default model when models load (only on initial load, don't trigger onValueChange)
   useEffect(() => {
     if (agentModels.length > 0 && !value && isInitialAutoSelectRef.current) {
-      // Silently set the value without triggering onValueChange callback
-      // This is just for initial display, not user interaction
       isInitialAutoSelectRef.current = false;
-      // Don't call onValueChange here - it's just for internal state
-      // The parent will handle setting the initial value if needed
     } else if (agentModels.length > 0 && value) {
-      // If value is already set, mark initial auto-select as done
       isInitialAutoSelectRef.current = false;
     }
   }, [agentModels, value]);
 
-  // Reset search when modal opens
   useEffect(() => {
     if (open) {
       setModelSearch('');
     }
   }, [open, setModelSearch]);
 
-  // Group models by chef
   const groupedModels = agentModels.reduce(
-    (acc, m) => {
-      const chef = m.chef || 'Other';
-      if (!acc[chef]) {
-        acc[chef] = [];
+    (acc, model) => {
+      const groupLabel = model.providerBrandLabel || 'Other';
+      if (!acc[groupLabel]) {
+        acc[groupLabel] = [];
       }
-      acc[chef].push(m);
+      acc[groupLabel].push(model);
       return acc;
     },
     {} as Record<string, AgentModelItem[]>
@@ -96,9 +88,9 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
   return (
     <ModelSelector onOpenChange={setOpen} open={open}>
       <ModelSelectorTrigger asChild>
-        <Button 
-          size={showLabel ? "default" : "icon"}
-          variant={showLabel ? "outline" : "ghost"}
+        <Button
+          size={showLabel ? 'default' : 'icon'}
+          variant={showLabel ? 'outline' : 'ghost'}
           disabled={disabled}
           className={cn(
             'text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900',
@@ -106,7 +98,7 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
             disabled && 'disabled:opacity-100'
           )}
         >
-          <Plus className={showLabel ? "w-4 h-4" : "w-5 h-5"} />
+          <Plus className={showLabel ? 'w-4 h-4' : 'w-5 h-5'} />
           {showLabel && <span>Select Agent</span>}
         </Button>
       </ModelSelectorTrigger>
@@ -125,41 +117,47 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
           ) : agentModels.length === 0 ? (
             <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
           ) : (
-            Object.entries(groupedModels).map(([chef, models]) => (
-              <ModelSelectorGroup key={chef} heading={chef}>
-                {models.map((m) => (
+            Object.entries(groupedModels).map(([groupLabel, models]) => (
+              <ModelSelectorGroup key={groupLabel} heading={groupLabel}>
+                {models.map((model) => (
                   <ModelSelectorItem
-                    key={m.id}
+                    key={model.id}
+                    className="relative gap-3 px-3 py-2.5"
                     onSelect={() => {
-                      onValueChange(m.id);
+                      onValueChange(model.id);
                       setOpen(false);
                     }}
-                    value={m.id}
+                    value={model.id}
                   >
-                    {m.agent_color ? (
-                      <span
-                        className="size-4 rounded-full shrink-0 border border-border"
-                        style={{ backgroundColor: m.agent_color }}
-                        aria-hidden
-                      />
-                    ) : m.chefSlug ? (
-                      <ModelSelectorLogo provider={m.chefSlug} />
-                    ) : null}
-                    <div className="flex flex-col min-w-0">
-                      <ModelSelectorName>{m.name}</ModelSelectorName>
-                      {m.model && (
-                        <span className="text-xs text-muted-foreground truncate">{m.model}</span>
-                      )}
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-background">
+                      {model.agent_color ? (
+                        <span
+                          className="size-4 rounded-full border border-border"
+                          style={{ backgroundColor: model.agent_color }}
+                          aria-hidden
+                        />
+                      ) : isKnownBrand(model.providerBrand) ? (
+                        <ModelSelectorLogo provider={model.providerBrand} className="size-4" />
+                      ) : null}
                     </div>
-                    <ModelSelectorLogoGroup>
-                      {m.providers.map((provider) => (
-                        <ModelSelectorLogo key={provider} provider={provider} />
-                      ))}
-                    </ModelSelectorLogoGroup>
-                    {value === m.id ? (
-                      <CheckIcon className="ml-auto size-4" />
+
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5 pr-8">
+                      <ModelSelectorName>{model.name}</ModelSelectorName>
+                      {model.model ? (
+                        <span className="text-xs text-muted-foreground truncate">{model.model}</span>
+                      ) : null}
+                    </div>
+
+                    {isKnownBrand(model.providerBrand) ? (
+                      <div className="absolute bottom-1.5 right-9 rounded-md border border-border bg-background p-0.5">
+                        <ProviderBrandIcon brand={model.providerBrand} />
+                      </div>
+                    ) : null}
+
+                    {value === model.id ? (
+                      <CheckIcon className="ml-auto size-4 shrink-0" />
                     ) : (
-                      <div className="ml-auto size-4" />
+                      <div className="ml-auto size-4 shrink-0" />
                     )}
                   </ModelSelectorItem>
                 ))}
@@ -171,4 +169,3 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
     </ModelSelector>
   );
 }
-

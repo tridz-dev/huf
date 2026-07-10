@@ -37,6 +37,7 @@ interface ItemCardProps {
   menuActions?: ActionButton[];
   menuIcon?: LucideIcon;
   footer?: ReactNode;
+  cornerBadge?: ReactNode;
   onClick?: () => void;
   className?: string;
 }
@@ -53,11 +54,17 @@ export function ItemCard({
   menuActions = [],
   menuIcon: MenuIcon = MoreVertical,
   footer,
+  cornerBadge,
   onClick,
   className,
 }: ItemCardProps) {
   return (
     <BaseCard onClick={onClick} className={cn('flex flex-col', className)}>
+      {cornerBadge ? (
+        <div className="absolute bottom-3 right-3 z-10 rounded-md border border-border bg-background p-1 shadow-sm">
+          {cornerBadge}
+        </div>
+      ) : null}
       <div className="flex flex-col flex-1">
         <CardHeader className="pb-3">
           <CardTitle className="text-xl font-semibold line-clamp-1 flex items-center gap-2">

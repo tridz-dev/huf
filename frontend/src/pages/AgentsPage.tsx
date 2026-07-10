@@ -7,6 +7,8 @@ import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgents } from '../services/agentApi';
 import { formatTimeAgo } from '../utils/time';
 import type { AgentDoc } from '../types/agent.types';
+import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
+import { isKnownBrand } from '@/utils/providerBrands';
 
 const statusOptions = [
   { label: 'All Status', value: 'all' },
@@ -174,6 +176,11 @@ function AgentsPage() {
               title={agent.agent_name || agent.name}
               description={agent.description?.slice(0, 100) || 'No description'}
               avatarColor={agent.agent_color}
+              cornerBadge={
+                isKnownBrand(agent.provider_brand) ? (
+                  <ProviderBrandIcon brand={agent.provider_brand} size="md" />
+                ) : undefined
+              }
               status={{
                 label: status,
                 variant: getStatusVariant(status),
