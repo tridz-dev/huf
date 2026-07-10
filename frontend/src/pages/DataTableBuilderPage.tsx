@@ -11,6 +11,7 @@ import type { DataTableFieldDef, DataTableFieldType, DataTableSchema } from '@/t
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 interface BuilderState {
 	tableName: string;
@@ -260,6 +261,12 @@ export function DataTableBuilderPage() {
 			setSaving(false);
 		}
 	};
+
+	useSaveShortcut({
+		onSave: handleSave,
+		enabled: !loading,
+		isSubmitting: saving,
+	});
 
 	if (loading) {
 		return (

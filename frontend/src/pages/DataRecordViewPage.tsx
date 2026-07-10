@@ -12,6 +12,7 @@ import {
 } from '@/services/dataTableApi';
 import type { DataTableSchema, DataTableFieldDef } from '@/types/dataTable.types';
 import { buildFormLayout, FieldInput, initFormData } from '@/components/data-table/DataRecordFormLayout';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 export interface DataRecordViewPageProps {
 	schema: DataTableSchema | null;
@@ -91,6 +92,12 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 			setSaving(false);
 		}
 	}, [schema, isNew, formData, tableId, navigate, recordName]);
+
+	useSaveShortcut({
+		onSave: handleSave,
+		enabled: hasSchema && !loading,
+		isSubmitting: saving,
+	});
 
 	const handleDelete = useCallback(async () => {
 		if (!schema || !recordName || isNew) return;
