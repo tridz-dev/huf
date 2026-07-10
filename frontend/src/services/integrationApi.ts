@@ -9,8 +9,10 @@ import { handleFrappeError } from '@/lib/frappe-error';
 import { fetchPaginatedCount } from './utilsApi';
 import { doctype } from '@/data/doctypes';
 import type {
+  CreateIntegrationServicePayload,
   IntegrationServiceDoc,
   IntegrationSettingsDoc,
+  UpdateIntegrationServicePayload,
 } from '@/types/integration.types';
 
 export interface GetIntegrationSettingsParams {
@@ -28,6 +30,20 @@ export interface PaginatedIntegrationSettingsResponse {
   total?: number;
 }
 
+export interface GetIntegrationServicesParams {
+  page?: number;
+  limit?: number;
+  start?: number;
+  search?: string;
+  category?: string;
+}
+
+export interface PaginatedIntegrationServicesResponse {
+  items: IntegrationServiceDoc[];
+  hasMore: boolean;
+  total?: number;
+}
+
 const LIST_FIELDS = [
   'name',
   'service',
@@ -35,6 +51,17 @@ const LIST_FIELDS = [
   'is_default',
   'last_used',
   'last_error',
+  'modified',
+] as const;
+
+const SERVICE_LIST_FIELDS = [
+  'name',
+  'service_name',
+  'category',
+  'description',
+  'documentation_url',
+  'required_credentials',
+  'is_builtin',
   'modified',
 ] as const;
 
@@ -66,6 +93,87 @@ export async function getIntegrationService(
   try {
     const response = await db.getDoc(doctype['Integration Service'], serviceName);
     return response as IntegrationServiceDoc;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function getIntegrationServicesPaginated(
+  params?: GetIntegrationServicesParams,
+): Promise<PaginatedIntegrationServicesResponse> {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      start = (page - 1) * limit,
+      search,
+      category,
+    } = params ?? {};
+
+    const filters: Array<[string, string, unknown]> = [];
+
+    if (search?.trim()) {
+      filters.push(['service_name', 'like', `%${search.trim()}%`]);
+    }
+    if (category && category !== 'all') {
+      filters.push(['category', '=', category]);
+    }
+
+    const services = await db.getDocList(doctype['Integration Service'], {
+      fields: [...SERVICE_LIST_FIELDS],
+      filters: filters.length > 0 ? (filters as never) : undefined,
+      limit: limit + 1,
+      ...(start > 0 && { limit_start: start }),
+      orderBy: { field: 'modified', order: 'desc' },
+    });
+
+    const mapped = services as IntegrationServiceDoc[];
+    const hasMore = mapped.length > limit;
+    const items = hasMore ? mapped.slice(0, limit) : mapped;
+
+    const total = await fetchPaginatedCount(
+      page,
+      items.length,
+      doctype['Integration Service'],
+      filters,
+    );
+
+    return { items, hasMore, total };
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching integration services');
+    throw error;
+  }
+}
+
+export async function createIntegrationService(
+  data: CreateIntegrationServicePayload,
+): Promise<IntegrationServiceDoc> {
+  try {
+    const response = await db.createDoc(doctype['Integration Service'], data);
+    return response as IntegrationServiceDoc;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function updateIntegrationService(
+  name: string,
+  data: UpdateIntegrationServicePayload,
+): Promise<IntegrationServiceDoc> {
+  try {
+    const response = await db.updateDoc(doctype['Integration Service'], name, data);
+    return response as unknown as IntegrationServiceDoc;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function deleteIntegrationService(name: string): Promise<void> {
+  try {
+    await db.deleteDoc(doctype['Integration Service'], name);
   } catch (error) {
     handleFrappeError(error);
     throw error;
