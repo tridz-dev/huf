@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useNavigate, useParams, useBlocker, type Location } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Save, Loader2, Settings2 } from 'lucide-react';
@@ -35,7 +35,8 @@ type BuilderAction =
 	| { type: 'REMOVE_FIELD'; payload: number }
 	| { type: 'REORDER_FIELDS'; payload: { from: number; to: number } }
 	| { type: 'SELECT_FIELD'; payload: number | null }
-	| { type: 'LOAD_SCHEMA'; payload: DataTableSchema };
+	| { type: 'LOAD_SCHEMA'; payload: DataTableSchema }
+	| { type: 'MARK_CLEAN' };
 
 const initialState: BuilderState = {
 	tableName: '',
@@ -120,6 +121,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedFieldIndex: null,
 				isDirty: false,
 			};
+		case 'MARK_CLEAN':
+			return { ...state, isDirty: false };
 		default:
 			return state;
 	}
@@ -135,6 +138,7 @@ export function DataTableBuilderPage() {
 	const [loading, setLoading] = useState(isEdit);
 	const isMobile = useIsMobile();
 	const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+	const allowNavigationRef = useRef(false);
 
 	useEffect(() => {
 		if (isEdit) {
@@ -164,6 +168,7 @@ export function DataTableBuilderPage() {
 
 	const shouldBlock = useCallback(
 		({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+			if (allowNavigationRef.current) return false;
 			if (!state.isDirty) return false;
 			return (
 				currentLocation.pathname !== nextLocation.pathname ||
@@ -230,6 +235,8 @@ export function DataTableBuilderPage() {
 					icon: state.icon,
 				});
 				toast.success('Table updated successfully');
+				dispatch({ type: 'MARK_CLEAN' });
+				allowNavigationRef.current = true;
 				navigate(`/data/${state.registryName || tableId}`);
 			} else {
 				const result = await createDataTable({
@@ -241,6 +248,8 @@ export function DataTableBuilderPage() {
 					title_field: state.titleField,
 				});
 				toast.success('Table created successfully');
+				dispatch({ type: 'MARK_CLEAN' });
+				allowNavigationRef.current = true;
 				navigate(`/data/${result.name}`);
 			}
 		} catch (err: any) {
