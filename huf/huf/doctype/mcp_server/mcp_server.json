@@ -18,6 +18,23 @@
   "auth_type",
   "auth_header_name",
   "auth_header_value",
+  "oauth_section",
+  "oauth_status",
+  "oauth_connect_button",
+  "oauth_disconnect_button",
+  "column_break_oauth",
+  "oauth_scope",
+  "oauth_extra_authorize_params",
+  "oauth_endpoints_section",
+  "oauth_authorization_endpoint",
+  "oauth_token_endpoint",
+  "oauth_client_id",
+  "oauth_client_secret",
+  "oauth_token_response_path",
+  "oauth_tokens_section",
+  "oauth_access_token",
+  "oauth_refresh_token",
+  "oauth_token_expires_at",
   "custom_headers_section",
   "custom_headers",
   "tools_section",
@@ -98,7 +115,7 @@
    "fieldname": "auth_type",
    "fieldtype": "Select",
    "label": "Auth Type",
-   "options": "none\napi_key\nbearer_token\ncustom_header",
+   "options": "none\napi_key\nbearer_token\ncustom_header\noauth",
    "default": "none"
   },
   {
@@ -115,6 +132,123 @@
    "label": "Auth Header Value",
    "depends_on": "eval:doc.auth_type && doc.auth_type !== 'none'",
    "description": "The API key, bearer token, or header value (stored encrypted)"
+  },
+  {
+   "fieldname": "oauth_section",
+   "fieldtype": "Section Break",
+   "label": "OAuth 2.1 Configuration",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "collapsible": 0
+  },
+  {
+   "fieldname": "oauth_status",
+   "fieldtype": "Select",
+   "label": "OAuth Status",
+   "options": "Not Connected\nConnected\nToken Expired",
+   "default": "Not Connected",
+   "read_only": 1,
+   "in_list_view": 0,
+   "bold": 1
+  },
+  {
+   "fieldname": "oauth_connect_button",
+   "fieldtype": "Button",
+   "label": "Connect",
+   "depends_on": "eval:doc.auth_type === 'oauth' && doc.oauth_status !== 'Connected'"
+  },
+  {
+   "fieldname": "oauth_disconnect_button",
+   "fieldtype": "Button",
+   "label": "Disconnect",
+   "depends_on": "eval:doc.auth_type === 'oauth' && doc.oauth_status === 'Connected'"
+  },
+  {
+   "fieldname": "column_break_oauth",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "oauth_scope",
+   "fieldtype": "Small Text",
+   "label": "OAuth Scope",
+   "description": "Space-separated OAuth scopes (e.g. 'read write'). Leave blank for provider default.",
+   "depends_on": "eval:doc.auth_type === 'oauth'"
+  },
+  {
+   "fieldname": "oauth_extra_authorize_params",
+   "fieldtype": "Small Text",
+   "label": "Extra Authorize Params (JSON)",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "description": "Additional URL parameters for the authorization endpoint (e.g. {\"user_scope\": \"...\", \"access_type\": \"offline\"})"
+  },
+  {
+   "fieldname": "oauth_endpoints_section",
+   "fieldtype": "Section Break",
+   "label": "OAuth Endpoints",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "collapsible": 1,
+   "collapsed": 1
+  },
+  {
+   "fieldname": "oauth_authorization_endpoint",
+   "fieldtype": "Data",
+   "label": "Authorization Endpoint",
+   "description": "e.g. https://higgsfield.ai/oauth/authorize",
+   "depends_on": "eval:doc.auth_type === 'oauth'"
+  },
+  {
+   "fieldname": "oauth_token_endpoint",
+   "fieldtype": "Data",
+   "label": "Token Endpoint",
+   "description": "e.g. https://higgsfield.ai/oauth/token",
+   "depends_on": "eval:doc.auth_type === 'oauth'"
+  },
+  {
+   "fieldname": "oauth_client_id",
+   "fieldtype": "Data",
+   "label": "Client ID",
+   "depends_on": "eval:doc.auth_type === 'oauth'"
+  },
+  {
+   "fieldname": "oauth_client_secret",
+   "fieldtype": "Password",
+   "label": "Client Secret",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "description": "Stored encrypted. Leave blank if using PKCE-only public client."
+  },
+  {
+   "fieldname": "oauth_token_response_path",
+   "fieldtype": "Data",
+   "label": "Token Response Path",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "description": "JSON path to access token if nested (e.g. authed_user.access_token). Defaults to access_token."
+  },
+  {
+   "fieldname": "oauth_tokens_section",
+   "fieldtype": "Section Break",
+   "label": "Stored Tokens",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "collapsible": 1,
+   "collapsed": 1
+  },
+  {
+   "fieldname": "oauth_access_token",
+   "fieldtype": "Password",
+   "label": "Access Token",
+   "read_only": 1,
+   "description": "Set automatically after OAuth flow. Stored encrypted."
+  },
+  {
+   "fieldname": "oauth_refresh_token",
+   "fieldtype": "Password",
+   "label": "Refresh Token",
+   "read_only": 1,
+   "description": "Set automatically after OAuth flow. Stored encrypted."
+  },
+  {
+   "fieldname": "oauth_token_expires_at",
+   "fieldtype": "Datetime",
+   "label": "Token Expires At",
+   "read_only": 1
   },
   {
    "fieldname": "custom_headers_section",

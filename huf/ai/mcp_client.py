@@ -220,40 +220,9 @@ async def execute_mcp_tool(
 
         mcp_server = frappe.get_doc("MCP Server", server_name)
         
-        # Build headers
-        headers = _build_mcp_headers(mcp_server)
-        return await _execute_mcp_tool_http(
-            mcp_server, tool_name, arguments, headers
+        return await _execute_mcp_tool_via_sdk(
+            mcp_server, tool_name, arguments
         )
-        
-        # Use LiteLLM's experimental MCP client if available
-        # try:
-        #     from litellm.experimental_mcp_client import call_openai_tool
-            
-        #     # Prepare the tool call in OpenAI format
-        #     tool_call = {
-        #         "type": "function",
-        #         "function": {
-        #             "name": tool_name,
-        #             "arguments": json.dumps(arguments)
-        #         }
-        #     }
-            
-        #     # Call the MCP tool
-        #     result = await call_openai_tool(
-        #         mcp_url=mcp_server.server_url,
-        #         tool_call=tool_call,
-        #         headers=headers,
-        #         timeout=mcp_server.timeout_seconds or 30
-        #     )
-            
-        #     return result
-            
-        # except ImportError:
-        #     # Fallback to direct HTTP call if LiteLLM MCP client not available
-        #     return await _execute_mcp_tool_http(
-        #         mcp_server, tool_name, arguments, headers
-        #     )
             
     except Exception as e:
         frappe.log_error(
@@ -263,56 +232,93 @@ async def execute_mcp_tool(
         return {"error": str(e), "success": False}
 
 
-async def _execute_mcp_tool_http(
-    mcp_server,
-    tool_name: str,
-    arguments: dict,
-    headers: dict
-) -> Any:
+from typing import Callable, Any
+
+def _has_status_code(exc, code: str) -> bool:
+    if code in str(exc):
+        return True
+    if hasattr(exc, "exceptions"):
+        for sub_exc in exc.exceptions:
+            if _has_status_code(sub_exc, code):
+                return True
+    return False
+
+def _format_mcp_error(exc) -> str:
+    import httpx
+    if hasattr(exc, "exceptions"):
+        return " | ".join(_format_mcp_error(e) for e in exc.exceptions)
+    if isinstance(exc, httpx.HTTPStatusError):
+        msg = str(exc)
+        try:
+            if hasattr(exc.response, "text") and exc.response.text:
+                msg += f" (Response: {exc.response.text})"
+        except Exception:
+            pass # Ignore if streaming response not read
+        return msg
+    return str(exc)
+
+async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
     """
-    Fallback HTTP-based MCP tool execution.
-    
-    This is used when LiteLLM's MCP client is not available.
+    Executes an async operation with an initialized MCP ClientSession.
+    Automatically handles transport selection (SSE vs HTTP) and OAuth 401 retries.
     """
-    import aiohttp
-    
-    url = mcp_server.server_url
-    timeout = aiohttp.ClientTimeout(total=mcp_server.timeout_seconds or 30)
-    
-    # MCP JSON-RPC format for tool calls
-    payload = {
-        "jsonrpc": "2.0",
-        "method": "tools/call",
-        "params": {
-            "name": tool_name,
-            "arguments": arguments
-        },
-        "id": 1
-    }
+    headers = _build_mcp_headers(mcp_server)
     
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(url, json=payload, headers=headers) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    return {
-                        "error": f"MCP server returned status {response.status}: {error_text}",
-                        "success": False
-                    }
-                
-                result = await response.json()
-                
-                # Handle JSON-RPC response
-                if "error" in result:
-                    return {
-                        "error": result["error"].get("message", "Unknown MCP error"),
-                        "success": False
-                    }
-                
-                return result.get("result", result)
-                
-    except asyncio.TimeoutError:
-        return {"error": f"MCP server timeout after {mcp_server.timeout_seconds}s", "success": False}
+        return await _do_execute_mcp_session(mcp_server, headers, operation)
+    except Exception as e:
+        # If it's a 401 and we use OAuth, retry once
+        if mcp_server.auth_type == "oauth" and _has_status_code(e, "401"):
+            from huf.ai.mcp_oauth import refresh_oauth_token
+            try:
+                refresh_oauth_token(mcp_server.name)
+                # Rebuild headers with fresh token
+                headers = _build_mcp_headers(mcp_server)
+                return await _do_execute_mcp_session(mcp_server, headers, operation)
+            except Exception as refresh_exc:
+                frappe.log_error(f"OAuth retry failed: {refresh_exc}", "MCP OAuth Retry")
+                raise Exception("OAuth token invalid or expired. Reconnect via the MCP Server form.")
+        raise Exception(_format_mcp_error(e))
+
+async def _do_execute_mcp_session(mcp_server, headers, operation):
+    import httpx
+    from mcp.client.session import ClientSession
+    
+    url = mcp_server.server_url
+    transport_type = getattr(mcp_server, "transport_type", "http").lower()
+    timeout_sec = float(mcp_server.timeout_seconds or 30.0)
+    
+    if transport_type == "sse":
+        from mcp.client.sse import sse_client
+        async with sse_client(url, headers=headers, timeout=timeout_sec) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                return await operation(session)
+    else:
+        from mcp.client.streamable_http import streamable_http_client
+        client = httpx.AsyncClient(
+            headers=headers, 
+            timeout=httpx.Timeout(timeout_sec, read=timeout_sec)
+        )
+        async with streamable_http_client(url, http_client=client) as streams:
+            read_stream, write_stream, get_session_id = streams
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                return await operation(session)
+
+async def _execute_mcp_tool_via_sdk(mcp_server, tool_name: str, arguments: dict) -> Any:
+    """
+    Executes an MCP tool call using the official MCP Python SDK.
+    """
+    async def operation(session):
+        return await session.call_tool(tool_name, arguments)
+    
+    try:
+        result = await execute_with_mcp_session(mcp_server, operation)
+        # Return standard MCP content payload
+        if hasattr(result, "model_dump"):
+            return result.model_dump()
+        return {"content": [{"type": "text", "text": str(result)}], "isError": getattr(result, "isError", False)}
     except Exception as e:
         return {"error": str(e), "success": False}
 
@@ -334,13 +340,23 @@ def _build_mcp_headers(mcp_server) -> dict:
     
     # Add authentication header
     if mcp_server.auth_type and mcp_server.auth_type != "none":
-        auth_value = mcp_server.get_password("auth_header_value")
-        
-        if auth_value and mcp_server.auth_header_name:
-            if mcp_server.auth_type == "bearer_token":
-                headers[mcp_server.auth_header_name] = f"Bearer {auth_value}"
-            else:
-                headers[mcp_server.auth_header_name] = auth_value
+        if mcp_server.auth_type == "oauth":
+            # Delegate to mcp_oauth — handles proactive refresh
+            from huf.ai.mcp_oauth import get_valid_access_token
+            try:
+                token = get_valid_access_token(mcp_server.name)
+                headers["Authorization"] = f"Bearer {token}"
+            except ValueError as exc:
+                frappe.log_error(str(exc), "MCP OAuth Header Error")
+                # Proceed without auth header; server will return 401
+        else:
+            auth_value = mcp_server.get_password("auth_header_value")
+            
+            if auth_value and mcp_server.auth_header_name:
+                if mcp_server.auth_type == "bearer_token":
+                    headers[mcp_server.auth_header_name] = f"Bearer {auth_value}"
+                else:
+                    headers[mcp_server.auth_header_name] = auth_value
     
     # Add custom headers
     if mcp_server.custom_headers:
@@ -369,14 +385,7 @@ def sync_mcp_server_tools(server_name: str) -> dict:
              return {"success": False, "error": f"Permission denied: You cannot sync MCP Server {server_name}"}
 
         mcp_server = frappe.get_doc("MCP Server", server_name)
-        headers = _build_mcp_headers(mcp_server)
-        
-        # Try to use LiteLLM's MCP client
-        # try:
-        #     tools = _sync_tools_via_litellm(mcp_server, headers)
-        # except ImportError:
-            # Fallback to direct HTTP
-        tools = _sync_tools_via_http(mcp_server, headers)
+        tools = _sync_tools_via_mcp_sdk(mcp_server)
         
         # Cache tools in the document
         mcp_server.available_tools = json.dumps(tools, indent=2)
@@ -435,71 +444,34 @@ def sync_mcp_server_tools(server_name: str) -> dict:
         }
 
 
-def _sync_tools_via_litellm(mcp_server, headers: dict) -> list:
+def _sync_tools_via_mcp_sdk(mcp_server) -> list:
     """
-    Sync tools using LiteLLM's experimental MCP client.
+    Sync tools using the official Model Context Protocol Python SDK.
+    Properly executes initialization handshakes for both HTTP and SSE.
     """
-    from litellm.experimental_mcp_client import load_mcp_tools
-    
-    # Run async function synchronously
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
     try:
-        tools = loop.run_until_complete(
-            load_mcp_tools(
-                mcp_url=mcp_server.server_url,
-                headers=headers,
-                format="openai"  # Get tools in OpenAI function format
-            )
-        )
-        return tools if tools else []
+        async def operation(session):
+            return await session.list_tools()
+        
+        result = loop.run_until_complete(execute_with_mcp_session(mcp_server, operation))
+        
+        # Convert ListToolsResult to OpenAI format
+        openai_tools = []
+        if hasattr(result, "tools"):
+            for tool in result.tools:
+                openai_tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description or "",
+                        "parameters": tool.inputSchema or {}
+                    }
+                })
+        return openai_tools
     finally:
         loop.close()
-
-
-def _sync_tools_via_http(mcp_server, headers: dict) -> list:
-    """
-    Sync tools using direct HTTP calls to MCP server.
-    """
-    import requests
-    
-    # MCP JSON-RPC format for listing tools
-    payload = {
-        "jsonrpc": "2.0",
-        "method": "tools/list",
-        "params": {},
-        "id": 1
-    }
-    
-    response = requests.post(
-        mcp_server.server_url,
-        json=payload,
-        headers=headers,
-        timeout=mcp_server.timeout_seconds or 30
-    )
-    
-    response.raise_for_status()
-    result = response.json()
-    
-    if "error" in result:
-        raise Exception(result["error"].get("message", "Unknown MCP error"))
-    
-    # Convert MCP tools list to OpenAI format
-    mcp_tools = result.get("result", {}).get("tools", [])
-    openai_tools = []
-    
-    for tool in mcp_tools:
-        openai_tools.append({
-            "type": "function",
-            "function": {
-                "name": tool.get("name", ""),
-                "description": tool.get("description", ""),
-                "parameters": tool.get("inputSchema", {})
-            }
-        })
-    
-    return openai_tools
 
 
 @frappe.whitelist()

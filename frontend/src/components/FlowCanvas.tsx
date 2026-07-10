@@ -366,13 +366,13 @@ export function FlowCanvas({
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         className="bg-background w-full h-full"
       >
-        <Background variant={'dots' as any} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
+        <Background variant={'dots' as any} gap={16} size={2} color="oklch(var(--muted-foreground) / 0.35)" />
         <Controls className="!bottom-6" />
         <MiniMap
           nodeColor={(node) => {
-            if (node.type === 'trigger') return 'var(--primary)';
+            if (node.type === 'trigger') return 'oklch(var(--primary))';
             if (node.type === 'end') return '#10b981';
-            return 'var(--muted)';
+            return 'oklch(var(--muted))';
           }}
           className="!bg-background !border-border !bottom-6"
         />
