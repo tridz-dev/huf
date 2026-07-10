@@ -114,6 +114,7 @@ export function ChatMessage({
                     ))
                 ) : (
                     <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
+                        <div className="min-w-0 max-w-full overflow-x-auto">
                         <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
                             {/* Show loading state while message is generating */}
                             {(status === 'submitted' || status === 'streaming') && 
@@ -169,6 +170,7 @@ export function ChatMessage({
                                 />
                             )}
                         </MessageContent>
+                        </div>
                         {/* Actions for assistant messages */}
                         {message.from === 'assistant' && message.versions[0]?.content && (!message.tools || !showToolExecutionDetails) && (
                             <div className="opacity-0 transition-opacity group-hover:opacity-100">
