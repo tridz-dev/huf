@@ -36,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 // ---------------------------------------------------------------------------
 // Role badge colour map
@@ -99,6 +100,13 @@ function InviteDialog({ open, roles, onClose, onInvited }: InviteDialogProps) {
       setBusy(false);
     }
   };
+
+  useSaveShortcut({
+    onSave: handleSubmit,
+    enabled: open,
+    isSubmitting: busy,
+    allowInDialog: true,
+  });
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
