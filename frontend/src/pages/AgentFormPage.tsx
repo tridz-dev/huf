@@ -116,6 +116,12 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
     stt_model: agent.stt_model || undefined,
+    allow_file_upload: agent.allow_file_upload === 1,
+    enable_ocr: agent.enable_ocr === 1,
+    max_upload_size_mb:
+      agent.max_upload_size_mb !== undefined && agent.max_upload_size_mb !== null
+        ? agent.max_upload_size_mb
+        : undefined,
   };
 }
 
@@ -192,6 +198,9 @@ export function AgentFormPage() {
         'tts_model',
         'tts_voice',
         'stt_model',
+        'allow_file_upload',
+        'enable_ocr',
+        'max_upload_size_mb',
       ],
       default: false,
       disabled: false,
@@ -326,6 +335,9 @@ export function AgentFormPage() {
         tts_model: undefined,
         tts_voice: '',
         stt_model: undefined,
+        allow_file_upload: false,
+        enable_ocr: false,
+        max_upload_size_mb: 25,
       },
   });
 
@@ -879,6 +891,12 @@ export function AgentFormPage() {
             tts_model: data.tts_model || undefined,
             tts_voice: data.tts_voice || '',
             stt_model: data.stt_model || undefined,
+            allow_file_upload: data.allow_file_upload === 1,
+            enable_ocr: data.enable_ocr === 1,
+            max_upload_size_mb:
+              data.max_upload_size_mb !== undefined && data.max_upload_size_mb !== null
+                ? data.max_upload_size_mb
+                : undefined,
           });
         }
         // Track initial disabled state and persisted allow_chat
@@ -1049,6 +1067,9 @@ export function AgentFormPage() {
         tts_model: values.tts_model || undefined,
         tts_voice: values.tts_voice || undefined,
         stt_model: values.stt_model || undefined,
+        allow_file_upload: values.allow_file_upload ? 1 : 0,
+        enable_ocr: values.enable_ocr ? 1 : 0,
+        max_upload_size_mb: values.max_upload_size_mb !== undefined ? values.max_upload_size_mb : undefined,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -1123,6 +1144,12 @@ export function AgentFormPage() {
           tts_model: newAgent.tts_model || undefined,
           tts_voice: newAgent.tts_voice || '',
           stt_model: newAgent.stt_model || undefined,
+          allow_file_upload: newAgent.allow_file_upload === 1,
+          enable_ocr: newAgent.enable_ocr === 1,
+          max_upload_size_mb:
+            newAgent.max_upload_size_mb !== undefined && newAgent.max_upload_size_mb !== null
+              ? newAgent.max_upload_size_mb
+              : undefined,
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
@@ -1187,6 +1214,9 @@ form.reset({
   tts_model: values.tts_model,
   tts_voice: values.tts_voice,
   stt_model: values.stt_model,
+  allow_file_upload: values.allow_file_upload,
+  enable_ocr: values.enable_ocr,
+  max_upload_size_mb: values.max_upload_size_mb,
 });
 // Reset tools, disabled state, and persisted allow_chat after successful update
 setInitialTools([...selectedTools]);

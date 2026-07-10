@@ -685,6 +685,84 @@ This includes whether each tool call is completed and its corresponding result.`
 					/>
 				</div>
 			</FormSettingsSection>
+
+			<FormSettingsSection
+				title="Document Upload"
+				description="Let users attach documents or images in chat for this agent."
+			>
+				<div className="grid gap-6 sm:grid-cols-2">
+					<FormField
+						control={form.control}
+						name="allow_file_upload"
+						render={({ field }) => (
+							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+								<div className="space-y-0.5">
+									<FormLabel className="text-base">Allow File Upload</FormLabel>
+									<FormDescription>
+										Lets users attach documents or images in chat for this agent.
+									</FormDescription>
+								</div>
+								<FormControl>
+									<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+								</FormControl>
+							</FormItem>
+						)}
+					/>
+
+					{form.watch('allow_file_upload') && (
+						<>
+							<FormField
+								control={form.control}
+								name="enable_ocr"
+								render={({ field }) => (
+									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+										<div className="space-y-0.5">
+											<FormLabel className="text-base">Enable OCR</FormLabel>
+											<FormDescription>
+												Route uploaded documents through OCR extraction instead of vision/local extraction only. Requires the selected model to support the OCR modality.
+											</FormDescription>
+										</div>
+										<FormControl>
+											<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+										</FormControl>
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={form.control}
+								name="max_upload_size_mb"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Max Upload Size (MB)</FormLabel>
+										<FormControl>
+											<Input
+												type="number"
+												placeholder="25"
+												{...field}
+												value={field.value?.toString() || ''}
+												onChange={(e) => {
+													const value = e.target.value;
+													if (value === '') {
+														field.onChange(undefined);
+													} else {
+														const numValue = parseInt(value, 10);
+														if (!isNaN(numValue)) {
+															field.onChange(numValue);
+														}
+													}
+												}}
+											/>
+										</FormControl>
+										<FormDescription>Capped by the global 25 MB limit.</FormDescription>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+						</>
+					)}
+				</div>
+			</FormSettingsSection>
 		</div>
 	);
 }

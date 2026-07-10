@@ -270,4 +270,7 @@ export interface AgentDoc {
   tts_model?: string | null;
   tts_voice?: string | null;
   stt_model?: string | null;
+  allow_file_upload?: 0 | 1;
+  enable_ocr?: 0 | 1;
+  max_upload_size_mb?: number | null;
 }
