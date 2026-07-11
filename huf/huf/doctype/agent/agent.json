@@ -88,6 +88,11 @@
   "enable_ocr",
   "column_break_doc_upload",
   "max_upload_size_mb",
+  "code_execution_section",
+  "allow_code_execution",
+  "execution_profile",
+  "column_break_code_exec",
+  "execution_shared_dir_limit_mb",
   "huf_ui_section",
   "agent_color",
   "column_break_g3a9",
@@ -666,6 +671,37 @@
    "fieldname": "max_upload_size_mb",
    "fieldtype": "Int",
    "label": "Max Upload Size (MB)"
+  },
+  {
+   "description": "Opt-in to the elevated-risk Python Code Execution tool. Requires both this flag and a Code Execution tool assigned in the Tools tab, plus an Execution Profile below, before the tool becomes active.",
+   "fieldname": "code_execution_section",
+   "fieldtype": "Section Break",
+   "label": "Code Execution"
+  },
+  {
+   "default": "0",
+   "description": "Explicit second confirmation enabling the Python Code Execution tool for this agent. The tool stays inert until this is checked and an Execution Profile is selected.",
+   "fieldname": "allow_code_execution",
+   "fieldtype": "Check",
+   "label": "Allow Code Execution"
+  },
+  {
+   "description": "Execution Profile that caps modules, network, filesystem, broker capabilities, and resource limits for code runs. If unset, the Code Execution tool remains inert.",
+   "fieldname": "execution_profile",
+   "fieldtype": "Link",
+   "label": "Execution Profile",
+   "options": "Execution Profile"
+  },
+  {
+   "fieldname": "column_break_code_exec",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Optional per-agent cap (MB) on the per-conversation shared directory. Leave blank to use the Execution Profile default.",
+   "fieldname": "execution_shared_dir_limit_mb",
+   "fieldtype": "Int",
+   "label": "Shared Dir Limit (MB)",
+   "non_negative": 1
   },
   {
    "default": "2000",

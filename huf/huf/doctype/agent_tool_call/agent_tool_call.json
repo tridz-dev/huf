@@ -14,7 +14,13 @@
   "tool_result",
   "status",
   "call_id",
-  "error_message"
+  "error_message",
+  "execution_profile",
+  "execution_profile_snapshot",
+  "code_ref",
+  "exit_status",
+  "resource_usage",
+  "limits_hit"
  ],
  "fields": [
   {
@@ -81,6 +87,51 @@
    "fieldtype": "Link",
    "label": "MCP Server",
    "options": "MCP Server",
+   "read_only": 1
+  },
+  {
+   "description": "Execution Profile that governed this code execution call.",
+   "fieldname": "execution_profile",
+   "fieldtype": "Link",
+   "label": "Execution Profile",
+   "options": "Execution Profile",
+   "read_only": 1
+  },
+  {
+   "description": "Snapshot of the Execution Profile (permissions, limits, policies) captured at call time so later profile edits do not change the audit meaning of this record.",
+   "fieldname": "execution_profile_snapshot",
+   "fieldtype": "JSON",
+   "label": "Execution Profile Snapshot",
+   "read_only": 1
+  },
+  {
+   "description": "Hash / artifact reference of the executed code. Never stores raw code inline.",
+   "fieldname": "code_ref",
+   "fieldtype": "Data",
+   "label": "Code Reference",
+   "read_only": 1
+  },
+  {
+   "description": "How the sandboxed execution terminated.",
+   "fieldname": "exit_status",
+   "fieldtype": "Select",
+   "label": "Exit Status",
+   "options": "\nOk\nTimeout\nOOM\nError\nKilled",
+   "read_only": 1
+  },
+  {
+   "description": "Measured resource usage for the run (cpu_s, wall_s, mem_mb_peak, output_bytes).",
+   "fieldname": "resource_usage",
+   "fieldtype": "JSON",
+   "label": "Resource Usage",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Set when the execution hit one or more of its resource limits (wall/CPU/memory/output).",
+   "fieldname": "limits_hit",
+   "fieldtype": "Check",
+   "label": "Limits Hit",
    "read_only": 1
   }
  ],

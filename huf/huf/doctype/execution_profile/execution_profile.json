@@ -1,0 +1,165 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:profile_name",
+ "creation": "2026-07-11 04:30:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "profile_name",
+  "is_builtin",
+  "disabled",
+  "column_break_ep_general",
+  "approval_mode",
+  "filesystem_policy",
+  "network_policy",
+  "allowed_modules",
+  "limits_section",
+  "max_wall_time_s",
+  "max_cpu_seconds",
+  "column_break_ep_limits",
+  "max_memory_mb",
+  "max_output_bytes",
+  "permissions_section",
+  "permissions"
+ ],
+ "fields": [
+  {
+   "description": "A unique, human-readable name for this execution profile.",
+   "fieldname": "profile_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Profile Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "0",
+   "description": "If checked, this is a built-in profile shipped with Huf. Built-in profiles are reused across agents and snapshotted at execution time.",
+   "fieldname": "is_builtin",
+   "fieldtype": "Check",
+   "label": "Is Built-in"
+  },
+  {
+   "default": "0",
+   "description": "If checked, this profile is disabled and cannot be used for new executions.",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "column_break_ep_general",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Ask Every Time",
+   "description": "How executions under this profile are approved. 'Ask Every Time' creates an Agent Execution Approval record and pauses the tool call until approved.",
+   "fieldname": "approval_mode",
+   "fieldtype": "Select",
+   "label": "Approval Mode",
+   "options": "Auto Approve\nAsk Every Time\nNever Allow"
+  },
+  {
+   "default": "None",
+   "description": "Filesystem access granted to the sandboxed interpreter.",
+   "fieldname": "filesystem_policy",
+   "fieldtype": "Select",
+   "label": "Filesystem Policy",
+   "options": "None\nScratch Only\nShared Directory"
+  },
+  {
+   "description": "Optional network egress allowlist applied to the sandbox broker's http.request capability.",
+   "fieldname": "network_policy",
+   "fieldtype": "Link",
+   "label": "Network Access Policy",
+   "options": "Network Access Policy"
+  },
+  {
+   "description": "List of stdlib/library module names the sandboxed interpreter is allowed to import.",
+   "fieldname": "allowed_modules",
+   "fieldtype": "JSON",
+   "label": "Allowed Modules"
+  },
+  {
+   "fieldname": "limits_section",
+   "fieldtype": "Section Break",
+   "label": "Resource Limits"
+  },
+  {
+   "default": "30",
+   "description": "Maximum wall-clock time (seconds) a single execution may run.",
+   "fieldname": "max_wall_time_s",
+   "fieldtype": "Int",
+   "label": "Max Wall Time (s)",
+   "non_negative": 1
+  },
+  {
+   "default": "30",
+   "description": "Maximum CPU time (seconds) a single execution may consume.",
+   "fieldname": "max_cpu_seconds",
+   "fieldtype": "Int",
+   "label": "Max CPU Seconds",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "column_break_ep_limits",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "256",
+   "description": "Maximum memory (MB) the sandboxed interpreter may allocate.",
+   "fieldname": "max_memory_mb",
+   "fieldtype": "Int",
+   "label": "Max Memory (MB)",
+   "non_negative": 1
+  },
+  {
+   "default": "1048576",
+   "description": "Maximum combined stdout/stderr size (bytes) captured from an execution.",
+   "fieldname": "max_output_bytes",
+   "fieldtype": "Int",
+   "label": "Max Output (bytes)",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "permissions_section",
+   "fieldtype": "Section Break",
+   "label": "Broker Capabilities"
+  },
+  {
+   "description": "Capabilities the sandbox broker is allowed to invoke back into Frappe under the acting user's permissions.",
+   "fieldname": "permissions",
+   "fieldtype": "Table",
+   "label": "Permissions",
+   "options": "Execution Profile Permission"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-11 04:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Execution Profile",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
