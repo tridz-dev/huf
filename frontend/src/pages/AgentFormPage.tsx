@@ -24,7 +24,7 @@ import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
-import { AdvancedTab } from '../components/agent/AdvancedTab';
+import { AdvancedTab, type ExecutionProfileOption } from '../components/agent/AdvancedTab';
 import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
@@ -44,6 +44,12 @@ type PromptListRow = {
   version?: number | null;
   is_latest?: 0 | 1;
   description?: string | null;
+};
+
+type ExecutionProfileListRow = {
+  name: string;
+  profile_name?: string | null;
+  approval_mode?: string | null;
 };
 
 type AgentToolRow = {
@@ -121,6 +127,12 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     max_upload_size_mb:
       agent.max_upload_size_mb !== undefined && agent.max_upload_size_mb !== null
         ? agent.max_upload_size_mb
+        : undefined,
+    allow_code_execution: agent.allow_code_execution === 1,
+    execution_profile: agent.execution_profile || undefined,
+    execution_shared_dir_limit_mb:
+      agent.execution_shared_dir_limit_mb !== undefined && agent.execution_shared_dir_limit_mb !== null
+        ? agent.execution_shared_dir_limit_mb
         : undefined,
   };
 }
@@ -201,6 +213,9 @@ export function AgentFormPage() {
         'allow_file_upload',
         'enable_ocr',
         'max_upload_size_mb',
+        'allow_code_execution',
+        'execution_profile',
+        'execution_shared_dir_limit_mb',
       ],
       default: false,
       disabled: false,
@@ -257,6 +272,8 @@ export function AgentFormPage() {
   const [loadingPrompts, setLoadingPrompts] = useState(false);
   const [summaryPromptOptions, setSummaryPromptOptions] = useState<AgentPromptOption[]>([]);
   const [loadingSummaryPrompts, setLoadingSummaryPrompts] = useState(false);
+  const [executionProfileOptions, setExecutionProfileOptions] = useState<ExecutionProfileOption[]>([]);
+  const [loadingExecutionProfiles, setLoadingExecutionProfiles] = useState(false);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
@@ -338,6 +355,9 @@ export function AgentFormPage() {
         allow_file_upload: false,
         enable_ocr: false,
         max_upload_size_mb: 25,
+        allow_code_execution: false,
+        execution_profile: undefined,
+        execution_shared_dir_limit_mb: undefined,
       },
   });
 
@@ -575,6 +595,50 @@ export function AgentFormPage() {
     };
 
     loadSummaryPromptOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadExecutionProfileOptions = async () => {
+      setLoadingExecutionProfiles(true);
+      try {
+        const profiles = await db.getDocList('Execution Profile', {
+          fields: ['name', 'profile_name', 'approval_mode'],
+          filters: [['disabled', '=', 0]],
+          limit: 500,
+          orderBy: { field: 'modified', order: 'desc' },
+        }) as ExecutionProfileListRow[];
+
+        if (cancelled) {
+          return;
+        }
+
+        setExecutionProfileOptions(
+          profiles.map((profile) => ({
+            value: profile.name,
+            label: profile.profile_name || profile.name,
+            approvalMode: profile.approval_mode || undefined,
+          }))
+        );
+      } catch (error) {
+        console.error('Error loading execution profiles:', error);
+        if (!cancelled) {
+          setExecutionProfileOptions([]);
+          toast.error('Failed to load Execution Profiles');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingExecutionProfiles(false);
+        }
+      }
+    };
+
+    loadExecutionProfileOptions();
 
     return () => {
       cancelled = true;
@@ -897,6 +961,12 @@ export function AgentFormPage() {
               data.max_upload_size_mb !== undefined && data.max_upload_size_mb !== null
                 ? data.max_upload_size_mb
                 : undefined,
+            allow_code_execution: data.allow_code_execution === 1,
+            execution_profile: data.execution_profile || undefined,
+            execution_shared_dir_limit_mb:
+              data.execution_shared_dir_limit_mb !== undefined && data.execution_shared_dir_limit_mb !== null
+                ? data.execution_shared_dir_limit_mb
+                : undefined,
           });
         }
         // Track initial disabled state and persisted allow_chat
@@ -1070,6 +1140,9 @@ export function AgentFormPage() {
         allow_file_upload: values.allow_file_upload ? 1 : 0,
         enable_ocr: values.enable_ocr ? 1 : 0,
         max_upload_size_mb: values.max_upload_size_mb !== undefined ? values.max_upload_size_mb : undefined,
+        allow_code_execution: values.allow_code_execution ? 1 : 0,
+        execution_profile: values.execution_profile || undefined,
+        execution_shared_dir_limit_mb: values.execution_shared_dir_limit_mb !== undefined ? values.execution_shared_dir_limit_mb : undefined,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -1150,6 +1223,12 @@ export function AgentFormPage() {
             newAgent.max_upload_size_mb !== undefined && newAgent.max_upload_size_mb !== null
               ? newAgent.max_upload_size_mb
               : undefined,
+          allow_code_execution: newAgent.allow_code_execution === 1,
+          execution_profile: newAgent.execution_profile || undefined,
+          execution_shared_dir_limit_mb:
+            newAgent.execution_shared_dir_limit_mb !== undefined && newAgent.execution_shared_dir_limit_mb !== null
+              ? newAgent.execution_shared_dir_limit_mb
+              : undefined,
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
@@ -1217,6 +1296,9 @@ form.reset({
   allow_file_upload: values.allow_file_upload,
   enable_ocr: values.enable_ocr,
   max_upload_size_mb: values.max_upload_size_mb,
+  allow_code_execution: values.allow_code_execution,
+  execution_profile: values.execution_profile,
+  execution_shared_dir_limit_mb: values.execution_shared_dir_limit_mb,
 });
 // Reset tools, disabled state, and persisted allow_chat after successful update
 setInitialTools([...selectedTools]);
@@ -1800,6 +1882,8 @@ setAllowChat(values.allow_chat);
                   allModels={allModels}
                   summaryPromptOptions={summaryPromptOptions}
                   loadingSummaryPrompts={loadingSummaryPrompts}
+                  executionProfileOptions={executionProfileOptions}
+                  loadingExecutionProfiles={loadingExecutionProfiles}
                 />
               </TabsContent>
             </Tabs>

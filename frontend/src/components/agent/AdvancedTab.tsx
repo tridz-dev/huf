@@ -32,15 +32,36 @@ import {
 	STT_MODEL_DESCRIPTION,
 } from '@/data/ai';
 
+export interface ExecutionProfileOption {
+	value: string;
+	label: string;
+	approvalMode?: string;
+}
+
 interface AdvancedTabProps {
 	form: UseFormReturn<AgentFormValues>;
 	allModels: AIModel[];
 	summaryPromptOptions: AgentPromptOption[];
 	loadingSummaryPrompts?: boolean;
+	executionProfileOptions?: ExecutionProfileOption[];
+	loadingExecutionProfiles?: boolean;
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
 	return (model.modalities || '').trim() === required;
+}
+
+function approvalModeDescription(mode?: string): string {
+	switch (mode) {
+		case 'Auto Approve':
+			return 'Code runs execute without manual approval.';
+		case 'Ask Every Time':
+			return 'This profile requires approval on every call.';
+		case 'Never Allow':
+			return 'This profile blocks all code execution calls.';
+		default:
+			return '';
+	}
 }
 
 function parseOptionalNumber(
@@ -59,6 +80,8 @@ export function AdvancedTab({
 	allModels,
 	summaryPromptOptions,
 	loadingSummaryPrompts = false,
+	executionProfileOptions = [],
+	loadingExecutionProfiles = false,
 }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
 	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
@@ -75,6 +98,14 @@ export function AdvancedTab({
 		...option,
 		subtitle: option.version ? `Version ${option.version}` : undefined,
 	}));
+	const selectedExecutionProfile = executionProfileOptions.find(
+		(option) => option.value === form.watch('execution_profile'),
+	);
+	const executionProfileComboboxOptions = executionProfileOptions.map((option) => ({
+		...option,
+		subtitle: option.approvalMode ? `Approval: ${option.approvalMode}` : undefined,
+	}));
+	const selectedApprovalHint = approvalModeDescription(selectedExecutionProfile?.approvalMode);
 
 	return (
 		<div className="space-y-12">
@@ -755,6 +786,91 @@ This includes whether each tool call is completed and its corresponding result.`
 											/>
 										</FormControl>
 										<FormDescription>Capped by the global 25 MB limit.</FormDescription>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+						</>
+					)}
+				</div>
+			</FormSettingsSection>
+
+			<FormSettingsSection
+				title="Code Execution"
+				description="Allow this agent to run Python code through the sandboxed Code Execution tool."
+			>
+				<div className="grid gap-6 sm:grid-cols-2">
+					<FormField
+						control={form.control}
+						name="allow_code_execution"
+						render={({ field }) => (
+							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+								<div className="space-y-0.5">
+									<FormLabel className="text-base">Allow Code Execution</FormLabel>
+									<FormDescription>
+										Explicit second confirmation enabling the Python Code Execution tool for this agent. The tool stays inert until this is checked and an Execution Profile is selected.
+									</FormDescription>
+								</div>
+								<FormControl>
+									<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+								</FormControl>
+							</FormItem>
+						)}
+					/>
+
+					{form.watch('allow_code_execution') && (
+						<>
+							<FormField
+								control={form.control}
+								name="execution_profile"
+								render={({ field }) => (
+									<FormItem className="sm:col-span-2">
+										<FormLabel>Execution Profile</FormLabel>
+										<FormControl>
+											<Combobox
+												options={executionProfileComboboxOptions}
+												value={field.value}
+												onValueChange={(v) => field.onChange(v || undefined)}
+												placeholder={loadingExecutionProfiles ? 'Loading profiles...' : 'Select an Execution Profile'}
+												disabled={loadingExecutionProfiles}
+												searchPlaceholder="Search execution profiles..."
+												emptyText="No enabled Execution Profiles found."
+											/>
+										</FormControl>
+										<FormDescription>
+											Caps modules, network, filesystem, broker capabilities, and resource limits for code runs. Execution Profiles are managed by admins in the Frappe desk.
+										</FormDescription>
+										{selectedExecutionProfile && selectedApprovalHint && (
+											<div className="flex flex-wrap items-center gap-2 pt-2">
+												{selectedExecutionProfile.approvalMode ? (
+													<Badge variant="outline">Approval: {selectedExecutionProfile.approvalMode}</Badge>
+												) : null}
+												<span className="text-sm text-muted-foreground">{selectedApprovalHint}</span>
+											</div>
+										)}
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={form.control}
+								name="execution_shared_dir_limit_mb"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Shared Dir Limit (MB)</FormLabel>
+										<FormControl>
+											<Input
+												type="number"
+												placeholder="Profile default"
+												{...field}
+												value={field.value?.toString() || ''}
+												onChange={(e) => field.onChange(parseOptionalNumber(e.target.value, (v) => parseInt(v, 10)))}
+											/>
+										</FormControl>
+										<FormDescription>
+											Optional per-agent cap on the per-conversation shared directory. Must be at or below the selected profile&apos;s own limit (enforced server-side). Leave blank to use the profile default.
+										</FormDescription>
 										<FormMessage />
 									</FormItem>
 								)}

@@ -41,7 +41,8 @@ export type ToolType =
   | "Get Conversation Data"
   | "Set Conversation Data"
   | "Load Conversation Data"
-  | "Speech to Text";
+  | "Speech to Text"
+  | "Code Execution";
 
 export type AgentToolFunctionRef = {
   name: string;
@@ -273,4 +274,7 @@ export interface AgentDoc {
   allow_file_upload?: 0 | 1;
   enable_ocr?: 0 | 1;
   max_upload_size_mb?: number | null;
+  allow_code_execution?: 0 | 1;
+  execution_profile?: string | null; // Link to Execution Profile
+  execution_shared_dir_limit_mb?: number | null;
 }
