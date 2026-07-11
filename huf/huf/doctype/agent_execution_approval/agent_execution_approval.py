@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 
 class AgentExecutionApproval(Document):
@@ -61,12 +61,64 @@ def _can_decide(doc: Document, user: str) -> bool:
 	return False
 
 
-def _transition(docname: str, new_status: str, comment: str | None = None) -> Document:
+def _finalize_tool_call(doc: Document, error_message: str) -> None:
+	"""Close the linked ``Agent Tool Call`` as a terminal failure.
+
+	Used when a parked execution is rejected or lapses: no RQ job is ever
+	enqueued for it, so the audit row must not sit parked at "Queued" forever.
+	The ``exit_status`` Select has no dedicated Rejected value (its options are
+	Ok/Timeout/OOM/Error/Killed), so "Error" — the closest existing terminal
+	value — marks the call. ``ignore_permissions`` mirrors the dispatcher,
+	which writes audit rows on behalf of users who hold no write perm on
+	``Agent Tool Call``.
+	"""
+	if not doc.agent_tool_call:
+		return
+	call = frappe.get_doc("Agent Tool Call", doc.agent_tool_call)
+	call.status = "Failed"
+	call.exit_status = "Error"
+	call.error_message = error_message
+	call.save(ignore_permissions=True)
+
+
+def _mark_expired(doc: Document) -> None:
+	"""Lapse an undecided approval: Expired + finalize the parked tool call.
+
+	Terminal rejected-equivalent (no enqueue). ``decided_by``/``decided_at``
+	stay empty — this is a system transition, not a user decision, so it uses
+	``ignore_permissions`` (a designated approver without DocType write perm
+	must still be able to lapse an expired record; the decide-path save stays
+	permission-checked). The explicit commit is deliberate: the caller reports
+	the lapse by throwing, and Frappe rolls the request's writes back on an
+	exception, so without a commit here the Expired transition itself would be
+	undone.
+	"""
+	doc.status = "Expired"
+	doc.save(ignore_permissions=True)
+	_finalize_tool_call(doc, _("Execution approval expired before a decision was recorded."))
+
+	from huf.ai.tools.code_execution import clear_pending_execution
+
+	clear_pending_execution(doc.name)
+	frappe.db.commit()
+
+
+def _transition(
+	docname: str, new_status: str, comment: str | None = None, before_decide=None
+) -> Document:
 	"""Move an approval from Pending to a terminal decided state.
 
 	Enforces (1) that the acting user is allowed to decide this approval
-	(capability / approver scoping) and (2) the state-machine invariant that a
-	decision can be recorded exactly once, while the record is still Pending.
+	(capability / approver scoping), (2) the state-machine invariant that a
+	decision can be recorded exactly once, while the record is still Pending,
+	and (3) lazy TTL expiry: an undecided approval past ``expires_on`` lapses
+	to Expired instead of being decided (no scheduler job sweeps approvals, so
+	the TTL is enforced on the next access).
+
+	``before_decide`` (optional callable receiving the doc) runs after all
+	guards and before the status flip; raising from it aborts the decision
+	(fail closed). ``approve_execution`` uses it to prove the parked execution
+	payload is still resolvable before ``Approved`` is recorded.
 	"""
 	doc = frappe.get_doc("Agent Execution Approval", docname)
 
@@ -83,6 +135,18 @@ def _transition(docname: str, new_status: str, comment: str | None = None) -> Do
 			frappe.ValidationError,
 		)
 
+	# Lazy TTL expiry — an undecided approval past ``expires_on`` lapses to
+	# Expired (terminal) and the decide attempt is rejected.
+	if doc.expires_on and get_datetime(doc.expires_on) < now_datetime():
+		_mark_expired(doc)
+		frappe.throw(
+			_("This execution approval has expired and can no longer be decided."),
+			frappe.ValidationError,
+		)
+
+	if before_decide:
+		before_decide(doc)
+
 	doc.status = new_status
 	doc.decided_by = frappe.session.user
 	doc.decided_at = now_datetime()
@@ -92,13 +156,67 @@ def _transition(docname: str, new_status: str, comment: str | None = None) -> Do
 	return doc
 
 
+def _load_dispatch_payload(doc: Document) -> dict:
+	"""``before_decide`` hook for approvals: resolve the parked execution payload.
+
+	The approval may flip to ``Approved`` only while the Redis hold for the
+	parked execution is still present and internally consistent. A lapsed hold
+	marks the approval Expired (same treatment as TTL expiry) and aborts the
+	decision; an integrity/acting-user problem aborts with the approval left
+	Pending (see ``load_pending_execution``).
+	"""
+	from huf.ai.tools.code_execution import PendingExecutionExpired, load_pending_execution
+
+	try:
+		return load_pending_execution(doc)
+	except PendingExecutionExpired:
+		_mark_expired(doc)
+		frappe.throw(
+			_("The parked execution is no longer available; the approval was marked Expired."),
+			frappe.ValidationError,
+		)
+
+
 @frappe.whitelist()
 def approve_execution(agent_execution_approval_name: str, comment: str | None = None) -> dict:
-	doc = _transition(agent_execution_approval_name, "Approved", comment)
-	return {"name": doc.name, "status": doc.status}
+	"""Approve a parked code execution and dispatch its RQ job.
+
+	The payload check runs as a pre-decision guard (a lapsed/invalid hold
+	aborts before ``Approved`` is recorded), and the job is enqueued only
+	AFTER the approval is saved (the worker refuses to run a call whose
+	approval is not yet Approved). The job impersonates the ORIGINAL
+	requesting user captured at dispatch time — never the approver.
+	"""
+	payload: dict = {}
+
+	def _preflight(doc):
+		payload.update(_load_dispatch_payload(doc))
+
+	doc = _transition(
+		agent_execution_approval_name, "Approved", comment, before_decide=_preflight
+	)
+
+	from huf.ai.tools.code_execution import enqueue_approved_execution
+
+	enqueue_approved_execution(doc, payload)
+	return {"name": doc.name, "status": doc.status, "agent_tool_call": doc.agent_tool_call}
 
 
 @frappe.whitelist()
 def reject_execution(agent_execution_approval_name: str, comment: str | None = None) -> dict:
+	"""Reject a parked code execution.
+
+	Finalizes the linked ``Agent Tool Call`` as a terminal failure and drops
+	the parked payload; no job is ever enqueued.
+	"""
 	doc = _transition(agent_execution_approval_name, "Rejected", comment)
-	return {"name": doc.name, "status": doc.status}
+
+	reason = _("Execution approval rejected by {0}.").format(frappe.session.user)
+	if comment:
+		reason = f"{reason} {comment}"[:600]
+	_finalize_tool_call(doc, reason)
+
+	from huf.ai.tools.code_execution import clear_pending_execution
+
+	clear_pending_execution(doc.name)
+	return {"name": doc.name, "status": doc.status, "agent_tool_call": doc.agent_tool_call}

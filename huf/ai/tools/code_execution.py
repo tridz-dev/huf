@@ -283,6 +283,20 @@ def run_python(
 		)
 		approval.insert(ignore_permissions=True)
 
+		# Hold the resumable dispatch payload (raw code + snapshot + the
+		# original ``acting_user``) in Redis for as long as the approval is
+		# actionable — neither the approval row nor the audit row stores raw
+		# code, only ``code_ref``. Resolution (Phase 5): ``approve_execution()``
+		# (huf.huf.doctype.agent_execution_approval) validates this hold and
+		# calls ``enqueue_approved_execution()``, which finally dispatches
+		# ``enqueue_execution(call.name, code, snapshot, acting_user=...)``
+		# impersonating the ORIGINAL requester captured above — never the
+		# approver. A lapsed hold fails closed (the approval lapses to
+		# Expired); rejection/expiry finalize the audit row without enqueueing.
+		stash_pending_execution(
+			approval.name, code=code, profile_snapshot=snapshot, acting_user=acting_user
+		)
+
 		# ``Agent Tool Call.status`` has no dedicated "waiting" option; "Queued"
 		# is the closest available value, and the linked
 		# ``Agent Execution Approval.status == "Pending"`` is the real
@@ -290,19 +304,6 @@ def run_python(
 		# "Waiting Approval" status in a later phase.)
 		call.status = "Queued"
 		call.save(ignore_permissions=True)
-
-		# TODO(phase5): when ``approve_execution()`` transitions the approval to
-		# "Approved" (huf.huf.doctype.agent_execution_approval...), the
-		# resolution path must call
-		# ``huf.ai.tools.code_execution.enqueue_execution(call.name, code, snapshot, acting_user=...)``
-		# to finally dispatch the RQ job. The raw ``code`` is NOT persisted on
-		# the ``Agent Tool Call`` (only ``code_ref`` is), so Phase 5 must
-		# re-supply it at approval time — e.g. from the pending tool invocation
-		# context, or by re-issuing the tool call once the approval is granted.
-		# The ``acting_user`` captured at dispatch time must be re-supplied the
-		# same way — broker calls impersonate the ORIGINAL requester, never the
-		# approver who granted the execution.
-		# OPEN QUESTION: where the raw code is held between park and approval.
 
 		return {
 			"success": True,
@@ -361,6 +362,137 @@ def enqueue_execution(
 		acting_user=acting_user,
 		now=bool(getattr(frappe.flags, "in_test", False)),
 	)
+
+
+# ---------------------------------------------------------------------------
+# E2b — Pending-approval hold (Phase 5)
+#
+# An ``Ask Every Time`` dispatch parks the call behind an
+# ``Agent Execution Approval`` record instead of enqueueing. The raw ``code``
+# and the ``acting_user`` are deliberately NOT persisted on any DocType (the
+# audit rows carry only ``code_ref``), so the resumable dispatch payload is
+# held in Redis for exactly as long as the approval stays actionable
+# (``expires_on`` == now + ``_APPROVAL_TTL_HOURS``; the hold TTL matches).
+# ``approve_execution()`` resolves the hold and enqueues; a missing hold at
+# approval time means the window lapsed (Redis TTL / eviction / restart) and
+# the approval is treated as Expired. The hold is the ONLY source of the raw
+# code and the original requester — a lost hold can never be substituted with
+# the approver's identity or a re-supplied payload (fail closed).
+# ---------------------------------------------------------------------------
+
+#: Redis key prefix for parked (pending-approval) execution payloads.
+_PENDING_EXECUTION_PREFIX = "huf_pending_execution"
+
+
+class PendingExecutionExpired(Exception):
+	"""The Redis hold for a parked execution lapsed before it was approved."""
+
+
+def _pending_execution_key(approval_name: str) -> str:
+	return f"{_PENDING_EXECUTION_PREFIX}:{approval_name}"
+
+
+def stash_pending_execution(
+	approval_name: str, *, code: str, profile_snapshot: dict, acting_user: str | None
+) -> None:
+	"""Hold the resumable dispatch payload for a parked execution in Redis.
+
+	Called by :func:`run_python` right after the ``Agent Execution Approval``
+	row is inserted. The TTL mirrors the approval's ``expires_on`` so the hold
+	never outlives the window in which the approval is actionable. The payload
+	is the only place the raw code survives between park and approval; nothing
+	is written to the database.
+	"""
+	payload = {
+		"code": code,
+		"code_ref": _sha256(code),
+		"profile_snapshot": profile_snapshot or {},
+		"acting_user": acting_user,
+	}
+	frappe.cache().set_value(
+		_pending_execution_key(approval_name),
+		json.dumps(payload),
+		expires_in_sec=_APPROVAL_TTL_HOURS * 3600,
+	)
+
+
+def load_pending_execution(approval_doc) -> dict:
+	"""Load and validate the parked payload for an ``Agent Execution Approval``.
+
+	Returns ``{"code", "profile_snapshot", "acting_user"}`` ready for
+	:func:`enqueue_execution`. Fails closed at every step:
+	  - missing/corrupt hold → :class:`PendingExecutionExpired` (the caller
+	    lapses the approval to Expired);
+	  - held code that no longer hashes to the approval's ``code_ref`` →
+	    ``frappe.ValidationError`` (nothing is enqueued);
+	  - missing/unresolvable ``acting_user`` → ``frappe.ValidationError``
+	    (the approver's identity is NEVER substituted).
+	"""
+	raw = frappe.cache().get_value(_pending_execution_key(approval_doc.name))
+	payload = None
+	if raw:
+		try:
+			payload = json.loads(raw)
+		except (TypeError, ValueError):
+			payload = None
+	if not isinstance(payload, dict):
+		frappe.log_error(
+			f"pending execution hold for approval {approval_doc.name} is missing or corrupt",
+			"Huf Code Execution Approval",
+		)
+		raise PendingExecutionExpired(approval_doc.name)
+
+	code = payload.get("code")
+	if not isinstance(code, str) or not code or _sha256(code) != (approval_doc.code_ref or ""):
+		frappe.log_error(
+			f"pending execution hold for approval {approval_doc.name} failed integrity check",
+			"Huf Code Execution Approval",
+		)
+		frappe.throw(
+			"The parked execution payload failed its integrity check; refusing to enqueue.",
+			frappe.ValidationError,
+		)
+
+	acting_user = payload.get("acting_user")
+	if not isinstance(acting_user, str) or not acting_user:
+		frappe.log_error(
+			f"pending execution hold for approval {approval_doc.name} has no acting user",
+			"Huf Code Execution Approval",
+		)
+		frappe.throw(
+			"The original requesting user for this execution is no longer resolvable; "
+			"refusing to enqueue (the approver's identity is never substituted).",
+			frappe.ValidationError,
+		)
+
+	snapshot = payload.get("profile_snapshot")
+	return {
+		"code": code,
+		"profile_snapshot": snapshot if isinstance(snapshot, dict) else {},
+		"acting_user": acting_user,
+	}
+
+
+def clear_pending_execution(approval_name: str) -> None:
+	"""Drop the Redis hold for a parked execution (consumed, rejected, lapsed)."""
+	frappe.cache().delete_key(_pending_execution_key(approval_name))
+
+
+def enqueue_approved_execution(approval_doc, payload: dict) -> None:
+	"""Enqueue the execution parked behind a just-approved ``approval_doc``.
+
+	Called by ``approve_execution()`` only AFTER the approval row is saved as
+	``Approved`` (the worker-side ``_approval_blocks`` safety net refuses to
+	run otherwise). ``payload`` must come from :func:`load_pending_execution`
+	(already validated); the hold is cleared once the job is enqueued.
+	"""
+	enqueue_execution(
+		approval_doc.agent_tool_call,
+		payload["code"],
+		payload["profile_snapshot"],
+		acting_user=payload["acting_user"],
+	)
+	clear_pending_execution(approval_doc.name)
 
 
 # ---------------------------------------------------------------------------
