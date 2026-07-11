@@ -18,10 +18,38 @@ Architecture (locked in by the v1 plan — do not relitigate here):
   * The parent enforces a hard wall-clock timeout with a guaranteed kill
     (``proc.kill()`` + reap) and classifies how the child terminated.
 
+Broker RPC (Phase 4a):
+  Sandboxed code holds no ambient Frappe access. Every side effect
+  (``doc.read`` / ``doc.get_list`` / ``doc.create`` / ``doc.update`` /
+  ``email.send`` / ``http.request`` / ``report.run``) is exposed as a method on
+  a small facade object (``doc`` / ``email`` / ``http`` / ``report``) injected
+  into the exec globals. Each method round-trips over a dedicated control
+  socket to the parent worker, where an **injected** ``broker_handler``
+  callable performs authorization + dispatch. The handler is constructed in
+  ``huf.ai.tools.code_execution`` (the frappe-aware side); this module only
+  knows the generic wire protocol below — the broker dispatch is injected, so
+  this module stays importable/runnable without Frappe.
+
+  * **Transport**: ``socket.socketpair(AF_UNIX, SOCK_STREAM)`` created in
+    :func:`run_sandboxed`. The child's end is handed to the subprocess via
+    ``Popen(pass_fds=...)``; its numeric fd travels in ``payload.json`` under
+    the ``control_fd`` key (chosen over an extra argv element so the payload
+    file remains the child's single configuration channel, and so a Phase-3
+    child — which reads only ``code``/``limits``/``max_output_bytes`` — is
+    unaffected by the new key).
+  * **Framing**: newline-delimited JSON, one message per line. Child→parent
+    request: ``{"id": int, "capability": str, "params": dict}``. Parent→child
+    response: ``{"id": int, "ok": true, "result": ...}`` or
+    ``{"id": int, "ok": false, "error": str}``.
+  * **Concurrency**: requests are synchronous/blocking from the child's
+    perspective with a single in-flight call (sandboxed code is
+    single-threaded). The parent services the socket in a daemon thread while
+    the main thread supervises the child with the existing wall-clock
+    ``communicate(timeout=...)`` + guaranteed ``proc.kill()`` path; on child
+    exit or timeout-kill the socket is closed and the thread joined.
+
 Out of scope for this phase (left as explicit TODOs):
-  * Phase 4 — broker RPC (``doc.read``/``doc.create``/``email.send``/
-    ``http.request``) injected as a ``broker`` callable into the globals dict.
-  * Phase 4 — real per-conversation shared directory + artifact diffing. The
+  * Phase 4b — real per-conversation shared directory + artifact diffing. The
     ``scratch_dir`` here is throwaway per execution.
   * OS-level network namespace isolation (Linux ``CLONE_NEWNET`` / gVisor /
     nsjail / Firecracker). On macOS (dev) and on a bare-metal/VM bench without
@@ -29,8 +57,10 @@ Out of scope for this phase (left as explicit TODOs):
     is app-level: no ``socket``/``requests``/``http`` module is placed in the
     globals dict and RestrictedPython's guarded ``__import__`` rejects every
     ``import`` (verified by the smoke test), so the sandboxed code has no handle
-    to open a socket. Network egress is intended to flow only through the
-    (Phase 4) broker ``http.request`` capability.
+    to open a socket. Network egress flows only through the broker
+    ``http.request`` capability, which re-validates the target against the
+    profile's ``Network Access Policy`` and the SSRF guard in
+    ``huf.ai.http_handler``.
 """
 
 from __future__ import annotations
@@ -41,6 +71,7 @@ import operator
 import os
 import resource
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -72,6 +103,11 @@ DEFAULT_MAX_OUTPUT_BYTES = 1 * 1024 * 1024
 #: dispatcher when computing the RQ job ``timeout``. Kept here so the worker and
 #: dispatcher agree.
 RQ_WALL_GRACE_S = 10
+
+#: Key in ``payload.json`` carrying the broker control-socket fd. Present only
+#: when the parent was given a ``broker_handler``; absent means "no broker" and
+#: the sandbox behaves exactly as the bare Phase-3 smoke-test path.
+CONTROL_FD_PAYLOAD_KEY = "control_fd"
 
 #: Attribute names blocked even though RestrictedPython's underscore rule does
 #: not catch them. ``str.format`` / ``"{0.__class__}".format(x)`` is a classic
@@ -130,6 +166,13 @@ def _safe_builtins() -> dict:
 	oct, pow``) appropriate for general-purpose computation rather than Frappe
 	server-script hooks.
 
+	Also exposes a small set of exception types so sandboxed code can use
+	ordinary ``try``/``except`` — in particular to catch broker denials, which
+	reach user code as ``RuntimeError`` (Phase 4a). These add no escape
+	surface: every interesting attribute on an exception class is
+	underscore-prefixed and rejected by the sandbox attribute guards, and
+	``object`` is already reachable from any user-defined class.
+
 	Deliberately EXCLUDED: ``open, eval, exec, compile, __import__, input,
 	globals, locals, breakpoint, memoryview, vars, dir, delattr, setattr,
 	getattr, hasattr, format`` (escape/introspection hatches).
@@ -138,6 +181,7 @@ def _safe_builtins() -> dict:
 		"abs": abs,
 		"all": all,
 		"any": any,
+		"AttributeError": AttributeError,
 		"bin": bin,
 		"bool": bool,
 		"bytes": bytes,
@@ -145,26 +189,34 @@ def _safe_builtins() -> dict:
 		"dict": dict,
 		"divmod": divmod,
 		"enumerate": enumerate,
+		"Exception": Exception,
 		"float": float,
 		"hex": hex,
+		"IndexError": IndexError,
 		"int": int,
 		"isinstance": isinstance,
 		"issubclass": issubclass,
+		"KeyError": KeyError,
 		"len": len,
 		"list": list,
 		"max": max,
 		"min": min,
+		"NameError": NameError,
 		"oct": oct,
 		"ord": ord,
 		"pow": pow,
 		"range": range,
 		"repr": repr,
 		"round": round,
+		"RuntimeError": RuntimeError,
 		"set": set,
 		"sorted": sorted,
 		"str": str,
 		"sum": sum,
 		"tuple": tuple,
+		"TypeError": TypeError,
+		"ValueError": ValueError,
+		"ZeroDivisionError": ZeroDivisionError,
 	}
 
 
@@ -297,6 +349,146 @@ def _make_getattr(safer_getattr):
 	return _getattr
 
 
+# ---------------------------------------------------------------------------
+# Child-side: broker facade (Phase 4a)
+#
+# The facade objects below are the ONLY handle to Frappe the sandbox receives.
+# They hold the inherited control socket and nothing else — no ``frappe``, no
+# ``os``, no ``socket`` module is placed in the exec globals. Every method
+# funnels through :meth:`_BrokerClient.call`, and every failure reaches user
+# code as a plain ``RuntimeError`` so the sandbox sees a normal exception.
+# Attribute names on the facades are all non-underscore public methods, so
+# RestrictedPython's ``safer_getattr`` permits exactly the intended surface and
+# nothing more (``_client`` etc. are rejected by the underscore rule).
+# ---------------------------------------------------------------------------
+
+
+class _BrokerClient:
+	"""Blocking request/response client over the inherited control socket.
+
+	Wraps the fd handed to the child via ``pass_fds``. A single in-flight
+	request at a time is enforced by a lock (sandboxed code is single-threaded,
+	so this is belt-and-braces). The wire format is newline-delimited JSON —
+	see the module docstring.
+	"""
+
+	def __init__(self, control_fd: int):
+		self._sock = socket.socket(fileno=control_fd)
+		self._reader = self._sock.makefile("rb")
+		self._lock = threading.Lock()
+		self._next_id = 0
+
+	def call(self, capability: str, params: dict):
+		"""Send one broker request and block until its response arrives.
+
+		Returns the parent's ``result`` on success; raises ``RuntimeError``
+		carrying the parent's error message (or a connection failure) so
+		sandboxed code can handle broker denials with ordinary try/except.
+		"""
+		with self._lock:
+			self._next_id += 1
+			request_id = self._next_id
+			frame = json.dumps({"id": request_id, "capability": capability, "params": params})
+			self._sock.sendall(frame.encode("utf-8") + b"\n")
+			while True:
+				line = self._reader.readline()
+				if not line:
+					raise RuntimeError("broker connection closed before a response arrived")
+				try:
+					response = json.loads(line.decode("utf-8", "replace"))
+				except ValueError:
+					continue  # unparseable line — keep waiting for our response
+				if not isinstance(response, dict) or response.get("id") != request_id:
+					continue  # stray frame — with one in-flight call this cannot happen
+				if response.get("ok"):
+					return response.get("result")
+				raise RuntimeError(response.get("error") or "broker call failed")
+
+
+class _DocFacade:
+	"""``doc`` namespace exposed to sandboxed code: Frappe documents via broker."""
+
+	def __init__(self, client: _BrokerClient):
+		self._client = client
+
+	def read(self, doctype, name, fields=None):
+		"""Return one document as a dict (optionally limited to ``fields``)."""
+		return self._client.call(
+			"doc.read", {"doctype": doctype, "name": name, "fields": fields}
+		)
+
+	def get_list(self, doctype, filters=None, fields=None, limit=None):
+		"""Return a list of documents matching ``filters``."""
+		return self._client.call(
+			"doc.get_list",
+			{"doctype": doctype, "filters": filters, "fields": fields, "limit": limit},
+		)
+
+	def create(self, doctype, values):
+		"""Insert a new document; returns ``{"doctype": ..., "name": ...}``."""
+		return self._client.call("doc.create", {"doctype": doctype, "values": values})
+
+	def update(self, doctype, name, values):
+		"""Update fields on an existing document; returns ``{"doctype": ..., "name": ...}``."""
+		return self._client.call(
+			"doc.update", {"doctype": doctype, "name": name, "values": values}
+		)
+
+
+class _EmailFacade:
+	"""``email`` namespace exposed to sandboxed code: outbound mail via broker."""
+
+	def __init__(self, client: _BrokerClient):
+		self._client = client
+
+	def send(self, recipients, subject, message):
+		"""Queue an email through Frappe's outbound mail queue."""
+		return self._client.call(
+			"email.send",
+			{"recipients": recipients, "subject": subject, "message": message},
+		)
+
+
+class _HttpFacade:
+	"""``http`` namespace exposed to sandboxed code: HTTP egress via broker."""
+
+	def __init__(self, client: _BrokerClient):
+		self._client = client
+
+	def request(self, method, url, headers=None, params=None, data=None, json=None):
+		"""Perform an HTTP request through the broker.
+
+		The parent re-validates the target against the profile's Network Access
+		Policy and the SSRF guard before anything is sent. Returns the
+		structured result dict from ``huf.ai.http_handler.handle_http_request``.
+		"""
+		return self._client.call(
+			"http.request",
+			{
+				"method": method,
+				"url": url,
+				"headers": headers,
+				"params": params,
+				"data": data,
+				"json_data": json,
+			},
+		)
+
+
+class _ReportFacade:
+	"""``report`` namespace exposed to sandboxed code: Frappe reports via broker."""
+
+	def __init__(self, client: _BrokerClient):
+		self._client = client
+
+	def run(self, report_name, filters=None, limit=None):
+		"""Run a Frappe report; returns ``{"columns": ..., "data": ...}``."""
+		return self._client.call(
+			"report.run",
+			{"report_name": report_name, "filters": filters, "limit": limit},
+		)
+
+
 def _apply_limits(limits: dict) -> None:
 	"""Apply OS resource limits to the current (child) process.
 
@@ -332,10 +524,16 @@ def _apply_limits(limits: dict) -> None:
 		_set(resource.RLIMIT_NPROC, MAX_NPROC, MAX_NPROC)
 
 
-def _build_globals() -> dict:
+def _build_globals(control_fd: int | None = None) -> dict:
 	"""Assemble the curated globals dict for ``exec``.
 
 	NOTHING from ``frappe``/``os``/``sys``/``socket``/``subprocess`` is present.
+	When ``control_fd`` is set (the parent is servicing a broker), the only
+	Frappe-facing surface added is the ``doc``/``email``/``http``/``report``
+	facades, which proxy to the parent worker over the control socket for
+	authorization + dispatch under the acting user's permissions and the
+	profile allowlist. When ``control_fd`` is None the facades are absent and
+	the globals are exactly the Phase-3 bare set.
 	"""
 	from RestrictedPython.Guards import (  # local import keeps parent import light
 		full_write_guard,
@@ -344,7 +542,7 @@ def _build_globals() -> dict:
 		safer_getattr,
 	)
 
-	return {
+	globals_dict = {
 		"__builtins__": _safe_builtins(),
 		"_getattr_": _make_getattr(safer_getattr),
 		"_getitem_": _safe_getitem,
@@ -354,10 +552,20 @@ def _build_globals() -> dict:
 		"_unpack_sequence_": guarded_unpack_sequence,
 		"_inplacevar_": _safe_inplacevar,
 		"_print_": _PrintCollector,
-		# TODO(phase4): inject a `broker` callable here that proxies
-		# doc.read/create/update, email.send, http.request back into the live
-		# Frappe process under the acting user's permissions + profile allowlist.
 	}
+
+	if control_fd is not None:
+		client = _BrokerClient(control_fd)
+		globals_dict.update(
+			{
+				"doc": _DocFacade(client),
+				"email": _EmailFacade(client),
+				"http": _HttpFacade(client),
+				"report": _ReportFacade(client),
+			}
+		)
+
+	return globals_dict
 
 
 def _start_memory_watchdog(max_memory_mb: int):
@@ -399,7 +607,9 @@ def _start_memory_watchdog(max_memory_mb: int):
 	return stop
 
 
-def _run_user_code(code: str, max_output_bytes: int, max_memory_mb: int) -> dict:
+def _run_user_code(
+	code: str, max_output_bytes: int, max_memory_mb: int, control_fd: int | None = None
+) -> dict:
 	"""Compile + execute ``code`` in the (already rlimit-ed) child process.
 
 	Returns a JSON-serializable dict describing the outcome. All exceptions —
@@ -440,7 +650,7 @@ def _run_user_code(code: str, max_output_bytes: int, max_memory_mb: int) -> dict
 	result: dict | None = None
 
 	try:
-		globals_dict = _build_globals()
+		globals_dict = _build_globals(control_fd=control_fd)
 		locals_dict: dict = {}
 
 		try:
@@ -538,6 +748,11 @@ def _child_main(argv: list[str]) -> int:
 	from the file at ``argv[1]``, applies rlimits, executes, and prints exactly
 	one JSON object to stdout describing the outcome. Exits 0 whenever it is
 	alive long enough to report; the parent maps signal deaths itself.
+
+	When the payload carries ``control_fd`` (the parent is servicing a
+	broker), the fd is forwarded to the exec globals so the broker facades are
+	available to sandboxed code; a missing/unparseable ``control_fd`` simply
+	means "no broker" (fail closed to the bare Phase-3 path).
 	"""
 	if len(argv) < 2:
 		sys.stdout.write(json.dumps({"exit_status": "Error", "stderr": "no payload"}))
@@ -555,9 +770,16 @@ def _child_main(argv: list[str]) -> int:
 	max_output_bytes = int(payload.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 	max_memory_mb = int(limits.get("max_memory_mb") or 0)
 
+	control_fd = payload.get(CONTROL_FD_PAYLOAD_KEY)
+	if control_fd is not None:
+		try:
+			control_fd = int(control_fd)
+		except (TypeError, ValueError):
+			control_fd = None
+
 	_apply_limits(limits)
 
-	result = _run_user_code(code, max_output_bytes, max_memory_mb)
+	result = _run_user_code(code, max_output_bytes, max_memory_mb, control_fd=control_fd)
 	result["output_bytes"] = len((result.get("stdout") or "").encode("utf-8", "replace"))
 
 	sys.stdout.write(json.dumps(result))
@@ -600,7 +822,78 @@ def _classify_signal(returncode: int) -> tuple[str, bool]:
 	return "Killed", False
 
 
-def run_sandboxed(code: str, limits: dict, scratch_dir: str) -> ExecutionResult:
+def _serve_broker_requests(sock, broker_handler, stop) -> None:
+	"""Service newline-delimited broker requests on ``sock`` until EOF/stop.
+
+	Runs in the daemon thread spawned by :func:`run_sandboxed`. Each request
+	line is ``{"id", "capability", "params"}``; each response is
+	``{"id", "ok", "result"}`` or ``{"id", "ok", "error"}``. The loop ends
+	when the child closes its end (process exit — the normal case, since
+	teardown only runs after the child is dead) or when the socket is closed
+	during teardown. Any handler exception or non-JSON-serializable result is
+	converted into an error frame so the child can never wedge waiting on a
+	response that will not come. Requests are handled strictly sequentially,
+	matching the child's single-in-flight design.
+
+	No frame-size cap is applied here on purpose: every byte on this socket
+	originates from the sandboxed interpreter, whose own ``RLIMIT_AS`` /
+	watchdog memory caps bound the frame it can build, and the frappe-side
+	handler returns ``(False, ...)`` for anything it rejects.
+	"""
+	try:
+		reader = sock.makefile("rb")
+	except OSError:
+		return
+	try:
+		while not stop.is_set():
+			try:
+				line = reader.readline()
+			except (OSError, ValueError):
+				break  # socket closed while blocked in read (teardown)
+			if not line:
+				break  # EOF — the child exited or closed its end
+
+			request_id = None
+			try:
+				request = json.loads(line.decode("utf-8", "replace"))
+				if not isinstance(request, dict):
+					raise ValueError("request is not a JSON object")
+				request_id = request.get("id")
+				params = request.get("params")
+				if params is not None and not isinstance(params, dict):
+					raise ValueError("request params must be a JSON object")
+				ok, payload = broker_handler(request.get("capability"), params or {})
+			except Exception as exc:  # noqa: BLE001 - never let the child hang
+				ok, payload = False, f"{type(exc).__name__}: {exc}"
+
+			if ok:
+				response = {"id": request_id, "ok": True, "result": payload}
+			else:
+				response = {"id": request_id, "ok": False, "error": str(payload)}
+			try:
+				sock.sendall((json.dumps(response) + "\n").encode("utf-8"))
+			except (TypeError, ValueError):
+				# Handler returned a non-serializable result — degrade to an
+				# error frame instead of wedging the child.
+				fallback = {
+					"id": request_id,
+					"ok": False,
+					"error": "broker result is not JSON-serializable",
+				}
+				try:
+					sock.sendall((json.dumps(fallback) + "\n").encode("utf-8"))
+				except OSError:
+					break
+			except OSError:
+				break  # socket closed mid-flight (teardown / dead peer)
+	finally:
+		try:
+			reader.close()
+		except Exception:
+			pass
+
+
+def run_sandboxed(code: str, limits: dict, scratch_dir: str, broker_handler=None) -> ExecutionResult:
 	"""Run ``code`` in an isolated subprocess and return an :class:`ExecutionResult`.
 
 	``limits`` is the profile snapshot's ``limits`` dict
@@ -608,39 +901,95 @@ def run_sandboxed(code: str, limits: dict, scratch_dir: str) -> ExecutionResult:
 	``max_output_bytes``). ``scratch_dir`` is a per-execution throwaway working
 	directory the worker creates and cleans up.
 
+	``broker_handler`` (optional) is a callable
+	``(capability: str, params: dict) -> (ok: bool, result_or_error)`` servicing
+	broker RPCs from sandboxed code. When given, an ``AF_UNIX`` socketpair is
+	created, the child's end is passed via ``pass_fds`` (its fd travels in
+	``payload.json`` as ``control_fd``), and a daemon thread services requests
+	while the main thread supervises the child exactly as before. When ``None``
+	(default) no broker is available and behavior is identical to the bare
+	Phase-3 smoke-test path.
+
 	This function is frappe-free and can be exercised directly by a smoke test
-	against any interpreter that has ``RestrictedPython`` available.
+	against any interpreter that has ``RestrictedPython`` available; the
+	Frappe-side broker dispatch is injected by the caller.
 	"""
 	max_wall = int((limits or {}).get("max_wall_time_s") or DEFAULT_WALL_TIME_S)
 	max_output_bytes = int((limits or {}).get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 
+	parent_sock = None
+	child_sock = None
+	if broker_handler is not None:
+		parent_sock, child_sock = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+
+	payload = {"code": code, "limits": limits or {}, "max_output_bytes": max_output_bytes}
+	if child_sock is not None:
+		payload[CONTROL_FD_PAYLOAD_KEY] = child_sock.fileno()
+
 	payload_path = os.path.join(scratch_dir, "payload.json")
 	with open(payload_path, "w", encoding="utf-8") as fh:
-		json.dump({"code": code, "limits": limits or {}, "max_output_bytes": max_output_bytes}, fh)
+		json.dump(payload, fh)
 
 	cmd = [sys.executable, "-m", "huf.ai.tools.execution_sandbox", payload_path]
 
 	before = resource.getrusage(resource.RUSAGE_CHILDREN)
 	start = time.monotonic()
 
-	proc = subprocess.Popen(
-		cmd,
-		cwd=scratch_dir,
-		env=_sanitize_child_env(),
-		stdout=subprocess.PIPE,
-		stderr=subprocess.PIPE,
-	)
+	popen_kwargs = {
+		"cwd": scratch_dir,
+		"env": _sanitize_child_env(),
+		"stdout": subprocess.PIPE,
+		"stderr": subprocess.PIPE,
+	}
+	if child_sock is not None:
+		popen_kwargs["pass_fds"] = (child_sock.fileno(),)
+	try:
+		proc = subprocess.Popen(cmd, **popen_kwargs)
+	except Exception:
+		# Never leak the socketpair if the launch itself fails.
+		if parent_sock is not None:
+			parent_sock.close()
+			child_sock.close()
+		raise
+
+	broker_thread = None
+	broker_stop = None
+	if parent_sock is not None:
+		# The parent services only its own end; dropping the child's copy here
+		# means the child's exit delivers EOF on the parent's socket.
+		child_sock.close()
+		broker_stop = threading.Event()
+		broker_thread = threading.Thread(
+			target=_serve_broker_requests,
+			args=(parent_sock, broker_handler, broker_stop),
+			name="huf-broker",
+			daemon=True,
+		)
+		broker_thread.start()
 
 	timed_out = False
 	try:
-		out_bytes, err_bytes = proc.communicate(timeout=max_wall)
-	except subprocess.TimeoutExpired:
-		timed_out = True
-		proc.kill()  # SIGKILL — Python-level loops / C extensions cannot ignore it
 		try:
-			out_bytes, err_bytes = proc.communicate(timeout=5)
-		except Exception:
-			out_bytes, err_bytes = b"", b""
+			out_bytes, err_bytes = proc.communicate(timeout=max_wall)
+		except subprocess.TimeoutExpired:
+			timed_out = True
+			proc.kill()  # SIGKILL — Python-level loops / C extensions cannot ignore it
+			try:
+				out_bytes, err_bytes = proc.communicate(timeout=5)
+			except Exception:
+				out_bytes, err_bytes = b"", b""
+	finally:
+		if broker_thread is not None:
+			# The child is dead (exited or killed) at this point, so the
+			# servicing thread has already seen EOF; closing the socket and
+			# joining is hygiene for the in-flight-handler edge case, where the
+			# thread is inside ``broker_handler`` rather than blocked on read.
+			broker_stop.set()
+			try:
+				parent_sock.close()
+			except OSError:
+				pass
+			broker_thread.join(timeout=5)
 
 	wall_s = time.monotonic() - start
 	after = resource.getrusage(resource.RUSAGE_CHILDREN)
