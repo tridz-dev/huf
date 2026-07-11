@@ -48,9 +48,33 @@ Broker RPC (Phase 4a):
     ``communicate(timeout=...)`` + guaranteed ``proc.kill()`` path; on child
     exit or timeout-kill the socket is closed and the thread joined.
 
-Out of scope for this phase (left as explicit TODOs):
-  * Phase 4b — real per-conversation shared directory + artifact diffing. The
-    ``scratch_dir`` here is throwaway per execution.
+Mounted workspace (Phase 4b):
+  ``scratch_dir`` is no longer necessarily throwaway. The worker passes one
+  of three things, mirroring the profile's ``filesystem_policy``:
+  * a persistent per-conversation directory (``"Shared Directory"``) — owned,
+    capped, seeded, diffed and cleaned by the frappe-aware side
+    (``huf.ai.tools.code_execution``); this module never deletes it;
+  * a throwaway temp directory (``"Scratch Only"``) — exactly the Phase-3
+    behavior: created and removed by the caller around the run;
+  * ``None`` (``"None"``) — no filesystem access at all: the child exposes no
+    ``open`` builtin, and :func:`run_sandboxed` creates/removes a private
+    bookkeeping directory for ``payload.json`` + the child cwd internally.
+
+  When a directory IS mounted, sandboxed code receives a restricted ``open``
+  rooted at that directory (see :func:`_make_workdir_open`): a flat namespace
+  (no subdirectories), no absolute paths, no ``..`` segments, reads
+  containment-checked via ``os.path.realpath``, writes refused through
+  symlinks, and the 50-file cap enforced at create time. ``payload.json``
+  always lives in a private bookkeeping directory outside the mounted
+  workspace so it can never pollute the caller's directory or its diff.
+
+  The frappe-free workspace primitives (``measure_dir`` / ``snapshot_dir`` /
+  ``diff_dir_snapshots`` / ``check_dir_caps``) live here so the worker's cap
+  enforcement and diff/write-back stay unit-testable without a bench; the
+  ``Agent Context Artifact`` write-back itself is in
+  ``huf.ai.tools.code_execution`` (the frappe-aware side).
+
+Out of scope (left as explicit TODOs):
   * OS-level network namespace isolation (Linux ``CLONE_NEWNET`` / gVisor /
     nsjail / Firecracker). On macOS (dev) and on a bare-metal/VM bench without
     containerization, v1 cannot deny network at the OS level. The v1 mitigation
@@ -65,15 +89,18 @@ Out of scope for this phase (left as explicit TODOs):
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import operator
 import os
 import resource
+import shutil
 import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -108,6 +135,17 @@ RQ_WALL_GRACE_S = 10
 #: when the parent was given a ``broker_handler``; absent means "no broker" and
 #: the sandbox behaves exactly as the bare Phase-3 smoke-test path.
 CONTROL_FD_PAYLOAD_KEY = "control_fd"
+
+#: Key in ``payload.json`` carrying the mounted workspace path. Present only
+#: when the parent mounted a directory; absent means "no filesystem access"
+#: (profile filesystem policy "None") and the child exposes no ``open``.
+WORKDIR_PAYLOAD_KEY = "workdir"
+
+#: Hard cap on the number of files a mounted workspace may hold. Enforced in
+#: the child at file-create time (see :func:`_make_workdir_open`) and by the
+#: worker before and after every execution, so a per-conversation shared
+#: directory stays bounded no matter how long the conversation runs.
+MAX_SHARED_DIR_FILES = 50
 
 #: Attribute names blocked even though RestrictedPython's underscore rule does
 #: not catch them. ``str.format`` / ``"{0.__class__}".format(x)`` is a classic
@@ -152,6 +190,132 @@ class ExecutionResult:
 
 
 # ---------------------------------------------------------------------------
+# Workspace directory primitives (frappe-free, Phase 4b)
+#
+# The mounted workspace is a FLAT directory of regular files. These helpers
+# measure it, snapshot it, diff two snapshots, and enforce the size/file-count
+# caps. They are used by the frappe-side worker around every execution and by
+# the standalone smoke tests, and they keep this module bench-independent.
+# ---------------------------------------------------------------------------
+
+
+class DirCapExceeded(Exception):
+	"""Raised when a mounted workspace breaches its size or file-count cap.
+
+	Carries the measured values so the worker can write an informative audit
+	message without re-measuring the directory.
+	"""
+
+	def __init__(self, message, *, total_bytes, file_count, max_bytes, max_files):
+		super().__init__(message)
+		self.total_bytes = total_bytes
+		self.file_count = file_count
+		self.max_bytes = max_bytes
+		self.max_files = max_files
+
+
+def _iter_workspace_entries(path):
+	"""Yield the non-directory entries of the (flat) workspace.
+
+	Subdirectories are skipped, not recursed: the workspace contract is a flat
+	namespace, and a planted subdirectory must not let unbounded content hide
+	from measurement.
+	"""
+	with os.scandir(path) as it:
+		for entry in it:
+			if entry.is_dir(follow_symlinks=False):
+				continue
+			yield entry
+
+
+def measure_dir(path: str) -> tuple[int, int]:
+	"""Return ``(total_bytes, file_count)`` for a mounted workspace.
+
+	Every non-directory entry counts toward ``file_count``; only regular files
+	contribute bytes. A symlink's target size is never followed (it may point
+	outside the workspace).
+	"""
+	total_bytes = 0
+	file_count = 0
+	for entry in _iter_workspace_entries(path):
+		file_count += 1
+		if entry.is_file(follow_symlinks=False):
+			total_bytes += entry.stat(follow_symlinks=False).st_size
+	return total_bytes, file_count
+
+
+def check_dir_caps(path: str, max_bytes: int, max_files: int = MAX_SHARED_DIR_FILES) -> tuple[int, int]:
+	"""Enforce the workspace size/file-count caps; return the measured usage.
+
+	Raises :class:`DirCapExceeded` when either cap is breached. The worker runs
+	this before dispatch (a pre-existing dir may already be over cap) and after
+	execution (the run may have produced an over-cap dir). It never deletes
+	anything — the caller fails the call and records ``limits_hit``.
+	"""
+	max_bytes = int(max_bytes or 0)
+	max_files = int(max_files or MAX_SHARED_DIR_FILES)
+	total_bytes, file_count = measure_dir(path)
+	if max_bytes > 0 and total_bytes > max_bytes:
+		raise DirCapExceeded(
+			f"shared directory holds {total_bytes} bytes, exceeding the {max_bytes}-byte cap",
+			total_bytes=total_bytes,
+			file_count=file_count,
+			max_bytes=max_bytes,
+			max_files=max_files,
+		)
+	if file_count > max_files:
+		raise DirCapExceeded(
+			f"shared directory holds {file_count} files, exceeding the {max_files}-file cap",
+			total_bytes=total_bytes,
+			file_count=file_count,
+			max_bytes=max_bytes,
+			max_files=max_files,
+		)
+	return total_bytes, file_count
+
+
+def snapshot_dir(path: str) -> dict:
+	"""Return ``{name: (size, sha256)}`` for the workspace's regular files.
+
+	Content-hashed, not mtime-based: a ``touch`` that leaves the bytes
+	identical must not resurface a file as "changed" on write-back, and only a
+	content difference is artifact-worthy. Symlinks and subdirectories are
+	excluded — seeds are materialized as plain copies and the sandbox ``open``
+	cannot create symlinks, so regular files are the only artifact-worthy
+	entries.
+	"""
+	snapshot = {}
+	for entry in _iter_workspace_entries(path):
+		if not entry.is_file(follow_symlinks=False):
+			continue
+		full = os.path.join(path, entry.name)
+		digest = hashlib.sha256()
+		size = 0
+		with open(full, "rb") as fh:
+			for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+				size += len(chunk)
+				digest.update(chunk)
+		snapshot[entry.name] = (size, digest.hexdigest())
+	return snapshot
+
+
+def diff_dir_snapshots(before: dict, after: dict) -> tuple[list, list]:
+	"""Compare two :func:`snapshot_dir` results; return ``(new, changed)``.
+
+	``new``: names present only in ``after``. ``changed``: names in both whose
+	(size, hash) differs. Deletions (names only in ``before``) are deliberately
+	not reported — a removed file has nothing to write back, and its earlier
+	artifact record stays as conversation history. Both lists are sorted for
+	deterministic audit output.
+	"""
+	before = before or {}
+	after = after or {}
+	new = sorted(name for name in after if name not in before)
+	changed = sorted(name for name in after if name in before and before[name] != after[name])
+	return new, changed
+
+
+# ---------------------------------------------------------------------------
 # Child-side: curated execution environment
 # ---------------------------------------------------------------------------
 
@@ -168,7 +332,9 @@ def _safe_builtins() -> dict:
 
 	Also exposes a small set of exception types so sandboxed code can use
 	ordinary ``try``/``except`` — in particular to catch broker denials, which
-	reach user code as ``RuntimeError`` (Phase 4a). These add no escape
+	reach user code as ``RuntimeError`` (Phase 4a), and workspace rejections
+	from the restricted ``open``, which arrive as ``PermissionError`` (path
+	safety) or ``OSError`` (file-count cap) (Phase 4b). These add no escape
 	surface: every interesting attribute on an exception class is
 	underscore-prefixed and rejected by the sandbox attribute guards, and
 	``object`` is already reachable from any user-defined class.
@@ -202,8 +368,10 @@ def _safe_builtins() -> dict:
 		"max": max,
 		"min": min,
 		"NameError": NameError,
+		"OSError": OSError,
 		"oct": oct,
 		"ord": ord,
+		"PermissionError": PermissionError,
 		"pow": pow,
 		"range": range,
 		"repr": repr,
@@ -347,6 +515,81 @@ def _make_getattr(safer_getattr):
 		return safer_getattr(obj, name)
 
 	return _getattr
+
+
+def _validate_open_mode(mode) -> str:
+	"""Validate a sandboxed ``open`` mode string (fail closed on anything exotic)."""
+	if not isinstance(mode, str) or not mode:
+		raise ValueError("open() mode must be a non-empty string")
+	bad = [ch for ch in mode if ch not in "rwaxbt+"]
+	if bad:
+		raise ValueError(f"open() mode {mode!r} is not permitted in the sandbox")
+	if len([ch for ch in mode if ch in "rwax"]) != 1:
+		raise ValueError(f"open() mode {mode!r} must contain exactly one of 'r', 'w', 'a', 'x'")
+	if mode.count("+") > 1 or mode.count("b") > 1 or mode.count("t") > 1:
+		raise ValueError(f"open() mode {mode!r} is not permitted in the sandbox")
+	if "b" in mode and "t" in mode:
+		raise ValueError(f"open() mode {mode!r} is not permitted in the sandbox")
+	return mode
+
+
+def _make_workdir_open(base_dir: str):
+	"""Build the restricted ``open`` builtin exposed to sandboxed code.
+
+	The mounted directory is the ONLY filesystem the sandbox can touch (the
+	Phase-3 adversarial requirement, extended to real file I/O in Phase 4b).
+	Path-safety rules, in order:
+	  * the workspace is a FLAT namespace — any path equal to ``.``/``..`` or
+	    containing ``/`` or ``\\`` is rejected, which makes ``../`` escapes and
+	    subdirectories syntactically impossible;
+	  * absolute paths are rejected;
+	  * reads (``r``/``r+``): the candidate is ``os.path.realpath``-resolved
+	    and must stay inside the realpath of ``base_dir``, so a symlink planted
+	    in the workspace cannot be used to read outside it;
+	  * creates/appends (``w``/``a``/``x`` and ``+`` variants): an existing
+	    symlink at the target name is refused (no write-through), and the
+	    ``MAX_SHARED_DIR_FILES`` cap is enforced when the open would create a
+	    new file. The workspace size cap is enforced by the worker around the
+	    run, and the per-file cap by ``RLIMIT_FSIZE``.
+	TOCTOU is a non-issue: sandboxed code is single-threaded and the directory
+	is private to this execution.
+	"""
+	base_real = os.path.realpath(base_dir)
+
+	def _resolve(user_path) -> str:
+		if not isinstance(user_path, str) or not user_path:
+			raise ValueError("open() path must be a non-empty string")
+		if os.path.isabs(user_path):
+			raise PermissionError(f"absolute path {user_path!r} is outside the sandbox workspace")
+		if user_path in (".", "..") or "/" in user_path or "\\" in user_path:
+			raise PermissionError(
+				f"path {user_path!r} is outside the sandbox workspace "
+				"(a flat directory; no subdirectories, no '..')"
+			)
+		return os.path.join(base_real, user_path)
+
+	def _workdir_open(file, mode="r", encoding=None, errors=None):
+		mode = _validate_open_mode(mode)
+		target = _resolve(file)
+		if mode[0] in "wax":
+			if os.path.islink(target):
+				raise PermissionError(
+					f"refusing to write through symlink {file!r} in the sandbox workspace"
+				)
+			if not os.path.lexists(target):
+				existing = sum(1 for _ in _iter_workspace_entries(base_real))
+				if existing >= MAX_SHARED_DIR_FILES:
+					raise OSError(
+						f"sandbox workspace already holds {existing} files; "
+						f"the {MAX_SHARED_DIR_FILES}-file cap forbids creating {file!r}"
+					)
+		else:
+			resolved = os.path.realpath(target)
+			if os.path.commonpath([resolved, base_real]) != base_real:
+				raise PermissionError(f"path {file!r} resolves outside the sandbox workspace")
+		return open(target, mode, encoding=encoding, errors=errors)
+
+	return _workdir_open
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +767,7 @@ def _apply_limits(limits: dict) -> None:
 		_set(resource.RLIMIT_NPROC, MAX_NPROC, MAX_NPROC)
 
 
-def _build_globals(control_fd: int | None = None) -> dict:
+def _build_globals(control_fd: int | None = None, workdir: str | None = None) -> dict:
 	"""Assemble the curated globals dict for ``exec``.
 
 	NOTHING from ``frappe``/``os``/``sys``/``socket``/``subprocess`` is present.
@@ -534,6 +777,11 @@ def _build_globals(control_fd: int | None = None) -> dict:
 	authorization + dispatch under the acting user's permissions and the
 	profile allowlist. When ``control_fd`` is None the facades are absent and
 	the globals are exactly the Phase-3 bare set.
+
+	When ``workdir`` is set (the parent mounted a workspace), a restricted
+	``open`` rooted at that directory is added to the builtins (Phase 4b). When
+	``workdir`` is None — profile filesystem policy "None" — no ``open`` is
+	exposed at all, so sandboxed code has no file I/O surface.
 	"""
 	from RestrictedPython.Guards import (  # local import keeps parent import light
 		full_write_guard,
@@ -553,6 +801,9 @@ def _build_globals(control_fd: int | None = None) -> dict:
 		"_inplacevar_": _safe_inplacevar,
 		"_print_": _PrintCollector,
 	}
+
+	if workdir:
+		globals_dict["__builtins__"]["open"] = _make_workdir_open(workdir)
 
 	if control_fd is not None:
 		client = _BrokerClient(control_fd)
@@ -608,7 +859,11 @@ def _start_memory_watchdog(max_memory_mb: int):
 
 
 def _run_user_code(
-	code: str, max_output_bytes: int, max_memory_mb: int, control_fd: int | None = None
+	code: str,
+	max_output_bytes: int,
+	max_memory_mb: int,
+	control_fd: int | None = None,
+	workdir: str | None = None,
 ) -> dict:
 	"""Compile + execute ``code`` in the (already rlimit-ed) child process.
 
@@ -650,7 +905,7 @@ def _run_user_code(
 	result: dict | None = None
 
 	try:
-		globals_dict = _build_globals(control_fd=control_fd)
+		globals_dict = _build_globals(control_fd=control_fd, workdir=workdir)
 		locals_dict: dict = {}
 
 		try:
@@ -753,6 +1008,12 @@ def _child_main(argv: list[str]) -> int:
 	broker), the fd is forwarded to the exec globals so the broker facades are
 	available to sandboxed code; a missing/unparseable ``control_fd`` simply
 	means "no broker" (fail closed to the bare Phase-3 path).
+
+	When the payload carries ``workdir`` (the parent mounted a workspace), the
+	restricted ``open`` rooted at it is added to the exec globals. A missing
+	``workdir`` means "no filesystem access" (policy "None"); a present but
+	non-directory ``workdir`` is a worker bug and fails the run closed with
+	``Error`` rather than silently degrading to no-filesystem behavior.
 	"""
 	if len(argv) < 2:
 		sys.stdout.write(json.dumps({"exit_status": "Error", "stderr": "no payload"}))
@@ -777,9 +1038,18 @@ def _child_main(argv: list[str]) -> int:
 		except (TypeError, ValueError):
 			control_fd = None
 
+	workdir = payload.get(WORKDIR_PAYLOAD_KEY)
+	if workdir is not None and (not isinstance(workdir, str) or not os.path.isdir(workdir)):
+		sys.stdout.write(
+			json.dumps({"exit_status": "Error", "stderr": f"[huf-exec] bad {WORKDIR_PAYLOAD_KEY}: {workdir!r}"})
+		)
+		return 0
+
 	_apply_limits(limits)
 
-	result = _run_user_code(code, max_output_bytes, max_memory_mb, control_fd=control_fd)
+	result = _run_user_code(
+		code, max_output_bytes, max_memory_mb, control_fd=control_fd, workdir=workdir
+	)
 	result["output_bytes"] = len((result.get("stdout") or "").encode("utf-8", "replace"))
 
 	sys.stdout.write(json.dumps(result))
@@ -919,7 +1189,7 @@ def _serve_broker_requests(sock, broker_handler, stop, thread_start=None, thread
 def run_sandboxed(
 	code: str,
 	limits: dict,
-	scratch_dir: str,
+	scratch_dir: str | None,
 	broker_handler=None,
 	broker_thread_start=None,
 	broker_thread_end=None,
@@ -928,8 +1198,17 @@ def run_sandboxed(
 
 	``limits`` is the profile snapshot's ``limits`` dict
 	(``max_cpu_seconds``, ``max_memory_mb``, ``max_wall_time_s``,
-	``max_output_bytes``). ``scratch_dir`` is a per-execution throwaway working
-	directory the worker creates and cleans up.
+	``max_output_bytes``). ``scratch_dir`` is the workspace mounted into the
+	sandbox, mirroring the profile's filesystem policy:
+	  * a persistent per-conversation directory ("Shared Directory") — owned and
+	    cleaned by the caller; this function NEVER deletes it;
+	  * a throwaway temp directory ("Scratch Only") — the Phase-3 behavior,
+	    created and removed by the caller around the run;
+	  * ``None`` ("None") — no filesystem access: the child gets no ``open``
+	    builtin and runs with a private bookkeeping directory as its cwd.
+	``payload.json`` always lives in a private bookkeeping directory (created
+	and removed here) so it can never pollute the caller's workspace or its
+	post-execution diff.
 
 	``broker_handler`` (optional) is a callable
 	``(capability: str, params: dict) -> (ok: bool, result_or_error)`` servicing
@@ -948,6 +1227,41 @@ def run_sandboxed(
 	against any interpreter that has ``RestrictedPython`` available; the
 	Frappe-side broker dispatch is injected by the caller.
 	"""
+	bookkeeping_dir = tempfile.mkdtemp(prefix="huf-exec-meta-")
+	try:
+		mounted_dir = os.path.abspath(scratch_dir) if scratch_dir else None
+		work_dir = mounted_dir or bookkeeping_dir
+		return _supervise_child(
+			code,
+			limits,
+			work_dir,
+			mounted_dir,
+			bookkeeping_dir,
+			broker_handler,
+			broker_thread_start,
+			broker_thread_end,
+		)
+	finally:
+		shutil.rmtree(bookkeeping_dir, ignore_errors=True)
+
+
+def _supervise_child(
+	code: str,
+	limits: dict,
+	work_dir: str,
+	mounted_dir: str | None,
+	bookkeeping_dir: str,
+	broker_handler=None,
+	broker_thread_start=None,
+	broker_thread_end=None,
+) -> ExecutionResult:
+	"""Launch + supervise the isolated child (body of :func:`run_sandboxed`).
+
+	``work_dir`` is the child cwd (the mounted workspace, or the bookkeeping
+	dir when no filesystem is mounted). ``mounted_dir`` travels in
+	``payload.json`` as ``workdir`` when set; ``bookkeeping_dir`` holds
+	``payload.json`` and always lives outside the mounted workspace.
+	"""
 	max_wall = int((limits or {}).get("max_wall_time_s") or DEFAULT_WALL_TIME_S)
 	max_output_bytes = int((limits or {}).get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 
@@ -959,8 +1273,10 @@ def run_sandboxed(
 	payload = {"code": code, "limits": limits or {}, "max_output_bytes": max_output_bytes}
 	if child_sock is not None:
 		payload[CONTROL_FD_PAYLOAD_KEY] = child_sock.fileno()
+	if mounted_dir is not None:
+		payload[WORKDIR_PAYLOAD_KEY] = mounted_dir
 
-	payload_path = os.path.join(scratch_dir, "payload.json")
+	payload_path = os.path.join(bookkeeping_dir, "payload.json")
 	with open(payload_path, "w", encoding="utf-8") as fh:
 		json.dump(payload, fh)
 
@@ -970,7 +1286,7 @@ def run_sandboxed(
 	start = time.monotonic()
 
 	popen_kwargs = {
-		"cwd": scratch_dir,
+		"cwd": work_dir,
 		"env": _sanitize_child_env(),
 		"stdout": subprocess.PIPE,
 		"stderr": subprocess.PIPE,
