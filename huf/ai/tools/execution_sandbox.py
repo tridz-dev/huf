@@ -822,7 +822,7 @@ def _classify_signal(returncode: int) -> tuple[str, bool]:
 	return "Killed", False
 
 
-def _serve_broker_requests(sock, broker_handler, stop) -> None:
+def _serve_broker_requests(sock, broker_handler, stop, thread_start=None, thread_end=None) -> None:
 	"""Service newline-delimited broker requests on ``sock`` until EOF/stop.
 
 	Runs in the daemon thread spawned by :func:`run_sandboxed`. Each request
@@ -835,6 +835,15 @@ def _serve_broker_requests(sock, broker_handler, stop) -> None:
 	response that will not come. Requests are handled strictly sequentially,
 	matching the child's single-in-flight design.
 
+	``thread_start``/``thread_end`` are optional no-arg callables, opaque to
+	this frappe-free module, invoked once at the start and end of this
+	thread's life. The frappe-aware caller uses them to establish/tear down
+	THIS thread's own site/db/session context — ``broker_handler`` executes
+	here, on a fresh OS thread distinct from the job's main thread, not on
+	whatever thread originally had frappe initialized. If ``thread_start``
+	raises, every request on this thread is answered with an error frame
+	(the child sees a normal broker denial) rather than left hanging.
+
 	No frame-size cap is applied here on purpose: every byte on this socket
 	originates from the sandboxed interpreter, whose own ``RLIMIT_AS`` /
 	watchdog memory caps bound the frame it can build, and the frappe-side
@@ -844,6 +853,12 @@ def _serve_broker_requests(sock, broker_handler, stop) -> None:
 		reader = sock.makefile("rb")
 	except OSError:
 		return
+	start_error = None
+	if thread_start is not None:
+		try:
+			thread_start()
+		except Exception as exc:  # noqa: BLE001 - never let setup failure hang the child
+			start_error = f"{type(exc).__name__}: {exc}"
 	try:
 		while not stop.is_set():
 			try:
@@ -862,7 +877,10 @@ def _serve_broker_requests(sock, broker_handler, stop) -> None:
 				params = request.get("params")
 				if params is not None and not isinstance(params, dict):
 					raise ValueError("request params must be a JSON object")
-				ok, payload = broker_handler(request.get("capability"), params or {})
+				if start_error is not None:
+					ok, payload = False, f"broker thread setup failed: {start_error}"
+				else:
+					ok, payload = broker_handler(request.get("capability"), params or {})
 			except Exception as exc:  # noqa: BLE001 - never let the child hang
 				ok, payload = False, f"{type(exc).__name__}: {exc}"
 
@@ -891,9 +909,21 @@ def _serve_broker_requests(sock, broker_handler, stop) -> None:
 			reader.close()
 		except Exception:
 			pass
+		if thread_end is not None:
+			try:
+				thread_end()
+			except Exception:  # noqa: BLE001 - teardown must never crash the worker
+				pass
 
 
-def run_sandboxed(code: str, limits: dict, scratch_dir: str, broker_handler=None) -> ExecutionResult:
+def run_sandboxed(
+	code: str,
+	limits: dict,
+	scratch_dir: str,
+	broker_handler=None,
+	broker_thread_start=None,
+	broker_thread_end=None,
+) -> ExecutionResult:
 	"""Run ``code`` in an isolated subprocess and return an :class:`ExecutionResult`.
 
 	``limits`` is the profile snapshot's ``limits`` dict
@@ -909,6 +939,10 @@ def run_sandboxed(code: str, limits: dict, scratch_dir: str, broker_handler=None
 	while the main thread supervises the child exactly as before. When ``None``
 	(default) no broker is available and behavior is identical to the bare
 	Phase-3 smoke-test path.
+
+	``broker_thread_start``/``broker_thread_end`` (optional no-arg callables)
+	are invoked once at the start/end of the broker-servicing thread, opaque
+	to this frappe-free module — see :func:`_serve_broker_requests`.
 
 	This function is frappe-free and can be exercised directly by a smoke test
 	against any interpreter that has ``RestrictedPython`` available; the
@@ -961,7 +995,7 @@ def run_sandboxed(code: str, limits: dict, scratch_dir: str, broker_handler=None
 		broker_stop = threading.Event()
 		broker_thread = threading.Thread(
 			target=_serve_broker_requests,
-			args=(parent_sock, broker_handler, broker_stop),
+			args=(parent_sock, broker_handler, broker_stop, broker_thread_start, broker_thread_end),
 			name="huf-broker",
 			daemon=True,
 		)

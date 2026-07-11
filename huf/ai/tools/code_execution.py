@@ -433,6 +433,7 @@ def _make_broker_handler(profile_snapshot: dict, acting_user: str | None):
 	permissions = list((profile_snapshot or {}).get("permissions") or [])
 	network_policy = (profile_snapshot or {}).get("network_policy") or None
 	call_counts: dict[str, int] = {}
+	site = frappe.local.site
 
 	def _authorize(capability: Any, params: dict) -> str | None:
 		"""Return None when the call may proceed, else a denial reason."""
@@ -503,7 +504,28 @@ def _make_broker_handler(profile_snapshot: dict, acting_user: str | None):
 			)
 			return False, f"{type(exc).__name__}: {exc}"
 
+	def _thread_start():
+		"""Establish frappe context for the broker's own OS thread.
+
+		``broker_handler`` runs on the daemon thread spawned by
+		``run_sandboxed`` for the lifetime of one execution, not on the RQ
+		job's main thread. ``frappe.local`` is a ``werkzeug.local.Local``
+		keyed by OS thread identity, so that thread starts with no
+		site/db/session context of its own — every frappe.* call inside
+		``broker_handler`` (has_permission, get_doc, set_user, log_error)
+		would otherwise fail. Called once by the thread before it services
+		any request.
+		"""
+		frappe.init(site=site)
+		frappe.connect()
+
+	def _thread_end():
+		"""Tear down the broker thread's frappe context (closes its DB connection)."""
+		frappe.destroy()
+
 	broker_handler.call_counts = call_counts
+	broker_handler.thread_start = _thread_start
+	broker_handler.thread_end = _thread_end
 	return broker_handler
 
 
@@ -680,7 +702,11 @@ def _op_doc_create(params: dict) -> dict:
 	values = params.get("values")
 	if not isinstance(values, dict):
 		raise ValueError("doc.create 'values' must be a dict of field values")
-	doc = frappe.get_doc({"doctype": doctype, **values})
+	# The authorized target is ``doctype`` from ``params`` (checked by
+	# ``_authorize`` against the profile snapshot). ``values`` is fully
+	# sandbox-controlled, so a smuggled "doctype" key inside it must never
+	# override the authorized target — doctype is applied last, deliberately.
+	doc = frappe.get_doc({**values, "doctype": doctype})
 	doc.insert()
 	return {"doctype": doctype, "name": doc.name}
 
@@ -691,8 +717,11 @@ def _op_doc_update(params: dict) -> dict:
 	values = params.get("values")
 	if not isinstance(values, dict):
 		raise ValueError("doc.update 'values' must be a dict of field values")
+	# Strip any attacker-supplied doctype/name from values so the update
+	# can never retarget a different, unauthorized document.
+	safe_values = {k: v for k, v in values.items() if k not in ("doctype", "name")}
 	doc = frappe.get_doc(doctype, name)
-	doc.update(values)
+	doc.update(safe_values)
 	doc.save()
 	return {"doctype": doctype, "name": doc.name}
 
@@ -828,7 +857,12 @@ def execute_job(
 	scratch_dir = tempfile.mkdtemp(prefix="huf-exec-")
 	try:
 		result: ExecutionResult = run_sandboxed(
-			code, limits=limits, scratch_dir=scratch_dir, broker_handler=broker_handler
+			code,
+			limits=limits,
+			scratch_dir=scratch_dir,
+			broker_handler=broker_handler,
+			broker_thread_start=broker_handler.thread_start,
+			broker_thread_end=broker_handler.thread_end,
 		)
 		_apply_result(call, result, max_output, broker_calls=broker_handler.call_counts)
 	except Exception as exc:  # noqa: BLE001 - never leave the row stuck at Started
