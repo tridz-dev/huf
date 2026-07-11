@@ -32,22 +32,30 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import os
 import shutil
 import tempfile
 from typing import Any
 from urllib.parse import urlparse
 
 import frappe
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, get_files_path, now_datetime
+from frappe.utils.file_manager import save_file
 
 from huf.ai.http_handler import handle_http_request
 from huf.ai.tool_functions import get_report_result
 from huf.ai.tools.execution_sandbox import (
 	DEFAULT_MAX_OUTPUT_BYTES,
 	DEFAULT_WALL_TIME_S,
+	MAX_SHARED_DIR_FILES,
 	RQ_WALL_GRACE_S,
+	DirCapExceeded,
 	ExecutionResult,
+	check_dir_caps,
+	diff_dir_snapshots,
+	measure_dir,
 	run_sandboxed,
+	snapshot_dir,
 )
 from huf.permissions import has_capability
 
@@ -56,6 +64,23 @@ _TOOL_NAME = "run_python"
 
 #: How long an ``Ask Every Time`` approval stays valid before expiring.
 _APPROVAL_TTL_HOURS = 24
+
+#: Effective default for the per-conversation shared directory size cap (MB).
+#: The Execution Profile doctype carries no shared-dir field (see the Phase 4b
+#: report), so this constant is the profile-level default the plan refers to;
+#: ``Agent.execution_shared_dir_limit_mb`` may only override it DOWNWARD.
+DEFAULT_SHARED_DIR_LIMIT_MB = 100
+
+#: Files at or under this size that decode as UTF-8 text are written back with
+#: ``context_policy="include_summary"`` (text inlined into ``summary``);
+#: larger or binary files get ``include_reference``. Mirrors the Agent
+#: ``max_context_chars`` default (2000) — the codebase's existing threshold for
+#: inlining tool output into context vs. referencing it.
+ARTIFACT_TEXT_INLINE_BYTES = 2000
+
+#: Subdirectory of the site's private files area holding per-conversation
+#: shared directories (alongside the knowledge system's artifacts).
+_SHARED_DIR_SUBDIR = "code_execution"
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +178,319 @@ def _truncate(text: str | None, limit: int) -> str | None:
 
 
 # ---------------------------------------------------------------------------
+# Shared directory — per-conversation workspace + artifact write-back (Phase 4b)
+#
+# When the profile's ``filesystem_policy`` is "Shared Directory", sandboxed
+# code works inside a real per-conversation directory under the site's private
+# files area. The directory is stable across executions of the same
+# conversation (a later message sees an earlier message's output files), is
+# seeded with the conversation's File artifacts before each run, is capped in
+# size and file count before AND after each run, and new/changed files are
+# written back as ``Agent Context Artifact`` records after each run. Every
+# failure here fails CLOSED: the call is rejected (audit row marked Failed)
+# rather than allowed to proceed with a degraded workspace.
+# ---------------------------------------------------------------------------
+
+
+def _conversation_dir_key(conversation_name: str) -> str:
+	"""Filesystem-safe, collision-proof directory key for a conversation name."""
+	name = str(conversation_name or "")
+	safe = "".join(ch if (ch.isalnum() or ch in "-_.") else "_" for ch in name)[:64].strip("._")
+	digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:12]
+	return f"{safe or 'conv'}-{digest}"
+
+
+def _shared_dir_for_conversation(conversation_name: str) -> str:
+	"""Resolve (creating on first use) the per-conversation shared directory.
+
+	Lives under the site's private files area (via ``get_files_path``, the same
+	helper the knowledge system uses) so it sits alongside uploaded attachments
+	and inherits the site's private-file storage/backup conventions. Keyed by
+	conversation id, so it is stable across executions of the same
+	conversation; never deleted between calls (nor by this module at all).
+	"""
+	base = get_files_path(is_private=True)
+	path = os.path.join(base, _SHARED_DIR_SUBDIR, _conversation_dir_key(conversation_name))
+	os.makedirs(path, exist_ok=True)
+	return path
+
+
+def _resolve_shared_dir_limit_mb(agent: Any) -> int:
+	"""Effective per-conversation shared-dir cap (MB) for an agent.
+
+	Falls back to :data:`DEFAULT_SHARED_DIR_LIMIT_MB` (the effective profile
+	default) when the agent sets no override. An agent-level override may only
+	LOWER the cap (plan: "overridable down only") — a higher override is an
+	invalid configuration and is REJECTED with a ValidationError rather than
+	silently clamped.
+	"""
+	agent = _as_agent_doc(agent)
+	override = getattr(agent, "execution_shared_dir_limit_mb", None)
+	if not override:
+		return DEFAULT_SHARED_DIR_LIMIT_MB
+	override = int(override)
+	if override > DEFAULT_SHARED_DIR_LIMIT_MB:
+		frappe.throw(
+			f"Shared Dir Limit (MB) on Agent '{agent.name}' is {override} MB, above the "
+			f"{DEFAULT_SHARED_DIR_LIMIT_MB} MB default. Agent-level limits may only override "
+			"the default downward; lower the agent value to proceed.",
+			frappe.ValidationError,
+		)
+	return override
+
+
+def _fail_call(call, message: str, *, limits_hit: bool) -> None:
+	"""Mark the audit row Failed around a rejected call (fail closed)."""
+	call.status = "Failed"
+	call.exit_status = "Error"
+	call.limits_hit = 1 if limits_hit else 0
+	call.error_message = _truncate(message, 60000)
+	call.save(ignore_permissions=True)
+
+
+def _seed_shared_dir(conversation_name: str, shared_dir: str) -> int:
+	"""Materialize the conversation's File artifacts into ``shared_dir``.
+
+	Copy, never symlink: the sandbox blocks symlink escapes by design (a
+	symlinked seed would be unreadable from inside the sandbox anyway), and a
+	plain copy is storage-agnostic (local or object-storage-backed File
+	records). Artifacts are applied oldest-first so the newest version of a
+	name wins; content already present in the persistent directory is never
+	overwritten — the live workspace is authoritative over historical
+	artifacts. Returns the number of files materialized this pass. An
+	unresolvable File record or an unsafe file name raises (fail closed: the
+	caller rejects the call).
+	"""
+	artifacts = frappe.get_all(
+		"Agent Context Artifact",
+		filters={"conversation": conversation_name, "artifact_type": "File"},
+		fields=["name", "payload_file", "creation"],
+		order_by="creation asc",
+	)
+	seeded_this_pass: set = set()
+	count = 0
+	for artifact in artifacts:
+		payload_file = artifact.get("payload_file")
+		if not payload_file:
+			continue
+		file_id = frappe.db.get_value("File", {"file_url": payload_file}, "name")
+		if not file_id:
+			raise FileNotFoundError(
+				f"seed artifact {artifact['name']}: no File record for {payload_file!r}"
+			)
+		file_doc = frappe.get_doc("File", file_id)
+		raw_name = file_doc.file_name or ""
+		base_name = os.path.basename(raw_name)
+		if not base_name or base_name != raw_name or base_name in (".", ".."):
+			raise ValueError(f"seed artifact {artifact['name']}: unsafe file name {raw_name!r}")
+		target = os.path.join(shared_dir, base_name)
+		if base_name not in seeded_this_pass and os.path.lexists(target):
+			# Pre-existing live workspace content wins over historical artifacts.
+			continue
+		with open(file_doc.get_full_path(), "rb") as fh:
+			content = fh.read()
+		with open(target, "wb") as fh:
+			fh.write(content)
+		seeded_this_pass.add(base_name)
+		count += 1
+	return count
+
+
+def _classify_artifact(name: str, content: bytes) -> tuple:
+	"""Pick ``(context_policy, summary, token_estimate)`` for a written-back file.
+
+	Small UTF-8 text (≤ ``ARTIFACT_TEXT_INLINE_BYTES``) is inlined into
+	``summary`` with ``include_summary``; anything larger or binary gets
+	``include_reference`` with a size note, so the model sees a handle rather
+	than a blob.
+	"""
+	if len(content) <= ARTIFACT_TEXT_INLINE_BYTES:
+		try:
+			text = content.decode("utf-8")
+		except UnicodeDecodeError:
+			text = None
+		if text is not None and "\x00" not in text:
+			return "include_summary", text, max(1, len(text) // 4)
+	summary = (
+		f"{name} ({len(content)} bytes) — binary or above the "
+		f"{ARTIFACT_TEXT_INLINE_BYTES}-byte inline threshold"
+	)
+	return "include_reference", summary, max(1, len(summary) // 4)
+
+
+def _write_back_artifacts(call, shared_dir: str, names: list) -> tuple:
+	"""Create one ``Agent Context Artifact`` per name; return ``(written, error)``.
+
+	Each file is attached through Frappe's normal private-file path
+	(``save_file(..., is_private=True)``, the same helper chat uploads use) and
+	linked on ``payload_file``. Stops at the first storage error and reports it
+	— fail closed: the caller marks the call Failed rather than silently
+	accepting a partial write-back. Files unchanged since the pre-execution
+	snapshot never reach this function (the diff happens in the caller), so
+	pre-existing seed files are not re-artifacted.
+	"""
+	written = 0
+	for name in names:
+		path = os.path.join(shared_dir, name)
+		try:
+			with open(path, "rb") as fh:
+				content = fh.read()
+			context_policy, summary, token_estimate = _classify_artifact(name, content)
+			artifact = frappe.get_doc(
+				{
+					"doctype": "Agent Context Artifact",
+					"conversation": call.conversation,
+					"agent_run": call.agent_run,
+					"artifact_type": "File",
+					"visibility": "user_visible",
+					"context_policy": context_policy,
+					"summary": summary,
+					"token_estimate": token_estimate,
+				}
+			)
+			artifact.insert(ignore_permissions=True)
+			saved = save_file(name, content, "Agent Context Artifact", artifact.name, is_private=True)
+			file_url = getattr(saved, "file_url", None) or (
+				saved.get("file_url") if isinstance(saved, dict) else None
+			)
+			if not file_url:
+				raise ValueError(f"save_file returned no file_url for {name!r}")
+			artifact.payload_file = file_url
+			artifact.save(ignore_permissions=True)
+			written += 1
+		except Exception as exc:  # noqa: BLE001 - report and stop (fail closed)
+			frappe.log_error(
+				f"artifact write-back failed for {name!r} in {shared_dir}: {exc}",
+				"Huf Code Execution",
+			)
+			return written, f"{type(exc).__name__}: {exc}"
+	return written, None
+
+
+def _prepare_shared_dir(call) -> dict | None:
+	"""Resolve, cap-check, seed and snapshot the per-conversation shared dir.
+
+	Returns a context dict for :func:`_finalize_shared_dir` when execution may
+	proceed, else ``None`` after marking the audit row Failed. Fails closed on:
+	missing conversation/agent context, an over-ceiling agent limit override,
+	a pre-existing cap violation, or any seed/storage error.
+	"""
+	conversation = call.conversation
+	if not conversation:
+		_fail_call(
+			call,
+			"Shared Directory filesystem policy requires a conversation context; "
+			"this tool call has none.",
+			limits_hit=False,
+		)
+		return None
+
+	agent_name = frappe.db.get_value("Agent Conversation", conversation, "agent")
+	if not agent_name:
+		_fail_call(
+			call,
+			f"Shared Directory filesystem policy cannot resolve the agent for "
+			f"conversation {conversation!r}.",
+			limits_hit=False,
+		)
+		return None
+
+	try:
+		limit_mb = _resolve_shared_dir_limit_mb(agent_name)
+	except frappe.ValidationError as exc:
+		_fail_call(call, str(exc), limits_hit=False)
+		return None
+
+	limit_bytes = limit_mb * 1024 * 1024
+	try:
+		shared_dir = _shared_dir_for_conversation(conversation)
+		# Pre-dispatch cap check: the persistent dir may already be over cap
+		# from earlier runs or uploads.
+		check_dir_caps(shared_dir, limit_bytes, MAX_SHARED_DIR_FILES)
+		_seed_shared_dir(conversation, shared_dir)
+		# Seed materialization is bounded by the same caps.
+		check_dir_caps(shared_dir, limit_bytes, MAX_SHARED_DIR_FILES)
+		before = snapshot_dir(shared_dir)
+	except DirCapExceeded as exc:
+		_fail_call(
+			call,
+			f"Shared directory cap exceeded before execution: {exc}. No files were deleted; "
+			"reduce the directory contents or raise the limit.",
+			limits_hit=True,
+		)
+		return None
+	except Exception as exc:  # noqa: BLE001 - storage/seed errors fail closed
+		frappe.log_error(
+			f"shared dir preparation failed for {call.name}: {exc}", "Huf Code Execution"
+		)
+		_fail_call(
+			call,
+			f"Shared directory could not be prepared: {type(exc).__name__}: {exc}",
+			limits_hit=False,
+		)
+		return None
+
+	return {"dir": shared_dir, "before": before, "limit_bytes": limit_bytes}
+
+
+def _finalize_shared_dir(call, ctx: dict) -> None:
+	"""Post-execution shared-dir handling; runs for every outcome (``finally``).
+
+	1. Measure + re-check the caps: an execution that leaves the directory over
+	   its size/file-count cap fails the call with ``limits_hit=1``. Nothing is
+	   deleted and no artifacts are written back in that case.
+	2. Otherwise diff against the pre-execution snapshot (content-hash based)
+	   and write each new/changed file back as an ``Agent Context Artifact``.
+	3. Fold ``shared_dir_bytes`` / ``artifacts_written`` into the existing
+	   ``resource_usage`` JSON (no new DocType fields).
+
+	Never raises: a finalizer bug must not mask the run's own outcome — it
+	marks the call Failed with the error and logs instead.
+	"""
+	try:
+		total_bytes, _count = measure_dir(ctx["dir"])
+		artifacts_written = 0
+		failure = None
+		try:
+			check_dir_caps(ctx["dir"], ctx["limit_bytes"], MAX_SHARED_DIR_FILES)
+		except DirCapExceeded as exc:
+			failure = (
+				f"Shared directory cap exceeded by execution output: {exc}. "
+				"No artifacts were written back and no files were deleted."
+			)
+			call.limits_hit = 1
+		if failure is None:
+			after = snapshot_dir(ctx["dir"])
+			new_names, changed_names = diff_dir_snapshots(ctx["before"], after)
+			artifacts_written, artifact_error = _write_back_artifacts(
+				call, ctx["dir"], new_names + changed_names
+			)
+			if artifact_error:
+				failure = (
+					f"Artifact write-back failed after {artifacts_written} file(s): "
+					f"{artifact_error}"
+				)
+		if failure is not None:
+			call.status = "Failed"
+			call.error_message = _truncate(
+				((call.error_message or "") + "\n" + failure).strip(), 60000
+			)
+		usage = call.resource_usage
+		if isinstance(usage, str):
+			usage = _parse_json_field(usage, {})
+		if not isinstance(usage, dict):
+			usage = {}
+		usage["shared_dir_bytes"] = int(total_bytes)
+		usage["artifacts_written"] = int(artifacts_written)
+		call.resource_usage = usage
+		call.save(ignore_permissions=True)
+	except Exception as exc:  # noqa: BLE001 - finalizer must never mask the run outcome
+		frappe.log_error(
+			f"shared dir finalization failed for {call.name}: {exc}", "Huf Code Execution"
+		)
+
+
+# ---------------------------------------------------------------------------
 # E1 — Dispatcher (LLM-facing tool entrypoint)
 # ---------------------------------------------------------------------------
 
@@ -222,6 +560,12 @@ def run_python(
 			"The selected Execution Profile is disabled.",
 			frappe.ValidationError,
 		)
+
+	# 4b. Shared Directory policy (Phase 4b): an agent-level shared-dir limit
+	#     may only override the default downward. Reject an over-ceiling config
+	#     at dispatch so no audit row is created for an invalid configuration.
+	if profile.filesystem_policy == "Shared Directory":
+		_resolve_shared_dir_limit_mb(agent)
 
 	# 5/6. Snapshot + code hash (raw code is never stored on the audit row).
 	snapshot = _build_profile_snapshot(profile)
@@ -806,10 +1150,21 @@ def execute_job(
 	from sandboxed code are authorized against ``profile_snapshot`` and executed
 	impersonating ``acting_user`` (see :func:`_make_broker_handler`); when
 	``acting_user`` is missing the broker denies every call (fail closed).
+
+	The profile's ``filesystem_policy`` decides what (if anything) is mounted
+	into the sandbox (Phase 4b):
+	  * "Shared Directory" — the per-conversation shared directory is resolved,
+	    cap-checked, seeded with the conversation's File artifacts, and
+	    snapshotted before the run; after the run (always, via ``finally``) it
+	    is cap-checked again and new/changed files are written back as
+	    ``Agent Context Artifact`` records.
+	  * "Scratch Only" — the Phase-3 throwaway temp directory, discarded after.
+	  * "None" — no filesystem access; ``run_sandboxed`` gets ``scratch_dir=None``.
 	"""
 	call = frappe.get_doc("Agent Tool Call", agent_tool_call_name)
 	limits = (profile_snapshot or {}).get("limits") or {}
 	max_output = int(limits.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
+	filesystem_policy = (profile_snapshot or {}).get("filesystem_policy") or "None"
 
 	# Do not run if a (Phase 5) approval exists and was not granted.
 	blocked = _approval_blocks(call.name)
@@ -825,10 +1180,23 @@ def execute_job(
 
 	broker_handler = _make_broker_handler(profile_snapshot, acting_user)
 
-	scratch_dir = tempfile.mkdtemp(prefix="huf-exec-")
+	scratch_dir = None
+	shared_ctx = None
+	if filesystem_policy == "Shared Directory":
+		shared_ctx = _prepare_shared_dir(call)
+		if shared_ctx is None:
+			# Audit row already marked Failed (fail closed) — do not run.
+			return
+		mount_dir = shared_ctx["dir"]
+	elif filesystem_policy == "Scratch Only":
+		scratch_dir = tempfile.mkdtemp(prefix="huf-exec-")
+		mount_dir = scratch_dir
+	else:  # "None": no filesystem mounted; the child exposes no file I/O
+		mount_dir = None
+
 	try:
 		result: ExecutionResult = run_sandboxed(
-			code, limits=limits, scratch_dir=scratch_dir, broker_handler=broker_handler
+			code, limits=limits, scratch_dir=mount_dir, broker_handler=broker_handler
 		)
 		_apply_result(call, result, max_output, broker_calls=broker_handler.call_counts)
 	except Exception as exc:  # noqa: BLE001 - never leave the row stuck at Started
@@ -844,7 +1212,10 @@ def execute_job(
 			"Huf Code Execution",
 		)
 	finally:
-		shutil.rmtree(scratch_dir, ignore_errors=True)
+		if shared_ctx is not None:
+			_finalize_shared_dir(call, shared_ctx)
+		if scratch_dir is not None:
+			shutil.rmtree(scratch_dir, ignore_errors=True)
 
 
 def _apply_result(
