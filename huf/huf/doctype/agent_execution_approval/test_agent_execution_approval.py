@@ -23,6 +23,7 @@ import frappe
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai.tools.code_execution import _sha256, run_python, stash_pending_execution
+from huf.ai.tools.ssh_execution import stash_pending_execution as stash_pending_ssh_execution
 from huf.huf.doctype.agent_execution_approval.agent_execution_approval import (
 	approve_execution,
 	reject_execution,
@@ -30,6 +31,7 @@ from huf.huf.doctype.agent_execution_approval.agent_execution_approval import (
 from huf.install import create_huf_roles
 
 _PENDING_PREFIX = "huf_pending_execution"
+_PENDING_SSH_PREFIX = "huf_pending_ssh_execution"
 
 
 class TestAgentExecutionApproval(unittest.TestCase):
@@ -54,6 +56,9 @@ class TestAgentExecutionApproval(unittest.TestCase):
 		self._profiles = []
 		self._calls = []
 		self._approvals = []
+		self._connections = []
+		self._huf_roles = []
+		self._huf_user_roles = []
 		self.provider = self._ensure_provider()
 		self.model = self._ensure_model(self.provider)
 
@@ -64,11 +69,21 @@ class TestAgentExecutionApproval(unittest.TestCase):
 				frappe.cache().delete_value(f"{_PENDING_PREFIX}:{name}")
 			except Exception:
 				pass
+			try:
+				frappe.cache().delete_value(f"{_PENDING_SSH_PREFIX}:{name}")
+			except Exception:
+				pass
 			self._delete("Agent Execution Approval", name)
 		for name in self._calls:
 			self._delete("Agent Tool Call", name)
 		for name in self._agents:
 			self._delete("Agent", name)
+		for name in self._connections:
+			self._delete("SSH Connection", name)
+		for name in self._huf_user_roles:
+			self._delete("Huf User Role", name)
+		for name in self._huf_roles:
+			self._delete("Huf Role", name)
 		for name in self._profiles:
 			self._delete("Execution Profile", name)
 		for name in self._users:
@@ -144,6 +159,7 @@ class TestAgentExecutionApproval(unittest.TestCase):
 			{
 				"doctype": "Agent",
 				"agent_name": f"test-agent-{frappe.generate_hash(length=8)}",
+				"instructions": "Test approval agent instructions",
 				"provider": self.provider,
 				"model": self.model,
 				"allow_code_execution": 1,
@@ -153,6 +169,51 @@ class TestAgentExecutionApproval(unittest.TestCase):
 		agent.insert(ignore_permissions=True)
 		self._agents.append(agent.name)
 		return agent
+
+	def _make_huf_role(self, capabilities, frappe_role="Huf User"):
+		role = frappe.get_doc(
+			{
+				"doctype": "Huf Role",
+				"role_name": f"Test Role {frappe.generate_hash(length=8)}",
+				"frappe_role": frappe_role,
+				"permissions": [{"capability": capability} for capability in capabilities],
+			}
+		)
+		role.insert(ignore_permissions=True)
+		self._huf_roles.append(role.name)
+		return role.name
+
+	def _assign_huf_role(self, user, huf_role):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Huf User Role",
+				"user": user,
+				"huf_role": huf_role,
+				"enabled": 1,
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		self._huf_user_roles.append(doc.name)
+		return doc.name
+
+	def _make_connection(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "SSH Connection",
+				"display_name": f"ssh-approval-{frappe.generate_hash(length=8)}",
+				"enabled": 1,
+				"host": "example.com",
+				"port": 22,
+				"username": "ubuntu",
+				"auth_method": "Password",
+				"password": "secret-pass",
+				"host_key_fingerprint": "SHA256:testfingerprint",
+				"host_key_type": "ssh-ed25519",
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		self._connections.append(doc.name)
+		return doc.name
 
 	def _park_execution(self, requester, code="print('parked')"):
 		"""Dispatch an Ask Every Time execution as ``requester``; return (call, approval)."""
@@ -200,6 +261,9 @@ class TestAgentExecutionApproval(unittest.TestCase):
 
 	def _hold_exists(self, approval_name):
 		return frappe.cache().get_value(f"{_PENDING_PREFIX}:{approval_name}") is not None
+
+	def _ssh_hold_exists(self, approval_name):
+		return frappe.cache().get_value(f"{_PENDING_SSH_PREFIX}:{approval_name}") is not None
 
 	# -- Ask Every Time --------------------------------------------------------------
 
@@ -318,7 +382,69 @@ class TestAgentExecutionApproval(unittest.TestCase):
 		mock_enqueue.assert_not_called()
 		approval.reload()
 		self.assertEqual(approval.status, "Pending")
-		self.assertTrue(self._hold_exists(approval.name), "undecided hold must survive")
+
+	def test_ssh_approval_requires_ssh_approver_capability(self):
+		requester = self._make_user(roles=("Huf User",))
+		code_only_approver = self._make_user()
+		code_only_role = self._make_huf_role(("execution.approve",), frappe_role="Huf User")
+		self._assign_huf_role(code_only_approver, code_only_role)
+		ssh_approver = self._make_user(roles=("Huf Manager",))
+		connection = self._make_connection()
+		code_ref = _sha256("echo ssh")
+		call = frappe.get_doc(
+			{
+				"doctype": "Agent Tool Call",
+				"tool": "run_ssh_command",
+				"status": "Queued",
+				"tool_args": json.dumps({"code_ref": code_ref, "connection": connection}),
+				"code_ref": code_ref,
+				"ssh_connection": connection,
+				"execution_kind": "exec",
+			}
+		)
+		call.insert(ignore_permissions=True)
+		approval = frappe.get_doc(
+			{
+				"doctype": "Agent Execution Approval",
+				"agent_tool_call": call.name,
+				"execution_kind": "ssh_exec",
+				"requested_capability": "ssh.run",
+				"code_ref": code_ref,
+				"status": "Pending",
+				"expires_on": add_to_date(now_datetime(), hours=24),
+			}
+		)
+		approval.insert(ignore_permissions=True)
+		stash_pending_ssh_execution(
+			approval.name,
+			command="echo ssh",
+			policy_snapshot={"limits": {}},
+			acting_user=requester,
+			connection_name="SSH-CONN",
+			agent_name="SSH-AGENT",
+		)
+		self._calls.append(call.name)
+		self._approvals.append(approval.name)
+
+		frappe.set_user(code_only_approver)
+		with patch("huf.ai.tools.ssh_execution.enqueue_execution") as mock_enqueue:
+			with self.assertRaises(frappe.PermissionError):
+				approve_execution(approval.name)
+		mock_enqueue.assert_not_called()
+		approval.reload()
+		self.assertEqual(approval.status, "Pending")
+		self.assertTrue(self._ssh_hold_exists(approval.name))
+
+		frappe.set_user(ssh_approver)
+		with patch("huf.ai.tools.ssh_execution.enqueue_execution") as mock_enqueue:
+			result = approve_execution(approval.name)
+		self.assertEqual(result.get("status"), "Approved")
+		mock_enqueue.assert_called_once()
+		self.assertEqual(mock_enqueue.call_args.kwargs.get("acting_user"), requester)
+		self.assertEqual(mock_enqueue.call_args.kwargs.get("connection_name"), "SSH-CONN")
+		self.assertEqual(mock_enqueue.call_args.kwargs.get("agent_name"), "SSH-AGENT")
+		self.assertFalse(self._ssh_hold_exists(approval.name))
+		self.assertFalse(self._hold_exists(approval.name))
 
 	def test_decided_approval_cannot_be_re_decided(self):
 		requester = self._make_user(roles=("Huf User",))

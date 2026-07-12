@@ -93,6 +93,9 @@
   "execution_profile",
   "column_break_code_exec",
   "execution_shared_dir_limit_mb",
+  "ssh_section",
+  "allow_ssh",
+  "ssh_connections",
   "huf_ui_section",
   "agent_color",
   "column_break_g3a9",
@@ -702,6 +705,25 @@
    "fieldtype": "Int",
    "label": "Shared Dir Limit (MB)",
    "non_negative": 1
+  },
+  {
+   "description": "Opt-in to the SSH execution tool. Requires this flag, at least one allowlisted SSH Connection below, and the acting user holding ssh.run before the tool becomes active.",
+   "fieldname": "ssh_section",
+   "fieldtype": "Section Break",
+   "label": "SSH Execution"
+  },
+  {
+   "default": "0",
+   "description": "Explicitly allow this agent to use allowlisted SSH Connections.",
+   "fieldname": "allow_ssh",
+   "fieldtype": "Check",
+   "label": "Allow SSH"
+  },
+  {
+   "fieldname": "ssh_connections",
+   "fieldtype": "Table",
+   "label": "SSH Connections",
+   "options": "Agent SSH Connection"
   },
   {
    "default": "2000",

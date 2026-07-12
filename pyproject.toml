@@ -24,6 +24,7 @@ dependencies = [
     "beautifulsoup4",
     "aiohttp",
     "pypdfium2>=4.26.0",
+    "paramiko>=3.4.0",
 ]
 
 [build-system]

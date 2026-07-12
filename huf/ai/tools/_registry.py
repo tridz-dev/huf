@@ -651,6 +651,26 @@ GOOGLE_MEET_TOOLS = [
 ]
 
 
+SSH_TOOLS = [
+	{
+		"tool_name": "run_ssh_command",
+		"description": (
+			"Run one remote SSH command against an admin-managed SSH Connection that the agent "
+			"is explicitly allowlisted to use. Supports only non-interactive one-shot command "
+			"execution in this version; interactive PTY sessions and managed background jobs are "
+			"not available."
+		),
+		"function_path": "huf.ai.tools.ssh_execution.run_ssh_command",
+		"category": "Developer Tools",
+		"parameters": [
+			_p("connection", required=True, description="Allowlisted SSH Connection name"),
+			_p("command", required=True, description="One remote shell command to execute without PTY"),
+			_p("timeout_seconds", type="integer", description="Optional execution timeout override in seconds"),
+		],
+	},
+]
+
+
 # ---------------------------------------------------------------------------
 # Master list
 # ---------------------------------------------------------------------------
@@ -674,4 +694,5 @@ ALL_INTEGRATION_TOOLS = (
 	+ GOOGLE_MAPS_TOOLS
 	+ GOOGLE_DRIVE_TOOLS
 	+ GOOGLE_MEET_TOOLS
+	+ SSH_TOOLS
 )

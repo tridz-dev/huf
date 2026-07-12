@@ -277,4 +277,12 @@ export interface AgentDoc {
   allow_code_execution?: 0 | 1;
   execution_profile?: string | null; // Link to Execution Profile
   execution_shared_dir_limit_mb?: number | null;
+  allow_ssh?: 0 | 1;
+  ssh_connections?: Array<{
+    name?: string;
+    ssh_connection: string;
+    host?: string;
+    username?: string;
+    enabled?: 0 | 1 | boolean;
+  }>;
 }

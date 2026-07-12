@@ -15,7 +15,9 @@
   "status",
   "call_id",
   "error_message",
+  "execution_kind",
   "execution_profile",
+  "ssh_connection",
   "execution_profile_snapshot",
   "code_ref",
   "exit_status",
@@ -62,6 +64,12 @@
    "read_only": 1
   },
   {
+   "fieldname": "execution_kind",
+   "fieldtype": "Data",
+   "label": "Execution Kind",
+   "read_only": 1
+  },
+  {
    "fieldname": "status",
    "fieldtype": "Select",
    "hidden": 1,
@@ -98,14 +106,21 @@
    "read_only": 1
   },
   {
-   "description": "Snapshot of the Execution Profile (permissions, limits, policies) captured at call time so later profile edits do not change the audit meaning of this record.",
+   "fieldname": "ssh_connection",
+   "fieldtype": "Link",
+   "label": "SSH Connection",
+   "options": "SSH Connection",
+   "read_only": 1
+  },
+  {
+   "description": "Snapshot of the governing execution policy captured at call time so later edits do not change the audit meaning of this record.",
    "fieldname": "execution_profile_snapshot",
    "fieldtype": "JSON",
    "label": "Execution Profile Snapshot",
    "read_only": 1
   },
   {
-   "description": "Hash / artifact reference of the executed code. Never stores raw code inline.",
+   "description": "Hash / artifact reference of the executed payload. Never stores the raw command or code inline.",
    "fieldname": "code_ref",
    "fieldtype": "Data",
    "label": "Code Reference",
