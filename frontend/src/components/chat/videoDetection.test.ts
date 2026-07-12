@@ -3,6 +3,7 @@ import {
   VIDEO_EXTENSIONS,
   isVideoMediaType,
   isVideoUrl,
+  isAllowedVideoSrc,
   detectVideo,
   toVideoProps,
   extractVideoFromToolResult,
@@ -11,6 +12,33 @@ import {
 describe('VIDEO_EXTENSIONS', () => {
   it('exposes the supported extensions', () => {
     expect(VIDEO_EXTENSIONS).toEqual(['.mp4', '.webm', '.ogv', '.mov', '.m4v']);
+  });
+});
+
+describe('isAllowedVideoSrc', () => {
+  it('allows http/https', () => {
+    expect(isAllowedVideoSrc('http://example.com/a.mp4')).toBe(true);
+    expect(isAllowedVideoSrc('https://example.com/a.mp4')).toBe(true);
+  });
+
+  it('allows data: and blob: URIs', () => {
+    expect(isAllowedVideoSrc('data:video/mp4;base64,AAAA')).toBe(true);
+    expect(isAllowedVideoSrc('blob:https://example.com/uuid')).toBe(true);
+  });
+
+  it('allows relative URLs (resolve against page origin)', () => {
+    expect(isAllowedVideoSrc('/files/clip.mp4')).toBe(true);
+    expect(isAllowedVideoSrc('files/clip.mp4')).toBe(true);
+  });
+
+  it('rejects dangerous schemes', () => {
+    expect(isAllowedVideoSrc('javascript:alert(1)')).toBe(false);
+    expect(isAllowedVideoSrc('vbscript:msgbox(1)')).toBe(false);
+    expect(isAllowedVideoSrc('file:///etc/passwd')).toBe(false);
+  });
+
+  it('rejects empty/invalid input', () => {
+    expect(isAllowedVideoSrc('')).toBe(false);
   });
 });
 

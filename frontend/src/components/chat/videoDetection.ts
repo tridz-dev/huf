@@ -24,6 +24,28 @@ export function isVideoUrl(url?: string | null): boolean {
   return VIDEO_EXTENSIONS.some((ext) => stripped.endsWith(ext));
 }
 
+const ALLOWED_VIDEO_SCHEMES = ['http:', 'https:', 'data:', 'blob:'];
+
+/**
+ * True iff `src` is safe to hand to a native <video>/<a href>/window.open —
+ * i.e. it's a relative URL (no scheme, resolves against the page origin) or
+ * declares an explicit http/https/data/blob scheme. Rejects anything else
+ * (e.g. javascript:, file:, vbscript:) so a malicious tool result or
+ * artifact tag can never smuggle a dangerous scheme into the DOM.
+ */
+export function isAllowedVideoSrc(src: string): boolean {
+  if (!src) return false;
+  try {
+    // Fixed base so this works in both node (tests) and the browser —
+    // only the scheme is inspected, resolution against a real origin
+    // never happens for relative URLs, so this base is arbitrary.
+    const url = new URL(src, 'http://localhost');
+    return ALLOWED_VIDEO_SCHEMES.includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
 export type VideoPartInput = {
   type?: string; // explicit part type, e.g. "video"
   mediaType?: string; // MIME

@@ -20,6 +20,7 @@ import type { ComponentPropsWithoutRef, ReactEventHandler } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Download, ExternalLink, VideoOff } from "lucide-react";
+import { isAllowedVideoSrc } from "@/components/chat/videoDetection";
 
 export type VideoProps = ComponentPropsWithoutRef<"video"> & {
   src: string;
@@ -50,7 +51,10 @@ export const Video = ({
 }: VideoProps) => {
   const [errored, setErrored] = useState(false);
 
-  if (!src) {
+  // Treat a missing or disallowed-scheme src the same way: render nothing.
+  // A disallowed scheme (e.g. javascript:) must never reach <video src>,
+  // window.open(src), or <a href={src}> — all of which would execute it.
+  if (!src || !isAllowedVideoSrc(src)) {
     return null;
   }
 
