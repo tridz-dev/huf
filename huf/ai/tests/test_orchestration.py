@@ -327,7 +327,7 @@ class TestProcessOrchestrations(unittest.TestCase):
 			self._make_step("pending", step_index=2),
 		])
 		with patch.object(frappe.db, "exists", return_value=True), \
-				patch("frappe.get_all", return_value=[{"name": "ORCH-TEST-1"}]), \
+				patch("frappe.get_all", return_value=[frappe._dict(name="ORCH-TEST-1")]), \
 				patch("frappe.get_doc", return_value=orch), \
 				patch("frappe.enqueue") as mock_enqueue:
 			process_orchestrations()
@@ -344,7 +344,7 @@ class TestProcessOrchestrations(unittest.TestCase):
 		step = self._make_step("in_progress", modified=now_datetime())
 		orch = self._make_orch([step])
 		with patch.object(frappe.db, "exists", return_value=True), \
-				patch("frappe.get_all", return_value=[{"name": "ORCH-TEST-1"}]), \
+				patch("frappe.get_all", return_value=[frappe._dict(name="ORCH-TEST-1")]), \
 				patch("frappe.get_doc", return_value=orch), \
 				patch("frappe.enqueue") as mock_enqueue:
 			process_orchestrations()
@@ -360,7 +360,7 @@ class TestProcessOrchestrations(unittest.TestCase):
 		step = self._make_step("in_progress", modified=stuck_since)
 		orch = self._make_orch([step])
 		with patch.object(frappe.db, "exists", return_value=True), \
-				patch("frappe.get_all", return_value=[{"name": "ORCH-TEST-1"}]), \
+				patch("frappe.get_all", return_value=[frappe._dict(name="ORCH-TEST-1")]), \
 				patch("frappe.get_doc", return_value=orch), \
 				patch("frappe.log_error") as mock_log, \
 				patch.object(frappe.db, "commit"), \
@@ -383,7 +383,7 @@ class TestProcessOrchestrations(unittest.TestCase):
 			return good_orch
 
 		with patch.object(frappe.db, "exists", return_value=True), \
-				patch("frappe.get_all", return_value=[{"name": "BAD"}, {"name": "GOOD"}]), \
+				patch("frappe.get_all", return_value=[frappe._dict(name="BAD"), frappe._dict(name="GOOD")]), \
 				patch("frappe.get_doc", side_effect=fake_get_doc), \
 				patch("frappe.log_error") as mock_log, \
 				patch("frappe.enqueue") as mock_enqueue:

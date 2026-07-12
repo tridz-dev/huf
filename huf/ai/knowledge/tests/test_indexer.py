@@ -41,7 +41,10 @@ class TestBuildBackendConfig(HufTestSuite):
 
 	def _source_doc(self, **overrides):
 		# In-memory doc: no insert, so vector-backend availability checks in
-		# the KnowledgeSource controller don't fire.
+		# the KnowledgeSource controller don't fire. _build_backend_config's
+		# chroma path scrubs source.name (the autonamed docname), not
+		# source_name directly — set .name explicitly to mirror what insert()
+		# would have assigned via this doctype's `field:source_name` autoname.
 		doc = {
 			"doctype": "Knowledge Source",
 			"source_name": "_Test Config Source",
@@ -50,7 +53,9 @@ class TestBuildBackendConfig(HufTestSuite):
 			"chunk_overlap": 100,
 		}
 		doc.update(overrides)
-		return frappe.get_doc(doc)
+		source = frappe.get_doc(doc)
+		source.name = doc["source_name"]
+		return source
 
 	def test_sqlite_fts_config_contains_only_chunk_settings(self):
 		config = _build_backend_config(self._source_doc())
@@ -340,9 +345,19 @@ class TestProcessKnowledgeInput(HufTestSuite):
 		frappe.db.commit()
 		self.addCleanup(self._delete_docs, source.name, (ki.name,))
 
-		fake_cache = MagicMock()
-		fake_cache.set.return_value = False  # lock already held
-		with patch.object(frappe, "cache", return_value=fake_cache):
+		# frappe.cache() is used all over the framework internals (e.g.
+		# workflow lookups) — a blanket MagicMock replacement breaks those.
+		# Only fake the .set() call for our specific lock key; everything
+		# else goes through the real cache.
+		real_cache = frappe.cache()
+		lock_key = f"knowledge_index_{source.name}"
+
+		def fake_set(key, *args, **kwargs):
+			if key == lock_key:
+				return False  # lock already held
+			return real_cache.set(key, *args, **kwargs)
+
+		with patch.object(real_cache, "set", side_effect=fake_set):
 			result = process_knowledge_input(ki.name)
 
 		self.assertEqual(result["status"], "error")

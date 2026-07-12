@@ -173,6 +173,9 @@ class TestKnowledgeSearchOrchestration(HufTestSuite):
 			class _DispatchBackend:
 				def initialize(self, knowledge_source, config):
 					self.impl = (erroring if knowledge_source == s1.name else good)()
+					# _FakeBackend.search() reads self.knowledge_source, set by
+					# its own initialize() — must be forwarded, not skipped.
+					self.impl.initialize(knowledge_source, config)
 
 				def search(self, query, top_k=5, filters=None):
 					return self.impl.search(query, top_k=top_k, filters=filters)
