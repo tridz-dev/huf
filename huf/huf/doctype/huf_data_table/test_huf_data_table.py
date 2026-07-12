@@ -38,7 +38,11 @@ class TestHufDataTable(HufTestSuite):
 			"table_name": "_Test Unique Table",
 		}).insert(ignore_permissions=True)
 
-		with self.assertRaises(frappe.DuplicateEntryError):
+		# table_name has `unique: 1` on a non-name-forming field — Frappe
+		# raises UniqueValidationError for that (DuplicateEntryError is
+		# specifically for a naming/PK collision, which this isn't since
+		# autoname here is "hash").
+		with self.assertRaises(frappe.UniqueValidationError):
 			frappe.get_doc({
 				"doctype": "Huf Data Table",
 				"table_name": "_Test Unique Table",

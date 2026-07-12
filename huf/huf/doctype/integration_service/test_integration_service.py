@@ -33,8 +33,14 @@ class TestIntegrationService(HufTestSuite):
 			}).insert(ignore_permissions=True)
 
 	def test_is_builtin_set_for_known_service(self):
-		# before_insert(): service_name.lower() in the builtin_services list.
-		service = self._make_service(service_name="slack")
+		# "slack" is one of install.py's seeded built-in services (created
+		# directly with is_builtin=1 during after_install, not via a fresh
+		# insert here) — service_name is unique, so re-inserting it would
+		# collide. Read the seeded row and confirm the flag instead.
+		if frappe.db.exists("Integration Service", "slack"):
+			service = frappe.get_doc("Integration Service", "slack")
+		else:
+			service = self._make_service(service_name="slack")
 		self.assertEqual(service.is_builtin, 1)
 
 	def test_is_builtin_not_set_for_unknown_service(self):

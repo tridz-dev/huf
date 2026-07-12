@@ -30,6 +30,7 @@ class TestAgentTool(HufTestSuite):
 			"agent_name": "_Test Agent Tool Parent",
 			"provider": self.bootstrap.provider.name,
 			"model": self.bootstrap.model.name,
+			"instructions": "You are a test assistant.",
 			"agent_tool": agent_tool,
 		}).insert(ignore_permissions=True)
 

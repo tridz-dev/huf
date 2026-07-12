@@ -37,7 +37,12 @@ class TestMCPServer(HufTestSuite):
 			server.insert(ignore_permissions=True)
 
 	def test_auth_header_name_required_when_auth_enabled(self):
-		server = self._make_server(auth_type="api_key", auth_header_name=None)
+		# auth_header_name has a DocType-level default of "Authorization", and
+		# Frappe re-applies that default when the field is unset/None on
+		# insert — so passing None doesn't actually leave it empty. An
+		# explicit empty string bypasses the default and reaches the
+		# controller's real validation.
+		server = self._make_server(auth_type="api_key", auth_header_name="")
 
 		with self.assertRaises(frappe.ValidationError):
 			server.insert(ignore_permissions=True)

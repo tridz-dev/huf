@@ -38,12 +38,17 @@ class TestKnowledgeSource(HufTestSuite):
 				"knowledge_type": "sqlite_fts",
 			}).insert(ignore_permissions=True)
 
-	def test_knowledge_type_required(self):
-		with self.assertRaises(frappe.ValidationError):
-			frappe.get_doc({
-				"doctype": "Knowledge Source",
-				"source_name": "_Test Knowledge Source",
-			}).insert(ignore_permissions=True)
+	def test_knowledge_type_defaults_to_first_select_option_when_omitted(self):
+		# knowledge_type is `reqd` but has no explicit `default` in the
+		# DocType JSON — verified against a live bench that Frappe silently
+		# auto-fills a required Select with no default with its first
+		# option on insert, so omitting it can never raise a validation
+		# error the way one might expect from `reqd: 1` alone.
+		source = frappe.get_doc({
+			"doctype": "Knowledge Source",
+			"source_name": "_Test Knowledge Source",
+		}).insert(ignore_permissions=True)
+		self.assertEqual(source.knowledge_type, "sqlite_fts")
 
 	def test_source_name_unique(self):
 		self._make_source()

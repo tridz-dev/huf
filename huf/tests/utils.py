@@ -105,4 +105,9 @@ class BootStrapTestData:
 			"agent_name": self.AGENT_NAME,
 			"provider": self.provider.name,
 			"model": self.model.name,
+			# Local prompt_mode (the default) requires instructions —
+			# Agent._validate_prompt() throws without it, which broke every
+			# test class's setUpClass until this was caught by an actual
+			# bench run.
+			"instructions": "You are a test agent.",
 		}).insert(ignore_permissions=True)

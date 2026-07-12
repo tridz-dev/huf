@@ -47,7 +47,10 @@ class TestAgentToolFunction(HufTestSuite):
 
 	def test_tool_name_required(self):
 		tool_type = self._make_tool_type()
-		with self.assertRaises(frappe.MandatoryError):
+		# autoname is "field:tool_name" — same naming-stage-before-mandatory-
+		# validation ordering as Agent Tool Type; a plain ValidationError,
+		# not frappe.MandatoryError.
+		with self.assertRaises(frappe.ValidationError):
 			frappe.get_doc({
 				"doctype": "Agent Tool Function",
 				"description": "Missing tool name",

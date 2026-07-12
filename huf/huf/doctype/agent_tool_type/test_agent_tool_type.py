@@ -17,7 +17,10 @@ class TestAgentToolType(HufTestSuite):
 		self.assertEqual(tool_type.name, "_Test Tool Type")
 
 	def test_name_required(self):
-		with self.assertRaises(frappe.MandatoryError):
+		# autoname is "field:name1", so a missing name1 is rejected at the
+		# naming stage (plain ValidationError) before mandatory-field
+		# validation ever runs — not frappe.MandatoryError.
+		with self.assertRaises(frappe.ValidationError):
 			frappe.get_doc({
 				"doctype": "Agent Tool Type",
 			}).insert(ignore_permissions=True)

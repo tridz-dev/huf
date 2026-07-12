@@ -10,6 +10,11 @@ from huf.tests.utils import HufTestSuite
 
 class TestKnowledgeInput(HufTestSuite):
 	def _make_knowledge_source(self, source_name="_Test Knowledge Source"):
+		# get_or_create: some tests call this indirectly twice in one test
+		# (e.g. once directly, once via _make_input) with the default name —
+		# source_name is unique, so a bare insert() would collide.
+		if frappe.db.exists("Knowledge Source", source_name):
+			return frappe.get_doc("Knowledge Source", source_name)
 		return frappe.get_doc({
 			"doctype": "Knowledge Source",
 			"source_name": source_name,
@@ -78,6 +83,9 @@ class TestKnowledgeInput(HufTestSuite):
 
 		ki = self._make_input(input_type="File", text=None, file=file_doc.file_url)
 
-		# before_save() resolves the File record and copies its metadata
+		# before_save() resolves the File record and copies its metadata.
+		# File.file_type in Frappe is the uppercased extension, not a MIME
+		# type (verified against a live bench) — get_file_type_from_name's
+		# fallback matches that convention.
 		self.assertEqual(ki.file_name, "_test_knowledge_input.txt")
-		self.assertEqual(ki.file_type, "text/plain")
+		self.assertEqual(ki.file_type, "TXT")
