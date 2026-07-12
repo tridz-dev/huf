@@ -60,6 +60,20 @@ on them.
 
 PR1 deliberately does not add a standalone React SSH-connection management page.
 
+## Known limitations in PR1 (deferred)
+
+- Output truncated at a byte limit is recorded as `Completed` with `limits_hit=1` (exit code
+  unknown once the channel is closed mid-stream); treat `limits_hit` as the truncation signal.
+- Idle timeout is labeled `exit_status="Killed"` while overall timeout is `"Timeout"`.
+- On timeout/limit the SSH channel is closed without signaling the remote process; a server-side
+  process may keep running (use the durable `tmux`/systemd pattern above for long jobs).
+- The per-connection concurrency slot uses a non-atomic Redis get-then-set; two jobs starting in
+  the same instant can both pass the check.
+- The pending-approval stash holds the raw command in Redis (plaintext, up to 24h) by design for
+  the integrity-hash check.
+- `_truncate` counts characters while capture limits count bytes (multibyte UTF-8 mismatch), and
+  the appended truncation marker pushes stored output slightly past the nominal limit.
+
 ## Follow-up roadmap
 
 - PR2: first-class `durable_job` support with status, logs, cancellation, cleanup

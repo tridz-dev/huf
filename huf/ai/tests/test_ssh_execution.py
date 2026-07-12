@@ -7,6 +7,7 @@ Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_ssh
 """
 import base64
 import hashlib
+import itertools
 import json
 import unittest
 from unittest.mock import Mock, patch
@@ -20,6 +21,27 @@ from huf.install import create_huf_roles
 def _fingerprint_for(key_bytes):
 	digest = hashlib.sha256(key_bytes).digest()
 	return "SHA256:" + base64.b64encode(digest).decode("ascii").rstrip("=")
+
+
+def _monotonic_clock(step=100.0):
+	"""Strictly increasing ``time.monotonic`` side_effect, safe for any call count.
+
+	Frappe/redis internals also call the patched ``time.monotonic``, so a fixed
+	sequence either exhausts (``StopIteration``) or freezes the value and makes
+	the executor's ``now - start`` checks never trip (infinite loop). A clock
+	that advances by ``step`` on every call makes the first loop iteration
+	always observe an elapsed time of exactly ``step``.
+	"""
+	ticks = itertools.count(1)
+	return lambda: next(ticks) * step
+
+
+def _json_field(doc, fieldname):
+	"""JSON DocFields come back from ``reload()`` as raw strings; parse them."""
+	value = getattr(doc, fieldname, None)
+	if isinstance(value, str):
+		value = json.loads(value)
+	return value or {}
 
 
 class _FakeHostKey:
@@ -328,7 +350,10 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 		channel.recv_ready.return_value = False
 		channel.recv_stderr_ready.return_value = False
 		channel.exit_status_ready.return_value = False
-		with patch("huf.ai.tools.ssh_execution.time.monotonic", side_effect=[0.0, 9999.0, 9999.0]), \
+		with patch(
+				"huf.ai.tools.ssh_execution.time.monotonic",
+				side_effect=_monotonic_clock(step=100.0),
+			), \
 				patch("huf.ai.tools.ssh_execution.select.select", return_value=([], [], [])):
 			call, _ = self._run_execute_job(
 				connection,
@@ -340,7 +365,7 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 		self.assertEqual(call.status, "Failed")
 		self.assertEqual(call.exit_status, "Timeout")
 		self.assertEqual(call.limits_hit, 1)
-		self.assertTrue(call.resource_usage["timed_out"])
+		self.assertTrue(_json_field(call, "resource_usage")["timed_out"])
 		channel.close.assert_called()
 
 	def test_idle_timeout_marks_call_killed(self):
@@ -351,7 +376,10 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 		channel.recv_ready.return_value = False
 		channel.recv_stderr_ready.return_value = False
 		channel.exit_status_ready.return_value = False
-		with patch("huf.ai.tools.ssh_execution.time.monotonic", side_effect=[0.0, 40.0, 40.0]), \
+		with patch(
+				"huf.ai.tools.ssh_execution.time.monotonic",
+				side_effect=_monotonic_clock(step=100.0),
+			), \
 				patch("huf.ai.tools.ssh_execution.select.select", return_value=([], [], [])):
 			call, _ = self._run_execute_job(
 				connection,
@@ -363,7 +391,7 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 		self.assertEqual(call.status, "Failed")
 		self.assertEqual(call.exit_status, "Killed")
 		self.assertEqual(call.limits_hit, 1)
-		self.assertTrue(call.resource_usage["idle_timed_out"])
+		self.assertTrue(_json_field(call, "resource_usage")["idle_timed_out"])
 		channel.close.assert_called()
 
 	def test_stdout_capture_bounded_by_limit(self):
@@ -385,7 +413,7 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 				channel=channel,
 			)
 		self.assertEqual(call.limits_hit, 1)
-		self.assertEqual(call.tool_result["stdout"], "a" * 16)
+		self.assertEqual(_json_field(call, "tool_result")["stdout"], "a" * 16)
 		channel.close.assert_called()
 
 	def test_stderr_capture_bounded_by_limit(self):
@@ -407,7 +435,7 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 				channel=channel,
 			)
 		self.assertEqual(call.limits_hit, 1)
-		self.assertEqual(call.tool_result["stderr"], "e" * 8)
+		self.assertEqual(_json_field(call, "tool_result")["stderr"], "e" * 8)
 		channel.close.assert_called()
 
 
