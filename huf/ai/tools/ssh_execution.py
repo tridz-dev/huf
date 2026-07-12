@@ -595,7 +595,7 @@ def execute_job(
 	call.status = "Started"
 	call.save(ignore_permissions=True)
 
-	connection_doc = frappe.get_doc("SSH Connection", connection_name or call.ssh_connection)
+	connection_label = connection_name or call.ssh_connection
 	limits = (policy_snapshot or {}).get("limits") or {}
 	max_concurrent = int(limits.get("max_concurrent_commands_per_connection") or DEFAULT_MAX_CONCURRENT_COMMANDS)
 	transport = None
@@ -606,12 +606,13 @@ def execute_job(
 			raise frappe.ValidationError("SSH execution is missing the original acting user.")
 		if not agent_name:
 			raise frappe.ValidationError("SSH execution is missing the original agent reference.")
+		connection_doc = frappe.get_doc("SSH Connection", connection_label)
 		_validate_agent_connection_for_user(agent_name, connection_doc.name, acting_user)
 		_acquire_connection_slot(connection_doc.name, max_concurrent)
 		acquired = True
 		transport, fingerprint, host_key_type = _connect_transport(connection_doc, limits)
 		result = _run_exec_over_transport(transport, command, limits, fingerprint, host_key_type)
-		_apply_result(call, result)
+		_apply_result(call, result, limits)
 	except Exception as exc:  # noqa: BLE001
 		call.status = "Failed"
 		call.exit_status = "Error"
@@ -620,7 +621,7 @@ def execute_job(
 		call.resource_usage = {
 			"wall_s": 0,
 			"execution_kind": "exec",
-			"connection_name": connection_doc.name,
+			"connection_name": connection_label,
 		}
 		call.save(ignore_permissions=True)
 		frappe.log_error(f"execute_job failed for {agent_tool_call_name}: {exc}", "Huf SSH Execution")
@@ -634,10 +635,11 @@ def execute_job(
 			_release_connection_slot(connection_doc.name)
 
 
-def _apply_result(call, result: SSHExecutionResult) -> None:
+def _apply_result(call, result: SSHExecutionResult, limits: dict | None = None) -> None:
 	ok = result.exit_status == "Ok" and (result.exit_code in (None, 0))
-	stdout_limit = DEFAULT_STDOUT_MAX_BYTES
-	stderr_limit = DEFAULT_STDERR_MAX_BYTES
+	limits = limits or {}
+	stdout_limit = int(limits.get("stdout_max_bytes") or DEFAULT_STDOUT_MAX_BYTES)
+	stderr_limit = int(limits.get("stderr_max_bytes") or DEFAULT_STDERR_MAX_BYTES)
 
 	call.status = "Completed" if ok else "Failed"
 	call.exit_status = result.exit_status
