@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from types import SimpleNamespace
 import litellm
 from litellm import token_counter
@@ -327,6 +328,27 @@ def safe_commit():
             raise
 
 
+def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
+    """Emit a realtime lifecycle event for an Agent Run (queued/started/success/failed)."""
+    try:
+        message = {
+            "type": "agent_run_status",
+            "status": status,
+            "agent_run_id": run_doc.name,
+            "conversation_id": conversation.name,
+            "agent": run_doc.agent,
+        }
+        if extra:
+            message.update(extra)
+        frappe.publish_realtime(
+            event=f"conversation:{conversation.name}",
+            message=message,
+            user=frappe.session.user,
+        )
+    except Exception:
+        pass
+
+
 def _parse_prompt_cache_options(prompt_cache_options):
     """Parse prompt caching options passed via API/runtime and return a dict."""
     if not prompt_cache_options:
@@ -650,6 +672,7 @@ def run_agent_sync(
     prompt_cache_options=None,
     files=None,
     skip_user_message: bool = False,
+    now=None,
 ):
 
     if not agent_name:
@@ -698,10 +721,6 @@ def run_agent_sync(
     frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
 
-    # Optimized history fetching with dynamic limit + buffer
-    fetch_limit = (agent_doc.history_limit or 20) + 10
-    history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
-    history = _history_without_pending_user_turn(history, skip_user_message)
     resolved_prompt_template = prompt_template
     if not resolved_prompt_template:
         if agent_doc.prompt_mode == "Local":
@@ -743,10 +762,125 @@ def run_agent_sync(
 
     run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert(ignore_permissions=True)
-    if prompt and not str(prompt).startswith("[SILENT_TRIGGER]") and not skip_user_message:
+
+    execution_kwargs = {
+        "agent_name": agent_name,
+        "run_id": run_doc.name,
+        "conversation_id": conversation.name,
+        "prompt": prompt,
+        "provider": resolved_provider,
+        "model": resolved_model,
+        "channel_id": channel_id,
+        "external_id": external_id,
+        "response_format": response_format,
+        "prompt_template": prompt_template,
+        "prompt_version": prompt_version,
+        "resolved_prompt_template": resolved_prompt_template,
+        "parent_conversation_id": parent_conversation_id,
+        "invoked_by_agent": invoked_by_agent,
+        "prompt_cache_options": prompt_cache_options,
+        "files": files,
+        "skip_user_message": skip_user_message,
+    }
+
+    is_queued = not getattr(agent_doc, "run_immediately", 0) and not _is_truthy(now)
+
+    if is_queued:
+        # Queue-first path: persist the Agent Run only. The user message is
+        # created later by the worker while holding the conversation lock, so
+        # two accepted requests for the same conversation cannot interleave
+        # into each other's history. The prompt travels on the run itself.
+        safe_commit()
+        frappe.enqueue(
+            "huf.ai.agent_integration._run_queued_agent",
+            queue="default",
+            timeout=600,
+            is_async=True,
+            enqueue_after_commit=True,
+            **execution_kwargs
+        )
+        _emit_run_lifecycle_event(run_doc, conversation, "queued")
+        safe_commit()
+        return {
+            "success": True,
+            "queued": True,
+            "status": "Queued",
+            "response": None,
+            "provider": resolved_provider,
+            "agent_run_id": run_doc.name,
+            "conversation_id": conversation.name,
+            "session_id": conv_manager.session_id,
+        }
+
+    # Direct path (``now`` override or Agent.run_immediately): preserve the
+    # existing immediate behavior — persist the user message up front and
+    # execute inline.
+    if prompt and not str(prompt).startswith("[SILENT_TRIGGER]") and not skip_user_message and not is_queued:
         conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
-    run_doc.db_set("start_time", now_datetime())
     safe_commit()
+
+    return _execute_agent_run(**execution_kwargs)
+
+
+def _is_truthy(value):
+    """Interpret API/runtime boolean-ish values (e.g. ``now``)."""
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes")
+    return bool(value)
+
+
+def _execute_agent_run(
+    agent_name,
+    run_id,
+    conversation_id,
+    prompt=None,
+    provider=None,
+    model=None,
+    channel_id=None,
+    external_id=None,
+    response_format=None,
+    prompt_template=None,
+    prompt_version=None,
+    resolved_prompt_template=None,
+    parent_conversation_id=None,
+    invoked_by_agent=None,
+    prompt_cache_options=None,
+    files=None,
+    skip_user_message=False,
+):
+    """Execute an agent against an existing Agent Run and conversation.
+
+    Shared execution logic for direct (``now`` / ``run_immediately``) and
+    queued runs. The Agent Run is created by the caller; the user message is
+    persisted by the caller (direct path) or by the queued worker while
+    holding the conversation lock. This function never creates another run
+    or user message.
+    """
+    agent_doc = frappe.get_doc("Agent", agent_name)
+    resolved_provider = provider if provider else agent_doc.provider
+    resolved_model = model if model else agent_doc.model
+
+    conv_manager = ConversationManager(
+        agent_name=agent_name,
+        channel=channel_id,
+        external_id=external_id
+    )
+    conversation = frappe.get_doc("Agent Conversation", conversation_id)
+    run_doc = frappe.get_doc("Agent Run", run_id)
+    run_doc.db_set("start_time", now_datetime())
+
+    # Optimized history fetching with dynamic limit + buffer.
+    # This turn's user message was persisted just before execution: inline
+    # (direct path) or by the queued worker under the conversation lock.
+    # The lock serializes queued runs per conversation, so the trailing
+    # user message is always this run's own turn — drop it from history
+    # because ``prompt`` carries the full turn.
+    user_message_persisted = skip_user_message or bool(
+        prompt and not str(prompt).startswith("[SILENT_TRIGGER]")
+    )
+    fetch_limit = (agent_doc.history_limit or 20) + 10
+    history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
+    history = _history_without_pending_user_turn(history, user_message_persisted)
 
     # Check for multi-run orchestration mode
     # Skip if already called from orchestration to prevent infinite loop
@@ -776,6 +910,7 @@ def run_agent_sync(
     
     try:
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
+        _emit_run_lifecycle_event(run_doc, conversation, "started")
         safe_commit()
 
         total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
@@ -1141,6 +1276,7 @@ def run_agent_sync(
             "provider": resolved_provider,
             "end_time": now_datetime()
         }, update_modified=True)
+        _emit_run_lifecycle_event(run_doc, conversation, "success")
         safe_commit()
 
         # Handle Sub-Agent Success Lifecycle Hook
@@ -1159,7 +1295,8 @@ def run_agent_sync(
                     parent_conversation_id=None,
                     conversation_id=parent_conversation_id,
                     channel_id=channel_id,
-                    external_id=external_id
+                    external_id=external_id,
+                    now=1
                 )
             except Exception as hook_err:
                 frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
@@ -1259,6 +1396,7 @@ def run_agent_sync(
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
         frappe.log_error(f"Agent Run Error: {frappe.get_traceback()}", "Huf")
+        _emit_run_lifecycle_event(run_doc, conversation, "failed", {"error": error_msg})
 
         # Handle Sub-Agent Failure Lifecycle Hook
         if parent_conversation_id and invoked_by_agent:
@@ -1275,7 +1413,8 @@ def run_agent_sync(
                     parent_conversation_id=None,
                     conversation_id=parent_conversation_id,
                     channel_id=channel_id,
-                    external_id=external_id
+                    external_id=external_id,
+                    now=1
                 )
             except Exception as hook_err:
                 frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
@@ -1299,6 +1438,104 @@ def run_agent_sync(
             "conversation_id": conversation.name,
             "session_id": conv_manager.session_id
         }
+
+
+# Conversation-scoped execution lock for queued runs. Serializes workers of
+# the same conversation (so a history snapshot never observes a later turn)
+# without blocking runs of other conversations. Uses the same cache set
+# nx/ex convention as huf/ai/knowledge/indexer.py.
+_QUEUE_LOCK_TTL = 600
+_QUEUE_LOCK_RETRY_DELAY = 5
+_QUEUE_LOCK_MAX_ATTEMPTS = 60
+
+
+def _run_queued_agent(lock_attempt=0, **kwargs):
+    """Background worker entry point for queued agent runs.
+
+    Acquires the conversation-scoped execution lock, persists exactly one
+    user message for the precreated Agent Run under that lock, then runs
+    the shared execution logic against the exact Agent Run and conversation
+    created by ``run_agent_sync``. If the lock is busy the job re-enqueues
+    itself instead of losing the turn. Never creates another run.
+    """
+    run_id = kwargs.get("run_id")
+    conversation_id = kwargs.get("conversation_id")
+    lock_key = f"agent_run_conv_{conversation_id}"
+
+    if not frappe.cache().set(lock_key, 1, ex=_QUEUE_LOCK_TTL, nx=True):
+        # Another run of this conversation is executing. Re-enqueue rather
+        # than drop the turn; bounded attempts guard against a stuck lock
+        # (the lock itself also expires after _QUEUE_LOCK_TTL seconds).
+        if lock_attempt >= _QUEUE_LOCK_MAX_ATTEMPTS:
+            _fail_queued_run(run_id, _("Timed out waiting for the conversation execution slot."))
+            return
+        time.sleep(_QUEUE_LOCK_RETRY_DELAY)
+        frappe.enqueue(
+            "huf.ai.agent_integration._run_queued_agent",
+            queue="default",
+            timeout=600,
+            is_async=True,
+            lock_attempt=lock_attempt + 1,
+            **kwargs
+        )
+        return
+
+    try:
+        run_doc = frappe.get_doc("Agent Run", run_id)
+        if run_doc.status != "Queued":
+            # Already picked up or cancelled elsewhere; never run twice.
+            return
+
+        prompt = kwargs.get("prompt")
+        if prompt and not str(prompt).startswith("[SILENT_TRIGGER]") and not kwargs.get("skip_user_message"):
+            # Exactly one user message per run, created under the lock so no
+            # other turn can interleave into this run's history snapshot.
+            if not frappe.db.exists("Agent Message", {"agent_run": run_id, "role": "user"}):
+                conv_manager = ConversationManager(
+                    agent_name=kwargs.get("agent_name"),
+                    channel=kwargs.get("channel_id"),
+                    external_id=kwargs.get("external_id"),
+                )
+                conversation = frappe.get_doc("Agent Conversation", conversation_id)
+                conv_manager.add_message(
+                    conversation,
+                    "user",
+                    prompt,
+                    kwargs.get("provider"),
+                    kwargs.get("model"),
+                    kwargs.get("agent_name"),
+                    run_id,
+                )
+                frappe.db.commit()
+        return _execute_agent_run(**kwargs)
+    except Exception as e:
+        _fail_queued_run(run_id, str(e))
+        try:
+            if run_id and conversation_id:
+                _emit_run_lifecycle_event(
+                    frappe.get_doc("Agent Run", run_id),
+                    SimpleNamespace(name=conversation_id),
+                    "failed",
+                    {"error": str(e)},
+                )
+        except Exception:
+            pass
+        frappe.log_error(f"Queued agent run failed: {frappe.get_traceback()}", "Huf")
+    finally:
+        frappe.cache().delete(lock_key)
+
+
+def _fail_queued_run(run_id, error_message):
+    """Mark a queued Agent Run as failed without losing the error."""
+    try:
+        if run_id:
+            frappe.db.set_value("Agent Run", run_id, {
+                "status": "Failed",
+                "error_message": error_message,
+            }, update_modified=True)
+            frappe.db.commit()
+    except Exception:
+        pass
 
 
 async def run_agent_stream(

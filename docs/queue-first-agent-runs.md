@@ -1,4 +1,4 @@
-# Queue-first agent runs (implementation plan)
+# Queue-first agent runs
 
 Agent requests can contain long model calls and multiple tool calls. Running the whole turn in a Frappe web request consumes scarce web-worker capacity and makes bursts of normal API activity compete with long-lived LLM work.
 
@@ -6,15 +6,22 @@ This change introduces a queue-first policy: an agent is queued by default, and 
 
 ## Compatibility contract
 
-Submission must create one `Agent Run` and its user message, enqueue the work immediately, and return `agent_run_id`, `conversation_id`, `status: Queued`, and `queued: true`. The worker must execute that exact run and update its existing lifecycle states. It must not create a second run or user message.
+Submission persists one `Agent Run` (status `Queued`, with the prompt stored on the run), enqueues a private worker for that exact run, and returns `agent_run_id`, `conversation_id`, `status: Queued`, and `queued: true`. The user message is **not** persisted at submission time (see ordering below). The worker creates exactly one user message for the run, executes that exact run, and updates its existing lifecycle states. It never creates a second run or user message.
 
-`now=true` takes precedence over the Agent's **Run immediately (advanced)** setting. Direct streaming remains available as an explicit compatibility path while the client migrates to run lifecycle events.
+`now=true` takes precedence over the Agent's **Run immediately (advanced)** setting; either one selects the direct path, which preserves the legacy behavior: the user message is persisted up front and the run executes inline. Direct streaming remains available as an explicit compatibility path while the client migrates to run lifecycle events.
 
 ## Conversation ordering
 
-Queueing changes an important assumption: two requests for the same conversation can be accepted before either worker begins. A worker-only lock is not enough if both user messages were already persisted, because the first worker can observe the second turn.
+Queueing changes an important assumption: two requests for the same conversation can be accepted before either worker begins. If both user messages were persisted at submission time, the first worker's history snapshot could observe (or trim) the second turn.
 
-The implementation therefore persists the `Agent Run` immediately but appends the user `Agent Message` only after the queued worker acquires the conversation's execution slot. The client renders the accepted user text optimistically from the queued acknowledgement, then reconciles from run lifecycle events. This serializes one conversation without reducing concurrency across different conversations.
+The implementation therefore persists the `Agent Run` immediately but appends the user `Agent Message` only after the queued worker acquires the conversation's execution slot:
+
+- The worker locks with the cache `set nx ex` convention used by `huf/ai/knowledge/indexer.py` (`agent_run_conv_<conversation_id>`, TTL 600s). The lock serializes queued runs for one conversation without blocking other conversations.
+- Under the lock, the worker verifies the run is still `Queued`, creates exactly one user message (guarded by an `Agent Message` lookup on `agent_run`), then loads history and executes. Because the lock is held, the trailing user message in history is guaranteed to be this run's own turn, so the original history semantics are restored.
+- If the lock is busy, the worker re-enqueues itself (bounded attempts with a short delay) instead of dropping the turn; the lock TTL bounds a stuck worker.
+- The lock is always released in a `finally` block.
+
+The client renders the accepted user text optimistically from the queued acknowledgement, then reconciles from run lifecycle events. This serializes one conversation without reducing concurrency across different conversations.
 
 ## Rollout order
 
