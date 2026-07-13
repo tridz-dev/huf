@@ -273,4 +273,7 @@ export interface AgentDoc {
   allow_file_upload?: 0 | 1;
   enable_ocr?: 0 | 1;
   max_upload_size_mb?: number | null;
+
+  // Execution policy (advanced): run turns directly instead of queue-first
+  run_immediately?: 0 | 1;
 }

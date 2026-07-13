@@ -33,6 +33,12 @@ interface ChatInputProps {
     scrollToBottomAfterPaint?: (instant?: boolean) => void;
     allowFileUpload?: boolean;
     maxUploadSizeMb?: number | null;
+    /**
+     * Agent policy: run turns directly (no queue). When true and the SSE
+     * endpoint is reachable, the chat streams; otherwise turns are
+     * queue-first.
+     */
+    runImmediately?: boolean;
 }
 
 export function ChatInput({ 
@@ -48,6 +54,7 @@ export function ChatInput({
     scrollToBottomAfterPaint,
     allowFileUpload = false,
     maxUploadSizeMb,
+    runImmediately = false,
 }: ChatInputProps) {
     const navigate = useNavigate();
     const [message, setMessage] = useState('');
@@ -88,7 +95,12 @@ export function ChatInput({
             skipUserMessage?: boolean;
             files?: PrepareMessageWithFileFile[];
         }) => {
-            const useStreaming = streamingAvailable;
+            // Queue-first by default: turns go through the REST path and
+            // reconcile from run lifecycle socket events. SSE streaming is the
+            // explicit direct-execution mode, used only for agents with the
+            // advanced `run_immediately` policy when the stream endpoint is
+            // reachable.
+            const useStreaming = streamingAvailable && runImmediately;
             const response = await sendMessage(
                 {
                     agent: agentName,
@@ -126,7 +138,7 @@ export function ChatInput({
             const status = msg?.status as string | undefined;
             return { conversationId, agentMessageId, agentRunId, queued, status };
         },
-        [agentName]
+        [agentName, runImmediately]
     );
 
     const syncAssistantMessageId = useCallback(
@@ -417,11 +429,15 @@ export function ChatInput({
             };
             let currentAssistantKey = assistantMessageId;
             try {
+                // The transcribe endpoint already persisted the user message;
+                // skip persisting it again in the run (queue-first workers
+                // otherwise add a second user message).
                 const { agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
                     message: res.transcript,
                     conversationId: res.conversation_id,
                     assistantMessageId,
                     updateAssistantContent,
+                    skipUserMessage: true,
                 });
                 currentAssistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
                 if (queued && agentRunId) {

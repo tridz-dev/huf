@@ -465,6 +465,9 @@ export async function prepareMessageWithFile(
 export interface NewConversationParams {
   agent: string;
   message: string;
+  /** The user message was already persisted (e.g. file/audio prepare step). */
+  skip_user_message?: boolean;
+  files?: PrepareMessageWithFileFile[];
 }
 
 export interface NewConversationResponse {
@@ -493,6 +496,9 @@ export interface NewConversationResponse {
 export interface SendMessageParams {
   conversation: string;
   message: string;
+  /** The user message was already persisted (e.g. file/audio prepare step). */
+  skip_user_message?: boolean;
+  files?: PrepareMessageWithFileFile[];
 }
 
 export interface SendMessageResponse {
@@ -520,6 +526,8 @@ export async function newConversation(
     const result = await call.post('huf.ai.agent_chat.new_conversation', {
       agent: params.agent,
       message: params.message,
+      skip_user_message: params.skip_user_message ? 1 : 0,
+      files: params.files,
     });
     return result as NewConversationResponse;
   } catch (error) {
@@ -537,6 +545,8 @@ export async function sendMessageToConversation(
     const result = await call.post('huf.ai.agent_chat.send_message_to_conversation', {
       conversation: params.conversation,
       message: params.message,
+      skip_user_message: params.skip_user_message ? 1 : 0,
+      files: params.files,
     });
     return result as SendMessageResponse;
   } catch (error) {

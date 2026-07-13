@@ -133,14 +133,27 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
   return [...prev, newMessage];
 }
 
+/** Canonical run lifecycle statuses match the Agent Run doctype Select options. */
+const CANONICAL_RUN_STATUSES: Record<string, AgentRunStatusEvent['status']> = {
+  queued: 'Queued',
+  started: 'Started',
+  success: 'Success',
+  failed: 'Failed',
+};
+
 function normalizeAgentRunStatusEvent(raw: Record<string, unknown>): AgentRunStatusEvent {
+  const rawStatus = typeof raw.status === 'string' ? raw.status : '';
+  const status =
+    CANONICAL_RUN_STATUSES[rawStatus.trim().toLowerCase()] ??
+    (rawStatus as AgentRunStatusEvent['status']) ??
+    'Queued';
   return {
     ...raw,
     type: 'agent_run_status',
     agent_run_id: (raw.agent_run_id as string) ?? '',
     conversation_id: (raw.conversation_id as string) ?? '',
     session_id: raw.session_id as string | undefined,
-    status: (raw.status as AgentRunStatusEvent['status']) ?? 'Queued',
+    status,
     response: raw.response as string | undefined,
     error: raw.error as string | undefined,
     agent_message_id: raw.agent_message_id as string | undefined,

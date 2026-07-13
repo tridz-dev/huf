@@ -257,11 +257,15 @@ export async function sendMessage(
     return sendMessageToConversation({
       conversation: params.conversationId,
       message: params.message,
+      skip_user_message: streamSkip,
+      files: streamFiles,
     }) as Promise<SendMessageResponse>;
   }
 
   return newConversation({
     agent: params.agent,
     message: params.message,
+    skip_user_message: streamSkip,
+    files: streamFiles,
   }) as Promise<NewConversationResponse>;
 }
