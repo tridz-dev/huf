@@ -129,7 +129,8 @@ function AgentsPage() {
 
   return (
     <PageLayout
-      subtitle="Manage your AI agents and their configurations"
+      title="Agents"
+      subtitle="Create and manage your AI agents."
       filters={
         <FilterBar
           searchPlaceholder="Search agents..."

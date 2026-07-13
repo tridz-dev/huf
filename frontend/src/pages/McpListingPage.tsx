@@ -78,7 +78,8 @@ export default function McpListingPage() {
 
   return (
     <PageLayout
-      subtitle="Manage Model Context Protocol (MCP) servers and their configurations"
+      title="MCP Servers"
+      subtitle="Connect Model Context Protocol servers."
       filters={
         <FilterBar
           searchPlaceholder="Search MCP servers..."

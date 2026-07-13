@@ -439,7 +439,7 @@ export const SidebarGroupLabel = React.forwardRef<
       ref={ref}
       data-sidebar="group-label"
       className={cn(
-        "flex h-8 shrink-0 items-center rounded-none px-2 font-mono text-[9.5px] uppercase tracking-widest text-steel-soft outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+        "flex h-8 shrink-0 items-center rounded-none px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
         className
       )}
@@ -512,13 +512,13 @@ SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
   // HUF: no rounded corners, signal-orange left-edge active state (not pill)
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-none p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-panel hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:font-medium data-[active=true]:border-l-2 data-[active=true]:border-signal data-[state=open]:hover:bg-panel data-[state=open]:hover:text-ink group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel [&>svg]:data-[active=true]:text-ink",
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-none p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-paper hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:font-semibold data-[active=true]:border-l-2 data-[active=true]:border-signal data-[active=true]:ring-1 data-[active=true]:ring-inset data-[active=true]:ring-line data-[state=open]:hover:bg-paper data-[state=open]:hover:text-ink group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel [&>svg]:data-[active=true]:text-ink",
   {
     variants: {
       variant: {
-        default: "hover:bg-panel hover:text-ink",
+        default: "hover:bg-paper hover:text-ink",
         outline:
-          "bg-panel border border-line hover:bg-panel hover:text-ink",
+          "bg-panel border border-line hover:bg-paper hover:text-ink",
       },
       size: {
         default: "h-8 text-sm",
@@ -683,8 +683,8 @@ export const SidebarMenuSubButton = React.forwardRef<
       data-size={size}
       data-active={isActive}
       className={cn(
-        "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground outline-none ring-sidebar-ring hover:bg-panel hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel",
-        "data-[active=true]:bg-panel data-[active=true]:text-ink",
+        "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground outline-none ring-sidebar-ring hover:bg-paper hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel",
+        "data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:font-semibold data-[active=true]:ring-1 data-[active=true]:ring-inset data-[active=true]:ring-line",
         size === "sm" && "text-xs",
         size === "md" && "text-sm",
         "group-data-[collapsible=icon]:hidden",
