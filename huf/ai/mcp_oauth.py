@@ -59,7 +59,7 @@ def start_oauth_flow(server_name: str) -> dict:
             expires_in_sec=600,
         )
 
-        redirect_uri = _get_redirect_uri()
+        redirect_uri = _get_redirect_uri(server)
 
         params = {
             "response_type": "code",
@@ -115,7 +115,7 @@ def handle_oauth_callback(server_name: str, code: str, state: str) -> dict:
         server = frappe.get_doc("MCP Server", server_name)
         _require_oauth_config(server)
 
-        redirect_uri = _get_redirect_uri()
+        redirect_uri = _get_redirect_uri(server)
 
         token_data = _exchange_code_for_tokens(server, code, code_verifier, redirect_uri)
         _save_tokens(server, token_data)
@@ -266,8 +266,11 @@ def _derive_code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
-def _get_redirect_uri() -> str:
-    """Build the absolute OAuth callback URL for this site."""
+def _get_redirect_uri(server=None) -> str:
+    """Build the absolute OAuth callback URL for this site, or use a custom one if configured."""
+    if server and getattr(server, "oauth_redirect_uri", None):
+        return server.oauth_redirect_uri
+
     site_url = frappe.utils.get_url()
     
     # Strip internal frappe ports (like :8703) to match public callback URLs
@@ -301,7 +304,11 @@ def _exchange_code_for_tokens(server, code: str, code_verifier: str, redirect_ur
         headers={"Accept": "application/json"},
         timeout=15,
     )
-    response.raise_for_status()
+    
+    if not response.ok:
+        frappe.log_error(f"OAuth Token Error Response: {response.text}", "MCP OAuth")
+        raise ValueError(f"Token error HTTP {response.status_code}: {response.text}")
+        
     data = response.json()
 
     if "error" in data:
