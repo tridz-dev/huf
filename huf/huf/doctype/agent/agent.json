@@ -16,6 +16,7 @@
   "column_break_df8m",
   "model",
   "async",
+  "run_immediately",
   "top_p",
   "disabled",
   "prompt_caching_section",
@@ -255,6 +256,13 @@
    "fieldtype": "Check",
    "hidden": 1,
    "label": "Async"
+  },
+  {
+   "default": "0",
+   "description": "Unchecked: runs are queued to background workers, which is safer for long LLM/tool runs. Checked: run synchronously in the web request \u2014 direct execution can exhaust web workers.",
+   "fieldname": "run_immediately",
+   "fieldtype": "Check",
+   "label": "Run immediately (advanced)"
   },
   {
    "default": "0",
