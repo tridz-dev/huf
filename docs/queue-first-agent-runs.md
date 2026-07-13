@@ -8,7 +8,30 @@ This change introduces a queue-first policy: an agent is queued by default, and 
 
 Submission persists one `Agent Run` (status `Queued`, with the prompt stored on the run), enqueues a private worker for that exact run, and returns `agent_run_id`, `conversation_id`, `status: Queued`, and `queued: true`. The user message is **not** persisted at submission time (see ordering below). The worker creates exactly one user message for the run, executes that exact run, and updates its existing lifecycle states. It never creates a second run or user message.
 
-`now=true` takes precedence over the Agent's **Run immediately (advanced)** setting; either one selects the direct path, which preserves the legacy behavior: the user message is persisted up front and the run executes inline. Direct streaming remains available as an explicit compatibility path while the client migrates to run lifecycle events.
+`now=true` takes precedence over the Agent's **Run immediately (advanced)** setting; either one selects the direct path, which preserves the legacy behavior: the user message is persisted up front and the run executes inline.
+
+## Run lifecycle event contract
+
+The worker publishes `agent_run_status` events with `frappe.publish_realtime` on event `conversation:<conversation_id>`, targeted at the submitting user (Frappe carries `frappe.session.user` into the worker). Status values are the canonical `Agent Run` doctype spellings — `Queued`, `Started`, `Success`, `Failed` — matching the HTTP acknowledgement and the frontend `AgentRunStatusEvent` union:
+
+```jsonc
+{"type": "agent_run_status", "status": "Queued",  "agent_run_id": "...", "conversation_id": "...", "agent": "..."}
+{"type": "agent_run_status", "status": "Started", "agent_run_id": "...", "conversation_id": "...", "agent": "..."}
+{"type": "agent_run_status", "status": "Success", "agent_run_id": "...", "conversation_id": "...", "agent": "...",
+ "response": "<final assistant text>", "agent_message_id": "<persisted Agent Message name>"}
+{"type": "agent_run_status", "status": "Failed",  "agent_run_id": "...", "conversation_id": "...", "agent": "...",
+ "error": "<error message>"}
+```
+
+Clients that cannot receive realtime events (guests, external API consumers) can poll `huf.ai.agent_integration.get_agent_run_status(agent_run_id)` (whitelisted, `allow_guest`; permissions mirror `run_agent_sync`). It returns `status` (canonical), `queued`, `response` (on Success), `error` (on Failed), `agent_message_id`, `conversation_id`, and `agent`. `huf.ai.chat_api.run_agent_sync_chat` accepts the same `now` override as `run_agent_sync`.
+
+## Client behavior: React chat is queue-first by default
+
+The React chat submits turns through the queue-first REST path (`new_conversation` / `send_message_to_conversation`) and reconciles the pending assistant turn from the lifecycle events above: it renders the accepted user text optimistically from the queued acknowledgement, keys the pending assistant bubble by `agent_run_id`, and fills it from the `Success` event's `response`/`agent_message_id` (or shows the `Failed` error). The Console page is an explicit direct-execution surface and always passes `now=true`.
+
+SSE streaming (`POST /huf/stream/<agent>`) remains as the **explicit direct-execution mode**: the chat uses it only when the agent's **Run immediately (advanced)** policy is enabled and the stream endpoint is reachable. Worker-side token streaming for queued runs is a separate future effort, not part of this contract.
+
+File and audio turns persist their user message in the prepare/transcribe step; those endpoints forward `skip_user_message` (and `files`) so the worker never creates a second user message and file content still reaches the run.
 
 ## Conversation ordering
 
