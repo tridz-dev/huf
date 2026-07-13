@@ -155,7 +155,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 	if (!schema || loading) {
 		return (
 			<div className="flex items-center justify-center h-full">
-				<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+				<Loader2 className="w-6 h-6 animate-spin text-steel-soft" />
 			</div>
 		);
 	}
@@ -175,7 +175,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 			<div className="p-6 space-y-6 max-w-5xl mx-auto">
 				<div className="space-y-1">
 					<h2 className="text-xl font-semibold">{recordTitle}</h2>
-					<p className="text-sm text-muted-foreground">{schema.table_name}</p>
+					<p className="text-sm text-steel">{schema.table_name}</p>
 				</div>
 
 				<Separator />
@@ -185,7 +185,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 						<div key={index}>
 							{index > 0 && <Separator className="my-4" />}
 							{section.label && (
-								<p className="text-sm font-medium text-muted-foreground mb-3">
+								<p className="text-sm font-medium text-steel mb-3">
 									{section.label}
 								</p>
 							)}
@@ -225,7 +225,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 					))}
 
 					{dataFields.length === 0 && (
-						<p className="text-sm text-muted-foreground text-center py-8">
+						<p className="text-sm font-body text-steel text-center py-8">
 							No fields defined
 						</p>
 					)}

@@ -140,7 +140,7 @@ export function ParameterCard({
               placeholder="One option per line"
               className="min-h-[80px]"
             />
-            <p className="text-xs text-muted-foreground">Enter each option on its own line.</p>
+            <p className="text-xs text-steel-soft">Enter each option on its own line.</p>
           </div>
 
           <div className="flex items-center space-x-2 pt-8">

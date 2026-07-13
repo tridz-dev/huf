@@ -321,7 +321,7 @@ export function ToolCreationForm({
         id: 'no',
         header: '#',
         cell: ({ row }) => (
-          <span className="text-muted-foreground">{row.index + 1}</span>
+          <span className="text-steel">{row.index + 1}</span>
         ),
       },
       {
@@ -335,7 +335,7 @@ export function ToolCreationForm({
         accessorKey: 'description',
         header: 'Description',
         cell: ({ row }) => (
-          <span className="text-muted-foreground">{row.original.description || '-'}</span>
+          <span className="text-steel">{row.original.description || '-'}</span>
         ),
       },
       {
@@ -406,7 +406,7 @@ export function ToolCreationForm({
           Back to Tool Settings
         </Button>
 
-        <div className="rounded-md border bg-background px-3 py-2 text-sm font-medium">
+        <div className="rounded-none border bg-paper px-3 py-2 text-sm font-medium">
           Edit Parameter {editingParameterIndex + 1}
         </div>
 
@@ -421,7 +421,7 @@ export function ToolCreationForm({
             }}
           />
         ) : (
-          <div className="text-sm text-muted-foreground rounded-md border p-4">
+          <div className="text-sm text-steel rounded-none border p-4">
             Parameter not found.
           </div>
         )}
@@ -436,7 +436,7 @@ export function ToolCreationForm({
       {/* CORE CONFIGURATION Section */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-3">
-          <Settings className="w-5 h-5 text-muted-foreground" />
+          <Settings className="w-5 h-5 text-steel-soft" />
           <h3 className="font-semibold text-foreground">Core configuration</h3>
         </div>
 
@@ -509,7 +509,7 @@ export function ToolCreationForm({
       {/* OPERATION DETAILS Section */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-5 h-5 text-muted-foreground" />
+          <Zap className="w-5 h-5 text-steel-soft" />
           <h3 className="font-semibold text-foreground">Operation details</h3>
         </div>
 
@@ -686,7 +686,7 @@ export function ToolCreationForm({
             control={form.control}
             name="pass_parameters_as_json"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
                 <div className="space-y-0.5">
                   <FormLabel>Pass parameters as JSON</FormLabel>
                 </div>
@@ -720,7 +720,7 @@ export function ToolCreationForm({
             </Button>
           </div>
           {httpHeaders.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
+            <div className="text-sm font-body text-steel text-center py-4 border border-dashed rounded-none">
               No headers added. Click "Add Header" to add one.
             </div>
           ) : (
@@ -794,11 +794,11 @@ export function ToolCreationForm({
         </div>
 
         {parameters.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg">
+          <div className="text-sm font-body text-steel text-center py-4 border border-dashed rounded-none">
             No parameters added. Click "Add Parameter" to add one.
           </div>
         ) : (
-          <div className="rounded-lg border overflow-hidden">
+          <div className="rounded-none border overflow-hidden">
             <Table>
               <TableHeader>
                 {parameterTable.getHeaderGroups().map((headerGroup) => (
@@ -830,8 +830,8 @@ export function ToolCreationForm({
 
         {showParamsPreview && (
           <div className="rounded-none border border-line bg-ink p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2 font-mono">Parameters JSON schema preview</p>
-            <pre className="text-xs overflow-x-auto font-mono text-muted-foreground">{JSON.stringify(parameterSchema, null, 2)}</pre>
+            <p className="text-xs uppercase tracking-wide text-steel-soft mb-2 font-mono">Parameters JSON schema preview</p>
+            <pre className="text-xs overflow-x-auto font-mono text-steel-soft">{JSON.stringify(parameterSchema, null, 2)}</pre>
           </div>
         )}
       </div>
@@ -875,10 +875,10 @@ export function ToolCreationForm({
           control={form.control}
           name="is_read_only"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+            <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
               <div className="space-y-0.5">
                 <FormLabel>Read Only</FormLabel>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-steel">
                   If checked, this tool does not modify data
                 </p>
               </div>
@@ -897,10 +897,10 @@ export function ToolCreationForm({
           control={form.control}
           name="allowed_for_guest"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+            <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
               <div className="space-y-0.5">
                 <FormLabel>Allowed for Guest</FormLabel>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-steel">
                   If checked, Guest users can use this tool
                 </p>
               </div>
@@ -926,13 +926,13 @@ export function ToolCreationForm({
         <Braces className="h-4 w-4" />
         <AlertDescription>
           <p className="font-medium text-foreground">Function definition preview</p>
-          <p className="text-muted-foreground">
+          <p className="text-steel">
             This JSON is generated from your current tool settings and parameter definitions.
           </p>
         </AlertDescription>
       </Alert>
       <div className="rounded-none border border-line bg-ink p-4">
-        <pre className="text-xs overflow-x-auto font-mono text-muted-foreground">{JSON.stringify(functionDefinition, null, 2)}</pre>
+        <pre className="text-xs overflow-x-auto font-mono text-steel-soft">{JSON.stringify(functionDefinition, null, 2)}</pre>
       </div>
     </div>
   );
@@ -950,7 +950,7 @@ export function ToolCreationForm({
           />
         )}
         {editingParameterIndex === null && (
-          <div className="sticky top-0 z-10 bg-background border-b border-line pb-3 -mx-1 px-1 mb-4">
+          <div className="sticky top-0 z-10 bg-panel border-b border-line pb-3 -mx-1 px-1 mb-4">
             <div className="flex items-center justify-between gap-4">
               <Button
                 type="button"
@@ -962,7 +962,7 @@ export function ToolCreationForm({
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
               </Button>
-              <div className="flex items-center gap-1 rounded-none border border-line bg-muted/30 p-1">
+              <div className="flex items-center gap-1 rounded-none border border-line bg-paper-deep/30 p-1">
                 <Button
                   type="button"
                   variant={configView === 'settings' ? 'secondary' : 'ghost'}
@@ -986,7 +986,7 @@ export function ToolCreationForm({
           </div>
         )}
         {editingParameterIndex === null && mode === 'edit' && sharedUsedBy.length > 0 && (
-          <Alert className="border-line bg-muted/50">
+          <Alert className="border-line bg-paper-deep/50">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
               This is a shared tool. Changes will affect other agents using it: {sharedUsedBy.join(', ')}.

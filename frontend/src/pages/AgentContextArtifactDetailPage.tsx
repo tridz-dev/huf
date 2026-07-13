@@ -41,7 +41,7 @@ function AgentContextArtifactDetailPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="flex items-center gap-2 text-muted-foreground">
+        <div className="flex items-center gap-2 text-steel">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Loading artifact...</span>
         </div>
@@ -90,32 +90,32 @@ function AgentContextArtifactDetailPage() {
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 text-sm">
             <div>
-              <div className="text-muted-foreground">Conversation</div>
+              <div className="text-steel">Conversation</div>
               <div className="font-mono">{artifact.conversation || '—'}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Agent Run</div>
+              <div className="text-steel">Agent Run</div>
               <div className="font-mono">{artifact.agent_run || '—'}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Visibility</div>
+              <div className="text-steel">Visibility</div>
               <div>{artifact.visibility || '—'}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Context Policy</div>
+              <div className="text-steel">Context Policy</div>
               <div>{artifact.context_policy || '—'}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Token Estimate</div>
+              <div className="text-steel">Token Estimate</div>
               <div>{artifact.token_estimate ?? '—'}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Created</div>
+              <div className="text-steel">Created</div>
               <div>{formatTimeAgo(artifact.creation ?? null)}</div>
             </div>
             {artifact.reference_doctype && (
               <div>
-                <div className="text-muted-foreground">Reference</div>
+                <div className="text-steel">Reference</div>
                 <div className="font-mono">
                   {artifact.reference_doctype} / {artifact.reference_name || '—'}
                 </div>
@@ -123,7 +123,7 @@ function AgentContextArtifactDetailPage() {
             )}
             {artifact.expires_on && (
               <div>
-                <div className="text-muted-foreground">Expires On</div>
+                <div className="text-steel">Expires On</div>
                 <div>{formatTimeAgo(artifact.expires_on)}</div>
               </div>
             )}
@@ -151,10 +151,10 @@ function AgentContextArtifactDetailPage() {
                   {artifact.payload_file}
                 </a>
               ) : (
-                <div className="text-sm text-muted-foreground">No file attached.</div>
+                <div className="text-sm font-body text-steel-soft">No file attached.</div>
               )
             ) : (
-              <pre className="rounded-md bg-muted p-3 text-sm whitespace-pre-wrap break-words max-h-[420px] overflow-auto">
+              <pre className="rounded-none bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[420px] overflow-auto">
                 {formatJson(artifact.payload_json) || 'No payload recorded.'}
               </pre>
             )}

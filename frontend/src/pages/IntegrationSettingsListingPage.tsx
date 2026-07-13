@@ -130,7 +130,7 @@ export function IntegrationSettingsListingPage({
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load integrations</p>
-          <p className="text-sm text-muted-foreground">{error.message}</p>
+          <p className="text-sm text-steel">{error.message}</p>
         </div>
       )}
 
@@ -140,7 +140,7 @@ export function IntegrationSettingsListingPage({
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No integrations configured yet.</p>
+            <p className="font-body text-steel-soft mb-4">No integrations configured yet.</p>
             <button
               type="button"
               className="text-sm text-primary hover:underline"
@@ -194,13 +194,13 @@ export function IntegrationSettingsListingPage({
       />
 
       {!hasMore && settings.length > 0 && categoryFilter === 'all' && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined ? `Showing all ${total} integrations` : 'No more integrations to load'}
         </div>
       )}
 
       {categoryFilter !== 'all' && settings.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground flex items-center justify-center gap-1">
+        <div className="text-center py-4 text-sm font-body text-steel flex items-center justify-center gap-1">
           <Users className="w-4 h-4" />
           {settings.length} integration{settings.length !== 1 ? 's' : ''} in this category
         </div>

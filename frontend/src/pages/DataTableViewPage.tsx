@@ -153,7 +153,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 	if (loading || !schema) {
 		return (
 			<div className="flex items-center justify-center h-full">
-				<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+				<Loader2 className="w-6 h-6 animate-spin text-steel-soft" />
 			</div>
 		);
 	}
@@ -172,11 +172,11 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 					<div>
 						<h2 className="text-xl font-semibold">{schema.table_name}</h2>
 						{schema.description && (
-							<p className="text-sm text-muted-foreground mt-1">
+							<p className="text-sm text-steel mt-1">
 								{schema.description}
 							</p>
 						)}
-						<div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+						<div className="flex items-center gap-4 mt-2 text-xs text-steel-soft">
 							<span>{dataFields.length} fields</span>
 							<span>{recordCount} records loaded</span>
 						</div>
@@ -205,9 +205,9 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 				{/* Records table */}
 				{records.length === 0 && !recordsLoading ? (
-					<div className="flex flex-col items-center justify-center py-16 border border-dashed rounded-lg">
-						<Database className="w-10 h-10 text-muted-foreground mb-3" />
-						<p className="text-sm text-muted-foreground mb-3">
+					<div className="flex flex-col items-center justify-center py-16 border border-dashed rounded-none">
+						<Database className="w-10 h-10 text-steel-soft mb-3" />
+						<p className="text-sm text-steel mb-3">
 							No records in this table yet
 						</p>
 						<Button size="sm" onClick={handleAddRecord}>

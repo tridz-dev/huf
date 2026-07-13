@@ -311,7 +311,7 @@ function KnowledgeSourceFormPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading knowledge source...</div>
+        <div className="font-body text-steel-soft">Loading knowledge source...</div>
       </div>
     );
   }

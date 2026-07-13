@@ -1685,7 +1685,7 @@ setAllowChat(values.allow_chat);
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading agent...</div>
+        <div className="font-body text-steel-soft">Loading agent...</div>
       </div>
     );
   }

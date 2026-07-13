@@ -28,7 +28,7 @@ function SettingsPage() {
       <div className="p-6 max-w-4xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-semibold">Settings</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-steel">
             Defaults and provider configuration shared across agents.
           </p>
         </div>

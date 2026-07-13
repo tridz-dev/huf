@@ -260,7 +260,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load providers</p>
-          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching providers.'}</p>
+          <p className="text-sm text-steel mb-4">{error.message || 'An error occurred while fetching providers.'}</p>
         </div>
       )}
       <GridView
@@ -269,7 +269,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No providers found.</p>
+            <p className="font-body text-steel-soft mb-4">No providers found.</p>
           </div>
         }
         renderItem={(provider) => {
@@ -304,7 +304,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No models configured</p>
+                  <p className="text-sm font-body text-steel-soft">No models configured</p>
                 )}
               </CardContent>
               <CardFooter>
@@ -330,7 +330,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         disabled={!!search || initialLoading}
       />
       {!hasMore && providers.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined ? `Showing all ${total} providers` : 'No more providers to load'}
         </div>
       )}
@@ -349,7 +349,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
 
           {loadingProvider ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
             </div>
           ) : (
             <div className="space-y-4 py-4">

@@ -156,7 +156,7 @@ function AgentsPage() {
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load agents</p>
-          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching agents.'}</p>
+          <p className="text-sm text-steel mb-4">{error.message || 'An error occurred while fetching agents.'}</p>
         </div>
       )}
       <GridView
@@ -165,7 +165,7 @@ function AgentsPage() {
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No agents found.</p>
+            <p className="font-body text-steel mb-4">No agents found.</p>
           </div>
         }
         renderItem={(agent) => {
@@ -224,7 +224,7 @@ function AgentsPage() {
         disabled={!!search || initialLoading}
       />
       {!hasMore && agents.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined ? `Showing all ${total} agents` : 'No more agents to load'}
         </div>
       )}

@@ -103,7 +103,7 @@ function KnowledgeSourcesPage() {
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load knowledge sources</p>
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="text-sm text-steel mb-4">
             {error.message || 'An error occurred while fetching knowledge sources.'}
           </p>
         </div>
@@ -114,7 +114,7 @@ function KnowledgeSourcesPage() {
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No knowledge sources found.</p>
+            <p className="font-body text-steel-soft mb-4">No knowledge sources found.</p>
           </div>
         }
         renderItem={(source) => {
@@ -156,7 +156,7 @@ function KnowledgeSourcesPage() {
         disabled={!!search || initialLoading}
       />
       {!hasMore && sources.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined
             ? `Showing all ${total} knowledge sources`
             : 'No more knowledge sources to load'}
