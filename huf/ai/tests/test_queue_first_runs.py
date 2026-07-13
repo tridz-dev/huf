@@ -382,7 +382,7 @@ class TestQueueFirstRuns(unittest.TestCase):
     # Caller compatibility (QFR-06)
     # ------------------------------------------------------------------
 
-    @patch("huf.ai.orchestration.planning.run_agent_sync")
+    @patch("huf.ai.agent_integration.run_agent_sync")
     def test_planning_caller_passes_now_true(self, mock_run):
         """A representative synchronous consumer must force direct execution."""
         mock_run.return_value = {"success": True, "response": "1. do the thing"}
@@ -462,7 +462,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertNotIn("now", mock_run.call_args.kwargs)
 
     @patch("huf.ai.flow_engine.frappe")
-    @patch("huf.ai.flow_engine.run_agent_sync")
+    @patch("huf.ai.agent_integration.run_agent_sync")
     def test_flow_engine_agent_node_forces_now_true(self, mock_run, mock_frappe):
         """Flow engine agent nodes must keep direct execution inside the flow worker."""
         flow_run = MagicMock()
@@ -489,7 +489,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertTrue(mock_run.call_args.kwargs.get("now"))
 
-    @patch("huf.ai.agent_scheduler.resolve_prompt")
+    @patch("huf.ai.prompt_resolver.resolve_prompt")
     @patch("huf.ai.agent_scheduler.frappe")
     @patch("huf.ai.agent_scheduler.run_agent_sync")
     def test_scheduler_submits_queued_run(self, mock_run, mock_frappe, mock_resolve_prompt):
