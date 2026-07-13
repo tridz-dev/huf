@@ -188,7 +188,8 @@ def execute_next_step(orch=None, orch_name=None):
             channel_id="orchestration",
             parent_run_id=orch.parent_run,
             orchestration_id=orch.name,
-            conversation_id=orch.conversation
+            conversation_id=orch.conversation,
+            now=True
         )
 
         if result.get("success"):

@@ -159,6 +159,7 @@ def process_telegram_update(settings_name: str, update: dict):
                 prompt=text,
                 channel_id="telegram",
                 external_id=str(chat_id),
+                now=True,
             )
             response_text = result.get("response") if isinstance(result, dict) else str(result)
         except Exception as e:

@@ -293,7 +293,7 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
             {''.join(extracted_content)}
             """
 
-        run_agent_sync(agent_name, prompt, provider, model, channel_id=channel, external_id=external_id, files=files)
+        run_agent_sync(agent_name, prompt, provider, model, channel_id=channel, external_id=external_id, files=files, now=True)
 
     except Exception:
         frappe.log_error(frappe.get_traceback(), "Hook Triggered Agent Error")

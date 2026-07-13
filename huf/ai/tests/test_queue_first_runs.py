@@ -21,6 +21,10 @@ from huf.ai.agent_integration import (
     _run_queued_agent,
     run_agent_sync,
 )
+from huf.ai import agent_chat
+from huf.ai import agent_scheduler
+from huf.ai.orchestration.planning import run_planning
+from huf.ai.flow_engine import _exec_agent_run
 
 
 def _make_agent_doc(**overrides):
@@ -373,6 +377,156 @@ class TestQueueFirstRuns(unittest.TestCase):
         statuses = self._published_statuses(mock_frappe)
         self.assertIn("started", statuses)
         self.assertIn("success", statuses)
+
+    # ------------------------------------------------------------------
+    # Caller compatibility (QFR-06)
+    # ------------------------------------------------------------------
+
+    @patch("huf.ai.orchestration.planning.run_agent_sync")
+    def test_planning_caller_passes_now_true(self, mock_run):
+        """A representative synchronous consumer must force direct execution."""
+        mock_run.return_value = {"success": True, "response": "1. do the thing"}
+
+        result = run_planning(
+            agent_name="Planner",
+            user_prompt="plan something",
+            provider="Test Provider",
+            model="test-model",
+        )
+
+        self.assertEqual(result, "1. do the thing")
+        mock_run.assert_called_once()
+        self.assertTrue(mock_run.call_args.kwargs.get("now"))
+
+    @patch("huf.ai.agent_chat.frappe")
+    @patch("huf.ai.agent_chat.ConversationManager")
+    @patch("huf.ai.agent_chat.run_agent_sync")
+    def test_new_conversation_returns_queued_ack(self, mock_run, mock_cm_cls, mock_frappe):
+        """Web-facing chat endpoints queue by default and surface the queued ack."""
+        conversation = MagicMock()
+        conversation.name = "CONV-CHAT-001"
+        cm = MagicMock()
+        cm.create_new_conversation.return_value = conversation
+        mock_cm_cls.return_value = cm
+
+        mock_frappe.db.get_value.side_effect = lambda dt, name, field, **kw: {
+            "provider": "Test Provider",
+            "model": "test-model",
+        }.get(field)
+        mock_run.return_value = {
+            "success": True,
+            "queued": True,
+            "status": "Queued",
+            "agent_run_id": "AR-CHAT-001",
+            "conversation_id": "CONV-CHAT-001",
+        }
+
+        result = agent_chat.new_conversation(agent="Test Agent", message="hello")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["conversation_id"], "CONV-CHAT-001")
+        self.assertTrue(result["run"]["queued"])
+        self.assertEqual(result["run"]["status"], "Queued")
+        mock_run.assert_called_once()
+        self.assertNotIn("now", mock_run.call_args.kwargs)
+
+    @patch("huf.ai.agent_chat.frappe")
+    @patch("huf.ai.agent_chat.run_agent_sync")
+    def test_send_message_to_conversation_returns_queued_ack(self, mock_run, mock_frappe):
+        """Continuing a conversation also queues by default."""
+        conv_doc = MagicMock()
+        conv_doc.is_active = True
+        conv_doc.agent = "Test Agent"
+        conv_doc.channel = "Chat"
+        conv_doc.name = "CONV-CHAT-001"
+        mock_frappe.get_doc.return_value = conv_doc
+        mock_frappe.db.get_value.side_effect = lambda dt, name, field, **kw: {
+            "provider": "Test Provider",
+            "model": "test-model",
+        }.get(field)
+        mock_run.return_value = {
+            "success": True,
+            "queued": True,
+            "status": "Queued",
+            "agent_run_id": "AR-CHAT-002",
+            "conversation_id": "CONV-CHAT-001",
+        }
+
+        result = agent_chat.send_message_to_conversation(
+            conversation="CONV-CHAT-001", message="hello again"
+        )
+
+        self.assertTrue(result["queued"])
+        self.assertEqual(result["agent_run_id"], "AR-CHAT-002")
+        mock_run.assert_called_once()
+        self.assertNotIn("now", mock_run.call_args.kwargs)
+
+    @patch("huf.ai.flow_engine.frappe")
+    @patch("huf.ai.flow_engine.run_agent_sync")
+    def test_flow_engine_agent_node_forces_now_true(self, mock_run, mock_frappe):
+        """Flow engine agent nodes must keep direct execution inside the flow worker."""
+        flow_run = MagicMock()
+        flow_run.name = "FR-001"
+        flow_run.conversation = "CONV-FLOW-001"
+        flow_run.context_json = None
+        flow_run.mode = None
+
+        mock_run.return_value = {
+            "success": True,
+            "agent_run_id": "AR-FLOW-001",
+            "response": "flow response",
+        }
+
+        result = _exec_agent_run(
+            flow_run,
+            node={"id": "node-1"},
+            config={"agent_name": "Flow Agent", "input": {"prompt_template": "hello"}},
+            settings={},
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["agent_run_id"], "AR-FLOW-001")
+        mock_run.assert_called_once()
+        self.assertTrue(mock_run.call_args.kwargs.get("now"))
+
+    @patch("huf.ai.agent_scheduler.resolve_prompt")
+    @patch("huf.ai.agent_scheduler.frappe")
+    @patch("huf.ai.agent_scheduler.run_agent_sync")
+    def test_scheduler_submits_queued_run(self, mock_run, mock_frappe, mock_resolve_prompt):
+        """Scheduled triggers are background workers; they hand runs to the queue."""
+        mock_frappe.session.user = "Administrator"
+        mock_frappe.has_permission.return_value = True
+        mock_frappe.db.exists.return_value = True
+
+        trigger = {
+            "name": "SCH-001",
+            "agent": "Scheduled Agent",
+            "scheduled_interval": "Hourly",
+            "interval_count": 1,
+            "next_execution": "2026-01-01 00:00:00",
+            "last_execution": None,
+        }
+
+        agent_doc = _make_agent_doc()
+        agent_doc.name = "Scheduled Agent"
+
+        mock_frappe.get_all.return_value = [trigger]
+        mock_frappe.get_doc.side_effect = lambda doctype, name: (
+            agent_doc if doctype == "Agent" and name == "Scheduled Agent" else MagicMock()
+        )
+        mock_resolve_prompt.return_value = "scheduled prompt"
+        mock_run.return_value = {
+            "success": True,
+            "queued": True,
+            "status": "Queued",
+            "agent_run_id": "AR-SCH-001",
+        }
+
+        agent_scheduler.run_scheduled_agents()
+
+        mock_run.assert_called_once()
+        self.assertNotIn("now", mock_run.call_args.kwargs)
+        self.assertEqual(mock_run.call_args.args, ("Scheduled Agent", "scheduled prompt", "Test Provider", "test-model"))
 
 
 if __name__ == "__main__":
