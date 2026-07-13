@@ -346,6 +346,24 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
 
             <FormField
               control={form.control}
+              name="oauth_redirect_uri"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Custom Redirect URI</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="https://provider.example.com/mcp-oauth-callback"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>Optional: Override the auto-generated callback URL for strict providers or local testing.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="oauth_authorization_endpoint"
               render={({ field }) => (
                 <FormItem>
