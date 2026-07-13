@@ -130,8 +130,8 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertTrue(enqueue_kwargs["is_async"])
         self.assertTrue(enqueue_kwargs["enqueue_after_commit"])
 
-        # A "queued" lifecycle event is emitted.
-        self.assertIn("queued", self._published_statuses(mock_frappe))
+        # A "Queued" lifecycle event is emitted (canonical doctype spelling).
+        self.assertIn("Queued", self._published_statuses(mock_frappe))
 
     @patch("huf.ai.agent_integration._execute_agent_run")
     @patch("huf.ai.agent_integration.ConversationManager")
@@ -373,10 +373,10 @@ class TestQueueFirstRuns(unittest.TestCase):
         # The provider is actually invoked.
         mock_run_provider.run.assert_called_once()
 
-        # started + success lifecycle events are emitted.
+        # Started + Success lifecycle events are emitted (canonical spelling).
         statuses = self._published_statuses(mock_frappe)
-        self.assertIn("started", statuses)
-        self.assertIn("success", statuses)
+        self.assertIn("Started", statuses)
+        self.assertIn("Success", statuses)
 
     # ------------------------------------------------------------------
     # Caller compatibility (QFR-06)
@@ -528,6 +528,309 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertNotIn("now", mock_run.call_args.kwargs)
         self.assertEqual(mock_run.call_args.args, ("Scheduled Agent", "scheduled prompt", "Test Provider", "test-model"))
+
+
+    # ------------------------------------------------------------------
+    # Lifecycle event wire contract (frontend AgentRunStatusEvent)
+    # ------------------------------------------------------------------
+
+    def _lifecycle_events(self, mock_frappe, status=None):
+        events = [
+            call.kwargs["message"]
+            for call in mock_frappe.publish_realtime.call_args_list
+            if isinstance(call.kwargs.get("message"), dict)
+            and call.kwargs["message"].get("type") == "agent_run_status"
+        ]
+        if status is not None:
+            events = [e for e in events if e.get("status") == status]
+        return events
+
+    def test_canonical_run_status_mapping(self):
+        from huf.ai.agent_integration import _canonical_run_status
+
+        self.assertEqual(_canonical_run_status("queued"), "Queued")
+        self.assertEqual(_canonical_run_status("started"), "Started")
+        self.assertEqual(_canonical_run_status("success"), "Success")
+        self.assertEqual(_canonical_run_status("failed"), "Failed")
+        # Already-canonical and unknown values pass through unchanged.
+        self.assertEqual(_canonical_run_status("Queued"), "Queued")
+        self.assertEqual(_canonical_run_status("custom"), "custom")
+        self.assertIsNone(_canonical_run_status(None))
+
+    @patch("huf.ai.agent_integration._execute_agent_run")
+    @patch("huf.ai.agent_integration.ConversationManager")
+    @patch("huf.ai.agent_integration.frappe")
+    def test_queued_event_matches_frontend_contract(self, mock_frappe, mock_cm_cls, mock_execute):
+        """The queued acknowledgement event uses the canonical status and
+        carries every field the frontend AgentRunStatusEvent union reads."""
+        mock_frappe.session.user = "test@example.com"
+        mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
+        mock_frappe.db.get_value.return_value = None
+        mock_cm_cls.return_value = self.conv_manager
+
+        run_agent_sync(agent_name="Test Agent", prompt="hello")
+
+        events = self._lifecycle_events(mock_frappe)
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event["status"], "Queued")
+        self.assertEqual(event["agent_run_id"], "AR-TEST-0001")
+        self.assertEqual(event["conversation_id"], "CONV-TEST-0001")
+        self.assertEqual(event["agent"], "Test Agent")
+
+    @patch("huf.ai.knowledge.context_builder.build_knowledge_context", return_value=None)
+    @patch("huf.ai.agent_integration._run_async_safely")
+    @patch("huf.ai.agent_integration.RunProvider")
+    @patch("huf.ai.agent_integration.AgentManager")
+    @patch("huf.ai.agent_integration.ConversationManager")
+    @patch("huf.ai.agent_integration.frappe")
+    def test_success_event_carries_response_and_message_id(
+        self,
+        mock_frappe,
+        mock_cm_cls,
+        mock_manager_cls,
+        mock_run_provider,
+        mock_run_async,
+        _mock_knowledge,
+    ):
+        """The success event must carry the final text and the persisted agent
+        message id — the frontend reconciles its pending bubble from these."""
+        mock_frappe.session.user = "worker@example.com"
+        mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
+        mock_frappe.db.get_value.return_value = None
+        mock_frappe.db.count.return_value = 1
+        agent_message = MagicMock()
+        agent_message.name = "AM-TEST-0001"
+        self.conv_manager.add_message.return_value = agent_message
+        mock_cm_cls.return_value = self.conv_manager
+
+        result_obj = MagicMock()
+        result_obj.new_items = []
+        result_obj.final_output = "mocked response"
+        result_obj.usage = None
+        result_obj.cost = 0
+        mock_run_async.return_value = result_obj
+
+        _execute_agent_run(
+            agent_name="Test Agent",
+            run_id="AR-TEST-0001",
+            conversation_id="CONV-TEST-0001",
+            prompt="hello",
+            provider="Test Provider",
+            model="test-model",
+            channel_id="api",
+        )
+
+        events = self._lifecycle_events(mock_frappe, status="Success")
+        self.assertEqual(len(events), 1)
+        event = events[0]
+        self.assertEqual(event["response"], "mocked response")
+        self.assertEqual(event["agent_message_id"], "AM-TEST-0001")
+        self.assertEqual(event["agent_run_id"], "AR-TEST-0001")
+        self.assertEqual(event["conversation_id"], "CONV-TEST-0001")
+
+    @patch("huf.ai.agent_integration._execute_agent_run")
+    @patch("huf.ai.agent_integration.ConversationManager")
+    @patch("huf.ai.agent_integration.frappe")
+    def test_lock_exhaustion_fails_run_and_emits_event(self, mock_frappe, mock_cm_cls, mock_execute):
+        """When the conversation lock never frees, the run is marked Failed
+        AND a failed lifecycle event reaches waiting clients."""
+        mock_frappe.session.user = "worker@example.com"
+        mock_frappe._.side_effect = lambda s, *a, **k: s
+        mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
+        mock_frappe.cache.return_value.set.return_value = False  # lock always busy
+
+        from huf.ai.agent_integration import _QUEUE_LOCK_MAX_ATTEMPTS
+
+        _run_queued_agent(
+            agent_name="Test Agent",
+            run_id="AR-TEST-0001",
+            conversation_id="CONV-TEST-0001",
+            prompt="hello",
+            channel_id="api",
+            lock_attempt=_QUEUE_LOCK_MAX_ATTEMPTS,
+        )
+
+        mock_execute.assert_not_called()
+        mock_frappe.db.set_value.assert_any_call(
+            "Agent Run",
+            "AR-TEST-0001",
+            {
+                "status": "Failed",
+                "error_message": "Timed out waiting for the conversation execution slot.",
+            },
+            update_modified=True,
+        )
+        events = self._lifecycle_events(mock_frappe, status="Failed")
+        self.assertEqual(len(events), 1)
+        self.assertIn("Timed out", events[0]["error"])
+        self.assertEqual(events[0]["agent_run_id"], "AR-TEST-0001")
+
+    # ------------------------------------------------------------------
+    # Status/result endpoint and API overrides
+    # ------------------------------------------------------------------
+
+    @patch("huf.ai.agent_integration.frappe")
+    def test_get_agent_run_status_returns_result(self, mock_frappe):
+        from huf.ai.agent_integration import get_agent_run_status
+
+        mock_frappe.session.user = "test@example.com"
+
+        run_row = MagicMock()
+        run_row.name = "AR-TEST-0001"
+        run_row.agent = "Test Agent"
+        run_row.status = "Success"
+        run_row.response = "final answer"
+        run_row.error_message = None
+        run_row.conversation = "CONV-TEST-0001"
+
+        def get_value(doctype, filters, fieldname=None, **kwargs):
+            if doctype == "Agent Run":
+                return run_row
+            if doctype == "Agent Message":
+                return "AM-TEST-0001"
+            return None
+
+        mock_frappe.db.get_value.side_effect = get_value
+        mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
+
+        result = get_agent_run_status("AR-TEST-0001")
+
+        self.assertTrue(result["success"])
+        self.assertFalse(result["queued"])
+        self.assertEqual(result["status"], "Success")
+        self.assertEqual(result["response"], "final answer")
+        self.assertIsNone(result["error"])
+        self.assertEqual(result["agent_message_id"], "AM-TEST-0001")
+        self.assertEqual(result["conversation_id"], "CONV-TEST-0001")
+        self.assertEqual(result["agent_run_id"], "AR-TEST-0001")
+
+    @patch("huf.ai.agent_integration.frappe")
+    def test_get_agent_run_status_marks_in_flight_run_as_queued(self, mock_frappe):
+        from huf.ai.agent_integration import get_agent_run_status
+
+        mock_frappe.session.user = "test@example.com"
+
+        run_row = MagicMock()
+        run_row.name = "AR-TEST-0001"
+        run_row.agent = "Test Agent"
+        run_row.status = "Started"
+        run_row.response = None
+        run_row.error_message = None
+        run_row.conversation = "CONV-TEST-0001"
+
+        mock_frappe.db.get_value.side_effect = lambda doctype, filters, fieldname=None, **kw: (
+            run_row if doctype == "Agent Run" else None
+        )
+        mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
+
+        result = get_agent_run_status("AR-TEST-0001")
+
+        self.assertTrue(result["queued"])
+        self.assertEqual(result["status"], "Started")
+        self.assertIsNone(result["response"])
+        self.assertIsNone(result["agent_message_id"])
+
+    @patch("huf.ai.agent_integration.frappe")
+    def test_get_agent_run_status_denies_guest_for_private_agent(self, mock_frappe):
+        import frappe as real_frappe
+
+        from huf.ai.agent_integration import get_agent_run_status
+
+        mock_frappe.session.user = "Guest"
+        mock_frappe.throw.side_effect = real_frappe.PermissionError("denied")
+
+        run_row = MagicMock()
+        run_row.name = "AR-TEST-0001"
+        run_row.agent = "Test Agent"
+        run_row.status = "Queued"
+        run_row.response = None
+        run_row.error_message = None
+        run_row.conversation = "CONV-TEST-0001"
+
+        mock_frappe.db.get_value.side_effect = lambda doctype, filters, fieldname=None, **kw: (
+            run_row if doctype == "Agent Run" else None
+        )
+        agent_doc = _make_agent_doc(allow_guest=0)
+        mock_frappe.get_doc.side_effect = self._get_doc_side_effect(agent_doc)
+
+        with self.assertRaises(real_frappe.PermissionError):
+            get_agent_run_status("AR-TEST-0001")
+
+    @patch("huf.ai.chat_api.run_agent_sync")
+    def test_chat_api_passes_now_override(self, mock_run):
+        from huf.ai.chat_api import run_agent_sync_chat
+
+        mock_run.return_value = {"success": True}
+
+        run_agent_sync_chat(agent_name="Test Agent", prompt="hi", now="true")
+
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args.kwargs.get("now"), "true")
+
+    # ------------------------------------------------------------------
+    # File/audio flow: one user message, files reach the run
+    # ------------------------------------------------------------------
+
+    @patch("huf.ai.agent_chat.frappe")
+    @patch("huf.ai.agent_chat.run_agent_sync")
+    def test_send_message_forwards_skip_user_message_and_files(self, mock_run, mock_frappe):
+        conv_doc = MagicMock()
+        conv_doc.is_active = True
+        conv_doc.agent = "Test Agent"
+        conv_doc.channel = "Chat"
+        conv_doc.name = "CONV-CHAT-001"
+        mock_frappe.get_doc.return_value = conv_doc
+        mock_frappe.db.get_value.side_effect = lambda dt, name, field, **kw: {
+            "provider": "Test Provider",
+            "model": "test-model",
+        }.get(field)
+        mock_run.return_value = {"success": True, "queued": True}
+
+        files = [
+            {"file_id": "F-1", "file_url": "/files/f.pdf", "filename": "f.pdf", "is_image": 0}
+        ]
+        agent_chat.send_message_to_conversation(
+            conversation="CONV-CHAT-001",
+            message="inflated prompt",
+            skip_user_message=1,
+            files=files,
+        )
+
+        kwargs = mock_run.call_args.kwargs
+        self.assertIs(kwargs["skip_user_message"], True)
+        self.assertEqual(kwargs["files"], files)
+
+    @patch("huf.ai.agent_chat.frappe")
+    @patch("huf.ai.agent_chat.ConversationManager")
+    @patch("huf.ai.agent_chat.run_agent_sync")
+    def test_new_conversation_forwards_skip_user_message_and_files(
+        self, mock_run, mock_cm_cls, mock_frappe
+    ):
+        conversation = MagicMock()
+        conversation.name = "CONV-CHAT-009"
+        cm = MagicMock()
+        cm.create_new_conversation.return_value = conversation
+        mock_cm_cls.return_value = cm
+        mock_frappe.db.get_value.side_effect = lambda dt, name, field, **kw: {
+            "provider": "Test Provider",
+            "model": "test-model",
+        }.get(field)
+        mock_run.return_value = {"success": True, "queued": True}
+
+        files = [
+            {"file_id": "F-2", "file_url": "/files/i.png", "filename": "i.png", "is_image": 1}
+        ]
+        agent_chat.new_conversation(
+            agent="Test Agent",
+            message="inflated prompt",
+            skip_user_message="true",
+            files=files,
+        )
+
+        kwargs = mock_run.call_args.kwargs
+        self.assertIs(kwargs["skip_user_message"], True)
+        self.assertEqual(kwargs["files"], files)
 
 
 if __name__ == "__main__":

@@ -328,12 +328,32 @@ def safe_commit():
             raise
 
 
+# Canonical lifecycle status values. These must match the Agent Run doctype
+# Select options (Queued/Started/Success/Failed), the HTTP acknowledgement
+# returned by run_agent_sync, and the frontend AgentRunStatusEvent union in
+# frontend/src/hooks/useChatSocket.tsx. Callers may pass lowercase; the wire
+# contract is always canonical.
+_RUN_STATUS_CANONICAL = {
+    "queued": "Queued",
+    "started": "Started",
+    "success": "Success",
+    "failed": "Failed",
+}
+
+
+def _canonical_run_status(status):
+    """Map a lifecycle status to its canonical (doctype) spelling."""
+    if isinstance(status, str):
+        return _RUN_STATUS_CANONICAL.get(status.strip().lower(), status)
+    return status
+
+
 def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
-    """Emit a realtime lifecycle event for an Agent Run (queued/started/success/failed)."""
+    """Emit a realtime lifecycle event for an Agent Run (Queued/Started/Success/Failed)."""
     try:
         message = {
             "type": "agent_run_status",
-            "status": status,
+            "status": _canonical_run_status(status),
             "agent_run_id": run_doc.name,
             "conversation_id": conversation.name,
             "agent": run_doc.agent,
@@ -829,6 +849,61 @@ def _is_truthy(value):
     return bool(value)
 
 
+@frappe.whitelist(allow_guest=True)
+def get_agent_run_status(agent_run_id: str):
+    """Return the status/result of an Agent Run for queue-first clients.
+
+    Polling fallback for clients that cannot receive the ``agent_run_status``
+    realtime events (guests, external API consumers). Permissions mirror
+    ``run_agent_sync``: guests need an agent that allows guest access;
+    logged-in users must be allowed to use the agent.
+    """
+    if not agent_run_id:
+        frappe.throw(_("Agent Run ID is required"))
+
+    run = frappe.db.get_value(
+        "Agent Run",
+        agent_run_id,
+        ["name", "agent", "status", "response", "error_message", "conversation"],
+        as_dict=True,
+    )
+    if not run:
+        frappe.throw(_("Agent Run not found: {0}").format(agent_run_id), frappe.DoesNotExistError)
+
+    agent_doc = frappe.get_doc("Agent", run.agent)
+    if frappe.session.user == "Guest" and not agent_doc.allow_guest:
+        frappe.throw(
+            _("Access denied. This agent does not allow guest access."),
+            frappe.PermissionError,
+        )
+    if not _is_user_allowed(agent_doc, frappe.session.user):
+        frappe.throw(
+            _("You are not authorized to use this agent."),
+            frappe.PermissionError,
+        )
+
+    agent_message_id = None
+    if run.status in ("Success", "Failed"):
+        agent_message_id = frappe.db.get_value(
+            "Agent Message",
+            {"agent_run": run.name, "role": "agent"},
+            "name",
+            order_by="creation desc",
+        )
+
+    return {
+        "success": True,
+        "queued": run.status in ("Queued", "Started"),
+        "status": run.status,
+        "response": run.response if run.status == "Success" else None,
+        "error": run.error_message if run.status == "Failed" else None,
+        "agent_run_id": run.name,
+        "conversation_id": run.conversation,
+        "agent": run.agent,
+        "agent_message_id": agent_message_id,
+    }
+
+
 def _execute_agent_run(
     agent_name,
     run_id,
@@ -1266,7 +1341,7 @@ def _execute_agent_run(
                 "cost": cost
             })
 
-        conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
+        agent_message = conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
 
         frappe.db.set_value("Agent Run", run_doc.name, {
             "status": "Success",
@@ -1276,7 +1351,15 @@ def _execute_agent_run(
             "provider": resolved_provider,
             "end_time": now_datetime()
         }, update_modified=True)
-        _emit_run_lifecycle_event(run_doc, conversation, "success")
+        _emit_run_lifecycle_event(
+            run_doc,
+            conversation,
+            "success",
+            {
+                "response": final_output,
+                "agent_message_id": getattr(agent_message, "name", None),
+            },
+        )
         safe_commit()
 
         # Handle Sub-Agent Success Lifecycle Hook
@@ -1467,7 +1550,17 @@ def _run_queued_agent(lock_attempt=0, **kwargs):
         # than drop the turn; bounded attempts guard against a stuck lock
         # (the lock itself also expires after _QUEUE_LOCK_TTL seconds).
         if lock_attempt >= _QUEUE_LOCK_MAX_ATTEMPTS:
-            _fail_queued_run(run_id, _("Timed out waiting for the conversation execution slot."))
+            lock_error = _("Timed out waiting for the conversation execution slot.")
+            _fail_queued_run(run_id, lock_error)
+            try:
+                _emit_run_lifecycle_event(
+                    frappe.get_doc("Agent Run", run_id),
+                    SimpleNamespace(name=conversation_id),
+                    "failed",
+                    {"error": lock_error},
+                )
+            except Exception:
+                pass
             return
         time.sleep(_QUEUE_LOCK_RETRY_DELAY)
         frappe.enqueue(
