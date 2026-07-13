@@ -498,12 +498,13 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_frappe.has_permission.return_value = True
         mock_frappe.db.exists.return_value = True
 
+        from datetime import datetime
         trigger = {
             "name": "SCH-001",
             "agent": "Scheduled Agent",
             "scheduled_interval": "Hourly",
             "interval_count": 1,
-            "next_execution": "2026-01-01 00:00:00",
+            "next_execution": datetime(2026, 1, 1, 0, 0, 0),
             "last_execution": None,
         }
 
