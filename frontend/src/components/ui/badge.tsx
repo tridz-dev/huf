@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
   // HUF: no pill, no fill, mono label — border + text only
-  'inline-flex items-center rounded-none border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  'inline-flex items-center rounded-none border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
   {
     variants: {
       variant: {
@@ -14,9 +14,9 @@ const badgeVariants = cva(
         secondary:
           'border-line bg-paper-deep text-steel',
         destructive:
-          'border-destructive/30 bg-transparent text-destructive',
+          'border-signal-ink/40 bg-transparent text-signal-ink',
         success:
-          'border-good/30 bg-transparent text-good',
+          'border-good/40 bg-transparent text-good',
         outline: 'border-line text-steel',
       },
     },

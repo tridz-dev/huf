@@ -12,7 +12,7 @@ export function IntegrationServicesHeaderActions() {
       <Button variant="outline" size="sm" onClick={() => navigate('/integrations')}>
         Integrations
       </Button>
-      <Button onClick={onAddService} size="sm">
+      <Button variant="display" onClick={onAddService} size="sm">
         <Plus className="w-4 h-4 mr-2" />
         Add Service
       </Button>

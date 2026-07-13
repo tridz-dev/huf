@@ -10,7 +10,7 @@ export function AgentsHeaderActions() {
   };
 
   return (
-    <Button onClick={handleNewAgent} size="sm">
+    <Button variant="display" onClick={handleNewAgent} size="sm">
       <Plus className="w-4 h-4 mr-2" />
       New Agent
     </Button>

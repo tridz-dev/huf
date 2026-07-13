@@ -13,7 +13,7 @@ export function IntegrationSettingsHeaderActions() {
         <Layers className="w-4 h-4 mr-2" />
         Service Catalog
       </Button>
-      <Button onClick={onAddIntegration} size="sm">
+      <Button variant="display" onClick={onAddIntegration} size="sm">
         <Plus className="w-4 h-4 mr-2" />
         Add Integration
       </Button>
