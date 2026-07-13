@@ -10,6 +10,12 @@ Submission must create one `Agent Run` and its user message, enqueue the work im
 
 `now=true` takes precedence over the Agent's **Run immediately (advanced)** setting. Direct streaming remains available as an explicit compatibility path while the client migrates to run lifecycle events.
 
+## Conversation ordering
+
+Queueing changes an important assumption: two requests for the same conversation can be accepted before either worker begins. A worker-only lock is not enough if both user messages were already persisted, because the first worker can observe the second turn.
+
+The implementation therefore persists the `Agent Run` immediately but appends the user `Agent Message` only after the queued worker acquires the conversation's execution slot. The client renders the accepted user text optimistically from the queued acknowledgement, then reconciles from run lifecycle events. This serializes one conversation without reducing concurrency across different conversations.
+
 ## Rollout order
 
 1. Extract run submission from run execution and add the worker entrypoint.
