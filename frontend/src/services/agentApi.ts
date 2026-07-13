@@ -529,6 +529,7 @@ export interface RunAgentTestParams {
   prompt: string;
   provider: string;
   model: string;
+  now?: boolean;
 }
 
 /**
@@ -543,6 +544,8 @@ export interface RunAgentTestResponse {
     agent_run_id?: string;
     conversation_id?: string;
     session_id?: string;
+    queued?: boolean;
+    status?: string;
   };
 }
 
@@ -551,12 +554,16 @@ export interface RunAgentTestResponse {
  */
 export async function runAgentTest(params: RunAgentTestParams): Promise<RunAgentTestResponse> {
   try {
-    const result = await call.post('huf.ai.agent_integration.run_agent_sync', {
+    const payload: any = {
       agent_name: params.agent_name,
       prompt: params.prompt,
       provider: params.provider,
       model: params.model,
-    });
+    };
+    if (params.now !== undefined) {
+      payload.now = params.now;
+    }
+    const result = await call.post('huf.ai.agent_integration.run_agent_sync', payload);
     return result as RunAgentTestResponse;
   } catch (error) {
     handleFrappeError(error, 'Error running agent test');
