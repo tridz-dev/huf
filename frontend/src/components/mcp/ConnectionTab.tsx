@@ -356,7 +356,9 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>Optional: Override the auto-generated callback URL for strict providers or local testing.</FormDescription>
+                  <FormDescription>
+                    Optional: Override the callback URL for strict providers or local testing. Leave blank to use HUF&apos;s default: {'{site_url}'}/mcp-oauth-callback.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

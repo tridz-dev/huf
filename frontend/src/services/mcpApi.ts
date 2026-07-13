@@ -31,6 +31,7 @@ export interface MCPServerDoc {
     oauth_status?: 'Not Connected' | 'Connected' | 'Token Expired';
     oauth_scope?: string;
     oauth_extra_authorize_params?: string;
+    oauth_redirect_uri?: string;
     oauth_authorization_endpoint?: string;
     oauth_token_endpoint?: string;
     oauth_client_id?: string;
