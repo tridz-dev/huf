@@ -25,6 +25,7 @@
   "column_break_oauth",
   "oauth_scope",
   "oauth_extra_authorize_params",
+  "oauth_redirect_uri",
   "oauth_endpoints_section",
   "oauth_authorization_endpoint",
   "oauth_token_endpoint",
@@ -179,6 +180,13 @@
    "label": "Extra Authorize Params (JSON)",
    "depends_on": "eval:doc.auth_type === 'oauth'",
    "description": "Additional URL parameters for the authorization endpoint (e.g. {\"user_scope\": \"...\", \"access_type\": \"offline\"})"
+  },
+  {
+   "fieldname": "oauth_redirect_uri",
+   "fieldtype": "Data",
+   "label": "Custom Redirect URI",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "description": "Optional: Override the auto-generated callback URL for strict providers or local testing."
   },
   {
    "fieldname": "oauth_endpoints_section",
