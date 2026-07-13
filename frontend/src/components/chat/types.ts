@@ -11,6 +11,8 @@ export type MessageType = {
   generatedImage?: string;
   generatedAudio?: string;
   voiceMessage?: string;
+  runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed';
+  error?: string;
   attachment?: {
     name: string;
     label: string;

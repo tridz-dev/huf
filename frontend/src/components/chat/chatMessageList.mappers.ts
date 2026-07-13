@@ -1,4 +1,4 @@
-import type { ToolCallEvent, NewAgentMessageEvent } from '@/hooks/useChatSocket';
+import type { ToolCallEvent, NewAgentMessageEvent, AgentRunStatusEvent } from '@/hooks/useChatSocket';
 import type { ChatMessage } from '@/services/chatApi';
 import { mapToolStatusToState } from './utils';
 import type { MessageType } from './types';
@@ -133,19 +133,123 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
   return [...prev, newMessage];
 }
 
+function normalizeAgentRunStatusEvent(raw: Record<string, unknown>): AgentRunStatusEvent {
+  return {
+    ...raw,
+    type: 'agent_run_status',
+    agent_run_id: (raw.agent_run_id as string) ?? '',
+    conversation_id: (raw.conversation_id as string) ?? '',
+    session_id: raw.session_id as string | undefined,
+    status: (raw.status as AgentRunStatusEvent['status']) ?? 'Queued',
+    response: raw.response as string | undefined,
+    error: raw.error as string | undefined,
+    agent_message_id: raw.agent_message_id as string | undefined,
+  } as AgentRunStatusEvent;
+}
+
+export function upsertAgentRunStatusFromSocket(
+  prev: MessageType[],
+  rawEvent: AgentRunStatusEvent | Record<string, unknown>
+): MessageType[] {
+  const event = normalizeAgentRunStatusEvent(
+    typeof rawEvent?.type === 'string' ? (rawEvent as Record<string, unknown>) : (rawEvent as Record<string, unknown>)
+  );
+
+  if (!event.agent_run_id) return prev;
+
+  const runIndex = prev.findIndex((msg) => msg.key === event.agent_run_id);
+
+  const createPendingMessage = (content: string = ''): MessageType => ({
+    key: event.agent_run_id,
+    from: 'assistant',
+    runStatus: event.status,
+    versions: [{ id: event.agent_run_id, content }],
+  });
+
+  if (event.status === 'Queued' || event.status === 'Started') {
+    if (runIndex >= 0) {
+      const updated = [...prev];
+      updated[runIndex] = { ...updated[runIndex], runStatus: event.status };
+      return updated;
+    }
+    return [...prev, createPendingMessage()];
+  }
+
+  if (event.status === 'Success') {
+    if (runIndex < 0) {
+      // If the persisted message already reconciled with this run, don't create a duplicate.
+      if (event.agent_message_id && prev.some((msg) => msg.versions.some((v) => v.id === event.agent_message_id))) {
+        return prev;
+      }
+      return [...prev, createPendingMessage(event.response ?? '')];
+    }
+    const updated = [...prev];
+    const existing = updated[runIndex];
+    updated[runIndex] = {
+      ...existing,
+      runStatus: 'Success',
+      versions: existing.versions.map((v, i) =>
+        i === 0 ? { ...v, content: event.response ?? v.content } : v
+      ),
+    };
+    return updated;
+  }
+
+  if (event.status === 'Failed') {
+    let targetIndex = runIndex;
+    if (targetIndex < 0 && event.agent_message_id) {
+      targetIndex = prev.findIndex(
+        (msg) =>
+          msg.key === event.agent_message_id ||
+          msg.versions.some((v) => v.id === event.agent_message_id)
+      );
+    }
+    if (targetIndex < 0) {
+      return [
+        ...prev,
+        {
+          key: event.agent_run_id,
+          from: 'assistant',
+          runStatus: 'Failed',
+          error: event.error,
+          versions: [{ id: event.agent_run_id, content: event.error ?? '' }],
+        },
+      ];
+    }
+    const updated = [...prev];
+    updated[targetIndex] = {
+      ...updated[targetIndex],
+      runStatus: 'Failed',
+      error: event.error,
+    };
+    return updated;
+  }
+
+  return prev;
+}
+
 export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgentMessageEvent): MessageType[] {
-  const messageIndex = prev.findIndex((msg) => msg.versions.some((v) => v.id === event.message_id));
+  let messageIndex = prev.findIndex((msg) => msg.versions.some((v) => v.id === event.message_id));
+
+  if (messageIndex < 0 && event.agent_run_id) {
+    messageIndex = prev.findIndex((msg) => msg.key === event.agent_run_id);
+  }
 
   if (messageIndex >= 0) {
     const updated = [...prev];
+    const existing = updated[messageIndex];
     updated[messageIndex] = {
-      ...updated[messageIndex],
+      ...existing,
       key: event.message_id,
       kind: event.kind,
       generatedImage: event.generated_image,
       generatedAudio: event.generated_audio,
-      versions: updated[messageIndex].versions.map((v) =>
-        v.id === event.message_id ? { ...v, content: event.content || v.content } : v
+      runStatus: undefined,
+      error: undefined,
+      versions: existing.versions.map((v) =>
+        v.id === event.message_id || v.id === event.agent_run_id
+          ? { ...v, id: event.message_id, content: event.content ?? v.content }
+          : v
       ),
     };
     return updated;

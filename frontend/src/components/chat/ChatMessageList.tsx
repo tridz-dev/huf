@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
 import { getAgent } from "@/services/agentApi";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent } from '@/hooks/useChatSocket';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent } from '@/hooks/useChatSocket';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { EmptyChatState } from './EmptyChatState';
@@ -15,6 +15,7 @@ import { useChatScrollToBottom } from './useChatScrollToBottom';
 import {
     mergeConversationItemsIntoMessages,
     upsertAgentMessageFromSocket,
+    upsertAgentRunStatusFromSocket,
     upsertToolUpdateFromSocket,
 } from './chatMessageList.mappers';
 
@@ -156,10 +157,17 @@ export function ChatMessageList({
         setMessages((prev) => upsertAgentMessageFromSocket(prev, event));
     }, [chatId]);
 
+    // Handle queued agent run lifecycle events
+    const handleAgentRunStatus = useCallback((event: AgentRunStatusEvent) => {
+        if (event.conversation_id !== chatId) return;
+        setMessages((prev) => upsertAgentRunStatusFromSocket(prev, event));
+    }, [chatId]);
+
     useChatSocket({
         conversationId: chatId,
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
+        onAgentRunStatus: handleAgentRunStatus,
     });
 
     // Show error toast when there's an error loading messages

@@ -111,14 +111,20 @@ export function ChatInput({
             const responseTextRaw =
                 (msg?.run as Record<string, unknown>)?.response ?? msg?.response;
             const responseText = typeof responseTextRaw === 'string' ? responseTextRaw : '';
-            if (!useStreaming && responseText) {
+            const queued = msg?.queued === true;
+            if (!useStreaming && responseText && !queued) {
                 params.updateAssistantContent(responseText);
             }
             const agentMessageId =
                 (msg?.agent_message_id as string) ||
                 ((msg?.run as Record<string, unknown>)?.agent_message_id as string) ||
                 undefined;
-            return { conversationId, agentMessageId };
+            const agentRunId =
+                (msg?.agent_run_id as string) ||
+                ((msg?.run as Record<string, unknown>)?.agent_run_id as string) ||
+                undefined;
+            const status = msg?.status as string | undefined;
+            return { conversationId, agentMessageId, agentRunId, queued, status };
         },
         [agentName]
     );
@@ -203,6 +209,7 @@ export function ChatInput({
                 );
                 scrollToBottomAfterPaint?.(false);
             };
+            let assistantKey = assistantMessageId;
 
             try {
                 const prepareRes = await prepareMessageWithFile({
@@ -224,7 +231,7 @@ export function ChatInput({
                 setPendingFile(null);
                 if (!chatId) isCreatingConversationRef.current = true;
 
-                const { conversationId, agentMessageId } = await runAgentAndUpdateAssistant({
+                const { conversationId, agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
                     message: prepareRes.agent_prompt,
                     conversationId: prepareRes.conversation_id ?? chatId ?? undefined,
                     assistantMessageId,
@@ -233,8 +240,19 @@ export function ChatInput({
                     files: prepareRes.files,
                 });
 
-                if (agentMessageId) {
-                    syncAssistantMessageId(assistantMessageId, agentMessageId);
+                assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+                if (queued && agentRunId) {
+                    setMessages((prev) =>
+                        prev.map((msg) =>
+                            msg.key === assistantMessageId
+                                ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
+                                : msg
+                        )
+                    );
+                }
+
+                if (agentMessageId && !queued) {
+                    syncAssistantMessageId(assistantKey, agentMessageId);
                 }
                 onStatusChange('ready');
                 if (conversationId && onConversationCreated) {
@@ -257,7 +275,7 @@ export function ChatInput({
                     error: error instanceof Error ? error.message : 'Failed to send file',
                 });
                 setMessages((prev) =>
-                    prev.filter((msg) => msg.key !== userMessageKey && msg.key !== assistantMessageId)
+                    prev.filter((msg) => msg.key !== userMessageKey && msg.key !== assistantKey)
                 );
                 toast.error('Failed to send message with attachment', {
                     description: error instanceof Error ? error.message : 'An error occurred',
@@ -299,16 +317,27 @@ export function ChatInput({
             scrollToBottomAfterPaint?.(false);
         };
 
+        let assistantKey = assistantMessageId;
         try {
             if (!chatId) isCreatingConversationRef.current = true;
-            const { conversationId, agentMessageId } = await runAgentAndUpdateAssistant({
+            const { conversationId, agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
                 message: messageText,
                 conversationId: chatId ?? undefined,
                 assistantMessageId,
                 updateAssistantContent,
             });
-            if (agentMessageId) {
-                syncAssistantMessageId(assistantMessageId, agentMessageId);
+            assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            if (queued && agentRunId) {
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.key === assistantMessageId
+                            ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
+                            : msg
+                    )
+                );
+            }
+            if (agentMessageId && !queued) {
+                syncAssistantMessageId(assistantKey, agentMessageId);
             }
             onStatusChange('ready');
             if (conversationId && onConversationCreated) {
@@ -326,7 +355,7 @@ export function ChatInput({
             toast.error('Failed to send message', {
                 description: error instanceof Error ? error.message : 'An error occurred',
             });
-            setMessages((prev) => prev.filter((msg) => msg.key !== assistantMessageId));
+            setMessages((prev) => prev.filter((msg) => msg.key !== assistantKey));
         } finally {
             setIsSubmitting(false);
         }
@@ -386,15 +415,26 @@ export function ChatInput({
                 );
                 scrollToBottomAfterPaint?.(false);
             };
+            let currentAssistantKey = assistantMessageId;
             try {
-                const { agentMessageId } = await runAgentAndUpdateAssistant({
+                const { agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
                     message: res.transcript,
                     conversationId: res.conversation_id,
                     assistantMessageId,
                     updateAssistantContent,
                 });
-                if (agentMessageId) {
-                    syncAssistantMessageId(assistantMessageId, agentMessageId);
+                currentAssistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+                if (queued && agentRunId) {
+                    setMessages((prev) =>
+                        prev.map((msg) =>
+                            msg.key === assistantMessageId
+                                ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
+                                : msg
+                        )
+                    );
+                }
+                if (agentMessageId && !queued) {
+                    syncAssistantMessageId(currentAssistantKey, agentMessageId);
                 }
                 onStatusChange('ready');
                 if (res.conversation_id && onConversationCreated) {
@@ -404,7 +444,7 @@ export function ChatInput({
                 return res.transcript;
             } catch (agentErr) {
                 isCreatingConversationRef.current = false;
-                setMessages((prev) => prev.filter((m) => m.key !== assistantMessageId));
+                setMessages((prev) => prev.filter((m) => m.key !== currentAssistantKey));
                 onStatusChange('error');
                 toast.error('Failed to send message', {
                     description: agentErr instanceof Error ? agentErr.message : 'An error occurred',

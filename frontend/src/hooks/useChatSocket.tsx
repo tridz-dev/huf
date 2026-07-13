@@ -26,13 +26,25 @@ export type NewAgentMessageEvent = {
     conversation_index?: number;
 };
 
+export type AgentRunStatusEvent = {
+    type: 'agent_run_status';
+    agent_run_id: string;
+    conversation_id: string;
+    session_id?: string;
+    status: 'Queued' | 'Started' | 'Success' | 'Failed';
+    response?: string;
+    error?: string;
+    agent_message_id?: string;
+};
+
 type ChatSocketProps = {   
     conversationId: string | null;
     onToolUpdate?: (event: ToolCallEvent) => void;
     onNewMessage?: (event: NewAgentMessageEvent) => void;
+    onAgentRunStatus?: (event: AgentRunStatusEvent) => void;
 }
 
-export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: ChatSocketProps) {
+export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus }: ChatSocketProps) {
     const socket = useSocket();
 
     useEffect(() => {
@@ -41,7 +53,7 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: Ch
         }
 
         // Listen for conversation-specific events on the shared socket
-        const handler = (data: NewAgentMessageEvent | ToolCallEvent) => {
+        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent) => {
             console.log("Conversation event received:", data);
 
             // Route to appropriate handler based on event type
@@ -53,6 +65,8 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: Ch
                 data.type === 'tool_call_failed'
             ) {
                 onToolUpdate?.(data as ToolCallEvent);
+            } else if (data.type === 'agent_run_status') {
+                onAgentRunStatus?.(data as AgentRunStatusEvent);
             }
         };
 
@@ -63,5 +77,5 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: Ch
             // itself is owned by SocketProvider and stays connected.
             socket.off(`conversation:${conversationId}`, handler);
         };
-    }, [socket, conversationId, onToolUpdate, onNewMessage]);
+    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus]);
 }

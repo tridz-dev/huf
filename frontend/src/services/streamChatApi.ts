@@ -228,6 +228,8 @@ export async function sendMessage(
       return {
         message: {
           success: true,
+          queued: false,
+          status: 'Success',
           response: runShape.response,
           conversation_id: data.conversation_id ?? '',
           agent_run_id: data.agent_run_id ?? '',
@@ -242,6 +244,8 @@ export async function sendMessage(
     return {
       message: {
         success: true,
+        queued: false,
+        status: 'Success',
         conversation_id: data.conversation_id ?? '',
         agent_message_id: data.agent_message_id ?? '',
         run: runShape,

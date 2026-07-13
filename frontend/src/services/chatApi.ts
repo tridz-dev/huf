@@ -471,7 +471,11 @@ export interface NewConversationResponse {
   message: {
     success: boolean;
     conversation_id: string;
-    run: {
+    queued?: boolean;
+    status?: string;
+    agent_run_id?: string;
+    agent_message_id?: string;
+    run?: {
       success: boolean;
       response: string;
       structured: unknown;
@@ -494,12 +498,15 @@ export interface SendMessageParams {
 export interface SendMessageResponse {
   message: {
     success: boolean;
-    response: string;
-    structured: unknown;
-    provider: string;
+    response?: string;
+    structured?: unknown;
+    provider?: string;
     agent_run_id: string;
     conversation_id: string;
     session_id: string;
+    queued?: boolean;
+    status?: string;
+    agent_message_id?: string;
   };
 }
 
