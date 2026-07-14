@@ -189,8 +189,6 @@
    "label": "Extra Authorize Params (JSON)"
   },
   {
-   "depends_on": "eval:doc.auth_type === 'oauth'",
-   "description": "Optional: Override the auto-generated callback URL for strict providers or local testing.",
    "fieldname": "oauth_redirect_uri",
    "fieldtype": "Data",
    "label": "Custom Redirect URI",
