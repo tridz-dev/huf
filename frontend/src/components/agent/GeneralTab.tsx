@@ -190,6 +190,24 @@ We generally recommend altering this or temperature but not both.`}
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name="run_immediately"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="space-y-0.5 pr-4">
+                  <FormLabel className="text-base">Run Immediately</FormLabel>
+                  <FormDescription>
+                    When enabled, agent runs execute synchronously and return a direct response. When disabled (default), runs are queued to avoid holding web workers during long LLM and tool calls. Enable only for trusted calls that require an immediate response.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </CardContent>
       </Card>
 
