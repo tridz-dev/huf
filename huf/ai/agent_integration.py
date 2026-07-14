@@ -1843,36 +1843,42 @@ def recover_stalled_agent_runs():
     """
     try:
         # Stale Started runs: if the worker is alive, it still holds the lock.
+        # Group in Python rather than in the query so EVERY stale Started run
+        # in a conversation is reset — grouping in SQL would recover only one
+        # run per conversation per tick and leave the rest stuck.
         started_cutoff = add_to_date(now_datetime(), seconds=-_QUEUE_LOCK_TTL)
         stale_started = frappe.db.get_all(
             "Agent Run",
             filters={"status": "Started", "modified": ("<", started_cutoff)},
             fields=["name", "conversation"],
-            group_by="conversation",
         )
-        drained_conversations = set()
+        stale_by_conversation = {}
         for run in stale_started:
-            if run.conversation in drained_conversations:
-                continue
-            lock_key = _conversation_lock_key(run.conversation)
+            stale_by_conversation.setdefault(run.conversation, []).append(run)
+
+        drained_conversations = set()
+        for conversation, conversation_runs in stale_by_conversation.items():
+            lock_key = _conversation_lock_key(conversation)
             try:
                 ttl = frappe.cache().ttl(lock_key)
             except Exception:
                 ttl = None
             if ttl and ttl > 0:
                 continue
-            _reset_run_to_queued(run.name, _("Worker heartbeat lost; run recovered to queue."))
-            _enqueue_drain(run.conversation)
-            drained_conversations.add(run.conversation)
+            for run in conversation_runs:
+                _reset_run_to_queued(run.name, _("Worker heartbeat lost; run recovered to queue."))
+            _enqueue_drain(conversation)
+            drained_conversations.add(conversation)
 
         # Orphaned Queued runs: a run that has been Queued for longer than the
         # sweep interval without an active lock probably lost its wake-up job.
+        # One drain per conversation is enough (the drain is idempotent), so
+        # no grouping needed here — drained_conversations dedupes repeats.
         queued_cutoff = add_to_date(now_datetime(), seconds=-_QUEUE_ORPHANED_QUEUED_AGE)
         orphaned = frappe.db.get_all(
             "Agent Run",
             filters={"status": "Queued", "modified": ("<", queued_cutoff)},
             fields=["name", "conversation"],
-            group_by="conversation",
         )
         for run in orphaned:
             if run.conversation in drained_conversations:

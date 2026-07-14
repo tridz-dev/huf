@@ -15,7 +15,7 @@ Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_que
 """
 import json
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from huf.ai.agent_integration import (
     _conversation_lock_key,
@@ -822,6 +822,49 @@ class TestQueueFirstRuns(unittest.TestCase):
             "Worker heartbeat lost; run recovered to queue.",
         )
         mock_enqueue_drain.assert_called_once_with("CONV-STALE-001")
+
+    @patch("huf.ai.agent_integration._enqueue_drain")
+    @patch("huf.ai.agent_integration._reset_run_to_queued")
+    @patch("huf.ai.agent_integration.frappe")
+    def test_recovery_resets_all_stale_started_runs_per_conversation(
+        self, mock_frappe, mock_reset, mock_enqueue_drain
+    ):
+        """Every stale Started run in a conversation is reset to Queued (not
+        just one), with a single drain enqueued per conversation."""
+        mock_frappe.session.user = "Administrator"
+
+        def make_run(name, conversation):
+            run = MagicMock()
+            run.name = name
+            run.conversation = conversation
+            return run
+
+        stale_a1 = make_run("AR-STALE-A1", "CONV-STALE-A")
+        stale_a2 = make_run("AR-STALE-A2", "CONV-STALE-A")
+        stale_b1 = make_run("AR-STALE-B1", "CONV-STALE-B")
+
+        def get_all(doctype, filters=None, fields=None, **kwargs):
+            if filters.get("status") == "Started":
+                return [stale_a1, stale_a2, stale_b1]
+            return []
+
+        mock_frappe.db.get_all.side_effect = get_all
+        mock_frappe.cache.return_value.ttl.return_value = -1  # locks gone
+
+        recover_stalled_agent_runs()
+
+        self.assertEqual(
+            mock_reset.call_args_list,
+            [
+                call("AR-STALE-A1", "Worker heartbeat lost; run recovered to queue."),
+                call("AR-STALE-A2", "Worker heartbeat lost; run recovered to queue."),
+                call("AR-STALE-B1", "Worker heartbeat lost; run recovered to queue."),
+            ],
+        )
+        self.assertEqual(
+            mock_enqueue_drain.call_args_list,
+            [call("CONV-STALE-A"), call("CONV-STALE-B")],
+        )
 
     @patch("huf.ai.agent_integration._enqueue_drain")
     @patch("huf.ai.agent_integration.frappe")
