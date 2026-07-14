@@ -134,7 +134,8 @@ def resolve_mcp_connection(server_url: str, callback_url: str) -> dict:
 
         if not client_id:
             return _error_result(
-                "Dynamic Client Registration is not available and no manual client_id was provided."
+                "Dynamic Client Registration is not available for this server. "
+                "Please provide Client ID, Authorization Endpoint, and Token Endpoint manually."
             )
 
         return {
@@ -158,10 +159,10 @@ def resolve_mcp_connection(server_url: str, callback_url: str) -> dict:
         }
 
     except MCPDiscoveryError as exc:
-        frappe.log_error(f"MCP discovery error for {server_url}: {exc}", "MCP Discovery")
+        frappe.log_error("MCP Discovery", message=f"MCP discovery error for {server_url}: {exc}")
         return _error_result(str(exc), exc.discovery_status)
     except Exception as exc:
-        frappe.log_error(f"MCP discovery unexpected error for {server_url}: {exc}", "MCP Discovery")
+        frappe.log_error("MCP Discovery", message=f"MCP discovery unexpected error for {server_url}: {exc}")
         return _error_result(str(exc))
 
 
@@ -225,7 +226,7 @@ def discover_mcp_server(server_name: str) -> dict:
         }
 
     except Exception as exc:
-        frappe.log_error(f"MCP discovery persist error for {server_name}: {exc}", "MCP Discovery")
+        frappe.log_error("MCP Discovery", message=f"MCP discovery persist error for {server_name}: {exc}")
         return {"error": str(exc)}
 
 
@@ -446,7 +447,7 @@ def _register_client(registration_endpoint: str, callback_url: str, auth_server_
         response.raise_for_status()
         return response.json()
     except Exception as exc:
-        frappe.log_error(f"MCP DCR failed at {registration_endpoint}: {exc}", "MCP DCR")
+        frappe.log_error("MCP DCR", message=f"MCP DCR failed at {registration_endpoint}: {exc}")
         return None
 
 
