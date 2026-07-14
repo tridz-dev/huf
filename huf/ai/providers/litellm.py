@@ -502,6 +502,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             provider_name = normalized_model.split("/")[0]
             _setup_api_key(provider_name, api_key, completion_kwargs)
 
+            # Local Ollama needs an explicit api_base; LiteLLM defaults to localhost:11434
+            if provider_name == "ollama":
+                provider_doc = frappe.get_doc("AI Provider", provider)
+                base = (provider_doc.url or "http://localhost").rstrip("/")
+                port = provider_doc.port or 11434
+                completion_kwargs["api_base"] = f"{base}:{port}"
+
             capability_cache_key = f"litellm_tool_json_conflict:{provider_name}"
             
             known_conflict = _L1_CAPABILITY_CACHE.get(capability_cache_key)
