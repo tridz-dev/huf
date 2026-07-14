@@ -881,6 +881,25 @@ def run_agent_sync(
             frappe.ValidationError,
         )
 
+    # Close the check-then-lock race: a queued run may have been submitted
+    # between the _has_queued_runs() check above and the lock acquisition.
+    # Re-check while holding the lock; queued runs must not be jumped.
+    if _has_queued_runs(conversation.name):
+        try:
+            frappe.cache().delete(lock_key)
+        except Exception:
+            pass
+        frappe.throw(
+            _(
+                "This conversation has queued runs pending. Wait for them to complete before using the direct-execution override."
+            ),
+            frappe.ValidationError,
+        )
+
+    # Keep the lock alive for long direct runs (same heartbeat as the queued
+    # drainer) so it cannot expire mid-run and let a drainer run concurrently.
+    heartbeat = _RunHeartbeat(lock_key)
+    heartbeat.start()
     try:
         if prompt and not str(prompt).startswith("[SILENT_TRIGGER]") and not skip_user_message:
             conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
@@ -888,8 +907,15 @@ def run_agent_sync(
 
         return _execute_agent_run(**execution_kwargs)
     finally:
+        heartbeat.stop()
         try:
             frappe.cache().delete(lock_key)
+        except Exception:
+            pass
+        # A queued run may have arrived while we held the lock; wake a drainer.
+        try:
+            if _has_queued_runs(conversation.name):
+                _enqueue_drain(conversation.name)
         except Exception:
             pass
 
@@ -1420,6 +1446,11 @@ def _execute_agent_run(
             # We bypass Agent Message insertion and use a silent trigger to hide the intermediate execution from the UI
             try:
                 silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' has responded. IMPORTANT: DO NOT assume this means the task was successful. Read the result carefully and appropriately relay it to the user.\nResult:\n{final_output}"
+                # NOTE: no ``now=1`` here. The parent conversation may still be
+                # locked by the worker that just finished this sub-agent; the
+                # direct path would fail to acquire the lock and the awaken
+                # would be lost (deadlock). Going through the queue-first
+                # drainer lets the post-release sweep pick it up.
                 frappe.enqueue(
                     "huf.ai.agent_integration.run_agent_sync",
                     queue="default",
@@ -1431,7 +1462,6 @@ def _execute_agent_run(
                     conversation_id=parent_conversation_id,
                     channel_id=channel_id,
                     external_id=external_id,
-                    now=1
                 )
             except Exception as hook_err:
                 frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
@@ -1538,6 +1568,8 @@ def _execute_agent_run(
             # 1. Silent Auto-Awaken Trigger
             try:
                 silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+                # NOTE: no ``now=1`` — see the success hook above; the direct
+                # path can deadlock against the parent conversation lock.
                 frappe.enqueue(
                     "huf.ai.agent_integration.run_agent_sync",
                     queue="default",
@@ -1549,7 +1581,6 @@ def _execute_agent_run(
                     conversation_id=parent_conversation_id,
                     channel_id=channel_id,
                     external_id=external_id,
-                    now=1
                 )
             except Exception as hook_err:
                 frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
