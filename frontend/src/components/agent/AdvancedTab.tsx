@@ -177,7 +177,7 @@ export function AdvancedTab({
 					control={form.control}
 					name="autonaming_of_conversation_title"
 					render={({ field }) => (
-						<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+						<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 							<div className="space-y-0.5 pr-4">
 								<FormLabel className="text-base">Autonaming of Conversation Title</FormLabel>
 								<FormDescription>
@@ -255,7 +255,7 @@ export function AdvancedTab({
 						control={form.control}
 						name="summary_prompt_mode"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 								<div className="space-y-0.5 pr-4">
 									<FormLabel className="text-base">Use external template</FormLabel>
 									<FormDescription>
@@ -329,7 +329,7 @@ export function AdvancedTab({
 											) : null}
 											{selectedSummaryPrompt.isLatest ? <Badge variant="secondary">Latest</Badge> : null}
 											{selectedSummaryPrompt.description ? (
-												<span className="text-sm text-muted-foreground">{selectedSummaryPrompt.description}</span>
+												<span className="text-sm text-steel">{selectedSummaryPrompt.description}</span>
 											) : null}
 										</div>
 									)}
@@ -345,7 +345,7 @@ export function AdvancedTab({
 								control={form.control}
 								name="summary_prompt_version_locked"
 								render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 										<div className="space-y-0.5 pr-4">
 											<FormLabel className="text-base">Lock Summary Prompt Version</FormLabel>
 											<FormDescription>
@@ -366,7 +366,7 @@ export function AdvancedTab({
 									<FormItem>
 										<FormLabel>Summary Attached at Version</FormLabel>
 										<FormControl>
-											<div className="flex min-h-10 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+											<div className="flex min-h-10 items-center rounded-none border bg-paper-deep/40 px-3 text-sm text-steel">
 												{field.value ?? 'Will be recorded after template attachment'}
 											</div>
 										</FormControl>
@@ -386,16 +386,16 @@ export function AdvancedTab({
 							name="summary_prompt"
 							render={({ field }) => (
 								<FormItem>
-									<div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+									<div className="rounded-none border bg-paper-deep/20 p-4 space-y-3">
 										<div>
 											<p className="text-sm font-medium">Local Prompt</p>
-											<p className="text-xs text-muted-foreground">
+											<p className="text-xs text-steel-soft">
 												Compression instructions used when summarizing conversation history.
 											</p>
 										</div>
 										<FormControl>
 											<textarea
-												className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+												className="flex min-h-[120px] w-full rounded-none border border-input bg-paper px-3 py-2 text-sm ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 												placeholder="Enter the prompt used to summarize conversation history..."
 												{...field}
 												value={field.value || ''}
@@ -421,7 +421,7 @@ export function AdvancedTab({
 					control={form.control}
 					name="enable_conversation_data"
 					render={({ field }) => (
-						<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+						<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 							<div className="space-y-0.5 pr-4">
 								<FormLabel className="text-base">Allow Conversation Data Management</FormLabel>
 								<FormDescription>
@@ -450,7 +450,7 @@ export function AdvancedTab({
 						control={form.control}
 						name="inject_conversation_data"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 								<div className="space-y-0.5 pr-4">
 									<FormLabel className="text-base">Inject Conversation Data into Prompt</FormLabel>
 									<FormDescription>
@@ -537,7 +537,7 @@ export function AdvancedTab({
 								</FormControl>
 								<input
 									type="color"
-									className="h-9 w-12 cursor-pointer rounded border bg-background p-0.5"
+									className="h-9 w-12 cursor-pointer rounded border bg-paper p-0.5"
 									value={/^#[0-9A-Fa-f]{6}$/.test(field.value || '') ? field.value : '#6366f1'}
 									onChange={(e) => field.onChange(e.target.value)}
 									aria-label="Pick agent color"
@@ -555,7 +555,7 @@ export function AdvancedTab({
 					control={form.control}
 					name="show_tool_execution_details"
 					render={({ field }) => (
-						<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+						<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 							<div className="space-y-0.5 pr-4">
 								<FormLabel className="text-base">Show Tool Execution Details</FormLabel>
 								<FormDescription className="whitespace-pre-line">
@@ -695,7 +695,7 @@ This includes whether each tool call is completed and its corresponding result.`
 						control={form.control}
 						name="allow_file_upload"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Allow File Upload</FormLabel>
 									<FormDescription>
@@ -715,7 +715,7 @@ This includes whether each tool call is completed and its corresponding result.`
 								control={form.control}
 								name="enable_ocr"
 								render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
 										<div className="space-y-0.5">
 											<FormLabel className="text-base">Enable OCR</FormLabel>
 											<FormDescription>

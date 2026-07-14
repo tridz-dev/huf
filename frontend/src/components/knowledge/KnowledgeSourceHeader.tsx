@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { UseFormReturn } from 'react-hook-form';
 import type { KnowledgeSourceFormValues } from './types';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 interface KnowledgeSourceHeaderProps {
   form: UseFormReturn<KnowledgeSourceFormValues>;
@@ -50,13 +51,20 @@ export function KnowledgeSourceHeader({
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
-          <Input
-            value={form.watch('source_name')}
-            onChange={(e) => form.setValue('source_name', e.target.value, { shouldDirty: true })}
-            className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-            placeholder="Source Name"
-            disabled={!isNew}
-          />
+          {isNew ? (
+            <Input
+              value={form.watch('source_name')}
+              onChange={(e) => form.setValue('source_name', e.target.value, { shouldDirty: true })}
+              className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
+              placeholder="Source Name"
+            />
+          ) : (
+            <InlineEditName
+              value={form.watch('source_name')}
+              onChange={(value) => form.setValue('source_name', value, { shouldDirty: true })}
+              placeholder="Source Name"
+            />
+          )}
           <Badge variant={watchDisabled ? 'secondary' : 'default'}>
             {watchDisabled ? 'Disabled' : 'Active'}
           </Badge>

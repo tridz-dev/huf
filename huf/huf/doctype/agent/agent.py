@@ -1,6 +1,8 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -111,12 +113,33 @@ class Agent(Document):
 
         if self.allow_chat == 1 and self.persist_conversation == 0:
             frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
-        
+
         # Validate prompt caching configuration
         if self.enable_prompt_caching:
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._update_mcp_tool_counts()
+
+    def _update_mcp_tool_counts(self):
+        """Populate each agent_mcp_server row's tool_count from its linked MCP Server.
+
+        Done here rather than in AgentMCPServer.before_save()/before_insert():
+        child-table controller hooks don't fire on parent document save in
+        Frappe v16.
+        """
+        for row in self.agent_mcp_server:
+            if not row.mcp_server:
+                continue
+            try:
+                mcp_doc = frappe.get_doc("MCP Server", row.mcp_server)
+                if mcp_doc.available_tools:
+                    tools = json.loads(mcp_doc.available_tools)
+                    row.tool_count = len(tools) if isinstance(tools, list) else 0
+                else:
+                    row.tool_count = 0
+            except Exception:
+                row.tool_count = 0
 
     def _validate_advanced_models(self):
         def _has_modality(model_docname: str, required: str) -> bool:

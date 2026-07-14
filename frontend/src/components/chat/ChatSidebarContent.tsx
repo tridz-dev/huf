@@ -46,12 +46,12 @@ export function ChatSidebarContent() {
             <p className="text-sm font-medium truncate flex-1">{chat.title}</p>
           </div>
           {chat.agent && (
-            <p className="text-xs text-muted-foreground truncate w-full">
+            <p className="text-xs text-steel-soft truncate w-full">
               {chat.agent}
             </p>
           )}
           {chat.timestampLabel && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-steel-soft">
               {chat.timestampLabel}
             </p>
           )}

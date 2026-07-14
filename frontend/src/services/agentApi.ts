@@ -348,9 +348,19 @@ export async function createAgent(data: Partial<AgentDoc>): Promise<AgentDoc> {
  */
 export async function updateAgent(name: string, data: Partial<AgentDoc>): Promise<AgentDoc> {
   try {
-    await db.updateDoc(doctype.Agent, name, data);
+    let targetName = name;
+    if (
+      data.agent_name &&
+      typeof data.agent_name === 'string' &&
+      data.agent_name.trim() &&
+      data.agent_name !== name
+    ) {
+      await db.renameDoc(doctype.Agent, name, data.agent_name);
+      targetName = data.agent_name;
+    }
+    await db.updateDoc(doctype.Agent, targetName, data);
     // Fetch updated document to return
-    const updatedAgent = await db.getDoc(doctype.Agent, name);
+    const updatedAgent = await db.getDoc(doctype.Agent, targetName);
     return updatedAgent as AgentDoc;
   } catch (error) {
     handleFrappeError(error, `Error updating agent ${name}`);

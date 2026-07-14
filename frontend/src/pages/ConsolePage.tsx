@@ -90,7 +90,7 @@ function ConsolePage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
       </div>
     );
   }
@@ -100,7 +100,7 @@ function ConsolePage() {
       <div className="p-6 max-w-3xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-semibold">Console</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-steel">
             Run any agent synchronously with a one-off prompt, outside of chat.
           </p>
         </div>
@@ -198,12 +198,12 @@ function ConsolePage() {
             </CardHeader>
             <CardContent>
               {running ? (
-                <div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
+                <div className="flex items-center gap-2 text-steel text-sm py-4">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Running...
                 </div>
               ) : (
-                <div className="rounded-md bg-muted p-3 text-sm whitespace-pre-wrap break-words max-h-[400px] overflow-auto">
+                <div className="rounded-none bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[400px] overflow-auto">
                   {response || 'No response returned.'}
                 </div>
               )}

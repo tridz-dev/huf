@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Info, Loader2 } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Button } from '../components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { ActiveAgentsTab, ActiveFlowsTab, RecentExecutionsTab } from '../components/dashboard';
+import {
+  ActiveAgentsTab,
+  ActiveFlowsTab,
+  RecentExecutionsTab,
+  GaugeRow,
+  MetricGauge,
+} from '../components/dashboard';
 import { getAgentRunsCountLast7Days, getAgentRunsForMetrics, getRecentAgentRuns, getDashboardActiveFlows, type AgentRunMetricsDoc, type DashboardFlowItem } from '../services/dashboardApi';
 import type { AgentRunDoc } from '../services/agentRunApi';
 import { getAgents } from '../services/agentApi';
@@ -190,31 +195,32 @@ function HomePage() {
   const metricsData = [
     {
       id: 'total-runs',
-      title: 'Total Agent Runs',
-      subtitle: 'Last 7 days',
+      label: 'Total Agent Runs',
+      period: 'Last 7 days',
       value: metricsLoading ? '...' : formatNumber(metrics.totalRuns),
-      tooltip: 'Total number of agent executions in the last 7 days',
+      info: 'Total number of agent executions in the last 7 days',
     },
     {
       id: 'success-rate',
-      title: 'Success Rate',
-      subtitle: 'Last 7 days',
+      label: 'Success Rate',
+      period: 'Last 7 days',
       value: metricsLoading ? '...' : `${metrics.successRate.toFixed(1)}%`,
-      tooltip: 'Percentage of successful agent runs without errors',
+      info: 'Percentage of successful agent runs without errors',
     },
     {
       id: 'avg-runtime',
-      title: 'Avg Runtime',
-      subtitle: 'Last 7 days',
+      label: 'Avg Runtime',
+      period: 'Last 7 days',
       value: metricsLoading ? '...' : formatDuration(metrics.avgRuntime),
-      tooltip: 'Average execution time across all agent runs',
+      info: 'Average execution time across all agent runs',
     },
     {
       id: 'cost',
-      title: 'Total Cost',
-      subtitle: 'Last 7 days',
+      label: 'Total Cost',
+      period: 'Last 7 days',
       value: metricsLoading ? '...' : formatCurrency(metrics.totalCost),
-      tooltip: 'Total API costs for LLM usage across all agents',
+      info: 'Total API costs for LLM usage across all agents',
+      flag: true,
     },
   ];
 
@@ -223,71 +229,49 @@ function HomePage() {
       <div className="p-6 space-y-6">
         {/* HUF Page head */}
         <div>
-          <h1 className="font-display font-bold text-[38px] uppercase text-ink leading-none tracking-tight">
+          <h1 className="font-display font-bold text-[36px] uppercase text-ink leading-none tracking-tight">
             Dashboard
           </h1>
-          <p className="font-body text-steel text-[14px] mt-1">
+          <p className="font-body text-steel text-[14.5px] mt-1">
             Monitor your agents, flows, and system performance
           </p>
         </div>
 
-        {/* HUF Gauge Strip — single bordered instrument strip, not 4 floating cards */}
-        <TooltipProvider>
-          <div className="border border-ink grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-line">
-            {metricsData.map((metric) => (
-              <div key={metric.id} className="p-4 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-mono text-[10px] uppercase tracking-widest text-steel">
-                    {metric.title}
-                  </span>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Info className="h-3.5 w-3.5 text-steel-soft cursor-help" strokeWidth={1.6} />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="max-w-xs font-mono text-[11px]">{metric.tooltip}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-                <div className="font-mono text-[9.5px] text-steel-soft mb-2">{metric.subtitle}</div>
-                <div className="font-display font-bold text-2xl sm:text-3xl lg:text-[38px] leading-none text-ink">
-                  {metricsLoading && metric.value === '...' ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-steel" />
-                  ) : (
-                    metric.value
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </TooltipProvider>
+        {/* HUF Gauge Strip */}
+        <GaugeRow>
+          {metricsData.map((metric) => (
+            <MetricGauge
+              key={metric.id}
+              label={metric.label}
+              period={metric.period}
+              value={metric.value}
+              info={metric.info}
+              flag={metric.flag}
+            />
+          ))}
+        </GaugeRow>
 
         {/* Tabbed Interface */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+          <div className="flex items-center justify-between border-b border-ink mb-2">
+            <TabsList variant="panel" className="border-b-0">
               <TabsTrigger value="agents">Agents</TabsTrigger>
               <TabsTrigger value="flows">Flows</TabsTrigger>
               <TabsTrigger value="executions">Executions</TabsTrigger>
             </TabsList>
-            {activeTab === 'agents' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/agents')}
-              >
-                Show More
-              </Button>
-            )}
-            {activeTab === 'flows' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate('/flows')}
-              >
-                Show More
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="font-body text-[13px] font-medium text-steel hover:text-ink hover:bg-transparent pr-1"
+              onClick={() => {
+                if (activeTab === 'agents') navigate('/agents');
+                else if (activeTab === 'flows') navigate('/flows');
+                else if (activeTab === 'executions') navigate('/executions');
+              }}
+            >
+              Show more
+              <ChevronRight className="w-[11px] h-[11px] ml-0.5" strokeWidth={2} />
+            </Button>
           </div>
 
           {/* Agents Tab */}

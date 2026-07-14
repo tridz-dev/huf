@@ -35,7 +35,7 @@ export function StatusTab({ source }: StatusTabProps) {
   if (!source) {
     return (
       <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
+        <CardContent className="py-12 text-center font-body text-steel">
           Save the knowledge source first to see status information.
         </CardContent>
       </Card>
@@ -62,35 +62,35 @@ export function StatusTab({ source }: StatusTabProps) {
         <CardContent>
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Status</p>
+              <p className="text-sm font-medium text-steel">Status</p>
               <Badge variant={getStatusVariant(source.status)}>{source.status}</Badge>
             </div>
 
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Last Indexed</p>
+              <p className="text-sm font-medium text-steel">Last Indexed</p>
               <p className="text-sm">
                 {source.last_indexed_at ? formatTimeAgo(source.last_indexed_at) : 'Never'}
               </p>
             </div>
 
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Total Chunks</p>
+              <p className="text-sm font-medium text-steel">Total Chunks</p>
               <p className="text-sm">{source.total_chunks.toLocaleString()}</p>
             </div>
 
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Total Inputs</p>
+              <p className="text-sm font-medium text-steel">Total Inputs</p>
               <p className="text-sm">{source.total_inputs.toLocaleString()}</p>
             </div>
 
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Index Size</p>
+              <p className="text-sm font-medium text-steel">Index Size</p>
               <p className="text-sm">{formatBytes(source.index_size_bytes)}</p>
             </div>
 
             {source.knowledge_type === 'chroma' && (
               <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">Chroma Connection</p>
+                <p className="text-sm font-medium text-steel">Chroma Connection</p>
                 {source.chroma_mode === 'Server' ? (
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-mono text-xs">
@@ -108,7 +108,7 @@ export function StatusTab({ source }: StatusTabProps) {
 
             {source.sqlite_file_path && source.knowledge_type !== 'chroma' && (
               <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">SQLite File</p>
+                <p className="text-sm font-medium text-steel">SQLite File</p>
                 <p className="text-sm font-mono text-xs break-all">{source.sqlite_file_path}</p>
               </div>
             )}

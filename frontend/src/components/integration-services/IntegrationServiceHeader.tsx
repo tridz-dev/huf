@@ -8,6 +8,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 interface IntegrationServiceHeaderProps {
   title: string;
@@ -19,6 +20,7 @@ interface IntegrationServiceHeaderProps {
   canDelete: boolean;
   onSave: () => void;
   onDelete?: () => void;
+  onTitleChange: (value: string) => void;
 }
 
 export function IntegrationServiceHeader({
@@ -31,14 +33,23 @@ export function IntegrationServiceHeader({
   canDelete,
   onSave,
   onDelete,
+  onTitleChange,
 }: IntegrationServiceHeaderProps) {
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold capitalize">
-            {isNew ? 'New Integration Service' : title.replace(/_/g, ' ')}
-          </h1>
+          {isNew ? (
+            <h1 className="text-2xl font-bold">
+              New Integration Service
+            </h1>
+          ) : (
+            <InlineEditName
+              value={title}
+              onChange={onTitleChange}
+              placeholder="Integration Service Name"
+            />
+          )}
           {!isNew && isBuiltin && <Badge variant="outline">Built-in</Badge>}
           <Badge variant="outline">
             <Link2 className="w-3 h-3 mr-1" />

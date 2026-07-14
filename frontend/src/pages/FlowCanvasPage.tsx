@@ -54,7 +54,7 @@ export function FlowCanvasPage() {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <div className="text-center">
-          <div className="text-muted-foreground mb-2">Loading flow...</div>
+          <div className="font-body text-steel-soft mb-2">Loading flow...</div>
         </div>
       </div>
     );
@@ -80,7 +80,7 @@ export function FlowCanvasPage() {
             type="button"
             size="icon"
             variant="outline"
-            className="fixed bottom-20 right-4 z-20 rounded-full shadow-md bg-background"
+            className="fixed bottom-20 right-4 z-20 rounded-full bg-panel"
             onClick={() => setIsSidebarOpen(true)}
           >
             <Settings2 className="w-4 h-4" />

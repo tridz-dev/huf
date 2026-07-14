@@ -25,6 +25,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useUser } from "@/contexts/UserContext"
+import { getInitials } from "@/utils/getInitials"
 import UserAvatar from "./UserAvatar"
 
 export function NavUser() {
@@ -48,14 +49,30 @@ export function NavUser() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <UserAvatar />
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">{displayName}</span>
-                {displayEmail && (
-                  <span className="truncate text-xs">{displayEmail}</span>
+              <div className="flex h-[30px] w-[30px] flex-none items-center justify-center border border-ink bg-paper-deep text-ink overflow-hidden">
+                {user.user_image ? (
+                  <img
+                    src={user.user_image}
+                    alt={displayName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="font-mono text-[11px]">
+                    {getInitials(displayName)}
+                  </span>
                 )}
               </div>
-              <ChevronsUpDown className="ml-auto size-4" />
+              <div className="grid flex-1 text-left leading-tight">
+                <span className="truncate font-body text-[13px] font-semibold text-ink">
+                  {displayName}
+                </span>
+                {displayEmail && (
+                  <span className="truncate font-mono text-[10.5px] text-steel">
+                    {displayEmail}
+                  </span>
+                )}
+              </div>
+              <ChevronsUpDown className="ml-auto size-4 text-steel-soft" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

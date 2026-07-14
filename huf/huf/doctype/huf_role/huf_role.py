@@ -14,6 +14,7 @@ class HufRole(Document):
 
 	def validate(self):
 		self._validate_capabilities()
+		self._populate_permission_labels()
 
 	def _validate_capabilities(self):
 		"""Reject any capability not in the CAPABILITIES catalogue."""
@@ -24,6 +25,15 @@ class HufRole(Document):
 						row.capability, ", ".join(sorted(CAPABILITIES.keys()))
 					)
 				)
+
+	def _populate_permission_labels(self):
+		"""Set each permission row's label from the CAPABILITIES catalogue.
+
+		Done here rather than in HufRolePermission.before_save(): child-table
+		controller hooks don't fire on parent document save in Frappe v16.
+		"""
+		for row in self.permissions:
+			row.label = CAPABILITIES.get(row.capability, row.capability)
 
 	# ------------------------------------------------------------------
 	# Guard system roles

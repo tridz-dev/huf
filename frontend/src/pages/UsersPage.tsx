@@ -262,13 +262,13 @@ export default function UsersPage() {
       }
     >
       {loading ? (
-        <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
+        <div className="text-sm font-body text-steel-soft py-12 text-center">Loading…</div>
       ) : filteredUsers.length === 0 ? (
-        <div className="text-sm text-muted-foreground py-12 text-center">No users found.</div>
+        <div className="text-sm font-body text-steel-soft py-12 text-center">No users found.</div>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <div className="overflow-x-auto rounded-none border">
           <Table className="w-full min-w-[32rem] table-fixed text-sm">
-            <TableHeader className="bg-muted/50">
+            <TableHeader className="bg-paper-deep/50">
               <TableRow>
                 <TableHead className="text-left px-3 py-2 font-medium sm:px-4 sm:py-3 w-[35%] sm:w-[32%]">
                   User
@@ -286,7 +286,7 @@ export default function UsersPage() {
             </TableHeader>
             <TableBody className="divide-y">
               {filteredUsers.map((u) => (
-                <TableRow key={u.user} className="hover:bg-muted/20">
+                <TableRow key={u.user} className="hover:bg-paper-deep/20">
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3">
                     <div
                       className="font-medium truncate"
@@ -294,14 +294,14 @@ export default function UsersPage() {
                     >
                       {u.full_name || u.email}
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                    <div className="text-xs text-steel-soft truncate">{u.email}</div>
                   </TableCell>
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="ml-auto flex items-center gap-1 hover:opacity-80">
                           <Badge className={roleBadgeClass(u.huf_role)}>{u.huf_role}</Badge>
-                          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <ChevronDown className="h-3 w-3 shrink-0 text-steel-soft" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>

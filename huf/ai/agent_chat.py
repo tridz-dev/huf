@@ -341,7 +341,7 @@ def render_markdown(content: str = "") -> str:
         if not isinstance(content, str):
             content = json.dumps(content, indent=2)
 
-        from frappe.utils.markdown import markdown as md
+        from frappe.utils import markdown as md
         return md(content or "")
     except Exception:
         return frappe.utils.escape_html(content or "")

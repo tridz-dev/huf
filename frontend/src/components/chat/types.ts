@@ -10,6 +10,7 @@ export type MessageType = {
   kind?: string;
   generatedImage?: string;
   generatedAudio?: string;
+  generatedVideo?: string;
   voiceMessage?: string;
   runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed';
   error?: string;

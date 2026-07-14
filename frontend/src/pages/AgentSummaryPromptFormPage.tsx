@@ -31,6 +31,7 @@ import {
   type AgentSummaryPromptUsageAgent,
 } from '@/services/agentSummaryPromptApi';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 const agentSummaryPromptFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -370,7 +371,7 @@ export function AgentSummaryPromptFormPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading Agent Summary Prompt...</div>
+        <div className="font-body text-steel-soft">Loading Agent Summary Prompt...</div>
       </div>
     );
   }
@@ -388,11 +389,19 @@ export function AgentSummaryPromptFormPage() {
                   render={({ field }) => (
                     <FormItem className="space-y-0">
                       <FormControl>
-                        <Input
-                          {...field}
-                          className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
-                          placeholder="Summary Prompt Title"
-                        />
+                        {isNew ? (
+                          <Input
+                            {...field}
+                            className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
+                            placeholder="Summary Prompt Title"
+                          />
+                        ) : (
+                          <InlineEditName
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Summary Prompt Title"
+                          />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -489,7 +498,7 @@ export function AgentSummaryPromptFormPage() {
                     placeholder="Auto-generated from title"
                     disabled={!isNew}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-steel-soft">
                     URL-friendly identifier for this summary prompt template. Auto-generated from title if left blank.
                   </p>
                 </div>
@@ -512,7 +521,7 @@ export function AgentSummaryPromptFormPage() {
                       <SelectItem value="Public">Public</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-steel-soft">
                     Controls who can see and use this summary prompt template.
                   </p>
                 </div>
@@ -534,14 +543,14 @@ export function AgentSummaryPromptFormPage() {
                     onChange={(event) => form.setValue('tags', event.target.value, { shouldDirty: true })}
                     placeholder="Comma-separated tags"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-steel-soft">
                     Comma-separated tags for search and filtering.
                   </p>
                 </div>
-                <div className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
                     <Label className="text-base">Active</Label>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-steel-soft">
                       Whether this summary prompt template is active and available for use.
                     </p>
                   </div>
@@ -558,7 +567,7 @@ export function AgentSummaryPromptFormPage() {
                 <CardTitle>Prompt Body</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground mb-3">
+                <p className="text-xs text-steel-soft mb-3">
                   The summary prompt template content. This is the prompt text used to summarize conversation history.
                 </p>
                 <InstructionsTextarea

@@ -19,6 +19,8 @@ import {
 import type { ComponentProps, ReactNode } from "react";
 import { isValidElement } from "react";
 import { CodeBlock } from "./code-block";
+import { Video } from "./video";
+import { extractVideoFromToolResult } from "@/components/chat/videoDetection";
 import type { ExtendedToolState } from "./types";
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
@@ -135,7 +137,20 @@ export const ToolOutput = ({
 
   let Output = <div>{output as ReactNode}</div>;
 
-  if (typeof output === "object" && !isValidElement(output)) {
+  const detectedVideo = output ? extractVideoFromToolResult(output) : null;
+
+  if (detectedVideo) {
+    Output = (
+      <Video
+        src={detectedVideo.src}
+        mediaType={detectedVideo.mediaType}
+        title={detectedVideo.title}
+        poster={detectedVideo.poster}
+        downloadName={detectedVideo.downloadName}
+        className="max-w-md"
+      />
+    );
+  } else if (typeof output === "object" && !isValidElement(output)) {
     Output = (
       <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
     );

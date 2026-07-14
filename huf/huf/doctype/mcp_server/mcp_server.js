@@ -53,19 +53,14 @@ frappe.ui.form.on("MCP Server", {
     },
 
     oauth_connect_button(frm) {
-        if (!frm.doc.oauth_authorization_endpoint || !frm.doc.oauth_token_endpoint || !frm.doc.oauth_client_id) {
-            frappe.msgprint({
-                title: __("Missing Configuration"),
-                message: __("Please fill in Authorization Endpoint, Token Endpoint, and Client ID before connecting."),
-                indicator: "orange"
-            });
-            return;
-        }
+        // URL-first entry point.  The backend decides whether to use manually
+        // configured OAuth endpoints or to run discovery + dynamic client
+        // registration, so no client-side validation is performed here.
         frappe.call({
-            method: "huf.ai.mcp_oauth.start_oauth_flow",
+            method: "huf.ai.mcp_oauth.resolve_and_start_oauth_flow",
             args: { server_name: frm.doc.name },
             freeze: true,
-            freeze_message: __("Preparing OAuth flow…"),
+            freeze_message: __("Discovering OAuth settings…"),
             callback(r) {
                 if (r.message && r.message.auth_url) {
                     const win = window.open(r.message.auth_url, "_blank", "width=600,height=700");

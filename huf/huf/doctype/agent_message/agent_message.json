@@ -43,6 +43,7 @@
   "voice_details_section",
   "voice_message",
   "generated_audio",
+  "generated_video",
   "tts_voice",
   "column_break_asyu",
   "tts_model",
@@ -81,7 +82,7 @@
    "fieldname": "kind",
    "fieldtype": "Select",
    "label": "Kind",
-   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage\nAudio",
+   "options": "\nMessage\nTool Call\nTool Result\nStatus\nError\nImage\nAudio\nVideo",
    "read_only": 1
   },
   {
@@ -154,7 +155,7 @@
    "fieldtype": "Select",
    "hidden": 1,
    "label": "Status",
-   "options": "\nStarted\nQueues\nCompleted\nFailed"
+   "options": "\nStarted\nQueued\nCompleted\nFailed"
   },
   {
    "fieldname": "tool_call",
@@ -223,6 +224,13 @@
    "fieldname": "generated_audio",
    "fieldtype": "Attach",
    "label": "Generated Audio",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.kind == \"Video\";",
+   "fieldname": "generated_video",
+   "fieldtype": "Attach",
+   "label": "Generated Video",
    "read_only": 1
   },
   {

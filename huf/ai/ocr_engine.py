@@ -128,11 +128,22 @@ def _mime_type_and_extension(file_path: str, file_type: str | None = None) -> tu
     """Return (mime_type, extension_lower) for a file path."""
     ext = os.path.splitext(file_path)[1].lower().lstrip(".")
 
-    if file_type:
-        mime = file_type.strip()
-    else:
-        mime, _ = mimetypes.guess_type(file_path)
-        mime = mime or "application/octet-stream"
+    mime, _ = mimetypes.guess_type(file_path)
+    
+    # If mimetypes couldn't guess from the path, try to use file_type from DB
+    if not mime and file_type and file_type.strip() and file_type.strip() != "application/octet-stream":
+        ft = file_type.strip()
+        if "/" in ft:
+            mime = ft
+        else:
+            # Often Frappe stores 'PNG', 'JPG' etc in file_type
+            mime = mimetypes.types_map.get("." + ft.lower())
+
+    mime = mime or "application/octet-stream"
+        
+    # Canonicalize invalid mime types that may be sent
+    if mime == "image/jpg":
+        mime = "image/jpeg"
 
     if not ext:
         # Try to recover extension from mime type
@@ -272,6 +283,7 @@ async def _process_with_ocr_endpoint(
     file_path: str,
     model: str,
     api_key: str,
+    mime_type: str,
     pages: str | None = None,
     include_images: bool = False,
 ) -> ExtractionResult:
@@ -294,9 +306,6 @@ async def _process_with_ocr_endpoint(
     try:
         with open(file_path, "rb") as f:
             base64_content = base64.b64encode(f.read()).decode("utf-8")
-
-        ext = os.path.splitext(file_path)[1].lower().lstrip(".")
-        mime_type = "application/pdf" if ext == "pdf" else f"image/{ext}"
 
         ocr_params = {
             "model": model,
@@ -367,6 +376,7 @@ async def _process_with_vision_model(
     file_path: str,
     model: str,
     api_key: str,
+    mime_type: str,
     file_name: str | None = None,
 ) -> ExtractionResult:
     """Process image/PDF using a vision-capable LLM via LiteLLM."""
@@ -387,14 +397,12 @@ async def _process_with_vision_model(
 
     try:
         ext = os.path.splitext(file_path)[1].lower().lstrip(".")
-        mime_type = "application/pdf" if ext == "pdf" else f"image/{ext}"
 
         prompt_text = (
-            f"Extract all text from the attached file '{file_name or os.path.basename(file_path)}'. "
-            "You MUST extract EVERYTHING. Do not summarize or omit any information. "
-            "Include all headers, titles, form fields, stamps, logos with text, table contents, footers, and small print. "
-            "Preserve the formatting, structure, and layout as closely as possible. Return the extracted text in markdown format. "
-            "If the file contains no text, state that explicitly."
+            f"Analyze the attached file '{file_name or os.path.basename(file_path)}'. "
+            "1. Extract EVERYTHING if it contains text (headers, form fields, tables, etc.). Preserve formatting in markdown. "
+            "2. If it is an image, photograph, or diagram, provide a detailed description and explanation of its contents. "
+            "Do not omit any information."
         )
 
         content_list = [{"type": "text", "text": prompt_text}]
@@ -603,13 +611,13 @@ async def extract_document(
     elif strategy == "ocr":
         normalized_model = _normalize_model_name(ocr_model, agent_doc.provider)
         result = await _process_with_ocr_endpoint(
-            file_path, normalized_model, api_key, pages, include_images
+            file_path, normalized_model, api_key, mime_type, pages, include_images
         )
 
     # Strategy: vision model
     elif strategy == "vision":
         normalized_model = _normalize_model_name(ocr_model, agent_doc.provider)
-        result = await _process_with_vision_model(file_path, normalized_model, api_key, file_name)
+        result = await _process_with_vision_model(file_path, normalized_model, api_key, mime_type, file_name)
 
     else:
         return ExtractionResult(
@@ -638,7 +646,7 @@ async def extract_document(
                 "OCR Fallback",
             )
             vision_model = _normalize_model_name(_default_model(provider_name, "vision"), agent_doc.provider)
-            result = await _process_with_vision_model(file_path, vision_model, api_key, file_name)
+            result = await _process_with_vision_model(file_path, vision_model, api_key, mime_type, file_name)
 
     # Enrich result with file metadata
     if result:

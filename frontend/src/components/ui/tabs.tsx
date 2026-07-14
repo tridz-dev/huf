@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 const Tabs = TabsPrimitive.Root;
 
-type TabsVariant = 'underline' | 'pill';
+type TabsVariant = 'underline' | 'panel' | 'pill';
 
 const TabsVariantContext = React.createContext<TabsVariant>('underline');
 const TabsSizeContext = React.createContext<'default' | 'compact'>('default');
@@ -16,6 +16,8 @@ const tabsListVariants = cva('gap-0', {
     variant: {
       underline:
         'inline-flex items-center justify-start border-b border-ink bg-transparent p-0',
+      panel:
+        'flex w-full items-center justify-start gap-7 border-b border-ink bg-transparent p-0',
       pill: 'inline-flex items-center justify-center rounded-lg bg-muted p-1',
     },
     layout: {
@@ -43,6 +45,8 @@ const tabsTriggerVariants = cva(
       variant: {
         underline:
           'border-b-2 border-transparent px-4 pb-2 font-mono text-[11.5px] uppercase tracking-wide text-steel hover:text-ink data-[state=active]:-mb-px data-[state=active]:border-signal data-[state=active]:text-ink',
+        panel:
+          'border-b-2 border-transparent py-3 font-body text-[13.5px] font-medium text-steel hover:text-ink data-[state=active]:-mb-px data-[state=active]:border-signal data-[state=active]:font-semibold data-[state=active]:text-ink',
         pill: 'rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm',
       },
       size: {

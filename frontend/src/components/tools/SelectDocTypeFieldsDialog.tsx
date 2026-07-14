@@ -110,14 +110,14 @@ export function SelectDocTypeFieldsDialog({
 
         <DialogScrollBody className="pb-6 space-y-4">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-steel">
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading fields...
             </div>
           ) : loadError ? (
             <p className="text-sm text-destructive py-4">{loadError}</p>
           ) : fieldOptions.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">
+            <p className="text-sm text-steel py-4">
               All available fields are already added.
             </p>
           ) : (

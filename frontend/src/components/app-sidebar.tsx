@@ -6,6 +6,8 @@ import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { AppSidebarHeader } from "@/components/app-sidebar-header"
 import { usePermissions } from "@/contexts/PermissionsContext"
+import { fetchDocCountQuiet } from "@/services/utilsApi"
+import { doctype } from "@/data/doctypes"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Sidebar,
@@ -160,6 +162,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { hasCapability, isLoading } = usePermissions()
   const { state: sidebarState, isMobile, setOpen } = useSidebar()
+  const [agentCount, setAgentCount] = React.useState<number | undefined>(undefined)
+
+  React.useEffect(() => {
+    let cancelled = false
+    fetchDocCountQuiet(doctype.Agent).then((count) => {
+      if (!cancelled) {
+        setAgentCount(count)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
 	const filterItemsByCapability = <T extends { capability: string | null }>(items: T[]) => {
 		if (isLoading) {
@@ -173,7 +188,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	// While permissions are loading show only uncapability-gated items so the
 	// sidebar doesn't flash/jump once capabilities resolve.
 	const dashboardItems = filterItemsByCapability(dashboardNavItems)
-	const buildItems = filterItemsByCapability(buildNavItems)
+	const buildItems = filterItemsByCapability(buildNavItems).map((item) =>
+		item.title === "Agents" ? { ...item, count: agentCount } : item
+	)
 	const operateItems = filterItemsByCapability(operateNavItems)
 	const peopleItems = filterItemsByCapability(peopleNavItems)
   const settingsItems = isLoading
@@ -251,7 +268,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="p-0 mb-1 mt-2 border-t border-sidebar-border">
         <NavUser />
       </SidebarFooter>
       <SidebarRail />

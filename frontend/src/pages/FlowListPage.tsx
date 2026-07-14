@@ -125,7 +125,8 @@ function FlowListPage() {
 
   return (
     <PageLayout
-      subtitle="Manage your automated workflows and integrations"
+      title="Flows"
+      subtitle="Design and orchestrate agent workflows."
       filters={
         <FilterBar
           searchPlaceholder="Search flows..."

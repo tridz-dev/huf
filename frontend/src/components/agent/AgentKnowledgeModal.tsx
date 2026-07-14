@@ -133,7 +133,7 @@ export function AgentKnowledgeModal({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-steel-soft">
               Mandatory: context injected into every prompt. Optional: agent queries via search tool.
             </p>
           </div>

@@ -22,7 +22,7 @@ export function HomeHeaderActions() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm">
+        <Button variant="display" size="sm">
           <Plus className="w-4 h-4 mr-2" />
           New
         </Button>

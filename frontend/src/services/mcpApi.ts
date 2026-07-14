@@ -31,14 +31,23 @@ export interface MCPServerDoc {
     oauth_status?: 'Not Connected' | 'Connected' | 'Token Expired';
     oauth_scope?: string;
     oauth_extra_authorize_params?: string;
+    oauth_redirect_uri?: string;
     oauth_authorization_endpoint?: string;
     oauth_token_endpoint?: string;
+    oauth_registration_endpoint?: string;
     oauth_client_id?: string;
     oauth_client_secret?: string;
     oauth_token_response_path?: string;
     oauth_access_token?: string;
     oauth_refresh_token?: string;
     oauth_token_expires_at?: string;
+    oauth_discovery_status?: 'Not Started' | 'In Progress' | 'Ready' | 'Failed';
+    oauth_resource_metadata_url?: string;
+    oauth_authorization_server?: string;
+    oauth_client_registration_method?: string;
+    oauth_metadata_json?: string;
+    oauth_last_discovered_at?: string;
+    oauth_discovery_error?: string;
     custom_headers?: Array<{
         header_name: string;
         header_value: string;
@@ -207,7 +216,17 @@ export async function createMCPServer(data: Partial<MCPServerDoc>): Promise<MCPS
  */
 export async function updateMCPServer(name: string, data: Partial<MCPServerDoc>): Promise<MCPServerDoc> {
     try {
-        const response = await db.updateDoc(doctype['MCP Server'], name, data);
+        let targetName = name;
+        if (
+            data.server_name &&
+            typeof data.server_name === 'string' &&
+            data.server_name.trim() &&
+            data.server_name !== name
+        ) {
+            await db.renameDoc(doctype['MCP Server'], name, data.server_name);
+            targetName = data.server_name;
+        }
+        const response = await db.updateDoc(doctype['MCP Server'], targetName, data);
         return response as MCPServerDoc;
     } catch (error) {
         handleFrappeError(error);
@@ -300,6 +319,22 @@ export async function startMCPOAuthFlow(serverName: string): Promise<{ auth_url?
             server_name: serverName,
         });
         return (response.message || {}) as { auth_url?: string; error?: string };
+    } catch (error) {
+        handleFrappeError(error);
+        throw error;
+    }
+}
+
+/**
+ * Discover OAuth settings from the MCP server URL and start the OAuth flow.
+ * This is the URL-first entry point.
+ */
+export async function resolveAndStartMCPOAuthFlow(serverName: string): Promise<{ auth_url?: string; error?: string; discovery_status?: string }> {
+    try {
+        const response = await call.post('huf.ai.mcp_oauth.resolve_and_start_oauth_flow', {
+            server_name: serverName,
+        });
+        return (response.message || {}) as { auth_url?: string; error?: string; discovery_status?: string };
     } catch (error) {
         handleFrappeError(error);
         throw error;

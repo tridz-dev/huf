@@ -30,6 +30,7 @@ import {
 	LayoutIcon,
 	BarChartIcon,
 	ExternalLinkIcon,
+	VideoIcon,
 } from 'lucide-react';
 import type { ParsedArtifact, ArtifactType } from '@/types/artifact.types';
 import type { ParsedMessageContent } from '@/utils/messageContentParser';
@@ -37,6 +38,7 @@ import { writePreviewCache } from '@/utils/previewCache';
 import { cn } from '@/lib/utils';
 import { Mermaid } from '@/components/ui/mermaid';
 import { JSXPreview, JSXPreviewContent, JSXPreviewExport } from '@/components/ui/jsx-preview';
+import { Video } from '@/components/ai-elements/video';
 
 interface ArtifactRendererProps {
 	artifact: ParsedArtifact;
@@ -59,6 +61,7 @@ const ARTIFACT_ICONS: Record<ArtifactType, typeof CodeIcon> = {
 	markdown: FileTextIcon,
 	jsx: LayoutIcon,
 	chart: BarChartIcon,
+	video: VideoIcon,
 };
 
 // Map common language aliases to Shiki language names
@@ -232,6 +235,11 @@ export function ArtifactRenderer({
 						</details>
 					</div>
 				);
+
+			case 'video': {
+				const src = artifact.content.trim();
+				return <Video src={src} title={artifact.title} className="max-w-full" />;
+			}
 
 			case 'markdown':
 			case 'document':
