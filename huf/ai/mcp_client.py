@@ -346,7 +346,7 @@ def _build_mcp_headers(mcp_server) -> dict:
             try:
                 token = get_valid_access_token(mcp_server.name)
                 headers["Authorization"] = f"Bearer {token}"
-            except ValueError as exc:
+            except Exception as exc:
                 frappe.log_error(str(exc), "MCP OAuth Header Error")
                 # Proceed without auth header; server will return 401
         else:
@@ -485,6 +485,8 @@ def test_mcp_connection(server_name: str) -> dict:
     Returns:
         dict: Result with success status
     """
+    import requests
+
     try:
         mcp_server = frappe.get_doc("MCP Server", server_name)
         if not mcp_server.server_url:
@@ -495,9 +497,7 @@ def test_mcp_connection(server_name: str) -> dict:
                 return {"success": False, "error": "Auth header name and value are required for this auth type"}
 
         headers = _build_mcp_headers(mcp_server)
-        
-        import requests
-        
+
         # Try a simple ping/list request
         payload = {
             "jsonrpc": "2.0",
