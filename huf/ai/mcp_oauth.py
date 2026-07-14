@@ -324,10 +324,14 @@ def _get_redirect_uri(server=None) -> str:
     if server and getattr(server, "oauth_redirect_uri", None):
         return server.oauth_redirect_uri
 
-    # Use Frappe's resolved site URL verbatim. In production this should already be
-    # the public URL; in local dev it will include the bench port (e.g. :8000).
     site_url = frappe.utils.get_url()
-    return f"{site_url.rstrip('/')}/mcp-oauth-callback"
+    
+    # Strip internal frappe ports (like :8703) to match public callback URLs
+    parsed = urllib.parse.urlparse(site_url)
+    if parsed.port:
+        site_url = f"{parsed.scheme}://{parsed.hostname}"
+        
+    return f"{site_url}/mcp-oauth-callback"
 
 
 def _exchange_code_for_tokens(server, config: dict, code: str, code_verifier: str, redirect_uri: str) -> dict:
