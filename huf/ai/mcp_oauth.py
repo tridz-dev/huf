@@ -94,13 +94,13 @@ def start_oauth_flow(server_name: str) -> dict:
                 if isinstance(extra_params, dict):
                     params.update(extra_params)
             except Exception as e:
-                frappe.log_error(f"Invalid JSON in oauth_extra_authorize_params for {server_name}: {e}", "MCP OAuth")
+                frappe.log_error("MCP OAuth", message=f"Invalid JSON in oauth_extra_authorize_params for {server_name}: {e}")
 
         auth_url = config["authorization_endpoint"] + "?" + urllib.parse.urlencode(params)
         return {"auth_url": auth_url}
 
     except Exception as exc:
-        frappe.log_error(f"MCP OAuth start_flow error for {server_name}: {exc}", "MCP OAuth")
+        frappe.log_error("MCP OAuth", message=f"MCP OAuth start_flow error for {server_name}: {exc}")
         return {"error": str(exc)}
 
 
@@ -110,13 +110,24 @@ def resolve_and_start_oauth_flow(server_name: str) -> dict:
     Discover OAuth settings from the MCP server URL, persist them, then start
     the OAuth authorization flow.
 
-    This is the URL-first entry point: the frontend calls it when the user
-    clicks Connect on a server that only has a URL configured.
+    This is the single entry point for the Connect button in both the frontend
+    and the backend form.  If the MCP Server document already has a complete
+    manual OAuth configuration (client_id + authorization_endpoint +
+    token_endpoint), discovery is skipped and the flow starts immediately.
+    Otherwise, discovery is attempted and, if available, Dynamic Client
+    Registration is performed before starting OAuth.
     """
     if not frappe.has_permission("MCP Server", "write", server_name):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
     try:
+        server = frappe.get_doc("MCP Server", server_name)
+
+        # If the admin has already configured OAuth endpoints and a client_id,
+        # do not run URL-first discovery; use the manual configuration.
+        if _has_manual_oauth_config(server):
+            return start_oauth_flow(server_name)
+
         discovery = discover_mcp_server(server_name)
         if discovery.get("error"):
             return {"error": discovery["error"]}
@@ -126,7 +137,7 @@ def resolve_and_start_oauth_flow(server_name: str) -> dict:
         return start_oauth_flow(server_name)
 
     except Exception as exc:
-        frappe.log_error(f"MCP OAuth resolve_and_start error for {server_name}: {exc}", "MCP OAuth")
+        frappe.log_error("MCP OAuth", message=f"MCP OAuth resolve_and_start error for {server_name}: {exc}")
         return {"error": str(exc)}
 
 
@@ -170,7 +181,7 @@ def handle_oauth_callback(server_name: str, code: str, state: str) -> dict:
         return {"success": True}
 
     except Exception as exc:
-        frappe.log_error(f"MCP OAuth callback error for {server_name}: {exc}", "MCP OAuth")
+        frappe.log_error("MCP OAuth", message=f"MCP OAuth callback error for {server_name}: {exc}")
         return {"error": str(exc)}
 
 
@@ -222,7 +233,7 @@ def get_valid_access_token(server_name: str) -> str:
         try:
             access_token = refresh_oauth_token(server_name)
         except Exception as exc:
-            frappe.log_error(f"MCP OAuth proactive refresh failed for {server_name}: {exc}", "MCP OAuth")
+            frappe.log_error("MCP OAuth", message=f"MCP OAuth proactive refresh failed for {server_name}: {exc}")
             # Return existing token — it may still work for a few minutes
             # (executor will get a 401 and retry once)
 
@@ -301,7 +312,7 @@ def auto_refresh_oauth_tokens():
             try:
                 refresh_oauth_token(s.name)
             except Exception as exc:
-                frappe.log_error(f"Auto refresh failed for {s.name}: {exc}", "MCP OAuth Auto Refresh")
+                frappe.log_error("MCP OAuth Auto Refresh", message=f"Auto refresh failed for {s.name}: {exc}")
 
 
 # --------------------------------------------------------------------------- #
@@ -359,7 +370,7 @@ def _exchange_code_for_tokens(server, config: dict, code: str, code_verifier: st
     )
 
     if not response.ok:
-        frappe.log_error(f"OAuth Token Error Response: {response.text}", "MCP OAuth")
+        frappe.log_error("MCP OAuth", message=f"OAuth Token Error Response: {response.text}")
         raise ValueError(f"Token error HTTP {response.status_code}: {response.text}")
 
     data = response.json()
@@ -468,3 +479,12 @@ def _require_oauth_config(server, config: dict = None):
         missing.append("Client ID")
     if missing:
         raise ValueError(f"Missing OAuth configuration: {', '.join(missing)}")
+
+
+def _has_manual_oauth_config(server) -> bool:
+    """Return True when the server doc has a complete manual OAuth configuration."""
+    return bool(
+        server.oauth_client_id
+        and server.oauth_authorization_endpoint
+        and server.oauth_token_endpoint
+    )
