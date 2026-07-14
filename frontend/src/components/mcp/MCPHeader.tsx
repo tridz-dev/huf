@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { UseFormReturn } from 'react-hook-form';
 import { cn } from '@/lib/utils';
 import type { MCPFormValues } from './types';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 interface MCPHeaderProps {
   form: UseFormReturn<MCPFormValues>;
@@ -51,9 +52,11 @@ export function MCPHeader({
               placeholder="MCP Server Name"
             />
           ) : (
-            <h1 className="text-2xl font-bold">
-              {form.watch('server_name') || 'MCP Server'}
-            </h1>
+            <InlineEditName
+              value={form.watch('server_name') || ''}
+              onChange={(value) => form.setValue('server_name', value, { shouldDirty: true })}
+              placeholder="MCP Server Name"
+            />
           )}
           <Badge variant={watchEnabled ? 'success' : 'secondary'}>
             {watchEnabled ? 'Enabled' : 'Disabled'}

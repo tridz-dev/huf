@@ -15,6 +15,7 @@ import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
 import { formatTimeAgo } from '@/utils/time';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 interface AgentHeaderProps {
   form: UseFormReturn<AgentFormValues>;
@@ -74,12 +75,20 @@ export function AgentHeader({
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
-          <Input
-            value={form.watch('agent_name')}
-            onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
-            className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-            placeholder="Agent Name"
-          />
+          {isNew ? (
+            <Input
+              value={form.watch('agent_name')}
+              onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
+              className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
+              placeholder="Agent Name"
+            />
+          ) : (
+            <InlineEditName
+              value={form.watch('agent_name')}
+              onChange={(value) => form.setValue('agent_name', value, { shouldDirty: true })}
+              placeholder="Agent Name"
+            />
+          )}
           <Badge variant={watchDisabled ? 'secondary' : 'default'}>
             {watchDisabled ? 'Disabled' : 'Active'}
           </Badge>

@@ -34,6 +34,7 @@ import { CategoryTab } from '@/components/category/CategoryTab';
 import { CategoryModal } from '@/components/category/CategoryModal';
 import { getCategories } from '@/services/categoryApi';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 const HUF_PATH_PREFIX = '/huf/';
 
@@ -465,11 +466,19 @@ export function AgentPromptFormPage() {
                   render={({ field }) => (
                     <FormItem className="space-y-0">
                       <FormControl>
-                        <Input
-                          {...field}
-                          className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
-                          placeholder="Prompt Title"
-                        />
+                        {isNew ? (
+                          <Input
+                            {...field}
+                            className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
+                            placeholder="Prompt Title"
+                          />
+                        ) : (
+                          <InlineEditName
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Prompt Title"
+                          />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>

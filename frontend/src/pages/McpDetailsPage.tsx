@@ -280,7 +280,7 @@ export function McpDetailsPage() {
         navigate(`/mcp/${newMCP.name}`);
       } else if (mcpId) {
         // Update existing MCP server
-        await updateMCPServer(mcpId, mcpData);
+        const updated = await updateMCPServer(mcpId, mcpData);
         toast.success('MCP server updated successfully!');
         // Reset form state with the updated values to mark form as clean
         form.reset({
@@ -307,16 +307,15 @@ export function McpDetailsPage() {
           enable_auto_sync: values.enable_auto_sync,
           custom_headers: values.custom_headers,
         });
-        
+
         // Reload tools after update
-        if (mcpId) {
-          getMCPServer(mcpId).then((updatedData: MCPServerDoc) => {
-            if (updatedData.tools && Array.isArray(updatedData.tools)) {
-              setTools(updatedData.tools as MCPTool[]);
-            }
-          }).catch((error) => {
-            console.error('Error reloading tools:', error);
-          });
+        if (updated.tools && Array.isArray(updated.tools)) {
+          setTools(updated.tools as MCPTool[]);
+        }
+
+        if (updated.name && updated.name !== mcpId) {
+          navigate(`/mcp/${encodeURIComponent(updated.name)}`, { replace: true });
+          return;
         }
       }
     } catch (error) {

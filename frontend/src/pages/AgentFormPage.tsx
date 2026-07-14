@@ -1169,67 +1169,74 @@ export function AgentFormPage() {
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
         // Update existing agent
-        await updateAgent(id, agentData as unknown as Partial<AgentDoc>);
+        const updated = await updateAgent(id, agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent updated successfully!');
         // Sync tool-details setting to other tabs via localStorage
-        writeToolDetailsSetting(id, !!values.show_tool_execution_details);
-// Reset form state with the updated values to mark form as clean
-form.reset({
-  agent_name: values.agent_name,
-  provider: values.provider,
-  model: values.model,
-  temperature: values.temperature,
-  top_p: values.top_p,
-  disabled: values.disabled,
-  allow_chat: values.allow_chat,
-  persist_conversation: values.persist_conversation,
-  persist_user_history: values.persist_user_history,
-  enable_multi_run: values.enable_multi_run,
-  description: values.description,
-  instructions: values.instructions,
-  default_plan: values.default_plan || [],
-  prompt_mode: values.prompt_mode,
-  agent_prompt: values.agent_prompt,
-  prompt_version_locked: values.prompt_version_locked,
-  template_version_at_attach: values.template_version_at_attach,
-  allow_guest: values.allow_guest,
-  allowed_users: values.allowed_users || [],
-  allowed_roles: values.allowed_roles || [],
-  enable_prompt_caching: values.enable_prompt_caching,
-  cache_control_type: values.cache_control_type,
-  cache_system_message: values.cache_system_message,
-  cache_conversation_history: values.cache_conversation_history,
-  context_strategy: values.context_strategy,
-  summary_model: values.summary_model,
-  summary_ratio: values.summary_ratio,
-  summary_prompt_mode: values.summary_prompt_mode,
-  summary_prompt_template: values.summary_prompt_template,
-  summary_prompt_version_locked: values.summary_prompt_version_locked,
-  summary_template_version_at_attach: values.summary_template_version_at_attach,
-  summary_prompt: values.summary_prompt,
-  history_limit: values.history_limit,
-  max_knowledge_tokens: values.max_knowledge_tokens,
-  max_turns: values.max_turns,
-  max_context_chars: values.max_context_chars,
-  enable_conversation_data: values.enable_conversation_data,
-  inject_conversation_data: values.inject_conversation_data,
-  conversation_data_api_permission: values.conversation_data_api_permission,
-  autonaming_of_conversation_title: values.autonaming_of_conversation_title,
-  agent_color: values.agent_color,
-  show_tool_execution_details: values.show_tool_execution_details,
+        writeToolDetailsSetting(updated.name || id, !!values.show_tool_execution_details);
+        // Reset form state with the updated values to mark form as clean
+        form.reset({
+          agent_name: values.agent_name,
+          provider: values.provider,
+          model: values.model,
+          temperature: values.temperature,
+          top_p: values.top_p,
+          disabled: values.disabled,
+          allow_chat: values.allow_chat,
+          persist_conversation: values.persist_conversation,
+          persist_user_history: values.persist_user_history,
+          enable_multi_run: values.enable_multi_run,
+          description: values.description,
+          instructions: values.instructions,
+          default_plan: values.default_plan || [],
+          prompt_mode: values.prompt_mode,
+          agent_prompt: values.agent_prompt,
+          prompt_version_locked: values.prompt_version_locked,
+          template_version_at_attach: values.template_version_at_attach,
+          allow_guest: values.allow_guest,
+          allowed_users: values.allowed_users || [],
+          allowed_roles: values.allowed_roles || [],
+          enable_prompt_caching: values.enable_prompt_caching,
+          cache_control_type: values.cache_control_type,
+          cache_system_message: values.cache_system_message,
+          cache_conversation_history: values.cache_conversation_history,
+          context_strategy: values.context_strategy,
+          summary_model: values.summary_model,
+          summary_ratio: values.summary_ratio,
+          summary_prompt_mode: values.summary_prompt_mode,
+          summary_prompt_template: values.summary_prompt_template,
+          summary_prompt_version_locked: values.summary_prompt_version_locked,
+          summary_template_version_at_attach: values.summary_template_version_at_attach,
+          summary_prompt: values.summary_prompt,
+          history_limit: values.history_limit,
+          max_knowledge_tokens: values.max_knowledge_tokens,
+          max_turns: values.max_turns,
+          max_context_chars: values.max_context_chars,
+          enable_conversation_data: values.enable_conversation_data,
+          inject_conversation_data: values.inject_conversation_data,
+          conversation_data_api_permission: values.conversation_data_api_permission,
+          autonaming_of_conversation_title: values.autonaming_of_conversation_title,
+          agent_color: values.agent_color,
+          show_tool_execution_details: values.show_tool_execution_details,
 
-  image_generation_model: values.image_generation_model,
-  tts_model: values.tts_model,
-  tts_voice: values.tts_voice,
-  stt_model: values.stt_model,
-  allow_file_upload: values.allow_file_upload,
-  enable_ocr: values.enable_ocr,
-  max_upload_size_mb: values.max_upload_size_mb,
-});
-// Reset tools, disabled state, and persisted allow_chat after successful update
-setInitialTools([...selectedTools]);
-setInitialDisabled(values.disabled);
-setAllowChat(values.allow_chat);
+          image_generation_model: values.image_generation_model,
+          tts_model: values.tts_model,
+          tts_voice: values.tts_voice,
+          stt_model: values.stt_model,
+          allow_file_upload: values.allow_file_upload,
+          enable_ocr: values.enable_ocr,
+          max_upload_size_mb: values.max_upload_size_mb,
+        });
+        // Reset tools, disabled state, and persisted allow_chat after successful update
+        setInitialTools([...selectedTools]);
+        setInitialDisabled(values.disabled);
+        setAllowChat(values.allow_chat);
+
+        if (updated.name && updated.name !== id) {
+          skipBlockRef.current = true;
+          navigate(`/agents/${encodeURIComponent(updated.name)}`, { replace: true });
+          return;
+        }
+
         if (id) {
           getAgent(id).then((updatedData: AgentDoc) => {
             form.reset(mapAgentDocToFormValues(updatedData));

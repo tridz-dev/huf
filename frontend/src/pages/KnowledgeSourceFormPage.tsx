@@ -57,6 +57,7 @@ function KnowledgeSourceFormPage() {
   const [searchParams] = useSearchParams();
   const fromAgent = searchParams.get('agent');
   const isNew = id === 'new';
+  const skipBlockRef = useRef(false);
 
   const tabConfig = {
     general: {
@@ -157,6 +158,10 @@ function KnowledgeSourceFormPage() {
 
   const shouldBlock = useCallback(
     ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+      if (skipBlockRef.current) {
+        skipBlockRef.current = false;
+        return false;
+      }
       if (allowNavigationRef.current) return false;
       if (!hasUnsavedChanges) return false;
       return (
@@ -249,6 +254,12 @@ function KnowledgeSourceFormPage() {
         const formValues = mapDocToFormValues(updated);
         form.reset(formValues);
         setInitialDisabled(formValues.disabled);
+
+        if (updated.name && updated.name !== id) {
+          skipBlockRef.current = true;
+          navigate(`/knowledge/${encodeURIComponent(updated.name)}`, { replace: true });
+          return;
+        }
       }
     } catch (error) {
       console.error('Error saving knowledge source:', error);
