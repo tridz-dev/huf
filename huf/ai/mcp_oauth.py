@@ -120,7 +120,7 @@ def resolve_and_start_oauth_flow(server_name: str) -> dict:
         discovery = discover_mcp_server(server_name)
         if discovery.get("error"):
             return {"error": discovery["error"]}
-        if discovery.get("discovery_status") != "ready":
+        if discovery.get("discovery_status") != "Ready":
             return {"error": discovery.get("discovery_error") or "OAuth discovery failed."}
 
         return start_oauth_flow(server_name)
