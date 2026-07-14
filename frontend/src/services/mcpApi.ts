@@ -34,12 +34,20 @@ export interface MCPServerDoc {
     oauth_redirect_uri?: string;
     oauth_authorization_endpoint?: string;
     oauth_token_endpoint?: string;
+    oauth_registration_endpoint?: string;
     oauth_client_id?: string;
     oauth_client_secret?: string;
     oauth_token_response_path?: string;
     oauth_access_token?: string;
     oauth_refresh_token?: string;
     oauth_token_expires_at?: string;
+    oauth_discovery_status?: 'Not Started' | 'In Progress' | 'Ready' | 'Failed';
+    oauth_resource_metadata_url?: string;
+    oauth_authorization_server?: string;
+    oauth_client_registration_method?: string;
+    oauth_metadata_json?: string;
+    oauth_last_discovered_at?: string;
+    oauth_discovery_error?: string;
     custom_headers?: Array<{
         header_name: string;
         header_value: string;
@@ -311,6 +319,22 @@ export async function startMCPOAuthFlow(serverName: string): Promise<{ auth_url?
             server_name: serverName,
         });
         return (response.message || {}) as { auth_url?: string; error?: string };
+    } catch (error) {
+        handleFrappeError(error);
+        throw error;
+    }
+}
+
+/**
+ * Discover OAuth settings from the MCP server URL and start the OAuth flow.
+ * This is the URL-first entry point.
+ */
+export async function resolveAndStartMCPOAuthFlow(serverName: string): Promise<{ auth_url?: string; error?: string; discovery_status?: string }> {
+    try {
+        const response = await call.post('huf.ai.mcp_oauth.resolve_and_start_oauth_flow', {
+            server_name: serverName,
+        });
+        return (response.message || {}) as { auth_url?: string; error?: string; discovery_status?: string };
     } catch (error) {
         handleFrappeError(error);
         throw error;
