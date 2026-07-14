@@ -49,36 +49,50 @@ export function InlineEditName({
     setIsEditing(true);
   };
 
+  const isButtonHidden = isEditing || disabled;
+
+  const editButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      aria-label="Edit name"
+      onClick={startEditing}
+      disabled={isButtonHidden}
+      tabIndex={isButtonHidden ? -1 : undefined}
+      className={cn(isButtonHidden && 'invisible')}
+    >
+      <Pencil className="h-4 w-4" />
+    </Button>
+  );
+
+  const wrapperClassName = cn(
+    'flex items-center gap-2 w-full max-w-md min-w-0',
+    className
+  );
+
   if (isEditing) {
     return (
-      <Input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onBlur={commit}
-        onKeyDown={handleKeyDown}
-        autoFocus
-        className={cn(
-          'text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md',
-          className
-        )}
-      />
+      <div className={wrapperClassName}>
+        <Input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={commit}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className="text-2xl font-bold h-auto border-0 px-0 py-0 focus-visible:ring-0 flex-1 min-w-0"
+        />
+        {editButton}
+      </div>
     );
   }
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
-      <h1 className="text-2xl font-bold">{value || placeholder}</h1>
-      {!disabled && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="Edit name"
-          onClick={startEditing}
-        >
-          <Pencil className="h-4 w-4" />
-        </Button>
-      )}
+    <div className={wrapperClassName}>
+      <h1 className="text-2xl font-bold flex-1 min-w-0 truncate">
+        {value || placeholder}
+      </h1>
+      {editButton}
     </div>
   );
 }
