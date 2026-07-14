@@ -9,6 +9,7 @@ import {
   BreadcrumbSeparator,
 } from '../components/ui/breadcrumb';
 import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
+import { ApprovalsBell } from '../components/ApprovalsBell';
 
 interface UnifiedHeaderProps {
   actions?: ReactNode;
@@ -86,6 +87,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
       </div> */}
 
       <div className="flex items-center gap-2">
+        <ApprovalsBell />
         {actions}
       </div>
     </div>
