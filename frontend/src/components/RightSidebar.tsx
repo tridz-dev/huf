@@ -413,12 +413,12 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               <div>
                 <Label htmlFor="edge-type" className="text-xs">Edge Type</Label>
                 <Select
-                  value={selectedEdge.data?.type || 'always'}
+                  value={selectedEdge.data?.edgeType || 'always'}
                   onValueChange={(value) => {
                     if (!activeFlow) return;
                     updateEdges(
                       activeFlow.edges.map((edge) =>
-                        edge.id === selectedEdge.id ? { ...edge, data: { ...edge.data, type: value } } : edge
+                        edge.id === selectedEdge.id ? { ...edge, data: { ...edge.data, edgeType: value } } : edge
                       )
                     );
                   }}
@@ -435,24 +435,75 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 </Select>
               </div>
 
-              {selectedEdge.data?.type === 'expression' && (
+              {selectedEdge.data?.edgeType === 'expression' && (
                 <div>
                   <Label htmlFor="edge-expr" className="text-xs">Condition Expression</Label>
                   <Input
                     id="edge-expr"
-                    value={selectedEdge.data?.expression || ''}
+                    value={selectedEdge.data?.condition || ''}
                     onChange={(e) => {
                       if (!activeFlow) return;
                       updateEdges(
                         activeFlow.edges.map((edge) =>
-                          edge.id === selectedEdge.id ? { ...edge, data: { ...edge.data, expression: e.target.value } } : edge
+                          edge.id === selectedEdge.id ? { ...edge, data: { ...edge.data, condition: e.target.value } } : edge
                         )
                       );
                     }}
-                    placeholder="e.g., {{context.status}} == 'approved'"
+                    placeholder='e.g., context["status"] == "approved"'
                   />
                 </div>
               )}
+
+              <div>
+                <Label htmlFor="edge-priority" className="text-xs">Priority</Label>
+                <Input
+                  id="edge-priority"
+                  type="number"
+                  value={selectedEdge.data?.priority ?? 0}
+                  onChange={(e) => {
+                    if (!activeFlow) return;
+                    const priority = e.target.value === '' ? 0 : Number(e.target.value);
+                    updateEdges(
+                      activeFlow.edges.map((edge) =>
+                        edge.id === selectedEdge.id ? { ...edge, data: { ...edge.data, priority } } : edge
+                      )
+                    );
+                  }}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Higher priority edges are evaluated first</p>
+              </div>
+
+              <div>
+                <Label htmlFor="edge-outcome" className="text-xs">Approval Outcome</Label>
+                <Select
+                  value={selectedEdge.data?.meta?.outcome || 'none'}
+                  onValueChange={(value) => {
+                    if (!activeFlow) return;
+                    updateEdges(
+                      activeFlow.edges.map((edge) => {
+                        if (edge.id !== selectedEdge.id) return edge;
+                        const meta = { ...(edge.data?.meta || {}) };
+                        if (value === 'none') {
+                          delete meta.outcome;
+                        } else {
+                          meta.outcome = value;
+                        }
+                        return { ...edge, data: { ...edge.data, meta } };
+                      })
+                    );
+                  }}
+                >
+                  <SelectTrigger id="edge-outcome">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="approved">approved</SelectItem>
+                    <SelectItem value="rejected">rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">For edges leaving a Human Approval node: route this edge when the decision matches.</p>
+              </div>
             </div>
           </>
         ) : selectedNode ? (

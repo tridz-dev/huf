@@ -218,10 +218,19 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 			next_node = edge.get("to")
 			break
 
-	if not next_node:
+	if not next_node and decision == "approved":
 		next_node = _evaluate_edges(flow_run, current_node, {"status": "success"}, edges_list)
 
 	if not next_node:
+		if decision == "rejected":
+			# Rejection without an explicit 'rejected' edge must not route like approval
+			flow_run.db_set("waiting", None)
+			_fail_flow_run(
+				flow_run,
+				f"Approval rejected by {frappe.session.user}" + (f": {comment}" if comment else ""),
+			)
+			_clear_flow_notifications(flow_run)
+			return
 		# No outgoing edges — approval was the final step, complete the flow gracefully
 		outgoing = [e for e in edges_list if e.get("from") == current_node]
 		if not outgoing:
@@ -325,6 +334,15 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
 			if not next_node_id:
 				_fail_flow_run(flow_run, "Condition node did not resolve a branch")
+				return
+
+		elif node.get("type") == "loop":
+			# Loop executor returns next_node_id (body node or done node)
+			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
+			if not next_node_id:
+				# No done_node configured — loop finished, complete gracefully
+				_complete_flow_run(flow_run)
+				_publish_flow_event(flow_run, "flow_completed", {"status": "Success"})
 				return
 
 		elif node.get("type") == "human.approval":
@@ -755,7 +773,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 					},
 					pluck="name"
 				)
-	elif approval_type == "users":
+	elif approval_type in ("user", "users"):
 		approver_users = waiting_data.get("approver_users", [])
 		if isinstance(approver_users, str):
 			# Handle comma-separated string
@@ -1303,7 +1321,7 @@ def _verify_approval_permission(waiting: dict):
 	approval_type = waiting.get("approval_type", "role")
 	user = frappe.session.user
 
-	if approval_type == "user":
+	if approval_type in ("user", "users"):
 		approver_users = waiting.get("approver_users", [])
 		if approver_users and user not in approver_users:
 			frappe.throw(
