@@ -6,7 +6,7 @@ This change introduces a queue-first policy: an agent is queued by default, and 
 
 ## Compatibility contract
 
-Submission persists one `Agent Run` (status `Queued`, with the prompt stored on the run), enqueues a private worker for that exact run, and returns `agent_run_id`, `conversation_id`, `status: Queued`, and `queued: true`. The user message is **not** persisted at submission time (see ordering below). The worker creates exactly one user message for the run, executes that exact run, and updates its existing lifecycle states. It never creates a second run or user message.
+Submission persists one `Agent Run` (status `Queued`, with the prompt stored on the run), enqueues a drainer for the conversation, and returns `agent_run_id`, `conversation_id`, `status: Queued`, `queued: true`, and `sequence` (the per-conversation order of this run). The user message is **not** persisted at submission time (see ordering below). The worker creates exactly one user message for the run, executes that exact run, and updates its existing lifecycle states. It never creates a second run or user message.
 
 `now=true` takes precedence over the Agent's **Run immediately (advanced)** setting; either one selects the direct path, which preserves the legacy behavior: the user message is persisted up front and the run executes inline.
 
@@ -15,11 +15,11 @@ Submission persists one `Agent Run` (status `Queued`, with the prompt stored on 
 The worker publishes `agent_run_status` events with `frappe.publish_realtime` on event `conversation:<conversation_id>`, targeted at the submitting user (Frappe carries `frappe.session.user` into the worker). Status values are the canonical `Agent Run` doctype spellings — `Queued`, `Started`, `Success`, `Failed` — matching the HTTP acknowledgement and the frontend `AgentRunStatusEvent` union:
 
 ```jsonc
-{"type": "agent_run_status", "status": "Queued",  "agent_run_id": "...", "conversation_id": "...", "agent": "..."}
-{"type": "agent_run_status", "status": "Started", "agent_run_id": "...", "conversation_id": "...", "agent": "..."}
-{"type": "agent_run_status", "status": "Success", "agent_run_id": "...", "conversation_id": "...", "agent": "...",
+{"type": "agent_run_status", "status": "Queued",  "agent_run_id": "...", "conversation_id": "...", "agent": "...", "sequence": 1}
+{"type": "agent_run_status", "status": "Started", "agent_run_id": "...", "conversation_id": "...", "agent": "...", "sequence": 1}
+{"type": "agent_run_status", "status": "Success", "agent_run_id": "...", "conversation_id": "...", "agent": "...", "sequence": 1,
  "response": "<final assistant text>", "agent_message_id": "<persisted Agent Message name>"}
-{"type": "agent_run_status", "status": "Failed",  "agent_run_id": "...", "conversation_id": "...", "agent": "...",
+{"type": "agent_run_status", "status": "Failed",  "agent_run_id": "...", "conversation_id": "...", "agent": "...", "sequence": 1,
  "error": "<error message>"}
 ```
 
@@ -33,18 +33,22 @@ SSE streaming (`POST /huf/stream/<agent>`) remains as the **explicit direct-exec
 
 File and audio turns persist their user message in the prepare/transcribe step; those endpoints forward `skip_user_message` (and `files`) so the worker never creates a second user message and file content still reaches the run.
 
-## Conversation ordering
+## Conversation ordering and strict FIFO
 
-Queueing changes an important assumption: two requests for the same conversation can be accepted before either worker begins. If both user messages were persisted at submission time, the first worker's history snapshot could observe (or trim) the second turn.
+Queueing changes an important assumption: two requests for the same conversation can be accepted before either worker begins. If both user messages were persisted at submission time, the first worker's history snapshot could observe (or trim) the second turn. The implementation therefore persists the `Agent Run` immediately but appends the user `Agent Message` only after the queued worker holds the conversation's execution slot.
 
-The implementation therefore persists the `Agent Run` immediately but appends the user `Agent Message` only after the queued worker acquires the conversation's execution slot:
+The ordering guarantee is enforced by a **DB-as-queue drainer** rather than by racing workers:
 
-- The worker locks with the cache `set nx ex` convention used by `huf/ai/knowledge/indexer.py` (`agent_run_conv_<conversation_id>`, TTL 600s). The lock serializes queued runs for one conversation without blocking other conversations.
-- Under the lock, the worker verifies the run is still `Queued`, creates exactly one user message (guarded by an `Agent Message` lookup on `agent_run`), then loads history and executes. Because the lock is held, the trailing user message in history is guaranteed to be this run's own turn, so the original history semantics are restored.
-- If the lock is busy, the worker re-enqueues itself (bounded attempts with a short delay) instead of dropping the turn; the lock TTL bounds a stuck worker.
-- The lock is always released in a `finally` block.
+1. **Per-conversation sequence.** Each submission atomically claims the next sequence number for its conversation via Redis `INCR` (`agent_run_seq:<conversation_id>`). The sequence is stored on `Agent Run.sequence` and indexed together with `conversation` and `status` so the drain loop can select the oldest queued run in O(log n) time.
+2. **Single-flight drain loop.** Submission enqueues one Frappe RQ job (`huf.ai.agent_integration._run_queued_agent`) per conversation. The first drainer to acquire the Redis lock `agent_run_conv_<conversation_id>` (set `nx`/`ex`, TTL 600s) becomes the sole executor for that conversation. It repeatedly selects the oldest `Queued` run (`ORDER BY sequence ASC, creation ASC`), executes it, and then selects again. Other would-be drainers see the lock is taken and exit immediately — no work is duplicated and no run is pushed to the back of the RQ queue.
+3. **Heartbeat during execution.** A background thread refreshes the Redis lock TTL every three minutes while a run is inside `_execute_agent_run`, so long model calls cannot outlive the lock.
+4. **Post-release sweeper.** After the last queued run is processed and the lock is released, the drainer checks once more for newly queued runs (submissions that arrived between the final `SELECT` and the `DELETE`). If any exist, it enqueues a follow-up drainer so nothing is orphaned.
+5. **Direct path participates in the same lock.** `now=true` or an agent's **Run immediately (advanced)** setting still uses the direct path, but it is rejected when any queued runs exist for that conversation and, when allowed, acquires the same `agent_run_conv_<conversation_id>` lock. This prevents the direct path from jumping ahead of queued work.
+6. **Recovery scheduler.** `recover_stalled_agent_runs` runs every minute via `scheduler_events` in `huf/hooks.py`. It resets `Started` runs whose lock has disappeared (TTL check via `frappe.cache().ttl`) back to `Queued`, and wakes orphaned `Queued` runs that have no active lock, so crashed workers do not stall a conversation forever.
 
-The client renders the accepted user text optimistically from the queued acknowledgement, then reconciles from run lifecycle events. This serializes one conversation without reducing concurrency across different conversations.
+Because one drainer processes all queued runs for a conversation in strict sequence order, queued runs execute in submission order. The lock only coordinates the single active drainer; runs are not reordered by RQ queue races. Concurrency across different conversations is unchanged — each conversation has its own lock and its own sequence counter.
+
+The client renders the accepted user text optimistically from the queued acknowledgement, then reconciles from run lifecycle events. Lifecycle events (`agent_run_status`) and the HTTP queued acknowledgement now include `sequence` so clients can detect gaps and order pending turns if they choose to.
 
 ## Rollout order
 
