@@ -260,8 +260,8 @@ toast.success("Agent created");
 
 ### Agent Execution Flow
 1. **`agent_integration.py`**: `AgentManager` prepares agents, provides both sync and streaming execution:
-   - `run_agent_sync()` - Synchronous execution, returns complete response (supports flow tagging via `flow_run_id`, `flow_node_id`, `run_kind`)
-   - `run_agent_stream()` - Async generator yielding chunks for real-time streaming
+   - `run_agent_sync()` - **Queue-first by default**: persists an `Agent Run` (Queued) and returns an acknowledgement; a per-conversation FIFO drainer executes it and emits `agent_run_status` realtime events. `now=true` or the Agent's advanced `run_immediately` policy selects direct inline execution (see `docs/queue-first-agent-runs.md`)
+   - `run_agent_stream()` - Async generator yielding chunks for real-time streaming; direct-execution mode, allowed only for agents with `run_immediately` enabled (enforced server-side in the stream renderer)
 2. **`agent_stream_renderer.py`**: SSE page renderer for `/huf/stream/<agent_name>` endpoint
 3. **`run.py`**: `RunProvider` routes to appropriate LLM provider
 4. **`providers/litellm.py`**: Unified provider handling via LiteLLM
@@ -506,7 +506,7 @@ Test files are located in:
 
 ### Frontend
 - ESLint + TypeScript type checking
-- No unit tests currently
+- Vitest unit tests: `cd frontend && yarn test --run` (e.g. `chatMessageList.mappers` lifecycle-event tests)
 
 ## CI/CD Workflows
 
@@ -524,7 +524,7 @@ Test files are located in:
 3. **LiteLLM Dependency**: Required for LLM access, auto-installed via `bench setup requirements`
 4. **Model Names**: Can be user-friendly (`gpt-4-turbo`) or LiteLLM format (`openai/gpt-4-turbo`)
 5. **MCP Protocol**: HUF is an MCP client only (not a server)
-6. **Streaming vs Sync**: Use `run_agent_stream()` for chat UIs, `run_agent_sync()` for triggers/automation
+6. **Queue-first execution**: `run_agent_sync()` queues by default (FIFO per conversation, lifecycle events, polling via `get_agent_run_status`). Streaming (`run_agent_stream()`) is the direct-execution escape hatch, gated on the Agent's `run_immediately` policy both in the chat client and server-side. Never call the direct path (`now=1`) from code that may hold or contend with the conversation lock (e.g. sub-agent completion hooks) — it deadlocks. See `docs/queue-first-agent-runs.md`.
 7. **Flow Engine**: Graph orchestration via JSON definitions; no separate Node/Edge doctypes; Agent Run serves as node-run log
 8. **Flow Modes**: Normal (deterministic edges) vs Agentic (orchestrator-in-the-loop); both constrained to graph topology
 

@@ -714,7 +714,8 @@ This file contains the main logic for creating and running agents.
     -   `create_agent(self)`: Constructs an `Agent` object from the `agents` SDK, passing the instructions, model, tools, and model_settings (temperature, top_p) from the Agent DocType.
 -   **Method: `run_agent_sync(...)`**
     -   This is the main whitelisted Frappe API endpoint for running an agent.
-    -   It orchestrates the entire process:
+    -   **Queue-first by default** (see `docs/queue-first-agent-runs.md`): it persists an `Agent Run` (status `Queued`, per-conversation `sequence`), returns a queued acknowledgement, and a single-flight per-conversation drainer executes runs in FIFO order, publishing `agent_run_status` lifecycle events (`Queued`/`Started`/`Success`/`Failed`). Clients can poll `get_agent_run_status`. Direct inline execution requires `now=true` or the Agent's advanced `run_immediately` policy, participates in the same conversation lock (re-check under lock, heartbeat, drain wake on release), and must never be invoked from code that may hold the lock (e.g. sub-agent completion hooks).
+    -   When executing (worker or direct), it orchestrates the entire process:
         1.  Initializes `ConversationManager` to handle the conversation history.
         2.  Creates or retrieves the `Agent Conversation` document.
         3.  Adds the user's new message to the conversation.
