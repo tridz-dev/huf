@@ -163,7 +163,17 @@ export async function updateIntegrationService(
   data: UpdateIntegrationServicePayload,
 ): Promise<IntegrationServiceDoc> {
   try {
-    const response = await db.updateDoc(doctype['Integration Service'], name, data);
+    let targetName = name;
+    if (
+      data.service_name &&
+      typeof data.service_name === 'string' &&
+      data.service_name.trim() &&
+      data.service_name !== name
+    ) {
+      await db.renameDoc(doctype['Integration Service'], name, data.service_name);
+      targetName = data.service_name;
+    }
+    const response = await db.updateDoc(doctype['Integration Service'], targetName, data);
     return response as unknown as IntegrationServiceDoc;
   } catch (error) {
     handleFrappeError(error);
