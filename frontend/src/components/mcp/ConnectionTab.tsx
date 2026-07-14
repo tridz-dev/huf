@@ -12,7 +12,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { MCPFormValues } from './types';
 import { mcpAuthTypes, mcpAuthHeaderNames, mcpTransportTypes } from '@/data/mcp';
 import {
-  startMCPOAuthFlow,
+  resolveAndStartMCPOAuthFlow,
   disconnectMCPOAuth,
   getMCPOAuthStatus,
 } from '@/services/mcpApi';
@@ -37,6 +37,7 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
   const watchOAuthStatus = form.watch('oauth_status');
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [showAdvancedOAuth, setShowAdvancedOAuth] = useState(false);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -67,15 +68,10 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
       return;
     }
 
-    const values = form.getValues();
-    if (!values.oauth_authorization_endpoint || !values.oauth_token_endpoint || !values.oauth_client_id) {
-      toast.error('Please fill in Authorization Endpoint, Token Endpoint, and Client ID before connecting.');
-      return;
-    }
-
     setConnecting(true);
     try {
-      const result = await startMCPOAuthFlow(serverName);
+      // URL-first: backend discovers endpoints and registers client automatically.
+      const result = await resolveAndStartMCPOAuthFlow(serverName);
       if (result.error) {
         toast.error(result.error);
         return;
@@ -273,7 +269,9 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
         <Card>
           <CardHeader>
             <CardTitle>OAuth 2.1 Configuration</CardTitle>
-            <CardDescription>Configure OAuth endpoints and connect the server</CardDescription>
+            <CardDescription>
+              HUF discovers endpoints and registers automatically. Use Advanced Overrides only if the provider requires manual configuration.
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
             <div className="flex flex-row items-center justify-between rounded-lg border p-4">
@@ -305,6 +303,26 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
                 )}
               </div>
             </div>
+
+            {form.watch('oauth_discovery_status') && form.watch('oauth_discovery_status') !== 'Not Started' && (
+              <div className="rounded-lg border p-4">
+                <p className="text-sm font-medium">Discovery Status</p>
+                <p className="text-sm text-muted-foreground">
+                  {form.watch('oauth_discovery_status')}
+                  {form.watch('oauth_authorization_server') && (
+                    <> · Authorization server: {form.watch('oauth_authorization_server')}</>
+                  )}
+                  {form.watch('oauth_client_registration_method') && (
+                    <> · Registration: {form.watch('oauth_client_registration_method')}</>
+                  )}
+                </p>
+                {form.watch('oauth_discovery_error') && (
+                  <p className="text-sm text-destructive mt-1">
+                    {form.watch('oauth_discovery_error')}
+                  </p>
+                )}
+              </div>
+            )}
 
             <FormField
               control={form.control}
@@ -344,110 +362,123 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="oauth_redirect_uri"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Custom Redirect URI</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="https://provider.example.com/mcp-oauth-callback"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>Optional: Override the auto-generated callback URL for strict providers or local testing.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAdvancedOAuth((v) => !v)}
+            >
+              {showAdvancedOAuth ? 'Hide Advanced Overrides' : 'Show Advanced Overrides'}
+            </Button>
 
-            <FormField
-              control={form.control}
-              name="oauth_authorization_endpoint"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Authorization Endpoint</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="https://provider.example.com/oauth/authorize"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>e.g. https://higgsfield.ai/oauth/authorize</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {showAdvancedOAuth && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="oauth_redirect_uri"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Custom Redirect URI</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="https://provider.example.com/mcp-oauth-callback"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Optional: Override the auto-generated callback URL for strict providers or local testing.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="oauth_token_endpoint"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Token Endpoint</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="https://provider.example.com/oauth/token"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>e.g. https://higgsfield.ai/oauth/token</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="oauth_authorization_endpoint"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Authorization Endpoint</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="https://provider.example.com/oauth/authorize"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>e.g. https://higgsfield.ai/oauth/authorize</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="oauth_client_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Client ID</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Client ID" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="oauth_token_endpoint"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Token Endpoint</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="https://provider.example.com/oauth/token"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>e.g. https://higgsfield.ai/oauth/token</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="oauth_client_secret"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Client Secret</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="password"
-                      placeholder="Leave blank if using PKCE-only public client"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>Stored encrypted. Leave blank if using PKCE-only public client.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="oauth_client_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Client ID</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Client ID" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            <FormField
-              control={form.control}
-              name="oauth_token_response_path"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Token Response Path</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="access_token"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>JSON path to access token if nested (e.g. authed_user.access_token). Defaults to access_token.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <FormField
+                  control={form.control}
+                  name="oauth_client_secret"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Client Secret</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="Leave blank if using PKCE-only public client"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Stored encrypted. Leave blank if using PKCE-only public client.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="oauth_token_response_path"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Token Response Path</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="access_token"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>JSON path to access token if nested (e.g. authed_user.access_token). Defaults to access_token.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
           </CardContent>
         </Card>
       )}

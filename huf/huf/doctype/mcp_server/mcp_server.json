@@ -36,6 +36,15 @@
   "oauth_access_token",
   "oauth_refresh_token",
   "oauth_token_expires_at",
+  "oauth_discovery_section",
+  "oauth_discovery_status",
+  "oauth_resource_metadata_url",
+  "oauth_authorization_server",
+  "oauth_registration_endpoint",
+  "oauth_client_registration_method",
+  "oauth_metadata_json",
+  "oauth_last_discovered_at",
+  "oauth_discovery_error",
   "custom_headers_section",
   "custom_headers",
   "tools_section",
@@ -256,6 +265,66 @@
    "fieldname": "oauth_token_expires_at",
    "fieldtype": "Datetime",
    "label": "Token Expires At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "oauth_discovery_section",
+   "fieldtype": "Section Break",
+   "label": "Discovered OAuth Metadata",
+   "depends_on": "eval:doc.auth_type === 'oauth'",
+   "collapsible": 1,
+   "collapsed": 1
+  },
+  {
+   "fieldname": "oauth_discovery_status",
+   "fieldtype": "Select",
+   "label": "Discovery Status",
+   "options": "Not Started\nIn Progress\nReady\nFailed",
+   "default": "Not Started",
+   "read_only": 1
+  },
+  {
+   "fieldname": "oauth_resource_metadata_url",
+   "fieldtype": "Data",
+   "label": "Resource Metadata URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "oauth_authorization_server",
+   "fieldtype": "Data",
+   "label": "Authorization Server",
+   "read_only": 1
+  },
+  {
+   "fieldname": "oauth_registration_endpoint",
+   "fieldtype": "Data",
+   "label": "Registration Endpoint",
+   "read_only": 1,
+   "description": "Discovered DCR endpoint."
+  },
+  {
+   "fieldname": "oauth_client_registration_method",
+   "fieldtype": "Data",
+   "label": "Client Registration Method",
+   "read_only": 1
+  },
+  {
+   "fieldname": "oauth_metadata_json",
+   "fieldtype": "Code",
+   "label": "Discovered Metadata JSON",
+   "read_only": 1,
+   "options": "JSON"
+  },
+  {
+   "fieldname": "oauth_last_discovered_at",
+   "fieldtype": "Datetime",
+   "label": "Last Discovered At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "oauth_discovery_error",
+   "fieldtype": "Small Text",
+   "label": "Discovery Error",
    "read_only": 1
   },
   {
