@@ -10,6 +10,7 @@ export type MessageType = {
   kind?: string;
   generatedImage?: string;
   generatedAudio?: string;
+  generatedVideo?: string;
   voiceMessage?: string;
   attachment?: {
     name: string;
