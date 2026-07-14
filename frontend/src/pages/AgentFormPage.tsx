@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useBlocker, type Location } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -134,6 +134,7 @@ export function AgentFormPage() {
   const [pendingSelectedPromptField, setPendingSelectedPromptField] = useState<string | null>(null);
   const [pendingScrollToPromptField, setPendingScrollToPromptField] = useState(false);
   const [resolvingPendingPrompt, setResolvingPendingPrompt] = useState(false);
+  const skipBlockRef = useRef(false);
 
   // Tab configuration - single source of truth
   const tabConfig = {
@@ -416,6 +417,10 @@ export function AgentFormPage() {
 
   const shouldBlock = useCallback(
     ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+      if (skipBlockRef.current) {
+        skipBlockRef.current = false;
+        return false;
+      }
       if (!hasUnsavedChanges) return false;
       return (
         currentLocation.pathname !== nextLocation.pathname ||
@@ -1153,11 +1158,14 @@ export function AgentFormPage() {
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
+        setInitialTools([...selectedTools]);
+        setInitialMcpServers([...mcpServers]);
         setInitialKnowledgeSources([...knowledgeSources]);
         setAgentStats({ last_run: newAgent.last_run ?? null, total_run: newAgent.total_run ?? null });
         // Sync tool-details setting to other tabs via localStorage
         writeToolDetailsSetting(newAgent.name, newAgent.show_tool_execution_details === 1);
         // Navigate to the edit page with the new agent's ID
+        skipBlockRef.current = true;
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
         // Update existing agent
