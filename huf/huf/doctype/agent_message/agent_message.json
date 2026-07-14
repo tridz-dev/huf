@@ -155,7 +155,7 @@
    "fieldtype": "Select",
    "hidden": 1,
    "label": "Status",
-   "options": "\nStarted\nQueues\nCompleted\nFailed"
+   "options": "\nStarted\nQueued\nCompleted\nFailed"
   },
   {
    "fieldname": "tool_call",
