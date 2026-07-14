@@ -34,7 +34,7 @@ USER_AGENT = "HUF-MCP-Client/1.0"
 class MCPDiscoveryError(Exception):
     """Raised when MCP OAuth discovery fails."""
 
-    def __init__(self, message: str, discovery_status: str = "failed"):
+    def __init__(self, message: str, discovery_status: str = "Failed"):
         super().__init__(message)
         self.discovery_status = discovery_status
 
@@ -148,7 +148,7 @@ def resolve_mcp_connection(server_url: str, callback_url: str) -> dict:
             "scopes_supported": auth_server_metadata.get("scopes_supported", []),
             "client_registration_method": registration_method,
             "client_id": client_id,
-            "discovery_status": "ready",
+            "discovery_status": "Ready",
             "discovery_error": None,
             "metadata_json": json.dumps({
                 "resource_metadata": resource_metadata,
@@ -181,15 +181,15 @@ def discover_mcp_server(server_name: str) -> dict:
         callback_url = _get_redirect_uri(server)
         result = resolve_mcp_connection(server.server_url, callback_url)
 
-        if result.get("discovery_status") != "ready":
-            server.oauth_discovery_status = result.get("discovery_status", "failed")
+        if result.get("discovery_status") != "Ready":
+            server.oauth_discovery_status = result.get("discovery_status", "Failed")
             server.oauth_discovery_error = result.get("discovery_error")
             server.save(ignore_permissions=True)
             frappe.db.commit()
             return result
 
         # Persist discovered metadata
-        server.oauth_discovery_status = "ready"
+        server.oauth_discovery_status = "Ready"
         server.oauth_discovery_error = None
         server.oauth_resource_metadata_url = result.get("resource_metadata_url")
         server.oauth_authorization_server = result.get("authorization_server")
@@ -215,7 +215,7 @@ def discover_mcp_server(server_name: str) -> dict:
         # Return a sanitized version (no full metadata dump to frontend)
         return {
             "success": True,
-            "discovery_status": "ready",
+            "discovery_status": "Ready",
             "authorization_server": result.get("authorization_server"),
             "client_registration_method": result.get("client_registration_method"),
         }
@@ -525,7 +525,7 @@ def _fetch_json(url: str) -> Optional[dict]:
         return None
 
 
-def _error_result(message: str, status: str = "failed") -> dict:
+def _error_result(message: str, status: str = "Failed") -> dict:
     return {
         "auth_type": None,
         "resource": None,
