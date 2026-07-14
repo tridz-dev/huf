@@ -60,7 +60,7 @@ export function ToolsTab({
             control={form.control}
             name="enable_auto_sync"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Enable Auto Sync</FormLabel>
                   <FormDescription>
@@ -100,10 +100,10 @@ export function ToolsTab({
             />
           )}
 
-          <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+          <div className="flex items-center justify-between p-4 rounded-none border bg-paper-deep/30">
             <div>
               <p className="text-sm font-medium">Last Sync</p>
-              <p className="text-sm text-muted-foreground">{formatTimeAgo(lastSync)}</p>
+              <p className="text-sm text-steel">{formatTimeAgo(lastSync)}</p>
             </div>
             <Button
               variant="outline"
@@ -129,7 +129,7 @@ export function ToolsTab({
         </CardHeader>
         <CardContent>
           {tools.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-12 font-body text-steel">
               <p>No tools available.</p>
               <Button
                 variant="outline"
@@ -143,7 +143,7 @@ export function ToolsTab({
               </Button>
             </div>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-none border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -156,11 +156,11 @@ export function ToolsTab({
                   {tools.map((tool) => (
                     <TableRow
                       key={tool.name}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-paper-deep"
                       onClick={() => handleToolClick(tool)}
                     >
                       <TableCell className="font-medium">{tool.tool_name}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-steel">
                         <div className="max-w-md truncate" title={tool.description || 'No description'}>
                           {tool.description || 'No description'}
                         </div>

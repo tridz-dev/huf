@@ -90,7 +90,7 @@ export function AgentHeader({
             {models.find(m => m.name === watchModel)?.model_name || watchModel || 'Model'}
           </Badge>
         </div>
-        <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+        <div className="flex flex-col gap-1 text-sm text-steel">
           {activeTriggerCount > 0 && (
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 shrink-0" />

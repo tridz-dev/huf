@@ -29,10 +29,10 @@ export function DefaultPlanTable({
 }: DefaultPlanTableProps) {
 	return (
 		<>
-			<div className="overflow-hidden rounded-md border">
+			<div className="overflow-hidden rounded-none border">
 				<div className="max-h-72 overflow-auto">
 					<Table className="table-fixed w-full">
-						<TableHeader className="bg-muted sticky top-0 z-10">
+						<TableHeader className="bg-paper-deep sticky top-0 z-10">
 							<TableRow>
 								<TableHead className="w-16">Step</TableHead>
 								<TableHead className={PLAN_FIELD_COL}>Status</TableHead>
@@ -94,7 +94,7 @@ export function DefaultPlanTable({
 							) : (
 								<TableRow>
 									<TableCell colSpan={5} className="h-24 text-center">
-										<div className="text-muted-foreground">No steps defined yet.</div>
+										<div className="font-body text-steel-soft">No steps defined yet.</div>
 									</TableCell>
 								</TableRow>
 							)}

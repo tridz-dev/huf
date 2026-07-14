@@ -241,7 +241,7 @@ export function IntegrationServiceFormPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading service...</div>
+        <div className="font-body text-steel-soft">Loading service...</div>
       </div>
     );
   }

@@ -276,7 +276,7 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
             <CardDescription>Configure OAuth endpoints and connect the server</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
-            <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div className="flex flex-row items-center justify-between rounded-none border p-4">
               <div className="space-y-0.5">
                 <p className="text-sm font-medium">OAuth Status</p>
                 <Badge variant={getOAuthStatusVariant(watchOAuthStatus)}>
@@ -461,11 +461,11 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
         </CardHeader>
         <CardContent className="grid gap-6">
           {fields.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No custom headers configured.</p>
+            <p className="text-sm font-body text-steel-soft">No custom headers configured.</p>
           ) : (
             <div className="space-y-4">
               {fields.map((field, index) => (
-                <div key={field.id} className="grid gap-4 rounded-lg border p-4 md:grid-cols-[1fr_1fr_auto]">
+                <div key={field.id} className="grid gap-4 rounded-none border p-4 md:grid-cols-[1fr_1fr_auto]">
                   <FormField
                     control={form.control}
                     name={`custom_headers.${index}.header_name`}

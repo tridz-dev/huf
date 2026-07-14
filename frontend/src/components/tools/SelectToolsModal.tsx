@@ -282,7 +282,7 @@ export function SelectToolsModal({
             <div className="flex flex-col gap-3 mb-4 flex-shrink-0">
               {/* Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-soft" />
                 <Input
                   placeholder="Search tools by name or description..."
                   value={searchQuery}
@@ -306,11 +306,11 @@ export function SelectToolsModal({
             <div className="flex-1 overflow-y-auto min-h-0 space-y-2 pb-2">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="text-muted-foreground">Loading tools...</div>
+                  <div className="font-body text-steel-soft">Loading tools...</div>
                 </div>
               ) : filteredTools.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="text-muted-foreground">
+                  <div className="text-steel">
                     {searchQuery || toolTypeFilter !== 'all'
                       ? 'No tools match your filters'
                       : 'No tools available'}
@@ -363,7 +363,7 @@ export function SelectToolsModal({
 
         {activeTab === 'tool-library' && (
           <DialogScrollFooter className="items-center justify-between sm:justify-between">
-            <div className="text-sm text-muted-foreground">
+            <div className="text-sm text-steel">
               {selectedCount > 0 ? (
                 <>
                   {selectedCount} tool{selectedCount > 1 ? 's' : ''} selected

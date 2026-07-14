@@ -52,6 +52,34 @@ export async function fetchDocCount(
  * @param filters - Filters matching the list query
  * @returns Total count, 0 when empty, or undefined for non-first pages / on error
  */
+/**
+ * Fetch count for a given DocType without surfacing errors to the user.
+ * Used for passive UI like sidebar count badges where a failure should
+ * simply hide the badge instead of showing an error toast.
+ */
+export async function fetchDocCountQuiet(
+	targetDoctype: string,
+	filters?: CountFilters
+): Promise<number | undefined> {
+	const params: Record<string, unknown> = { doctype: targetDoctype };
+	if (filters && filters.length > 0) {
+		params.filters = JSON.stringify(filters);
+	}
+
+	try {
+		const response = await call.get('frappe.client.get_count', params);
+		const { message } = response || {};
+		if (typeof message === 'number') return message;
+		if (typeof message === 'string') {
+			const parsed = Number(message);
+			return Number.isNaN(parsed) ? undefined : parsed;
+		}
+		return undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export async function fetchPaginatedCount(
   page: number,
   itemCount: number,

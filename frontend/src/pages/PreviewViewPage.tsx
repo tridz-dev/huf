@@ -172,8 +172,8 @@ export function PreviewViewPage() {
 	// Loading state
 	if (loading) {
 		return (
-			<div className="flex h-screen items-center justify-center bg-background">
-				<div className="flex flex-col items-center gap-3 text-muted-foreground">
+			<div className="flex h-screen items-center justify-center bg-paper">
+				<div className="flex flex-col items-center gap-3 text-steel">
 					<Loader2 className="size-8 animate-spin" />
 					<p className="text-sm">Loading preview...</p>
 				</div>
@@ -184,12 +184,12 @@ export function PreviewViewPage() {
 	// Error state
 	if (error) {
 		return (
-			<div className="flex h-screen items-center justify-center bg-background">
+			<div className="flex h-screen items-center justify-center bg-paper">
 				<div className="flex max-w-md flex-col items-center gap-4 text-center">
-					<AlertCircle className="size-10 text-muted-foreground" />
+					<AlertCircle className="size-10 text-steel-soft" />
 					<div>
 						<p className="font-medium text-foreground">{error}</p>
-						<p className="mt-1 text-sm text-muted-foreground">
+						<p className="mt-1 text-sm text-steel">
 							Message ID: {messageId}
 						</p>
 					</div>
@@ -222,7 +222,7 @@ export function PreviewViewPage() {
 	const viewFullUrl = messageId ? `/view/${messageId}?preview=full` : '';
 
 	return (
-		<div className="flex h-screen flex-col bg-background">
+		<div className="flex h-screen flex-col bg-paper">
 			{/* Toolbar */}
 			<header className="flex shrink-0 items-center justify-between border-b px-4 py-2">
 				<div className="flex items-center gap-3">
@@ -265,7 +265,7 @@ export function PreviewViewPage() {
 				<div className="mx-auto max-w-4xl space-y-4">
 					{jsxOnly ? (
 						!showJsxOnlyContent ? (
-							<p className="text-sm text-muted-foreground">
+							<p className="text-sm text-steel">
 								No JSX or chart content in this message. Switch to Full message to see
 								everything.
 							</p>
@@ -280,14 +280,14 @@ export function PreviewViewPage() {
 							</>
 						)
 					) : !hasContent ? (
-						<p className="text-sm text-muted-foreground">No content in this message.</p>
+						<p className="text-sm font-body text-steel-soft">No content in this message.</p>
 					) : (
 						<>
 							{textContent && textContent.trim() && (
 								<div className="prose prose-sm dark:prose-invert max-w-none">
 									<Suspense
 										fallback={
-											<div className="animate-pulse rounded bg-muted/50 p-4 text-sm text-muted-foreground">
+											<div className="animate-pulse rounded bg-paper-deep/50 p-4 text-sm text-steel">
 												Loading…
 											</div>
 										}

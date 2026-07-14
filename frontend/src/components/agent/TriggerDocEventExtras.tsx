@@ -110,7 +110,7 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
         )}
       />
 
-      <div className="space-y-3 rounded-lg border p-4">
+      <div className="space-y-3 rounded-none border p-4">
         <div className="flex items-center justify-between gap-2">
           <div>
             <FormLabel>File Attachments</FormLabel>
@@ -135,11 +135,11 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
         </div>
 
         {fields.length === 0 && (
-          <p className="text-sm text-muted-foreground">No file attachment mappings configured.</p>
+          <p className="text-sm font-body text-steel-soft">No file attachment mappings configured.</p>
         )}
 
         {fields.map((row, index) => (
-          <div key={row.id} className="grid gap-3 rounded-md border p-3 sm:grid-cols-2">
+          <div key={row.id} className="grid gap-3 rounded-none border p-3 sm:grid-cols-2">
             <FormField
               control={control}
               name={`file_attachments.${index}.source_type`}

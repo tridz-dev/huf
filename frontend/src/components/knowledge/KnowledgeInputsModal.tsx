@@ -234,7 +234,7 @@ export function KnowledgeInputsModal({
 
         <DialogScrollBody className="space-y-4 py-2">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-steel">
               {inputs.length} {inputs.length === 1 ? 'input' : 'inputs'}
             </p>
             <Button
@@ -248,7 +248,7 @@ export function KnowledgeInputsModal({
           </div>
 
           {showCreate && (
-            <div className="rounded-lg border p-4 space-y-4">
+            <div className="rounded-none border p-4 space-y-4">
               <div className="space-y-2">
                 <Label>Input Type</Label>
                 <Select value={inputType} onValueChange={(v) => setInputType(v as KnowledgeInputType)}>
@@ -292,7 +292,7 @@ export function KnowledgeInputsModal({
                     </Button>
                   </div>
                   {uploadedFileUrl && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-steel-soft">
                       Uploaded: <span className="font-mono">{uploadedFileUrl}</span>
                     </p>
                   )}
@@ -340,10 +340,10 @@ export function KnowledgeInputsModal({
 
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              <Loader2 className="w-5 h-5 animate-spin text-steel-soft" />
             </div>
           ) : inputs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
+            <div className="text-center py-8 font-body text-steel text-sm">
               No knowledge inputs yet. Add one to get started.
             </div>
           ) : (
@@ -353,9 +353,9 @@ export function KnowledgeInputsModal({
                 return (
                   <div
                     key={input.name}
-                    className="flex items-center gap-3 rounded-lg border p-3"
+                    className="flex items-center gap-3 rounded-none border p-3"
                   >
-                    <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <Icon className="w-4 h-4 text-steel-soft flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">
                         {getInputPreview(input)}
@@ -365,7 +365,7 @@ export function KnowledgeInputsModal({
                           {input.status}
                         </Badge>
                         {input.chunks_created > 0 && (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-steel-soft">
                             {input.chunks_created} chunks
                           </span>
                         )}

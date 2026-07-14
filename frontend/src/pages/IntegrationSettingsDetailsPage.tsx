@@ -393,7 +393,7 @@ export function IntegrationSettingsDetailsPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading integration...</div>
+        <div className="font-body text-steel-soft">Loading integration...</div>
       </div>
     );
   }

@@ -29,7 +29,7 @@ export function MCPServerCard({
       onClick={handleClick}
       className={cn(
         'flex items-start gap-3 rounded-lg border p-3 transition-colors',
-        'hover:bg-muted/50 cursor-pointer',
+        'hover:bg-paper-deep cursor-pointer',
         selected && 'border-primary bg-primary/5',
         className
       )}

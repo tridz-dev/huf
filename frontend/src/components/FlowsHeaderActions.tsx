@@ -176,7 +176,7 @@ export function FlowsHeaderActions() {
 
       {/* Publish Button */}
       <Button
-        variant="default"
+        variant="display"
         size="sm"
         className="gap-2"
         onClick={handlePublish}

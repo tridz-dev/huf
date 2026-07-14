@@ -81,11 +81,11 @@ function RunArtifactsPanel({ runId }: { runId: string }) {
           <Link
             key={artifact.name}
             to={`/artifacts/${artifact.name}`}
-            className="flex items-center justify-between rounded-md border p-3 text-sm hover:bg-muted/50"
+            className="flex items-center justify-between rounded-none border p-3 text-sm hover:bg-paper-deep"
           >
             <div className="min-w-0">
               <div className="truncate font-medium">{artifact.summary || artifact.name}</div>
-              <div className="text-xs text-muted-foreground">{artifact.visibility}</div>
+              <div className="text-xs text-steel-soft">{artifact.visibility}</div>
             </div>
             <Badge variant="secondary" className="shrink-0">
               {artifact.artifact_type || 'Unknown'}
@@ -190,7 +190,7 @@ function AgentRunDetailPage() {
           );
         },
         cell: ({ row }) => (
-          <div className="font-mono text-sm text-muted-foreground">{row.getValue('name')}</div>
+          <div className="font-mono text-sm text-steel-soft">{row.getValue('name')}</div>
         ),
       },
       {
@@ -229,7 +229,7 @@ function AgentRunDetailPage() {
         },
         cell: ({ row }) => {
           const timeAgo = formatTimeAgo(row.original.start_time ?? null);
-          return <div className="text-sm text-muted-foreground">{timeAgo}</div>;
+          return <div className="text-sm text-steel">{timeAgo}</div>;
         },
         sortingFn: (rowA, rowB) => {
           const timeA = rowA.original.start_time ? new Date(rowA.original.start_time).getTime() : 0;
@@ -255,7 +255,7 @@ function AgentRunDetailPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="flex items-center gap-2 text-muted-foreground">
+        <div className="flex items-center gap-2 text-steel">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Loading run details...</span>
         </div>
@@ -320,52 +320,52 @@ function AgentRunDetailPage() {
           <CardContent>
             <div className="grid gap-8 md:grid-cols-2">
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-muted-foreground">Overview</h3>
+                <h3 className="text-sm font-semibold text-steel">Overview</h3>
                 <div className="space-y-1 text-sm">
                   <Link to={`/agents/${run.agent}`} className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Agent</span>
+                    <span className="text-steel">Agent</span>
                     <span className="font-medium truncate">{run.agent || 'Unknown'}</span>
                   </Link>
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Provider</span>
+                    <span className="text-steel">Provider</span>
                     <span className="font-medium truncate">{run.provider || 'Unknown'}</span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Model</span>
+                    <span className="text-steel">Model</span>
                     <span className="font-medium truncate">{run.model || 'Unknown'}</span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Status</span>
+                    <span className="text-steel">Status</span>
                     <span className="font-medium">{status}</span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Started</span>
+                    <span className="text-steel">Started</span>
                     <span className="font-medium">{startedAt}</span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Duration</span>
+                    <span className="text-steel">Duration</span>
                     <span className="font-medium">{duration}</span>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-muted-foreground">Tokens & Cost</h3>
+                <h3 className="text-sm font-semibold text-steel">Tokens & Cost</h3>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Input Tokens</span>
+                    <span className="text-steel">Input Tokens</span>
                     <span className="font-medium">
                       {typeof run.input_tokens === 'number' ? run.input_tokens : 'Not available'}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Output Tokens</span>
+                    <span className="text-steel">Output Tokens</span>
                     <span className="font-medium">
                       {typeof run.output_tokens === 'number' ? run.output_tokens : 'Not available'}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Total Tokens</span>
+                    <span className="text-steel">Total Tokens</span>
                     <span className="font-medium">
                       {typeof run.input_tokens === 'number' || typeof run.output_tokens === 'number'
                         ? (run.input_tokens || 0) + (run.output_tokens || 0)
@@ -373,7 +373,7 @@ function AgentRunDetailPage() {
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Cost</span>
+                    <span className="text-steel">Cost</span>
                     <span className="font-medium">
                       {typeof run.cost === 'number' ? `$${run.cost.toFixed(6)}` : 'Not available'}
                     </span>
@@ -393,7 +393,7 @@ function AgentRunDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md bg-muted p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
+              <div className="rounded-none bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
                 {run.prompt || 'No prompt recorded.'}
               </div>
             </CardContent>
@@ -407,7 +407,7 @@ function AgentRunDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md bg-muted p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
+              <div className="rounded-none bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
                 {run.response || 'No response recorded.'}
               </div>
             </CardContent>
@@ -428,10 +428,10 @@ function AgentRunDetailPage() {
             <CardContent>
               {loadingChildRuns ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-md border">
+                <div className="overflow-hidden rounded-none border">
                   <Table>
                     <TableHeader>
                       {table.getHeaderGroups().map((headerGroup) => (
@@ -453,7 +453,7 @@ function AgentRunDetailPage() {
                         table.getRowModel().rows.map((row) => (
                           <TableRow
                             key={row.id}
-                            className="cursor-pointer hover:bg-muted/50"
+                            className="cursor-pointer hover:bg-paper-deep"
                             onClick={() => navigate(`/executions/${row.original.name}`)}
                           >
                             {row.getVisibleCells().map((cell) => (
@@ -466,7 +466,7 @@ function AgentRunDetailPage() {
                       ) : (
                         <TableRow>
                           <TableCell colSpan={columns.length} className="h-24 text-center">
-                            <div className="text-muted-foreground">No child runs found.</div>
+                            <div className="font-body text-steel-soft">No child runs found.</div>
                           </TableCell>
                         </TableRow>
                       )}

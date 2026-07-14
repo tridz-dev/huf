@@ -83,7 +83,7 @@ export function IntegrationServicesListingPage() {
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load integration services</p>
-          <p className="text-sm text-muted-foreground">{error.message}</p>
+          <p className="text-sm text-steel">{error.message}</p>
         </div>
       )}
 
@@ -93,7 +93,7 @@ export function IntegrationServicesListingPage() {
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No integration services found.</p>
+            <p className="font-body text-steel-soft mb-4">No integration services found.</p>
             <button
               type="button"
               className="text-sm text-primary hover:underline"
@@ -154,7 +154,7 @@ export function IntegrationServicesListingPage() {
       />
 
       {!hasMore && services.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined ? `Showing all ${total} services` : 'No more services to load'}
         </div>
       )}

@@ -271,7 +271,7 @@ export function DataTableBuilderPage() {
 	if (loading) {
 		return (
 			<div className="flex items-center justify-center h-full">
-				<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+				<Loader2 className="w-6 h-6 animate-spin text-steel-soft" />
 			</div>
 		);
 	}
@@ -366,7 +366,7 @@ export function DataTableBuilderPage() {
 							type="button"
 							size="icon"
 							variant="outline"
-							className="fixed bottom-20 right-4 z-20 rounded-full shadow-md bg-background"
+							className="fixed bottom-20 right-4 z-20 rounded-full bg-panel"
 							onClick={() => setIsSidebarOpen(true)}
 						>
 							<Settings2 className="w-4 h-4" />
@@ -385,14 +385,14 @@ export function DataTableBuilderPage() {
 						</Sheet>
 					</>
 				) : (
-					<div className="w-80 border-l bg-muted/30 overflow-y-auto p-4">
+					<div className="w-80 border-l bg-paper-deep/30 overflow-y-auto p-4">
 						{sidebarContent}
 					</div>
 				)}
 			</div>
 
 			{/* Bottom action bar */}
-			<div className="border-t px-6 py-3 flex items-center justify-between bg-background">
+			<div className="border-t px-6 py-3 flex items-center justify-between bg-paper">
 				<Button
 					variant="outline"
 					onClick={() => navigate(isEdit ? `/data/${tableId}` : '/data')}
