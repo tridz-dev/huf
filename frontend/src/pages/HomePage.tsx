@@ -253,8 +253,8 @@ function HomePage() {
 
         {/* Tabbed Interface */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
-          <div className="flex items-center justify-between border-b border-ink">
-            <TabsList variant="panel">
+          <div className="flex items-center justify-between border-b border-ink mb-2">
+            <TabsList variant="panel" className="border-b-0">
               <TabsTrigger value="agents">Agents</TabsTrigger>
               <TabsTrigger value="flows">Flows</TabsTrigger>
               <TabsTrigger value="executions">Executions</TabsTrigger>
