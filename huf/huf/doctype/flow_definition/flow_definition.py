@@ -8,6 +8,8 @@ from frappe.utils import now_datetime
 
 ALLOWED_NODE_TYPES = {
 	"trigger.webhook",
+	"trigger.schedule",
+	"trigger.doc-event",
 	"agent.run",
 	"tool.call",
 	"router.llm",
