@@ -268,7 +268,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="p-0 mb-1 mt-2 border-t border-sidebar-border">
         <NavUser />
       </SidebarFooter>
       <SidebarRail />
