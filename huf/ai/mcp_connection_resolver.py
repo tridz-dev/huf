@@ -197,6 +197,10 @@ def discover_mcp_server(server_name: str) -> dict:
         server.oauth_metadata_json = result.get("metadata_json")
         server.oauth_last_discovered_at = frappe.utils.now_datetime()
 
+        # Auto-detect auth type from discovery result
+        if result.get("auth_type") == "oauth":
+            server.auth_type = "oauth"
+
         # Override manual fields only if they are empty (preserve admin overrides)
         if not server.oauth_authorization_endpoint:
             server.oauth_authorization_endpoint = result.get("authorization_endpoint")

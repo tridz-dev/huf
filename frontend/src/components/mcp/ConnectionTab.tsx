@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useFieldArray } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -30,68 +30,108 @@ interface ConnectionTabProps {
   form: UseFormReturn<MCPFormValues>;
   serverName: string;
   isNew: boolean;
+  onSaveAndConnect?: () => Promise<string | undefined>;
 }
 
-export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
+export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: ConnectionTabProps) {
   const watchAuthType = form.watch('auth_type');
   const watchOAuthStatus = form.watch('oauth_status');
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [showAdvancedOAuth, setShowAdvancedOAuth] = useState(false);
 
+  const popupRef = useRef<Window | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: 'custom_headers',
   });
 
+  // Clean up any lingering status poll when this tab unmounts.
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
+
   // Auto-fill auth_header_name based on auth_type
   useEffect(() => {
-    if (watchAuthType && watchAuthType !== 'none') {
+    if (watchAuthType && watchAuthType !== 'none' && watchAuthType !== 'oauth') {
       const headerName = mcpAuthHeaderNames[watchAuthType];
       if (headerName !== undefined) {
         form.setValue('auth_header_name', headerName, { shouldDirty: false });
       }
-    } else if (watchAuthType === 'none') {
-      // Clear auth fields when auth_type is 'none'
+    } else if (watchAuthType === 'none' || watchAuthType === 'oauth') {
+      // Clear auth fields when auth_type is 'none' or 'oauth'
       form.setValue('auth_header_name', '', { shouldDirty: false });
       form.setValue('auth_header_value', '', { shouldDirty: false });
     }
   }, [watchAuthType, form]);
 
-  const showAuthFields = watchAuthType && watchAuthType !== 'none';
+  const showAuthFields = watchAuthType && watchAuthType !== 'none' && watchAuthType !== 'oauth';
   const showOAuthFields = watchAuthType === 'oauth';
   const isOAuthConnected = watchOAuthStatus === 'Connected';
 
   const handleConnectOAuth = async () => {
-    if (isNew || !serverName) {
-      toast.error('Please save the MCP server before connecting OAuth');
-      return;
-    }
-
     setConnecting(true);
+
+    let nameToUse = serverName;
     try {
+      if (isNew) {
+        if (!onSaveAndConnect) {
+          toast.error('Please save the MCP server before connecting OAuth');
+          setConnecting(false);
+          return;
+        }
+        const savedName = await onSaveAndConnect();
+        if (!savedName) {
+          // Save-and-link path completed without starting OAuth (e.g. from-agent flow)
+          setConnecting(false);
+          return;
+        }
+        nameToUse = savedName;
+      } else if (!serverName) {
+        toast.error('Please save the MCP server before connecting OAuth');
+        setConnecting(false);
+        return;
+      }
+
       // URL-first: backend discovers endpoints and registers client automatically.
-      const result = await resolveAndStartMCPOAuthFlow(serverName);
+      const result = await resolveAndStartMCPOAuthFlow(nameToUse);
       if (result.error) {
         toast.error(result.error);
+        setConnecting(false);
         return;
       }
       if (!result.auth_url) {
         toast.error('Could not start OAuth flow.');
+        setConnecting(false);
         return;
       }
 
       const popup = window.open(result.auth_url, '_blank', 'width=600,height=700');
       if (!popup) {
         toast.error('Popup blocked. Please allow popups for this site.');
+        setConnecting(false);
         return;
       }
+      popupRef.current = popup;
 
-      const poll = setInterval(async () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+      }
+      pollRef.current = setInterval(async () => {
         if (!popup || popup.closed) {
-          clearInterval(poll);
+          if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
           try {
-            const statusResult = await getMCPOAuthStatus(serverName);
+            const statusResult = await getMCPOAuthStatus(nameToUse);
             const status = statusResult.status || 'Not Connected';
             form.setValue('oauth_status', status, { shouldDirty: false });
           } catch (error) {
@@ -286,9 +326,9 @@ export function ConnectionTab({ form, serverName, isNew }: ConnectionTabProps) {
                   <Button
                     type="button"
                     onClick={handleConnectOAuth}
-                    disabled={connecting || isNew}
+                    disabled={connecting || (isNew && !onSaveAndConnect)}
                   >
-                    {connecting ? 'Connecting…' : 'Connect'}
+                    {connecting ? 'Connecting…' : isNew ? 'Save & Connect' : 'Connect'}
                   </Button>
                 )}
                 {isOAuthConnected && (

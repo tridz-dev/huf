@@ -489,9 +489,11 @@ def test_mcp_connection(server_name: str) -> dict:
         mcp_server = frappe.get_doc("MCP Server", server_name)
         if not mcp_server.server_url:
             return {"success": False, "error": "Server URL is not set"}
-        if not mcp_server.auth_header_name or not mcp_server.auth_header_value:
-            return {"success": False, "error": "Auth Details are not set"}
-        
+
+        if mcp_server.auth_type and mcp_server.auth_type not in ("none", "oauth"):
+            if not mcp_server.auth_header_name or not mcp_server.auth_header_value:
+                return {"success": False, "error": "Auth header name and value are required for this auth type"}
+
         headers = _build_mcp_headers(mcp_server)
         
         import requests
