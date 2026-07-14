@@ -75,9 +75,7 @@ export type CreateIntegrationServicePayload = Pick<
   'service_name' | 'category' | 'description' | 'documentation_url' | 'required_credentials'
 >;
 
-export type UpdateIntegrationServicePayload = Partial<
-  Omit<CreateIntegrationServicePayload, 'service_name'>
->;
+export type UpdateIntegrationServicePayload = Partial<CreateIntegrationServicePayload>;
 
 export function serializeRequiredCredentials(schema: CredentialSchemaItem[]): string {
   return JSON.stringify(

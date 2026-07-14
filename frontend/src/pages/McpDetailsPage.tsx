@@ -4,8 +4,27 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { getMCPServer, createMCPServer, updateMCPServer, syncMCPTools, updateMCPTool, testMCPConnection, type MCPServerDoc } from '../services/mcpApi';
+import {
+  getMCPServer,
+  createMCPServer,
+  updateMCPServer,
+  deleteMCPServer,
+  syncMCPTools,
+  updateMCPTool,
+  testMCPConnection,
+  type MCPServerDoc,
+} from '../services/mcpApi';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { MCPHeader } from '../components/mcp/MCPHeader';
 import { DetailsTab } from '../components/mcp/DetailsTab';
@@ -116,6 +135,8 @@ export function McpDetailsPage() {
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const form = useForm<MCPFormValues>({
     resolver: zodResolver(mcpFormSchema),
@@ -280,7 +301,7 @@ export function McpDetailsPage() {
         navigate(`/mcp/${newMCP.name}`);
       } else if (mcpId) {
         // Update existing MCP server
-        await updateMCPServer(mcpId, mcpData);
+        const updated = await updateMCPServer(mcpId, mcpData);
         toast.success('MCP server updated successfully!');
         // Reset form state with the updated values to mark form as clean
         form.reset({
@@ -307,16 +328,15 @@ export function McpDetailsPage() {
           enable_auto_sync: values.enable_auto_sync,
           custom_headers: values.custom_headers,
         });
-        
+
         // Reload tools after update
-        if (mcpId) {
-          getMCPServer(mcpId).then((updatedData: MCPServerDoc) => {
-            if (updatedData.tools && Array.isArray(updatedData.tools)) {
-              setTools(updatedData.tools as MCPTool[]);
-            }
-          }).catch((error) => {
-            console.error('Error reloading tools:', error);
-          });
+        if (updated.tools && Array.isArray(updated.tools)) {
+          setTools(updated.tools as MCPTool[]);
+        }
+
+        if (updated.name && updated.name !== mcpId) {
+          navigate(`/mcp/${encodeURIComponent(updated.name)}`, { replace: true });
+          return;
         }
       }
     } catch (error) {
@@ -438,6 +458,20 @@ export function McpDetailsPage() {
     navigate(-1);
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!mcpId) return;
+
+    setDeleting(true);
+    try {
+      await deleteMCPServer(mcpId);
+      toast.success('MCP server deleted');
+      navigate('/mcp');
+    } catch (error) {
+      toast.error(getFrappeErrorMessage(error));
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -462,6 +496,7 @@ export function McpDetailsPage() {
           onCancel={fromAgent ? handleCancel : undefined}
           onSync={handleSyncTools}
           onTestConnection={handleTestConnection}
+          onDelete={!isNew && !fromAgent ? () => setDeleteDialogOpen(true) : undefined}
         />
 
         <Form {...form}>
@@ -496,6 +531,28 @@ export function McpDetailsPage() {
             </Tabs>
           </form>
         </Form>
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={(next) => { if (!deleting) setDeleteDialogOpen(next); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete "{form.watch('server_name') || mcpId}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the MCP server. Agents referencing it may
+                lose tool access. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

@@ -208,7 +208,17 @@ export async function createMCPServer(data: Partial<MCPServerDoc>): Promise<MCPS
  */
 export async function updateMCPServer(name: string, data: Partial<MCPServerDoc>): Promise<MCPServerDoc> {
     try {
-        const response = await db.updateDoc(doctype['MCP Server'], name, data);
+        let targetName = name;
+        if (
+            data.server_name &&
+            typeof data.server_name === 'string' &&
+            data.server_name.trim() &&
+            data.server_name !== name
+        ) {
+            await db.renameDoc(doctype['MCP Server'], name, data.server_name);
+            targetName = data.server_name;
+        }
+        const response = await db.updateDoc(doctype['MCP Server'], targetName, data);
         return response as MCPServerDoc;
     } catch (error) {
         handleFrappeError(error);

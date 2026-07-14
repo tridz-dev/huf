@@ -31,6 +31,7 @@ import {
   type AgentSummaryPromptUsageAgent,
 } from '@/services/agentSummaryPromptApi';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 const agentSummaryPromptFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -388,11 +389,19 @@ export function AgentSummaryPromptFormPage() {
                   render={({ field }) => (
                     <FormItem className="space-y-0">
                       <FormControl>
-                        <Input
-                          {...field}
-                          className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
-                          placeholder="Summary Prompt Title"
-                        />
+                        {isNew ? (
+                          <Input
+                            {...field}
+                            className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
+                            placeholder="Summary Prompt Title"
+                          />
+                        ) : (
+                          <InlineEditName
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Summary Prompt Title"
+                          />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
