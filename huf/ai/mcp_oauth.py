@@ -324,17 +324,9 @@ def _get_redirect_uri(server=None) -> str:
     if server and getattr(server, "oauth_redirect_uri", None):
         return server.oauth_redirect_uri
 
+    # Use Frappe's resolved site URL verbatim. In production this should already be
+    # the public URL; in local dev it will include the bench port (e.g. :8000).
     site_url = frappe.utils.get_url()
-
-    # When the site has no explicit host_name (typical local dev), Frappe may drop
-    # the bench port. Add it back from webserver_port so the browser callback works.
-    if not frappe.get_conf().get("host_name"):
-        parsed = urllib.parse.urlparse(site_url)
-        if parsed.scheme and parsed.hostname and not parsed.port:
-            port = frappe.get_conf().get("webserver_port")
-            if port and int(port) not in (80, 443):
-                site_url = f"{parsed.scheme}://{parsed.hostname}:{port}"
-
     return f"{site_url.rstrip('/')}/mcp-oauth-callback"
 
 
