@@ -1,7 +1,13 @@
-import { Save, Server, RefreshCw, Wifi } from 'lucide-react';
+import { Save, Server, RefreshCw, Wifi, MoreVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { UseFormReturn } from 'react-hook-form';
 import { cn } from '@/lib/utils';
 import type { MCPFormValues } from './types';
@@ -20,6 +26,7 @@ interface MCPHeaderProps {
   onCancel?: () => void;
   onSync?: () => void;
   onTestConnection?: () => void;
+  onDelete?: () => void;
 }
 
 export function MCPHeader({
@@ -35,6 +42,7 @@ export function MCPHeader({
   onCancel,
   onSync,
   onTestConnection,
+  onDelete,
 }: MCPHeaderProps) {
   const watchAuthType = form.watch('auth_type');
   const watchOAuthStatus = form.watch('oauth_status');
@@ -113,6 +121,21 @@ export function MCPHeader({
             <Save className="w-4 h-4 mr-2" />
             {saving ? (isNew ? 'Creating...' : 'Saving...') : (isNew ? 'Create' : 'Save')}
           </Button>
+        )}
+        {!isNew && onDelete && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" type="button">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </div>
