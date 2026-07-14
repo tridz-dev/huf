@@ -18,6 +18,7 @@ export interface RunAgentSyncResult {
   status?: string;
   conversation_id?: string;
   session_id?: string;
+  sequence?: number;
 }
 
 export async function runAgentSync(params: RunAgentSyncParams): Promise<RunAgentSyncResult> {

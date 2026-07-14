@@ -35,6 +35,7 @@ export type AgentRunStatusEvent = {
     response?: string;
     error?: string;
     agent_message_id?: string;
+    sequence?: number;
 };
 
 type ChatSocketProps = {   

@@ -478,6 +478,7 @@ export interface NewConversationResponse {
     status?: string;
     agent_run_id?: string;
     agent_message_id?: string;
+    sequence?: number;
     run?: {
       success: boolean;
       response: string;
@@ -513,6 +514,7 @@ export interface SendMessageResponse {
     queued?: boolean;
     status?: string;
     agent_message_id?: string;
+    sequence?: number;
   };
 }
 

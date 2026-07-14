@@ -157,6 +157,7 @@ function normalizeAgentRunStatusEvent(raw: Record<string, unknown>): AgentRunSta
     response: raw.response as string | undefined,
     error: raw.error as string | undefined,
     agent_message_id: raw.agent_message_id as string | undefined,
+    sequence: typeof raw.sequence === 'number' ? raw.sequence : undefined,
   } as AgentRunStatusEvent;
 }
 

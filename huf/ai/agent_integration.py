@@ -1,5 +1,6 @@
 import asyncio
 import json
+import threading
 import time
 from types import SimpleNamespace
 import litellm
@@ -8,7 +9,7 @@ from litellm import token_counter
 import frappe
 from agents import OpenAIProvider,Agent, Runner, Tool, function_tool,ModelSettings
 from frappe.utils.background_jobs import enqueue
-from frappe.utils import now_datetime
+from frappe.utils import now_datetime, add_to_date
 
 from frappe import _
 from .tool_functions import (
@@ -357,6 +358,7 @@ def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
             "agent_run_id": run_doc.name,
             "conversation_id": conversation.name,
             "agent": run_doc.agent,
+            "sequence": getattr(run_doc, "sequence", None),
         }
         if extra:
             message.update(extra)
@@ -755,6 +757,22 @@ def run_agent_sync(
             if exact_match:
                 resolved_prompt_template = exact_match
 
+    sequence = _next_run_sequence(conversation.name)
+
+    runtime_context = {
+        "channel_id": channel_id,
+        "external_id": external_id,
+        "response_format": response_format,
+        "prompt_template": prompt_template,
+        "prompt_version": prompt_version,
+        "resolved_prompt_template": resolved_prompt_template,
+        "parent_conversation_id": parent_conversation_id,
+        "invoked_by_agent": invoked_by_agent,
+        "prompt_cache_options": prompt_cache_options,
+        "files": files,
+        "skip_user_message": skip_user_message,
+    }
+
     run_doc_data = {
         "doctype": "Agent Run",
         "agent": agent_name,
@@ -766,7 +784,9 @@ def run_agent_sync(
         "provider": resolved_provider,
         "parent_run": parent_run_id,
         "is_child": 1 if parent_run_id else 0,
-        "agent_orchestration": orchestration_id
+        "agent_orchestration": orchestration_id,
+        "sequence": sequence,
+        "runtime_context": frappe.as_json(runtime_context),
     }
     # Add flow linkage fields if provided
     if flow_run_id:
@@ -817,7 +837,7 @@ def run_agent_sync(
             timeout=600,
             is_async=True,
             enqueue_after_commit=True,
-            **execution_kwargs
+            conversation_id=conversation.name,
         )
         _emit_run_lifecycle_event(run_doc, conversation, "queued")
         safe_commit()
@@ -830,16 +850,48 @@ def run_agent_sync(
             "agent_run_id": run_doc.name,
             "conversation_id": conversation.name,
             "session_id": conv_manager.session_id,
+            "sequence": sequence,
         }
 
     # Direct path (``now`` override or Agent.run_immediately): preserve the
     # existing immediate behavior — persist the user message up front and
-    # execute inline.
-    if prompt and not str(prompt).startswith("[SILENT_TRIGGER]") and not skip_user_message and not is_queued:
-        conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
-    safe_commit()
+    # execute inline. To keep the ordering guarantee, it must not jump ahead
+    # of queued runs for the same conversation and must hold the same lock.
+    if _has_queued_runs(conversation.name):
+        frappe.throw(
+            _(
+                "This conversation has queued runs pending. Wait for them to complete before using the direct-execution override."
+            ),
+            frappe.ValidationError,
+        )
 
-    return _execute_agent_run(**execution_kwargs)
+    lock_key = _conversation_lock_key(conversation.name)
+    lock_acquired = False
+    for _attempt in range(_DIRECT_LOCK_ATTEMPTS):
+        if frappe.cache().set(lock_key, 1, ex=_QUEUE_LOCK_TTL, nx=True):
+            lock_acquired = True
+            break
+        time.sleep(_DIRECT_LOCK_RETRY_DELAY)
+
+    if not lock_acquired:
+        frappe.throw(
+            _(
+                "This conversation is currently executing another run. Please try the direct-execution override again shortly."
+            ),
+            frappe.ValidationError,
+        )
+
+    try:
+        if prompt and not str(prompt).startswith("[SILENT_TRIGGER]") and not skip_user_message:
+            conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+        safe_commit()
+
+        return _execute_agent_run(**execution_kwargs)
+    finally:
+        try:
+            frappe.cache().delete(lock_key)
+        except Exception:
+            pass
 
 
 def _is_truthy(value):
@@ -1528,94 +1580,213 @@ def _execute_agent_run(
 # without blocking runs of other conversations. Uses the same cache set
 # nx/ex convention as huf/ai/knowledge/indexer.py.
 _QUEUE_LOCK_TTL = 600
-_QUEUE_LOCK_RETRY_DELAY = 5
-_QUEUE_LOCK_MAX_ATTEMPTS = 60
+_QUEUE_HEARTBEAT_INTERVAL = 180  # refresh lock every 3 minutes
+_QUEUE_ORPHANED_QUEUED_AGE = 60  # seconds before a Queued run is considered orphaned
+_DIRECT_LOCK_ATTEMPTS = 3
+_DIRECT_LOCK_RETRY_DELAY = 1
+
+
+def _conversation_lock_key(conversation_id: str) -> str:
+    return f"agent_run_conv_{conversation_id}"
+
+
+def _next_run_sequence(conversation_id: str) -> int:
+    """Return the next per-conversation sequence number (atomic via Redis INCR)."""
+    seq_key = f"agent_run_seq:{conversation_id}"
+    try:
+        return int(frappe.cache().incr(seq_key))
+    except Exception:
+        # Redis unavailable: gaps are acceptable; 0 lets the drain loop fall
+        # back to creation-time ordering.
+        return 0
+
+
+def _next_queued_run(conversation_id: str):
+    """Return the oldest Queued Agent Run name for a conversation, or None."""
+    return frappe.db.get_value(
+        "Agent Run",
+        filters={"conversation": conversation_id, "status": "Queued"},
+        fieldname="name",
+        order_by="sequence asc, creation asc",
+    )
+
+
+def _has_queued_runs(conversation_id: str) -> bool:
+    return bool(
+        frappe.db.exists(
+            "Agent Run",
+            {"conversation": conversation_id, "status": "Queued"},
+        )
+    )
+
+
+def _enqueue_drain(conversation_id: str):
+    """Wake a drainer for this conversation. Safe to call repeatedly."""
+    frappe.enqueue(
+        "huf.ai.agent_integration._run_queued_agent",
+        queue="default",
+        timeout=_QUEUE_LOCK_TTL,
+        is_async=True,
+        conversation_id=conversation_id,
+    )
+
+
+def _reset_run_to_queued(run_id: str, error_message: str = None):
+    """Recover a run that was lost by a dead worker."""
+    try:
+        values = {"status": "Queued"}
+        if error_message:
+            values["error_message"] = error_message
+        frappe.db.set_value("Agent Run", run_id, values, update_modified=True)
+        frappe.db.commit()
+    except Exception:
+        pass
+
+
+class _RunHeartbeat:
+    """Keep the conversation lock alive while a run executes."""
+
+    def __init__(self, lock_key: str, interval: int = _QUEUE_HEARTBEAT_INTERVAL):
+        self.lock_key = lock_key
+        self.interval = interval
+        self._stop = threading.Event()
+        self._thread = None
+
+    def start(self):
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5)
+
+    def _loop(self):
+        while not self._stop.wait(self.interval):
+            try:
+                frappe.cache().expire(self.lock_key, _QUEUE_LOCK_TTL)
+            except Exception:
+                pass
 
 
 def _run_queued_agent(lock_attempt=0, **kwargs):
-    """Background worker entry point for queued agent runs.
+    """Background drainer for a single conversation.
 
-    Acquires the conversation-scoped execution lock, persists exactly one
-    user message for the precreated Agent Run under that lock, then runs
-    the shared execution logic against the exact Agent Run and conversation
-    created by ``run_agent_sync``. If the lock is busy the job re-enqueues
-    itself instead of losing the turn. Never creates another run.
+    Acquires the conversation-scoped execution lock and processes every queued
+    run for this conversation in strict sequence order. If another drainer
+    already holds the lock, this job exits immediately — the holder will drain
+    everything. After releasing the lock, a final re-check enqueues a sweeper
+    in case a run was submitted during the final SELECT.
     """
-    run_id = kwargs.get("run_id")
     conversation_id = kwargs.get("conversation_id")
-    lock_key = f"agent_run_conv_{conversation_id}"
-
-    if not frappe.cache().set(lock_key, 1, ex=_QUEUE_LOCK_TTL, nx=True):
-        # Another run of this conversation is executing. Re-enqueue rather
-        # than drop the turn; bounded attempts guard against a stuck lock
-        # (the lock itself also expires after _QUEUE_LOCK_TTL seconds).
-        if lock_attempt >= _QUEUE_LOCK_MAX_ATTEMPTS:
-            lock_error = _("Timed out waiting for the conversation execution slot.")
-            _fail_queued_run(run_id, lock_error)
-            try:
-                _emit_run_lifecycle_event(
-                    frappe.get_doc("Agent Run", run_id),
-                    SimpleNamespace(name=conversation_id),
-                    "failed",
-                    {"error": lock_error},
-                )
-            except Exception:
-                pass
-            return
-        time.sleep(_QUEUE_LOCK_RETRY_DELAY)
-        frappe.enqueue(
-            "huf.ai.agent_integration._run_queued_agent",
-            queue="default",
-            timeout=600,
-            is_async=True,
-            lock_attempt=lock_attempt + 1,
-            **kwargs
-        )
+    if not conversation_id:
         return
 
-    try:
-        run_doc = frappe.get_doc("Agent Run", run_id)
-        if run_doc.status != "Queued":
-            # Already picked up or cancelled elsewhere; never run twice.
-            return
+    lock_key = _conversation_lock_key(conversation_id)
 
-        prompt = kwargs.get("prompt")
-        if prompt and not str(prompt).startswith("[SILENT_TRIGGER]") and not kwargs.get("skip_user_message"):
-            # Exactly one user message per run, created under the lock so no
-            # other turn can interleave into this run's history snapshot.
-            if not frappe.db.exists("Agent Message", {"agent_run": run_id, "role": "user"}):
+    if not frappe.cache().set(lock_key, 1, ex=_QUEUE_LOCK_TTL, nx=True):
+        # Another worker is draining this conversation; it will pick up all
+        # queued runs including any submitted while this job was waiting.
+        return
+
+    last_result = None
+    try:
+        while True:
+            run_id = _next_queued_run(conversation_id)
+            if not run_id:
+                break
+            run_doc = frappe.get_doc("Agent Run", run_id)
+            if run_doc.status != "Queued":
+                continue
+            last_result = _drain_run(run_doc, lock_key)
+        return last_result
+    except Exception:
+        frappe.log_error(f"Conversation drainer failed: {frappe.get_traceback()}", "Huf")
+    finally:
+        try:
+            frappe.cache().delete(lock_key)
+        except Exception:
+            pass
+        # Re-check after releasing lock. If a submit happened between our last
+        # SELECT and the delete, enqueue a sweeper so the run is not orphaned.
+        try:
+            if _has_queued_runs(conversation_id):
+                _enqueue_drain(conversation_id)
+        except Exception:
+            pass
+
+
+def _drain_run(run_doc, lock_key: str):
+    """Execute a single queued run while keeping the conversation lock alive."""
+    heartbeat = _RunHeartbeat(lock_key)
+    heartbeat.start()
+    try:
+        context = frappe.parse_json(run_doc.runtime_context or "{}")
+        execution_kwargs = _build_execution_kwargs(run_doc, context)
+
+        prompt = execution_kwargs.get("prompt")
+        if (
+            prompt
+            and not str(prompt).startswith("[SILENT_TRIGGER]")
+            and not execution_kwargs.get("skip_user_message")
+        ):
+            if not frappe.db.exists("Agent Message", {"agent_run": run_doc.name, "role": "user"}):
                 conv_manager = ConversationManager(
-                    agent_name=kwargs.get("agent_name"),
-                    channel=kwargs.get("channel_id"),
-                    external_id=kwargs.get("external_id"),
+                    agent_name=execution_kwargs.get("agent_name"),
+                    channel=execution_kwargs.get("channel_id"),
+                    external_id=execution_kwargs.get("external_id"),
                 )
-                conversation = frappe.get_doc("Agent Conversation", conversation_id)
+                conversation = frappe.get_doc("Agent Conversation", run_doc.conversation)
                 conv_manager.add_message(
                     conversation,
                     "user",
                     prompt,
-                    kwargs.get("provider"),
-                    kwargs.get("model"),
-                    kwargs.get("agent_name"),
-                    run_id,
+                    execution_kwargs.get("provider"),
+                    execution_kwargs.get("model"),
+                    execution_kwargs.get("agent_name"),
+                    run_doc.name,
                 )
                 frappe.db.commit()
-        return _execute_agent_run(**kwargs)
+
+        result = _execute_agent_run(**execution_kwargs)
+        return result
     except Exception as e:
-        _fail_queued_run(run_id, str(e))
+        _fail_queued_run(run_doc.name, str(e))
         try:
-            if run_id and conversation_id:
-                _emit_run_lifecycle_event(
-                    frappe.get_doc("Agent Run", run_id),
-                    SimpleNamespace(name=conversation_id),
-                    "failed",
-                    {"error": str(e)},
-                )
+            _emit_run_lifecycle_event(
+                run_doc,
+                SimpleNamespace(name=run_doc.conversation),
+                "failed",
+                {"error": str(e)},
+            )
         except Exception:
             pass
         frappe.log_error(f"Queued agent run failed: {frappe.get_traceback()}", "Huf")
     finally:
-        frappe.cache().delete(lock_key)
+        heartbeat.stop()
+
+
+def _build_execution_kwargs(run_doc, context: dict):
+    """Reconstruct execution kwargs from the persisted run doc + runtime context."""
+    return {
+        "agent_name": run_doc.agent,
+        "run_id": run_doc.name,
+        "conversation_id": run_doc.conversation,
+        "prompt": run_doc.prompt,
+        "provider": run_doc.provider,
+        "model": run_doc.model,
+        "channel_id": context.get("channel_id"),
+        "external_id": context.get("external_id"),
+        "response_format": context.get("response_format"),
+        "prompt_template": context.get("prompt_template"),
+        "prompt_version": context.get("prompt_version"),
+        "resolved_prompt_template": context.get("resolved_prompt_template"),
+        "parent_conversation_id": context.get("parent_conversation_id"),
+        "invoked_by_agent": context.get("invoked_by_agent"),
+        "prompt_cache_options": context.get("prompt_cache_options"),
+        "files": context.get("files"),
+        "skip_user_message": context.get("skip_user_message", False),
+    }
 
 
 def _fail_queued_run(run_id, error_message):
@@ -1629,6 +1800,63 @@ def _fail_queued_run(run_id, error_message):
             frappe.db.commit()
     except Exception:
         pass
+
+
+def recover_stalled_agent_runs():
+    """Scheduler entry point: recover runs left behind by crashed workers.
+
+    Runs marked ``Started`` whose lock has disappeared are reset to ``Queued``
+    and re-drained. ``Queued`` runs that have been pending without an active
+    lock are also re-drained. Live runs are protected by the heartbeat, which
+    keeps the Redis lock alive.
+    """
+    try:
+        # Stale Started runs: if the worker is alive, it still holds the lock.
+        started_cutoff = add_to_date(now_datetime(), seconds=-_QUEUE_LOCK_TTL)
+        stale_started = frappe.db.get_all(
+            "Agent Run",
+            filters={"status": "Started", "modified": ("<", started_cutoff)},
+            fields=["name", "conversation"],
+            group_by="conversation",
+        )
+        drained_conversations = set()
+        for run in stale_started:
+            if run.conversation in drained_conversations:
+                continue
+            lock_key = _conversation_lock_key(run.conversation)
+            try:
+                ttl = frappe.cache().ttl(lock_key)
+            except Exception:
+                ttl = None
+            if ttl and ttl > 0:
+                continue
+            _reset_run_to_queued(run.name, _("Worker heartbeat lost; run recovered to queue."))
+            _enqueue_drain(run.conversation)
+            drained_conversations.add(run.conversation)
+
+        # Orphaned Queued runs: a run that has been Queued for longer than the
+        # sweep interval without an active lock probably lost its wake-up job.
+        queued_cutoff = add_to_date(now_datetime(), seconds=-_QUEUE_ORPHANED_QUEUED_AGE)
+        orphaned = frappe.db.get_all(
+            "Agent Run",
+            filters={"status": "Queued", "modified": ("<", queued_cutoff)},
+            fields=["name", "conversation"],
+            group_by="conversation",
+        )
+        for run in orphaned:
+            if run.conversation in drained_conversations:
+                continue
+            lock_key = _conversation_lock_key(run.conversation)
+            try:
+                ttl = frappe.cache().ttl(lock_key)
+            except Exception:
+                ttl = None
+            if ttl and ttl > 0:
+                continue
+            _enqueue_drain(run.conversation)
+            drained_conversations.add(run.conversation)
+    except Exception:
+        frappe.log_error(f"Agent run recovery failed: {frappe.get_traceback()}", "Huf")
 
 
 async def run_agent_stream(

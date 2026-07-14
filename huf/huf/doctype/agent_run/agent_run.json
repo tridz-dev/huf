@@ -9,6 +9,8 @@
   "conversation",
   "agent",
   "prompt",
+  "sequence",
+  "runtime_context",
   "response_tab",
   "response",
   "status",
@@ -99,6 +101,21 @@
    "fieldname": "request_tab",
    "fieldtype": "Tab Break",
    "label": "Request"
+  },
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Sequence",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "runtime_context",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Runtime Context",
+   "read_only": 1
   },
   {
    "fieldname": "response_tab",

@@ -546,6 +546,7 @@ export interface RunAgentTestResponse {
     session_id?: string;
     queued?: boolean;
     status?: string;
+    sequence?: number;
   };
 }
 
