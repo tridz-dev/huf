@@ -1,5 +1,5 @@
 import type { ToolCallEvent, NewAgentMessageEvent, AgentRunStatusEvent } from '@/hooks/useChatSocket';
-import type { ChatMessage } from '@/services/chatApi';
+import type { AgentRunStatusResponse, ChatMessage } from '@/services/chatApi';
 import { mapToolStatusToState } from './utils';
 import type { MessageType } from './types';
 
@@ -285,6 +285,49 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
     ],
   };
   return [...prev, newMessage];
+}
+
+/**
+ * Apply a polled agent run status as the same state transition the socket
+ * handlers would produce. Reuses the socket mappers so the reconciliation
+ * logic stays in one place:
+ * - the run status event updates the pending bubble (keyed by agent_run_id);
+ * - on Success with an agent_message_id, the follow-up new message event
+ *   reconciles the bubble with the persisted Agent Message.
+ */
+export function applyPolledRunStatus(
+  prev: MessageType[],
+  poll: AgentRunStatusResponse,
+  conversationId: string
+): MessageType[] {
+  // Ignore status payloads that belong to another conversation.
+  if (poll.conversation_id && poll.conversation_id !== conversationId) {
+    return prev;
+  }
+
+  const eventConversationId = poll.conversation_id ?? conversationId;
+
+  const withStatus = upsertAgentRunStatusFromSocket(prev, {
+    type: 'agent_run_status',
+    agent_run_id: poll.agent_run_id,
+    conversation_id: eventConversationId,
+    status: poll.status,
+    response: poll.response ?? undefined,
+    error: poll.error ?? undefined,
+    agent_message_id: poll.agent_message_id ?? undefined,
+  });
+
+  if (poll.status === 'Success' && poll.agent_message_id) {
+    return upsertAgentMessageFromSocket(withStatus, {
+      type: 'new_agent_message',
+      conversation_id: eventConversationId,
+      message_id: poll.agent_message_id,
+      content: poll.response ?? '',
+      agent_run_id: poll.agent_run_id,
+    });
+  }
+
+  return withStatus;
 }
 
 export function mergeConversationItemsIntoMessages(

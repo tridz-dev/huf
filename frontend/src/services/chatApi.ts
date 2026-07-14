@@ -622,6 +622,37 @@ export async function getAgentMessageIdForRun(agentRunId: string): Promise<strin
   }
 }
 
+/**
+ * Response of huf.ai.agent_integration.get_agent_run_status.
+ * Statuses match the Agent Run doctype Select options.
+ */
+export interface AgentRunStatusResponse {
+  success: boolean;
+  queued?: boolean;
+  status: 'Queued' | 'Started' | 'Success' | 'Failed';
+  response?: string | null;
+  error?: string | null;
+  agent_run_id: string;
+  conversation_id?: string;
+  agent?: string;
+  agent_message_id?: string | null;
+}
+
+/**
+ * Fetch the status of a queued agent run.
+ * Polling fallback for missed `agent_run_status` socket events.
+ */
+export async function getAgentRunStatus(agentRunId: string): Promise<AgentRunStatusResponse> {
+  try {
+    const result = await call.get('huf.ai.agent_integration.get_agent_run_status', {
+      agent_run_id: agentRunId,
+    });
+    return (result?.message ?? result) as AgentRunStatusResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching agent run status');
+  }
+}
+
 export async function getExistingRunFeedback(
   agentMessageId: string
 ): Promise<AgentRunFeedbackDoc | undefined> {

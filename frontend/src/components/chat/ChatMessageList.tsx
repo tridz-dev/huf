@@ -12,6 +12,7 @@ import type { MessageType } from './types';
 import type { LoadingType } from './ChatInput';
 import { useChatAgentIdentity } from './useChatAgentIdentity';
 import { useChatScrollToBottom } from './useChatScrollToBottom';
+import { useRunStatusPolling } from './useRunStatusPolling';
 import {
     mergeConversationItemsIntoMessages,
     upsertAgentMessageFromSocket,
@@ -169,6 +170,10 @@ export function ChatMessageList({
         onNewMessage: handleNewMessage,
         onAgentRunStatus: handleAgentRunStatus,
     });
+
+    // Polling fallback: a missed socket event would otherwise leave pending
+    // bubbles stuck on Queued/Started forever.
+    useRunStatusPolling(messages, setMessages, chatId);
 
     // Show error toast when there's an error loading messages
     useEffect(() => {
