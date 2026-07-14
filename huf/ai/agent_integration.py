@@ -261,9 +261,9 @@ class AgentManager:
             """
 
         if self.agent_doc.allow_chat:
-            from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
+            from huf.ai.artifact_instructions import AI_ELEMENT_INSTRUCTIONS
 
-            instructions += CHART_ARTIFACT_INSTRUCTIONS
+            instructions += AI_ELEMENT_INSTRUCTIONS
 
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
