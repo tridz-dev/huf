@@ -27,6 +27,7 @@ export interface IntegrationServiceDoc {
   documentation_url?: string;
   required_credentials?: string | CredentialSchemaItem[];
   is_builtin?: 0 | 1;
+  modified?: string;
 }
 
 export interface IntegrationSettingsDoc {
@@ -45,6 +46,46 @@ export interface IntegrationSettingsDoc {
   last_used?: string;
   last_error?: string;
   modified?: string;
+}
+
+export interface HttpProviderSettingsDoc {
+  name?: string;
+  provider?: string;
+  api_url?: string;
+  method?: 'POST' | 'GET';
+  auth_type?: 'Bearer Token' | 'API Key Header' | 'None';
+  file_param?: string;
+  enabled?: 0 | 1;
+  model?: string;
+  api_key?: string;
+  response_path?: string;
+  modified?: string;
+}
+
+export interface ElevenlabsSettingsDoc {
+  name?: string;
+  provider?: string;
+  agent_id?: string;
+  webhook_secret?: string;
+  modified?: string;
+}
+
+export type CreateIntegrationServicePayload = Pick<
+  IntegrationServiceDoc,
+  'service_name' | 'category' | 'description' | 'documentation_url' | 'required_credentials'
+>;
+
+export type UpdateIntegrationServicePayload = Partial<CreateIntegrationServicePayload>;
+
+export function serializeRequiredCredentials(schema: CredentialSchemaItem[]): string {
+  return JSON.stringify(
+    schema.map((item) => ({
+      key: item.key,
+      label: item.label,
+      ...(item.required !== undefined ? { required: item.required } : {}),
+      ...(item.description ? { description: item.description } : {}),
+    })),
+  );
 }
 
 export function parseRequiredCredentials(

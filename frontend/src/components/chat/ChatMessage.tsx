@@ -9,10 +9,12 @@ import { MessageActions } from './MessageActions';
 import { MessageLoadingState } from './MessageLoadingState';
 import { CopyButton } from './CopyButton';
 import { Image } from '@/components/ai-elements/image';
+import { Video } from '@/components/ai-elements/video';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatTime } from './utils';
 import type { MessageType } from './types';
 import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
+import { ChatAttachmentCard } from './ChatAttachmentCard';
 import {
 	AudioPlayer,
 	AudioPlayerElement,
@@ -30,6 +32,11 @@ const frappeUrl = import.meta.env.VITE_FRAPPE_URL || window.location.origin;
 
 function resolveAudioSrc(src: string): string {
 	if (src.startsWith('http://') || src.startsWith('https://')) return src;
+	return `${frappeUrl}${src.startsWith('/') ? '' : '/'}${src}`;
+}
+
+function resolveVideoSrc(src: string): string {
+	if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:') || src.startsWith('blob:')) return src;
 	return `${frappeUrl}${src.startsWith('/') ? '' : '/'}${src}`;
 }
 
@@ -159,14 +166,42 @@ export function ChatMessage({
                                         />
                                     )}
                                 </div>
-                            ) : !message.generatedAudio && !((status === 'submitted' || status === 'streaming') && 
+                            ) : message.kind === 'Video' ? (
+                                <div className="flex flex-col gap-2">
+                                    {message.generatedVideo ? (
+                                        <Video
+                                            src={resolveVideoSrc(message.generatedVideo)}
+                                            title={message.versions[0]?.content || 'Generated video'}
+                                            className="max-w-full"
+                                        />
+                                    ) : (
+                                        <Skeleton className="w-full h-[320px] rounded-lg" />
+                                    )}
+                                    {message.versions[0]?.content && (
+                                        <MessageContentWithArtifacts
+                                            content={message.versions[0].content}
+                                            messageId={message.versions[0]?.id ?? message.key}
+                                        />
+                                    )}
+                                </div>
+                            ) : !message.generatedAudio && !((status === 'submitted' || status === 'streaming') &&
                                   message.from === 'assistant' && 
                                   (!message.versions[0]?.content || message.versions[0].content.trim() === '') && 
                                   !message.tools) && (
-                                <MessageContentWithArtifacts
-                                    content={message.versions[0]?.content || ''}
-                                    messageId={message.versions[0]?.id ?? message.key}
-                                />
+                                <>
+                                    {message.attachment && (
+                                        <ChatAttachmentCard
+                                            name={message.attachment.name}
+                                            label={message.attachment.label}
+                                            previewUrl={message.attachment.previewUrl}
+                                            className="mb-2 max-w-sm"
+                                        />
+                                    )}
+                                    <MessageContentWithArtifacts
+                                        content={message.versions[0]?.content || ''}
+                                        messageId={message.versions[0]?.id ?? message.key}
+                                    />
+                                </>
                             )}
                         </MessageContent>
                         {/* Actions for assistant messages */}

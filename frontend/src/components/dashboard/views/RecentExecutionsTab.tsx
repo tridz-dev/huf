@@ -1,41 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { getRecentAgentRuns } from '@/services/dashboardApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
-import { AgentRunDoc } from '@/services/agentRunApi';
+import type { AgentRunDoc } from '@/services/agentRunApi';
+import { LedgerSection, LedgerRow } from '@/components/dashboard';
 
 interface RecentExecutionsTabProps {
   runs?: AgentRunDoc[];
   loading?: boolean;
 }
 
-/**
- * Get status badge variant based on status
- */
-function getStatusVariant(status?: string): 'default' | 'destructive' {
-  if (status === 'Success' || status === 'success') {
-    return 'default';
+function getExecutionStatus(status?: string): { variant: 'run' | 'ok' | 'fail'; label: string } {
+  const normalized = status?.toLowerCase();
+  if (normalized === 'success') {
+    return { variant: 'ok', label: 'Success' };
   }
-  if (status === 'Failed' || status === 'failed') {
-    return 'destructive';
+  if (normalized === 'failed') {
+    return { variant: 'fail', label: 'Failed' };
   }
-  return 'default';
-}
-
-/**
- * Get status icon based on status
- */
-function getStatusIcon(status?: string) {
-  if (status === 'Success' || status === 'success') {
-    return CheckCircle;
-  }
-  if (status === 'Failed' || status === 'failed') {
-    return XCircle;
-  }
-  return CheckCircle;
+  return { variant: 'run', label: status || 'Running' };
 }
 
 export function RecentExecutionsTab({ runs: providedRuns, loading: providedLoading }: RecentExecutionsTabProps) {
@@ -45,14 +29,12 @@ export function RecentExecutionsTab({ runs: providedRuns, loading: providedLoadi
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // If runs are provided, use them and skip fetching
     if (providedRuns !== undefined) {
       setRuns(providedRuns);
       setLoading(providedLoading ?? false);
       return;
     }
 
-    // Otherwise, fetch runs
     async function fetchRecentRuns() {
       try {
         setLoading(true);
@@ -76,67 +58,39 @@ export function RecentExecutionsTab({ runs: providedRuns, loading: providedLoadi
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Recent Executions</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : error ? (
-          <div className="text-center py-8 text-destructive">
-            <p>Failed to load executions</p>
-            <p className="text-sm text-muted-foreground mt-1">{error.message}</p>
-          </div>
-        ) : runs.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No recent executions
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {runs.map((run) => {
-              const StatusIcon = getStatusIcon(run.status);
-              const duration = calculateDuration(run.start_time, run.end_time);
-              const timeAgo = formatTimeAgo(run.start_time);
-              const statusColor = run.status === 'Success' || run.status === 'success' 
-                ? 'text-green-600' 
-                : run.status === 'Failed' || run.status === 'failed'
-                ? 'text-red-600'
-                : 'text-muted-foreground';
+    <LedgerSection title="Recent executions">
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-steel-soft" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-8 text-signal-ink">
+          <p className="font-body font-semibold">Failed to load executions</p>
+          <p className="font-mono text-[12px] text-steel mt-1">{error.message}</p>
+        </div>
+      ) : runs.length === 0 ? (
+        <div className="text-center py-8 text-steel font-body text-[14px]">
+          No recent executions
+        </div>
+      ) : (
+        runs.map((run) => {
+          const duration = calculateDuration(run.start_time, run.end_time);
+          const timeAgo = formatTimeAgo(run.start_time);
+          const status = getExecutionStatus(run.status);
+          const isClickable = Boolean(run.conversation);
 
-              const isClickable = Boolean(run.conversation);
-
-              return (
-                <div
-                  key={run.name}
-                  className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                    isClickable 
-                      ? 'hover:bg-muted/50 cursor-pointer' 
-                      : 'opacity-75'
-                  }`}
-                  onClick={() => isClickable && handleExecutionClick(run)}
-                >
-                  <div className="flex items-center gap-3 flex-1">
-                    <StatusIcon className={`w-4 h-4 shrink-0 ${statusColor}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{run.agent || 'Unknown Agent'}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {duration} • {timeAgo}
-                      </div>
-                    </div>
-                  </div>
-                  <Badge variant={getStatusVariant(run.status)}>
-                    {run.status || 'Unknown'}
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          return (
+            <LedgerRow
+              key={run.name}
+              name={run.agent || 'Unknown Agent'}
+              sub={`run · ${run.name}`}
+              meta={`${duration} · ${timeAgo}`}
+              status={status}
+              onClick={isClickable ? () => handleExecutionClick(run) : undefined}
+            />
+          );
+        })
+      )}
+    </LedgerSection>
   );
 }
-

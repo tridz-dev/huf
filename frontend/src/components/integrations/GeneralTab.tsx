@@ -76,7 +76,7 @@ export function GeneralTab({
             <div className="space-y-0.5">
               <FormLabel>Default for this service</FormLabel>
               <FormDescription>
-                When multiple configs exist for the same service, the default is preferred.
+                Use this as the default credential set for this service
               </FormDescription>
             </div>
             <FormControl>

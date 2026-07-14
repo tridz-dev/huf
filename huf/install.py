@@ -5,6 +5,8 @@
 Installation hooks for Huf app
 """
 
+import json
+
 import frappe
 from huf.utils import is_frappe_16
 
@@ -134,33 +136,49 @@ def after_migrate():
 	try:
 		from huf.ai.app_seeding.seeder import seed_all
 		results = list(seed_all())
-		for r in results:
-			if r.errors:
-				frappe.log_error(f"Seeding errors for {r.app}: {r.errors}", "App Seeding")
+		logger = frappe.logger("app_seeding")
+		_log_seed_results(results, logger)
 	except Exception as e:
 		frappe.log_error(f"App seeding failed: {e}", "App Seeding")
 
+
+def _log_seed_results(results, logger):
+	"""Emit WARNING-level structured logs for skipped seed records and per-app summaries."""
+	for r in results:
+		for rec in r.skipped_records:
+			logger.warning(json.dumps({
+				"app": rec["app"],
+				"file": rec["file"],
+				"record": rec["record"],
+				"missing_refs": rec.get("missing_refs", [])
+			}))
+		logger.warning(json.dumps({
+			"app": r.app,
+			"skipped_count": r.skipped,
+			"seeded_count": r.seeded
+		}))
+
 def create_demo_ai_providers():
     providers = [
-        # {"doctype": "AI Provider", "provider_name": "xAI", "slug": "xai", "chef": "xAI", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Mistral", "slug": "mistral", "chef": "Mistral", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Alibaba", "slug": "alibaba", "chef": "Alibaba", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "DashScope", "slug": "dashscope", "chef": "Alibaba", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Meta", "slug": "meta", "chef": "Meta", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "TogetherAI", "slug": "togetherai", "chef": "TogetherAI", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Azure OpenAI", "slug": "azure", "chef": "Microsoft", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "AWS Bedrock", "slug": "bedrock", "chef": "Amazon", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Ollama", "slug": "ollama", "chef": "Ollama", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "ElevenLabs", "slug": "elevenlabs", "chef": "ElevenLabs", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Groq", "slug": "groq", "chef": "xAI", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "DeepSeek", "slug": "deepseek", "chef": "DeepSeek", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Huggingface", "slug": "huggingface", "chef": "HuggingFace", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Cohere", "slug": "cohere", "chef": "Cohere", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Perplexity", "slug": "perplexity", "chef": "Perplexity", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Google", "slug": "google", "chef": "Google", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Anthropic", "slug": "anthropic", "chef": "Anthropic", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "OpenRouter", "slug": "openrouter", "chef": "OpenRouter", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "OpenAI", "slug": "openai", "chef": "OpenAI", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "xAI", "provider_brand": "xai", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Mistral", "provider_brand": "mistral", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Alibaba", "provider_brand": "alibaba", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "DashScope", "provider_brand": "alibaba", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Meta", "provider_brand": "meta", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "TogetherAI", "provider_brand": "togetherai", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Azure OpenAI", "provider_brand": "azure", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "AWS Bedrock", "provider_brand": "amazon-bedrock", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Ollama", "provider_brand": "ollama", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "ElevenLabs", "provider_brand": "elevenlabs", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Groq", "provider_brand": "groq", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "DeepSeek", "provider_brand": "deepseek", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Huggingface", "provider_brand": "huggingface", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Cohere", "provider_brand": "cohere", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Perplexity", "provider_brand": "perplexity", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Google", "provider_brand": "google", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Anthropic", "provider_brand": "anthropic", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "OpenRouter", "provider_brand": "openrouter", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "OpenAI", "provider_brand": "openai", "api_key": ""},
         
         
     ]

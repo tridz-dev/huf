@@ -10,7 +10,7 @@ export function KnowledgeHeaderActions() {
   };
 
   return (
-    <Button onClick={handleNew} size="sm">
+    <Button variant="display" onClick={handleNew} size="sm">
       <Plus className="w-4 h-4 mr-2" />
       New Knowledge Source
     </Button>

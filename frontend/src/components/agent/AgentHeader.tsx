@@ -1,4 +1,4 @@
-import { Clock, Play, Save, MessageSquare, MoreVertical, FileText, Copy, Trash2 } from 'lucide-react';
+import { Clock, Play, Save, MessageSquare, MoreVertical, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,7 @@ import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
 import { formatTimeAgo } from '@/utils/time';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 interface AgentHeaderProps {
   form: UseFormReturn<AgentFormValues>;
@@ -29,7 +30,6 @@ interface AgentHeaderProps {
   onSave: () => void;
   onRunTest: () => void;
   onDuplicate: () => void;
-  duplicating?: boolean;
   onViewLogs: () => void;
   onDelete: () => void;
   agentId?: string;
@@ -50,10 +50,9 @@ export function AgentHeader({
   runningTest = false,
   onSave,
   onRunTest,
-  onDuplicate,
-  duplicating = false,
+  // onDuplicate,
   onViewLogs,
-  onDelete,
+  // onDelete,
   agentId,
   allowChat,
   lastRun,
@@ -76,12 +75,20 @@ export function AgentHeader({
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
-          <Input
-            value={form.watch('agent_name')}
-            onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
-            className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-            placeholder="Agent Name"
-          />
+          {isNew ? (
+            <Input
+              value={form.watch('agent_name')}
+              onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
+              className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
+              placeholder="Agent Name"
+            />
+          ) : (
+            <InlineEditName
+              value={form.watch('agent_name')}
+              onChange={(value) => form.setValue('agent_name', value, { shouldDirty: true })}
+              placeholder="Agent Name"
+            />
+          )}
           <Badge variant={watchDisabled ? 'secondary' : 'default'}>
             {watchDisabled ? 'Disabled' : 'Active'}
           </Badge>
@@ -92,7 +99,7 @@ export function AgentHeader({
             {models.find(m => m.name === watchModel)?.model_name || watchModel || 'Model'}
           </Badge>
         </div>
-        <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+        <div className="flex flex-col gap-1 text-sm text-steel">
           {activeTriggerCount > 0 && (
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 shrink-0" />
@@ -150,18 +157,18 @@ export function AgentHeader({
             {!isNew && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onDuplicate} disabled={duplicating}>
+                {/* <DropdownMenuItem onClick={onDuplicate}>
                   <Copy className="w-4 h-4 mr-2" />
-                  {duplicating ? 'Duplicating...' : 'Duplicate'}
-                </DropdownMenuItem>
+                  Duplicate
+                </DropdownMenuItem> */}
                 <DropdownMenuItem onClick={onViewLogs}>
                   <FileText className="w-4 h-4 mr-2" />
                   View Logs
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                {/* <DropdownMenuItem onClick={onDelete} className="text-destructive">
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
               </>
             )}
           </DropdownMenuContent>

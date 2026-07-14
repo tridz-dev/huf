@@ -10,7 +10,7 @@ export function AgentSummaryPromptsHeaderActions() {
   };
 
   return (
-    <Button onClick={handleNewPrompt}>
+    <Button variant="display" onClick={handleNewPrompt}>
       <Plus className="mr-2 h-4 w-4" />
       New Summary Prompt
     </Button>

@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-# Superseded — this is the legacy single-container docker setup. The current
-# setup is the fasterdocker multi-service compose (see docker/README.md /
-# docker/compose.fast.yml). This legacy setup will be moved to a
-# `backup/docker-single-container-legacy` branch and may be removed from main in the
-# future.
 set -e
 
 echo "Setting up HUF environment..."

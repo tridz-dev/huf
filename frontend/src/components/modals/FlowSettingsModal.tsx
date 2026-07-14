@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog,
-  DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '../ui/dialog';
+import {
+  DialogScrollBody,
+  DialogScrollContent,
+  DialogScrollFooter,
+  DialogScrollHeader,
+} from '../ui/dialog-scroll';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
@@ -115,11 +118,11 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
+      <DialogScrollContent className="sm:max-w-[425px]">
+        <DialogScrollHeader>
           <DialogTitle>Flow Settings</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
+        </DialogScrollHeader>
+        <DialogScrollBody className="grid gap-4 py-4">
           <div className="grid gap-2">
             <Label htmlFor="name">Flow Name</Label>
             <Input
@@ -133,7 +136,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             <Label htmlFor="description">Description (Optional)</Label>
             <textarea
               id="description"
-              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-[80px] w-full rounded-none border border-input bg-paper px-3 py-2 text-sm ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this flow do?"
@@ -183,8 +186,8 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               />
             </div>
           </div>
-        </div>
-        <DialogFooter className="sm:justify-between items-center border-t pt-4 mt-2">
+        </DialogScrollBody>
+        <DialogScrollFooter className="items-center justify-between sm:justify-between">
           <Button
             variant="outline"
             size="sm"
@@ -204,8 +207,8 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               Save Changes
             </Button>
           </div>
-        </DialogFooter>
-      </DialogContent>
+        </DialogScrollFooter>
+      </DialogScrollContent>
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>

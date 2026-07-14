@@ -1,4 +1,4 @@
-import { Plug, Settings, Loader2 } from 'lucide-react';
+import { Settings, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -20,12 +20,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIProvider, AIModel } from '../types/agent.types';
+import { ProviderBrandSelect } from '@/components/providers/ProviderBrandSelect';
+import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
+import { suggestBrandFromProviderName, resolveProviderBrand } from '@/utils/providerBrands';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
-interface IntegrationsPageProps {
+interface AiProvidersPageProps {
   addProviderKey?: number;
 }
 
-export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
+export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const configureHandledRef = useRef(false);
   const [models, setModels] = useState<AIModel[]>([]);
@@ -37,8 +41,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
   const [formData, setFormData] = useState({
     provider_name: '',
     api_key: '',
-    slug: '',
-    chef: '',
+    provider_brand: '',
   });
 
   const {
@@ -119,8 +122,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
     setFormData({
       provider_name: '',
       api_key: '',
-      slug: '',
-      chef: '',
+      provider_brand: '',
     });
     setConfigureModalOpen(true);
   };
@@ -144,8 +146,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
       setFormData({
         provider_name: details.provider_name || '',
         api_key: details.api_key || '',
-        slug: details.slug || '',
-        chef: details.chef || '',
+        provider_brand: details.provider_brand || '',
       });
     } catch (error) {
       toast.error('Failed to load provider details');
@@ -200,23 +201,24 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
       return;
     }
 
+    const providerBrand =
+      formData.provider_brand ||
+      suggestBrandFromProviderName(formData.provider_name) ||
+      'other';
+
     setSaving(true);
     try {
       if (isEditing && selectedProvider) {
-        // Update existing provider
         await updateProvider(selectedProvider.name, {
           api_key: formData.api_key,
-          slug: formData.slug,
-          chef: formData.chef,
+          provider_brand: providerBrand,
         });
         toast.success('Provider updated successfully');
       } else {
-        // Create new provider
         await createProvider({
           provider_name: formData.provider_name.trim(),
           api_key: formData.api_key,
-          slug: formData.slug,
-          chef: formData.chef,
+          provider_brand: providerBrand,
         });
         toast.success('Provider created successfully');
       }
@@ -225,8 +227,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
       setFormData({
         provider_name: '',
         api_key: '',
-        slug: '',
-        chef: '',
+        provider_brand: '',
       });
       // Refresh the list
       reset();
@@ -237,6 +238,13 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
       setSaving(false);
     }
   };
+
+  useSaveShortcut({
+    onSave: handleSave,
+    enabled: configureModalOpen && !loadingProvider,
+    isSubmitting: saving,
+    allowInDialog: true,
+  });
 
   return (
     <PageLayout
@@ -252,7 +260,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load providers</p>
-          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching providers.'}</p>
+          <p className="text-sm text-steel mb-4">{error.message || 'An error occurred while fetching providers.'}</p>
         </div>
       )}
       <GridView
@@ -261,7 +269,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No providers found.</p>
+            <p className="font-body text-steel-soft mb-4">No providers found.</p>
           </div>
         }
         renderItem={(provider) => {
@@ -271,9 +279,11 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Plug className="w-5 h-5 text-primary" />
-                    </div>
+                    <ProviderBrandIcon
+                      brand={resolveProviderBrand(provider.provider_brand, provider.provider_name)}
+                      size="sm"
+                      showFallback
+                    />
                     <div>
                       <CardTitle className="text-base">{provider.provider_name}</CardTitle>
                       <CardDescription className="text-xs">
@@ -294,7 +304,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No models configured</p>
+                  <p className="text-sm font-body text-steel-soft">No models configured</p>
                 )}
               </CardContent>
               <CardFooter>
@@ -320,7 +330,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
         disabled={!!search || initialLoading}
       />
       {!hasMore && providers.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined ? `Showing all ${total} providers` : 'No more providers to load'}
         </div>
       )}
@@ -339,7 +349,7 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
 
           {loadingProvider ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
             </div>
           ) : (
             <div className="space-y-4 py-4">
@@ -370,27 +380,12 @@ export function IntegrationsPage({ addProviderKey }: IntegrationsPageProps) {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="slug">Slug</Label>
-                <Input
-                  id="slug"
-                  type="text"
-                  placeholder="Enter slug"
-                  value={formData.slug}
-                  onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="chef">Chef</Label>
-                <Input
-                  id="chef"
-                  type="text"
-                  placeholder="Enter chef"
-                  value={formData.chef}
-                  onChange={(e) => setFormData({ ...formData, chef: e.target.value })}
-                />
-              </div>
+              <ProviderBrandSelect
+                value={formData.provider_brand}
+                onChange={(provider_brand) => setFormData({ ...formData, provider_brand })}
+                providerName={formData.provider_name}
+                required
+              />
             </div>
           )}
 

@@ -4,9 +4,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
+import { Checkbox } from '@/components/ui/checkbox';
 import { UseFormReturn } from 'react-hook-form';
 import { useMemo } from 'react';
-import { knowledgeTypes, knowledgeScopes, knowledgeStorageModes } from '@/data/knowledge';
+import { knowledgeTypes, knowledgeScopes, knowledgeStorageModes, chromaModes, isVectorKnowledgeType } from '@/data/knowledge';
 import { linkRoutes } from '@/lib/link-routes';
 import type { KnowledgeSourceFormValues } from './types';
 
@@ -23,6 +24,7 @@ interface GeneralTabProps {
 
 export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
   const watchKnowledgeType = form.watch('knowledge_type');
+  const watchChromaMode = form.watch('chroma_mode');
 
   const providerOptions = useMemo(
     () => providers.map((p) => ({ value: p.name, label: p.provider_name || p.name })),
@@ -153,7 +155,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
         </CardContent>
       </Card>
 
-      {watchKnowledgeType === 'sqlite_vec' && (
+      {isVectorKnowledgeType(watchKnowledgeType) && (
         <Card>
           <CardHeader>
             <CardTitle>Vector Settings</CardTitle>
@@ -173,7 +175,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                       value={field.value ?? ''}
                     />
                   </FormControl>
-                  <FormDescription>LiteLLM model id (e.g. text-embedding-3-small)</FormDescription>
+                  <FormDescription>LiteLLM model identifier, e.g. openai/text-embedding-3-small</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -194,7 +196,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                       onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                     />
                   </FormControl>
-                  <FormDescription>Must match the embedding model dimension</FormDescription>
+                  <FormDescription>Must match the embedding model output dimensionality</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -217,11 +219,110 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                       linkTo={linkRoutes.aiProvider}
                     />
                   </FormControl>
-                  <FormDescription>AI Provider used for API key resolution (optional)</FormDescription>
+                  <FormDescription>AI Provider for API key resolution</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {watchKnowledgeType === 'chroma' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Chroma Connection Settings</CardTitle>
+            <CardDescription>Configure how this knowledge source connects to ChromaDB</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="chroma_mode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Chroma Mode</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select mode" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {chromaModes.map((mode) => (
+                        <SelectItem key={mode.value} value={mode.value}>
+                          {mode.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>File: store on disk. Server: connect to a running Chroma server.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {watchChromaMode === 'Server' && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="chroma_host"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Chroma Host</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="localhost"
+                          {...field}
+                          value={field.value ?? ''}
+                        />
+                      </FormControl>
+                      <FormDescription>Hostname or IP of the Chroma server</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="chroma_port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Chroma Port</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="8000"
+                          {...field}
+                          value={field.value ?? 8000}
+                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                        />
+                      </FormControl>
+                      <FormDescription>Port of the Chroma server</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="chroma_ssl"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-start space-x-3 space-y-0 sm:col-span-2">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel>Use SSL (HTTPS)</FormLabel>
+                        <FormDescription>Enable if your Chroma server uses HTTPS</FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
           </CardContent>
         </Card>
       )}

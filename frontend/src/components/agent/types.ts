@@ -47,8 +47,10 @@ export const agentFormSchema = z.object({
   history_limit: z.number().optional(),
   max_knowledge_tokens: z.number().optional(),
   max_turns: z.number().optional(),
+  max_context_chars: z.number().optional(),
   enable_conversation_data: z.boolean().optional(),
   inject_conversation_data: z.boolean().optional(),
+  conversation_data_api_permission: z.string().optional(),
   autonaming_of_conversation_title: z.boolean().optional(),
 
   agent_color: z
@@ -65,6 +67,10 @@ export const agentFormSchema = z.object({
   tts_model: z.string().optional(),
   tts_voice: z.string().optional(),
   stt_model: z.string().optional(),
+
+  allow_file_upload: z.boolean().optional(),
+  enable_ocr: z.boolean().optional(),
+  max_upload_size_mb: z.number().int().positive().optional(),
 }).superRefine((values, ctx) => {
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({

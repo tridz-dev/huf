@@ -8,7 +8,7 @@ HUF is a complete, self-hosted AI layer built on open standards. It gives teams 
 
 <br/>
 
-<img width="1905" height="928" alt="HUF Dashboard" src="https://github.com/user-attachments/assets/61a8511b-80cc-4843-a90c-bfcfc4a45c97" />
+<img width="1905" height="928" alt="HUF Dashboard" src="./huf/public/Images/HUF Home.png" />
 
 <br/>
 
@@ -220,25 +220,17 @@ These capabilities are in final development and will ship soon:
 
 ## Quick Start
 
-### Try with Docker (demo / trial only)
-
-The fastest way to try HUF is the single-image demo. It is **not meant for production or active development** — it bundles a pre-seeded site, uses hardcoded demo credentials, and runs everything inside one container for simplicity.
+### Try with Docker
 
 ```bash
 git clone https://github.com/tridz-dev/huf.git
 cd huf/docker
-docker compose up --wait
+docker compose up
 ```
 
-Open http://localhost:8000/huf and login:
+Open http://localhost:8000 and login:
 - **User:** Administrator
-- **Password:** fasterdocker-admin
-
-The image ships with a disabled **Demo Assistant** agent and a **Demo Assistant Prompt**. Enable the agent and add your OpenAI API key to start chatting.
-
-The compose file pulls a prebuilt multi-arch image (`ghcr.io/tridz-dev/huf-demo`) that supports both **Apple Silicon / ARM64 Linux (`linux/arm64`)** and **Intel/AMD Linux (`linux/amd64`)**. Docker automatically pulls the correct architecture for your host.
-
-For development or production-style Docker setups, see [`docker/fast/README.md`](docker/fast/README.md).
+- **Password:** admin
 
 ### Install on Existing Bench
 

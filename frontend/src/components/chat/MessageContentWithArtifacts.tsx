@@ -27,7 +27,11 @@ export function MessageContentWithArtifacts({ content, messageId }: MessageConte
 	const contentHasJSXPreviews = hasJSXPreviews(decodedContent);
 
 	if (!contentHasArtifacts && !contentHasWebPreviews && !contentHasJSXPreviews) {
-		return <MessageResponse>{content}</MessageResponse>;
+		return (
+			<div className="min-w-0 max-w-full overflow-x-auto">
+				<MessageResponse>{content}</MessageResponse>
+			</div>
+		);
 	}
 
 	const parsed = parseMessagePreviewContent(content);
@@ -36,7 +40,9 @@ export function MessageContentWithArtifacts({ content, messageId }: MessageConte
 	return (
 		<>
 			{textContent && textContent.trim() && (
-				<MessageResponse>{textContent}</MessageResponse>
+				<div className="min-w-0 max-w-full overflow-x-auto">
+					<MessageResponse>{textContent}</MessageResponse>
+				</div>
 			)}
 
 			{jsxPreviews.map((preview, idx) => (

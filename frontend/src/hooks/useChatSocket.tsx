@@ -1,5 +1,5 @@
-import { createFrappeSocket } from '../utils/socket';
 import { useEffect } from 'react';
+import { useSocket } from '../contexts/SocketContext';
 
 export type ToolCallEvent = {
     type: 'tool_call_started' | 'tool_call_completed' | 'tool_call_failed';
@@ -22,56 +22,29 @@ export type NewAgentMessageEvent = {
     content?: string;
     generated_image?: string;
     generated_audio?: string;
+    generated_video?: string;
     agent_run_id?: string;
     conversation_index?: number;
-};
-
-export type SubAgentCompletedEvent = {
-    type: 'sub_agent_completed';
-    conversation_id: string;
-    agent_name: string;
-    status: string;
-    result?: string;
-};
-
-export type SubAgentFailedEvent = {
-    type: 'sub_agent_failed';
-    conversation_id: string;
-    agent_name: string;
-    status: string;
-    error?: string;
 };
 
 type ChatSocketProps = {   
     conversationId: string | null;
     onToolUpdate?: (event: ToolCallEvent) => void;
     onNewMessage?: (event: NewAgentMessageEvent) => void;
-    onSubAgentCompleted?: (event: SubAgentCompletedEvent) => void;
-    onSubAgentFailed?: (event: SubAgentFailedEvent) => void;
 }
 
-export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onSubAgentCompleted, onSubAgentFailed }: ChatSocketProps) {
+export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: ChatSocketProps) {
+    const socket = useSocket();
+
     useEffect(() => {
-        if (!conversationId) {
+        if (!socket || !conversationId) {
             return;
         }
 
-        const siteName = (window as any).frappe?.boot?.sitename;
-        // If port is available in the url, use socketio port from the url, otherwise empty
-        const port = window.location.port ?  (window as any).frappe?.boot?.socketio_port : ''
-        
-        if (!siteName) {
-            console.warn("Site name not available yet, socket connection will be skipped");
-            return;
-        }
-
-        const socket = createFrappeSocket({ siteName, port });
-        console.log("Socket created for conversation:", conversationId);
-
-        // Listen for conversation-specific events
-        socket.on(`conversation:${conversationId}`, (data: any) => {
+        // Listen for conversation-specific events on the shared socket
+        const handler = (data: NewAgentMessageEvent | ToolCallEvent) => {
             console.log("Conversation event received:", data);
-            
+
             // Route to appropriate handler based on event type
             if (data.type === 'new_agent_message') {
                 onNewMessage?.(data as NewAgentMessageEvent);
@@ -81,29 +54,15 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onSu
                 data.type === 'tool_call_failed'
             ) {
                 onToolUpdate?.(data as ToolCallEvent);
-            } else if (data.type === 'sub_agent_completed') {
-                onSubAgentCompleted?.(data as SubAgentCompletedEvent);
-            } else if (data.type === 'sub_agent_failed') {
-                onSubAgentFailed?.(data as SubAgentFailedEvent);
             }
-        });
+        };
 
-        socket.on('connect', () => {
-            console.log("✅ Socket connected for conversation:", conversationId);
-        });
-
-        socket.on('connect_error', (error) => {
-            console.error("❌ Socket connection error:", error);
-        });
-
-        socket.on('disconnect', (reason) => {
-            console.warn("⚠️ Socket disconnected:", reason);
-        });
+        socket.on(`conversation:${conversationId}`, handler);
 
         return () => {
-            console.log("Cleaning up socket for conversation:", conversationId);
-            socket.off(`conversation:${conversationId}`);
-            socket.disconnect();
+            // Only detach this conversation's listener - the shared socket
+            // itself is owned by SocketProvider and stays connected.
+            socket.off(`conversation:${conversationId}`, handler);
         };
-    }, [conversationId, onToolUpdate, onNewMessage, onSubAgentCompleted, onSubAgentFailed]);
+    }, [socket, conversationId, onToolUpdate, onNewMessage]);
 }

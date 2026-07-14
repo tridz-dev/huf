@@ -7,6 +7,8 @@ import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgents } from '../services/agentApi';
 import { formatTimeAgo } from '../utils/time';
 import type { AgentDoc } from '../types/agent.types';
+import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
+import { resolveProviderBrand } from '@/utils/providerBrands';
 
 const statusOptions = [
   { label: 'All Status', value: 'all' },
@@ -23,7 +25,7 @@ const chatOptions = [
 function getStatusVariant(status: 'active' | 'disabled') {
   switch (status) {
     case 'active':
-      return 'default';
+      return 'success';
     case 'disabled':
       return 'secondary';
     default:
@@ -127,7 +129,8 @@ function AgentsPage() {
 
   return (
     <PageLayout
-      subtitle="Manage your AI agents and their configurations"
+      title="Agents"
+      subtitle="Create and manage your AI agents."
       filters={
         <FilterBar
           searchPlaceholder="Search agents..."
@@ -153,7 +156,7 @@ function AgentsPage() {
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load agents</p>
-          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching agents.'}</p>
+          <p className="text-sm text-steel mb-4">{error.message || 'An error occurred while fetching agents.'}</p>
         </div>
       )}
       <GridView
@@ -162,7 +165,7 @@ function AgentsPage() {
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No agents found.</p>
+            <p className="font-body text-steel mb-4">No agents found.</p>
           </div>
         }
         renderItem={(agent) => {
@@ -174,6 +177,13 @@ function AgentsPage() {
               title={agent.agent_name || agent.name}
               description={agent.description?.slice(0, 100) || 'No description'}
               avatarColor={agent.agent_color}
+              cornerBadge={
+                <ProviderBrandIcon
+                  brand={resolveProviderBrand(agent.provider_brand, agent.provider)}
+                  size="sm"
+                  showFallback
+                />
+              }
               status={{
                 label: status,
                 variant: getStatusVariant(status),
@@ -214,7 +224,7 @@ function AgentsPage() {
         disabled={!!search || initialLoading}
       />
       {!hasMore && agents.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined ? `Showing all ${total} agents` : 'No more agents to load'}
         </div>
       )}

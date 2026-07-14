@@ -33,5 +33,5 @@ class IntegrationService(Document):
 			"jira", "linear", "clickup", "trello", "notion",
 			"zendesk", "calcom", "zoom", "tavily", "gmail"
 		]
-		if self.service_name.lower() in builtin_services:
+		if self.service_name and self.service_name.lower() in builtin_services:
 			self.is_builtin = 1

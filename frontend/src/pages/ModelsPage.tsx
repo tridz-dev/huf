@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import type { AIModel, AIProvider } from '../types/agent.types';
 import { LinkFieldControl } from '../components/ui/link-field-control';
 import { linkRoutes } from '../lib/link-routes';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 interface ModelsPageProps {
   addModelKey?: number;
@@ -297,6 +298,13 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
     }
   };
 
+  useSaveShortcut({
+    onSave: handleSave,
+    enabled: configureModalOpen && !loadingModel,
+    isSubmitting: saving,
+    allowInDialog: true,
+  });
+
   return (
     <PageLayout
       subtitle="Manage AI models and their capabilities"
@@ -311,7 +319,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load models</p>
-          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching models.'}</p>
+          <p className="text-sm text-steel mb-4">{error.message || 'An error occurred while fetching models.'}</p>
         </div>
       )}
       <GridView
@@ -320,7 +328,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No models found.</p>
+            <p className="font-body text-steel-soft mb-4">No models found.</p>
           </div>
         }
         renderItem={(model) => {
@@ -331,7 +339,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-none bg-primary/10 flex items-center justify-center">
                       <Cpu className="w-5 h-5 text-primary" />
                     </div>
                     <div>
@@ -352,7 +360,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                   ))}
                 </div>
                 {model.use_custom_pricing === 1 && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5 text-xs text-steel-soft">
                     <DollarSign className="w-3 h-3" />
                     <span>{pricingSummary || 'Custom pricing'}</span>
                   </div>
@@ -381,7 +389,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         disabled={!!search || initialLoading}
       />
       {!hasMore && models.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined ? `Showing all ${total} models` : 'No more models to load'}
         </div>
       )}
@@ -399,7 +407,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
 
           {loadingModel ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
             </div>
           ) : (
             <div className="space-y-4 py-4">
@@ -460,14 +468,20 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-steel-soft">
+                  Supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription).
+                </p>
               </div>
 
               <div className="border-t pt-4 space-y-4">
+                <p className="text-xs text-steel-soft">
+                  Enable custom prices to override LiteLLM&apos;s automatic pricing lookup. When disabled, LiteLLM&apos;s built-in price table is used as fallback. Values are in USD per 1 million tokens.
+                </p>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="use_custom_pricing">Enable Custom Pricing</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Override LiteLLM automatic pricing (USD per 1M tokens)
+                    <p className="text-xs text-steel-soft">
+                      Check this to activate the custom prices below. When unchecked, LiteLLM&apos;s automatic pricing is used regardless of what is entered below.
                     </p>
                   </div>
                   <Switch
@@ -483,6 +497,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <Label htmlFor="input_cost">Input Cost per 1M Tokens (USD)</Label>
+                      <p className="text-xs text-steel-soft">
+                        Cost in USD per 1 million prompt/input tokens. E.g. enter 2.50 for $2.50 per 1M tokens. Enter 0 for free/self-hosted models.
+                      </p>
                       <Input
                         id="input_cost"
                         type="number"
@@ -497,6 +514,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="output_cost">Output Cost per 1M Tokens (USD)</Label>
+                      <p className="text-xs text-steel-soft">
+                        Cost in USD per 1 million completion/output tokens. E.g. enter 10.00 for $10.00 per 1M tokens.
+                      </p>
                       <Input
                         id="output_cost"
                         type="number"
@@ -511,6 +531,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="cached_input_cost">Cached Input Cost per 1M Tokens (USD)</Label>
+                      <p className="text-xs text-steel-soft">
+                        Optional. Cost for prompt cache reads (cache hits) in USD per 1M tokens. E.g. Anthropic charges $0.30/1M for cache reads vs $3.00/1M for regular input. Leave as 0 if not applicable.
+                      </p>
                       <Input
                         id="cached_input_cost"
                         type="number"

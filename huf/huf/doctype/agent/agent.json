@@ -10,8 +10,7 @@
   "llm_configuration_section",
   "agent_name",
   "provider",
-  "chef",
-  "slug",
+  "provider_brand",
   "temperature",
   "description",
   "column_break_df8m",
@@ -84,6 +83,11 @@
   "tts_voice",
   "audio_transcription_section",
   "stt_model",
+  "document_upload_section",
+  "allow_file_upload",
+  "enable_ocr",
+  "column_break_doc_upload",
+  "max_upload_size_mb",
   "huf_ui_section",
   "agent_color",
   "column_break_g3a9",
@@ -460,19 +464,11 @@
    "label": "Persist per User (Doc/Schedule)"
   },
   {
-   "description": "This is the provider standard name",
-   "fetch_from": "provider.chef",
-   "fieldname": "chef",
+   "fetch_from": "provider.provider_brand",
+   "fieldname": "provider_brand",
    "fieldtype": "Data",
    "hidden": 1,
-   "label": "Chef"
-  },
-  {
-   "fetch_from": "provider.slug",
-   "fieldname": "slug",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Slug"
+   "label": "Provider Brand"
   },
   {
    "default": "0",
@@ -640,6 +636,36 @@
    "fieldname": "audio_transcription_section",
    "fieldtype": "Section Break",
    "label": "Audio Transcription"
+  },
+  {
+   "fieldname": "document_upload_section",
+   "fieldtype": "Section Break",
+   "label": "Document Upload"
+  },
+  {
+   "default": "0",
+   "description": "Allow users to attach files (documents, images) in chat for this agent.",
+   "fieldname": "allow_file_upload",
+   "fieldtype": "Check",
+   "label": "Allow File Upload"
+  },
+  {
+   "default": "0",
+   "description": "Route uploaded documents through the OCR extraction pipeline instead of vision/local extraction only.",
+   "fieldname": "enable_ocr",
+   "fieldtype": "Check",
+   "label": "Enable OCR"
+  },
+  {
+   "fieldname": "column_break_doc_upload",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "25",
+   "description": "Maximum size (in MB) for a single uploaded file. Capped by the global 25 MB limit.",
+   "fieldname": "max_upload_size_mb",
+   "fieldtype": "Int",
+   "label": "Max Upload Size (MB)"
   },
   {
    "default": "2000",

@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
   Dialog,
-  DialogContent,
-  DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import {
+  DialogScrollBody,
+  DialogScrollContent,
+  DialogScrollFooter,
+  DialogScrollHeader,
+} from '../ui/dialog-scroll';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -206,7 +210,7 @@ export function NodeSelectionModal({
 
     if (config.type === 'webhook') {
       return (
-        <div className="space-y-4 mt-4 overflow-y-auto max-h-[300px] pr-2 border rounded-md p-3 bg-muted/20">
+        <div className="space-y-4 mt-4 overflow-y-auto max-h-[300px] pr-2 border rounded-none p-3 bg-paper-deep/20">
           <div>
             <Label htmlFor="webhook-url">Webhook URL</Label>
             <div className="flex gap-2">
@@ -214,7 +218,7 @@ export function NodeSelectionModal({
                 id="webhook-url"
                 value={config.url || ''}
                 readOnly
-                className="bg-muted text-xs font-mono"
+                className="bg-paper-deep text-xs font-mono"
               />
               <Button
                 variant="outline"
@@ -227,7 +231,7 @@ export function NodeSelectionModal({
                 Copy
               </Button>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1">This is your endpoint. Send data here to trigger this flow.</p>
+            <p className="text-[10px] text-steel-soft mt-1">This is your endpoint. Send data here to trigger this flow.</p>
           </div>
           <div>
             <Label htmlFor="method">HTTP Method</Label>
@@ -261,7 +265,7 @@ export function NodeSelectionModal({
             <Label htmlFor="headers">Custom Headers (JSON string)</Label>
             <textarea
               id="headers"
-              className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-ring"
+              className="flex min-h-[60px] w-full rounded-none border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
               value={JSON.stringify(config.headers || {}, null, 2)}
               onChange={(e) => {
                 try {
@@ -278,7 +282,7 @@ export function NodeSelectionModal({
             <Label htmlFor="body-template">Expected Body Template (JSON for validation or documentation)</Label>
             <textarea
               id="body-template"
-              className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-ring"
+              className="flex min-h-[100px] w-full rounded-none border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
               value={config.body_template || ''}
               onChange={(e) => setTriggerConfig({ ...config, body_template: e.target.value })}
               placeholder='{ "order_id": "123", "amount": 100 }'
@@ -395,7 +399,7 @@ export function NodeSelectionModal({
               id="integration"
               value={config.integration || ''}
               readOnly
-              className="bg-muted"
+              className="bg-paper-deep"
             />
           </div>
           <div>
@@ -419,7 +423,7 @@ export function NodeSelectionModal({
 
     return (
       <div className="mb-6">
-        <h3 className="text-sm font-medium mb-3 text-muted-foreground">{title}</h3>
+        <h3 className="text-sm font-medium mb-3 text-steel">{title}</h3>
         <div className="grid grid-cols-2 gap-3">
           {actions.map((action) => {
             const Icon = iconMap[action.icon || 'FileText'];
@@ -429,7 +433,7 @@ export function NodeSelectionModal({
             return (
               <button
                 key={action.id}
-                className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-accent transition-all"
+                className="flex items-center gap-3 p-3 rounded-none border border-line hover:border-ink hover:bg-paper-deep transition-all"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -438,7 +442,7 @@ export function NodeSelectionModal({
                 <div className="text-left flex-1 min-w-0">
                   <div className="text-sm font-medium">{action.name}</div>
                   {action.description && (
-                    <div className="text-xs text-muted-foreground truncate">
+                    <div className="text-xs text-steel-soft truncate">
                       {action.description}
                     </div>
                   )}
@@ -453,15 +457,16 @@ export function NodeSelectionModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader className="flex-shrink-0">
+      <DialogScrollContent className="max-w-3xl">
+        <DialogScrollHeader>
           <DialogTitle>
             {mainTab === 'triggers' ? 'Select Trigger' : 'Add Action'}
           </DialogTitle>
-        </DialogHeader>
+        </DialogScrollHeader>
 
+        <DialogScrollBody className="flex flex-col pb-4">
         <div className="relative mb-4 flex-shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-soft" />
           <Input
             placeholder={`Search ${mainTab}...`}
             value={searchQuery}
@@ -472,19 +477,19 @@ export function NodeSelectionModal({
 
         <Tabs value={mainTab} onValueChange={(v) => { setMainTab(v as MainTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
           {mode !== 'trigger' ? (
-            <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+            <TabsList layout="grid" cols={2} className="flex-shrink-0">
               <TabsTrigger value="triggers">Triggers</TabsTrigger>
               <TabsTrigger value="actions">Actions</TabsTrigger>
             </TabsList>
           ) : (
-            <TabsList className="grid w-full grid-cols-1 flex-shrink-0">
+            <TabsList layout="grid" cols={1} className="flex-shrink-0">
               <TabsTrigger value="triggers">Triggers</TabsTrigger>
             </TabsList>
           )}
 
           <TabsContent value="triggers" className="flex-1 flex flex-col min-h-0 mt-4">
             <Tabs value={triggerSubTab} onValueChange={(v) => { setTriggerSubTab(v as TriggerSubTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
-              <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+              <TabsList layout="grid" cols={2} className="flex-shrink-0">
                 <TabsTrigger value="explore">Explore</TabsTrigger>
                 <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
               </TabsList>
@@ -494,18 +499,18 @@ export function NodeSelectionModal({
                   {triggerSubTab === 'ai-agents' ? (
                     loadingAgents ? (
                       <div className="flex items-center justify-center py-12">
-                        <div className="text-muted-foreground">Loading agents...</div>
+                        <div className="font-body text-steel-soft">Loading agents...</div>
                       </div>
                     ) : agents.length === 0 ? (
                       <div className="flex items-center justify-center py-12">
-                        <div className="text-center text-muted-foreground">
+                        <div className="text-center font-body text-steel">
                           <Bot className="w-12 h-12 mx-auto mb-2 opacity-50" />
                           <p>No agents available</p>
                         </div>
                       </div>
                     ) : (
                       <div>
-                        <h3 className="text-sm font-medium mb-3 text-muted-foreground">
+                        <h3 className="text-sm font-medium mb-3 text-steel">
                           Available Agents
                         </h3>
                         <div className="space-y-2">
@@ -526,8 +531,8 @@ export function NodeSelectionModal({
                             <button
                               key={agent.name}
                               className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === agent.name
-                                ? 'border-primary bg-primary/5'
-                                : 'border-border hover:border-primary/50 hover:bg-accent'
+                                ? 'border-signal bg-panel'
+                                : 'border-line hover:border-ink hover:bg-paper-deep'
                                 }`}
                               onClick={() => {
                                 setSelectedItem(agent.name);
@@ -559,10 +564,10 @@ export function NodeSelectionModal({
                                     <Badge variant="outline" className="text-xs">Chat</Badge>
                                   )}
                                 </div>
-                                <div className="text-xs text-muted-foreground line-clamp-1">
+                                <div className="text-xs text-steel-soft line-clamp-1">
                                   {summary}
                                 </div>
-                                <div className="text-xs text-muted-foreground mt-1">
+                                <div className="text-xs text-steel-soft mt-1">
                                   {agent.provider || 'Unknown provider'} • {agent.model || 'Unknown model'}
                                   {agent.prompt_mode === 'Template' ? ' • Template' : ''}
                                 </div>
@@ -577,7 +582,7 @@ export function NodeSelectionModal({
                     <>
                       {highlightTriggers.length > 0 && (
                         <div className="mb-6">
-                          <h3 className="text-sm font-medium mb-3 text-muted-foreground">
+                          <h3 className="text-sm font-medium mb-3 text-steel">
                             Highlights
                           </h3>
                           <div className="grid grid-cols-2 gap-3">
@@ -587,8 +592,8 @@ export function NodeSelectionModal({
                                 <button
                                   key={trigger.id}
                                   className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedItem === trigger.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50 hover:bg-accent'
+                                    ? 'border-signal bg-panel'
+                                    : 'border-line hover:border-ink hover:bg-paper-deep'
                                     }`}
                                   onClick={() => handleSelectTrigger(trigger.id)}
                                 >
@@ -607,7 +612,7 @@ export function NodeSelectionModal({
 
                       {popularTriggers.length > 0 && (
                         <div>
-                          <h3 className="text-sm font-medium mb-3 text-muted-foreground">
+                          <h3 className="text-sm font-medium mb-3 text-steel">
                             Popular
                           </h3>
                           <div className="space-y-2">
@@ -617,8 +622,8 @@ export function NodeSelectionModal({
                                 <button
                                   key={trigger.id}
                                   className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === trigger.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50 hover:bg-accent'
+                                    ? 'border-signal bg-panel'
+                                    : 'border-line hover:border-ink hover:bg-paper-deep'
                                     }`}
                                   onClick={() => handleSelectTrigger(trigger.id)}
                                 >
@@ -628,7 +633,7 @@ export function NodeSelectionModal({
                                   <div className="text-left flex-1 min-w-0">
                                     <div className="text-sm font-medium">{trigger.name}</div>
                                     {trigger.description && (
-                                      <div className="text-xs text-muted-foreground">
+                                      <div className="text-xs text-steel-soft">
                                         {trigger.description}
                                       </div>
                                     )}
@@ -657,8 +662,9 @@ export function NodeSelectionModal({
             {renderActionCategory('Integrations', integrationActions)}
           </TabsContent>
         </Tabs>
+        </DialogScrollBody>
 
-        <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
+        <DialogScrollFooter className="justify-end">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
@@ -667,8 +673,8 @@ export function NodeSelectionModal({
               Save Configuration
             </Button>
           )}
-        </div>
-      </DialogContent>
+        </DialogScrollFooter>
+      </DialogScrollContent>
     </Dialog>
   );
 }

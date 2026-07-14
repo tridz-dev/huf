@@ -8,6 +8,7 @@ export const mcpAuthTypes = [
   { label: 'API Key', value: 'api_key' },
   { label: 'Bearer Token', value: 'bearer_token' },
   { label: 'Custom Header', value: 'custom_header' },
+  { label: 'OAuth 2.1', value: 'oauth' },
 ] as const;
 
 export type MCPAuthType = typeof mcpAuthTypes[number]['value'];
@@ -17,6 +18,7 @@ export const mcpAuthHeaderNames: Record<MCPAuthType, string> = {
   api_key: 'X-API-Key',
   bearer_token: 'Authorization',
   custom_header: 'Authorization',
+  oauth: '',
 } as const;
 
 /**
@@ -28,6 +30,7 @@ export const mcpAuthHeaderValuePrefix: Record<MCPAuthType, string> = {
   api_key: '',
   bearer_token: 'Bearer ',
   custom_header: '',
+  oauth: '',
 } as const;
 
 export const mcpTransportTypes = [
