@@ -133,7 +133,7 @@ export function SelectMCPServersModal({
         <div className="flex flex-col gap-3">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-soft" />
             <Input
               placeholder="Search MCP servers by name..."
               value={searchQuery}
@@ -147,11 +147,11 @@ export function SelectMCPServersModal({
         <div className="space-y-2">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="text-muted-foreground">Loading MCP servers...</div>
+              <div className="font-body text-steel-soft">Loading MCP servers...</div>
             </div>
           ) : filteredServers.length === 0 ? (
             <div className="flex items-center justify-center py-12">
-              <div className="text-muted-foreground">
+              <div className="text-steel">
                 {searchQuery
                   ? 'No MCP servers match your search'
                   : 'No MCP servers available'}
@@ -172,7 +172,7 @@ export function SelectMCPServersModal({
         </DialogScrollBody>
 
         <DialogScrollFooter className="items-center justify-between sm:justify-between">
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-steel">
             {selectedCount > 0 ? (
               <>
                 {selectedCount} server{selectedCount > 1 ? 's' : ''} selected

@@ -24,13 +24,13 @@ export function ToolTemplateCard({ template, onClick }: ToolTemplateCardProps) {
       onClick={onClick}
       className={cn(
         'cursor-pointer group transition-colors',
-        'hover:bg-muted/50 hover:border-ink'
+        'hover:bg-paper-deep hover:border-ink'
       )}
     >
       <CardContent className="flex flex-col items-start p-5">
         <div
           className={cn(
-            'h-10 w-10 rounded-none bg-muted/30 text-muted-foreground',
+            'h-10 w-10 rounded-none bg-paper-deep/30 text-muted-foreground',
             'flex items-center justify-center mb-4',
             'group-hover:text-ink transition-colors'
           )}
@@ -38,7 +38,7 @@ export function ToolTemplateCard({ template, onClick }: ToolTemplateCardProps) {
           <Icon className="w-6 h-6" aria-hidden="true" />
         </div>
         <h3 className="font-semibold text-foreground mb-1">{template.name}</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed">{template.description}</p>
+        <p className="text-sm text-steel leading-relaxed">{template.description}</p>
       </CardContent>
     </Card>
   );

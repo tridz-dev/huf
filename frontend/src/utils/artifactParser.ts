@@ -105,6 +105,7 @@ export function isValidArtifactType(type: string): type is ArtifactType {
 		'mermaid',
 		'react-component',
 		'markdown',
+		'video',
 	];
 	return validTypes.includes(type as ArtifactType);
 }

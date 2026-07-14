@@ -23,7 +23,7 @@ export function FormSettingsSection({
 		>
 			<div className="space-y-1">
 				<h3 className="text-lg font-semibold tracking-tight">{title}</h3>
-				<p className="text-sm text-muted-foreground">{description}</p>
+				<p className="text-sm text-steel">{description}</p>
 			</div>
 			<Card>
 				<CardContent className="grid gap-6 pt-6">{children}</CardContent>

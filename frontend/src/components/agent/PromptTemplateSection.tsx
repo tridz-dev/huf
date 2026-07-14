@@ -108,7 +108,7 @@ export function PromptTemplateSection({
                   ) : null}
                   {selectedPrompt.isLatest ? <Badge variant="secondary">Latest</Badge> : null}
                   {selectedPrompt.description ? (
-                    <span className="text-sm text-muted-foreground">{selectedPrompt.description}</span>
+                    <span className="text-sm text-steel">{selectedPrompt.description}</span>
                   ) : null}
                 </div>
               )}
@@ -121,7 +121,7 @@ export function PromptTemplateSection({
           control={form.control}
           name="prompt_version_locked"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+            <FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
               <div className="space-y-0.5 pr-4">
                 <FormLabel className="text-base">Lock Template Version</FormLabel>
                 <FormDescription>
@@ -142,7 +142,7 @@ export function PromptTemplateSection({
             <FormItem>
               <FormLabel>Attached at Version</FormLabel>
               <FormControl>
-                <div className="flex min-h-10 items-center rounded-md border bg-muted/40 px-3 text-sm text-muted-foreground">
+                <div className="flex min-h-10 items-center rounded-none border bg-paper-deep/40 px-3 text-sm text-steel">
                   {field.value ?? 'Will be recorded after template attachment'}
                 </div>
               </FormControl>

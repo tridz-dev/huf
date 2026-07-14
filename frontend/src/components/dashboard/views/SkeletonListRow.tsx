@@ -15,7 +15,7 @@ export function SkeletonListRow({
   return (
     <div
       className={cn(
-        'flex items-center justify-between p-3 rounded-lg border',
+        'flex items-center justify-between p-3 rounded-none border border-line',
         className,
       )}
     >
@@ -28,7 +28,7 @@ export function SkeletonListRow({
           <Skeleton className="h-3 w-3/5" />
         </div>
       </div>
-      {showBadge && <Skeleton className="h-5 w-16 rounded-full shrink-0 ml-3" />}
+      {showBadge && <Skeleton className="h-5 w-16 rounded-none shrink-0 ml-3" />}
     </div>
   );
 }

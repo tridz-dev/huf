@@ -13,6 +13,8 @@ const buttonVariants = cva(
         // HUF primary: --ink bg, --signal on hover
         default:
           'bg-ink text-primary-foreground hover:bg-signal',
+        display:
+          'bg-ink text-primary-foreground hover:bg-signal font-display font-bold text-[13px] uppercase tracking-[.06em]',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline:

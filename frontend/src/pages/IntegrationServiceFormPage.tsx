@@ -188,15 +188,14 @@ export function IntegrationServiceFormPage() {
 
         if (!serviceId) return;
 
-        const updatePayload = {
-          category: payload.category,
-          description: payload.description,
-          documentation_url: payload.documentation_url,
-          required_credentials: payload.required_credentials,
-        };
-        await updateIntegrationService(serviceId, updatePayload);
+        const updated = await updateIntegrationService(serviceId, payload);
         toast.success('Integration service updated successfully');
-        form.reset(values);
+        form.reset(mapDocToFormValues(updated));
+
+        if (updated.name && updated.name !== serviceId) {
+          navigate(`/integration-services/${encodeURIComponent(updated.name)}`, { replace: true });
+          return;
+        }
       } catch (error) {
         toast.error(
           getFrappeErrorMessage(error) ||
@@ -241,7 +240,7 @@ export function IntegrationServiceFormPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading service...</div>
+        <div className="font-body text-steel-soft">Loading service...</div>
       </div>
     );
   }
@@ -261,6 +260,7 @@ export function IntegrationServiceFormPage() {
           canDelete={!isBuiltin}
           onSave={handleFormSubmit}
           onDelete={() => setDeleteDialogOpen(true)}
+          onTitleChange={(value) => form.setValue('service_name', value, { shouldDirty: true })}
         />
 
         <Form {...form}>

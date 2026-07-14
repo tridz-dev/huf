@@ -226,14 +226,14 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
                     <Skeleton className="h-4 w-40" />
                   </div>
                   <div className="ml-3 pl-3 border-l border-line space-y-2">
-                    <Skeleton className="h-10 w-full rounded-md" />
-                    <Skeleton className="h-10 w-full rounded-md" />
+                    <Skeleton className="h-10 w-full rounded-none" />
+                    <Skeleton className="h-10 w-full rounded-none" />
                   </div>
                 </div>
               ))}
             </div>
           ) : agents.length === 0 ? (
-            <div className="p-3 text-sm text-muted-foreground text-center">No agents with conversations</div>
+            <div className="p-3 text-sm font-body text-steel-soft text-center">No agents with conversations</div>
           ) : (
             <Accordion
               type="multiple"
@@ -365,15 +365,15 @@ function AgentConversationItem({
       <AccordionContent className="space-y-0.5 ml-3 pl-3 border-l border-line overflow-hidden transition-all duration-300 opacity-100">
         {initialLoading ? (
           <div className="space-y-2 p-2">
-            <Skeleton className="h-10 w-full rounded-md" />
-            <Skeleton className="h-10 w-full rounded-md" />
+            <Skeleton className="h-10 w-full rounded-none" />
+            <Skeleton className="h-10 w-full rounded-none" />
           </div>
         ) : conversations.length === 0 && agent.conversationCount === 0 ? (
-          <div className="p-2 text-xs text-muted-foreground">No conversations</div>
+          <div className="p-2 text-xs font-body text-steel-soft">No conversations</div>
         ) : conversations.length === 0 && agent.conversationCount > 0 ? (
           <div className="space-y-2 p-2">
-            <Skeleton className="h-10 w-full rounded-md" />
-            <Skeleton className="h-10 w-full rounded-md" />
+            <Skeleton className="h-10 w-full rounded-none" />
+            <Skeleton className="h-10 w-full rounded-none" />
           </div>
         ) : (
           <>
@@ -540,7 +540,7 @@ function RecentsConversationList({
     return (
       <div className="space-y-1">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={`recent-skel-${i}`} className="flex px-2 py-1.5 gap-2 items-center rounded-md">
+          <div key={`recent-skel-${i}`} className="flex px-2 py-1.5 gap-2 items-center rounded-none">
             <Skeleton className="h-6 w-6 rounded-full shrink-0" />
             <div className="flex-1 space-y-1.5">
               <Skeleton className="h-3 w-2/3" />
@@ -555,7 +555,7 @@ function RecentsConversationList({
   return (
     <div ref={scrollContainerRef} className="space-y-3">
         {byRecents.every(([, items]) => items.length === 0) ? (
-          <div className="p-3 text-sm text-muted-foreground text-center">No conversations yet</div>
+          <div className="p-3 text-sm font-body text-steel-soft text-center">No conversations yet</div>
         ) : (
           <>
             {byRecents.map(([label, items]) => {
@@ -626,7 +626,7 @@ function RecentsConversationList({
               <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
             )}
             {loadingMore && (
-              <div className="p-2 text-xs text-muted-foreground text-center">Loading more...</div>
+              <div className="p-2 text-xs font-body text-steel-soft text-center">Loading more...</div>
             )}
           </>
         )}

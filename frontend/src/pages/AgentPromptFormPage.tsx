@@ -34,6 +34,7 @@ import { CategoryTab } from '@/components/category/CategoryTab';
 import { CategoryModal } from '@/components/category/CategoryModal';
 import { getCategories } from '@/services/categoryApi';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 const HUF_PATH_PREFIX = '/huf/';
 
@@ -446,7 +447,7 @@ export function AgentPromptFormPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading Agent Prompt...</div>
+        <div className="font-body text-steel-soft">Loading Agent Prompt...</div>
       </div>
     );
   }
@@ -465,11 +466,19 @@ export function AgentPromptFormPage() {
                   render={({ field }) => (
                     <FormItem className="space-y-0">
                       <FormControl>
-                        <Input
-                          {...field}
-                          className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
-                          placeholder="Prompt Title"
-                        />
+                        {isNew ? (
+                          <Input
+                            {...field}
+                            className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
+                            placeholder="Prompt Title"
+                          />
+                        ) : (
+                          <InlineEditName
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Prompt Title"
+                          />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -569,7 +578,7 @@ export function AgentPromptFormPage() {
                     placeholder="Auto-generated from title"
                     disabled={!isNew}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-steel-soft">
                     URL-friendly identifier for this prompt template. Auto-generated from title if left blank.
                   </p>
                 </div>
@@ -592,7 +601,7 @@ export function AgentPromptFormPage() {
                       <SelectItem value="Public">Public</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-steel-soft">
                     Controls who can see and use this prompt template.
                   </p>
                 </div>
@@ -614,14 +623,14 @@ export function AgentPromptFormPage() {
                     onChange={(event) => form.setValue('tags', event.target.value, { shouldDirty: true })}
                     placeholder="Comma-separated tags"
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-steel-soft">
                     Comma-separated tags for search and filtering.
                   </p>
                 </div>
-                <div className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
                     <Label className="text-base">Active</Label>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-steel-soft">
                       Whether this prompt template is active and available for use.
                     </p>
                   </div>
@@ -653,7 +662,7 @@ export function AgentPromptFormPage() {
                 <CardTitle>Prompt Body</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground mb-3">
+                <p className="text-xs text-steel-soft mb-3">
                   The prompt template content. This is the system prompt or instructions text.
                 </p>
                 <InstructionsTextarea

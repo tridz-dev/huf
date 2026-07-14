@@ -242,7 +242,7 @@ export function TriggerConfigModal({
               id="integration"
               value={config.integration || ''}
               readOnly
-              className="bg-muted"
+              className="bg-paper-deep"
             />
           </div>
           <div>
@@ -269,7 +269,7 @@ export function TriggerConfigModal({
         </DialogHeader>
 
         <div className="relative mb-4 flex-shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-soft" />
           <Input
             placeholder="Search triggers..."
             value={searchQuery}
@@ -290,7 +290,7 @@ export function TriggerConfigModal({
             <TabsContent value={activeTab} className="mt-0">
               {highlightTriggers.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="text-sm font-medium mb-3 text-muted-foreground">
+                  <h3 className="text-sm font-medium mb-3 text-steel">
                     Highlights
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
@@ -320,7 +320,7 @@ export function TriggerConfigModal({
 
               {popularTriggers.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium mb-3 text-muted-foreground">
+                  <h3 className="text-sm font-medium mb-3 text-steel">
                     Popular
                   </h3>
                   <div className="space-y-2">
@@ -341,7 +341,7 @@ export function TriggerConfigModal({
                           <div className="text-left flex-1 min-w-0">
                             <div className="text-sm font-medium">{trigger.name}</div>
                             {trigger.description && (
-                              <div className="text-xs text-muted-foreground">
+                              <div className="text-xs text-steel-soft">
                                 {trigger.description}
                               </div>
                             )}
