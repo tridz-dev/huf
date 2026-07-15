@@ -271,8 +271,6 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             )
             if tool: tools.append(tool)
 
-            if tool: tools.append(tool)
-
     existing_types = [t.name for t in tools] if tools else []
     if "get_result_context" not in existing_types:
         tool = create_function_tool(
