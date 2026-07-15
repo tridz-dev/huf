@@ -258,7 +258,7 @@
    "label": "Async"
   },
   {
-   "default": "0",
+   "default": "1",
    "description": "When disabled, runs are queued to avoid holding web workers during long LLM and tool calls. Enable only for trusted calls that require a direct response.",
    "fieldname": "run_immediately",
    "fieldtype": "Check",
@@ -751,7 +751,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-30 18:59:30.376271",
+ "modified": "2026-07-15 13:26:56.858724",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",
