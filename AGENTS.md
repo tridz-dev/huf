@@ -546,7 +546,7 @@ Registry entry for custom, user-defined data tables. HUF allows dynamically crea
 | **Autoname Method** | `autoname_method` | Select | E.g., Prompt-derived, Autoincrement, Field. |
 | **Title Field Name** | `title_field_name` | Data | The field used as the row title. |
 
-#### 21. Integration Service
+#### 23. Integration Service
 
 Catalog of external integrations (Slack, Gmail, GitHub, ERPNext, etc.) that HUF agents can authenticate with.
 
@@ -564,7 +564,7 @@ Catalog of external integrations (Slack, Gmail, GitHub, ERPNext, etc.) that HUF 
 | **Required Credentials** | `required_credentials` | JSON | Schema array specifying credential keys and types. |
 | **Is Built-in** | `is_builtin` | Check | System-level integration service. |
 
-#### 22. Integration Settings
+#### 24. Integration Settings
 
 Specific configuration instances storing connection settings and credentials for a given integration service.
 
@@ -581,21 +581,21 @@ Specific configuration instances storing connection settings and credentials for
 | **Credentials** | `credentials` | Table | Table of keys and password values (`Integration Credential`). |
 | **Recipients** | `recipients` | Table | Pre-resolved ID map (`Integration Recipient`). |
 
-#### 23. Integration Credential
+#### 25. Integration Credential
 
 Child table containing credential key-value pairs. Values are stored securely using encrypted password fields.
 
 -   **Python Class**: `IntegrationCredential(Document)`
 -   **File**: `huf/huf/doctype/integration_credential/integration_credential.py`
 
-#### 24. Integration Recipient
+#### 26. Integration Recipient
 
 Child table containing mappings of human names to channel/user IDs (e.g., resolving "General Channel" to Slack ID `C12345`).
 
 -   **Python Class**: `IntegrationRecipient(Document)`
 -   **File**: `huf/huf/doctype/integration_recipient/integration_recipient.py`
 
-#### 25. Huf Role
+#### 27. Huf Role
 
 Custom capability-based Huf role used to configure permissions on the HUF dashboard.
 
@@ -610,14 +610,14 @@ Custom capability-based Huf role used to configure permissions on the HUF dashbo
 | **Role Description** | `role_description` | Small Text | Explanation. |
 | **Permissions** | `permissions` | Table | Child table linking capabilities (`Huf Role Permission`). |
 
-#### 26. Huf Role Permission
+#### 28. Huf Role Permission
 
 Child table mapping allowed capability strings (e.g., `agent.create`, `flows.use`) to Huf Roles.
 
 -   **Python Class**: `HufRolePermission(Document)`
 -   **File**: `huf/huf/doctype/huf_role_permission/huf_role_permission.py`
 
-#### 27. Huf User Role
+#### 29. Huf User Role
 
 Assigns custom capability-based Huf Roles to Users.
 
@@ -631,6 +631,350 @@ Assigns custom capability-based Huf Roles to Users.
 | **User** | `user` | Link | User link. |
 | **Huf Role** | `huf_role` | Link | Huf Role link. |
 | **Enabled** | `enabled` | Check | Active flag. |
+
+
+#### 30. Agent Context Artifact
+
+-   **Python Class**: `AgentContextArtifact(Document)`
+-   **File**: `huf/huf/doctype/agent_context_artifact/agent_context_artifact.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Conversation** | `conversation` | Link | Link to Agent Conversation. |
+| **Agent Run** | `agent_run` | Link | Link to Agent Run. |
+| **Artifact Type** | `artifact_type` | Select |  |
+| **Summary** | `summary` | Small Text |  |
+| **Payload JSON** | `payload_json` | Code |  |
+| **Payload File** | `payload_file` | Attach |  |
+| **Reference DocType** | `reference_doctype` | Link | Link to DocType. |
+| **Reference Name** | `reference_name` | Dynamic Link |  |
+| **Visibility** | `visibility` | Select |  |
+| **Context Policy** | `context_policy` | Select |  |
+| **Token Estimate** | `token_estimate` | Int |  |
+| **Expires On** | `expires_on` | Datetime |  |
+
+
+#### 31. Agent Function Params
+
+-   **Python Class**: `AgentFunctionParams(Document)`
+-   **File**: `huf/huf/doctype/agent_function_params/agent_function_params.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Label** | `label` | Data |  |
+| **Fieldname** | `fieldname` | Data |  |
+| **Type** | `type` | Select |  |
+| **Required** | `required` | Check |  |
+| **Description** | `description` | Small Text |  |
+| **Options** | `options` | Small Text |  |
+| **Child Table Name** | `child_table_name` | Data |  |
+
+
+#### 32. Agent MCP Server
+
+-   **Python Class**: `AgentMCPServer(Document)`
+-   **File**: `huf/huf/doctype/agent_mcp_server/agent_mcp_server.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **MCP Server** | `mcp_server` | Link | Link to MCP Server. |
+| **Enabled** | `enabled` | Check |  |
+| **Server URL** | `server_url` | Data |  |
+| **Tools** | `tool_count` | Int | Number of tools available from this MCP server |
+
+
+#### 33. Agent Orchestration
+
+-   **Python Class**: `AgentOrchestration(Document)`
+-   **File**: `huf/huf/doctype/agent_orchestration/agent_orchestration.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Agent** | `agent` | Link | Link to Agent. |
+| **Status** | `status` | Select |  |
+| **Current Step** | `current_step` | Int |  |
+| **Last Run** | `last_run_at` | Datetime |  |
+| **Error Log** | `error_log` | Small Text |  |
+| **Plan** | `agent_orchestration_plan` | Table | Child table `Agent Orchestration Plan`. |
+| **Scratchpad** | `scratchpad` | Code |  |
+| **Parent Run** | `parent_run` | Link | Link to Agent Run. |
+| **conversation** | `conversation` | Link | Link to Agent Conversation. |
+
+
+#### 34. Agent Orchestration Plan
+
+-   **Python Class**: `AgentOrchestrationPlan(Document)`
+-   **File**: `huf/huf/doctype/agent_orchestration_plan/agent_orchestration_plan.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Step Index** | `step_index` | Int |  |
+| **Status** | `status` | Select |  |
+| **Instruction** | `instruction` | Long Text |  |
+| **Output** | `output_ref` | Long Text |  |
+
+
+#### 35. Agent Role
+
+-   **Python Class**: `AgentRole(Document)`
+-   **File**: `huf/huf/doctype/agent_role/agent_role.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Role** | `role` | Link | Link to Role. |
+
+
+#### 36. Agent Tool
+
+-   **Python Class**: `AgentTool(Document)`
+-   **File**: `huf/huf/doctype/agent_tool/agent_tool.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Tool** | `tool` | Link | Link to Agent Tool Function. |
+| **Type** | `type` | Data |  |
+| **Description** | `description` | Small Text |  |
+
+
+#### 37. Agent Tool Call
+
+-   **Python Class**: `AgentToolCall(Document)`
+-   **File**: `huf/huf/doctype/agent_tool_call/agent_tool_call.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Agent Run** | `agent_run` | Link | Link to Agent Run. |
+| **Conversation** | `conversation` | Link | Link to Agent Conversation. |
+| **Tool Args** | `tool_args` | JSON |  |
+| **Tool Result** | `tool_result` | JSON |  |
+| **Call ID** | `call_id` | Long Text |  |
+| **Error Message** | `error_message` | Small Text |  |
+| **Status** | `status` | Select |  |
+| **Tool Name** | `tool` | Data |  |
+| **Is MCP Tool** | `is_mcp_tool` | Check |  |
+| **MCP Server** | `mcp_server` | Link | Link to MCP Server. |
+
+
+#### 38. Agent Trigger Attachment
+
+-   **Python Class**: `AgentTriggerAttachment(Document)`
+-   **File**: `huf/huf/doctype/agent_trigger_attachment/agent_trigger_attachment.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Source Type** | `source_type` | Select |  |
+| **Child Table** | `child_table` | Select |  |
+| **Attach Field Name** | `field_name` | Data |  |
+
+
+#### 39. Agent User
+
+-   **Python Class**: `AgentUser(Document)`
+-   **File**: `huf/huf/doctype/agent_user/agent_user.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **User** | `user` | Link | Link to User. |
+
+
+#### 40. Elevenlabs Settings
+
+-   **Python Class**: `ElevenlabsSettings(Document)`
+-   **File**: `huf/huf/doctype/elevenlabs_settings/elevenlabs_settings.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Agent ID** | `agent_id` | Data |  |
+| **Provider** | `provider` | Link | Link to AI Provider. |
+| **webhook_secret** | `webhook_secret` | Password |  |
+
+
+#### 41. Flow Definition
+
+-   **Python Class**: `FlowDefinition(Document)`
+-   **File**: `huf/huf/doctype/flow_definition/flow_definition.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Flow ID** | `flow_id` | Data |  |
+| **Flow Name** | `flow_name` | Data |  |
+| **Status** | `status` | Select |  |
+| **Version** | `version` | Int |  |
+| **Schema Version** | `schema_version` | Int |  |
+| **Definition JSON** | `definition_json` | JSON |  |
+| **Is System** | `is_system` | Check |  |
+| **Updated By** | `updated_by` | Link | Link to User. |
+| **Updated At** | `updated_at` | Datetime |  |
+
+
+#### 42. Flow Run
+
+-   **Python Class**: `FlowRun(Document)`
+-   **File**: `huf/huf/doctype/flow_run/flow_run.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Flow Definition** | `flow_definition` | Link | Link to Flow Definition. |
+| **Flow ID** | `flow_id` | Data |  |
+| **Flow Version** | `flow_version` | Int |  |
+| **Mode** | `mode` | Select |  |
+| **Status** | `status` | Select |  |
+| **Trigger Type** | `trigger_type` | Select |  |
+| **Current Node ID** | `current_node_id` | Data |  |
+| **Hop Count** | `hop_count` | Int |  |
+| **Max Hops** | `max_hops` | Int |  |
+| **Last Agent Run** | `last_agent_run` | Link | Link to Agent Run. |
+| **Conversation** | `conversation` | Link | Link to Agent Conversation. |
+| **Context JSON** | `context_json` | JSON |  |
+| **Trigger Payload** | `trigger_payload` | JSON |  |
+| **Waiting** | `waiting` | JSON |  |
+| **Last Error** | `last_error` | Small Text |  |
+| **Started At** | `started_at` | Datetime |  |
+| **Completed At** | `completed_at` | Datetime |  |
+
+
+#### 43. Groq Settings
+
+-   **Python Class**: `GroqSettings(Document)`
+-   **File**: `huf/huf/doctype/groq_settings/groq_settings.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Provider** | `provider` | Link | Link to AI Provider. |
+| **API URL** | `api_url` | Data |  |
+| **Method** | `method` | Select |  |
+| **Auth Type** | `auth_type` | Select |  |
+| **File Param** | `file_param` | Data |  |
+| **Model** | `model` | Data |  |
+| **Enabled** | `enabled` | Check |  |
+| **API Key** | `api_key` | Password |  |
+| **Response Path** | `response_path` | Data |  |
+
+
+#### 44. MCP Server
+
+-   **Python Class**: `MCPServer(Document)`
+-   **File**: `huf/huf/doctype/mcp_server/mcp_server.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Server Name** | `server_name` | Data | Unique identifier for this MCP server (e.g., 'gmail', 'github', 'frappe-erp') |
+| **Description** | `description` | Small Text | What capabilities this MCP server provides |
+| **Enabled** | `enabled` | Check |  |
+| **Tool Namespace** | `tool_namespace` | Data | Optional prefix for tool names (e.g., 'gmail' results in 'gmail.send_email') |
+| **Timeout (seconds)** | `timeout_seconds` | Int | Request timeout for MCP server calls |
+| **Transport Type** | `transport_type` | Select |  |
+| **Server URL** | `server_url` | Data | MCP server endpoint URL (e.g., 'https://mcp.example.com/mcp') |
+| **Auth Type** | `auth_type` | Select |  |
+| **Auth Header Name** | `auth_header_name` | Data | Header name for authentication (e.g., 'Authorization', 'X-API-Key') |
+| **Auth Header Value** | `auth_header_value` | Password | The API key, bearer token, or header value (stored encrypted) |
+| **OAuth Status** | `oauth_status` | Select |  |
+| **Connect** | `oauth_connect_button` | Button |  |
+| **Disconnect** | `oauth_disconnect_button` | Button |  |
+| **OAuth Scope** | `oauth_scope` | Small Text | Space-separated OAuth scopes (e.g. 'read write'). Leave blank for provider default. |
+| **Extra Authorize Params (JSON)** | `oauth_extra_authorize_params` | Small Text | Additional URL parameters for the authorization endpoint (e.g. {"user_scope": "...", "access_type": "offline"}) |
+| **Custom Redirect URI** | `oauth_redirect_uri` | Data | Optional: Override the callback URL for strict providers or local testing. Leave blank to use HUF's default: {site_url}/mcp-oauth-callback. |
+| **Authorization Endpoint** | `oauth_authorization_endpoint` | Data | e.g. https://higgsfield.ai/oauth/authorize |
+| **Token Endpoint** | `oauth_token_endpoint` | Data | e.g. https://higgsfield.ai/oauth/token |
+| **Client ID** | `oauth_client_id` | Small Text |  |
+| **Client Secret** | `oauth_client_secret` | Password | Stored encrypted. Leave blank if using PKCE-only public client. |
+| **Token Response Path** | `oauth_token_response_path` | Data | JSON path to access token if nested (e.g. authed_user.access_token). Defaults to access_token. |
+| **Access Token** | `oauth_access_token` | Password | Set automatically after OAuth flow. Stored encrypted. |
+| **Refresh Token** | `oauth_refresh_token` | Password | Set automatically after OAuth flow. Stored encrypted. |
+| **Token Expires At** | `oauth_token_expires_at` | Datetime |  |
+| **Discovery Status** | `oauth_discovery_status` | Select |  |
+| **Resource Metadata URL** | `oauth_resource_metadata_url` | Data |  |
+| **Authorization Server** | `oauth_authorization_server` | Data |  |
+| **Registration Endpoint** | `oauth_registration_endpoint` | Data | Discovered DCR endpoint. |
+| **Client Registration Method** | `oauth_client_registration_method` | Data |  |
+| **Discovered Metadata JSON** | `oauth_metadata_json` | Code |  |
+| **Last Discovered At** | `oauth_last_discovered_at` | Datetime |  |
+| **Discovery Error** | `oauth_discovery_error` | Small Text |  |
+| **Custom Headers** | `custom_headers` | Table | Additional HTTP headers to send with MCP requests |
+| **Sync Tools** | `sync_tools_button` | Button | Fetch available tools from the MCP server |
+| **Tools** | `tools` | Table | Manage enabled tools from this server |
+| **Last Synced** | `last_sync` | Datetime |  |
+| **Available Tools** | `available_tools` | Code | Cached list of tools available from this MCP server |
+| **Enable Auto Sync** | `enable_auto_sync` | Check | Automatically sync tools periodically |
+| **Sync Interval (Hours)** | `auto_sync_interval` | Int | Interval in hours to auto-sync tools |
+
+
+#### 45. MCP Server Header
+
+-   **Python Class**: `MCPServerHeader(Document)`
+-   **File**: `huf/huf/doctype/mcp_server_header/mcp_server_header.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Header Name** | `header_name` | Data |  |
+| **Header Value** | `header_value` | Data |  |
+
+
+#### 46. MCP Server Tool
+
+-   **Python Class**: `MCPServerTool(Document)`
+-   **File**: `huf/huf/doctype/mcp_server_tool/mcp_server_tool.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Tool Name** | `tool_name` | Data |  |
+| **Enabled** | `enabled` | Check |  |
+| **Description** | `description` | Small Text |  |
+| **Parameters** | `parameters` | Code |  |
+
+
+#### 47. OpenAI Settings
+
+-   **Python Class**: `OpenAISettings(Document)`
+-   **File**: `huf/huf/doctype/openai_settings/openai_settings.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Provider** | `provider` | Link | Link to AI Provider. |
+| **API URL** | `api_url` | Data |  |
+| **Method** | `method` | Select |  |
+| **Auth Type** | `auth_type` | Select |  |
+| **File Param** | `file_param` | Data |  |
+| **Model** | `model` | Data |  |
+| **Enabled** | `enabled` | Check |  |
+| **API Key** | `api_key` | Password |  |
+| **Response Path** | `response_path` | Data |  |
 
 
 ### Standard Tools (System Available)
