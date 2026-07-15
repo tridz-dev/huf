@@ -123,7 +123,12 @@ export function ChatInput({
             const responseTextRaw =
                 (msg?.run as Record<string, unknown>)?.response ?? msg?.response;
             const responseText = typeof responseTextRaw === 'string' ? responseTextRaw : '';
-            const queued = msg?.queued === true;
+            // `new_conversation` nests the run ack under `msg.run`; `send_message_to_conversation`
+            // returns it flattened at the top level. Check both, like the other run fields below —
+            // otherwise the very first message in a brand-new conversation is never marked queued,
+            // so the pending bubble never gets `runStatus` and the polling fallback never engages.
+            const queued =
+                msg?.queued === true || (msg?.run as Record<string, unknown>)?.queued === true;
             if (!useStreaming && responseText && !queued) {
                 params.updateAssistantContent(responseText);
             }
@@ -135,7 +140,9 @@ export function ChatInput({
                 (msg?.agent_run_id as string) ||
                 ((msg?.run as Record<string, unknown>)?.agent_run_id as string) ||
                 undefined;
-            const status = msg?.status as string | undefined;
+            const status =
+                (msg?.status as string | undefined) ??
+                ((msg?.run as Record<string, unknown>)?.status as string | undefined);
             return { conversationId, agentMessageId, agentRunId, queued, status };
         },
         [agentName, runImmediately]
