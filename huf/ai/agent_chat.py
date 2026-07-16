@@ -423,7 +423,7 @@ def send_message_to_conversation(conversation: str, message: str):
 @frappe.whitelist()
 def upload_file_and_process(docname: str, filename: str, b64data: str, agent: str = None, conversation: str = None):
     """
-    Upload a file (PDF/Image) and process it with OCR/Vision.
+    Upload a file (PDF/Image/Audio) and process it with OCR/Vision/STT.
     Returns the extracted text and optionally creates an Agent Message.
     """
     if not b64data or not filename:
@@ -475,13 +475,19 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
     file_id = saved_file.name
 
     try:
-        result = _run_async_safely(
-            sdk_tools.handle_ocr_document(
+        if audio_service.is_audio_file(filename):
+            result = audio_service.transcribe_audio_file(
                 file_id=file_id,
                 agent_name=chat.agent,
-                conversation_id=conversation or chat.conversation,
             )
-        )
+        else:
+            result = _run_async_safely(
+                sdk_tools.handle_ocr_document(
+                    file_id=file_id,
+                    agent_name=chat.agent,
+                    conversation_id=conversation or chat.conversation,
+                )
+            )
 
         if not result.get("success"):
             return result
@@ -489,7 +495,7 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
         return result
 
     except Exception as e:
-        frappe.log_error(f"OCR Processing Error: {str(e)}")
+        frappe.log_error(f"File Processing Error: {str(e)}")
         return {"success": False, "error": str(e)}
 
 
@@ -500,8 +506,8 @@ def upload_file_and_process_web(
     agent: str,
     conversation: str | None = None,
 ):
-    """Web endpoint: save an uploaded document/image against a real Agent Conversation
-    and extract its text via OCR/vision, honoring the agent's upload capability flags.
+    """Web endpoint: save an uploaded document/image/audio against a real Agent Conversation
+    and extract its text via OCR/vision or STT transcription, honoring the agent's upload capability flags.
     """
     if not b64data or not filename:
         frappe.throw(_("Filename and file data are required"))
@@ -530,16 +536,28 @@ def upload_file_and_process_web(
             "error": _("File exceeds the maximum allowed size of {0} MB.").format(min(max_upload_size_mb, 25)),
         }
 
-    model_name = agent_doc.get("model")
-    modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
-    supported = {m.strip() for m in modalities.split(",") if m.strip()}
+    # Audio attachments bypass the OCR/Vision modality gate: they only need a
+    # resolvable STT configuration for the agent.
+    is_audio = audio_service.is_audio_file(filename)
+    if is_audio:
+        try:
+            audio_service.resolve_stt_config(agent)
+        except ValueError:
+            return {
+                "success": False,
+                "error": _("This agent has no transcription model configured for audio files."),
+            }
+    else:
+        model_name = agent_doc.get("model")
+        modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
+        supported = {m.strip() for m in modalities.split(",") if m.strip()}
 
-    is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
-    use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
-    use_vision = "Vision" in supported and is_image_or_pdf
+        is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
+        use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
+        use_vision = "Vision" in supported and is_image_or_pdf
 
-    if not use_ocr and not use_vision:
-        return {"success": False, "error": _("This model does not support file analysis.")}
+        if not use_ocr and not use_vision:
+            return {"success": False, "error": _("This model does not support file analysis.")}
 
     # Ensure conversation exists (or create a new one)
     conv = None
@@ -581,15 +599,21 @@ def upload_file_and_process_web(
         return {"success": False, "error": "File was saved but ID could not be retrieved."}
 
     try:
-        result = _run_async_safely(
-            sdk_tools.handle_ocr_document(
+        if is_audio:
+            result = audio_service.transcribe_audio_file(
                 file_id=file_id,
                 agent_name=agent,
-                conversation_id=conversation_id,
             )
-        )
+        else:
+            result = _run_async_safely(
+                sdk_tools.handle_ocr_document(
+                    file_id=file_id,
+                    agent_name=agent,
+                    conversation_id=conversation_id,
+                )
+            )
     except Exception as e:
-        frappe.log_error(f"OCR Processing Error (web): {str(e)}")
+        frappe.log_error(f"File Processing Error (web): {str(e)}")
         return {"success": False, "error": str(e)}
 
     if not result.get("success"):
@@ -620,6 +644,18 @@ def _validate_web_file_upload(agent: str, filename: str, file_bytes: bytes):
             "success": False,
             "error": _("File exceeds the maximum allowed size of {0} MB.").format(min(max_upload_size_mb, 25)),
         }
+
+    # Audio attachments bypass the OCR/Vision modality gate: they only need a
+    # resolvable STT configuration for the agent.
+    if audio_service.is_audio_file(filename):
+        try:
+            audio_service.resolve_stt_config(agent)
+        except ValueError:
+            return None, {
+                "success": False,
+                "error": _("This agent has no transcription model configured for audio files."),
+            }
+        return agent_doc, None
 
     model_name = agent_doc.get("model")
     modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
@@ -796,8 +832,9 @@ def prepare_message_with_file_web(
     if not resolved_file_url:
         resolved_file_url = frappe.db.get_value("File", resolved_file_id, "file_url")
 
-    mime_type, _ = mimetypes.guess_type(resolved_filename)
+    mime_type, _unused = mimetypes.guess_type(resolved_filename)
     is_image = bool(mime_type and mime_type.startswith("image/"))
+    is_audio = audio_service.is_audio_file(resolved_filename, mime_type)
 
     agent_prompt = display_content
     files_payload = None
@@ -809,6 +846,33 @@ def prepare_message_with_file_web(
             "filename": resolved_filename,
             "is_image": 1,
         }]
+    elif is_audio:
+        result = audio_service.transcribe_audio_file(
+            file_id=resolved_file_id,
+            agent_name=agent,
+        )
+
+        if not result.get("success"):
+            return result
+
+        transcript = result.get("transcript") or result.get("text") or ""
+        agent_prompt = f"""{display_content}
+
+Attached Audio Transcript:
+--- File: {resolved_filename} ---
+{transcript}
+"""
+
+        # Stamp audio metadata on the Agent Message when the fields exist;
+        # kind stays "Message" so attachment cards keep rendering as-is.
+        msg_meta = frappe.get_meta("Agent Message")
+        msg_updates = {}
+        if resolved_file_url and msg_meta.get_field("voice_message"):
+            msg_updates["voice_message"] = resolved_file_url
+        if result.get("stt_model") and msg_meta.get_field("stt_model"):
+            msg_updates["stt_model"] = result["stt_model"]
+        if msg_updates:
+            frappe.db.set_value("Agent Message", msg.name, msg_updates, update_modified=False)
     else:
         try:
             result = _run_async_safely(
