@@ -146,6 +146,39 @@ export function ChatMessage({
                                         </AudioPlayerControlBar>
                                     </AudioPlayer>
                                 </div>
+                            ) : message.voiceMessage && message.from === 'user' ? (
+                                <div className="flex flex-col gap-2 w-full max-w-md">
+                                    <AudioPlayer>
+                                        <AudioPlayerElement src={resolveAudioSrc(message.voiceMessage)} />
+                                        <AudioPlayerControlBar>
+                                            <AudioPlayerPlayButton />
+                                            <AudioPlayerTimeDisplay />
+                                            <AudioPlayerTimeRange />
+                                            <AudioPlayerDurationDisplay />
+                                            <AudioPlayerMuteButton />
+                                            <AudioPlayerVolumeRange />
+                                        </AudioPlayerControlBar>
+                                    </AudioPlayer>
+                                    {message.versions[0]?.content && (
+                                        <div className="text-sm text-zinc-600 bg-zinc-50 rounded-lg p-3 border border-zinc-100">
+                                            <span className="font-medium text-zinc-900">Transcript:</span>{' '}
+                                            <MessageContentWithArtifacts
+                                                content={message.versions[0].content}
+                                                messageId={message.versions[0]?.id ?? message.key}
+                                            />
+                                        </div>
+                                    )}
+                                    {(message.sttModel || message.status) && (
+                                        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                                            {message.sttModel && (
+                                                <span>Model: {message.sttModel}</span>
+                                            )}
+                                            {message.status && (
+                                                <span>Status: {message.status}</span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             ) : message.kind === 'Image' ? (
                                 <div className="flex flex-col gap-2">
                                     {message.generatedImage ? (
