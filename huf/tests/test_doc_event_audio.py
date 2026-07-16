@@ -26,7 +26,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # litellm stubs into sys.modules and imports huf.ai.audio_service against
 # them. Reusing that mock keeps audio_service.frappe bound to one shared
 # mock no matter which suite is imported first.
-from huf.tests import test_audio_service as _audio_mocks
+#
+# The module may already be loaded under a different name: unittest
+# discovery (``python -m unittest discover -s huf/tests``) imports it as the
+# top-level module "test_audio_service", while dotted runs
+# (``python -m unittest huf.tests.test_doc_event_audio``) import it as
+# "huf.tests.test_audio_service". Reuse whichever copy is already loaded so
+# its module-level mock setup executes exactly once; importing it a second
+# time under the other name would rebind sys.modules["litellm"] and break
+# the first copy's mock assertions.
+_audio_mocks = sys.modules.get("huf.tests.test_audio_service") or sys.modules.get(
+    "test_audio_service"
+)
+if _audio_mocks is None:
+    from huf.tests import test_audio_service as _audio_mocks
 
 frappe_mock = _audio_mocks.frappe_mock
 frappe_utils = sys.modules["frappe.utils"]
