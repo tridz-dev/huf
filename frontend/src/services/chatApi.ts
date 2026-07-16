@@ -344,6 +344,7 @@ export interface TranscribeAudioResponse {
   transcript?: string;
   message_id?: string;
   error?: string;
+  file_url?: string;
 }
 
 export async function transcribeAudio(
@@ -448,6 +449,10 @@ export interface PrepareMessageWithFileResponse {
   agent_prompt?: string;
   files?: PrepareMessageWithFileFile[];
   error?: string;
+  is_audio?: boolean;
+  transcript?: string;
+  voice_message?: string;
+  stt_model?: string;
 }
 
 export async function prepareMessageWithFile(
