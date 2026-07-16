@@ -160,23 +160,18 @@ export function ChatMessage({
                                         </AudioPlayerControlBar>
                                     </AudioPlayer>
                                     {message.versions[0]?.content && (
-                                        <div className="text-sm text-zinc-600 bg-zinc-50 rounded-lg p-3 border border-zinc-100">
-                                            <span className="font-medium text-zinc-900">Transcript:</span>{' '}
-                                            <MessageContentWithArtifacts
-                                                content={message.versions[0].content}
-                                                messageId={message.versions[0]?.id ?? message.key}
-                                            />
-                                        </div>
-                                    )}
-                                    {(message.sttModel || message.status) && (
-                                        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-                                            {message.sttModel && (
-                                                <span>Model: {message.sttModel}</span>
-                                            )}
-                                            {message.status && (
-                                                <span>Status: {message.status}</span>
-                                            )}
-                                        </div>
+                                        <details className="text-sm rounded-lg border border-black/10 dark:border-white/10 group [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="font-medium cursor-pointer select-none p-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors rounded-lg group-open:rounded-b-none list-none flex items-center justify-between opacity-80">
+                                                <span>Transcript</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open:rotate-180 opacity-50"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                            </summary>
+                                            <div className="p-3 pt-0 border-t border-black/10 dark:border-white/10 mt-2 opacity-90">
+                                                <MessageContentWithArtifacts
+                                                    content={message.versions[0].content}
+                                                    messageId={message.versions[0]?.id ?? message.key}
+                                                />
+                                            </div>
+                                        </details>
                                     )}
                                 </div>
                             ) : message.kind === 'Image' ? (
