@@ -6,6 +6,7 @@ import frappe
 from frappe import _
 from frappe.utils.file_manager import save_file
 
+from huf.ai import audio_service
 from huf.ai import sdk_tools
 from huf.ai import transcription_handler
 from huf.ai.agent_integration import _run_async_safely, run_agent_sync
@@ -45,55 +46,44 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
     msg.insert(ignore_permissions=True)
 
     try:
-        saved_file = save_file(
-            filename, 
-            audio_bytes, 
-            "Agent Message", 
-            msg.name, 
-            is_private=False
+        saved_file = audio_service.save_audio_upload(
+            filename,
+            b64data,
+            attached_to_doctype="Agent Message",
+            attached_to_name=msg.name,
+            is_private=0,
         )
     except Exception as e:
         frappe.log_error(message=f"Save File Failed: {e}", title="Save File Failed")
-        return {"success": False, "error": "Could not save audio file to database."}
+        return {"success": False, "error": str(e)}
 
-    file_id = None
-    file_url = None
-    if hasattr(saved_file, "name"):
-        file_id = saved_file.name
-        file_url = saved_file.file_url 
-        # Link file URL to voice_message field
+    file_id = saved_file["file_id"]
+    file_url = saved_file["file_url"]
+    if file_url:
         frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-    elif isinstance(saved_file, dict):
-        file_id = saved_file.get("name")
-        file_url = saved_file.get("file_url")
-        if file_url:
-             frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-    
-    if not file_id:
-        file_id = frappe.db.get_value("File", {
-            "attached_to_doctype": "Agent Message", 
-            "attached_to_name": msg.name
-        }, "name", order_by="creation desc")
-        
-    if file_id and not file_url:
-        file_url = frappe.db.get_value("File", file_id, "file_url")
-        if file_url:
-            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-
-    if not file_id:
-        return {"success": False, "error": "File was saved but ID could not be retrieved."}
 
     provider = frappe.db.get_value("Agent", chat.agent, "provider")
 
     try:
-        res = _run_async_safely(
-            sdk_tools.handle_transcribe_audio(
-                file_id=file_id,
-                agent_name=chat.agent,
-                conversation_id=conversation or chat.conversation,
-                message_id=msg.name,
-            )
+        res = audio_service.transcribe_audio_file(
+            file_id=file_id,
+            agent_name=chat.agent,
         )
+
+        conv_id = conversation or chat.conversation
+        if res.get("success") and conv_id:
+            try:
+                audio_service.create_audio_user_message(
+                    conv_id,
+                    file_id,
+                    res["text"],
+                    metadata={"agent_name": chat.agent, "message_id": msg.name},
+                )
+            except Exception as e:
+                frappe.log_error(
+                    f"Error creating Agent Message for transcription: {e!s}",
+                    "Audio Transcription Message Creation"
+                )
     except Exception as e:
          frappe.log_error(f"Transcription Error: {str(e)}")
          return {"success": False, "error": str(e)}
@@ -177,56 +167,29 @@ def upload_audio_and_transcribe_web(
 
     # Save file attached to Agent Message
     try:
-        saved_file = save_file(
+        saved_file = audio_service.save_audio_upload(
             filename,
-            audio_bytes,
-            "Agent Message",
-            msg.name,
-            is_private=False,
+            b64data,
+            attached_to_doctype="Agent Message",
+            attached_to_name=msg.name,
+            is_private=0,
         )
     except Exception as e:
         frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
-        return {"success": False, "error": "Could not save audio file to database."}
+        return {"success": False, "error": str(e)}
 
-    file_id = None
-    file_url = None
-    if hasattr(saved_file, "name"):
-        file_id = saved_file.name
-        file_url = saved_file.file_url
+    file_id = saved_file["file_id"]
+    file_url = saved_file["file_url"]
+    if file_url:
         frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-    elif isinstance(saved_file, dict):
-        file_id = saved_file.get("name")
-        file_url = saved_file.get("file_url")
-        if file_url:
-            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-
-    if not file_id:
-        file_id = frappe.db.get_value(
-            "File",
-            {"attached_to_doctype": "Agent Message", "attached_to_name": msg.name},
-            "name",
-            order_by="creation desc",
-        )
-
-    if file_id and not file_url:
-        file_url = frappe.db.get_value("File", file_id, "file_url")
-        if file_url:
-            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-
-    if not file_id:
-        return {"success": False, "error": "File was saved but ID could not be retrieved."}
 
     provider = frappe.db.get_value("Agent", agent, "provider")
 
-    # Transcribe using SDK STT tool
+    # Transcribe via the canonical audio service
     try:
-        res = _run_async_safely(
-            sdk_tools.handle_transcribe_audio(
-                file_id=file_id,
-                agent_name=agent,
-                conversation_id=conversation_id,
-                message_id=msg.name,
-            )
+        res = audio_service.transcribe_audio_file(
+            file_id=file_id,
+            agent_name=agent,
         )
     except Exception as e:
         frappe.log_error(f"Transcription Error (web): {str(e)}")
@@ -235,9 +198,23 @@ def upload_audio_and_transcribe_web(
     if not res.get("success"):
         return res
 
-    transcript = res.get("text")
+    transcript = res["text"]
 
     # Update user message with the actual transcript
+    try:
+        audio_service.create_audio_user_message(
+            conversation_id,
+            file_id,
+            transcript,
+            metadata={"agent_name": agent, "message_id": msg.name},
+        )
+    except Exception as e:
+        frappe.log_error(
+            f"Error creating Agent Message for transcription: {e!s}",
+            "Audio Transcription Message Creation"
+        )
+
+    # Ensure the transcript is stored even if message update failed above
     frappe.db.set_value("Agent Message", msg.name, "content", transcript)
     frappe.db.commit()
 
