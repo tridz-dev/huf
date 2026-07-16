@@ -152,9 +152,8 @@ class TestDocEventAudioRouting(unittest.TestCase):
 
     def _audio_error_log_titles(self):
         return [
-            c.args[1]
+            c.kwargs.get("title") or (c.args[1] if len(c.args) > 1 else None)
             for c in frappe_mock.log_error.call_args_list
-            if len(c.args) > 1
         ]
 
     def test_audio_file_is_transcribed_not_ocrd(self):

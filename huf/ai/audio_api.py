@@ -93,8 +93,8 @@ def transcribe(
             message_id = message_doc.name if message_doc else None
         except Exception as e:
             frappe.log_error(
-                f"Error creating Agent Message for transcription: {e!s}",
-                "Audio Transcription Message Creation",
+                title="Audio Transcription Message Creation",
+                message=f"Error creating Agent Message for transcription: {e!s}",
             )
 
     return {
