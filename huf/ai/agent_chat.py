@@ -34,13 +34,19 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
         chat.db_set("agent", agent)
         chat.agent = agent
 
+    conv_id = conversation or chat.conversation
+    session_id = None
+    if conv_id:
+        session_id = frappe.db.get_value("Agent Conversation", conv_id, "session_id")
+    
     msg = frappe.get_doc({
         "doctype": "Agent Message",
-        "conversation": conversation or chat.conversation,
+        "conversation": conv_id,
         "role": "user",
         "content": f"(voice message: {filename})",
         "kind": "Audio",
-        "user": frappe.session.user
+        "user": frappe.session.user,
+        "session_id": session_id,
     })
     msg.insert(ignore_permissions=True)
 
@@ -112,7 +118,8 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
         model=frappe.db.get_value("Agent", chat.agent, "model"),
         channel_id="chat",
         external_id=frappe.session.user,
-        conversation_id=chat.conversation
+        conversation_id=chat.conversation,
+        skip_user_message=True
     )
     
     if run_result.get("conversation_id") and not chat.conversation:
@@ -173,6 +180,7 @@ def upload_audio_and_transcribe_web(
         "content": f"(voice message: {filename})",
         "kind": "Audio",
         "user": frappe.session.user,
+        "session_id": conv.session_id,
     })
     msg.insert(ignore_permissions=True)
 
@@ -246,6 +254,7 @@ def upload_audio_and_transcribe_web(
             "conversation_id": conversation_id,
             "transcript": transcript,
             "message_id": msg.name,
+            "file_url": file_url,
         }
 
     # Run agent with transcript as prompt, within the same conversation
@@ -472,14 +481,20 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
     
     # Save file
     
+    conv_id = conversation or chat.conversation
+    session_id = None
+    if conv_id:
+        session_id = frappe.db.get_value("Agent Conversation", conv_id, "session_id")
+        
     try:
         msg = frappe.get_doc({
             "doctype": "Agent Message",
-            "conversation": conversation or chat.conversation,
+            "conversation": conv_id,
             "role": "user",
             "kind":"Message",
             "content": f"Uploaded file: {filename}",
-            "user": frappe.session.user
+            "user": frappe.session.user,
+            "session_id": session_id,
         })
         msg.insert()
 
@@ -605,6 +620,7 @@ def upload_file_and_process_web(
         "kind": "Message",
         "content": f"Uploaded file: {filename}",
         "user": frappe.session.user,
+        "session_id": conv.session_id,
     })
     msg.insert()
 
@@ -823,6 +839,7 @@ def prepare_message_with_file_web(
         "kind": "Message",
         "content": display_content,
         "user": frappe.session.user,
+        "session_id": conv.session_id,
     })
     msg.insert(ignore_permissions=True)
 
@@ -878,23 +895,31 @@ def prepare_message_with_file_web(
             return result
 
         transcript = result.get("transcript") or result.get("text") or ""
-        agent_prompt = f"""{display_content}
+        agent_prompt = transcript
 
-Attached Audio Transcript:
---- File: {resolved_filename} ---
-{transcript}
-"""
-
-        # Stamp audio metadata on the Agent Message when the fields exist;
-        # kind stays "Message" so attachment cards keep rendering as-is.
         msg_meta = frappe.get_meta("Agent Message")
-        msg_updates = {}
+        msg_updates = {
+            "kind": "Audio",
+            "content": transcript
+        }
         if resolved_file_url and msg_meta.get_field("voice_message"):
             msg_updates["voice_message"] = resolved_file_url
         if result.get("stt_model") and msg_meta.get_field("stt_model"):
             msg_updates["stt_model"] = result["stt_model"]
         if msg_updates:
             frappe.db.set_value("Agent Message", msg.name, msg_updates, update_modified=False)
+
+        return {
+            "success": True,
+            "conversation_id": conversation_id,
+            "message_id": msg.name,
+            "agent_prompt": agent_prompt,
+            "is_audio": True,
+            "transcript": transcript,
+            "voice_message": resolved_file_url,
+            "stt_model": result.get("stt_model"),
+            "files": files_payload,
+        }
     else:
         try:
             result = _run_async_safely(
