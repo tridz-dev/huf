@@ -11,7 +11,7 @@ import {
   setStreamingAvailable,
 } from "@/services/streamChatApi";
 import { transcribeAudio, prepareMessageWithFile, uploadFileAttachment } from "@/services/chatApi";
-import type { PrepareMessageWithFileFile } from "@/services/chatApi";
+import type { PrepareMessageWithFileFile, TranscribeAudioResponse } from "@/services/chatApi";
 import { SpeechInput } from "@/components/ai-elements/speech-input";
 import { ChatAttachmentCard } from "@/components/chat/ChatAttachmentCard";
 import { getFileTypeInfo } from "@/utils/fileTypeUtils";
@@ -354,71 +354,90 @@ export function ChatInput({
         onStatusChange('submitted');
         onLoadingTypeChange?.('transcribing');
 
+        const failTranscription = (title: string, description: string): never => {
+            setMessages((prev) => prev.filter((m) => m.key !== assistantMessageId));
+            onStatusChange('error');
+            onLoadingTypeChange?.('default');
+            isCreatingConversationRef.current = false;
+            toast.error(title, { description });
+            throw new Error(description);
+        };
+
+        let res: TranscribeAudioResponse | undefined;
         try {
-            const res = await transcribeAudio({
+            res = await transcribeAudio({
                 filename,
                 b64data: b64,
                 agent: agentName,
                 conversation: chatId ?? undefined,
             });
-            if (!res?.success || !res.transcript) {
-                setMessages((prev) => prev.filter((m) => m.key !== assistantMessageId));
-                throw new Error(typeof res?.error === 'string' ? res.error : 'Transcription failed');
-            }
-            isAudioRecordingFlowRef.current = true;
-            setMessages((prev) => {
-                const idx = prev.findIndex((m) => m.key === assistantMessageId);
-                const userMessage: MessageType = {
-                    key: userMessageKey,
-                    from: 'user',
-                    versions: [{ id: userMessageKey, content: res.transcript! }],
-                };
-                if (idx < 0) return [...prev, userMessage];
-                return [...prev.slice(0, idx), userMessage, ...prev.slice(idx)];
-            });
-            onLoadingTypeChange?.('default');
-            if (!chatId) isCreatingConversationRef.current = true;
-            const updateAssistantContent = (content: string) => {
-                setMessages((prev) =>
-                    prev.map((m) =>
-                        m.key === assistantMessageId ? { ...m, versions: [{ id: assistantMessageId, content }] } : m
-                    )
-                );
-                scrollToBottomAfterPaint?.(false);
-            };
-            try {
-                const { agentMessageId } = await runAgentAndUpdateAssistant({
-                    message: res.transcript,
-                    conversationId: res.conversation_id,
-                    assistantMessageId,
-                    updateAssistantContent,
-                });
-                if (agentMessageId) {
-                    syncAssistantMessageId(assistantMessageId, agentMessageId);
-                }
-                onStatusChange('ready');
-                if (res.conversation_id && onConversationCreated) {
-                    newlyCreatedConversationIdRef.current = res.conversation_id;
-                    onConversationCreated(res.conversation_id, agentName);
-                }
-                return res.transcript;
-            } catch (agentErr) {
-                isCreatingConversationRef.current = false;
-                setMessages((prev) => prev.filter((m) => m.key !== assistantMessageId));
-                onStatusChange('error');
-                toast.error('Failed to send message', {
-                    description: agentErr instanceof Error ? agentErr.message : 'An error occurred',
-                });
-                throw agentErr;
-            }
         } catch (err) {
-            onStatusChange('error');
-            onLoadingTypeChange?.('default');
-            isCreatingConversationRef.current = false;
-            toast.error('Failed to transcribe or send', {
-                description: err instanceof Error ? err.message : 'An error occurred',
+            failTranscription(
+                'Transcription failed',
+                err instanceof Error ? err.message : 'The audio could not be transcribed. Please try again.'
+            );
+        }
+
+        if (!res?.success) {
+            failTranscription(
+                'Transcription failed',
+                (typeof res?.error === 'string' && res.error) || 'The audio could not be transcribed. Please try again.'
+            );
+        }
+
+        const transcript = (res?.transcript ?? '').trim();
+        if (!transcript) {
+            failTranscription(
+                'No speech detected',
+                'The recording was transcribed but no text was detected. Please try again and speak clearly.'
+            );
+        }
+
+        isAudioRecordingFlowRef.current = true;
+        setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.key === assistantMessageId);
+            const userMessage: MessageType = {
+                key: userMessageKey,
+                from: 'user',
+                versions: [{ id: userMessageKey, content: transcript }],
+            };
+            if (idx < 0) return [...prev, userMessage];
+            return [...prev.slice(0, idx), userMessage, ...prev.slice(idx)];
+        });
+        onLoadingTypeChange?.('default');
+        if (!chatId) isCreatingConversationRef.current = true;
+        const updateAssistantContent = (content: string) => {
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.key === assistantMessageId ? { ...m, versions: [{ id: assistantMessageId, content }] } : m
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
+        try {
+            const { agentMessageId } = await runAgentAndUpdateAssistant({
+                message: transcript,
+                conversationId: res?.conversation_id,
+                assistantMessageId,
+                updateAssistantContent,
             });
-            throw err;
+            if (agentMessageId) {
+                syncAssistantMessageId(assistantMessageId, agentMessageId);
+            }
+            onStatusChange('ready');
+            if (res?.conversation_id && onConversationCreated) {
+                newlyCreatedConversationIdRef.current = res.conversation_id;
+                onConversationCreated(res.conversation_id, agentName);
+            }
+            return transcript;
+        } catch (agentErr) {
+            isCreatingConversationRef.current = false;
+            setMessages((prev) => prev.filter((m) => m.key !== assistantMessageId));
+            onStatusChange('error');
+            toast.error('Failed to send message', {
+                description: agentErr instanceof Error ? agentErr.message : 'An error occurred',
+            });
+            throw agentErr;
         }
     }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId]);
 
@@ -627,7 +646,7 @@ export function ChatInput({
                                 <input
                                     ref={fileInputRef}
                                     type="file"
-                                    accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.xml,.html,.htm"
+                                    accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.xml,.html,.htm,audio/*,.webm,.mp3,.wav,.m4a,.ogg,.flac"
                                     className="hidden"
                                     onChange={handleFileSelected}
                                     disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}

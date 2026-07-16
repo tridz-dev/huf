@@ -70,6 +70,12 @@ export type SpeechInputProps = ComponentProps<typeof Button> & {
    */
   onAudioRecorded?: (audioBlob: Blob) => Promise<string>;
   lang?: string;
+  /**
+   * Maximum recording duration in seconds for MediaRecorder mode.
+   * When the cap is reached, recording auto-stops and the recorded blob is
+   * still delivered to onAudioRecorded. Defaults to 180 (3 minutes).
+   */
+  maxDurationSeconds?: number;
 };
 
 const detectSpeechInputMode = (): SpeechInputMode => {
@@ -93,6 +99,7 @@ export const SpeechInput = ({
   onTranscriptionChange,
   onAudioRecorded,
   lang = "en-US",
+  maxDurationSeconds = 180,
   ...props
 }: SpeechInputProps) => {
   const [isListening, setIsListening] = useState(false);
@@ -103,6 +110,9 @@ export const SpeechInput = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const maxDurationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const onTranscriptionChangeRef = useRef<
     SpeechInputProps["onTranscriptionChange"]
   >(onTranscriptionChange);
@@ -181,6 +191,10 @@ export const SpeechInput = ({
   // Cleanup MediaRecorder and stream on unmount
   useEffect(
     () => () => {
+      if (maxDurationTimeoutRef.current !== null) {
+        clearTimeout(maxDurationTimeoutRef.current);
+        maxDurationTimeoutRef.current = null;
+      }
       if (mediaRecorderRef.current?.state === "recording") {
         mediaRecorderRef.current.stop();
       }
@@ -192,6 +206,13 @@ export const SpeechInput = ({
     },
     []
   );
+
+  const clearMaxDurationTimeout = useCallback(() => {
+    if (maxDurationTimeoutRef.current !== null) {
+      clearTimeout(maxDurationTimeoutRef.current);
+      maxDurationTimeoutRef.current = null;
+    }
+  }, []);
 
   // Start MediaRecorder recording
   const startMediaRecorder = useCallback(async () => {
@@ -212,6 +233,7 @@ export const SpeechInput = ({
       };
 
       const handleStop = async () => {
+        clearMaxDurationTimeout();
         for (const track of stream.getTracks()) {
           track.stop();
         }
@@ -237,6 +259,7 @@ export const SpeechInput = ({
       };
 
       const handleError = () => {
+        clearMaxDurationTimeout();
         setIsListening(false);
         for (const track of stream.getTracks()) {
           track.stop();
@@ -251,18 +274,31 @@ export const SpeechInput = ({
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setIsListening(true);
+
+      // Auto-stop at the max duration cap; the "stop" handler above still
+      // delivers the recorded blob to onAudioRecorded.
+      if (maxDurationSeconds > 0) {
+        maxDurationTimeoutRef.current = setTimeout(() => {
+          maxDurationTimeoutRef.current = null;
+          if (mediaRecorderRef.current?.state === "recording") {
+            mediaRecorderRef.current.stop();
+          }
+          setIsListening(false);
+        }, maxDurationSeconds * 1000);
+      }
     } catch {
       setIsListening(false);
     }
-  }, []);
+  }, [clearMaxDurationTimeout, maxDurationSeconds]);
 
   // Stop MediaRecorder recording
   const stopMediaRecorder = useCallback(() => {
+    clearMaxDurationTimeout();
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
     }
     setIsListening(false);
-  }, []);
+  }, [clearMaxDurationTimeout]);
 
   const toggleListening = useCallback(() => {
     if (mode === "speech-recognition" && recognitionRef.current) {
