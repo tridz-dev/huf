@@ -74,6 +74,35 @@ def _get_file_extension(filename: str) -> str:
     return (filename or "").rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
 
 
+def is_audio_file(filename: str, mime_type: str = None) -> bool:
+    """
+    Return True when a file should be routed to audio transcription.
+
+    Reuses the same allowlists as upload validation
+    (``ALLOWED_AUDIO_EXTENSIONS`` / ``ALLOWED_AUDIO_MIME_TYPES``), so any
+    file that would be accepted as an audio upload is classified as audio
+    here. Unlike ``validate_audio_filename`` this never throws - it is a
+    passive classifier for routing decisions (e.g. doc-event triggers).
+
+    Args:
+        filename: File name used for the extension check.
+        mime_type: Optional known MIME type (e.g. guessed from the file
+            name). When omitted, it is guessed from the filename.
+    """
+    if mime_type and mime_type.lower() in ALLOWED_AUDIO_MIME_TYPES:
+        return True
+
+    if _get_file_extension(filename) in ALLOWED_AUDIO_EXTENSIONS:
+        return True
+
+    if not mime_type:
+        guessed = mimetypes.guess_type(filename)[0]
+        if guessed and guessed.lower() in ALLOWED_AUDIO_MIME_TYPES:
+            return True
+
+    return False
+
+
 def validate_audio_filename(filename: str) -> None:
     """Guardrail: only allow known audio extensions/MIME types."""
     ext = _get_file_extension(filename)
