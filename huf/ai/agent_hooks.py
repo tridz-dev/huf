@@ -309,14 +309,14 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                         )
                     else:
                         frappe.log_error(
-                            f"Doc Event Audio Transcription Error ({file['filename']}): "
+                            title="Agent Hooks Audio",
+                            message=f"Doc Event Audio Transcription Error ({file['filename']}): "
                             f"{(stt_result or {}).get('error', 'unknown error')}",
-                            "Agent Hooks Audio"
                         )
                 except Exception as e:
                     frappe.log_error(
-                        f"Doc Event Audio Transcription Error ({file.get('filename')}): {str(e)}",
-                        "Agent Hooks Audio"
+                        title="Agent Hooks Audio",
+                        message=f"Doc Event Audio Transcription Error ({file.get('filename')}): {str(e)}",
                     )
 
         if extracted_content:

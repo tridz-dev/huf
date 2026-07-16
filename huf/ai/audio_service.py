@@ -212,6 +212,10 @@ def _get_default_stt_model(provider_name: str) -> str:
         "azure": "whisper-1",
         "groq": "groq/whisper-large-v3",
         "deepgram": "deepgram/nova-2",
+        # Multimodal providers transcribe via completion with audio input
+        "google": "gemini/gemini-2.5-flash",
+        "gemini": "gemini/gemini-2.5-flash",
+        "vertex_ai": "gemini/gemini-2.5-flash",
     }
     return defaults.get(provider_name.lower())
 
@@ -326,7 +330,10 @@ def resolve_stt_config(agent_name: str = None, model: str = None) -> dict:
         stt_model = _get_default_stt_model(provider_name)
 
     if not stt_model:
-        stt_model = "whisper-1"  # Safe ultimate fallback
+        raise ValueError(
+            f"No transcription model available for provider '{provider_doc.provider_name}'. "
+            "Set Agent.stt_model or add an AI Model with the Transcription modality."
+        )
 
     normalized = _normalize_model_name(stt_model, agent_doc.provider)
     return {
@@ -441,7 +448,7 @@ def transcribe_audio_file(
         }
 
     except Exception as e:
-        frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Service")
+        frappe.log_error(title="Audio Transcription Service", message=f"Audio transcription error: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -476,14 +483,16 @@ def _call_stt_provider(
             mime_type = "audio/webm"
 
         base64_audio = base64.b64encode(audio_data).decode("utf-8")
-        audio_url = f"data:{mime_type};base64,{base64_audio}"
+        audio_format = _get_file_extension(file_path) or "mp3"
+        if audio_format == "m4a":
+            audio_format = "mp4"
 
         messages = [
             {
                 "role": "user",
                 "content": [
                     {"type": "text", "text": "Please transcribe this audio exactly as it is spoken. Do not add any extra commentary or formatting. If there are multiple languages, transcribe them as spoken. If it is silent, just write [Silence]."},
-                    {"type": "image_url", "image_url": {"url": audio_url}},
+                    {"type": "input_audio", "input_audio": {"data": base64_audio, "format": audio_format}},
                 ],
             }
         ]
@@ -650,8 +659,8 @@ def create_audio_user_message(
         )
     except Exception as e:
         frappe.log_error(
-            f"Error emitting new_user_message socket event: {e!s}",
-            "Audio Transcription Socket Event",
+            title="Audio Transcription Socket Event",
+            message=f"Error emitting new_user_message socket event: {e!s}",
         )
 
     return message_doc
