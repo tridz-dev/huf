@@ -34,7 +34,7 @@
     {
       "id": "platform_utility",
       "name": "Platform Utility",
-      "description": "Built-in capabilities like Speech-to-Text, Canvas operations, or Conversation data management.",
+      "description": "Built-in capabilities like Audio Transcription, Canvas operations, or Conversation data management.",
       "icon": "cpu",
       "toolTypes": [
         "Get Report Result",

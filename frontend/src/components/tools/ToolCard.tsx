@@ -1,6 +1,7 @@
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
 import { cn } from '@/lib/utils';
+import { getToolTypeDisplayLabel } from '@/data/ai';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import { Users } from 'lucide-react';
 
@@ -57,12 +58,12 @@ export function ToolCard({
               <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
               {tool.types && (
                 <Badge variant="secondary" className="text-[10px] uppercase shrink-0">
-                  {tool.types}
+                  {getToolTypeDisplayLabel(tool.types)}
                 </Badge>
               )}
               {toolTypeDisplayName && (
                 <Badge variant="outline" className="text-xs shrink-0">
-                  {toolTypeDisplayName}
+                  {getToolTypeDisplayLabel(toolTypeDisplayName)}
                 </Badge>
               )}
               {isShared && (

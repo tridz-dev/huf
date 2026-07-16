@@ -41,6 +41,11 @@ export type ToolType =
   | "Get Conversation Data"
   | "Set Conversation Data"
   | "Load Conversation Data"
+  | "Transcription"
+  /**
+   * @deprecated Legacy value kept for backward compatibility with saved docs.
+   * New tools should use "Transcription" (displayed as "Audio Transcription").
+   */
   | "Speech to Text";
 
 export type AgentToolFunctionRef = {
