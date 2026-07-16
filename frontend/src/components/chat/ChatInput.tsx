@@ -221,6 +221,23 @@ export function ChatInput({
                     );
                 }
 
+                if (prepareRes.is_audio) {
+                    setMessages((prev) =>
+                        prev.map((msg) =>
+                            msg.key === userMessageKey
+                                ? {
+                                    ...msg,
+                                    kind: 'Audio',
+                                    voiceMessage: prepareRes.voice_message,
+                                    sttModel: prepareRes.stt_model,
+                                    versions: [{ id: userMessageKey, content: prepareRes.transcript || prepareRes.agent_prompt || '' }],
+                                    attachment: undefined
+                                }
+                                : msg
+                        )
+                    );
+                }
+
                 setPendingFile(null);
                 if (!chatId) isCreatingConversationRef.current = true;
 
@@ -399,6 +416,8 @@ export function ChatInput({
             const userMessage: MessageType = {
                 key: userMessageKey,
                 from: 'user',
+                kind: 'Audio',
+                voiceMessage: res?.file_url,
                 versions: [{ id: userMessageKey, content: transcript }],
             };
             if (idx < 0) return [...prev, userMessage];
@@ -420,6 +439,7 @@ export function ChatInput({
                 conversationId: res?.conversation_id,
                 assistantMessageId,
                 updateAssistantContent,
+                skipUserMessage: true,
             });
             if (agentMessageId) {
                 syncAssistantMessageId(assistantMessageId, agentMessageId);
