@@ -668,6 +668,7 @@ export function ChatInput({
                             <SpeechInput
                                 onTranscriptionChange={handleTranscriptionChange}
                                 onAudioRecorded={handleAudioRecorded}
+                                preferServerStt={true}
                                 disabled={isSubmitting || isModelMismatch}
                                 size="icon"
                                 className="shrink-0 rounded-full"
