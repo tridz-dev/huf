@@ -219,6 +219,7 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
         files = []
         if file_attachments:
             import mimetypes
+            from huf.ai.audio_service import is_audio_file
             file_urls_to_process = []
             for attachment in file_attachments:
                 fetch_from = attachment.get("source_type")
@@ -246,6 +247,9 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                 if mime_type and mime_type.startswith("image/"):
                     is_image = 1
 
+                # Audio attachments are transcribed, not OCR'd
+                is_audio = 0 if is_image else (1 if is_audio_file(filename, mime_type) else 0)
+
                 # Resolve File document ID to avoid ambiguous file_name lookups later
                 file_id = frappe.db.get_value("File", {"file_url": f_url}, "name")
 
@@ -253,12 +257,13 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                     "file_id": file_id,
                     "filename": filename,
                     "file_url": f_url,
-                    "is_image": is_image
+                    "is_image": is_image,
+                    "is_audio": is_audio
                 })
 
-        # Extract Text from non-image files via OCR to augment context
+        # Extract Text from non-image, non-audio files via OCR to augment context
         extracted_content = []
-        if any(not f.get("is_image") for f in files):
+        if any(not f.get("is_image") and not f.get("is_audio") for f in files):
             from huf.ai.sdk_tools import handle_ocr_document
             import asyncio
             loop = asyncio.new_event_loop()
@@ -266,7 +271,7 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
             
             try:
                 for file in files:
-                    if not file.get("is_image"):
+                    if not file.get("is_image") and not file.get("is_audio"):
                         ocr_result = loop.run_until_complete(
                             handle_ocr_document(
                                 file_id=file.get("file_id"),
@@ -283,7 +288,37 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                 frappe.log_error(f"Doc Event OCR Error: {str(e)}", "Agent Hooks OCR")
             finally:
                 loop.close()
-                
+
+        # Transcribe audio attachments via the canonical audio service
+        transcribed_content = []
+        if any(f.get("is_audio") for f in files):
+            from huf.ai import audio_service
+            for file in files:
+                if not file.get("is_audio"):
+                    continue
+                try:
+                    stt_result = audio_service.transcribe_audio_file(
+                        file_id=file.get("file_id"),
+                        file_url=file["file_url"],
+                        agent_name=agent_name
+                    )
+                    if stt_result and stt_result.get("success"):
+                        transcribed_content.append(
+                            f"--- File: {file['filename']} ---\n"
+                            f"{stt_result.get('transcript') or stt_result.get('text')}\n"
+                        )
+                    else:
+                        frappe.log_error(
+                            f"Doc Event Audio Transcription Error ({file['filename']}): "
+                            f"{(stt_result or {}).get('error', 'unknown error')}",
+                            "Agent Hooks Audio"
+                        )
+                except Exception as e:
+                    frappe.log_error(
+                        f"Doc Event Audio Transcription Error ({file.get('filename')}): {str(e)}",
+                        "Agent Hooks Audio"
+                    )
+
         if extracted_content:
             prompt += f"""
             
@@ -291,6 +326,15 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
             The following text was extracted from attached files. Use this as context:
             
             {''.join(extracted_content)}
+            """
+
+        if transcribed_content:
+            prompt += f"""
+            
+            Attached Audio Transcript(s):
+            The following transcripts were generated from attached audio files. Use this as context:
+            
+            {''.join(transcribed_content)}
             """
 
         run_agent_sync(agent_name, prompt, provider, model, channel_id=channel, external_id=external_id, files=files)
