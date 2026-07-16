@@ -6,7 +6,7 @@ import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
@@ -1637,6 +1637,8 @@ export function AgentFormPage() {
     reference_doctype?: string;
     doc_event?: string;
     condition?: string;
+    prompt_field?: string;
+    file_attachments?: AgentTriggerAttachmentRow[];
     app_name?: string;
     event_name?: string;
     webhook_slug?: string;
@@ -1670,6 +1672,17 @@ export function AgentFormPage() {
         webhook_slug: values.webhook_slug,
         webhook_key: values.webhook_key,
       };
+
+      // Doc Event extras: field to read the prompt from + file/audio attachment mappings
+      if (values.trigger_type === 'Doc Event') {
+        triggerData.prompt_field = values.prompt_field || '';
+        triggerData.file_attachments = (values.file_attachments || []).map((row) => ({
+          ...(row.name ? { name: row.name } : {}),
+          source_type: row.source_type,
+          field_name: row.field_name,
+          child_table: row.source_type === 'Child Table Field' ? row.child_table || '' : '',
+        }));
+      }
 
       if (editingTrigger) {
         // Update existing trigger
