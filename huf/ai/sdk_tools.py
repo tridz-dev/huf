@@ -2238,11 +2238,17 @@ async def handle_transcribe_audio(
 ):
     """
     Transcribe audio using LiteLLM's transcription function.
-    
+
+    This is a pure agent tool: it resolves the audio file, calls the
+    canonical audio service, and returns the transcript. It does **not**
+    create or update Agent Message records. Callers that need chat/UI
+    persistence should use ``huf.ai.audio_api.transcribe`` or the chat
+    endpoints, which layer message creation on top of the same service.
+
     Uses LiteLLM's transcription() function. The model used is either:
     1. The explicitly provided model parameter, OR
     2. An auto-detected suitable transcription model based on the provider
-    
+
     Args:
         file_id: File document ID (preferred) - File must exist in Frappe
         file_url: File URL/path (alternative) - e.g., "/files/audio.mp3"
@@ -2252,21 +2258,23 @@ async def handle_transcribe_audio(
         model: Optional model name (e.g., "whisper-1", "whisper-large-v3")
                If not provided, defaults based on provider
         agent_name: Automatically passed from context
-        conversation_id: Automatically passed from context
-    
+        conversation_id: Present for context but ignored; this tool does
+            not create messages.
+
     Returns:
         dict: {
             "success": bool,
             "text": str,
+            "transcript": str,
             "file_id": str,
-            "message_id": str,
-            "language": str
+            "file_url": str,
+            "local_path": str,
+            "language": str,
+            "model": str,
+            "provider": str
         }
     """
     try:
-        # Get message_id for upsert logic
-        message_id = kwargs.get("message_id")
-
         # Pure transcription (no message/socket side effects) via the
         # canonical audio service.
         result = await asyncio.to_thread(
@@ -2284,41 +2292,19 @@ async def handle_transcribe_audio(
 
         transcribed_text = result["text"]
 
-        # Create Agent Message with transcription result
-        message_doc = None
-        if conversation_id:
-            try:
-                stt_model_link = None
-                if result.get("stt_source") == "agent_config":
-                    stt_model_link = frappe.db.get_value("Agent", agent_name, "stt_model")
-
-                message_doc = audio_service.create_audio_user_message(
-                    conversation_id,
-                    result.get("file_id"),
-                    transcribed_text,
-                    metadata={
-                        "agent_name": agent_name,
-                        "message_id": message_id,
-                        "agent_run_id": kwargs.get("agent_run_id"),
-                        "stt_model": stt_model_link,
-                    },
-                )
-            except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for transcription: {e!s}",
-                    "Audio Transcription Message Creation"
-                )
-                message_doc = None
-
         return {
             "success": True,
             "text": transcribed_text,
+            "transcript": transcribed_text,
             "file_id": result.get("file_id"),
-            "message_id": message_doc.name if message_doc else None,
+            "file_url": result.get("file_url"),
+            "local_path": result.get("local_path"),
             "language": result.get("language") or "auto-detected",
-            "model": result.get("stt_model")
+            "model": result.get("stt_model"),
+            "provider": result.get("provider"),
         }
 
     except Exception as e:
         frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
+        return {"success": False, "error": str(e)}
         return {"success": False, "error": str(e)}
