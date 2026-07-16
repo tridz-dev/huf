@@ -8,7 +8,6 @@ from frappe.utils.file_manager import save_file
 
 from huf.ai import audio_service
 from huf.ai import sdk_tools
-from huf.ai import transcription_handler
 from huf.ai.agent_integration import _run_async_safely, run_agent_sync
 from huf.ai.conversation_manager import ConversationManager
 
@@ -64,6 +63,8 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
 
     provider = frappe.db.get_value("Agent", chat.agent, "provider")
 
+    stt_model_link = frappe.db.get_value("Agent", chat.agent, "stt_model")
+
     try:
         res = audio_service.transcribe_audio_file(
             file_id=file_id,
@@ -77,7 +78,12 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
                     conv_id,
                     file_id,
                     res["text"],
-                    metadata={"agent_name": chat.agent, "message_id": msg.name},
+                    metadata={
+                        "agent_name": chat.agent,
+                        "message_id": msg.name,
+                        "stt_model": stt_model_link,
+                        "status": "Completed",
+                    },
                 )
             except Exception as e:
                 frappe.log_error(
@@ -86,12 +92,17 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
                 )
     except Exception as e:
          frappe.log_error(f"Transcription Error: {str(e)}")
+         frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
          return {"success": False, "error": str(e)}
 
     if not res.get("success"):
+        frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
         return res
 
     transcript = res.get("text")
+    frappe.db.set_value("Agent Message", msg.name, "status", "Completed")
+    if stt_model_link:
+        frappe.db.set_value("Agent Message", msg.name, "stt_model", stt_model_link)
     if not chat.conversation: chat.reload()
     
     run_result = run_agent_sync(
@@ -193,12 +204,15 @@ def upload_audio_and_transcribe_web(
         )
     except Exception as e:
         frappe.log_error(f"Transcription Error (web): {str(e)}")
+        frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
         return {"success": False, "error": str(e)}
 
     if not res.get("success"):
+        frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
         return res
 
     transcript = res["text"]
+    stt_model_link = frappe.db.get_value("Agent", agent, "stt_model")
 
     # Update user message with the actual transcript
     try:
@@ -206,7 +220,12 @@ def upload_audio_and_transcribe_web(
             conversation_id,
             file_id,
             transcript,
-            metadata={"agent_name": agent, "message_id": msg.name},
+            metadata={
+                "agent_name": agent,
+                "message_id": msg.name,
+                "stt_model": stt_model_link,
+                "status": "Completed",
+            },
         )
     except Exception as e:
         frappe.log_error(
@@ -216,6 +235,9 @@ def upload_audio_and_transcribe_web(
 
     # Ensure the transcript is stored even if message update failed above
     frappe.db.set_value("Agent Message", msg.name, "content", transcript)
+    if stt_model_link:
+        frappe.db.set_value("Agent Message", msg.name, "stt_model", stt_model_link)
+    frappe.db.set_value("Agent Message", msg.name, "status", "Completed")
     frappe.db.commit()
 
     if transcribe_only:
