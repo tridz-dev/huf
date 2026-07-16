@@ -109,7 +109,7 @@ def transcribe(
                 conversation,
                 file_id,
                 transcript,
-                metadata={"agent_name": agent},
+                metadata={"agent_name": agent, "status": "Completed"},
             )
             message_id = message_doc.name if message_doc else None
         except Exception as e:
