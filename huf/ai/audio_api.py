@@ -24,6 +24,7 @@ def transcribe(
     file_id: str = None,
     b64data: str = None,
     filename: str = None,
+    file_path: str = None,
     agent: str = None,
     conversation: str = None,
     language: str = None,
@@ -33,13 +34,20 @@ def transcribe(
     """
     Transcribe an audio file via the canonical audio service.
 
-    Provide either an existing Frappe File (``file_id``) or a base64
-    upload (``b64data`` + ``filename``).
+    Provide exactly one source: an existing Frappe File (``file_id``), a
+    base64 upload (``b64data`` + ``filename``), or a server-side
+    filesystem path (``file_path``, e.g. an scp/wget drop inside an
+    allowed audio import directory).
 
     Args:
         file_id: Existing Frappe File document ID (preferred).
         b64data: Base64 audio data, with or without a data-URL prefix.
         filename: Original file name (required with ``b64data``).
+        file_path: Absolute server path inside an allowed audio import
+            directory. Requires the System Manager role. With
+            ``create_message`` the file is first imported as a Frappe
+            File (so the message has a playable attachment); otherwise
+            it is transcribed in place with no File record.
         agent: Agent whose STT configuration/provider is used (required).
         conversation: Agent Conversation to attach the result message to.
         language: Optional language code (ISO 639-1, e.g. "en", "es").
@@ -49,28 +57,41 @@ def transcribe(
 
     Returns:
         dict: {"success", "transcript", "file_id", "file_url",
-               "message_id", "stt_model", "provider", "language"}
+               "local_path", "message_id", "stt_model", "provider",
+               "language"}
     """
     if not agent:
         frappe.throw(_("agent is required"))
 
-    if file_id and (b64data or filename):
-        frappe.throw(_("Provide either file_id or b64data with filename, not both"))
+    sources = sum(1 for source in (file_id, file_path, b64data or filename) if source)
+    if sources > 1:
+        frappe.throw(_("Provide exactly one of file_id, b64data with filename, or file_path"))
+    if sources == 0:
+        frappe.throw(_("Provide one of file_id, b64data with filename, or file_path"))
 
-    if not file_id and not (b64data and filename):
-        frappe.throw(_("Provide either file_id or b64data with filename"))
+    if file_path:
+        # Server filesystem paths must not be probeable by ordinary users.
+        frappe.only_for("System Manager")
 
     if cint(create_message) and not conversation:
         frappe.throw(_("conversation is required when create_message is set"))
 
     file_url = None
-    if not file_id:
+    if file_path and cint(create_message):
+        # Import the server-drop as a Frappe File so the resulting message
+        # has a playable attachment, then proceed as the file_id path.
+        saved = audio_service.import_local_audio(file_path, is_private=1)
+        file_id = saved["file_id"]
+        file_url = saved["file_url"]
+        file_path = None
+    elif not file_id and not file_path:
         saved = audio_service.save_audio_upload(filename, b64data, is_private=1)
         file_id = saved["file_id"]
         file_url = saved["file_url"]
 
     result = audio_service.transcribe_audio_file(
         file_id=file_id,
+        local_path=file_path,
         agent_name=agent,
         language=language,
         model=model,
@@ -102,6 +123,7 @@ def transcribe(
         "transcript": transcript,
         "file_id": file_id,
         "file_url": result.get("file_url") or file_url,
+        "local_path": result.get("local_path"),
         "message_id": message_id,
         "stt_model": result.get("stt_model"),
         "provider": result.get("provider"),

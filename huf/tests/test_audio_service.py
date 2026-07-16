@@ -344,7 +344,7 @@ class TestTranscribeAudioFile(unittest.TestCase):
     def test_requires_file(self):
         result = audio_service.transcribe_audio_file(agent_name="Agent-1")
         self.assertFalse(result["success"])
-        self.assertIn("Either file_id or file_url is required", result["error"])
+        self.assertIn("One of file_id, file_url, or local_path is required", result["error"])
 
     def test_missing_file_returns_error(self):
         result = audio_service.transcribe_audio_file(
@@ -377,12 +377,12 @@ class TestAudioApiValidation(unittest.TestCase):
                 filename="clip.webm",
                 agent="Agent-1",
             )
-        self.assertIn("not both", str(ctx.exception))
+        self.assertIn("exactly one", str(ctx.exception))
 
     def test_no_input_rejected(self):
         with self.assertRaises(ThrowError) as ctx:
             audio_api.transcribe(agent="Agent-1")
-        self.assertIn("Provide either file_id or b64data", str(ctx.exception))
+        self.assertIn("Provide one of file_id, b64data", str(ctx.exception))
 
     def test_create_message_requires_conversation(self):
         with self.assertRaises(ThrowError) as ctx:
