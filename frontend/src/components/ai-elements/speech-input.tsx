@@ -76,10 +76,32 @@ export type SpeechInputProps = ComponentProps<typeof Button> & {
    * still delivered to onAudioRecorded. Defaults to 180 (3 minutes).
    */
   maxDurationSeconds?: number;
+  /**
+   * When true, always use server-side STT (MediaRecorder) even if the
+   * browser supports the Web Speech API. This keeps transcription on the
+   * server where provider, audit, and cost controls apply. Browser-only
+   * dictation is treated as a fallback and labeled as local/unaudited.
+   */
+  preferServerStt?: boolean;
 };
 
-const detectSpeechInputMode = (): SpeechInputMode => {
+const detectSpeechInputMode = (preferServerStt = false): SpeechInputMode => {
   if (typeof window === "undefined") {
+    return "none";
+  }
+
+  const hasMediaRecorder =
+    "MediaRecorder" in window && "mediaDevices" in navigator;
+
+  // Prefer server-side STT when requested; only fall back to browser
+  // dictation when MediaRecorder is unavailable.
+  if (preferServerStt) {
+    if (hasMediaRecorder) {
+      return "media-recorder";
+    }
+    if ("SpeechRecognition" in window || "webkitSpeechRecognition" in window) {
+      return "speech-recognition";
+    }
     return "none";
   }
 
@@ -87,7 +109,7 @@ const detectSpeechInputMode = (): SpeechInputMode => {
     return "speech-recognition";
   }
 
-  if ("MediaRecorder" in window && "mediaDevices" in navigator) {
+  if (hasMediaRecorder) {
     return "media-recorder";
   }
 
@@ -100,11 +122,12 @@ export const SpeechInput = ({
   onAudioRecorded,
   lang = "en-US",
   maxDurationSeconds = 180,
+  preferServerStt = false,
   ...props
 }: SpeechInputProps) => {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [mode] = useState<SpeechInputMode>(detectSpeechInputMode);
+  const [mode] = useState<SpeechInputMode>(detectSpeechInputMode(preferServerStt));
   const [isRecognitionReady, setIsRecognitionReady] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -350,12 +373,22 @@ export const SpeechInput = ({
         )}
         disabled={isDisabled}
         onClick={toggleListening}
+        title={
+          mode === "speech-recognition"
+            ? "Local browser dictation (not audited by server STT)"
+            : "Record audio and transcribe with server STT"
+        }
         {...props}
       >
         {isProcessing && <Spinner />}
         {!isProcessing && isListening && <SquareIcon className="size-4" />}
         {!(isProcessing || isListening) && <MicIcon className="size-4" />}
       </Button>
+      {mode === "speech-recognition" && !isListening && (
+        <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] text-zinc-400">
+          local
+        </span>
+      )}
     </div>
   );
 };
