@@ -12,6 +12,8 @@ audio transcription, and audio user-message creation. Chat endpoints
 
 Separation of concerns:
 - ``save_audio_upload``        -> validate + store base64 audio as a Frappe File
+- ``resolve_local_audio_path`` -> validate a server-side path (scp/wget drops)
+- ``import_local_audio``       -> turn a server-drop file into a Frappe File
 - ``resolve_stt_config``       -> pick STT model/provider/credentials
 - ``transcribe_audio_file``    -> pure transcription (no messages, no sockets)
 - ``create_audio_user_message``-> persist an Agent Message for a transcript
@@ -20,6 +22,7 @@ Separation of concerns:
 import base64
 import binascii
 import mimetypes
+import os
 
 import frappe
 from frappe import _
@@ -203,6 +206,104 @@ def save_audio_upload(
     return {"file_id": file_id, "file_url": file_url, "file_name": file_name}
 
 
+def _get_allowed_audio_import_dirs() -> list:
+    """
+    Return the realpath'd root directories from which server-side audio
+    imports (scp/wget/cron drops) are allowed.
+
+    Always includes the site's ``private/audio_imports`` directory; extra
+    roots can be added via the ``audio_import_dirs`` list in site config.
+    This only defines the security boundary - no directory is created.
+    """
+    roots = [frappe.get_site_path("private", "audio_imports")]
+    extra_dirs = frappe.get_site_config().get("audio_import_dirs") or []
+    roots.extend(extra_dirs)
+    return [os.path.realpath(root) for root in roots]
+
+
+def resolve_local_audio_path(file_path: str) -> str:
+    """
+    Resolve and validate a server-side audio file path for transcription.
+
+    Guardrails against path traversal and symlink escapes:
+    - The path must be absolute.
+    - Symlinks are resolved (``os.path.realpath``) and the real path must
+      live inside one of the allowed import roots
+      (``_get_allowed_audio_import_dirs``).
+    - The target must exist and be a regular file, pass the audio
+      filename allowlist (``validate_audio_filename``), and respect the
+      maximum size cap (``MAX_AUDIO_FILE_SIZE``).
+
+    Args:
+        file_path: Absolute path to an audio file on the server.
+
+    Returns:
+        str: The resolved real path.
+    """
+    if not file_path or not isinstance(file_path, str) or not os.path.isabs(file_path):
+        frappe.throw(_("An absolute file path is required."))
+
+    real_path = os.path.realpath(file_path)
+
+    allowed_roots = _get_allowed_audio_import_dirs()
+    if not any(real_path == root or real_path.startswith(root + os.sep) for root in allowed_roots):
+        frappe.throw(_("Path is outside the allowed audio import directories."))
+
+    if not os.path.exists(real_path) or not os.path.isfile(real_path):
+        frappe.throw(_("Audio file not found: {0}").format(file_path))
+
+    validate_audio_filename(os.path.basename(real_path))
+
+    if os.path.getsize(real_path) > MAX_AUDIO_FILE_SIZE:
+        frappe.throw(
+            _("Audio file exceeds the maximum allowed size of {0} MB.").format(
+                MAX_AUDIO_FILE_SIZE // (1024 * 1024)
+            )
+        )
+
+    return real_path
+
+
+def import_local_audio(
+    file_path: str,
+    *,
+    attach_to_doctype: str = None,
+    attach_to_name: str = None,
+    is_private: int = 1,
+) -> dict:
+    """
+    Import a server-side audio file (scp/wget/cron drop) as a Frappe File.
+
+    Validates the path via ``resolve_local_audio_path`` (the same security
+    boundary used for in-place local transcription), reads the bytes, and
+    stores them through ``save_audio_upload`` so all upload guardrails
+    (extension/MIME allowlist, size cap) apply. Useful when a server-drop
+    should become a normal File for message/chat integration.
+
+    Args:
+        file_path: Absolute path to an audio file on the server.
+        attach_to_doctype: Optional DocType the file is attached to.
+        attach_to_name: Optional document name the file is attached to.
+        is_private: Whether the stored file is private (default: 1).
+
+    Returns:
+        dict: {"file_id": str, "file_url": str, "file_name": str}
+    """
+    real_path = resolve_local_audio_path(file_path)
+
+    with open(real_path, "rb") as audio_file:
+        audio_bytes = audio_file.read()
+
+    b64data = base64.b64encode(audio_bytes).decode("ascii")
+    return save_audio_upload(
+        os.path.basename(real_path),
+        b64data,
+        attached_to_doctype=attach_to_doctype,
+        attached_to_name=attach_to_name,
+        is_private=is_private,
+    )
+
+
 def _get_default_stt_model(provider_name: str) -> str:
     """
     Get default STT model for a provider.
@@ -365,6 +466,7 @@ def transcribe_audio_file(
     file_id: str = None,
     file_url: str = None,
     *,
+    local_path: str = None,
     agent_name: str = None,
     language: str = None,
     model: str = None,
@@ -377,13 +479,17 @@ def transcribe_audio_file(
     Args:
         file_id: File document ID (preferred) - File must exist in Frappe.
         file_url: File URL/path (alternative) - e.g., "/files/audio.mp3".
+        local_path: Absolute server path inside an allowed audio import
+            directory (mutually exclusive with ``file_id``/``file_url``).
+            Skips the Frappe File lookup and transcribes in place.
         agent_name: Agent whose STT configuration/provider is used.
         language: Optional language code (ISO 639-1, e.g. "en", "es").
         model: Optional explicit STT model override.
 
     Returns:
         dict: {"success", "transcript", "text" (alias), "file_id",
-               "file_url", "stt_model", "provider", "language"}
+               "file_url", "local_path", "stt_model", "provider",
+               "language"}
     """
     try:
         if not agent_name:
@@ -393,7 +499,13 @@ def transcribe_audio_file(
 
         # Get audio file
         file_doc = None
-        if file_id:
+        resolved_local_path = None
+        if local_path and (file_id or file_url):
+            return {"success": False, "error": "local_path is mutually exclusive with file_id/file_url"}
+        if local_path:
+            resolved_local_path = resolve_local_audio_path(local_path)
+            file_path = resolved_local_path
+        elif file_id:
             try:
                 file_doc = _resolve_file_doc(file_id=file_id)
             except Exception as e:
@@ -403,13 +515,14 @@ def transcribe_audio_file(
             if not file_doc:
                 return {"success": False, "error": f"File not found at URL: {file_url}"}
         else:
-            return {"success": False, "error": "Either file_id or file_url is required"}
+            return {"success": False, "error": "One of file_id, file_url, or local_path is required"}
 
-        # Get file path for LiteLLM (accepts file path or file-like object)
-        try:
-            file_path = file_doc.get_full_path()
-        except Exception as e:
-            return {"success": False, "error": f"Error getting file path: {e!s}"}
+        if file_doc:
+            # Get file path for LiteLLM (accepts file path or file-like object)
+            try:
+                file_path = file_doc.get_full_path()
+            except Exception as e:
+                return {"success": False, "error": f"Error getting file path: {e!s}"}
 
         # Determine transcription model
         try:
@@ -439,8 +552,9 @@ def transcribe_audio_file(
             "success":    True,
             "transcript": transcribed_text,
             "text":       transcribed_text,  # compatibility alias
-            "file_id":    file_doc.name,
-            "file_url":   file_doc.file_url,
+            "file_id":    file_doc.name if file_doc else None,
+            "file_url":   file_doc.file_url if file_doc else None,
+            "local_path": resolved_local_path,
             "stt_model":  normalized_model,
             "provider":   provider_name,
             "language":   language or "auto-detected",

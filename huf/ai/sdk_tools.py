@@ -2229,6 +2229,7 @@ async def handle_generate_audio(
 async def handle_transcribe_audio(
     file_id: str = None,
     file_url: str = None,
+    file_path: str = None,
     language: str = None,
     model: str = None,
     agent_name: str = None,
@@ -2245,6 +2246,8 @@ async def handle_transcribe_audio(
     Args:
         file_id: File document ID (preferred) - File must exist in Frappe
         file_url: File URL/path (alternative) - e.g., "/files/audio.mp3"
+        file_path: Absolute server path inside an allowed audio import
+               directory (alternative to file_id/file_url)
         language: Optional language code (e.g., "en", "es", "fr") - ISO 639-1 format
         model: Optional model name (e.g., "whisper-1", "whisper-large-v3")
                If not provided, defaults based on provider
@@ -2270,6 +2273,7 @@ async def handle_transcribe_audio(
             audio_service.transcribe_audio_file,
             file_id=file_id,
             file_url=file_url,
+            local_path=file_path,
             agent_name=agent_name,
             language=language,
             model=model,
