@@ -668,6 +668,7 @@ def create_audio_user_message(
             - message_id: Existing Agent Message to update (upsert).
             - agent_run_id: Agent Run to link on new messages.
             - stt_model: AI Model link to stamp on the message.
+            - status: One of Started, Queued, Completed, Failed.
 
     Returns:
         The created/updated Agent Message document.
@@ -677,6 +678,7 @@ def create_audio_user_message(
     message_id = metadata.get("message_id")
     agent_run_id = metadata.get("agent_run_id")
     stt_model_link = metadata.get("stt_model")
+    message_status = metadata.get("status")
 
     file_doc = frappe.get_doc("File", file_id) if file_id else None
 
@@ -706,6 +708,8 @@ def create_audio_user_message(
             message_doc.kind = "Audio"
         if stt_model_link:
             message_doc.stt_model = stt_model_link
+        if message_status:
+            message_doc.status = message_status
         if file_doc and file_doc.file_url:
             message_doc.voice_message = file_doc.file_url
         message_doc.save(ignore_permissions=True)
@@ -726,6 +730,8 @@ def create_audio_user_message(
         })
         if stt_model_link:
             message_doc.stt_model = stt_model_link
+        if message_status:
+            message_doc.status = message_status
         if file_doc and file_doc.file_url:
             message_doc.voice_message = file_doc.file_url
         message_doc.insert(ignore_permissions=True)
