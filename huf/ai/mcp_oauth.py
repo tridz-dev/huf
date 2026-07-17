@@ -178,6 +178,10 @@ def handle_oauth_callback(server_name: str, code: str, state: str) -> dict:
         token_data = _exchange_code_for_tokens(server, config, code, code_verifier, redirect_uri)
         _save_tokens(server, token_data)
 
+        # Explicit commit required here because this is invoked via a GET request
+        # to a Web Page (www/mcp_oauth_callback.py), which Frappe rolls back by default.
+        frappe.db.commit() # nosemgrep
+
         return {"success": True}
 
     except Exception as exc:
