@@ -26,6 +26,7 @@ from typing import Any
 import frappe
 
 from huf.ai.knowledge.extractors import TextExtractor
+from huf.ai.transaction import commit_if_background
 
 
 # Maximum file size we are willing to read into memory for base64 encoding (bytes)
@@ -709,7 +710,7 @@ async def extract_document(
                 """,
                 (conversation_index, conversation_id),
             )
-            frappe.db.commit()
+            commit_if_background()
 
             try:
                 frappe.publish_realtime(

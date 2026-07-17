@@ -5,6 +5,7 @@ from datetime import datetime
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
+from huf.ai.transaction import commit_if_background
 
 TOOL_DOCTYPE = "Agent Tool Function"
 CACHE_DOCTYPE = "Agent Settings"  # Singleton for caching
@@ -299,7 +300,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 tool_type_doc.insert(ignore_permissions=True)
         except Exception as e:
             errors.append(f"Failed to create Tool Type '{category}': {str(e)}")
-    frappe.db.commit()
+    commit_if_background()
     # BATCH 2: Validate all functions first (before any DB operations)
     validated_tools = []
     validation_cache = {}  # function_path -> bool

@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 
 
 from .tool_registry import PermissionAwareToolRegistry
+from huf.ai.transaction import commit_if_background
 MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
 
 # Guest-allowed tools of these types MUST pin a reference_doctype; otherwise the
@@ -942,7 +943,7 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
             doc.set(field, value)
 
         doc.save(ignore_permissions=ignore_permissions)
-        frappe.db.commit()
+        commit_if_background()
 
         # Build a concise result dict
         result_dict = {"name": doc.name, "modified": str(doc.modified)}
@@ -1128,7 +1129,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         doc = frappe.get_doc(doctype, doc_name)
         doc.set(fieldname, value)
         doc.save(ignore_permissions=ignore_permissions)
-        frappe.db.commit()
+        commit_if_background()
 
         return {
             "success": True,
@@ -1348,7 +1349,7 @@ def handle_set_conversation_data(
         new_json = json.dumps(state, ensure_ascii=False, indent=2)
 
         frappe.db.set_value("Agent Conversation", conversation_id, "conversation_data", new_json)
-        frappe.db.commit() # Persist changes immediately
+        commit_if_background() # Persist changes immediately
 
         return {"success": True, "message": f"Set '{name}' match successfully"}
 
@@ -1657,7 +1658,7 @@ async def handle_generate_image(
                 # This ensures the Attach Image field displays the image correctly
                 if message_doc and file_url:
                     message_doc.db_set("generated_image", file_url)
-                    frappe.db.commit()
+                    commit_if_background()
 
                     # Emit socket event for new agent message (Image)
                     try:
@@ -2237,7 +2238,7 @@ async def handle_generate_audio(
         # Update the message with the file URL
         if message_doc and file_url:
             message_doc.db_set("generated_audio", file_url)
-            frappe.db.commit()
+            commit_if_background()
 
             # Emit socket event for new agent message (Audio)
             try:
@@ -2517,7 +2518,7 @@ async def handle_transcribe_audio(
                 else:
                     frappe.db.set_value("Agent Conversation", conversation_id, "last_activity", frappe.utils.now())
 
-                frappe.db.commit()
+                commit_if_background()
 
                 # Emit socket event for new message
                 try:
