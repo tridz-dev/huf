@@ -1,0 +1,16 @@
+GROUND FACTS (already verified — do not re-derive):
+- Repo: /Users/safwan/Code/HUF/huf, on branch feat/design-simplified-hub-homepage-interface (merged with develop).
+- Hub Simple files: frontend/src/pages/HubSimplePage.tsx, frontend/src/components/hub/SlashCommandMenu.tsx, frontend/src/components/hub/HubConversationView.tsx, frontend/src/services/commandParser.ts, App.tsx changes.
+- READ-ONLY recon. DO NOT modify files. DO NOT push. Other agents cover frontend UX and backend — stay in your lane (conventions + duplication).
+
+READ FIRST: CLAUDE.md (frontend conventions section).
+
+TASKS:
+C1. CONVENTION COMPLIANCE: audit the hub files against CLAUDE.md frontend rules — all backend calls via src/services with db/call from @/lib/frappe-sdk; doctype names from @/data/doctypes; handleFrappeError in catch blocks; shadcn/ui primitives reused (not reinvented); cn() for class merging; sonner for toasts; routing via React Router under /huf basename. List every violation with file:line.
+C2. DUPLICATION VS REUSE: compare HubConversationView + hub input against existing ChatWindowV2, ChatInput, ChatMessageList, ai-elements/* (message, prompt-input, suggestion, code-block...). Quantify: which behaviors are re-implemented (streaming loop, markdown rendering, tool-call display, autoscroll), rough duplicated LOC, and what could be reused instead. Does the hub render markdown/tool calls at all, or plain text?
+C3. STYLE/QUALITY: strict-TS issues (any, unused), component size (HubSimplePage is ~369 lines — should it be decomposed?), inline styles vs Tailwind, magic values.
+C4. MERGE FRESHNESS: post-merge, do the hub files use any APIs/services that develop has since changed or superseded (e.g. newer chat/streaming service, audio service, queue-first runs)? Check git log of frontend/src/services since the merge-base for renames the hub missed.
+
+OUTPUT: write detailed findings to ongoing/hub-simple-analysis/02c-conventions.md organized by task ID with file:line refs.
+
+REPLY ONLY with: one line per task ID, top 3 findings one line each, <verdict: SOLID|MIXED|WEAK>.
