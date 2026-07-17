@@ -239,7 +239,6 @@ def upload_audio_and_transcribe_web(
 
     # Update user message with the actual transcript
     frappe.db.set_value("Agent Message", msg.name, "content", transcript)
-    frappe.db.commit()
 
     if transcribe_only:
         return {
