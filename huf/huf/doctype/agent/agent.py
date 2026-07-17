@@ -110,6 +110,7 @@ class Agent(Document):
     def validate(self):
         self._validate_prompt()
         self._validate_summary_prompt()
+        self._validate_system_field_tamper()
 
         if self.allow_chat == 1 and self.persist_conversation == 0:
             frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
@@ -120,6 +121,27 @@ class Agent(Document):
 
         self._validate_advanced_models()
         self._update_mcp_tool_counts()
+
+    def _validate_system_field_tamper(self):
+        """Prevent non-admins from flipping is_system via API/UI."""
+        if self.is_new():
+            return
+
+        if not self.has_value_changed("is_system"):
+            return
+
+        if (
+            frappe.flags.in_seeding
+            or frappe.flags.in_install
+            or frappe.flags.in_migrate
+            or "System Manager" in frappe.get_roles()
+        ):
+            return
+
+        frappe.throw(
+            _("Only System Managers can change the system-agent flag."),
+            title=_("System Agent Protected"),
+        )
 
     def _update_mcp_tool_counts(self):
         """Populate each agent_mcp_server row's tool_count from its linked MCP Server.
@@ -284,8 +306,19 @@ class Agent(Document):
             self.generate_default_plan()
         
     def on_trash(self):
+        if self.is_system and not (
+            frappe.flags.in_install or frappe.flags.in_migrate or frappe.flags.in_uninstall
+        ):
+            frappe.throw(_("System agents cannot be deleted."), title=_("System Agent Protected"))
+
         clear_doc_event_agents_cache()
-    
+
+    def before_rename(self, old_name: str, new_name: str, merge: bool = False):
+        if self.is_system and not (
+            frappe.flags.in_install or frappe.flags.in_migrate or frappe.flags.in_uninstall
+        ):
+            frappe.throw(_("System agents cannot be renamed."), title=_("System Agent Protected"))
+
     def generate_default_plan(self):
         """
         Generates the default plan using run_agent_sync directly.

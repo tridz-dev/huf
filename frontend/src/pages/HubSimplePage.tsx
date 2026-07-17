@@ -23,7 +23,6 @@ interface StarterPrompt {
 const GREETINGS: Record<string, string> = {
   admin: 'What would you like to orchestrate?',
   builder: 'What are you building today?',
-  operator: 'What do you need to monitor?',
   viewer: 'What insights are you looking for?',
 };
 
@@ -39,12 +38,6 @@ const STARTER_PROMPTS: Record<string, StarterPrompt[]> = {
     { label: 'Create a new knowledge agent', route: '/agents' },
     { label: 'Browse existing agents', route: '/agents' },
     { label: 'Add an agent tool', route: '/agents' },
-  ],
-  operator: [
-    { label: 'Show failed executions', route: '/executions' },
-    { label: 'View all executions', route: '/executions' },
-    { label: 'View dashboard metrics', route: '/dashboard' },
-    { label: 'Export run diagnostics', route: '/executions' },
   ],
   viewer: [
     { label: 'Show dashboard metrics', route: '/dashboard' },
@@ -66,10 +59,11 @@ const NAV_ITEMS = [
 export default function HubSimplePage() {
   const navigate = useNavigate();
   const { user } = useUser();
-  const { capabilities } = usePermissions();
+  const { hufRole } = usePermissions();
 
-  const role = capabilities.includes('system.admin') ? 'admin'
-    : capabilities.includes('agent.use') ? 'builder'
+  const role =
+    hufRole === 'Huf Admin' ? 'admin'
+    : hufRole === 'Huf Manager' || hufRole === 'Huf User' ? 'builder'
     : 'viewer';
 
   const initials = (user?.full_name || user?.name || 'U')

@@ -102,7 +102,8 @@
   "total_run",
   "seeding_metadata_section",
   "source_app",
-  "source_file"
+  "source_file",
+  "is_system"
  ],
  "fields": [
   {
@@ -702,6 +703,14 @@
    "read_only": 1
   },
   {
+   "default": "0",
+   "fieldname": "is_system",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is System",
+   "read_only": 1
+  },
+  {
    "fieldname": "column_break_jrdw",
    "fieldtype": "Column Break"
   },
@@ -743,7 +752,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-30 18:59:30.376271",
+ "modified": "2026-07-17 13:11:19.673477",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",
