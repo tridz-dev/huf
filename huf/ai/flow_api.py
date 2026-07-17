@@ -82,7 +82,6 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
-	frappe.db.commit()
 	return {"flow_id": doc.flow_id, "version": doc.version}
 
 
@@ -472,8 +471,6 @@ def schedule_flow(flow_id: str, cron: str, schedule_name: str | None = None, tim
 		})
 		doc.insert()
 	
-	frappe.db.commit()
-	
 	return {
 		"schedule_id": doc.name,
 		"flow_id": flow_id,
@@ -507,7 +504,6 @@ def unschedule_flow(flow_id: str) -> dict:
 		}
 	
 	frappe.delete_doc("Scheduled Job Type", existing, ignore_missing=True)
-	frappe.db.commit()
 	
 	return {
 		"status": "unscheduled",
