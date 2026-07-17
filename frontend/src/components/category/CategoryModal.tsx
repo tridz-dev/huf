@@ -1,10 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Dialog,
-  DialogContent,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DialogScrollBody,
+  DialogScrollContent,
+  DialogScrollHeader,
+} from '@/components/ui/dialog-scroll';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -31,8 +34,8 @@ interface CategoryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   categories: Category[];
-  selected: Category[];
-  onSave: (categories: Category[]) => void;
+  selected: Category | null;
+  onSave: (category: Category | null) => void;
   refreshCategories: () => Promise<void>;
   onDeleteCategory?: (categoryName: string) => void;
   editCategory?: Category | null;
@@ -51,7 +54,7 @@ export function CategoryModal({
   onEditComplete,
 }: CategoryModalProps) {
   const [localCategories, setLocalCategories] = useState<Category[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const [newCategoryData, setNewCategoryData] = useState({
@@ -71,7 +74,7 @@ export function CategoryModal({
   useEffect(() => {
     if (open) {
       setLocalCategories(categories);
-      setSelectedIds(selected.map((c) => c.name));
+      setSelectedId(selected?.name || null);
       setSearchQuery(''); // Reset search when modal opens
       setEditingCategory(null); // Reset editing state
       setActiveTab('list'); // Reset to list tab
@@ -113,19 +116,13 @@ export function CategoryModal({
 
   // ✅ Toggle selection
   const toggleCategory = (name: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(name)
-        ? prev.filter((id) => id !== name)
-        : [...prev, name]
-    );
+    setSelectedId((prev) => (prev === name ? null : name));
   };
 
   // ✅ Save
   const handleSave = () => {
-    const selectedCategories = localCategories.filter((c) =>
-      selectedIds.includes(c.name)
-    );
-    onSave(selectedCategories);
+    const selectedCategory = localCategories.find((c) => c.name === selectedId) || null;
+    onSave(selectedCategory);
     onOpenChange(false);
   };
 
@@ -141,7 +138,7 @@ export function CategoryModal({
       setDeletingCategory(categoryName);
       await deleteCategory(categoryName);
       setLocalCategories((prev) => prev.filter((c) => c.name !== categoryName));
-      setSelectedIds((prev) => prev.filter((id) => id !== categoryName));
+      setSelectedId((prev) => (prev === categoryName ? null : prev));
       await refreshCategories();
       toast.success('Category deleted');
     } catch (error) {
@@ -190,9 +187,7 @@ export function CategoryModal({
         prev.map((cat) => (cat.name === editingCategory.name ? edited : cat))
       );
 
-      setSelectedIds((prev) =>
-        prev.map((id) => (id === editingCategory.name ? finalName : id))
-      );
+      setSelectedId((prev) => (prev === editingCategory.name ? finalName : prev));
 
       await refreshCategories();
 
@@ -223,9 +218,7 @@ export function CategoryModal({
       setLocalCategories((prev) => [...prev, created]);
 
       // auto select
-      setSelectedIds((prev) =>
-        prev.includes(created.name) ? prev : [...prev, created.name]
-      );
+      setSelectedId(created.name);
 
       await refreshCategories();
 
@@ -250,8 +243,8 @@ export function CategoryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+      <DialogScrollContent className="sm:max-w-2xl">
+        <DialogScrollHeader>
           <DialogTitle>
             {editingCategory
               ? `Edit Category: ${newCategoryData.category_name || editingCategory.category_name}`
@@ -259,10 +252,11 @@ export function CategoryModal({
               ? 'Add New Category'
               : 'Manage Categories'}
           </DialogTitle>
-        </DialogHeader>
+        </DialogScrollHeader>
 
+        <DialogScrollBody>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-2 bg-muted p-1 rounded-lg">
+          <TabsList variant="pill" layout="grid" cols={2}>
             <TabsTrigger value="list">Categories</TabsTrigger>
             <TabsTrigger value="create">{editingCategory ? 'Edit' : 'Add New'}</TabsTrigger>
           </TabsList>
@@ -298,12 +292,12 @@ export function CategoryModal({
                 </div>
               ) : (
                 <>
-                  {selectedIds.length > 0 && (
+                  {selectedId && (
                     <div>
-                      <div className="mb-3 text-sm font-medium">Selected categories</div>
+                      <div className="mb-3 text-sm font-medium">Selected category</div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                         {localCategories
-                          .filter((cat) => selectedIds.includes(cat.name))
+                          .filter((cat) => cat.name === selectedId)
                           .map((cat) => {
                             const Icon = cat.icon
                               ? TABLE_ICON_MAP[cat.icon] || (Icons[cat.icon as keyof typeof Icons] as React.ElementType)
@@ -351,14 +345,14 @@ export function CategoryModal({
                       <div
                         key={cat.name}
                         className={`group flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer ${
-                          selectedIds.includes(cat.name) ? 'border-primary bg-primary/5' : ''
+                          selectedId === cat.name ? 'border-primary bg-primary/5' : ''
                         }`}
                         onClick={() => toggleCategory(cat.name)}
                       >
                         {/* Checkbox */}
                         <div onClick={(e) => e.stopPropagation()}>
                           <Checkbox
-                            checked={selectedIds.includes(cat.name)}
+                            checked={selectedId === cat.name}
                             onCheckedChange={() => toggleCategory(cat.name)}
                           />
                         </div>
@@ -435,7 +429,14 @@ export function CategoryModal({
 
             {/* Save Button - Fixed at bottom */}
             <div className="flex justify-center pt-4 border-t">
-              <Button size="lg" onClick={handleSave}>
+              <Button 
+                type="button" 
+                size="lg" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSave();
+                }}
+              >
                 Save Selection
               </Button>
             </div>
@@ -563,7 +564,11 @@ export function CategoryModal({
               {/* Button */}
               <div className="flex gap-2 mt-2">
                 <Button
-                  onClick={handleCreate}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleCreate();
+                  }}
                   className="flex-1"
                   size="lg"
                   disabled={!newCategoryData.category_name.trim()}
@@ -593,7 +598,8 @@ export function CategoryModal({
             </div>
           </TabsContent>
         </Tabs>
-      </DialogContent>
+        </DialogScrollBody>
+      </DialogScrollContent>
     </Dialog>
   );
 }

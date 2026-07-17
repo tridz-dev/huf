@@ -6,14 +6,14 @@ import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../co
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getKnowledgeSources } from '../services/knowledgeApi';
 import { formatTimeAgo } from '../utils/time';
-import { knowledgeSourceFilterStatuses } from '../data/knowledge';
+import { knowledgeSourceFilterStatuses, knowledgeTypeLabels } from '../data/knowledge';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 
-function getStatusVariant(source: KnowledgeSourceDoc): 'default' | 'secondary' | 'destructive' | 'outline' {
+function getStatusVariant(source: KnowledgeSourceDoc): 'default' | 'secondary' | 'destructive' | 'success' | 'outline' {
   if (source.disabled === 1) return 'secondary';
   switch (source.status) {
     case 'Ready':
-      return 'default';
+      return 'success';
     case 'Indexing':
     case 'Rebuilding':
       return 'outline';
@@ -103,7 +103,7 @@ function KnowledgeSourcesPage() {
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load knowledge sources</p>
-          <p className="text-sm text-muted-foreground mb-4">
+          <p className="text-sm text-steel mb-4">
             {error.message || 'An error occurred while fetching knowledge sources.'}
           </p>
         </div>
@@ -114,7 +114,7 @@ function KnowledgeSourcesPage() {
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No knowledge sources found.</p>
+            <p className="font-body text-steel-soft mb-4">No knowledge sources found.</p>
           </div>
         }
         renderItem={(source) => {
@@ -128,7 +128,7 @@ function KnowledgeSourcesPage() {
                 variant: getStatusVariant(source),
               }}
               metadata={[
-                { label: 'Type', value: source.knowledge_type === 'sqlite_fts' ? 'FTS' : 'Vec', icon: Database },
+                { label: 'Type', value: knowledgeTypeLabels[source.knowledge_type] ?? source.knowledge_type, icon: Database },
                 { label: 'Chunks', value: (source.total_chunks ?? 0).toLocaleString() },
                 {
                   label: 'Last Indexed',
@@ -156,7 +156,7 @@ function KnowledgeSourcesPage() {
         disabled={!!search || initialLoading}
       />
       {!hasMore && sources.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined
             ? `Showing all ${total} knowledge sources`
             : 'No more knowledge sources to load'}

@@ -27,6 +27,7 @@ interface MultiSelectComboboxProps {
   placeholder?: string;
   searchPlaceholder?: string;
   emptyText?: string;
+  closeLabel?: string;
   disabled?: boolean;
   className?: string;
   maxBadges?: number;
@@ -39,6 +40,7 @@ export function MultiSelectCombobox({
   placeholder = 'Select options...',
   searchPlaceholder = 'Search...',
   emptyText = 'No results found.',
+  closeLabel = 'Done',
   disabled = false,
   className,
   maxBadges = 3,
@@ -87,8 +89,21 @@ export function MultiSelectCombobox({
         </PopoverTrigger>
         <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
           <Command>
+            <div className="flex items-center justify-between border-b px-3 py-2">
+              <span className="text-xs font-medium text-muted-foreground">Select options</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setOpen(false)}
+              >
+                <X className="h-4 w-4 mr-1" />
+                {closeLabel}
+              </Button>
+            </div>
             <CommandInput placeholder={searchPlaceholder} />
-            <CommandList>
+            <CommandList className="max-h-[min(50vh,280px)]">
               <CommandEmpty>{emptyText}</CommandEmpty>
               <CommandGroup>
                 {options.map((option) => {

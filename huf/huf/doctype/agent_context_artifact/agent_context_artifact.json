@@ -1,0 +1,123 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:ART-{####}",
+ "creation": "2026-06-04 13:28:42.992361",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "conversation",
+  "agent_run",
+  "artifact_type",
+  "summary",
+  "payload_json",
+  "payload_file",
+  "reference_doctype",
+  "reference_name",
+  "visibility",
+  "context_policy",
+  "token_estimate",
+  "expires_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "Agent Conversation"
+  },
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "label": "Agent Run",
+   "options": "Agent Run"
+  },
+  {
+   "default": "JSON",
+   "fieldname": "artifact_type",
+   "fieldtype": "Select",
+   "label": "Artifact Type",
+   "options": "JSON\nFile\nText"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Small Text",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "payload_json",
+   "fieldtype": "Code",
+   "label": "Payload JSON",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "payload_file",
+   "fieldtype": "Attach",
+   "label": "Payload File"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_doctype"
+  },
+  {
+   "default": "user_visible",
+   "fieldname": "visibility",
+   "fieldtype": "Select",
+   "label": "Visibility",
+   "options": "user_visible\nmodel_visible\nui_only\naudit_only\ndeveloper_only"
+  },
+  {
+   "default": "include_full",
+   "fieldname": "context_policy",
+   "fieldtype": "Select",
+   "label": "Context Policy",
+   "options": "include_full\ninclude_summary\ninclude_reference\ninclude_on_demand\nexclude\ntransient_only\ntoken_budgeted\nprovider_cached"
+  },
+  {
+   "fieldname": "token_estimate",
+   "fieldtype": "Int",
+   "label": "Token Estimate"
+  },
+  {
+   "fieldname": "expires_on",
+   "fieldtype": "Datetime",
+   "label": "Expires On"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-04 13:28:42.992361",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Context Artifact",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

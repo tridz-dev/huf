@@ -68,6 +68,7 @@ class AgentStreamRenderer(BaseRenderer):
 		model = frappe.form_dict.get("model")
 		prompt_template = frappe.form_dict.get("prompt_template")
 		prompt_version = frappe.form_dict.get("prompt_version")
+		prompt_cache_options = frappe.form_dict.get("prompt_cache_options")
 		
 		if not prompt:
 			# Try to get from POST body
@@ -79,6 +80,7 @@ class AgentStreamRenderer(BaseRenderer):
 					if not model: model = body.get("model")
 					if not prompt_template: prompt_template = body.get("prompt_template")
 					if not prompt_version: prompt_version = body.get("prompt_version")
+					if not prompt_cache_options: prompt_cache_options = body.get("prompt_cache_options")
 			except Exception:
 				pass
 		
@@ -140,28 +142,40 @@ class AgentStreamRenderer(BaseRenderer):
 		
 		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
 		create_new = frappe.form_dict.get("create_new", False)
+		skip_user_message = frappe.form_dict.get("skip_user_message", False)
+		files = None
 		try:
 			if frappe.request.method == "POST":
 				body = frappe.request.get_json(force=True) or {}
 				if not conversation_id:
 					conversation_id = body.get("conversation_id") or body.get("conversation")
 				create_new = body.get("create_new", create_new)
+				skip_user_message = body.get("skip_user_message", skip_user_message)
+				files = body.get("files")
 		except Exception:
 			pass
 
 		create_new = bool(create_new)
+		skip_user_message = bool(skip_user_message)
 		
 		# Create async generator wrapper
 		def stream_generator() -> Generator[str, None, None]:
 			"""Wrapper to convert async generator to sync generator for Werkzeug Response."""
 			loop = None
+			created_loop = False
 			try:
 				# Try to get existing event loop
 				try:
 					loop = asyncio.get_event_loop()
+					if loop.is_closed():
+						loop = None
 				except RuntimeError:
+					loop = None
+					
+				if loop is None:
 					loop = asyncio.new_event_loop()
 					asyncio.set_event_loop(loop)
+					created_loop = True
 				
 				# Create async generator
 				async_gen = run_agent_stream(
@@ -174,7 +188,10 @@ class AgentStreamRenderer(BaseRenderer):
 					conversation_id=None if create_new else conversation_id,
 					create_new=create_new,
 					prompt_template=prompt_template,
-					prompt_version=prompt_version
+					prompt_version=prompt_version,
+					prompt_cache_options=prompt_cache_options,
+					skip_user_message=skip_user_message,
+					files=files,
 				)
 				
 				# Convert async generator to sync
@@ -196,12 +213,20 @@ class AgentStreamRenderer(BaseRenderer):
 				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}"}
 				yield f"data: {json.dumps(error_data)}\n\n"
 			finally:
-				# Don't close loop if it was already running
-				if loop and loop != asyncio.get_event_loop():
+				# Close the loop if we created it AND unset it to prevent leaking closed loops!
+				if created_loop and loop:
 					try:
+						# Clean up pending tasks
+						pending = asyncio.all_tasks(loop)
+						for task in pending:
+							task.cancel()
+						if pending:
+							loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
 						loop.close()
 					except Exception:
 						pass
+					finally:
+						asyncio.set_event_loop(None)
 		
 		response = Response(
 			stream_generator(),
@@ -445,4 +470,3 @@ class AgentStreamRenderer(BaseRenderer):
 
 		headers = {"Content-Type": "text/html; charset=utf-8"}
 		return self.build_response(html_content, headers=headers)
-

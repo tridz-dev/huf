@@ -36,20 +36,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 // ---------------------------------------------------------------------------
 // Role badge colour map
 // ---------------------------------------------------------------------------
 
 const ROLE_COLOURS: Record<string, string> = {
-  'Huf Admin': 'bg-red-100 text-red-800',
-  'Huf Manager': 'bg-blue-100 text-blue-800',
-  'Huf User': 'bg-green-100 text-green-800',
-  'Huf Viewer': 'bg-gray-100 text-gray-700',
+  'Huf Admin': 'border-destructive/30 text-destructive bg-transparent',
+  'Huf Manager': 'border-signal/30 text-signal bg-transparent',
+  'Huf User': 'border-good/30 text-good bg-transparent',
+  'Huf Viewer': 'border-steel text-steel-soft bg-paper-deep',
 };
 
 function roleBadgeClass(role: string): string {
-  return ROLE_COLOURS[role] ?? 'bg-purple-100 text-purple-800';
+  return ROLE_COLOURS[role] ?? 'border-line text-steel bg-transparent';
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +100,13 @@ function InviteDialog({ open, roles, onClose, onInvited }: InviteDialogProps) {
       setBusy(false);
     }
   };
+
+  useSaveShortcut({
+    onSave: handleSubmit,
+    enabled: open,
+    isSubmitting: busy,
+    allowInDialog: true,
+  });
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -254,13 +262,13 @@ export default function UsersPage() {
       }
     >
       {loading ? (
-        <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
+        <div className="text-sm font-body text-steel-soft py-12 text-center">Loading…</div>
       ) : filteredUsers.length === 0 ? (
-        <div className="text-sm text-muted-foreground py-12 text-center">No users found.</div>
+        <div className="text-sm font-body text-steel-soft py-12 text-center">No users found.</div>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <div className="overflow-x-auto rounded-none border">
           <Table className="w-full min-w-[32rem] table-fixed text-sm">
-            <TableHeader className="bg-muted/50">
+            <TableHeader className="bg-paper-deep/50">
               <TableRow>
                 <TableHead className="text-left px-3 py-2 font-medium sm:px-4 sm:py-3 w-[35%] sm:w-[32%]">
                   User
@@ -278,7 +286,7 @@ export default function UsersPage() {
             </TableHeader>
             <TableBody className="divide-y">
               {filteredUsers.map((u) => (
-                <TableRow key={u.user} className="hover:bg-muted/20">
+                <TableRow key={u.user} className="hover:bg-paper-deep/20">
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3">
                     <div
                       className="font-medium truncate"
@@ -286,14 +294,14 @@ export default function UsersPage() {
                     >
                       {u.full_name || u.email}
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                    <div className="text-xs text-steel-soft truncate">{u.email}</div>
                   </TableCell>
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="ml-auto flex items-center gap-1 hover:opacity-80">
                           <Badge className={roleBadgeClass(u.huf_role)}>{u.huf_role}</Badge>
-                          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <ChevronDown className="h-3 w-3 shrink-0 text-steel-soft" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
@@ -309,7 +317,7 @@ export default function UsersPage() {
                     </DropdownMenu>
                   </TableCell>
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
-                    <Badge variant={u.enabled ? 'default' : 'secondary'}>
+                    <Badge variant={u.enabled ? 'success' : 'secondary'}>
                       {u.enabled ? 'Active' : 'Disabled'}
                     </Badge>
                   </TableCell>

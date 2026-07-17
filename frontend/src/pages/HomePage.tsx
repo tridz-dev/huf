@@ -1,188 +1,294 @@
-import { useMemo, useState } from 'react';
-import { ArrowRight, Command, Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Button } from '../components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { parseSlashCommand, type ParsedCommand } from '@/services/commandParser';
+import {
+  ActiveAgentsTab,
+  ActiveFlowsTab,
+  RecentExecutionsTab,
+  GaugeRow,
+  MetricGauge,
+} from '../components/dashboard';
+import { getAgentRunsCountLast7Days, getAgentRunsForMetrics, getRecentAgentRuns, getDashboardActiveFlows, type AgentRunMetricsDoc, type DashboardFlowItem } from '../services/dashboardApi';
+import type { AgentRunDoc } from '../services/agentRunApi';
+import { getAgents } from '../services/agentApi';
+import type { AgentDoc } from '../types/agent.types';
 
-const starterPrompts = [
-  '/flow create approval for todo',
-  '/agent create support assistant for billing',
-  '/users add teammate as builder in realm operations',
-  '/runs retry failed since yesterday',
-  '/cost show last 7 days by model',
-];
+interface DashboardMetrics {
+  totalRuns: number;
+  successRate: number;
+  avgRuntime: number;
+  totalCost: number;
+}
 
-const commandCatalog = [
-  { domain: 'flow', hint: 'Create and manage automations', route: '/flows' },
-  { domain: 'agent', hint: 'Build and manage agents', route: '/agents' },
-  { domain: 'users', hint: 'Invite/remove users', route: '/users' },
-  { domain: 'knowledge', hint: 'Index and query sources', route: '/knowledge' },
-  { domain: 'runs', hint: 'Inspect and retry executions', route: '/executions' },
-  { domain: 'cost', hint: 'Analyze usage and cost', route: '/executions' },
-  { domain: 'realm', hint: 'Realm-level operations', route: '/users' },
-] as const;
+/**
+ * Calculate success rate from agent runs
+ */
+function calculateSuccessRate(runs: AgentRunMetricsDoc[]): number {
+  if (runs.length === 0) return 0;
+  const successCount = runs.filter(
+    (run) => run.status === 'Success' || run.status === 'success'
+  ).length;
+  return (successCount / runs.length) * 100;
+}
 
-const domainRouteMap = Object.fromEntries(commandCatalog.map((item) => [item.domain, item.route]));
+/**
+ * Calculate average runtime from agent runs
+ */
+function calculateAvgRuntime(runs: AgentRunMetricsDoc[]): number {
+  const validRuns = runs.filter(
+    (run) => run.start_time && run.end_time
+  );
+
+  if (validRuns.length === 0) return 0;
+
+  const totalMs = validRuns.reduce((sum, run) => {
+    try {
+      const start = new Date(run.start_time!);
+      const end = new Date(run.end_time!);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return sum;
+      }
+
+      const diff = end.getTime() - start.getTime();
+      return diff >= 0 ? sum + diff : sum;
+    } catch {
+      return sum;
+    }
+  }, 0);
+
+  return totalMs / validRuns.length;
+}
+
+/**
+ * Calculate total cost from agent runs
+ */
+function calculateTotalCost(runs: AgentRunMetricsDoc[]): number {
+  return runs.reduce((sum, run) => {
+    const cost = run.cost;
+    return sum + (typeof cost === 'number' && !isNaN(cost) ? cost : 0);
+  }, 0);
+}
+
+/**
+ * Format duration in milliseconds to human-readable string
+ */
+function formatDuration(ms: number): string {
+  if (ms < 1000) {
+    return `${Math.round(ms)}ms`;
+  }
+  if (ms < 60000) {
+    return `${(ms / 1000).toFixed(1)}s`;
+  }
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  return `${minutes}m ${seconds}s`;
+}
+
+/**
+ * Format number with commas
+ */
+function formatNumber(num: number): string {
+  return num.toLocaleString('en-US');
+}
+
+/**
+ * Format currency with up to 4 decimal places
+ * Shows more decimal places for very small values
+ */
+function formatCurrency(amount: number): string {
+  // Format with up to 4 decimal places, removing trailing zeros
+  const formatted = amount.toFixed(4);
+  // Remove trailing zeros but keep at least 2 decimal places
+  const trimmed = formatted.replace(/\.?0+$/, '');
+  
+  // If no decimal point, add .00
+  if (!trimmed.includes('.')) {
+    return `$${trimmed}.00`;
+  }
+  
+  // Ensure at least 2 decimal places for consistency
+  const parts = trimmed.split('.');
+  const decimals = parts[1];
+  if (decimals.length < 2) {
+    return `$${parts[0]}.${decimals.padEnd(2, '0')}`;
+  }
+  
+  return `$${trimmed}`;
+}
 
 export { HomePage };
 export default HomePage;
 
 function HomePage() {
   const navigate = useNavigate();
-  const [input, setInput] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [lastParsed, setLastParsed] = useState<ParsedCommand | null>(null);
+  const [activeTab, setActiveTab] = useState('agents');
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
+    totalRuns: 0,
+    successRate: 0,
+    avgRuntime: 0,
+    totalCost: 0,
+  });
+  const [metricsLoading, setMetricsLoading] = useState(true);
+  
+  // Data for tabs - loaded once on mount
+  const [agents, setAgents] = useState<AgentDoc[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(true);
+  const [agentRuns, setAgentRuns] = useState<AgentRunDoc[]>([]);
+  const [agentRunsLoading, setAgentRunsLoading] = useState(true);
+  const [flows, setFlows] = useState<DashboardFlowItem[]>([]);
+  const [flowsLoading, setFlowsLoading] = useState(true);
 
-  const showCommandPicker = input.trim().startsWith('/');
+  useEffect(() => {
+    async function fetchAllData() {
+      try {
+        // Fetch all data in parallel
+        const [totalRuns, runsData, agentsData, recentRuns, flowsData] = await Promise.all([
+          getAgentRunsCountLast7Days(),
+          getAgentRunsForMetrics(),
+          getAgents({
+            status: 'active',
+            limit: 10,
+            page: 1,
+          }),
+          getRecentAgentRuns(),
+          getDashboardActiveFlows(10),
+        ]);
 
-  const filteredCatalog = useMemo(() => {
-    if (!showCommandPicker) return commandCatalog;
-    const needle = input.replace('/', '').trim().toLowerCase();
-    if (!needle) return commandCatalog;
-    return commandCatalog.filter((item) => item.domain.includes(needle) || item.hint.toLowerCase().includes(needle));
-  }, [input, showCommandPicker]);
+        // Process metrics
+        const successRate = calculateSuccessRate(runsData);
+        const avgRuntime = calculateAvgRuntime(runsData);
+        const totalCost = calculateTotalCost(runsData);
 
-  const handleSubmit = () => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
+        setMetrics({
+          totalRuns,
+          successRate,
+          avgRuntime,
+          totalCost,
+        });
 
-    if (!trimmed.startsWith('/')) {
-      navigate('/chat');
-      return;
+        // Process agents
+        const agentList = Array.isArray(agentsData) ? agentsData : agentsData.items;
+        const activeAgents = agentList.filter((agent) => agent.disabled === 0);
+        setAgents(activeAgents.slice(0, 10));
+
+        // Set agent runs
+        setAgentRuns(recentRuns);
+
+        // Set flows
+        setFlows(flowsData);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setMetricsLoading(false);
+        setAgentsLoading(false);
+        setAgentRunsLoading(false);
+        setFlowsLoading(false);
+      }
     }
 
-    try {
-      const parsed = parseSlashCommand(trimmed);
-      setLastParsed(parsed);
-      setError(null);
+    fetchAllData();
+  }, []);
 
-      const route = domainRouteMap[parsed.domain] ?? '/';
-      navigate(route);
-    } catch (parseError) {
-      const message = parseError instanceof Error ? parseError.message : 'Unable to parse command.';
-      setError(message);
-      setLastParsed(null);
-    }
-  };
+  const metricsData = [
+    {
+      id: 'total-runs',
+      label: 'Total Agent Runs',
+      period: 'Last 7 days',
+      value: metricsLoading ? '...' : formatNumber(metrics.totalRuns),
+      info: 'Total number of agent executions in the last 7 days',
+    },
+    {
+      id: 'success-rate',
+      label: 'Success Rate',
+      period: 'Last 7 days',
+      value: metricsLoading ? '...' : `${metrics.successRate.toFixed(1)}%`,
+      info: 'Percentage of successful agent runs without errors',
+    },
+    {
+      id: 'avg-runtime',
+      label: 'Avg Runtime',
+      period: 'Last 7 days',
+      value: metricsLoading ? '...' : formatDuration(metrics.avgRuntime),
+      info: 'Average execution time across all agent runs',
+    },
+    {
+      id: 'cost',
+      label: 'Total Cost',
+      period: 'Last 7 days',
+      value: metricsLoading ? '...' : formatCurrency(metrics.totalCost),
+      info: 'Total API costs for LLM usage across all agents',
+      flag: true,
+    },
+  ];
 
   return (
     <div className="h-full overflow-auto">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6 md:p-10">
-        <section className="rounded-2xl border bg-gradient-to-b from-muted/20 to-background p-6 md:p-10">
-          <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-            <Sparkles className="h-4 w-4" />
-            Hub Simple powered by Huf orchestrator
-          </div>
-          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">What are you building today?</h1>
-          <p className="mt-2 max-w-2xl text-muted-foreground">
-            Use natural language or type <code>/</code> for a command. Commands route to focused sub-agents such as
-            flow, users, and cost operations.
+      <div className="p-6 space-y-6">
+        {/* HUF Page head */}
+        <div>
+          <h1 className="font-display font-bold text-[36px] uppercase text-ink leading-none tracking-tight">
+            Dashboard
+          </h1>
+          <p className="font-body text-steel text-[14.5px] mt-1">
+            Monitor your agents, flows, and system performance
           </p>
+        </div>
 
-          <div className="mt-6 flex flex-col gap-3 md:flex-row">
-            <Input
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              placeholder="Try: /flow create approval for todo"
-              className="h-11"
+        {/* HUF Gauge Strip */}
+        <GaugeRow>
+          {metricsData.map((metric) => (
+            <MetricGauge
+              key={metric.id}
+              label={metric.label}
+              period={metric.period}
+              value={metric.value}
+              info={metric.info}
+              flag={metric.flag}
             />
-            <Button className="h-11 px-6" onClick={handleSubmit}>
-              Run
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-            <Button variant="outline" className="h-11" onClick={() => navigate('/chat')}>
-              Open Advanced Chat
+          ))}
+        </GaugeRow>
+
+        {/* Tabbed Interface */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
+          <div className="flex items-center justify-between border-b border-ink mb-2">
+            <TabsList variant="panel" className="border-b-0">
+              <TabsTrigger value="agents">Agents</TabsTrigger>
+              <TabsTrigger value="flows">Flows</TabsTrigger>
+              <TabsTrigger value="executions">Executions</TabsTrigger>
+            </TabsList>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="font-body text-[13px] font-medium text-steel hover:text-ink hover:bg-transparent pr-1"
+              onClick={() => {
+                if (activeTab === 'agents') navigate('/agents');
+                else if (activeTab === 'flows') navigate('/flows');
+                else if (activeTab === 'executions') navigate('/executions');
+              }}
+            >
+              Show more
+              <ChevronRight className="w-[11px] h-[11px] ml-0.5" strokeWidth={2} />
             </Button>
           </div>
 
-          {showCommandPicker && (
-            <div className="mt-3 rounded-lg border bg-card p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-                <Command className="h-4 w-4" />
-                Command shortcuts
-              </div>
-              <div className="grid gap-2 md:grid-cols-2">
-                {filteredCatalog.map((item) => (
-                  <button
-                    key={item.domain}
-                    className="rounded-md border bg-background px-3 py-2 text-left text-sm hover:bg-muted"
-                    onClick={() => setInput(`/${item.domain} `)}
-                    type="button"
-                  >
-                    <div className="font-medium">/{item.domain}</div>
-                    <div className="text-xs text-muted-foreground">{item.hint}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Agents Tab */}
+          <TabsContent value="agents" className="space-y-4">
+            <ActiveAgentsTab agents={agents} loading={agentsLoading} />
+          </TabsContent>
 
-          {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+          {/* Flows Tab */}
+          <TabsContent value="flows" className="space-y-4">
+            <ActiveFlowsTab flows={flows} loading={flowsLoading} />
+          </TabsContent>
 
-          {lastParsed && (
-            <div className="mt-3 rounded-lg border bg-card p-3 text-sm">
-              <div className="font-medium">Parsed command</div>
-              <div className="mt-1 text-muted-foreground">
-                {lastParsed.routingMode} → <strong>{lastParsed.domain}</strong> / {lastParsed.verb}
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-sm font-medium text-muted-foreground">Starter actions</h2>
-          <div className="grid gap-3 md:grid-cols-2">
-            {starterPrompts.map((prompt) => (
-              <button
-                key={prompt}
-                className="rounded-lg border bg-card px-4 py-3 text-left text-sm hover:bg-muted"
-                onClick={() => setInput(prompt)}
-                type="button"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Permissions</CardTitle>
-              <CardDescription>Huf roles and agent-level controls are applied automatically.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Badge variant="secondary">No new privilege model</Badge>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Orchestration</CardTitle>
-              <CardDescription>Requests are delegated to domain agents for clearer scope.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Badge variant="secondary">Orchestrator + Sub-agents</Badge>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Need full control?</CardTitle>
-              <CardDescription>Switch to the existing Hub interface at any time.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="outline" onClick={() => navigate('/agents')}>Go to Advanced Hub</Button>
-            </CardContent>
-          </Card>
-        </section>
+          {/* Executions Tab */}
+          <TabsContent value="executions" className="space-y-4">
+            <RecentExecutionsTab runs={agentRuns} loading={agentRunsLoading} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

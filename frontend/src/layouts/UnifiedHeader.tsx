@@ -24,10 +24,22 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/agents')) return 'Agent';
     if (path.startsWith('/flows')) return 'Flows';
     if (path.startsWith('/data')) return 'Data';
+    if (path.startsWith('/artifacts')) return 'Artifacts';
     if (path.startsWith('/providers')) return 'AI Providers';
+    if (path.startsWith('/integration-services')) return 'Integration Services';
+    if (path.startsWith('/integrations')) return 'Integrations';
     if (path.startsWith('/settings')) return 'Settings';
+    if (path.startsWith('/console')) return 'Console';
     if (path.startsWith('/help')) return 'Help';
     if (path.startsWith('/chat')) return 'Chat';
+    if (path.startsWith('/executions')) return 'Executions';
+    if (path.startsWith('/knowledge')) return 'Knowledge';
+    if (path.startsWith('/mcp')) return 'MCP Servers';
+    if (path.startsWith('/prompts')) return 'Agent Prompts';
+    if (path.startsWith('/summary-prompts')) return 'Agent Summary Prompts';
+    if (path.startsWith('/users')) return 'Users';
+    if (path.startsWith('/roles')) return 'Roles';
+    if (path.startsWith('/models')) return 'Models';
     return 'HufAI';
   };
 
@@ -42,23 +54,23 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
                 <div className="flex items-center">
                   <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
                     {index === breadcrumbs.length - 1 ? (
-                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                      <BreadcrumbPage className="font-mono text-[11px] uppercase tracking-widest text-ink">{crumb.label}</BreadcrumbPage>
                     ) : crumb.href ? (
                       <BreadcrumbLink href={crumb.href} asChild>
-                        <Link to={crumb.href}>{crumb.label}</Link>
+                        <Link to={crumb.href} className="font-mono text-[11px] uppercase tracking-widest text-steel hover:text-ink">{crumb.label}</Link>
                       </BreadcrumbLink>
                     ) : (
-                      <span>{crumb.label}</span>
+                      <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{crumb.label}</span>
                     )}
                   </BreadcrumbItem>
                 </div>
-                {index < breadcrumbs.length - 1 && <BreadcrumbSeparator className="hidden md:block mt-0.5" />}
+                {index < breadcrumbs.length - 1 && <BreadcrumbSeparator className="hidden md:block mt-0.5 text-steel-soft" />}
                 </Fragment>
               ))}
             </BreadcrumbList>
           </Breadcrumb>
         ) : (
-          <span className="text-sm font-medium">{getPageTitle()}</span>
+          <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{getPageTitle()}</span>
         )}
       </div>
 

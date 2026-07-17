@@ -1,4 +1,4 @@
-import { db } from '@/lib/frappe-sdk';
+import { call, db } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { doctype } from '@/data/doctypes';
 import { fetchDocCount, fetchPaginatedCount } from './utilsApi';
@@ -19,7 +19,7 @@ export interface AgentPromptDoc {
   forked_from?: string;
   prompt_group?: string;
   modified?: string;
-  categories?: string[]; // Assuming categories are stored as an array of category names
+  category?: string;
 }
 
 export interface GetAgentPromptsParams {
@@ -182,6 +182,46 @@ export async function getAgentsUsingPrompt(name: string): Promise<AgentPromptUsa
     return response as AgentPromptUsageAgent[];
   } catch (error) {
     handleFrappeError(error, 'Error fetching prompt usage agents');
+    throw error;
+  }
+}
+
+export interface AgentPromptVersionResult {
+  name: string;
+  version: number;
+}
+
+export async function createAgentPromptNewVersion(
+  promptName: string,
+  promptBody: string,
+  title?: string,
+  description?: string
+): Promise<AgentPromptVersionResult> {
+  try {
+    const response = await call.post('huf.ai.prompt_api.create_new_version', {
+      prompt_name: promptName,
+      prompt_body: promptBody,
+      title,
+      description,
+    });
+
+    return response?.message as AgentPromptVersionResult;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function forkAgentPrompt(promptName: string, title?: string): Promise<AgentPromptVersionResult> {
+  try {
+    const response = await call.post('huf.ai.prompt_api.fork_prompt', {
+      prompt_name: promptName,
+      title,
+    });
+
+    return response?.message as AgentPromptVersionResult;
+  } catch (error) {
+    handleFrappeError(error);
     throw error;
   }
 }

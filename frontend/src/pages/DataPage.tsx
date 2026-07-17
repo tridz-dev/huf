@@ -100,9 +100,9 @@ function DataPage() {
 				loading={initialLoading}
 				emptyState={
 					<div className="text-center py-12">
-						<Database className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-						<p className="text-muted-foreground mb-2">No data tables yet</p>
-						<p className="text-sm text-muted-foreground">
+						<Database className="w-12 h-12 text-steel-soft mx-auto mb-4" />
+						<p className="font-body text-steel-soft mb-2">No data tables yet</p>
+						<p className="text-sm text-steel">
 							Create your first table to start managing structured data.
 						</p>
 					</div>
@@ -114,7 +114,7 @@ function DataPage() {
 						icon={table.icon ? TABLE_ICON_MAP[table.icon] ?? Table2 : Table2}
 						status={
 							table.is_active
-								? { label: 'Active', variant: 'default' }
+								? { label: 'Active', variant: 'success' }
 								: { label: 'Inactive', variant: 'secondary' }
 						}
 						metadata={[
@@ -152,7 +152,7 @@ function DataPage() {
 				disabled={!!search || initialLoading}
 			/>
 			{!hasMore && tables.length > 0 && (
-				<div className="text-center py-4 text-sm text-muted-foreground">
+				<div className="text-center py-4 text-sm font-body text-steel">
 					{total !== undefined
 						? `Showing all ${total} tables`
 						: 'No more tables to load'}

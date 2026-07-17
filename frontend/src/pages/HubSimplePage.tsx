@@ -12,7 +12,7 @@ import { SlashCommandMenu } from '@/components/hub/SlashCommandMenu';
 import { getProviders } from '@/services/providerApi';
 import { sendMessage, streamingAvailable } from '@/services/streamChatApi';
 
-interface Message { role: 'user' | 'assistant'; content: string; }
+interface Message { role: 'user' | 'assistant'; content: string; _key?: string; }
 
 interface StarterPrompt {
   label: string;
@@ -118,11 +118,11 @@ export default function HubSimplePage() {
 
     // Optimistically insert empty assistant message — same pattern as ChatInput
     const assistantKey = `assistant-${Date.now()}`;
-    setMessages(prev => [...prev, { role: 'assistant', content: '', _key: assistantKey } as any]);
+    setMessages(prev => [...prev, { role: 'assistant', content: '', _key: assistantKey }]);
     setIsStreaming(true);
 
     const updateAssistantContent = (content: string) => {
-      setMessages(prev => prev.map((m: any) =>
+      setMessages(prev => prev.map((m) =>
         m._key === assistantKey ? { ...m, content } : m
       ));
     };
@@ -133,9 +133,11 @@ export default function HubSimplePage() {
         { agent: 'Hub Orchestrator', message: msg, conversationId },
         { useStreaming: useStream, onDelta: useStream ? updateAssistantContent : undefined }
       );
-      const data = result.message as any;
-      const responseText: string = data?.run?.response ?? data?.response ?? "I've processed your request.";
-      const newConvId: string = data?.conversation_id ?? data?.run?.conversation_id ?? '';
+      const message = result.message;
+      const responseText: string =
+        ('run' in message ? message.run.response : message.response) ?? "I've processed your request.";
+      const newConvId: string =
+        ('run' in message ? message.run.conversation_id : message.conversation_id) ?? '';
       if (!useStream) updateAssistantContent(responseText);
       setConversationId(newConvId || undefined);
     } catch {

@@ -9,10 +9,12 @@ import { MessageActions } from './MessageActions';
 import { MessageLoadingState } from './MessageLoadingState';
 import { CopyButton } from './CopyButton';
 import { Image } from '@/components/ai-elements/image';
+import { Video } from '@/components/ai-elements/video';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatTime } from './utils';
 import type { MessageType } from './types';
 import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
+import { ChatAttachmentCard } from './ChatAttachmentCard';
 import {
 	AudioPlayer,
 	AudioPlayerElement,
@@ -33,10 +35,16 @@ function resolveAudioSrc(src: string): string {
 	return `${frappeUrl}${src.startsWith('/') ? '' : '/'}${src}`;
 }
 
+function resolveVideoSrc(src: string): string {
+	if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:') || src.startsWith('blob:')) return src;
+	return `${frappeUrl}${src.startsWith('/') ? '' : '/'}${src}`;
+}
+
 interface ChatMessageProps {
     message: MessageType;
     agentName: string;
     agentColor: string | null;
+    showToolExecutionDetails?: boolean;
     status: 'submitted' | 'streaming' | 'ready' | 'error';
     loadingType?: LoadingType;
     onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
@@ -47,6 +55,7 @@ export function ChatMessage({
     message, 
     agentName,
     agentColor,
+    showToolExecutionDetails = true,
     status,
     loadingType = 'default',
     onFeedback,
@@ -57,6 +66,21 @@ export function ChatMessage({
     const timestamp = message.versions[0]?.id ? undefined : undefined; // We'll get timestamp from message if available
     const timeDisplay = timestamp ? formatTime(timestamp) : '';
     const userInitials = user?.full_name ? getInitials(user.full_name) : 'You';
+
+    // Skip rendering ALL tool-related messages when tool execution details are hidden
+    if (!showToolExecutionDetails) {
+        // Hide messages with tool-related kinds (stored in DB as text)
+        const kind = message.kind;
+        if (kind === 'Tool Call' || kind === 'Tool Result') {
+            return null;
+        }
+        // Hide messages that only contain Tool UI components (from socket events)
+        const hasToolsOnly = message.tools && message.tools.length > 0 &&
+            (!message.versions[0]?.content || message.versions[0].content.trim() === '');
+        if (hasToolsOnly) {
+            return null;
+        }
+    }
 
     return (
         <div className={cn("flex gap-3 group relative", isUser ? "flex-row" : "flex-row")}>
@@ -78,7 +102,7 @@ export function ChatMessage({
                     )}
                 </div>
                 
-                {message.tools && message.tools.length > 0 ? (
+                {showToolExecutionDetails && message.tools && message.tools.length > 0 ? (
                     message.tools.map((tool, toolIndex) => (
                         <Tool key={`${message.key}-tool-${toolIndex}`}>
                             <ToolHeader
@@ -103,9 +127,9 @@ export function ChatMessage({
                              message.from === 'assistant' && 
                              (!message.versions[0]?.content || message.versions[0].content.trim() === '') && (
                                 <MessageLoadingState
-                                    type={message.tools?.length ? 'tool-execution' : loadingType}
-                                    hasTools={!!message.tools && message.tools.length > 0}
-                                    toolName={message.tools?.[0]?.name}
+                                    type={showToolExecutionDetails && message.tools?.length ? 'tool-execution' : loadingType}
+                                    hasTools={showToolExecutionDetails && !!message.tools && message.tools.length > 0}
+                                    toolName={showToolExecutionDetails ? message.tools?.[0]?.name : undefined}
                                 />
                             )}
                             {message.generatedAudio && message.from === 'assistant' ? (
@@ -138,22 +162,50 @@ export function ChatMessage({
                                     {message.versions[0]?.content && (
                                         <MessageContentWithArtifacts
                                             content={message.versions[0].content}
-                                            messageKey={message.key}
+                                            messageId={message.versions[0]?.id ?? message.key}
                                         />
                                     )}
                                 </div>
-                            ) : !message.generatedAudio && !((status === 'submitted' || status === 'streaming') && 
+                            ) : message.kind === 'Video' ? (
+                                <div className="flex flex-col gap-2">
+                                    {message.generatedVideo ? (
+                                        <Video
+                                            src={resolveVideoSrc(message.generatedVideo)}
+                                            title={message.versions[0]?.content || 'Generated video'}
+                                            className="max-w-full"
+                                        />
+                                    ) : (
+                                        <Skeleton className="w-full h-[320px] rounded-lg" />
+                                    )}
+                                    {message.versions[0]?.content && (
+                                        <MessageContentWithArtifacts
+                                            content={message.versions[0].content}
+                                            messageId={message.versions[0]?.id ?? message.key}
+                                        />
+                                    )}
+                                </div>
+                            ) : !message.generatedAudio && !((status === 'submitted' || status === 'streaming') &&
                                   message.from === 'assistant' && 
                                   (!message.versions[0]?.content || message.versions[0].content.trim() === '') && 
                                   !message.tools) && (
-                                <MessageContentWithArtifacts
-                                    content={message.versions[0]?.content || ''}
-                                    messageKey={message.key}
-                                />
+                                <>
+                                    {message.attachment && (
+                                        <ChatAttachmentCard
+                                            name={message.attachment.name}
+                                            label={message.attachment.label}
+                                            previewUrl={message.attachment.previewUrl}
+                                            className="mb-2 max-w-sm"
+                                        />
+                                    )}
+                                    <MessageContentWithArtifacts
+                                        content={message.versions[0]?.content || ''}
+                                        messageId={message.versions[0]?.id ?? message.key}
+                                    />
+                                </>
                             )}
                         </MessageContent>
                         {/* Actions for assistant messages */}
-                        {message.from === 'assistant' && message.versions[0]?.content && !message.tools && (
+                        {message.from === 'assistant' && message.versions[0]?.content && (!message.tools || !showToolExecutionDetails) && (
                             <div className="opacity-0 transition-opacity group-hover:opacity-100">
                                 <MessageActions
                                     content={message.versions[0].content}

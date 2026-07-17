@@ -18,6 +18,7 @@ export function NavMain({
     title: string
     url: string
     icon?: LucideIcon
+    count?: number
   }[]
   label?: string
 }) {
@@ -41,9 +42,14 @@ export function NavMain({
           return (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
-                <NavLink to={item.url} onClick={handleNavClick}>
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
+                <NavLink to={item.url} onClick={handleNavClick} className="flex w-full items-center gap-2">
+                  {item.icon && <item.icon strokeWidth={1.6} />}
+                  <span className="font-body text-[13.5px]">{item.title}</span>
+                  {typeof item.count === 'number' && (
+                    <span className="ml-auto font-mono text-[10.5px] text-steel-soft group-data-[collapsible=icon]:hidden">
+                      {item.count}
+                    </span>
+                  )}
                 </NavLink>
               </SidebarMenuButton>
             </SidebarMenuItem>

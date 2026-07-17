@@ -1,5 +1,5 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useBlocker, useSearchParams, type Location } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
@@ -24,6 +24,9 @@ import {
 } from '../components/knowledge/types';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
+import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
+import { linkKnowledgeToAgent } from '../services/agentApi';
 
 export { KnowledgeSourceFormPage };
 export default KnowledgeSourceFormPage;
@@ -41,13 +44,20 @@ function mapDocToFormValues(doc: Partial<KnowledgeSourceDoc>): KnowledgeSourceFo
     embedding_model: doc.embedding_model || '',
     vector_dimension: doc.vector_dimension ?? 1536,
     embedding_provider: doc.embedding_provider || '',
+    chroma_mode: doc.chroma_mode || 'File',
+    chroma_host: doc.chroma_host || 'localhost',
+    chroma_port: doc.chroma_port ?? 8000,
+    chroma_ssl: doc.chroma_ssl === 1,
   };
 }
 
 function KnowledgeSourceFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromAgent = searchParams.get('agent');
   const isNew = id === 'new';
+  const skipBlockRef = useRef(false);
 
   const tabConfig = {
     general: {
@@ -63,6 +73,10 @@ function KnowledgeSourceFormPage() {
         'embedding_model',
         'vector_dimension',
         'embedding_provider',
+        'chroma_mode',
+        'chroma_host',
+        'chroma_port',
+        'chroma_ssl',
       ],
       default: true,
       disabled: false,
@@ -126,6 +140,7 @@ function KnowledgeSourceFormPage() {
   const [inputsModalOpen, setInputsModalOpen] = useState(false);
   const [sourceDoc, setSourceDoc] = useState<KnowledgeSourceDoc | null>(null);
   const [providers, setProviders] = useState<AIProvider[]>([]);
+  const allowNavigationRef = useRef(false);
 
   const form = useForm<KnowledgeSourceFormValues>({
     resolver: zodResolver(knowledgeSourceFormSchema),
@@ -137,6 +152,27 @@ function KnowledgeSourceFormPage() {
   const [initialDisabled, setInitialDisabled] = useState(false);
   const disabledChanged = watchDisabled !== initialDisabled;
   const showSaveButton = isNew || isDirty || disabledChanged;
+  // Deliberately excludes `isNew` - a blank new-source form has nothing to
+  // lose, so it shouldn't block navigation until the user actually changes something.
+  const hasUnsavedChanges = isDirty || disabledChanged;
+
+  const shouldBlock = useCallback(
+    ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+      if (skipBlockRef.current) {
+        skipBlockRef.current = false;
+        return false;
+      }
+      if (allowNavigationRef.current) return false;
+      if (!hasUnsavedChanges) return false;
+      return (
+        currentLocation.pathname !== nextLocation.pathname ||
+        currentLocation.search !== nextLocation.search
+      );
+    },
+    [hasUnsavedChanges]
+  );
+
+  const blocker = useBlocker(shouldBlock);
 
   const loadSource = useCallback(
     async (name: string) => {
@@ -184,15 +220,32 @@ function KnowledgeSourceFormPage() {
         embedding_model: values.embedding_model || '',
         vector_dimension: values.vector_dimension ?? 1536,
         embedding_provider: values.embedding_provider || '',
+        chroma_mode: values.chroma_mode,
+        chroma_host: values.chroma_host || '',
+        chroma_port: values.chroma_port ?? 8000,
+        chroma_ssl: values.chroma_ssl ? 1 : 0,
       };
 
       if (isNew) {
         const created = await createKnowledgeSource(payload);
-        toast.success('Knowledge source created');
-        setSourceDoc(created);
         const formValues = mapDocToFormValues(created);
         form.reset(formValues);
         setInitialDisabled(formValues.disabled);
+
+        if (fromAgent) {
+          const linkedRow = await linkKnowledgeToAgent(fromAgent, created.name);
+          toast.success('Knowledge source created and linked to agent');
+          allowNavigationRef.current = true;
+          navigate(`/agents/${fromAgent}#knowledge`, {
+            state: { linkedKnowledge: linkedRow, showTab: 'knowledge' },
+            replace: true,
+          });
+          return;
+        }
+
+        toast.success('Knowledge source created');
+        setSourceDoc(created);
+        allowNavigationRef.current = true;
         navigate(`/knowledge/${created.name}`);
       } else if (id) {
         const updated = await updateKnowledgeSource(id, payload);
@@ -201,6 +254,12 @@ function KnowledgeSourceFormPage() {
         const formValues = mapDocToFormValues(updated);
         form.reset(formValues);
         setInitialDisabled(formValues.disabled);
+
+        if (updated.name && updated.name !== id) {
+          skipBlockRef.current = true;
+          navigate(`/knowledge/${encodeURIComponent(updated.name)}`, { replace: true });
+          return;
+        }
       }
     } catch (error) {
       console.error('Error saving knowledge source:', error);
@@ -215,6 +274,12 @@ function KnowledgeSourceFormPage() {
     () => createFormSubmitHandler(form, activeTab, tabFieldMapping, tabLabels, onSubmit),
     [form, activeTab, tabFieldMapping, tabLabels],
   );
+
+  useSaveShortcut({
+    onSave: handleFormSubmit,
+    enabled: showSaveButton,
+    isSubmitting: saving,
+  });
 
   const handleRebuildIndex = async () => {
     if (!id || isNew) return;
@@ -250,10 +315,14 @@ function KnowledgeSourceFormPage() {
     }
   };
 
+  const handleCancel = () => {
+    navigate(-1);
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading knowledge source...</div>
+        <div className="font-body text-steel-soft">Loading knowledge source...</div>
       </div>
     );
   }
@@ -270,7 +339,9 @@ function KnowledgeSourceFormPage() {
           rebuilding={rebuilding}
           refreshing={refreshing}
           sourceStatus={sourceDoc?.status}
+          fromAgent={fromAgent || undefined}
           onSave={handleFormSubmit}
+          onCancel={fromAgent ? handleCancel : undefined}
           onRebuildIndex={handleRebuildIndex}
           onRefresh={handleRefresh}
           onOpenInputs={() => setInputsModalOpen(true)}
@@ -279,7 +350,7 @@ function KnowledgeSourceFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList layout="grid" cols={2}>
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
                     {config.label}
@@ -306,6 +377,8 @@ function KnowledgeSourceFormPage() {
             onSourceChanged={handleSourceChanged}
           />
         )}
+
+        <UnsavedChangesDialog blocker={blocker} />
       </div>
     </div>
   );

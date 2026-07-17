@@ -27,7 +27,7 @@ export function HomeHeaderActions() {
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="sm">
+          <Button variant="display" size="sm">
             <Plus className="w-4 h-4 mr-2" />
             New
           </Button>
@@ -35,11 +35,11 @@ export function HomeHeaderActions() {
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={handleNewFlow}>
             <Workflow className="w-4 h-4 mr-2" />
-            New Flow
+            Open Flows
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleNewAgent}>
             <Bot className="w-4 h-4 mr-2" />
-            New Agent
+            Open Agents
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

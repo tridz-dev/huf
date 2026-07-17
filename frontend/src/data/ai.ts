@@ -5,23 +5,23 @@ export const MODEL_MODALITY_STT = "Transcription";
 export const IMAGE_MODEL_LABEL = "Image Generation Model";
 export const IMAGE_MODEL_PLACEHOLDER = "Select image model (optional)";
 export const IMAGE_MODEL_DESCRIPTION =
-  "Only models tagged with modality “Image” are shown.";
+  "Optional: Link specific Model for Image generation tool otherwise default model of the Agent's provider will be used";
 
 export const TTS_MODEL_LABEL = "TTS Model";
 export const TTS_MODEL_PLACEHOLDER = "Select TTS model (optional)";
 export const TTS_MODEL_DESCRIPTION =
-  "Only models tagged with modality “Text-to-Speech” are shown.";
+  "Specific model for Text-to-Speech (Audio Generation). If unset, defaults to the provider's default TTS model.";
 
 export const TTS_VOICE_LABEL = "TTS Voice";
 export const TTS_VOICE_PLACEHOLDER =
   "e.g. alloy, nova, 21m00Tcm4TlvDq8ikWAM";
 export const TTS_VOICE_DESCRIPTION =
-  "Optional voice identifier for the selected TTS provider.";
+  "Voice to use for TTS (e.g. alloy, echo, onyx).";
 
 export const STT_MODEL_LABEL = "STT Model";
 export const STT_MODEL_PLACEHOLDER = "Select transcription model (optional)";
 export const STT_MODEL_DESCRIPTION =
-  "Only models tagged with modality “Transcription” are shown.";
+  "Specific model for Speech-to-Text (Audio Transcription). If unset, defaults to the provider's default STT model.";
 
 export const MOCK_PROVIDER_OPENAI = "openai";
 export const MOCK_PROVIDER_ANTHROPIC = "anthropic";
