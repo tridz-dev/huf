@@ -347,6 +347,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         if not api_key:
             frappe.throw("API key not configured in AI Provider.")
 
+        # Support local/custom OpenAI-compatible endpoints (e.g. Kimi Code API)
+        api_base = None
+        if getattr(provider_doc, "is_local_llm", False) and getattr(provider_doc, "url", None):
+            api_base = provider_doc.url
+            if getattr(provider_doc, "port", None):
+                api_base = f"{api_base.rstrip('/')}:{provider_doc.port}"
+
         normalized_model = _normalize_model_name(model, provider)
 
         # Check prompt caching configuration
@@ -472,6 +479,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 "temperature": temperature,
                 "timeout": _DEFAULT_LITELLM_TIMEOUT,
             }
+
+            if api_base:
+                completion_kwargs["api_base"] = api_base
 
             # Trim messages to fit context window, then sanitize tool-call pairs
             try:

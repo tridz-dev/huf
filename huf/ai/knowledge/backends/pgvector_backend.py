@@ -87,6 +87,9 @@ class PGVectorBackend(KnowledgeBackend):
 			}
 
 		params.update(self._get_database_params())
+		# PGVectorStore.from_params does not accept sslmode; it is handled via
+		# the SQLAlchemy URL used for direct pgvector-extension checks.
+		params.pop("sslmode", None)
 		return params
 
 	def _get_database_params(self) -> dict[str, Any]:

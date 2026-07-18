@@ -96,7 +96,15 @@ class AgentManager:
         if not api_key:
             frappe.throw(_("API key is not configured in AI Provider."))
 
-        self.provider = OpenAIProvider(api_key=api_key, use_responses=True)
+        provider_kwargs = {"api_key": api_key, "use_responses": True}
+        # Support local/custom OpenAI-compatible endpoints (e.g. Kimi Code API)
+        if getattr(self.settings, "is_local_llm", False) and getattr(self.settings, "url", None):
+            base_url = self.settings.url
+            if getattr(self.settings, "port", None):
+                base_url = f"{base_url.rstrip('/')}:{self.settings.port}"
+            provider_kwargs["base_url"] = base_url
+
+        self.provider = OpenAIProvider(**provider_kwargs)
 
         self.client = self.provider
 

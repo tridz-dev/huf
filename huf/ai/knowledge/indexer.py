@@ -53,9 +53,7 @@ def _build_backend_config(source) -> dict:
 				"port": int(getattr(source, "pgvector_port", None) or 5432),
 				"database": getattr(source, "pgvector_database", None),
 				"user": getattr(source, "pgvector_user", None),
-				"password": source.get_password("pgvector_password")
-				if getattr(source, "pgvector_password", None)
-				else None,
+				"password": source.get_password("pgvector_password"),
 				"sslmode": getattr(source, "pgvector_sslmode", None) or "prefer",
 			}
 		)
