@@ -1,5 +1,6 @@
 """Knowledge ingestion and indexing pipeline."""
 
+import json
 import os
 
 import frappe
@@ -57,6 +58,18 @@ def _build_backend_config(source) -> dict:
 				"sslmode": getattr(source, "pgvector_sslmode", None) or "prefer",
 			}
 		)
+
+	# Merge backend-specific advanced config; core fields above take precedence.
+	advanced_config = getattr(source, "advanced_config", None) or "{}"
+	try:
+		advanced_values = json.loads(advanced_config)
+	except json.JSONDecodeError:
+		advanced_values = {}
+
+	if isinstance(advanced_values, dict):
+		for key, value in advanced_values.items():
+			if key not in config:
+				config[key] = value
 
 	return config
 

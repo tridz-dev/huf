@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { knowledgeTypes, knowledgeScopes, knowledgeStorageModes, chromaModes, isVectorKnowledgeType } from '@/data/knowledge';
 import { linkRoutes } from '@/lib/link-routes';
 import type { KnowledgeSourceFormValues } from './types';
+import { AdvancedConfigFields } from './AdvancedConfigFields';
 
 interface ProviderOption {
   name: string;
@@ -525,6 +526,11 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                 />
               </>
             )}
+
+            <div className="sm:col-span-2 pt-2">
+              <h4 className="text-sm font-medium mb-2">Advanced Configuration</h4>
+              <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+            </div>
           </CardContent>
         </Card>
       )}

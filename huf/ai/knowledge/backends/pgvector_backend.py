@@ -34,6 +34,12 @@ class PGVectorBackend(KnowledgeBackend):
 	embeddings, while LlamaIndex owns the vector-store adapter behavior.
 	"""
 
+	PGVECTOR_DISTANCE_TO_OPS = {
+		"cosine": "vector_cosine_ops",
+		"l2": "vector_l2_ops",
+		"inner_product": "vector_ip_ops",
+	}
+
 	def __init__(self):
 		self.knowledge_source = None
 		self.config = {}
@@ -43,6 +49,48 @@ class PGVectorBackend(KnowledgeBackend):
 		self.vector_store = None
 		self.storage_context = None
 		self._initialized = False
+
+	@classmethod
+	def get_advanced_config_schema(cls) -> list[dict[str, Any]]:
+		return [
+			{
+				"key": "hnsw_m",
+				"label": "HNSW M",
+				"type": "number",
+				"default": 16,
+				"min": 4,
+				"max": 200,
+				"help_text": "Max connections per node in the HNSW graph. Higher values improve recall at the cost of more memory and slower index builds.",
+				"visible_when": {"pgvector_index_type": "hnsw"},
+			},
+			{
+				"key": "hnsw_ef_construction",
+				"label": "HNSW EF Construction",
+				"type": "number",
+				"default": 64,
+				"min": 4,
+				"max": 1000,
+				"help_text": "Size of the dynamic candidate list used during HNSW index construction. Higher values improve index quality at the cost of build time.",
+				"visible_when": {"pgvector_index_type": "hnsw"},
+			},
+			{
+				"key": "hnsw_ef_search",
+				"label": "HNSW EF Search",
+				"type": "number",
+				"default": 40,
+				"min": 1,
+				"max": 1000,
+				"help_text": "Size of the dynamic candidate list used during HNSW search. Higher values improve recall at the cost of search speed.",
+				"visible_when": {"pgvector_index_type": "hnsw"},
+			},
+			{
+				"key": "hybrid_search",
+				"label": "Hybrid Search",
+				"type": "boolean",
+				"default": False,
+				"help_text": "Combine vector similarity with full-text keyword search when supported by the backend.",
+			},
+		]
 
 	def initialize(self, knowledge_source: str, config: dict[str, Any]) -> None:
 		if not LLAMAINDEX_PGVECTOR_AVAILABLE:
@@ -76,15 +124,23 @@ class PGVectorBackend(KnowledgeBackend):
 			"table_name": self.table_name,
 			"embed_dim": self.dimension,
 			"use_jsonb": True,
+			"hybrid_search": bool(self.config.get("hybrid_search")),
 		}
 
 		index_type = self.config.get("index_type")
 		if index_type == "hnsw":
-			params["hnsw_kwargs"] = {
+			hnsw_kwargs = {
 				"hnsw_m": int(self.config.get("hnsw_m") or 16),
 				"hnsw_ef_construction": int(self.config.get("hnsw_ef_construction") or 64),
 				"hnsw_ef_search": int(self.config.get("hnsw_ef_search") or 40),
 			}
+
+			distance_metric = self.config.get("distance_metric") or "cosine"
+			hnsw_dist_method = self.PGVECTOR_DISTANCE_TO_OPS.get(distance_metric)
+			if hnsw_dist_method:
+				hnsw_kwargs["hnsw_dist_method"] = hnsw_dist_method
+
+			params["hnsw_kwargs"] = hnsw_kwargs
 
 		params.update(self._get_database_params())
 		# PGVectorStore.from_params does not accept sslmode; it is handled via

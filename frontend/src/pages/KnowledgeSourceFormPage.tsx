@@ -22,6 +22,24 @@ import {
   knowledgeSourceFormSchema,
   type KnowledgeSourceFormValues,
 } from '../components/knowledge/types';
+
+function parseAdvancedConfig(value: unknown): Record<string, unknown> {
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      return JSON.parse(value) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function stringifyAdvancedConfig(value: Record<string, unknown> | undefined): string {
+  return JSON.stringify(value || {});
+}
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
@@ -58,6 +76,7 @@ function mapDocToFormValues(doc: Partial<KnowledgeSourceDoc>): KnowledgeSourceFo
     pgvector_user: doc.pgvector_user || '',
     pgvector_password: doc.pgvector_password || '',
     pgvector_sslmode: doc.pgvector_sslmode || 'prefer',
+    advanced_config: parseAdvancedConfig(doc.advanced_config),
   };
 }
 
@@ -97,6 +116,7 @@ function KnowledgeSourceFormPage() {
         'pgvector_user',
         'pgvector_password',
         'pgvector_sslmode',
+        'advanced_config',
       ],
       default: true,
       disabled: false,
@@ -254,6 +274,7 @@ function KnowledgeSourceFormPage() {
         pgvector_user: values.pgvector_user || '',
         pgvector_password: values.pgvector_password || '',
         pgvector_sslmode: values.pgvector_sslmode,
+        advanced_config: stringifyAdvancedConfig(values.advanced_config),
       };
 
       if (isNew) {

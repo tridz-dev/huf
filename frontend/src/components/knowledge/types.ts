@@ -35,6 +35,9 @@ export const knowledgeSourceFormSchema = z.object({
 	pgvector_password: z.string().optional(),
 	pgvector_sslmode: z.enum(['prefer', 'require', 'disable', 'allow', 'verify-ca', 'verify-full']).default('prefer').optional(),
 	pgvector_index_type: z.enum(['none', 'hnsw', 'ivfflat']).default('hnsw').optional(),
+
+	// Backend-specific advanced config (schema-driven, backend declares the shape)
+	advanced_config: z.record(z.unknown()).optional(),
 }).superRefine((values, ctx) => {
 	if (isVectorKnowledgeType(values.knowledge_type)) {
 		if (!values.embedding_model?.trim()) {

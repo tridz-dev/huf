@@ -36,6 +36,7 @@
 		"pgvector_password",
 		"pgvector_sslmode",
 		"pgvector_index_type",
+		"advanced_config",
 		"storage_settings_section",
 		"storage_mode",
 		"sqlite_file",
@@ -268,6 +269,15 @@
 			"depends_on": "eval:doc.knowledge_type === 'pgvector'"
 		},
 		{
+			"fieldname": "advanced_config",
+			"fieldtype": "Code",
+			"options": "JSON",
+			"label": "Advanced Config",
+			"default": "{}",
+			"description": "Backend-specific tuning parameters (e.g. HNSW settings). Controlled by the backend schema.",
+			"depends_on": "eval:doc.knowledge_type === 'pgvector'"
+		},
+		{
 			"fieldname": "storage_settings_section",
 			"fieldtype": "Section Break",
 			"label": "Storage Settings"
@@ -398,7 +408,7 @@
 	],
 	"index_web_pages_for_search": 1,
 	"links": [],
-	"modified": "2026-06-01 00:00:00.000000",
+	"modified": "2026-07-18 22:56:02.000000",
 	"modified_by": "Administrator",
 	"module": "Huf",
 	"name": "Knowledge Source",

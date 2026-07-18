@@ -51,6 +51,9 @@ export interface KnowledgeSourceDoc {
 	pgvector_sslmode?: 'prefer' | 'require' | 'disable' | 'allow' | 'verify-ca' | 'verify-full' | null;
 	pgvector_index_type?: 'none' | 'hnsw' | 'ivfflat' | null;
 
+	// Backend-specific advanced config (JSON string from Code field)
+	advanced_config?: string | null;
+
 	// Storage
 	storage_mode: KnowledgeStorageMode;
 	sqlite_file?: string | null;

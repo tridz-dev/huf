@@ -58,6 +58,16 @@ class KnowledgeBackend(ABC):
 		"""Get backend statistics (chunk count, size, etc.)."""
 		pass
 
+	@classmethod
+	def get_advanced_config_schema(cls) -> list[dict[str, Any]]:
+		"""Return schema for backend-specific advanced configuration.
+
+		Each entry is a dict with:
+			key, label, type (number|text|boolean|select), default, help_text,
+			options? (select only), min/max? (number only), visible_when? ({field: value}).
+		"""
+		return []
+
 
 def get_backend(backend_type: str) -> type:
 	"""Get backend class by type."""
@@ -72,3 +82,10 @@ def get_backend(backend_type: str) -> type:
 		frappe.throw(_("Unknown backend type: {0}").format(backend_type))
 
 	return frappe.get_attr(backends[backend_type])
+
+
+@frappe.whitelist()
+def get_advanced_config_schema(knowledge_type: str) -> list[dict[str, Any]]:
+	"""Return the advanced-config schema for a given knowledge backend type."""
+	backend_class = get_backend(knowledge_type)
+	return backend_class.get_advanced_config_schema()
