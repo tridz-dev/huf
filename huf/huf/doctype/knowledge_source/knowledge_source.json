@@ -52,7 +52,10 @@
 		"index_size_bytes",
 		"error_message",
 		"disabled",
-		"test_connection"
+		"test_connection",
+		"seeding_metadata_section",
+		"source_app",
+		"source_file"
 	],
 	"fields": [
 		{
@@ -371,6 +374,26 @@
 			"options": "test_connection",
 			"depends_on": "eval:doc.knowledge_type=='pgvector'",
 			"in_list_view": 0
+		},
+		{
+			"fieldname": "seeding_metadata_section",
+			"fieldtype": "Section Break",
+			"label": "Seeding Metadata",
+			"hidden": 1
+		},
+		{
+			"fieldname": "source_app",
+			"fieldtype": "Data",
+			"label": "Source App",
+			"read_only": 1,
+			"hidden": 1
+		},
+		{
+			"fieldname": "source_file",
+			"fieldtype": "Data",
+			"label": "Source File",
+			"read_only": 1,
+			"hidden": 1
 		}
 	],
 	"index_web_pages_for_search": 1,
