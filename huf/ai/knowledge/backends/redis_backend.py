@@ -30,6 +30,7 @@ class RedisBackend(KnowledgeBackend):
 		self.index = None
 		self._initialized = False
 		self._redis_client = None
+		self._index_name = None
 	
 	def initialize(self, knowledge_source: str, config: Dict[str, Any]) -> None:
 		"""Initialize Redis backend."""
@@ -44,6 +45,7 @@ class RedisBackend(KnowledgeBackend):
 		
 		# Get connection parameters
 		connection_params = self._get_connection_params()
+		self._index_name = connection_params["index_name"]
 		
 		# Create vector store
 		self.vector_store = RedisVectorStore(**connection_params)
@@ -52,7 +54,14 @@ class RedisBackend(KnowledgeBackend):
 		)
 		
 		# Store redis client for direct operations
-		self._redis_client = self.vector_store._redis_client
+		try:
+			self._redis_client = getattr(self.vector_store, "client", None) or getattr(self.vector_store, "_redis_client", None)
+		except Exception:
+			self._redis_client = None
+			frappe.logger().warning(
+				"Could not access Redis client from RedisVectorStore; "
+				"some direct operations may be unavailable."
+			)
 		
 		self._initialized = True
 	
@@ -153,7 +162,7 @@ class RedisBackend(KnowledgeBackend):
 		try:
 			# Redis Vector Store stores documents with metadata
 			# We'll search for keys matching the input_id pattern and delete them
-			index_name = self.config.get("index_name", f"huf_{frappe.scrub(self.knowledge_source)}")
+			index_name = self._index_name
 			
 			# Use FT.SEARCH to find documents by input_id
 			query = f"@input_id:{{{input_id}}}"
@@ -175,7 +184,7 @@ class RedisBackend(KnowledgeBackend):
 		"""Clear all vectors from the Redis index."""
 		if self._redis_client and self.vector_store:
 			try:
-				index_name = self.config.get("index_name", f"huf_{frappe.scrub(self.knowledge_source)}")
+				index_name = self._index_name
 				
 				# Drop the search index
 				try:
@@ -186,11 +195,15 @@ class RedisBackend(KnowledgeBackend):
 				
 				# Re-initialize the vector store
 				connection_params = self._get_connection_params()
+				self._index_name = connection_params["index_name"]
 				self.vector_store = RedisVectorStore(**connection_params)
 				self.storage_context = StorageContext.from_defaults(
 					vector_store=self.vector_store
 				)
-				self._redis_client = self.vector_store._redis_client
+				try:
+					self._redis_client = getattr(self.vector_store, "client", None) or getattr(self.vector_store, "_redis_client", None)
+				except Exception:
+					self._redis_client = None
 				self.index = None
 				
 			except Exception as e:
@@ -209,7 +222,7 @@ class RedisBackend(KnowledgeBackend):
 		# Try to get Redis index info
 		if self._redis_client:
 			try:
-				index_name = self.config.get("index_name", f"huf_{frappe.scrub(self.knowledge_source)}")
+				index_name = self._index_name
 				info = self._redis_client.ft(index_name).info()
 				stats["index_name"] = index_name
 				stats["num_docs"] = info.get("num_docs", 0)
