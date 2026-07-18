@@ -112,8 +112,18 @@ export async function updateKnowledgeSource(
   data: Partial<KnowledgeSourceDoc>,
 ): Promise<KnowledgeSourceDoc> {
   try {
-    await db.updateDoc(doctype['Knowledge Source'], name, data);
-    const updated = await db.getDoc(doctype['Knowledge Source'], name);
+    let targetName = name;
+    if (
+      data.source_name &&
+      typeof data.source_name === 'string' &&
+      data.source_name.trim() &&
+      data.source_name !== name
+    ) {
+      await db.renameDoc(doctype['Knowledge Source'], name, data.source_name);
+      targetName = data.source_name;
+    }
+    await db.updateDoc(doctype['Knowledge Source'], targetName, data);
+    const updated = await db.getDoc(doctype['Knowledge Source'], targetName);
     return updated as KnowledgeSourceDoc;
   } catch (error) {
     handleFrappeError(error, `Error updating knowledge source ${name}`);

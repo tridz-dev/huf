@@ -18,8 +18,17 @@ export interface GetCategoriesParams {
   [key: string]: unknown;
 }
 
+type CategoryType = 'prompt' | 'summary';
+
+function getCategoryDoctype(category_type: CategoryType = 'prompt') {
+  return category_type === 'summary'
+    ? doctype['Agent Summary Prompt Category']
+    : doctype['Agent Prompt Category'];
+}
+
 export async function getCategories(
-  params?: GetCategoriesParams
+  params?: GetCategoriesParams,
+  category_type: CategoryType = 'prompt'
 ): Promise<CategoryDoc[]> {
   try {
     const filters: Array<[string, string, unknown]> = [];
@@ -32,7 +41,7 @@ export async function getCategories(
       filters.push(['parent_category', '=', params.parent_category]);
     }
 
-    const response = await db.getDocList(doctype['Agent Prompt Category'], {
+    const response = await db.getDocList(getCategoryDoctype(category_type), {
       fields: [
         'name',
         'category_name',
@@ -54,6 +63,12 @@ export async function getCategories(
   }
 }
 
+export async function getSummaryPromptCategories(
+  params?: GetCategoriesParams
+): Promise<CategoryDoc[]> {
+  return getCategories(params, 'summary');
+}
+
 export async function getCategory(name: string): Promise<CategoryDoc> {
   try {
     const response = await db.getDoc(doctype['Agent Prompt Category'], name);
@@ -65,13 +80,11 @@ export async function getCategory(name: string): Promise<CategoryDoc> {
 }
 
 export async function createCategory(
-  data: Partial<CategoryDoc>
+  data: Partial<CategoryDoc>,
+  category_type: CategoryType = 'prompt'
 ): Promise<CategoryDoc> {
   try {
-    const response = await db.createDoc(
-      doctype['Agent Prompt Category'],
-      data
-    );
+    const response = await db.createDoc(getCategoryDoctype(category_type), data);
     return response as CategoryDoc;
   } catch (error) {
     handleFrappeError(error);
@@ -81,7 +94,8 @@ export async function createCategory(
 
 export async function updateCategory(
   name: string,
-  data: Partial<CategoryDoc>
+  data: Partial<CategoryDoc>,
+  category_type: CategoryType = 'prompt'
 ): Promise<CategoryDoc> {
   try {
     let targetName = name;
@@ -93,7 +107,7 @@ export async function updateCategory(
     ) {
       try {
         await db.renameDoc(
-          doctype['Agent Prompt Category'],
+          getCategoryDoctype(category_type),
           name,
           data.category_name
         );
@@ -106,7 +120,7 @@ export async function updateCategory(
     }
 
     const response = await db.updateDoc(
-      doctype['Agent Prompt Category'],
+      getCategoryDoctype(category_type),
       targetName,
       data
     );
@@ -117,9 +131,12 @@ export async function updateCategory(
   }
 }
 
-export async function deleteCategory(name: string): Promise<void> {
+export async function deleteCategory(
+  name: string,
+  category_type: CategoryType = 'prompt'
+): Promise<void> {
   try {
-    await db.deleteDoc(doctype['Agent Prompt Category'], name);
+    await db.deleteDoc(getCategoryDoctype(category_type), name);
   } catch (error) {
     handleFrappeError(error);
     throw error;

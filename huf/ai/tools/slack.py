@@ -28,7 +28,7 @@ def handle_send_message(**kwargs) -> str:
         channel = kwargs.get("channel")
         text = kwargs.get("text")
         if not all([channel, text]):
-            return json.dumps({"success": False, "error": "channel and text are required"})
+            return json.dumps({"success": False, "error": "channel and text are required"}, default=str)
 
         headers = _get_slack_headers()
         payload = {"channel": channel, "text": text, "mrkdwn": True}
@@ -45,14 +45,14 @@ def handle_send_message(**kwargs) -> str:
         if not data.get("ok"):
             error_msg = data.get("error", "Unknown error")
             update_last_error(service_name, error_msg)
-            return json.dumps({"success": False, "error": error_msg})
+            return json.dumps({"success": False, "error": error_msg}, default=str)
         
-        return json.dumps({"success": True, "results": data})
+        return json.dumps({"success": True, "results": data}, default=str)
     except Exception as e:
         error_msg = f"Slack Send Message Error: {str(e)}"
         frappe.log_error(error_msg, "Slack Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_send_message_thread(**kwargs) -> str:
@@ -63,7 +63,7 @@ def handle_send_message_thread(**kwargs) -> str:
         text = kwargs.get("text")
         thread_ts = kwargs.get("thread_ts")
         if not all([channel, text, thread_ts]):
-            return json.dumps({"success": False, "error": "channel, text, and thread_ts are required"})
+            return json.dumps({"success": False, "error": "channel, text, and thread_ts are required"}, default=str)
 
         headers = _get_slack_headers()
         payload = {"channel": channel, "text": text, "thread_ts": thread_ts, "mrkdwn": True}
@@ -80,14 +80,14 @@ def handle_send_message_thread(**kwargs) -> str:
         if not data.get("ok"):
             error_msg = data.get("error", "Unknown error")
             update_last_error(service_name, error_msg)
-            return json.dumps({"success": False, "error": error_msg})
+            return json.dumps({"success": False, "error": error_msg}, default=str)
         
-        return json.dumps({"success": True, "results": data})
+        return json.dumps({"success": True, "results": data}, default=str)
     except Exception as e:
         error_msg = f"Slack Thread Reply Error: {str(e)}"
         frappe.log_error(error_msg, "Slack Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_list_channels(**kwargs) -> str:
@@ -108,7 +108,7 @@ def handle_list_channels(**kwargs) -> str:
         if not data.get("ok"):
             error_msg = data.get("error", "Unknown error")
             update_last_error(service_name, error_msg)
-            return json.dumps({"success": False, "error": error_msg})
+            return json.dumps({"success": False, "error": error_msg}, default=str)
         
         channels = [{"id": ch.get("id"), "name": ch.get("name"), "is_private": ch.get("is_private", False)}
                     for ch in data.get("channels", [])]
@@ -122,7 +122,7 @@ def handle_list_channels(**kwargs) -> str:
         error_msg = f"Slack List Channels Error: {str(e)}"
         frappe.log_error(error_msg, "Slack Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_get_channel_history(**kwargs) -> str:
@@ -131,7 +131,7 @@ def handle_get_channel_history(**kwargs) -> str:
     try:
         channel = kwargs.get("channel")
         if not channel:
-            return json.dumps({"success": False, "error": "channel is required"})
+            return json.dumps({"success": False, "error": "channel is required"}, default=str)
 
         limit = int(kwargs.get("limit", 100))
         headers = _get_slack_headers()
@@ -148,7 +148,7 @@ def handle_get_channel_history(**kwargs) -> str:
         if not data.get("ok"):
             error_msg = data.get("error", "Unknown error")
             update_last_error(service_name, error_msg)
-            return json.dumps({"success": False, "error": error_msg})
+            return json.dumps({"success": False, "error": error_msg}, default=str)
         
         messages = [{"ts": msg.get("ts"), "text": msg.get("text", ""), "user": msg.get("user", "bot" if msg.get("bot_id") else "unknown")}
                     for msg in data.get("messages", [])]
@@ -162,7 +162,7 @@ def handle_get_channel_history(**kwargs) -> str:
         error_msg = f"Slack Get History Error: {str(e)}"
         frappe.log_error(error_msg, "Slack Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_search_messages(**kwargs) -> str:
@@ -171,7 +171,7 @@ def handle_search_messages(**kwargs) -> str:
     try:
         query = kwargs.get("query")
         if not query:
-            return json.dumps({"success": False, "error": "query is required"})
+            return json.dumps({"success": False, "error": "query is required"}, default=str)
 
         limit = int(kwargs.get("limit", 20))
         headers = _get_slack_headers()
@@ -188,7 +188,7 @@ def handle_search_messages(**kwargs) -> str:
         if not data.get("ok"):
             error_msg = data.get("error", "Unknown error")
             update_last_error(service_name, error_msg)
-            return json.dumps({"success": False, "error": error_msg})
+            return json.dumps({"success": False, "error": error_msg}, default=str)
         
         matches = data.get("messages", {}).get("matches", [])
         results = [{"text": msg.get("text", ""), "user": msg.get("username", msg.get("user", "unknown")), "channel": msg.get("channel", {}).get("name", "unknown"), "permalink": msg.get("permalink")}
@@ -203,7 +203,7 @@ def handle_search_messages(**kwargs) -> str:
         error_msg = f"Slack Search Error: {str(e)}"
         frappe.log_error(error_msg, "Slack Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)
 
 
 def handle_list_users(**kwargs) -> str:
@@ -225,7 +225,7 @@ def handle_list_users(**kwargs) -> str:
         if not data.get("ok"):
             error_msg = data.get("error", "Unknown error")
             update_last_error(service_name, error_msg)
-            return json.dumps({"success": False, "error": error_msg})
+            return json.dumps({"success": False, "error": error_msg}, default=str)
         
         users = [{"id": user.get("id"), "name": user.get("name"), "real_name": user.get("real_name", ""), "is_bot": user.get("is_bot", False)}
                  for user in data.get("members", [])
@@ -240,4 +240,4 @@ def handle_list_users(**kwargs) -> str:
         error_msg = f"Slack List Users Error: {str(e)}"
         frappe.log_error(error_msg, "Slack Tool")
         update_last_error(service_name, error_msg)
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({"success": False, "error": str(e)}, default=str)

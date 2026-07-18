@@ -33,7 +33,9 @@ export function useToolCreationOptions() {
     () =>
       agents.map((agent) => ({
         value: agent.name,
-        label: agent.agent_name || agent.name,
+        label: agent.model
+          ? `${agent.agent_name || agent.name} · ${agent.model}`
+          : agent.agent_name || agent.name,
       })),
     [agents]
   );

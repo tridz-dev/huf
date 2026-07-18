@@ -1,4 +1,4 @@
-__version__ = "0.0.1"
+__version__ = "1.0.0-beta.1"
 
 # Use pysqlite3 (loadable extensions) instead of stdlib sqlite3 for sqlite_vec
 try:

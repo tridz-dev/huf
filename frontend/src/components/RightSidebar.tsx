@@ -6,6 +6,8 @@ import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
+import { linkRoutes } from '@/lib/link-routes';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,9 +27,10 @@ import { VariablePicker } from './ui/VariablePicker';
 
 interface RightSidebarProps {
   onToggle: () => void;
+  variant?: 'panel' | 'sheet';
 }
 
-export function RightSidebar({ onToggle }: RightSidebarProps) {
+export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps) {
   const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, deleteNode, updateEdges } = useFlowContext();
   const selectedNode = activeFlow?.nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = activeFlow?.edges.find((e) => e.id === selectedEdgeId);
@@ -75,9 +78,11 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
       .then((result) => {
         const items = Array.isArray(result) ? result : result.items;
         setAgents(
-          (items || []).map((a: { name: string; agent_name?: string }) => ({
+          (items || []).map((a: { name: string; agent_name?: string; model?: string }) => ({
             value: a.name,
-            label: a.agent_name || a.name,
+            label: a.model
+              ? `${a.agent_name || a.name} · ${a.model}`
+              : a.agent_name || a.name,
           }))
         );
       })
@@ -353,15 +358,22 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
     return null;
   };
 
+  const isSheet = variant === 'sheet';
+
   return (
     <div
-      className="relative h-screen bg-card border-l border-border flex flex-col"
-      style={{ width: `${width}px` }}
+      className={cn(
+        'relative bg-card flex flex-col',
+        isSheet ? 'h-full' : 'h-screen border-l border-border',
+      )}
+      style={isSheet ? undefined : { width: `${width}px` }}
     >
+      {!isSheet && (
       <div
         className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
         onMouseDown={handleMouseDown}
       />
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {!selectedNode && !selectedEdge ? (
@@ -521,6 +533,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                         disabled={loadingAgents}
                         searchPlaceholder="Search agents..."
                         emptyText="No agent found."
+                        linkTo={linkRoutes.agent}
                       />
                     </div>
                     <div>
@@ -650,6 +663,7 @@ export function RightSidebar({ onToggle }: RightSidebarProps) {
                         disabled={loadingAgents}
                         searchPlaceholder="Search agents..."
                         emptyText="No agent found."
+                        linkTo={linkRoutes.agent}
                       />
                     </div>
                     <div>

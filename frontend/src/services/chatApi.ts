@@ -44,6 +44,7 @@ export interface AgentMessageDoc {
   kind?: string;
   generated_image?: string;
   generated_audio?: string;
+  generated_video?: string;
   voice_message?: string;
   tool_name?: string;
   tool_status?: string;
@@ -60,6 +61,7 @@ export interface ChatMessage {
   kind?: string;
   generatedImage?: string;
   generatedAudio?: string;
+  generatedVideo?: string;
   voiceMessage?: string;
   toolName?: string;
   toolStatus?: string;
@@ -91,6 +93,7 @@ function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
     kind: doc.kind,
     generatedImage: doc.generated_image,
     generatedAudio: doc.generated_audio,
+    generatedVideo: doc.generated_video,
     voiceMessage: doc.voice_message,
     toolName: doc.tool_name,
     toolStatus: doc.tool_status,
@@ -151,6 +154,9 @@ export interface AgentWithCount {
   conversationCount: number;
   last_updated?: string;
   agent_color?: string | null;
+  provider?: string;
+  model?: string;
+  allow_chat?: number;
 }
 
 /**
@@ -161,14 +167,23 @@ export async function getAgentsWithConversationCounts(): Promise<AgentWithCount[
   try {
     // Fetch all agents sorted by last updated (modified field)
     const agents = await db.getDocList(doctype.Agent, {
-      fields: ['name', 'agent_name', 'modified', 'agent_color'],
+      fields: ['name', 'agent_name', 'modified', 'agent_color', 'provider', 'model', 'allow_chat'],
+      filters: [['allow_chat', '=', 1]],
       orderBy: { field: 'modified', order: 'asc' },
       limit: 1000, // Reasonable limit for agents
     });
 
     // Fetch conversation count for each agent
     const agentsWithCounts: AgentWithCount[] = await Promise.all(
-      (agents as Array<{ name: string; agent_name: string; modified?: string }>).map(async (agent) => {
+      (agents as Array<{
+        name: string;
+        agent_name: string;
+        modified?: string;
+        agent_color?: string | null;
+        provider?: string;
+        model?: string;
+        allow_chat?: number;
+      }>).map(async (agent) => {
         const count = await fetchDocCount(doctype['Agent Conversation'], [
           ['agent', '=', agent.name],
           ['channel', '=', 'Chat'],
@@ -178,7 +193,10 @@ export async function getAgentsWithConversationCounts(): Promise<AgentWithCount[
           agent_name: agent.agent_name || agent.name,
           conversationCount: count || 0,
           last_updated: agent.modified,
-          agent_color: (agent as any).agent_color || null,
+          agent_color: agent.agent_color || null,
+          provider: agent.provider,
+          model: agent.model,
+          allow_chat: agent.allow_chat,
         };
       })
     );
@@ -285,7 +303,7 @@ export async function getConversationMessages(
 
   try {
     const messages = await db.getDocList(doctype['Agent Message'], {
-      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'voice_message', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'generated_video', 'voice_message', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
       filters: [['conversation', '=', conversation]],
       orderBy: { field: 'creation', order: 'desc' },
       limit,
@@ -336,6 +354,111 @@ export async function transcribeAudio(
     return (result?.message ?? result) as TranscribeAudioResponse;
   } catch (error) {
     handleFrappeError(error, 'Error transcribing audio');
+  }
+}
+
+export interface UploadFileParams {
+  filename: string;
+  b64data: string;
+  agent: string;
+  conversation?: string;
+}
+
+export interface UploadFileResponse {
+  success: boolean;
+  conversation_id?: string;
+  message_id?: string;
+  text?: string;
+  file_name?: string;
+  error?: string;
+}
+
+export async function uploadFileAndProcess(
+  params: UploadFileParams
+): Promise<UploadFileResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_chat.upload_file_and_process_web', {
+      filename: params.filename,
+      b64data: params.b64data,
+      agent: params.agent,
+      conversation: params.conversation ?? undefined,
+    });
+    return (result?.message ?? result) as UploadFileResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error uploading file');
+    return { success: false, error: 'Error uploading file' };
+  }
+}
+
+export interface UploadFileAttachmentParams {
+  filename: string;
+  b64data: string;
+  agent: string;
+}
+
+export interface UploadFileAttachmentResponse {
+  success: boolean;
+  file_id?: string;
+  file_url?: string;
+  filename?: string;
+  error?: string;
+}
+
+export async function uploadFileAttachment(
+  params: UploadFileAttachmentParams
+): Promise<UploadFileAttachmentResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_chat.upload_file_attachment_web', {
+      filename: params.filename,
+      b64data: params.b64data,
+      agent: params.agent,
+    });
+    return (result?.message ?? result) as UploadFileAttachmentResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error uploading file');
+    return { success: false, error: 'Error uploading file' };
+  }
+}
+
+export interface PrepareMessageWithFileParams {
+  file_id: string;
+  filename: string;
+  agent: string;
+  conversation?: string;
+  message?: string;
+}
+
+export interface PrepareMessageWithFileFile {
+  file_id: string;
+  file_url: string;
+  filename: string;
+  is_image: number;
+}
+
+export interface PrepareMessageWithFileResponse {
+  success: boolean;
+  conversation_id?: string;
+  message_id?: string;
+  agent_prompt?: string;
+  files?: PrepareMessageWithFileFile[];
+  error?: string;
+}
+
+export async function prepareMessageWithFile(
+  params: PrepareMessageWithFileParams
+): Promise<PrepareMessageWithFileResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_chat.prepare_message_with_file_web', {
+      file_id: params.file_id,
+      filename: params.filename,
+      agent: params.agent,
+      conversation: params.conversation ?? undefined,
+      message: params.message ?? '',
+    });
+    return (result?.message ?? result) as PrepareMessageWithFileResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error preparing file attachment');
+    return { success: false, error: 'Error preparing file attachment' };
   }
 }
 
@@ -430,7 +553,7 @@ export interface AgentRunFeedbackParams {
 
 export async function createAgentRunFeedback(params: AgentRunFeedbackParams): Promise<void> {
   try {
-    await db.createDoc('Agent Run Feedback', {
+    await db.createDoc(doctype['Agent Run Feedback'], {
       agent: params.agent,
       feedback: params.feedback,
       comments: params.comments,
@@ -449,5 +572,49 @@ export async function updateConversationTitle(conversationId:string,title:string
     })
   }catch(e){
     handleFrappeError(e,"Error update conversation title")
+  }
+}
+
+export interface AgentRunFeedbackDoc {
+  name: string;
+  agent: string;
+  feedback: 'Thumbs Up' | 'Thumbs Down';
+  comments?: string;
+  conversation?: string;
+  agent_message?: string;
+}
+
+export async function getAgentMessageIdForRun(agentRunId: string): Promise<string | undefined> {
+  try {
+    const messages = await db.getDocList(doctype['Agent Message'], {
+      fields: ['name'],
+      filters: [
+        ['agent_run', '=', agentRunId],
+        ['is_agent_message', '=', 1],
+      ],
+      orderBy: { field: 'creation', order: 'desc' },
+      limit: 1,
+    });
+
+    const first = (messages as Array<{ name: string }>)[0];
+    return first?.name;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching agent message for run');
+  }
+}
+
+export async function getExistingRunFeedback(
+  agentMessageId: string
+): Promise<AgentRunFeedbackDoc | undefined> {
+  try {
+    const feedback = await db.getDocList(doctype['Agent Run Feedback'], {
+      fields: ['name', 'agent', 'feedback', 'comments', 'conversation', 'agent_message'],
+      filters: [['agent_message', '=', agentMessageId]],
+      limit: 1,
+    });
+
+    return (feedback as AgentRunFeedbackDoc[])[0];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching run feedback');
   }
 }

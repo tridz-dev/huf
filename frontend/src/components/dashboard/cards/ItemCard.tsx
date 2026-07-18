@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { BaseCard } from './BaseCard';
 import { cn } from '@/lib/utils';
 
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'success' | 'outline';
 
 interface MetadataItem {
   label: string;
@@ -26,15 +26,18 @@ interface ItemCardProps {
   title: string;
   description?: string;
   icon?: LucideIcon;
+  avatarColor?: string | null;
   status?: {
     label: string;
     variant?: BadgeVariant;
   };
   metadata?: MetadataItem[];
+  badges?: Array<{ label: string; variant?: BadgeVariant }>;
   actions?: ActionButton[];
   menuActions?: ActionButton[];
   menuIcon?: LucideIcon;
   footer?: ReactNode;
+  cornerBadge?: ReactNode;
   onClick?: () => void;
   className?: string;
 }
@@ -43,25 +46,40 @@ export function ItemCard({
   title,
   description,
   icon: TitleIcon,
+  avatarColor,
   status,
   metadata = [],
+  badges = [],
   actions = [],
   menuActions = [],
   menuIcon: MenuIcon = MoreVertical,
   footer,
+  cornerBadge,
   onClick,
   className,
 }: ItemCardProps) {
   return (
     <BaseCard onClick={onClick} className={cn('flex flex-col', className)}>
+      {cornerBadge ? (
+        <div className="absolute bottom-3 right-3 z-10">
+          {cornerBadge}
+        </div>
+      ) : null}
       <div className="flex flex-col flex-1">
         <CardHeader className="pb-3">
-          <CardTitle className="text-xl font-semibold line-clamp-1 flex items-center gap-2">
-            {TitleIcon && <TitleIcon className="w-5 h-5 shrink-0 text-muted-foreground" />}
+          <CardTitle className="font-body font-semibold text-[15px] line-clamp-1 flex items-center gap-2">
+            {avatarColor && (
+              <span
+                className="w-3 h-3 rounded-full shrink-0 border border-border"
+                style={{ backgroundColor: avatarColor }}
+                aria-hidden
+              />
+            )}
+            {TitleIcon && <TitleIcon className="w-5 h-5 shrink-0 text-steel-soft" />}
             {title}
           </CardTitle>
           {description && (
-            <CardDescription className="text-sm line-clamp-2 min-h-[2.5rem]">{description}</CardDescription>
+            <CardDescription className="text-steel text-[13px] line-clamp-2 min-h-[2.5rem]">{description}</CardDescription>
           )}
           {status && (
             <CardAction className="top-5">
@@ -81,12 +99,22 @@ export function ItemCard({
                     key={index}
                     className="flex items-center justify-between text-sm leading-tight"
                   >
-                    <div className="flex items-center gap-1 text-muted-foreground">
+                    <div className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-wide text-steel-soft">
                       {item.icon && <item.icon className="w-3 h-3" />}
                       <span>{item.label}</span>
                     </div>
-                    <span className="font-medium">{item.value}</span>
+                    <span className="font-mono text-[12px] text-steel">{item.value}</span>
                   </div>
+                ))}
+              </div>
+            )}
+
+            {badges.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {badges.map((badge) => (
+                  <Badge key={badge.label} variant={badge.variant || 'secondary'} className="text-xs">
+                    {badge.label}
+                  </Badge>
                 ))}
               </div>
             )}

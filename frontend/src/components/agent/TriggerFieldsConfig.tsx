@@ -118,7 +118,7 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
       type: 'custom',
       label: '',
       render: () => (
-        <div className="rounded-lg border p-4 text-sm text-muted-foreground">
+        <div className="rounded-none border p-4 text-sm text-steel">
           Manual trigger can be run from workflows or flows. No configuration required.
         </div>
       ),

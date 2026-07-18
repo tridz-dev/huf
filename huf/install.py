@@ -5,6 +5,8 @@
 Installation hooks for Huf app
 """
 
+import json
+
 import frappe
 from huf.utils import is_frappe_16
 
@@ -130,28 +132,53 @@ def after_migrate():
 			f"Failed to sync tools after migrate: {str(e)}",
 			"Tool Sync Error"
 		)
+		
+	try:
+		from huf.ai.app_seeding.seeder import seed_all
+		results = list(seed_all())
+		logger = frappe.logger("app_seeding")
+		_log_seed_results(results, logger)
+	except Exception as e:
+		frappe.log_error(f"App seeding failed: {e}", "App Seeding")
+
+
+def _log_seed_results(results, logger):
+	"""Emit WARNING-level structured logs for skipped seed records and per-app summaries."""
+	for r in results:
+		for rec in r.skipped_records:
+			logger.warning(json.dumps({
+				"app": rec["app"],
+				"file": rec["file"],
+				"record": rec["record"],
+				"missing_refs": rec.get("missing_refs", [])
+			}))
+		logger.warning(json.dumps({
+			"app": r.app,
+			"skipped_count": r.skipped,
+			"seeded_count": r.seeded
+		}))
 
 def create_demo_ai_providers():
     providers = [
-        # {"doctype": "AI Provider", "provider_name": "xAI", "slug": "xai", "chef": "xAI", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Mistral", "slug": "mistral", "chef": "Mistral", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Alibaba", "slug": "alibaba", "chef": "Alibaba", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "DashScope", "slug": "dashscope", "chef": "Alibaba", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Meta", "slug": "meta", "chef": "Meta", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "TogetherAI", "slug": "togetherai", "chef": "TogetherAI", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Azure OpenAI", "slug": "azure", "chef": "Microsoft", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "AWS Bedrock", "slug": "bedrock", "chef": "Amazon", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Ollama", "slug": "ollama", "chef": "Ollama", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "ElevenLabs", "slug": "elevenlabs", "chef": "ElevenLabs", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Groq", "slug": "groq", "chef": "xAI", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "DeepSeek", "slug": "deepseek", "chef": "DeepSeek", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Huggingface", "slug": "huggingface", "chef": "HuggingFace", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Cohere", "slug": "cohere", "chef": "Cohere", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Perplexity", "slug": "perplexity", "chef": "Perplexity", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Google", "slug": "google", "chef": "Google", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Anthropic", "slug": "anthropic", "chef": "Anthropic", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "OpenRouter", "slug": "openrouter", "chef": "OpenRouter", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "OpenAI", "slug": "openai", "chef": "OpenAI", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "xAI", "provider_brand": "xai", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Mistral", "provider_brand": "mistral", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Alibaba", "provider_brand": "alibaba", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "DashScope", "provider_brand": "alibaba", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Meta", "provider_brand": "meta", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "TogetherAI", "provider_brand": "togetherai", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Azure OpenAI", "provider_brand": "azure", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "AWS Bedrock", "provider_brand": "amazon-bedrock", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Ollama", "provider_brand": "ollama", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "ElevenLabs", "provider_brand": "elevenlabs", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Groq", "provider_brand": "groq", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "DeepSeek", "provider_brand": "deepseek", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Huggingface", "provider_brand": "huggingface", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Cohere", "provider_brand": "cohere", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Perplexity", "provider_brand": "perplexity", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Google", "provider_brand": "google", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Anthropic", "provider_brand": "anthropic", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "OpenRouter", "provider_brand": "openrouter", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "OpenAI", "provider_brand": "openai", "api_key": ""},
         
         
     ]
@@ -332,7 +359,7 @@ def create_ocr_document_tool():
     if tool_exists:
         # Update existing tool
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
-        tool_doc.description = "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents."
+        tool_doc.description = "Extract text from documents and images using OCR. Supports PDFs, images, scanned documents, Word/Excel/PowerPoint documents (DOCX/XLSX/PPTX), text files (TXT/MD/CSV/JSON/XML/LOG), and HTML. Uses local extractors when possible, vision models for images, and OCR endpoints or vision models for PDFs."
         tool_doc.function_path = "huf.ai.sdk_tools.handle_ocr_document"
         tool_doc.tool_type = "OCR"
         try:
@@ -382,7 +409,7 @@ def create_ocr_document_tool():
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
-            "description": "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents.",
+            "description": "Extract text from documents and images using OCR. Supports PDFs, images, scanned documents, Word/Excel/PowerPoint documents (DOCX/XLSX/PPTX), text files (TXT/MD/CSV/JSON/XML/LOG), and HTML. Uses local extractors when possible, vision models for images, and OCR endpoints or vision models for PDFs.",
             "types": "Custom Function",
             "function_path": "huf.ai.sdk_tools.handle_ocr_document",
             "pass_parameters_as_json": 1,
@@ -844,6 +871,16 @@ def register_integration_services():
 			"description": "Google Maps directions and geocoding",
 			"required_credentials": [
 				{"key": "api_key", "label": "Google Maps API Key", "required": True}
+			]
+		},
+		{
+			"service_name": "google_meet",
+			"category": "Google",
+			"description": "Google Meet meeting space creation",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
 			]
 		},
 	]

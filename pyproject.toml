@@ -21,8 +21,11 @@ dependencies = [
     "psycopg[binary]>=3.1.0",
     "pypdf",
     "python-docx",
+    "openpyxl",
+    "python-pptx",
     "beautifulsoup4",
     "aiohttp",
+    "pypdfium2>=4.26.0",
 ]
 
 [build-system]

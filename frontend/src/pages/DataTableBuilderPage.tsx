@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useReducer, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useNavigate, useParams, useBlocker, type Location } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Save, Loader2, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { createDataTable, updateDataTable, getTableSchema } from '@/services/dat
 import type { DataTableFieldDef, DataTableFieldType, DataTableSchema } from '@/types/dataTable.types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { UnsavedChangesDialog } from '@/components/UnsavedChangesDialog';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 interface BuilderState {
 	tableName: string;
@@ -34,7 +36,8 @@ type BuilderAction =
 	| { type: 'REMOVE_FIELD'; payload: number }
 	| { type: 'REORDER_FIELDS'; payload: { from: number; to: number } }
 	| { type: 'SELECT_FIELD'; payload: number | null }
-	| { type: 'LOAD_SCHEMA'; payload: DataTableSchema };
+	| { type: 'LOAD_SCHEMA'; payload: DataTableSchema }
+	| { type: 'MARK_CLEAN' };
 
 const initialState: BuilderState = {
 	tableName: '',
@@ -119,6 +122,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				selectedFieldIndex: null,
 				isDirty: false,
 			};
+		case 'MARK_CLEAN':
+			return { ...state, isDirty: false };
 		default:
 			return state;
 	}
@@ -134,6 +139,7 @@ export function DataTableBuilderPage() {
 	const [loading, setLoading] = useState(isEdit);
 	const isMobile = useIsMobile();
 	const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+	const allowNavigationRef = useRef(false);
 
 	useEffect(() => {
 		if (isEdit) {
@@ -160,6 +166,20 @@ export function DataTableBuilderPage() {
 		window.addEventListener('beforeunload', handler);
 		return () => window.removeEventListener('beforeunload', handler);
 	}, [state.isDirty]);
+
+	const shouldBlock = useCallback(
+		({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+			if (allowNavigationRef.current) return false;
+			if (!state.isDirty) return false;
+			return (
+				currentLocation.pathname !== nextLocation.pathname ||
+				currentLocation.search !== nextLocation.search
+			);
+		},
+		[state.isDirty]
+	);
+
+	const blocker = useBlocker(shouldBlock);
 
 	const handleAddField = useCallback(
 		(type: DataTableFieldType) => {
@@ -216,6 +236,8 @@ export function DataTableBuilderPage() {
 					icon: state.icon,
 				});
 				toast.success('Table updated successfully');
+				dispatch({ type: 'MARK_CLEAN' });
+				allowNavigationRef.current = true;
 				navigate(`/data/${state.registryName || tableId}`);
 			} else {
 				const result = await createDataTable({
@@ -227,6 +249,8 @@ export function DataTableBuilderPage() {
 					title_field: state.titleField,
 				});
 				toast.success('Table created successfully');
+				dispatch({ type: 'MARK_CLEAN' });
+				allowNavigationRef.current = true;
 				navigate(`/data/${result.name}`);
 			}
 		} catch (err: any) {
@@ -238,10 +262,16 @@ export function DataTableBuilderPage() {
 		}
 	};
 
+	useSaveShortcut({
+		onSave: handleSave,
+		enabled: !loading,
+		isSubmitting: saving,
+	});
+
 	if (loading) {
 		return (
 			<div className="flex items-center justify-center h-full">
-				<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+				<Loader2 className="w-6 h-6 animate-spin text-steel-soft" />
 			</div>
 		);
 	}
@@ -336,7 +366,7 @@ export function DataTableBuilderPage() {
 							type="button"
 							size="icon"
 							variant="outline"
-							className="fixed bottom-20 right-4 z-20 rounded-full shadow-md bg-background"
+							className="fixed bottom-20 right-4 z-20 rounded-full bg-panel"
 							onClick={() => setIsSidebarOpen(true)}
 						>
 							<Settings2 className="w-4 h-4" />
@@ -355,14 +385,14 @@ export function DataTableBuilderPage() {
 						</Sheet>
 					</>
 				) : (
-					<div className="w-80 border-l bg-muted/30 overflow-y-auto p-4">
+					<div className="w-80 border-l bg-paper-deep/30 overflow-y-auto p-4">
 						{sidebarContent}
 					</div>
 				)}
 			</div>
 
 			{/* Bottom action bar */}
-			<div className="border-t px-6 py-3 flex items-center justify-between bg-background">
+			<div className="border-t px-6 py-3 flex items-center justify-between bg-paper">
 				<Button
 					variant="outline"
 					onClick={() => navigate(isEdit ? `/data/${tableId}` : '/data')}
@@ -378,6 +408,8 @@ export function DataTableBuilderPage() {
 					{isEdit ? 'Save Changes' : 'Create Table'}
 				</Button>
 			</div>
+
+			<UnsavedChangesDialog blocker={blocker} />
 		</div>
 	);
 }

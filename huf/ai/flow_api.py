@@ -8,6 +8,7 @@ Provides REST-style APIs for:
 - Agent tools (run_flow, get_flow_run, resume_flow_run, approve/reject)
 """
 
+import hmac
 import json
 
 import frappe
@@ -328,6 +329,30 @@ def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _webhook_key_is_valid(defn: dict, webhook_key: str | None) -> bool:
+	"""Return True only if the flow's entry node is a webhook trigger with a
+	non-empty configured auth key that matches webhook_key (constant-time).
+
+	Fails closed: returns False if the entry node is missing, is not a
+	trigger.webhook, or has no/empty auth configured.
+	"""
+	entry_id = defn.get("entry")
+	entry_node = None
+	for n in defn.get("nodes", []):
+		if n.get("id") == entry_id and n.get("type") == "trigger.webhook":
+			entry_node = n
+			break
+
+	if entry_node is None:
+		return False
+
+	expected_auth = entry_node.get("config", {}).get("auth")
+	if not expected_auth:
+		return False
+
+	return hmac.compare_digest(str(webhook_key or ""), str(expected_auth))
+
+
 @frappe.whitelist(allow_guest=True)
 def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 	"""
@@ -351,18 +376,9 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
 
-	# Validate webhook auth
-	nodes = defn.get("nodes", [])
-	entry_node = None
-	for n in nodes:
-		if n.get("id") == defn.get("entry") and n.get("type") == "trigger.webhook":
-			entry_node = n
-			break
-
-	if entry_node:
-		expected_auth = entry_node.get("config", {}).get("auth")
-		if expected_auth and webhook_key != expected_auth:
-			frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
+	# Validate webhook auth — mandatory, fail closed.
+	if not _webhook_key_is_valid(defn, webhook_key):
+		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
 
 	# Get payload from request
 	payload = {}

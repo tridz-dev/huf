@@ -30,7 +30,7 @@ const categoryOptions = [
 function getStatusVariant(status: FlowMetadata['status']) {
   switch (status) {
     case 'active':
-      return 'default';
+      return 'success';
     case 'error':
       return 'destructive';
     case 'paused':
@@ -125,7 +125,8 @@ function FlowListPage() {
 
   return (
     <PageLayout
-      subtitle="Manage your automated workflows and integrations"
+      title="Flows"
+      subtitle="Design and orchestrate agent workflows."
       filters={
         <FilterBar
           searchPlaceholder="Search flows..."

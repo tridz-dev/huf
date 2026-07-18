@@ -28,10 +28,10 @@ export function UnifiedLayout({ children, hideHeader, headerActions, breadcrumbs
       <AppSidebar />
       <SidebarInset className="h-svh max-h-svh overflow-hidden">
         {!hideHeader && (
-          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 border-b">
+          <header className="flex h-[60px] shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[60px] border-b border-line bg-panel">
             <div className="flex items-center gap-2 px-4 w-full">
-              <SidebarTrigger className="-ml-1" />
-              <Separator orientation="vertical" className="mr-2 h-4" />
+              <SidebarTrigger className="-ml-1 text-steel hover:text-ink" />
+              <Separator orientation="vertical" className="mr-2 h-4 bg-line" />
               <UnifiedHeader actions={headerActions} breadcrumbs={breadcrumbs} />
             </div>
           </header>

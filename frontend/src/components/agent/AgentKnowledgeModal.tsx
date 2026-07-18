@@ -5,12 +5,15 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DialogScrollBody,
+  DialogScrollContent,
+  DialogScrollFooter,
+  DialogScrollHeader,
+} from '@/components/ui/dialog-scroll';
 import {
   Select,
   SelectContent,
@@ -23,6 +26,7 @@ import { knowledgeModes } from '@/data/knowledge';
 import { getKnowledgeSources } from '@/services/knowledgeApi';
 import type { AgentKnowledgeRow } from '@/types/agent.types';
 import type { ComboboxOption } from '@/components/ui/combobox';
+import { linkRoutes } from '@/lib/link-routes';
 
 interface AgentKnowledgeModalProps {
   open: boolean;
@@ -93,15 +97,15 @@ export function AgentKnowledgeModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogScrollContent className="sm:max-w-md">
+        <DialogScrollHeader>
           <DialogTitle>{initialData ? 'Edit Knowledge Link' : 'Add Knowledge Source'}</DialogTitle>
           <DialogDescription>
             Link a knowledge source to this agent for RAG-based retrieval.
           </DialogDescription>
-        </DialogHeader>
+        </DialogScrollHeader>
 
-        <div className="space-y-4 py-2">
+        <DialogScrollBody className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Knowledge Source *</Label>
             <Combobox
@@ -111,6 +115,7 @@ export function AgentKnowledgeModal({
               placeholder="Select knowledge source..."
               searchPlaceholder="Search knowledge sources..."
               emptyText="No knowledge sources found."
+              linkTo={linkRoutes.knowledgeSource}
             />
           </div>
 
@@ -128,7 +133,7 @@ export function AgentKnowledgeModal({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-steel-soft">
               Mandatory: context injected into every prompt. Optional: agent queries via search tool.
             </p>
           </div>
@@ -172,17 +177,17 @@ export function AgentKnowledgeModal({
               rows={2}
             />
           </div>
-        </div>
+        </DialogScrollBody>
 
-        <DialogFooter>
+        <DialogScrollFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button type="button" onClick={handleSave} disabled={!isValid}>
             {initialData ? 'Update' : 'Add'}
           </Button>
-        </DialogFooter>
-      </DialogContent>
+        </DialogScrollFooter>
+      </DialogScrollContent>
     </Dialog>
   );
 }

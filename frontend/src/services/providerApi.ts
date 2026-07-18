@@ -5,8 +5,47 @@ import { handleFrappeError } from '@/lib/frappe-error';
 import { fetchPaginatedCount } from './utilsApi';
 
 /**
- * Pagination parameters for fetching providers
+ * Fields needed for model listing pages
  */
+const MODEL_LIST_FIELDS = [
+  'name',
+  'model_name',
+  'provider',
+  'modalities',
+  'use_custom_pricing',
+  'input_cost_per_1m_tokens',
+  'output_cost_per_1m_tokens',
+  'cached_input_cost_per_1m_tokens',
+];
+
+function mapModelListItem(m: Record<string, unknown>): AIModel {
+  return {
+    name: m.name as string,
+    model_name: (m.model_name as string) || (m.name as string),
+    provider: m.provider as string,
+    modalities: m.modalities as string | undefined,
+    use_custom_pricing: m.use_custom_pricing as number | undefined,
+    input_cost_per_1m_tokens: m.input_cost_per_1m_tokens as number | null | undefined,
+    output_cost_per_1m_tokens: m.output_cost_per_1m_tokens as number | null | undefined,
+    cached_input_cost_per_1m_tokens: m.cached_input_cost_per_1m_tokens as number | null | undefined,
+  };
+}
+
+/**
+ * Build a provider doc name → display name map from provider list
+ */
+export function buildProviderNameMap(providers: AIProvider[]): Map<string, string> {
+  return new Map(providers.map((p) => [p.name, p.provider_name || p.name]));
+}
+
+export function resolveProviderName(
+  providerId: string | undefined,
+  providerMap: Map<string, string>,
+): string {
+  if (!providerId) return 'Unknown';
+  return providerMap.get(providerId) || providerId;
+}
+
 export interface GetProvidersParams {
   page?: number;
   limit?: number;
@@ -54,12 +93,13 @@ export async function getProviders(
     // Backward compatibility: if no params, return array (old API)
     if (!params) {
       const providers = await db.getDocList(doctype['AI Provider'], {
-        fields: ['name', 'provider_name'],
+        fields: ['name', 'provider_name', 'provider_brand'],
         limit: 1000,
       });
       return providers.map((p: any) => ({
         name: p.name,
         provider_name: p.provider_name || p.name,
+        provider_brand: p.provider_brand,
       })) as AIProvider[];
     }
 
@@ -80,7 +120,7 @@ export async function getProviders(
 
     // Fetch data
     const providers = await db.getDocList(doctype['AI Provider'], {
-      fields: ['name', 'provider_name'],
+      fields: ['name', 'provider_name', 'provider_brand'],
       filters: filters.length > 0 ? (filters as any) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }), // Only include if start > 0
@@ -90,6 +130,7 @@ export async function getProviders(
     const mappedProviders = providers.map((p: any) => ({
       name: p.name,
       provider_name: p.provider_name || p.name,
+      provider_brand: p.provider_brand,
     })) as AIProvider[];
 
     const hasMore = mappedProviders.length > limit;
@@ -124,8 +165,7 @@ export interface AIProviderDoc {
   name: string;
   provider_name: string;
   api_key?: string;
-  slug?: string;
-  chef?: string;
+  provider_brand?: string;
 }
 
 /**
@@ -180,15 +220,11 @@ export async function getModels(
     if (typeof params === 'string' || !params) {
       const providerId = typeof params === 'string' ? params : undefined;
       const models = await db.getDocList(doctype['AI Model'], {
-        fields: ['name', 'model_name', 'provider'],
+        fields: MODEL_LIST_FIELDS,
         filters: providerId ? [['provider', '=', providerId]] : undefined,
         limit: 1000,
       });
-      return models.map((m: any) => ({
-        name: m.name,
-        model_name: m.model_name || m.name,
-        provider: m.provider,
-      })) as AIModel[];
+      return models.map((m: Record<string, unknown>) => mapModelListItem(m));
     }
 
     const {
@@ -212,18 +248,14 @@ export async function getModels(
 
     // Fetch data
     const models = await db.getDocList(doctype['AI Model'], {
-      fields: ['name', 'model_name', 'provider'],
+      fields: MODEL_LIST_FIELDS,
       filters: filters.length > 0 ? (filters as any) : undefined,
       limit: limit + 1,
       ...(start > 0 && { limit_start: start }),
       orderBy: { field: 'modified', order: 'desc' },
     });
 
-    const mappedModels = models.map((m: any) => ({
-      name: m.name,
-      model_name: m.model_name || m.name,
-      provider: m.provider,
-    })) as AIModel[];
+    const mappedModels = models.map((m: Record<string, unknown>) => mapModelListItem(m));
 
     const hasMore = mappedModels.length > limit;
     const items = hasMore ? mappedModels.slice(0, limit) : mappedModels;
@@ -258,6 +290,10 @@ export interface AIModelDoc {
   model_name: string;
   provider: string;
   modalities?: string;
+  use_custom_pricing?: number;
+  input_cost_per_1m_tokens?: number | null;
+  output_cost_per_1m_tokens?: number | null;
+  cached_input_cost_per_1m_tokens?: number | null;
 }
 
 /**

@@ -1,3 +1,5 @@
+from . import __version__ as app_version
+
 app_name = "huf"
 app_title = "Huf"
 app_publisher = "Tridz Technologies Pvt Ltd"
@@ -68,13 +70,13 @@ website_route_rules = [
         "from_route": "/huf/docs/<path:app_path>", 
         "to_route": "huf/docs/<path:app_path>"
     },
+    {"from_route": "/mcp-oauth-callback", "to_route": "mcp_oauth_callback"},
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
 ]
 
 # Register custom page renderer for SSE streaming and docs
 page_renderer = [
-    "huf.ai.agent_stream_renderer.AgentStreamRenderer",
-    "huf.www.docs_renderer.DocsRenderer",
+    "huf.ai.agent_stream_renderer.AgentStreamRenderer"
 ]
 
 
@@ -106,7 +108,10 @@ page_renderer = [
 
 # before_install = "huf.install.before_install"
 after_install = "huf.install.after_install"
-after_app_install = "huf.install.setup_desktop_icon_as_workspace"
+after_app_install = [
+    "huf.install.setup_desktop_icon_as_workspace",
+    "huf.ai.app_seeding.seeder.on_app_installed"
+]
 after_migrate = "huf.install.after_migrate"
 
 # Uninstallation
@@ -233,7 +238,8 @@ scheduler_events = {
         ]
     },
     "hourly": [
-        "huf.ai.mcp_client.auto_sync_mcp_server_tools"
+        "huf.ai.mcp_client.auto_sync_mcp_server_tools",
+        "huf.ai.mcp_oauth.auto_refresh_oauth_tokens"
     ]
 }
 
