@@ -113,7 +113,7 @@ class RedisBackend(KnowledgeBackend):
 		schema = IndexSchema.from_dict({
 			"index": {
 				"name": index_name,
-				"prefix": f"{index_prefix}/vector",
+				"prefix": f"{index_name}/vector",
 				"key_separator": "_",
 			},
 			"fields": [
