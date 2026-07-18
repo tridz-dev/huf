@@ -5,7 +5,7 @@
 
 import re
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import frappe
 from frappe import _
@@ -18,6 +18,7 @@ try:
 	from llama_index.core.vector_stores.types import ExactMatchFilter, MetadataFilters
 	from llama_index.vector_stores.postgres import PGVectorStore
 	from sqlalchemy import create_engine, text
+
 	LLAMAINDEX_PGVECTOR_AVAILABLE = True
 except ImportError:
 	LLAMAINDEX_PGVECTOR_AVAILABLE = False
@@ -43,11 +44,13 @@ class PGVectorBackend(KnowledgeBackend):
 		self.storage_context = None
 		self._initialized = False
 
-	def initialize(self, knowledge_source: str, config: Dict[str, Any]) -> None:
+	def initialize(self, knowledge_source: str, config: dict[str, Any]) -> None:
 		if not LLAMAINDEX_PGVECTOR_AVAILABLE:
 			frappe.throw(
-				_("llama-index-vector-stores-postgres is required for pgvector knowledge sources. "
-				  "Install it with: pip install llama-index-vector-stores-postgres")
+				_(
+					"llama-index-vector-stores-postgres is required for pgvector knowledge sources. "
+					"Install it with: pip install llama-index-vector-stores-postgres"
+				)
 			)
 
 		self.knowledge_source = knowledge_source
@@ -68,7 +71,7 @@ class PGVectorBackend(KnowledgeBackend):
 		if self.dimension <= 0:
 			frappe.throw(_("PGVector vector dimension must be positive"))
 
-	def _get_connection_params(self) -> Dict[str, Any]:
+	def _get_connection_params(self) -> dict[str, Any]:
 		params = {
 			"table_name": self.table_name,
 			"embed_dim": self.dimension,
@@ -86,12 +89,14 @@ class PGVectorBackend(KnowledgeBackend):
 		params.update(self._get_database_params())
 		return params
 
-	def _get_database_params(self) -> Dict[str, Any]:
+	def _get_database_params(self) -> dict[str, Any]:
 		if self.connection_mode == "Site PostgreSQL":
 			if frappe.conf.db_type != "postgres":
 				frappe.throw(
-					_("Site PostgreSQL mode requires a PostgreSQL-backed Frappe site. "
-					  "Use External PostgreSQL for MariaDB-backed sites.")
+					_(
+						"Site PostgreSQL mode requires a PostgreSQL-backed Frappe site. "
+						"Use External PostgreSQL for MariaDB-backed sites."
+					)
 				)
 			return {
 				"host": frappe.conf.db_host or "localhost",
@@ -134,12 +139,16 @@ class PGVectorBackend(KnowledgeBackend):
 				conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 		except Exception as exc:
 			frappe.throw(
-				_("Unable to ensure PostgreSQL pgvector extension. "
-				  "Create it manually with `CREATE EXTENSION IF NOT EXISTS vector;` "
-				  "or grant the database user permission. Error: {0}").format(str(exc))
+				_(
+					"Unable to ensure PostgreSQL pgvector extension. "
+					"Create it manually with `CREATE EXTENSION IF NOT EXISTS vector;` "
+					"or grant the database user permission. Error: {0}"
+				).format(str(exc))
 			)
 
-	def _count_by_filters(self, extra_where: str = "", params: Optional[Dict[str, Any]] = None) -> Tuple[int, int]:
+	def _count_by_filters(
+		self, extra_where: str = "", params: dict[str, Any] | None = None
+	) -> tuple[int, int]:
 		params = params or {}
 		query = f"""
 			SELECT COUNT(*) AS chunk_count,
@@ -162,10 +171,10 @@ class PGVectorBackend(KnowledgeBackend):
 				).fetchone()
 				return (int(row[0] or 0), int(row[1] or 0))
 		except Exception as exc:
-			frappe.logger().warning(f"PGVector count failed for {self.knowledge_source}: {str(exc)}")
+			frappe.logger().warning(f"PGVector count failed for {self.knowledge_source}: {exc!s}")
 			return (0, 0)
 
-	def add_chunks(self, chunks: List[Dict[str, Any]]) -> int:
+	def add_chunks(self, chunks: list[dict[str, Any]]) -> int:
 		if not chunks:
 			return 0
 		if not self._initialized:
@@ -183,7 +192,7 @@ class PGVectorBackend(KnowledgeBackend):
 		)
 
 		documents = []
-		for chunk, embedding in zip(chunks, embeddings):
+		for chunk, embedding in zip(chunks, embeddings, strict=True):
 			chunk_id = chunk.get("chunk_id") or str(uuid.uuid4())
 			documents.append(
 				Document(
@@ -218,15 +227,17 @@ class PGVectorBackend(KnowledgeBackend):
 			extra_where="AND metadata_->>'input_id' = :input_id",
 			params={"input_id": input_id},
 		)
-		filters = MetadataFilters(filters=[
-			ExactMatchFilter(key="site_name", value=frappe.local.site),
-			ExactMatchFilter(key="knowledge_source", value=self.knowledge_source),
-			ExactMatchFilter(key="input_id", value=input_id),
-		])
+		filters = MetadataFilters(
+			filters=[
+				ExactMatchFilter(key="site_name", value=frappe.local.site),
+				ExactMatchFilter(key="knowledge_source", value=self.knowledge_source),
+				ExactMatchFilter(key="input_id", value=input_id),
+			]
+		)
 		try:
 			self.vector_store.delete_nodes(filters=filters)
 		except Exception as exc:
-			frappe.logger().warning(f"PGVector delete_chunks error for {input_id}: {str(exc)}")
+			frappe.logger().warning(f"PGVector delete_chunks error for {input_id}: {exc!s}")
 			return 0
 		return count_before
 
@@ -234,8 +245,8 @@ class PGVectorBackend(KnowledgeBackend):
 		self,
 		query: str,
 		top_k: int = 5,
-		filters: Optional[Dict[str, Any]] = None,
-	) -> List[ChunkResult]:
+		filters: dict[str, Any] | None = None,
+	) -> list[ChunkResult]:
 		if not query or not query.strip():
 			return []
 		if not self._initialized:
@@ -256,10 +267,7 @@ class PGVectorBackend(KnowledgeBackend):
 			ExactMatchFilter(key="knowledge_source", value=self.knowledge_source),
 		]
 		if filters:
-			llama_filters.extend(
-				ExactMatchFilter(key=key, value=value)
-				for key, value in filters.items()
-			)
+			llama_filters.extend(ExactMatchFilter(key=key, value=value) for key, value in filters.items())
 
 		query_obj = VectorStoreQuery(
 			query_embedding=query_embedding,
@@ -284,9 +292,11 @@ class PGVectorBackend(KnowledgeBackend):
 						title=metadata.get("source_title"),
 						score=score,
 						source=metadata.get("input_id"),
-						metadata={k: v for k, v in metadata.items() if k not in [
-							"chunk_id", "source_title", "knowledge_source", "site_name"
-						]},
+						metadata={
+							k: v
+							for k, v in metadata.items()
+							if k not in ["chunk_id", "source_title", "knowledge_source", "site_name"]
+						},
 					)
 				)
 
@@ -296,17 +306,19 @@ class PGVectorBackend(KnowledgeBackend):
 		if not self._initialized:
 			raise RuntimeError("Backend not initialized. Call initialize() first.")
 
-		filters = MetadataFilters(filters=[
-			ExactMatchFilter(key="site_name", value=frappe.local.site),
-			ExactMatchFilter(key="knowledge_source", value=self.knowledge_source),
-		])
+		filters = MetadataFilters(
+			filters=[
+				ExactMatchFilter(key="site_name", value=frappe.local.site),
+				ExactMatchFilter(key="knowledge_source", value=self.knowledge_source),
+			]
+		)
 		try:
 			self.vector_store.delete_nodes(filters=filters)
 		except Exception as exc:
-			frappe.logger().warning(f"PGVector clear error for {self.knowledge_source}: {str(exc)}")
+			frappe.logger().warning(f"PGVector clear error for {self.knowledge_source}: {exc!s}")
 			raise
 
-	def get_stats(self) -> Dict[str, Any]:
+	def get_stats(self) -> dict[str, Any]:
 		chunk_count, input_count = self._count_by_filters()
 		return {
 			"backend_type": "pgvector",
@@ -319,7 +331,7 @@ class PGVectorBackend(KnowledgeBackend):
 			"size_bytes": 0,
 		}
 
-	def health_check(self) -> Tuple[bool, str]:
+	def health_check(self) -> tuple[bool, str]:
 		try:
 			if not self._initialized:
 				return (False, "Backend not initialized")

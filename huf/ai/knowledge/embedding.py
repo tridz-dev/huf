@@ -5,9 +5,9 @@ Provides model-agnostic embedding functions using LiteLLM's unified API.
 Supports OpenAI, Gemini, Cohere, HuggingFace, and any LiteLLM-compatible provider.
 """
 
-import frappe
-from typing import List, Dict, Any, Optional
+from typing import Any
 
+import frappe
 
 # Maximum texts per batch request (most APIs cap at 2048, we use conservative default)
 DEFAULT_BATCH_SIZE = 100
@@ -16,9 +16,9 @@ DEFAULT_BATCH_SIZE = 100
 def get_embedding(
 	text: str,
 	model: str,
-	api_key: Optional[str] = None,
-	api_base: Optional[str] = None,
-) -> List[float]:
+	api_key: str | None = None,
+	api_base: str | None = None,
+) -> list[float]:
 	"""
 	Get embedding vector for a single text string.
 
@@ -50,12 +50,12 @@ def get_embedding(
 
 
 def get_embeddings(
-	texts: List[str],
+	texts: list[str],
 	model: str,
-	api_key: Optional[str] = None,
-	api_base: Optional[str] = None,
+	api_key: str | None = None,
+	api_base: str | None = None,
 	batch_size: int = DEFAULT_BATCH_SIZE,
-) -> List[List[float]]:
+) -> list[list[float]]:
 	"""
 	Get embedding vectors for multiple texts with batched requests.
 
@@ -118,7 +118,7 @@ def get_embeddings(
 	return all_embeddings
 
 
-def resolve_embedding_config(knowledge_source: str) -> Dict[str, Any]:
+def resolve_embedding_config(knowledge_source: str) -> dict[str, Any]:
 	"""
 	Resolve embedding configuration from a Knowledge Source document.
 

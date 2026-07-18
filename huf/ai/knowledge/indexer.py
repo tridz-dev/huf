@@ -1,13 +1,15 @@
 """Knowledge ingestion and indexing pipeline."""
 
 import os
+
 import frappe
+import requests
 from frappe import _
 from frappe.utils import now_datetime
 
 from .backends import get_backend
-from .extractors import TextExtractor, ExtractedText
 from .chunkers.sentence import chunk_text
+from .extractors import ExtractedText, TextExtractor
 
 
 def _build_backend_config(source) -> dict:
@@ -32,26 +34,31 @@ def _build_backend_config(source) -> dict:
 			config["host"] = getattr(source, "chroma_host", None) or "localhost"
 			config["port"] = int(getattr(source, "chroma_port", None) or 8000)
 			config["ssl"] = bool(getattr(source, "chroma_ssl", False))
-			
+
 		else:
 			from frappe.utils import get_files_path
+
 			files_path = get_files_path(is_private=True)
 			safe_name = frappe.scrub(source.name)
 			config["persist_directory"] = os.path.join(files_path, "knowledge", f"{safe_name}_chroma")
 
 	if source.knowledge_type == "pgvector":
-		config.update({
-			"connection_mode": getattr(source, "pgvector_connection_mode", None) or "External PostgreSQL",
-			"table_name": getattr(source, "pgvector_table_name", None) or "huf_knowledge_vectors",
-			"distance_metric": getattr(source, "pgvector_distance_metric", None) or "cosine",
-			"index_type": getattr(source, "pgvector_index_type", None) or "hnsw",
-			"host": getattr(source, "pgvector_host", None) or "localhost",
-			"port": int(getattr(source, "pgvector_port", None) or 5432),
-			"database": getattr(source, "pgvector_database", None),
-			"user": getattr(source, "pgvector_user", None),
-			"password": source.get_password("pgvector_password") if getattr(source, "pgvector_password", None) else None,
-			"sslmode": getattr(source, "pgvector_sslmode", None) or "prefer",
-		})
+		config.update(
+			{
+				"connection_mode": getattr(source, "pgvector_connection_mode", None) or "External PostgreSQL",
+				"table_name": getattr(source, "pgvector_table_name", None) or "huf_knowledge_vectors",
+				"distance_metric": getattr(source, "pgvector_distance_metric", None) or "cosine",
+				"index_type": getattr(source, "pgvector_index_type", None) or "hnsw",
+				"host": getattr(source, "pgvector_host", None) or "localhost",
+				"port": int(getattr(source, "pgvector_port", None) or 5432),
+				"database": getattr(source, "pgvector_database", None),
+				"user": getattr(source, "pgvector_user", None),
+				"password": source.get_password("pgvector_password")
+				if getattr(source, "pgvector_password", None)
+				else None,
+				"sslmode": getattr(source, "pgvector_sslmode", None) or "prefer",
+			}
+		)
 
 	return config
 
@@ -59,65 +66,67 @@ def _build_backend_config(source) -> dict:
 def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> dict:
 	"""
 	Process a single knowledge input and add to index.
-	
+
 	This function is designed to run in a background job.
 	"""
 	doc = frappe.get_doc("Knowledge Input", knowledge_input)
 	source = frappe.get_doc("Knowledge Source", doc.knowledge_source)
-	
+
 	try:
 		# Update status
 		doc.status = "Processing"
 		doc.save(ignore_permissions=True)
 		frappe.db.commit()
-		
+
 		# Acquire lock for this knowledge source
 		lock_key = f"knowledge_index_{source.name}"
 		if not skip_lock and not frappe.cache().set(lock_key, 1, ex=300, nx=True):
-			raise Exception(_("Another indexing operation is in progress"))
-		
+			frappe.throw(_("Another indexing operation is in progress"))
+
 		try:
 			# Update source status
 			if source.status != "Indexing" and source.status != "Rebuilding":
 				source.status = "Indexing"
 				source.save(ignore_permissions=True)
 				frappe.db.commit()
-			
+
 			# Extract text
 			extracted = _extract_text(doc)
-			
+
 			# Chunk text
 			chunks = chunk_text(
 				text=extracted.text,
 				chunk_size=source.chunk_size or 512,
 				chunk_overlap=source.chunk_overlap or 50,
 			)
-			
+
 			# Prepare chunk data
 			chunk_data = []
 			for chunk in chunks:
-				chunk_data.append({
-					"input_id": doc.name,
-					"input_type": doc.input_type,
-					"source_title": extracted.title or doc.file_name,
-					"chunk_index": chunk.chunk_index,
-					"text": chunk.text,
-					"char_start": chunk.char_start,
-					"char_end": chunk.char_end,
-					"metadata": extracted.metadata or {},
-				})
-			
+				chunk_data.append(
+					{
+						"input_id": doc.name,
+						"input_type": doc.input_type,
+						"source_title": extracted.title or doc.file_name,
+						"chunk_index": chunk.chunk_index,
+						"text": chunk.text,
+						"char_start": chunk.char_start,
+						"char_end": chunk.char_end,
+						"metadata": extracted.metadata or {},
+					}
+				)
+
 			# Initialize backend and add chunks
 			backend_class = get_backend(source.knowledge_type)
 			backend = backend_class()
 			backend.initialize(source.name, _build_backend_config(source))
-			
+
 			# Delete existing chunks for this input (for reprocessing)
 			backend.delete_chunks(doc.name)
-			
+
 			# Add new chunks
 			chunks_added = backend.add_chunks(chunk_data)
-			
+
 			# Update input status
 			doc.status = "Indexed"
 			doc.chunks_created = chunks_added
@@ -125,48 +134,45 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 			doc.processed_at = now_datetime()
 			doc.error_message = None
 			doc.save(ignore_permissions=True)
-			
+
 			# Update source stats
 			update_source_stats(source, backend)
-			
+
 			# Update source status to Ready if not rebuilding
 			if source.status != "Rebuilding":
 				source.status = "Ready"
 				source.last_indexed_at = now_datetime()
 				source.save(ignore_permissions=True)
-			
+
 			frappe.db.commit()
-			
+
 			return {
 				"status": "success",
 				"chunks_created": chunks_added,
 				"character_count": extracted.character_count,
 			}
-			
+
 		finally:
 			if not skip_lock:
 				frappe.cache().delete(lock_key)
-			
+
 	except Exception as e:
 		frappe.db.rollback()
-		
+
 		doc.reload()
 		doc.status = "Error"
 		doc.error_message = str(e)[:500]
 		doc.save(ignore_permissions=True)
-		
+
 		source.reload()
 		source.status = "Error"
 		source.error_message = str(e)[:500]
 		source.save(ignore_permissions=True)
-		
+
 		frappe.db.commit()
-		
-		frappe.log_error(
-			f"Knowledge Input Processing Error: {doc.name}",
-			frappe.get_traceback()
-		)
-		
+
+		frappe.log_error(f"Knowledge Input Processing Error: {doc.name}", frappe.get_traceback())
+
 		return {
 			"status": "error",
 			"error": str(e),
@@ -176,49 +182,50 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 def rebuild_knowledge_index(knowledge_source: str) -> dict:
 	"""
 	Rebuild entire index for a knowledge source.
-	
+
 	This function is designed to run in a background job.
 	"""
 	source = frappe.get_doc("Knowledge Source", knowledge_source)
-	
+
 	try:
 		# Acquire exclusive lock
 		lock_key = f"knowledge_index_{source.name}"
 		if not frappe.cache().set(lock_key, 1, ex=600, nx=True):
-			raise Exception(_("Another indexing operation is in progress"))
-		
+			frappe.throw(_("Another indexing operation is in progress"))
+
 		try:
 			source.status = "Rebuilding"
 			source.save(ignore_permissions=True)
 			frappe.db.commit()
-			
+
 			# Initialize backend and clear
 			backend_class = get_backend(source.knowledge_type)
 			backend = backend_class()
 			backend.initialize(source.name, _build_backend_config(source))
 			backend.clear()
-			
+
 			# Reset all input statuses
-			frappe.db.sql("""
+			frappe.db.sql(
+				"""
 				UPDATE `tabKnowledge Input`
 				SET status = 'Pending', chunks_created = 0
 				WHERE knowledge_source = %s
-			""", source.name)
+			""",
+				source.name,
+			)
 			frappe.db.commit()
-			
+
 			# Process each input
 			inputs = frappe.get_all(
-				"Knowledge Input",
-				filters={"knowledge_source": source.name},
-				pluck="name"
+				"Knowledge Input", filters={"knowledge_source": source.name}, pluck="name"
 			)
-			
+
 			total_chunks = 0
 			for input_name in inputs:
 				result = process_knowledge_input(input_name, skip_lock=True)
 				if result.get("status") == "success":
 					total_chunks += result.get("chunks_created", 0)
-			
+
 			# Update source status
 			update_source_stats(source, backend)
 			source.reload()
@@ -226,30 +233,27 @@ def rebuild_knowledge_index(knowledge_source: str) -> dict:
 			source.last_indexed_at = now_datetime()
 			source.save(ignore_permissions=True)
 			frappe.db.commit()
-			
+
 			return {
 				"status": "success",
 				"total_chunks": total_chunks,
 				"inputs_processed": len(inputs),
 			}
-			
+
 		finally:
 			frappe.cache().delete(lock_key)
-			
+
 	except Exception as e:
 		frappe.db.rollback()
-		
+
 		source.reload()
 		source.status = "Error"
 		source.error_message = str(e)[:500]
 		source.save(ignore_permissions=True)
 		frappe.db.commit()
-		
-		frappe.log_error(
-			f"Knowledge Index Rebuild Error: {source.name}",
-			frappe.get_traceback()
-		)
-		
+
+		frappe.log_error(f"Knowledge Index Rebuild Error: {source.name}", frappe.get_traceback())
+
 		return {
 			"status": "error",
 			"error": str(e),
@@ -264,26 +268,25 @@ def _extract_text(doc) -> ExtractedText:
 			title="Pasted Text",
 			character_count=len(doc.text or ""),
 		)
-	
+
 	elif doc.input_type == "File":
 		# Get file path
 		file_doc = frappe.get_doc("File", {"file_url": doc.file})
 		file_path = file_doc.get_full_path()
-		
+
 		# Get appropriate extractor
 		extractor = TextExtractor.get_extractor(doc.file_type)
 		return extractor.extract(file_path)
-	
+
 	elif doc.input_type == "URL":
 		# Fetch URL content
-		import requests
 		response = requests.get(doc.url, timeout=30)
 		response.raise_for_status()
-		
+
 		# Extract text from HTML
 		extractor = TextExtractor.get_extractor("html")
 		return extractor.extract_from_content(response.text, doc.url)
-	
+
 	else:
 		frappe.throw(_("Unsupported input type: {0}").format(doc.input_type))
 
@@ -297,4 +300,4 @@ def update_source_stats(source, backend):
 		source.index_size_bytes = stats.get("size_bytes", 0)
 		source.save(ignore_permissions=True)
 	except Exception as e:
-		frappe.logger().warning(f"Failed to update knowledge source stats: {str(e)}")
+		frappe.logger().warning(f"Failed to update knowledge source stats: {e!s}")

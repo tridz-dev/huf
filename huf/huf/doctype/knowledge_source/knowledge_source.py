@@ -4,9 +4,8 @@
 import re
 
 import frappe
-from frappe.model.document import Document
 from frappe import _
-
+from frappe.model.document import Document
 
 VECTOR_KNOWLEDGE_TYPES = {"sqlite_vec", "chroma", "pgvector"}
 PGVECTOR_DISTANCE_METRICS = {"cosine", "l2", "inner_product"}
@@ -23,7 +22,7 @@ class KnowledgeSource(Document):
 		self.validate_vector_settings()
 		self.validate_pgvector_settings()
 		self._warn_if_embedding_changed()
-		
+
 	def set_defaults(self):
 		if not self.chunk_size:
 			self.chunk_size = 512
@@ -61,9 +60,11 @@ class KnowledgeSource(Document):
 
 			if not check_sqlite_vec_available():
 				frappe.throw(
-					_("sqlite_vec requires loadable SQLite extensions. "
-					  "Install pysqlite3-binary: pip install pysqlite3-binary. "
-					  "Or use sqlite_fts for keyword search.")
+					_(
+						"sqlite_vec requires loadable SQLite extensions. "
+						"Install pysqlite3-binary: pip install pysqlite3-binary. "
+						"Or use sqlite_fts for keyword search."
+					)
 				)
 
 	def validate_pgvector_settings(self):
@@ -94,9 +95,7 @@ class KnowledgeSource(Document):
 					missing_fields.append(label)
 
 			if missing_fields:
-				frappe.throw(
-					_("Missing PGVector connection fields: {0}").format(", ".join(missing_fields))
-				)
+				frappe.throw(_("Missing PGVector connection fields: {0}").format(", ".join(missing_fields)))
 
 			if int(self.pgvector_port or 0) <= 0:
 				frappe.throw(_("PGVector Port must be a positive integer"))
@@ -104,8 +103,10 @@ class KnowledgeSource(Document):
 		elif self.pgvector_connection_mode == "Site PostgreSQL":
 			if frappe.conf.db_type != "postgres":
 				frappe.throw(
-					_("Site PostgreSQL mode requires the Frappe site database to be PostgreSQL. "
-					  "Use External PostgreSQL for MariaDB-backed sites.")
+					_(
+						"Site PostgreSQL mode requires the Frappe site database to be PostgreSQL. "
+						"Use External PostgreSQL for MariaDB-backed sites."
+					)
 				)
 		else:
 			frappe.throw(_("Invalid PGVector Connection Mode"))
@@ -130,10 +131,10 @@ class KnowledgeSource(Document):
 				title=_("Embedding Provider Changed"),
 				indicator="orange",
 			)
-	
+
 	def before_save(self):
 		self.set_defaults()
-	
+
 	def on_trash(self):
 		# Delete SQLite artifact file
 		if self.sqlite_file:
@@ -142,7 +143,7 @@ class KnowledgeSource(Document):
 				file_doc.delete(ignore_permissions=True)
 			except Exception:
 				pass
-		
+
 		# Delete all related inputs
 		frappe.db.delete("Knowledge Input", {"knowledge_source": self.name})
 
@@ -151,11 +152,11 @@ class KnowledgeSource(Document):
 def rebuild_index(knowledge_source: str):
 	"""Trigger a full index rebuild for the knowledge source."""
 	from huf.ai.knowledge.indexer import rebuild_knowledge_index
-	
+
 	doc = frappe.get_doc("Knowledge Source", knowledge_source)
 	doc.status = "Rebuilding"
 	doc.save()
-	
+
 	frappe.enqueue(
 		rebuild_knowledge_index,
 		queue="long",
@@ -163,7 +164,7 @@ def rebuild_index(knowledge_source: str):
 		job_id=f"rebuild_index_{knowledge_source}",
 		deduplicate=True,
 	)
-	
+
 	return {"status": "queued", "message": _("Index rebuild has been queued")}
 
 
@@ -171,13 +172,9 @@ def rebuild_index(knowledge_source: str):
 def test_search(knowledge_source: str, query: str, top_k: int = 5):
 	"""Test search against a knowledge source."""
 	from huf.ai.knowledge.retriever import knowledge_search
-	
-	results = knowledge_search(
-		query=query,
-		knowledge_source=knowledge_source,
-		top_k=int(top_k)
-	)
-	
+
+	results = knowledge_search(query=query, knowledge_source=knowledge_source, top_k=int(top_k))
+
 	return results
 
 
@@ -192,8 +189,10 @@ def test_connection(knowledge_source: str):
 	if doc.knowledge_type == "pgvector":
 		try:
 			from huf.ai.knowledge.backends.pgvector_backend import PGVectorBackend
+
 			backend = PGVectorBackend()
 			from huf.ai.knowledge.indexer import _build_backend_config
+
 			config = _build_backend_config(doc)
 			backend.initialize(knowledge_source, config)
 			stats = backend.get_stats()
@@ -205,6 +204,7 @@ def test_connection(knowledge_source: str):
 	if doc.embedding_model:
 		try:
 			from huf.ai.knowledge.embedding import get_embedding, resolve_embedding_config
+
 			config = resolve_embedding_config(knowledge_source)
 			embedding = get_embedding(
 				"connection test",
