@@ -7,11 +7,12 @@ export const knowledgeTypes = [
   { label: 'SQLite FTS', value: 'sqlite_fts' },
   { label: 'SQLite Vec', value: 'sqlite_vec' },
   { label: 'ChromaDB', value: 'chroma' },
+  { label: 'Redis Vector', value: 'redis' },
 ] as const;
 
 export type KnowledgeTypeOption = (typeof knowledgeTypes)[number]['value'];
 
-export const VECTOR_KNOWLEDGE_TYPES = ['sqlite_vec', 'chroma'] as const;
+export const VECTOR_KNOWLEDGE_TYPES = ['sqlite_vec', 'chroma', 'redis'] as const;
 
 export function isVectorKnowledgeType(type: string): boolean {
   return (VECTOR_KNOWLEDGE_TYPES as readonly string[]).includes(type);
@@ -21,6 +22,7 @@ export const knowledgeTypeLabels: Record<string, string> = {
   sqlite_fts: 'FTS',
   sqlite_vec: 'Vec',
   chroma: 'Chroma',
+  redis: 'Redis',
 };
 
 export const chromaModes = [

@@ -48,6 +48,11 @@ function mapDocToFormValues(doc: Partial<KnowledgeSourceDoc>): KnowledgeSourceFo
     chroma_host: doc.chroma_host || 'localhost',
     chroma_port: doc.chroma_port ?? 8000,
     chroma_ssl: doc.chroma_ssl === 1,
+    redis_host: doc.redis_host || 'localhost',
+    redis_port: doc.redis_port ?? 6379,
+    redis_username: doc.redis_username || '',
+    redis_password: doc.redis_password || '',
+    redis_index_prefix: doc.redis_index_prefix || 'huf',
   };
 }
 
@@ -77,6 +82,11 @@ function KnowledgeSourceFormPage() {
         'chroma_host',
         'chroma_port',
         'chroma_ssl',
+        'redis_host',
+        'redis_port',
+        'redis_username',
+        'redis_password',
+        'redis_index_prefix',
       ],
       default: true,
       disabled: false,
@@ -224,6 +234,11 @@ function KnowledgeSourceFormPage() {
         chroma_host: values.chroma_host || '',
         chroma_port: values.chroma_port ?? 8000,
         chroma_ssl: values.chroma_ssl ? 1 : 0,
+        redis_host: values.redis_host || '',
+        redis_port: values.redis_port ?? 6379,
+        redis_username: values.redis_username || '',
+        redis_password: values.redis_password || '',
+        redis_index_prefix: values.redis_index_prefix || '',
       };
 
       if (isNew) {

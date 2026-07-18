@@ -327,6 +327,114 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
         </Card>
       )}
 
+      {watchKnowledgeType === 'redis' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Redis Connection</CardTitle>
+            <CardDescription>Configure how this knowledge source connects to Redis</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="redis_host"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Redis Host</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="localhost"
+                      {...field}
+                      value={field.value ?? ''}
+                    />
+                  </FormControl>
+                  <FormDescription>Hostname or IP of the Redis server</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="redis_port"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Redis Port</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      placeholder="6379"
+                      {...field}
+                      value={field.value ?? 6379}
+                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                    />
+                  </FormControl>
+                  <FormDescription>Port of the Redis server</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="redis_username"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Redis Username</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="default"
+                      {...field}
+                      value={field.value ?? ''}
+                    />
+                  </FormControl>
+                  <FormDescription>Optional Redis ACL username</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="redis_password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Redis Password</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      {...field}
+                      value={field.value ?? ''}
+                    />
+                  </FormControl>
+                  <FormDescription>Optional Redis password</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="redis_index_prefix"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Redis Index Prefix</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="huf"
+                      {...field}
+                      value={field.value ?? ''}
+                    />
+                  </FormControl>
+                  <FormDescription>Prefix used for the Redis search index and keys</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Chunking Settings</CardTitle>

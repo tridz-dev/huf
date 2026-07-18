@@ -106,6 +106,20 @@ export function StatusTab({ source }: StatusTabProps) {
               </div>
             )}
 
+            {source.knowledge_type === 'redis' && (
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-steel">Redis Connection</p>
+                <p className="text-sm font-mono text-xs">
+                  Redis {source.redis_host || 'localhost'}:{source.redis_port ?? 6379}
+                </p>
+                {source.redis_index_prefix && (
+                  <p className="text-sm font-mono text-xs">
+                    Prefix: {source.redis_index_prefix}
+                  </p>
+                )}
+              </div>
+            )}
+
             {source.sqlite_file_path && source.knowledge_type !== 'chroma' && (
               <div className="space-y-1">
                 <p className="text-sm font-medium text-steel">SQLite File</p>

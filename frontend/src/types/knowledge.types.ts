@@ -1,4 +1,4 @@
-export type KnowledgeType = 'sqlite_fts' | 'sqlite_vec' | 'chroma';
+export type KnowledgeType = 'sqlite_fts' | 'sqlite_vec' | 'chroma' | 'redis';
 export type ChromaMode = 'File' | 'Server';
 export type KnowledgeScope = 'Site' | 'Workspace' | 'Agent' | 'Global';
 export type KnowledgeSourceStatus = 'Pending' | 'Indexing' | 'Ready' | 'Error' | 'Rebuilding';
@@ -38,6 +38,13 @@ export interface KnowledgeSourceDoc {
   chroma_host?: string | null;
   chroma_port?: number | null;
   chroma_ssl?: number | null;
+
+  // Redis connection settings (redis only)
+  redis_host?: string | null;
+  redis_port?: number | null;
+  redis_username?: string | null;
+  redis_password?: string | null;
+  redis_index_prefix?: string | null;
 
   // Storage
   storage_mode: KnowledgeStorageMode;
