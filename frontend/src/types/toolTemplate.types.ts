@@ -41,4 +41,5 @@ export type ToolFormData = {
 
   // Optional UI-only metadata
   usedBy?: string[];
+  auto_add_to_agent?: boolean;
 };

@@ -1,0 +1,10 @@
+{
+  "title": "Demo Assistant Prompt",
+  "slug": "demo-assistant-prompt",
+  "description": "A simple reusable prompt for a helpful AI assistant.",
+  "is_active": 1,
+  "is_system": 0,
+  "visibility": "Public",
+  "tags": "demo, assistant",
+  "prompt_body": "You are a helpful, concise assistant. Answer the user's questions clearly and accurately. If you don't know something, say so."
+}

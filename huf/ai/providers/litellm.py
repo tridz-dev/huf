@@ -16,16 +16,23 @@ Features:
 """
 
 import asyncio
+import base64
 import json
 import os
 from types import SimpleNamespace
 
 import frappe
 import litellm
-from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, completion_cost, ContextWindowExceededError
+from litellm import InternalServerError, RateLimitError, APIError, BadRequestError, ContextWindowExceededError
 from litellm.utils import trim_messages
 from huf.ai.tool_serializer import serialize_tools
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
+from huf.ai.cost_calculator import calculate_cost
+from huf.ai.conversation_manager import repair_message_sequence
+
+
+# Default request timeout for LiteLLM completion calls (seconds)
+_DEFAULT_LITELLM_TIMEOUT = 180
 
 
 class SimpleResult:
@@ -41,6 +48,113 @@ class SimpleResult:
 # High-performance in-memory cache for provider capabilities
 # Stores capability flags to avoid Redis hits on every request
 _L1_CAPABILITY_CACHE = {}
+
+
+def _is_transient_litellm_error(exc: Exception) -> bool:
+    """Return True for transient network errors that a retry may resolve."""
+    msg = str(exc).lower()
+    if any(k in msg for k in (
+        "broken pipe", "connection reset", "connection aborted",
+        "connection error", "unexpected eof", "remote end closed",
+    )):
+        return True
+    if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+        return True
+    return False
+
+
+async def _litellm_completion_with_retry(**completion_kwargs):
+    """Call litellm.completion with transient-error retries and backoff."""
+    max_retries = completion_kwargs.pop("_huf_max_retries", 2)
+    base_delay = completion_kwargs.pop("_huf_base_delay", 0.5)
+
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            return await asyncio.to_thread(litellm.completion, **completion_kwargs)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < max_retries and _is_transient_litellm_error(exc):
+                delay = base_delay * (2 ** attempt)
+                frappe.log_error(
+                    f"LiteLLM transient error (attempt {attempt + 1}/{max_retries + 1}): {exc}. Retrying in {delay}s",
+                    "LiteLLM Retry"
+                )
+                await asyncio.sleep(delay)
+                continue
+            raise
+    raise last_exc
+
+
+def _get_prompt_cache_options(context: dict | None) -> dict:
+    if not isinstance(context, dict):
+        return {}
+    options = context.get("prompt_cache_options")
+    return options if isinstance(options, dict) else {}
+
+
+def _build_text_content(text: str, provider_name: str, cache_enabled: bool, cache_control_type: str):
+    """Build provider-compatible message content payload with optional cache marker."""
+    if not cache_enabled:
+        return text
+
+    if provider_name == "anthropic":
+        return [{"type": "text", "text": text, "cache_control": {"type": cache_control_type}}]
+
+    return [{"type": "text", "text": text}]
+
+
+def _file_dict_to_data_image_url(file_dict: dict) -> dict | None:
+    """Embed a local Frappe file as a base64 data URI for multimodal LLM calls.
+
+    Cloud providers cannot fetch localhost or authenticated /private/files/ URLs.
+    """
+    if not file_dict.get("is_image"):
+        return None
+
+    file_id = file_dict.get("file_id")
+    file_url = file_dict.get("file_url")
+    if not file_id and not file_url:
+        return None
+
+    try:
+        from huf.ai.ocr_engine import _mime_type_and_extension, _resolve_file_doc
+
+        file_doc = _resolve_file_doc(file_id=file_id, file_url=file_url)
+        file_path = file_doc.get_full_path()
+        if not os.path.exists(file_path):
+            frappe.log_error(f"Image file not found on disk: {file_path}", "LiteLLM Image Embed")
+            return None
+
+        mime_type, _ = _mime_type_and_extension(file_path, file_doc.file_type)
+        with open(file_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+        return {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}}
+    except Exception as e:
+        frappe.log_error(f"Failed to embed image for LLM: {e}", "LiteLLM Image Embed")
+        return None
+
+
+def _append_context_images_to_user_content(user_content, files: list):
+    """Append base64-embedded image parts from context files to user message content."""
+    image_parts = []
+    for file_dict in files:
+        part = _file_dict_to_data_image_url(file_dict)
+        if part:
+            image_parts.append(part)
+
+    if not image_parts:
+        return user_content
+
+    if isinstance(user_content, str):
+        user_content = [{"type": "text", "text": user_content}]
+    elif isinstance(user_content, list):
+        user_content = list(user_content)
+    else:
+        user_content = [{"type": "text", "text": str(user_content)}]
+
+    user_content.extend(image_parts)
+    return user_content
 
 
 async def _execute_tool_call(tool, args_json, context=None, tool_call_id=None):
@@ -72,6 +186,44 @@ async def _execute_tool_call(tool, args_json, context=None, tool_call_id=None):
 def _find_tool(agent, tool_name):
     """Find a tool by name in the agent's tools"""
     return next((t for t in agent.tools if t.name == tool_name), None)
+
+
+def _get_agent_max_context_chars(agent_doc) -> int:
+    """Return the agent's configured tool-result context threshold."""
+    try:
+        value = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
+    except Exception:
+        value = 2000
+    # Enforce a sensible floor so truncation notices still fit.
+    return max(value, 500)
+
+
+def _truncate_tool_result_for_context(result_content, max_context_chars: int = 2000) -> str:
+    """
+    Truncate a tool result before feeding it back to the LLM in the same run.
+
+    Large tool results (e.g. full document payloads returned by custom functions)
+    explode the context window and can confuse the agent into calling the same
+    tool repeatedly.  We keep the full result in the Agent Tool Call record for
+    audit / reference; the in-context copy is capped to ``max_context_chars``.
+    """
+    if result_content is None:
+        return ""
+    if not isinstance(result_content, str):
+        result_content = str(result_content)
+
+    # Defensive floor in case this helper is ever called directly.
+    max_context_chars = max(max_context_chars, 500)
+
+    if len(result_content) <= max_context_chars:
+        return result_content
+
+    notice = (
+        f"\n\n... [Tool result truncated from {len(result_content)} characters "
+        f"to {max_context_chars} characters to protect the context window.]"
+    )
+    keep = max(max_context_chars - len(notice), 200)
+    return result_content[:keep] + notice
 
 
 def _normalize_model_name(model: str, provider: str) -> str:
@@ -202,12 +354,21 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         cache_control_type = "ephemeral"
         cache_system_message = False
         cache_conversation_history = False
+        prompt_cache_options = _get_prompt_cache_options(context)
+        static_prefix = (prompt_cache_options.get("static_prefix") or "").strip()
+        dynamic_suffix = prompt_cache_options.get("dynamic_suffix")
+        openai_prompt_cache_retention = prompt_cache_options.get("openai_prompt_cache_retention")
+        gemini_cached_content = prompt_cache_options.get("gemini_cached_content")
+        cache_static_prefix = bool(prompt_cache_options.get("cache_static_prefix", True))
+        cache_dynamic_content_override = prompt_cache_options.get("cache_dynamic_content")
         
         if agent_doc:
             enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
             cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
             cache_system_message = bool(agent_doc.get("cache_system_message", 0))
             cache_conversation_history = bool(agent_doc.get("cache_conversation_history", 0))
+
+        max_context_chars = _get_agent_max_context_chars(agent_doc)
         
         # Check if model supports prompt caching
         model_supports_caching = False
@@ -221,36 +382,33 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     "LiteLLM Prompt Caching"
                 )
 
-        # Prepare messages with cache_control if enabled
+        if not isinstance(dynamic_suffix, str):
+            dynamic_suffix = enhanced_prompt
+
+        # Prepare messages with cache control/static-vs-dynamic segmentation
         messages = []
         provider_name = normalized_model.split("/")[0]
+
+        if static_prefix:
+            static_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_static_prefix
+            )
+            messages.append(
+                {
+                    "role": "system",
+                    "content": _build_text_content(
+                        static_prefix, provider_name, static_cache_enabled, cache_control_type
+                    ),
+                }
+            )
         
         if agent.instructions:
-            if not (enable_prompt_caching and model_supports_caching and cache_system_message):
-                system_content = agent.instructions
-            else:
-                if provider_name == "anthropic" or "anthropic" in normalized_model:
-                    # Anthropic: content array with cache_control
-                    system_content = [
-                        {
-                            "type": "text",
-                            "text": agent.instructions,
-                            "cache_control": {"type": cache_control_type}
-                        }
-                    ]
-                elif provider_name in ("openai", "deepseek"):
-                    # OpenAI/Deepseek: content array format (LiteLLM handles cache_control)
-                    system_content = [
-                        {
-                            "type": "text",
-                            "text": agent.instructions
-                        }
-                    ]
-                    # Note: OpenAI requires messages to be marked for caching
-                    # LiteLLM handles this automatically when content is an array
-                else:
-                    system_content = [{"type": "text", "text": agent.instructions}]
-            
+            system_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_system_message
+            )
+            system_content = _build_text_content(
+                agent.instructions, provider_name, system_cache_enabled, cache_control_type
+            )
             messages.append({"role": "system", "content": system_content})
         
         # Insert Conversation History if available
@@ -258,26 +416,20 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             messages.extend(context["conversation_history"])
         
         # Add user message with cache_control if conversation history caching is enabled
-        if not (enable_prompt_caching and model_supports_caching and cache_conversation_history):
-            user_content = enhanced_prompt
-        else:
-            if provider_name == "anthropic" or "anthropic" in normalized_model:
-                # Anthropic: content array with cache_control
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt,
-                        "cache_control": {"type": cache_control_type}
-                    }
-                ]
-            elif provider_name in ("openai", "deepseek"):
-                # OpenAI/Deepseek: content array format
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt
-                    }
-                ]
+        cache_dynamic_content = cache_conversation_history
+        if isinstance(cache_dynamic_content_override, bool):
+            cache_dynamic_content = cache_dynamic_content_override
+
+        user_content = _build_text_content(
+            dynamic_suffix,
+            provider_name,
+            enable_prompt_caching and model_supports_caching and cache_dynamic_content,
+            cache_control_type,
+        )
+        
+        # Append images if any are passed in context (embedded as base64 data URIs)
+        if context and context.get("files"):
+            user_content = _append_context_images_to_user_content(user_content, context.get("files"))
         
         messages.append({"role": "user", "content": user_content})
 
@@ -318,19 +470,31 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             completion_kwargs = {
                 "model": normalized_model,
                 "temperature": temperature,
+                "timeout": _DEFAULT_LITELLM_TIMEOUT,
             }
 
-            # Trim messages to fit context window
+            # Trim messages to fit context window, then sanitize tool-call pairs
             try:
                 messages = trim_messages(messages=messages, model=normalized_model)
-                completion_kwargs["messages"] = messages
             except Exception as e:
                 frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
                 # Continue with untrimmed messages if trimming fails
                 pass
 
+            messages = repair_message_sequence(
+                messages,
+                conversation_name=context.get("conversation_id") if context else None,
+            )
+            completion_kwargs["messages"] = messages
+
             if context and context.get("response_format"):
                 completion_kwargs["response_format"] = context.get("response_format")
+
+            if openai_prompt_cache_retention:
+                completion_kwargs["prompt_cache_retention"] = openai_prompt_cache_retention
+
+            if gemini_cached_content:
+                completion_kwargs["cached_content"] = gemini_cached_content
 
             if top_p:
                 completion_kwargs["top_p"] = top_p
@@ -359,9 +523,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # LiteLLM call
             try:
                 try:
-                    response = await asyncio.to_thread(
-                        litellm.completion, **completion_kwargs
-                    )
+                    response = await _litellm_completion_with_retry(**completion_kwargs)
                 except BadRequestError as e:
                     err_msg = str(e).lower()
                     conflict_keywords = [
@@ -390,16 +552,29 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         completion_kwargs.pop("tools", None)
                         completion_kwargs.pop("tool_choice", None)
                         
-                        response = await asyncio.to_thread(
-                            litellm.completion, **completion_kwargs
-                        )
+                        response = await _litellm_completion_with_retry(**completion_kwargs)
                     else:
                         raise e
 
                 try:
-                    current_cost = completion_cost(completion_response=response)
-                    total_cost += float(current_cost)
-                    
+                    # --- Round token counts for cost calculation ---
+                    round_usage = response.usage
+                    round_input  = int(getattr(round_usage, "prompt_tokens", 0) or 0)
+                    round_output = int(getattr(round_usage, "completion_tokens", 0) or 0)
+                    round_cached = 0
+                    if hasattr(round_usage, "prompt_tokens_details") and round_usage.prompt_tokens_details:
+                        _d = round_usage.prompt_tokens_details
+                        round_cached = int(
+                            (getattr(_d, "cached_tokens", None) or getattr(_d, "cache_hit_tokens", None) or 0)
+                        )
+                    round_cost, _cost_source = calculate_cost(
+                        model_name=model,
+                        input_tokens=round_input,
+                        output_tokens=round_output,
+                        cached_tokens=round_cached,
+                        litellm_response=response,
+                    )
+                    total_cost += round_cost
                 except Exception:
                     pass
 
@@ -531,7 +706,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "name": tool_name,
-                        "content": str(result_content),
+                        "content": _truncate_tool_result_for_context(result_content, max_context_chars),
                     }
                 )
 
@@ -571,20 +746,17 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
             "model": normalized_model,
             "messages": messages,
             "temperature": 0.3,
+            "timeout": _DEFAULT_LITELLM_TIMEOUT,
         }
         
         _setup_api_key(provider_name, api_key, completion_kwargs)
         
         try:
-            response = await asyncio.to_thread(
-                litellm.completion, **completion_kwargs
-            )
+            response = await _litellm_completion_with_retry(**completion_kwargs)
         except BadRequestError as e:
             if "unsupported value" in str(e).lower() and "temperature" in str(e).lower():
                 completion_kwargs.pop("temperature", None)
-                response = await asyncio.to_thread(
-                    litellm.completion, **completion_kwargs
-                )
+                response = await _litellm_completion_with_retry(**completion_kwargs)
             else:
                 raise e
         
@@ -628,6 +800,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             except Exception:
                 pass
 
+        max_context_chars = _get_agent_max_context_chars(agent_doc)
+
         # Get API key
         provider_doc = frappe.get_doc("AI Provider", provider)
         api_key = provider_doc.get_password("api_key")
@@ -643,6 +817,13 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         cache_control_type = "ephemeral"
         cache_system_message = False
         cache_conversation_history = False
+        prompt_cache_options = _get_prompt_cache_options(context)
+        static_prefix = (prompt_cache_options.get("static_prefix") or "").strip()
+        dynamic_suffix = prompt_cache_options.get("dynamic_suffix")
+        openai_prompt_cache_retention = prompt_cache_options.get("openai_prompt_cache_retention")
+        gemini_cached_content = prompt_cache_options.get("gemini_cached_content")
+        cache_static_prefix = bool(prompt_cache_options.get("cache_static_prefix", True))
+        cache_dynamic_content_override = prompt_cache_options.get("cache_dynamic_content")
         
         if agent_doc:
             enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
@@ -662,53 +843,53 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     title="LiteLLM Prompt Caching"
                 )
 
-        # Prepare messages with cache_control if enabled
+        if not isinstance(dynamic_suffix, str):
+            dynamic_suffix = enhanced_prompt
+
+        # Prepare messages with cache control/static-vs-dynamic segmentation
         messages = []
         provider_name = normalized_model.split("/")[0]
+
+        if static_prefix:
+            static_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_static_prefix
+            )
+            messages.append(
+                {
+                    "role": "system",
+                    "content": _build_text_content(
+                        static_prefix, provider_name, static_cache_enabled, cache_control_type
+                    ),
+                }
+            )
         
         if agent.instructions:
-            system_content = agent.instructions
-            
-            if enable_prompt_caching and model_supports_caching and cache_system_message:
-                if provider_name == "anthropic" or "anthropic" in normalized_model:
-                    system_content = [
-                        {
-                            "type": "text",
-                            "text": agent.instructions,
-                            "cache_control": {"type": cache_control_type}
-                        }
-                    ]
-                elif provider_name in ("openai", "deepseek"):
-                    system_content = [
-                        {
-                            "type": "text",
-                            "text": agent.instructions
-                        }
-                    ]
-            
+            system_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_system_message
+            )
+            system_content = _build_text_content(
+                agent.instructions, provider_name, system_cache_enabled, cache_control_type
+            )
             messages.append({"role": "system", "content": system_content})
         
         # Insert Conversation History if available
         if context and context.get("conversation_history"):
             messages.extend(context["conversation_history"])
         
-        user_content = enhanced_prompt
-        if enable_prompt_caching and model_supports_caching and cache_conversation_history:
-            if provider_name == "anthropic" or "anthropic" in normalized_model:
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt,
-                        "cache_control": {"type": cache_control_type}
-                    }
-                ]
-            elif provider_name in ("openai", "deepseek"):
-                user_content = [
-                    {
-                        "type": "text",
-                        "text": enhanced_prompt
-                    }
-                ]
+        cache_dynamic_content = cache_conversation_history
+        if isinstance(cache_dynamic_content_override, bool):
+            cache_dynamic_content = cache_dynamic_content_override
+
+        user_content = _build_text_content(
+            dynamic_suffix,
+            provider_name,
+            enable_prompt_caching and model_supports_caching and cache_dynamic_content,
+            cache_control_type,
+        )
+        
+        # Append images if any are passed in context (embedded as base64 data URIs)
+        if context and context.get("files"):
+            user_content = _append_context_images_to_user_content(user_content, context.get("files"))
         
         messages.append({"role": "user", "content": user_content})
 
@@ -743,19 +924,31 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "messages": messages,
             "temperature": temperature,
             "stream": True,  # Enable streaming
-            "stream_options": {"include_usage": True} # Request usage stats in stream
+            "stream_options": {"include_usage": True}, # Request usage stats in stream
+            "timeout": _DEFAULT_LITELLM_TIMEOUT,
         }
         
-        # Trim messages to fit context window
+        # Trim messages to fit context window, then sanitize tool-call pairs
         try:
             messages = trim_messages(messages=messages, model=normalized_model)
-            completion_kwargs["messages"] = messages
         except Exception as e:
             frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
             pass
 
+        messages = repair_message_sequence(
+            messages,
+            conversation_name=context.get("conversation_id") if context else None,
+        )
+        completion_kwargs["messages"] = messages
+
         if top_p:
             completion_kwargs["top_p"] = top_p
+
+        if openai_prompt_cache_retention:
+            completion_kwargs["prompt_cache_retention"] = openai_prompt_cache_retention
+
+        if gemini_cached_content:
+            completion_kwargs["cached_content"] = gemini_cached_content
 
         provider_name = normalized_model.split("/")[0]
         _setup_api_key(provider_name, api_key, completion_kwargs)
@@ -772,9 +965,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             try:
                 # Use LiteLLM completion with stream=True
                 # LiteLLM completion() supports streaming when stream=True
-                stream = await asyncio.to_thread(
-                    litellm.completion, **completion_kwargs
-                )
+                stream = await _litellm_completion_with_retry(**completion_kwargs)
 
                 # Buffer for tool calls
                 current_tool_calls = {}
@@ -893,6 +1084,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                     if context and context.get("conversation_id"):
                                         conv_id = context.get("conversation_id")
                                         call_id = tool_call.get("id")
+                                        agent_run_id = context.get("agent_run_id")
                                         try:
                                             tool_call_doc = frappe.db.get_value("Agent Tool Call", {
                                                 "conversation": conv_id,
@@ -909,14 +1101,54 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     tc_doc.tool_result = {"output": str(result_content)[:140000]}
                                                 tc_doc.save(ignore_permissions=True)
 
-                                                message_name = frappe.db.get_value("Agent Message", {"tool_calll": tool_call_doc}, "name")
+                                                # Find the Agent Message to update. Prefer the in-memory
+                                                # map passed via context, then fall back to DB lookups.
+                                                tool_call_message_map = context.get("_tool_call_message_map") or {}
+                                                message_name = tool_call_message_map.get(call_id)
+
+                                                if not message_name and tool_call_doc:
+                                                    message_name = frappe.db.get_value(
+                                                        "Agent Message", {"tool_call": tool_call_doc}, "name"
+                                                    )
+
+                                                if not message_name and call_id:
+                                                    message_name = frappe.db.get_value(
+                                                        "Agent Message", {"tool_call_id": call_id}, "name"
+                                                    )
+
+                                                if not message_name and call_id and agent_run_id:
+                                                    message_name = frappe.db.get_value(
+                                                        "Agent Message",
+                                                        {
+                                                            "conversation": conv_id,
+                                                            "agent_run": agent_run_id,
+                                                            "kind": "Tool Call",
+                                                            "tool_call_id": call_id,
+                                                        },
+                                                        "name",
+                                                        order_by="creation desc",
+                                                    )
+
                                                 if message_name:
-                                                    msg_doc = frappe.get_doc("Agent Message", message_name)
-                                                    result_str = json.dumps(result_content) if not isinstance(result_content, str) else str(result_content)
-                                                    new_content = msg_doc.content + f"\n\n**Tool Result:**\n{result_str}"
-                                                    msg_doc.content = new_content
-                                                    msg_doc.kind = "Tool Result"
-                                                    msg_doc.save(ignore_permissions=True)
+                                                    from huf.ai.conversation_manager import update_tool_call_message
+                                                    updated = update_tool_call_message(
+                                                        message_name=message_name,
+                                                        tool_call_id=call_id,
+                                                        tool_call=[tool_call],
+                                                        result_content=result_content,
+                                                        agent_doc=agent_doc,
+                                                    )
+                                                    if not updated:
+                                                        message_name = None
+                                                        frappe.log_error(
+                                                            f"Failed to update tool call message for call_id={call_id}, tool_call_doc={tool_call_doc}",
+                                                            "Tool Call Message Update"
+                                                        )
+                                                else:
+                                                    frappe.log_error(
+                                                        f"No Agent Message found for tool call call_id={call_id}, tool_call_doc={tool_call_doc}",
+                                                        "Tool Call Message Update"
+                                                    )
 
                                                 tool_result_for_socket = (
                                                     result_content
@@ -943,8 +1175,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                 if getattr(frappe.local, "_realtime_log", None) is None:
                                                     frappe.local._realtime_log = []
                                                 frappe.db.commit()
-                                        except Exception:
-                                            pass
+                                        except Exception as e:
+                                            frappe.log_error(
+                                                f"Error updating tool call result for call_id={call_id}: {e}",
+                                                "Tool Call Message Update"
+                                            )
                                 else:
                                     result_content = f"Tool '{tool_name}' not found."
 
@@ -953,7 +1188,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                         "role": "tool",
                                         "tool_call_id": tool_call["id"],
                                         "name": tool_name,
-                                        "content": str(result_content),
+                                        "content": _truncate_tool_result_for_context(result_content, max_context_chars),
                                     }
                                 )
 
@@ -999,12 +1234,33 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
              stream_usage = stream_usage.dict()
         elif stream_usage and hasattr(stream_usage, "model_dump"):
              stream_usage = stream_usage.model_dump()
-             
+
+        # Calculate cost from streaming usage
+        stream_cost = 0.0
+        if stream_usage and isinstance(stream_usage, dict):
+            try:
+                s_input   = int(stream_usage.get("prompt_tokens", 0) or 0)
+                s_output  = int(stream_usage.get("completion_tokens", 0) or 0)
+                s_cached  = 0
+                s_details = stream_usage.get("prompt_tokens_details") or {}
+                if isinstance(s_details, dict):
+                    s_cached = int(s_details.get("cached_tokens", 0) or s_details.get("cache_hit_tokens", 0) or 0)
+                stream_cost, _src = calculate_cost(
+                    model_name=model,
+                    input_tokens=s_input,
+                    output_tokens=s_output,
+                    cached_tokens=s_cached,
+                )
+            except Exception:
+                pass
+
         yield {
             "type": "complete",
             "full_response": full_response or "Agent stopped after max rounds.",
-            "usage": stream_usage
+            "usage": stream_usage,
+            "cost": stream_cost,
         }
+
 
     except Exception as e:
         frappe.log_error(message=f"LiteLLM Streaming Error: {str(e)}", title="LiteLLM Streaming")

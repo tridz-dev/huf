@@ -10,7 +10,7 @@ export function AgentPromptsHeaderActions() {
   };
 
   return (
-    <Button onClick={handleNewPrompt} size="sm">
+    <Button variant="display" onClick={handleNewPrompt} size="sm">
       <Plus className="w-4 h-4 mr-2" />
       New Agent Prompt
     </Button>

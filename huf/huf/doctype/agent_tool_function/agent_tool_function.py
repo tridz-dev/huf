@@ -1,23 +1,74 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
+import inspect
 import json
+import re
+import typing
 
 import frappe
 from frappe import _, is_whitelisted
-
 from frappe.model.document import Document
 
-import inspect 
 
-import typing
+def _annotation_to_param_type(annotation):
+	if annotation == inspect.Parameter.empty:
+		return "string"
+	if annotation in (int,):
+		return "integer"
+	if annotation in (bool,):
+		return "boolean"
+	if annotation in (float,):
+		return "number"
+	if annotation in (dict, typing.Dict):
+		return "object"
+	if annotation in (list, typing.List):
+		return "array"
+	return "string"
 
-import re
+
+def _inspect_function_parameters(function_path):
+	try:
+		func = frappe.get_attr(function_path)
+	except Exception as e:
+		frappe.throw(_("Could not find function at {0}: {1}").format(function_path, str(e)))
+
+	parameters = []
+	for name, param in inspect.signature(func).parameters.items():
+		if name in ("self", "cls"):
+			continue
+
+		parameters.append(
+			{
+				"fieldname": name,
+				"label": name.replace("_", " ").title(),
+				"type": _annotation_to_param_type(param.annotation),
+				"required": 0 if param.default != inspect.Parameter.empty else 1,
+			}
+		)
+
+	return {
+		"parameters": parameters,
+		"pass_parameters_as_json": 1,
+	}
+
+
+@frappe.whitelist()
+def fetch_tool_parameters_from_code(function_path):
+	"""Return tool parameters inferred from a Python function signature (for React UI)."""
+	if not function_path:
+		frappe.throw(_("Please provide a Function Path first."))
+
+	return _inspect_function_parameters(function_path)
+
 
 class AgentToolFunction(Document):
 	def before_validate(self):
 		self.validate_reference_doctype()
 		self.validate_fields_for_doctype()
+		self.validate_base_url()
+		self.validate_http_headers()
+		self.validate_http_parameter_names()
 		self.prepare_function_params()
 		self.validate_json()
 		self.validate_tool_name()
@@ -29,6 +80,40 @@ class AgentToolFunction(Document):
 				"and be at most 128 characters long.")
 			)
 
+
+	def validate_base_url(self):
+		"""Validate that base_url is a proper HTTP(S) URL when set."""
+		if self.types in ("GET", "POST") and self.base_url:
+			from urllib.parse import urlparse
+
+			parsed = urlparse(self.base_url)
+			if parsed.scheme not in ("http", "https"):
+				frappe.throw(_("Base URL must start with http:// or https://"))
+			if not parsed.hostname:
+				frappe.throw(_("Base URL must contain a valid hostname"))
+
+	def validate_http_headers(self):
+		"""Reject HTTP headers containing CRLF characters (header injection prevention)."""
+		if not hasattr(self, "http_headers") or not self.http_headers:
+			return
+		for header in self.http_headers:
+			if header.key and ("\r" in header.key or "\n" in header.key):
+				frappe.throw(_("HTTP header key contains invalid characters: {0}").format(header.key))
+			if header.value and ("\r" in header.value or "\n" in header.value):
+				frappe.throw(_("HTTP header value for '{0}' contains invalid characters").format(header.key))
+
+	def validate_http_parameter_names(self):
+		"""Reject parameter names that collide with reserved HTTP schema keys."""
+		if self.types not in ("GET", "POST"):
+			return
+		reserved = frozenset({"url", "params", "headers", "json_data", "data", "tool_name", "method"})
+		for param in self.parameters:
+			if param.fieldname in reserved:
+				frappe.throw(
+					_("Parameter name '{0}' is reserved for HTTP tools. Choose a different name.").format(
+						param.fieldname
+					)
+				)
 
 	def validate_reference_doctype(self):
 		if not self.reference_doctype:
@@ -230,7 +315,7 @@ class AgentToolFunction(Document):
 			else:
 				params = self.get_params_as_dict()
 		elif self.types == "Get List":
-			
+
 			filter_properties = {}
 			for param in self.parameters:
 				filter_properties[param.fieldname] = {
@@ -244,8 +329,8 @@ class AgentToolFunction(Document):
 					"filters": {
 						"type": "object",
 						"description": "Dictionary of filters. Example: {'status': 'New', 'first_name': 'John Doe'}.",
-						"properties": filter_properties, 
-						"additionalProperties": True 
+						"properties": filter_properties,
+						"additionalProperties": True
 					},
 					"fields": {
 						"type": "array",
@@ -485,7 +570,7 @@ class AgentToolFunction(Document):
 				"required": [],
 				"additionalProperties": False
 			}
-		
+
 		elif self.types == "Run Agent":
 			params = {
 				"type": "object",
@@ -498,7 +583,7 @@ class AgentToolFunction(Document):
 				"required": ["prompt"],
 				"additionalProperties": False
 			}
-					
+
 		else:
 			params = self.build_params_json_from_table()
 
@@ -561,13 +646,13 @@ class AgentToolFunction(Document):
 					child_tables[param.child_table_name]["items"]["required"].append(param.fieldname)
 
 		for child_table_name, child_table in child_tables.items():
-		
+
 			if self.reference_doctype:
 				try:
 					doctype_meta = frappe.get_meta(self.reference_doctype)
 					table_field = doctype_meta.get_field(child_table_name)
 				except Exception:
-					pass 
+					pass
 
 			properties[child_table_name] = child_table
 
@@ -583,7 +668,7 @@ class AgentToolFunction(Document):
 					},
 				}
 			}
-			
+
 		else:
 			params["properties"] = properties
 			params["required"] = required
@@ -683,41 +768,10 @@ class AgentToolFunction(Document):
 		if not self.function_path:
 			frappe.throw(_("Please provide a Function Path first."))
 
-		try:
-			func = frappe.get_attr(self.function_path)
-		except Exception as e:
-			frappe.throw(_("Could not find function at {0}: {1}").format(self.function_path, str(e)))
-
-		sig = inspect.signature(func)
+		result = _inspect_function_parameters(self.function_path)
 		self.set("parameters", [])
-
-		for name, param in sig.parameters.items():
-			if name in ["self", "cls"]:
-				continue
-			
-			param_type = "string"
-			if param.annotation != inspect.Parameter.empty:
-				if param.annotation == int:
-					param_type = "integer"
-				elif param.annotation == bool:
-					param_type = "boolean"
-				elif param.annotation == float:
-					param_type = "number"
-				elif param.annotation == dict or param.annotation == typing.Dict:
-					param_type = "object"
-				elif param.annotation == list or param.annotation == typing.List:
-					param_type = "array"
-			
-			reqd = 1
-			if param.default != inspect.Parameter.empty:
-				reqd = 0
-
-			self.append("parameters", {
-				"fieldname": name,
-				"label": name.replace("_", " ").title(),
-				"type": param_type,
-				"required": reqd,
-			})
-		self.pass_parameters_as_json = 1
+		for param in result["parameters"]:
+			self.append("parameters", param)
+		self.pass_parameters_as_json = result["pass_parameters_as_json"]
 		self.save()
 		return _("Parameters fetched successfully.")

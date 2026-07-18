@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -10,8 +10,10 @@ import { UnifiedLayout } from './layouts/UnifiedLayout';
 import { HomeHeaderActions } from './components/HomeHeaderActions';
 import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
+import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
 import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
+import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
@@ -25,13 +27,17 @@ const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
 const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
 const AgentPromptFormPageWrapper = lazy(() => import('./pages/AgentPromptFormPageWrapper'));
+const AgentSummaryPromptsPage = lazy(() => import('./pages/AgentSummaryPromptsPage'));
+const AgentSummaryPromptFormPageWrapper = lazy(() => import('./pages/AgentSummaryPromptFormPageWrapper'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
-const IntegrationsPageWrapper = lazy(() => import('./pages/IntegrationsPageWrapper'));
+const AiProvidersPageWrapper = lazy(() => import('./pages/AiProvidersPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const Executions = lazy(() => import('./pages/Executions'));
-const AgentRunDetailPage = lazy(() => import('./pages/AgentRunDetailPage'));
+const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
+const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
+const AgentContextArtifactDetailPage = lazy(() => import('./pages/AgentContextArtifactDetailPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
@@ -39,9 +45,23 @@ const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourc
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
+const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
+const ConsolePage = lazy(() => import('./pages/ConsolePage'));
+const IntegrationSettingsListingPageWrapper = lazy(
+  () => import('./pages/IntegrationSettingsListingPageWrapper'),
+);
+const IntegrationSettingsDetailsPageWrapper = lazy(
+  () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
+);
+const IntegrationServicesListingPageWrapper = lazy(
+  () => import('./pages/IntegrationServicesListingPageWrapper'),
+);
+const IntegrationServiceFormPageWrapper = lazy(
+  () => import('./pages/IntegrationServiceFormPageWrapper'),
+);
 
 import { useEffect } from 'react';
-import { createFrappeSocket } from './utils/socket';
+import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
   setStreamingAvailable,
@@ -49,72 +69,13 @@ import {
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
 
-function App() {
-  useEffect(() => {
-    const connectionDescription =
-      'Some features may be disabled or not work as expected. Please refresh the page to retry.';
-
-    const siteName = (window as any).frappe?.boot?.sitename;
-    const hasPort = !!window.location?.port;
-    const port = hasPort ? (window as any).frappe?.boot?.socketio_port : '';
-
-    console.log("Checking streaming availability");
-    checkStreamingAvailable().then((ok) => {
-      console.log("Streaming available:", ok);
-      setStreamingAvailable(ok);
-      if (!ok) {
-        toast.error("Streaming not working", {
-          description: connectionDescription,
-          duration: 5000,
-        });
-      }
-    });
-
-    if (!siteName) {
-      toast.error("Socket connection failed", {
-        description: connectionDescription,
-        duration: 5000,
-      });
-      console.warn("Site name not available yet, socket connection will be skipped");
-      return;
-    }
-
-    console.log("Creating socket connection for site:", siteName);
-    const socket = createFrappeSocket({ siteName, port });
-
-    socket.on("connect", () => {
-      console.log("✅ Connected to Frappe websocket!");
-    });
-
-    socket.on("connect_error", (error) => {
-      console.error("❌ Socket connection error:", error);
-      toast.error("Socket connection failed", {
-        description: connectionDescription,
-        duration: 5000,
-      });
-    });
-
-    socket.on("disconnect", (reason) => {
-      console.warn("⚠️ Socket disconnected:", reason);
-    });
-
-    socket.on("tool_call_started", (data) => {
-      console.log("📡 Realtime event - tool_call_started:", data);
-    });
-
-    return () => {
-      console.log("Cleaning up socket connection");
-      socket.disconnect();
-    };
-  }, []);
-
-
+function AppShell() {
   return (
-    <BrowserRouter basename="/huf">
+    <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
-        <Suspense fallback={<AuthenticatingPage />}>
-          <Routes>
+          <Suspense fallback={<AuthenticatingPage />}>
+            <Routes>
           <Route
             path="/"
             element={
@@ -172,12 +133,46 @@ function App() {
             }
           />
           <Route
+            path="/summary-prompts"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<AgentSummaryPromptsHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentSummaryPromptsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/summary-prompts/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AgentSummaryPromptFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/data"
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<DataHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <DataPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/console"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <ConsolePage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -218,11 +213,21 @@ function App() {
             }
           />
           <Route
+            path="/models"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ModelsPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/providers"
             element={
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
-                  <IntegrationsPageWrapper />
+                  <AiProvidersPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
@@ -232,7 +237,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlowProvider>
-                  <UnifiedLayout>
+                  <UnifiedLayout headerActions={<FlowsListHeaderActions />}>
                     <Suspense fallback={<PageLoader />}>
                       <FlowListPage />
                     </Suspense>
@@ -295,9 +300,31 @@ function App() {
             path="/executions/:runId"
             element={
               <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AgentRunDetailPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifacts"
+            element={
+              <ProtectedRoute>
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
-                    <AgentRunDetailPage />
+                    <AgentContextArtifactsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifacts/:artifactId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentContextArtifactDetailPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -305,18 +332,6 @@ function App() {
           />
           <Route
             path="/settings"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <NotFoundPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/help"
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
@@ -345,6 +360,46 @@ function App() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <KnowledgeSourceFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integrations"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationSettingsListingPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integrations/:settingId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationSettingsDetailsPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integration-services"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationServicesListingPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integration-services/:serviceId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <IntegrationServiceFormPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
@@ -413,13 +468,36 @@ function App() {
               </ProtectedRoute>
             }
           />
-          </Routes>
-        </Suspense>
-        <Toaster />
+            </Routes>
+          </Suspense>
+          <Toaster />
         </PermissionsProvider>
       </UserProvider>
-    </BrowserRouter>
+    </SocketProvider>
   );
+}
+
+const router = createBrowserRouter(
+  [{ path: '*', element: <AppShell /> }],
+  { basename: '/huf' },
+);
+
+function App() {
+  useEffect(() => {
+    console.log("Checking streaming availability");
+    checkStreamingAvailable().then((ok) => {
+      console.log("Streaming available:", ok);
+      setStreamingAvailable(ok);
+      if (!ok) {
+        toast.error("Streaming not working", {
+          description: 'Some features may be disabled or not work as expected. Please refresh the page to retry.',
+          duration: 5000,
+        });
+      }
+    });
+  }, []);
+
+  return <RouterProvider router={router} />;
 }
 
 export default App;

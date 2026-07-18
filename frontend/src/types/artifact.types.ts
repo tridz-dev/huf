@@ -11,7 +11,8 @@ export type ArtifactType =
 	| 'react-component'
 	| 'markdown'
 	| 'jsx'
-	| 'chart';
+	| 'chart'
+	| 'video';
 
 export interface ParsedArtifact {
 	id: string;

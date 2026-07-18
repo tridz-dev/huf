@@ -15,10 +15,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { LinkFieldAction } from '@/components/ui/link-field-control';
 
 export interface ComboboxOption {
   value: string;
   label: string;
+  subtitle?: string;
 }
 
 export interface ComboboxProps {
@@ -29,6 +31,7 @@ export interface ComboboxProps {
   disabled?: boolean;
   emptyText?: string;
   searchPlaceholder?: string;
+  linkTo?: (value: string) => string | undefined;
 }
 
 export function Combobox({
@@ -39,10 +42,13 @@ export function Combobox({
   disabled = false,
   emptyText = 'No option found.',
   searchPlaceholder = 'Search...',
+  linkTo,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
 
   const selectedOption = options.find((option) => option.value === value);
+  const href = value && linkTo ? linkTo(value) : undefined;
+  const showLink = Boolean(href) && !disabled;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -51,11 +57,18 @@ export function Combobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className="h-9 w-full justify-between px-3 py-2"
           disabled={disabled}
         >
-          {selectedOption ? selectedOption.label : placeholder}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          {selectedOption ? (
+            <span className="min-w-0 flex-1 truncate text-left">{selectedOption.label}</span>
+          ) : (
+            <span className="min-w-0 flex-1 truncate text-left text-muted-foreground">{placeholder}</span>
+          )}
+          <div className="flex shrink-0 items-center gap-0.5">
+            {showLink && href ? <LinkFieldAction href={href} /> : null}
+            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+          </div>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
@@ -79,7 +92,12 @@ export function Combobox({
                       value === option.value ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  {option.label}
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate">{option.label}</span>
+                    {option.subtitle ? (
+                      <span className="truncate text-xs text-muted-foreground">{option.subtitle}</span>
+                    ) : null}
+                  </div>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -89,4 +107,3 @@ export function Combobox({
     </Popover>
   );
 }
-

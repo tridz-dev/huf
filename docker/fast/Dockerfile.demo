@@ -1,0 +1,35 @@
+# FasterDocker single-image HUF demo.
+#
+# This image layers a physical MariaDB data snapshot on top of the HUF app
+# image. On first boot the entrypoint copies the snapshot into the mounted
+# MariaDB volume. On restart the existing volume is reused and the copy is
+# skipped.
+#
+# Build context: repository root (same as Dockerfile.huf).
+# The physical snapshot must already be generated at ./docker/fast/mysql-data/
+# before building this image (see build-demo.sh).
+
+ARG HUF_APP_IMAGE=huf-app
+ARG HUF_IMAGE_TAG=latest
+FROM ${HUF_APP_IMAGE}:${HUF_IMAGE_TAG}
+
+USER root
+
+# Copy the physical MariaDB snapshot baked into the image.
+# The official mariadb:10.11.11 image runs as UID/GID 999.
+COPY --chown=999:999 docker/fast/mysql-data/ /var/lib/mysql-snapshot/
+
+# Install redis-server so the single frappe container can run its own Redis.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the demo entrypoint that handles snapshot copy on first boot.
+COPY docker/fast/demo-entrypoint.sh /usr/local/bin/demo-entrypoint.sh
+RUN chmod 755 /usr/local/bin/demo-entrypoint.sh
+
+# Run entrypoint as root so it can copy the MariaDB snapshot into the shared
+# volume. It drops to the frappe user before exec-ing bench.
+USER root
+ENTRYPOINT ["/usr/local/bin/demo-entrypoint.sh"]
+CMD ["/usr/local/bin/bench-start.sh"]

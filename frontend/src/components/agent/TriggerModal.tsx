@@ -1,15 +1,18 @@
 import React from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DialogScrollBody,
+  DialogScrollContent,
+  DialogScrollFooter,
+  DialogScrollHeader,
+} from '@/components/ui/dialog-scroll';
 import {
   Form,
   FormControl,
@@ -181,19 +184,24 @@ export function TriggerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
+      <DialogScrollContent className="sm:max-w-[600px]">
+        <DialogScrollHeader>
           <DialogTitle>Configure Trigger</DialogTitle>
           <DialogDescription>
             {editingTrigger ? 'Edit trigger configuration' : 'Add a new trigger to this agent'}
           </DialogDescription>
-        </DialogHeader>
+        </DialogScrollHeader>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <Form {...triggerForm}>
-          <form onSubmit={triggerForm.handleSubmit(handleSubmit, handleFormError)} className="space-y-4">
+          <form
+            onSubmit={triggerForm.handleSubmit(handleSubmit, handleFormError)}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          >
+            <DialogScrollBody className="space-y-4 pb-4">
             {/* Trigger Name Field - Only editable when adding */}
             {!editingTrigger && (
               <FormField
-                control={triggerForm.control}
+                control={triggerForm.control as unknown as Control<any>}
                 name="trigger_name"
                 render={({ field }) => (
                   <FormItem>
@@ -248,7 +256,7 @@ export function TriggerModal({
               control={triggerForm.control}
               name="active"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
                   <div className="space-y-0.5">
                     <FormLabel className="text-base">Active</FormLabel>
                     <FormDescription>Enable this trigger</FormDescription>
@@ -264,6 +272,7 @@ export function TriggerModal({
             {watchTriggerType && (
               <TriggerFieldsRenderer
                 triggerType={watchTriggerType}
+                // @ts-ignore - Control type incompatibility between strict form type and generic component
                 control={triggerForm.control}
                 docTypes={docTypes}
                 loadingDocTypes={loadingDocTypes}
@@ -271,17 +280,20 @@ export function TriggerModal({
               />
             )}
 
-            <DialogFooter>
+            </DialogScrollBody>
+
+            <DialogScrollFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
               <Button type="submit">
                 {editingTrigger ? 'Update' : 'Add'} Trigger
               </Button>
-            </DialogFooter>
+            </DialogScrollFooter>
           </form>
         </Form>
-      </DialogContent>
+        </div>
+      </DialogScrollContent>
     </Dialog>
   );
 }

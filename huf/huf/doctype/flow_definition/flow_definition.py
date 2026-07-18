@@ -12,6 +12,10 @@ ALLOWED_NODE_TYPES = {
 	"tool.call",
 	"router.llm",
 	"human.approval",
+	"condition",
+	"http_request",
+	"transform",
+	"loop",
 	"end",
 }
 
