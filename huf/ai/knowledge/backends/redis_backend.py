@@ -8,20 +8,45 @@ from typing import Any, Dict, List, Optional, Tuple
 import frappe
 
 from ..backends import ChunkResult, KnowledgeBackend
-from ..backends.factory import BackendFactory
 
 # LlamaIndex imports - optional dependency
 try:
 	from llama_index.vector_stores.redis import RedisVectorStore
-	from llama_index.core import VectorStoreIndex, StorageContext, Document
+	from llama_index.core import StorageContext, Document
+	from llama_index.core.vector_stores.types import (
+		VectorStoreQuery,
+		MetadataFilters,
+		ExactMatchFilter,
+	)
 	LLAMAINDEX_AVAILABLE = True
 except ImportError:
+	RedisVectorStore = None
+	StorageContext = None
+	VectorStoreQuery = None
+	MetadataFilters = None
+	ExactMatchFilter = None
+
+	class Document:
+		"""Minimal Document stand-in used only when llama-index is unavailable."""
+
+		def __init__(self, text=None, id_=None, embedding=None, metadata=None):
+			self.text = text
+			self.id_ = id_
+			self.embedding = embedding
+			self.metadata = metadata or {}
+
 	LLAMAINDEX_AVAILABLE = False
 
 
 class RedisBackend(KnowledgeBackend):
-	"""Redis Vector backend for Huf knowledge storage."""
-	
+	"""Redis Vector backend for Huf knowledge storage.
+
+	Uses a modern llama-index-vector-stores-redis RedisVectorStore that expects
+	a redis.Redis client and an IndexSchema describing the index. Embeddings are
+	computed explicitly by Huf's embedding module and attached to Documents before
+	add(), matching the chroma backend pattern.
+	"""
+
 	def __init__(self):
 		self.knowledge_source = None
 		self.config = {}
@@ -30,236 +55,327 @@ class RedisBackend(KnowledgeBackend):
 		self.index = None
 		self._initialized = False
 		self._redis_client = None
-		self._index_name = None
-	
+
 	def initialize(self, knowledge_source: str, config: Dict[str, Any]) -> None:
-		"""Initialize Redis backend."""
+		"""Initialize Redis backend.
+
+		Config options:
+		- host: Redis server host (default: localhost)
+		- port: Redis server port (default: 6379)
+		- username: Optional Redis username
+		- password: Optional Redis password
+		- index_prefix: Key/index prefix (default: huf)
+		- vector_dimension: Embedding dimension (default: 1536)
+		"""
 		if not LLAMAINDEX_AVAILABLE:
 			raise ImportError(
 				"llama-index-vector-stores-redis not installed. "
 				"Install with: pip install llama-index-vector-stores-redis"
 			)
-		
+
 		self.knowledge_source = knowledge_source
 		self.config = config
-		
-		# Get connection parameters
-		connection_params = self._get_connection_params()
-		self._index_name = connection_params["index_name"]
-		
-		# Create vector store
-		self.vector_store = RedisVectorStore(**connection_params)
+
+		self._init_redis_client()
+		self._init_vector_store()
+
+		self._initialized = True
+
+	def _init_redis_client(self) -> None:
+		"""Create the redis.Redis client from config."""
+		import redis
+
+		connection_kwargs = {
+			"host": self.config.get("host", "localhost"),
+			"port": self.config.get("port", 6379),
+		}
+
+		if self.config.get("username"):
+			connection_kwargs["username"] = self.config.get("username")
+		if self.config.get("password"):
+			connection_kwargs["password"] = self.config.get("password")
+
+		self._redis_client = redis.Redis(**connection_kwargs)
+
+	def _init_vector_store(self) -> None:
+		"""Build RedisVectorStore with an explicit IndexSchema.
+
+		We construct the schema via redisvl IndexSchema.from_dict so we can set
+		the index name, key prefix, vector dimension, and metadata tag fields
+		(input_id, input_type, etc.) that search/delete filters rely on.
+		"""
+		from redisvl.schema import IndexSchema
+
+		index_prefix = self.config.get("index_prefix", "huf")
+		index_name = f"{index_prefix}_{frappe.scrub(self.knowledge_source)}"
+		vector_dimension = self.config.get("vector_dimension", 1536)
+
+		schema = IndexSchema.from_dict({
+			"index": {
+				"name": index_name,
+				"prefix": f"{index_prefix}/vector",
+				"key_separator": "_",
+			},
+			"fields": [
+				{"type": "tag", "name": "id", "attrs": {"sortable": False}},
+				{"type": "tag", "name": "doc_id", "attrs": {"sortable": False}},
+				{"type": "text", "name": "text", "attrs": {"weight": 1.0}},
+				{"type": "tag", "name": "input_id", "attrs": {"sortable": False}},
+				{"type": "tag", "name": "input_type", "attrs": {"sortable": False}},
+				{"type": "tag", "name": "chunk_id", "attrs": {"sortable": False}},
+				{"type": "tag", "name": "source_title", "attrs": {"sortable": False}},
+				{"type": "tag", "name": "knowledge_source", "attrs": {"sortable": False}},
+				{
+					"type": "vector",
+					"name": "vector",
+					"attrs": {
+						"dims": vector_dimension,
+						"algorithm": "flat",
+						"distance_metric": "cosine",
+					},
+				},
+			],
+		})
+
+		self.vector_store = RedisVectorStore(
+			redis_client=self._redis_client,
+			schema=schema,
+		)
 		self.storage_context = StorageContext.from_defaults(
 			vector_store=self.vector_store
 		)
-		
-		# Store redis client for direct operations
-		try:
-			self._redis_client = getattr(self.vector_store, "client", None) or getattr(self.vector_store, "_redis_client", None)
-		except Exception:
-			self._redis_client = None
-			frappe.logger().warning(
-				"Could not access Redis client from RedisVectorStore; "
-				"some direct operations may be unavailable."
-			)
-		
-		self._initialized = True
-	
-	def _get_connection_params(self) -> Dict[str, Any]:
-		"""Build connection parameters from config."""
-		index_prefix = self.config.get("index_prefix", "huf")
-		index_name = f"{index_prefix}_{frappe.scrub(self.knowledge_source)}"
-		
-		params = {
-			"index_name": index_name,
-			"index_prefix": index_prefix,
-			"host": self.config.get("host", "localhost"),
-			"port": self.config.get("port", 6379),
-			"dim": self.config.get("vector_dimension", 1536),
-		}
-		
-		# Optional authentication
-		if self.config.get("password"):
-			params["password"] = self.config.get("password")
-		
-		if self.config.get("username"):
-			params["username"] = self.config.get("username")
-		
-		return params
-	
+
 	def add_chunks(self, chunks: List[Dict[str, Any]]) -> int:
-		"""Add chunks to Redis Vector Store."""
+		"""Add chunks to Redis Vector Store.
+
+		Args:
+			chunks: List of chunk dictionaries with keys:
+				- text: The chunk text content
+				- input_id: Source input ID
+				- input_type: Type of input (e.g., 'document', 'web_page')
+				- chunk_id: Unique chunk identifier
+				- source_title: Title of the source
+				- chunk_index: Index of the chunk within the source
+				- metadata: Additional metadata dict
+
+		Returns:
+			Number of chunks added
+		"""
 		if not chunks:
 			return 0
-		
-		# Convert to LlamaIndex Documents
+
+		if not self._initialized:
+			raise RuntimeError("Backend not initialized. Call initialize() first.")
+
+		from huf.ai.knowledge.embedding import get_embeddings, resolve_embedding_config
+		import uuid
+
+		texts = [chunk["text"] for chunk in chunks]
+		embed_config = resolve_embedding_config(self.knowledge_source)
+		embeddings = get_embeddings(
+			texts=texts,
+			model=embed_config["model"],
+			api_key=embed_config.get("api_key"),
+			api_base=embed_config.get("api_base"),
+		)
+
 		documents = []
-		for chunk in chunks:
+		for chunk, embedding in zip(chunks, embeddings):
+			chunk_id = chunk.get("chunk_id") or str(uuid.uuid4())
 			doc = Document(
 				text=chunk["text"],
+				id_=chunk_id,
+				embedding=embedding,
 				metadata={
 					"input_id": chunk["input_id"],
 					"input_type": chunk["input_type"],
-					"chunk_id": chunk.get("chunk_id"),
+					"chunk_id": chunk_id,
 					"source_title": chunk.get("source_title"),
+					"chunk_index": chunk.get("chunk_index"),
 					"knowledge_source": self.knowledge_source,
+					**(chunk.get("metadata") or {})
 				}
 			)
 			documents.append(doc)
-		
-		# Create/update index
-		self.index = VectorStoreIndex.from_documents(
-			documents,
-			storage_context=self.storage_context,
-		)
-		
+
+		if documents:
+			self.vector_store.add(documents)
+
 		return len(chunks)
-	
+
 	def search(
 		self,
 		query: str,
 		top_k: int = 5,
-		filters: Optional[Dict] = None
+		filters: Optional[Dict[str, Any]] = None
 	) -> List[ChunkResult]:
-		"""Search Redis Vector Store."""
-		if not self.index:
-			# Try to load existing index
-			self.index = VectorStoreIndex.from_vector_store(
-				self.vector_store,
-				storage_context=self.storage_context,
-			)
-		
-		# Create retriever with optional filters
-		retriever_kwargs = {"similarity_top_k": top_k}
+		"""Search Redis Vector Store for relevant chunks.
+
+		Args:
+			query: Search query text
+			top_k: Maximum number of results
+			filters: Optional metadata filters (e.g., {"input_type": "document"})
+
+		Returns:
+			List of ChunkResult objects
+		"""
+		if not self._initialized:
+			raise RuntimeError("Backend not initialized. Call initialize() first.")
+
+		from huf.ai.knowledge.embedding import get_embedding, resolve_embedding_config
+
+		embed_config = resolve_embedding_config(self.knowledge_source)
+		query_embedding = get_embedding(
+			text=query,
+			model=embed_config["model"],
+			api_key=embed_config.get("api_key"),
+			api_base=embed_config.get("api_base"),
+		)
+
+		query_kwargs = {
+			"query_embedding": query_embedding,
+			"similarity_top_k": top_k,
+			"mode": "default",
+		}
+
 		if filters:
-			retriever_kwargs["filters"] = filters
-		
-		retriever = self.index.as_retriever(**retriever_kwargs)
-		
-		# Search
-		nodes = retriever.retrieve(query)
-		
+			llama_filters = [
+				ExactMatchFilter(key=key, value=value)
+				for key, value in filters.items()
+			]
+			query_kwargs["filters"] = MetadataFilters(filters=llama_filters)
+
+		query_obj = VectorStoreQuery(**query_kwargs)
+
+		# Search directly on vector store to use our custom embedding
+		result = self.vector_store.query(query_obj)
+
 		# Convert to ChunkResult
 		results = []
-		for node in nodes:
-			result = ChunkResult(
-				chunk_id=node.metadata.get("chunk_id", ""),
-				text=node.text,
-				title=node.metadata.get("source_title"),
-				score=float(node.score) if hasattr(node, "score") else 0.0,
-				source=node.metadata.get("knowledge_source"),
-				metadata=node.metadata,
-			)
-			results.append(result)
-		
+		if result.nodes:
+			for i, node in enumerate(result.nodes):
+				score = 0.0
+				if result.similarities and i < len(result.similarities):
+					score = float(result.similarities[i])
+
+				res = ChunkResult(
+					chunk_id=node.metadata.get("chunk_id", ""),
+					text=node.text,
+					title=node.metadata.get("source_title"),
+					score=score,
+					source=node.metadata.get("knowledge_source"),
+					metadata={k: v for k, v in node.metadata.items() if k not in [
+						"chunk_id", "source_title", "knowledge_source"
+					]}
+				)
+				results.append(res)
+
 		return results
-	
+
 	def delete_chunks(self, input_id: str) -> int:
-		"""Delete chunks by input_id using Redis hash tagging."""
-		if not self._redis_client:
-			return 0
-		
+		"""Delete all chunks for an input.
+
+		Uses RedisVectorStore.delete_nodes with a metadata filter on input_id.
+		The schema declares input_id as a tag field so this filter is indexed.
+
+		Args:
+			input_id: The input ID to delete chunks for
+
+		Returns:
+			Number of chunks deleted
+		"""
+		if not self._initialized or not self.vector_store:
+			raise RuntimeError("Backend not initialized. Call initialize() first.")
+
 		try:
-			# Redis Vector Store stores documents with metadata
-			# We'll search for keys matching the input_id pattern and delete them
-			index_name = self._index_name
-			
-			# Use FT.SEARCH to find documents by input_id
-			query = f"@input_id:{{{input_id}}}"
-			results = self._redis_client.ft(index_name).search(query)
-			
-			deleted_count = 0
-			if results and results.docs:
-				for doc in results.docs:
-					# Delete the document from Redis
-					self._redis_client.delete(doc.id)
-					deleted_count += 1
-			
-			return deleted_count
+			# Count matching documents before deleting
+			count_query = VectorStoreQuery(
+				filters=MetadataFilters(filters=[
+					ExactMatchFilter(key="input_id", value=input_id)
+				]),
+				similarity_top_k=10000,
+			)
+			count_result = self.vector_store.query(count_query)
+			count = len(count_result.nodes) if count_result.nodes else 0
+
+			# Delete matching documents
+			self.vector_store.delete_nodes(
+				filters=MetadataFilters(filters=[
+					ExactMatchFilter(key="input_id", value=input_id)
+				])
+			)
+
+			return count
 		except Exception as e:
 			frappe.logger().warning(f"Redis delete_chunks error for {input_id}: {str(e)}")
 			return 0
-	
+
 	def clear(self) -> None:
-		"""Clear all vectors from the Redis index."""
-		if self._redis_client and self.vector_store:
-			try:
-				index_name = self._index_name
-				
-				# Drop the search index
-				try:
-					self._redis_client.ft(index_name).dropindex(delete_documents=True)
-				except Exception:
-					# Index might not exist
-					pass
-				
-				# Re-initialize the vector store
-				connection_params = self._get_connection_params()
-				self._index_name = connection_params["index_name"]
-				self.vector_store = RedisVectorStore(**connection_params)
-				self.storage_context = StorageContext.from_defaults(
-					vector_store=self.vector_store
-				)
-				try:
-					self._redis_client = getattr(self.vector_store, "client", None) or getattr(self.vector_store, "_redis_client", None)
-				except Exception:
-					self._redis_client = None
-				self.index = None
-				
-			except Exception as e:
-				frappe.logger().warning(f"Redis clear error: {str(e)}")
-	
+		"""Clear all chunks from the Redis index."""
+		if not self._initialized or not self.vector_store:
+			raise RuntimeError("Backend not initialized. Call initialize() first.")
+
+		try:
+			index_name = self.vector_store.index_name
+			self.vector_store.client.ft(index_name).dropindex(delete_documents=True)
+		except Exception as e:
+			frappe.logger().warning(f"Redis clear dropindex error: {str(e)}")
+
+		# Rebuild vector store so the index exists for subsequent operations
+		self._init_vector_store()
+		self.index = None
+
 	def get_stats(self) -> Dict[str, Any]:
-		"""Get backend statistics."""
+		"""Get backend statistics.
+
+		Returns:
+			Dict with backend statistics
+		"""
 		stats = {
 			"backend_type": "redis",
 			"knowledge_source": self.knowledge_source,
 			"initialized": self._initialized,
 			"host": self.config.get("host", "localhost"),
 			"port": self.config.get("port", 6379),
+			"index_name": self.vector_store.index_name if self.vector_store else None,
+			"chunk_count": 0,
 		}
-		
-		# Try to get Redis index info
-		if self._redis_client:
+
+		if self.vector_store:
 			try:
-				index_name = self._index_name
-				info = self._redis_client.ft(index_name).info()
-				stats["index_name"] = index_name
-				stats["num_docs"] = info.get("num_docs", 0)
-				stats["indexing"] = info.get("indexing", False)
-			except Exception:
-				# Index might not exist yet
-				stats["index_exists"] = False
-		
+				info = self.vector_store.client.ft(
+					self.vector_store.index_name
+				).info()
+				stats["chunk_count"] = info.get("num_docs", 0)
+			except Exception as e:
+				frappe.logger().warning(f"Redis get_stats count error: {str(e)}")
+
 		return stats
-	
+
 	def health_check(self) -> Tuple[bool, str]:
-		"""Check backend health by pinging Redis."""
+		"""Check backend health.
+
+		Returns:
+			Tuple of (is_healthy, message)
+		"""
 		try:
-			if self._redis_client:
-				# Ping Redis server
-				response = self._redis_client.ping()
-				if response:
-					return (True, "Healthy - Redis server responding")
-				else:
-					return (False, "Redis ping failed")
-			else:
-				return (False, "Redis client not initialized")
+			if not self._initialized:
+				return (False, "Backend not initialized")
+
+			if not self.vector_store:
+				return (False, "Redis vector store not available")
+
+			# Ping Redis server
+			self.vector_store.client.ping()
+
+			return (True, "Healthy")
 		except Exception as e:
-			return (False, f"Redis health check failed: {str(e)}")
-	
+			return (False, str(e))
+
 	def supports_filters(self) -> bool:
 		"""Redis supports metadata filtering via RediSearch."""
 		return True
-	
+
 	def supports_hybrid_search(self) -> bool:
-		"""Redis hybrid search is possible but complex to implement.
-		
-		For now, return False. Can be enhanced later with
-		Redisearch hybrid query support.
-		"""
+		"""Redis hybrid search is not enabled in this backend."""
 		return False
-
-
-# Register backend
-BackendFactory.register("redis", RedisBackend)

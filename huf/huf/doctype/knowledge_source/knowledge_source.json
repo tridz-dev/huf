@@ -23,6 +23,13 @@
   "column_break_chroma",
   "chroma_port",
   "chroma_ssl",
+  "redis_server_section",
+  "redis_host",
+  "redis_port",
+  "column_break_redis",
+  "redis_username",
+  "redis_password",
+  "redis_index_prefix",
   "storage_settings_section",
   "storage_mode",
   "sqlite_file",
@@ -175,22 +182,22 @@
    "fieldname": "knowledge_type",
    "fieldtype": "Select",
    "label": "Knowledge Type",
-   "options": "sqlite_fts\nsqlite_vec\nchroma",
+   "options": "sqlite_fts\nsqlite_vec\nchroma\nredis",
    "reqd": 1
   },
   {
    "fieldname": "vector_settings_section",
    "fieldtype": "Section Break",
    "label": "Vector Settings",
-   "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
+   "depends_on": "eval:['sqlite_vec', 'chroma', 'redis'].includes(doc.knowledge_type)"
   },
   {
    "fieldname": "embedding_model",
    "fieldtype": "Data",
    "label": "Embedding Model",
    "description": "LiteLLM model identifier, e.g. openai/text-embedding-3-small",
-   "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)",
-   "mandatory_depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
+   "depends_on": "eval:['sqlite_vec', 'chroma', 'redis'].includes(doc.knowledge_type)",
+   "mandatory_depends_on": "eval:['sqlite_vec', 'chroma', 'redis'].includes(doc.knowledge_type)"
   },
   {
    "fieldname": "vector_dimension",
@@ -199,8 +206,8 @@
    "default": 1536,
    "non_negative": 1,
    "description": "Must match the embedding model output dimensionality",
-   "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)",
-   "mandatory_depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
+   "depends_on": "eval:['sqlite_vec', 'chroma', 'redis'].includes(doc.knowledge_type)",
+   "mandatory_depends_on": "eval:['sqlite_vec', 'chroma', 'redis'].includes(doc.knowledge_type)"
   },
   {
    "fieldname": "column_break_vector",
@@ -212,7 +219,7 @@
    "label": "Embedding Provider",
    "options": "AI Provider",
    "description": "AI Provider for API key resolution",
-   "depends_on": "eval:['sqlite_vec', 'chroma'].includes(doc.knowledge_type)"
+   "depends_on": "eval:['sqlite_vec', 'chroma', 'redis'].includes(doc.knowledge_type)"
   },
   {
    "fieldname": "chroma_server_section",
@@ -256,6 +263,54 @@
    "default": 0,
    "description": "Enable if your Chroma server uses HTTPS",
    "depends_on": "eval:doc.knowledge_type === 'chroma' && doc.chroma_mode === 'Server'"
+  },
+  {
+   "fieldname": "redis_server_section",
+   "fieldtype": "Section Break",
+   "label": "Redis Connection",
+   "depends_on": "eval:doc.knowledge_type === 'redis'"
+  },
+  {
+   "fieldname": "redis_host",
+   "fieldtype": "Data",
+   "label": "Redis Host",
+   "default": "localhost",
+   "description": "Hostname or IP of the Redis server",
+   "depends_on": "eval:doc.knowledge_type === 'redis'"
+  },
+  {
+   "fieldname": "redis_port",
+   "fieldtype": "Int",
+   "label": "Redis Port",
+   "default": 6379,
+   "description": "Port of the Redis server",
+   "depends_on": "eval:doc.knowledge_type === 'redis'"
+  },
+  {
+   "fieldname": "column_break_redis",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "redis_username",
+   "fieldtype": "Data",
+   "label": "Redis Username",
+   "description": "Optional Redis ACL username",
+   "depends_on": "eval:doc.knowledge_type === 'redis'"
+  },
+  {
+   "fieldname": "redis_password",
+   "fieldtype": "Password",
+   "label": "Redis Password",
+   "description": "Optional Redis password",
+   "depends_on": "eval:doc.knowledge_type === 'redis'"
+  },
+  {
+   "fieldname": "redis_index_prefix",
+   "fieldtype": "Data",
+   "label": "Redis Index Prefix",
+   "default": "huf",
+   "description": "Prefix used for the Redis search index and keys",
+   "depends_on": "eval:doc.knowledge_type === 'redis'"
   },
   {
    "fieldname": "seeding_metadata_section",

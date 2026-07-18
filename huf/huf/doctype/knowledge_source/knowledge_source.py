@@ -18,11 +18,13 @@ class KnowledgeSource(Document):
 			frappe.throw(_("Chunk overlap must be less than chunk size"))
 
 	def validate_vector_settings(self):
-		if self.knowledge_type == "sqlite_vec":
+		if self.knowledge_type in ("sqlite_vec", "chroma", "redis"):
 			if not self.embedding_model:
 				frappe.throw(_("Embedding Model is required for vector knowledge types"))
 			if not self.vector_dimension or self.vector_dimension <= 0:
 				frappe.throw(_("Vector Dimension must be a positive integer for vector knowledge types"))
+
+		if self.knowledge_type == "sqlite_vec":
 			from huf.ai.knowledge.backends.sqlite_vec_backend import check_sqlite_vec_available
 
 			if not check_sqlite_vec_available():

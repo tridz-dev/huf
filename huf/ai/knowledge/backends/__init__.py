@@ -2,7 +2,7 @@
 Knowledge Backend Abstraction
 
 This module provides a unified interface for knowledge storage backends.
-Supported: SQLite FTS (keyword search), SQLite Vec (vector search), ChromaDB (vector search)
+Supported: SQLite FTS (keyword search), SQLite Vec (vector search), ChromaDB (vector search), Redis (vector search)
 """
 
 from abc import ABC, abstractmethod
@@ -66,6 +66,7 @@ def get_backend(backend_type: str) -> type:
 		"sqlite_fts": "huf.ai.knowledge.backends.sqlite_fts.SQLiteFTSBackend",
 		"sqlite_vec": "huf.ai.knowledge.backends.sqlite_vec_backend.SQLiteVecBackend",
 		"chroma": "huf.ai.knowledge.backends.chroma_backend.ChromaBackend",
+		"redis": "huf.ai.knowledge.backends.redis_backend.RedisBackend",
 	}
 	
 	if backend_type not in backends:

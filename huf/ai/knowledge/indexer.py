@@ -21,7 +21,7 @@ def _build_backend_config(source) -> dict:
 		"chunk_overlap": source.chunk_overlap,
 	}
 
-	if source.knowledge_type in ("sqlite_vec", "chroma"):
+	if source.knowledge_type in ("sqlite_vec", "chroma", "redis"):
 		config["embedding_model"] = source.embedding_model
 		config["vector_dimension"] = source.vector_dimension
 		config["embedding_provider"] = getattr(source, "embedding_provider", None)
@@ -38,6 +38,16 @@ def _build_backend_config(source) -> dict:
 			files_path = get_files_path(is_private=True)
 			safe_name = frappe.scrub(source.name)
 			config["persist_directory"] = os.path.join(files_path, "knowledge", f"{safe_name}_chroma")
+
+	if source.knowledge_type == "redis":
+		config["host"] = getattr(source, "redis_host", None) or "localhost"
+		config["port"] = int(getattr(source, "redis_port", None) or 6379)
+		config["username"] = getattr(source, "redis_username", None)
+		try:
+			config["password"] = source.get_password("redis_password") if getattr(source, "redis_password", None) else None
+		except Exception:
+			config["password"] = None
+		config["index_prefix"] = getattr(source, "redis_index_prefix", None) or "huf"
 
 	return config
 
