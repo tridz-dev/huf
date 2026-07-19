@@ -137,6 +137,8 @@ class RedisBackend(KnowledgeBackend):
 			],
 		})
 
+		self._index_name = index_name
+
 		self.vector_store = RedisVectorStore(
 			redis_client=self._redis_client,
 			schema=schema,
@@ -275,8 +277,8 @@ class RedisBackend(KnowledgeBackend):
 	def delete_chunks(self, input_id: str) -> int:
 		"""Delete all chunks for an input.
 
-		Uses RedisVectorStore.delete_nodes with a metadata filter on input_id.
-		The schema declares input_id as a tag field so this filter is indexed.
+		Uses a raw RediSearch tag query on the indexed input_id field so deletion
+		does not require a vector embedding.
 
 		Args:
 			input_id: The input ID to delete chunks for
@@ -284,30 +286,28 @@ class RedisBackend(KnowledgeBackend):
 		Returns:
 			Number of chunks deleted
 		"""
-		if not self._initialized or not self.vector_store:
+		if not self._initialized or not self._redis_client:
 			raise RuntimeError("Backend not initialized. Call initialize() first.")
 
+		import re
+		from redis.commands.search.query import Query
+
+		# Escape any character that is not alphanumeric or underscore for the tag query
+		escaped_id = re.sub(r'([^a-zA-Z0-9_])', r'\\\1', input_id)
+
+		index_name = getattr(self, "_index_name", None) or self.vector_store.index_name
+
 		try:
-			# Count matching documents before deleting
-			count_query = VectorStoreQuery(
-				filters=MetadataFilters(filters=[
-					ExactMatchFilter(key="input_id", value=input_id)
-				]),
-				similarity_top_k=10000,
-			)
-			count_result = self.vector_store.query(count_query)
-			count = len(count_result.nodes) if count_result.nodes else 0
-
-			# Delete matching documents
-			self.vector_store.delete_nodes(
-				filters=MetadataFilters(filters=[
-					ExactMatchFilter(key="input_id", value=input_id)
-				])
-			)
-
-			return count
+			q = Query(f'@input_id:{{{escaped_id}}}').paging(0, 10000).no_content()
+			res = self._redis_client.ft(index_name).search(q)
+			for doc in res.docs:
+				self._redis_client.delete(doc.id)
+			return len(res.docs)
 		except Exception as e:
-			frappe.logger().warning(f"Redis delete_chunks error for {input_id}: {str(e)}")
+			import traceback
+			frappe.logger().warning(
+				f"Redis delete_chunks error for {input_id}: {repr(e)}\n{traceback.format_exc()}"
+			)
 			return 0
 
 	def clear(self) -> None:
