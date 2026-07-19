@@ -12,6 +12,14 @@ from typing import Any
 import frappe
 from frappe import _
 
+# Built-in backend registry. Hooked backends are merged on top per request.
+_BUILTIN_BACKENDS = {
+	"sqlite_fts": "huf.ai.knowledge.backends.sqlite_fts.SQLiteFTSBackend",
+	"sqlite_vec": "huf.ai.knowledge.backends.sqlite_vec_backend.SQLiteVecBackend",
+	"chroma": "huf.ai.knowledge.backends.chroma_backend.ChromaBackend",
+	"pgvector": "huf.ai.knowledge.backends.pgvector_backend.PGVectorBackend",
+}
+
 
 @dataclass
 class ChunkResult:
@@ -69,19 +77,76 @@ class KnowledgeBackend(ABC):
 		return []
 
 
+def _discover_backends() -> dict[str, str]:
+	"""Return the merged registry of built-in + hooked knowledge backends.
+
+	Built-in backends are loaded first. Each installed app may contribute
+	additional backends via the ``huf_knowledge_backends`` hook. Hook entries
+	must be dicts mapping ``backend_type`` to ``dotted.path.to.Class``.
+
+	Hook-provided type keys that collide with a built-in key are skipped and
+	logged as a warning so external apps cannot shadow HUF's built-ins.
+	"""
+	backends = dict(_BUILTIN_BACKENDS)
+
+	for app in frappe.get_installed_apps():
+		app_hooks = frappe.get_hooks("huf_knowledge_backends", app_name=app) or []
+		for hook_entry in app_hooks:
+			if not isinstance(hook_entry, dict):
+				frappe.logger().warning(
+					_("huf_knowledge_backends entry in app '{0}' must be a dict; got {1}").format(
+						app, type(hook_entry).__name__
+					)
+				)
+				continue
+
+			for backend_type, dotted_path in hook_entry.items():
+				if backend_type in _BUILTIN_BACKENDS:
+					frappe.logger().warning(
+						_(
+							"huf_knowledge_backends in app '{0}' tried to override built-in "
+							"backend '{1}'; skipping."
+						).format(app, backend_type)
+					)
+					continue
+				if backend_type in backends:
+					frappe.logger().warning(
+						_(
+							"huf_knowledge_backends in app '{0}' declares duplicate backend "
+							"type '{1}'; keeping first registration."
+						).format(app, backend_type)
+					)
+					continue
+				backends[backend_type] = dotted_path
+
+	return backends
+
+
+def _get_backend_registry() -> dict[str, str]:
+	"""Return the discovered backend registry, cached for the current request."""
+	if not getattr(frappe.local, "huf_backend_registry", None):
+		frappe.local.huf_backend_registry = _discover_backends()
+	return frappe.local.huf_backend_registry
+
+
 def get_backend(backend_type: str) -> type:
 	"""Get backend class by type."""
-	backends = {
-		"sqlite_fts": "huf.ai.knowledge.backends.sqlite_fts.SQLiteFTSBackend",
-		"sqlite_vec": "huf.ai.knowledge.backends.sqlite_vec_backend.SQLiteVecBackend",
-		"chroma": "huf.ai.knowledge.backends.chroma_backend.ChromaBackend",
-		"pgvector": "huf.ai.knowledge.backends.pgvector_backend.PGVectorBackend",
-	}
+	backends = _get_backend_registry()
 
 	if backend_type not in backends:
 		frappe.throw(_("Unknown backend type: {0}").format(backend_type))
 
-	return frappe.get_attr(backends[backend_type])
+	dotted_path = backends[backend_type]
+	backend_class = frappe.get_attr(dotted_path)
+
+	if not isinstance(backend_class, type) or not issubclass(backend_class, KnowledgeBackend):
+		frappe.throw(
+			_("Knowledge backend '{0}' ({1}) must be a subclass of KnowledgeBackend.").format(
+				backend_type, dotted_path
+			)
+		)
+
+	return backend_class
 
 
 @frappe.whitelist()
