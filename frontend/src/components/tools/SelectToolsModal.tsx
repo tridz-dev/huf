@@ -20,6 +20,7 @@ import { ToolCreationForm } from './ToolCreationForm';
 import { getToolFunctions, getToolTypes, createToolFunction, getAgentsUsingTool } from '@/services/toolApi';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
+import { getToolTypeDisplayLabel } from '@/data/ai';
 import { toast } from 'sonner';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import toolTemplatesConfig from '@/config/toolTemplates.json';
@@ -126,7 +127,7 @@ export function SelectToolsModal({
       { value: 'all', label: 'All Tool Types' },
       ...toolTypes.map((type) => ({
         value: type.name,
-        label: type.name1 || type.name,
+        label: getToolTypeDisplayLabel(type.name1 || type.name),
       })),
     ];
     return options;

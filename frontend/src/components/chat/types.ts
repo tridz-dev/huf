@@ -12,6 +12,8 @@ export type MessageType = {
   generatedAudio?: string;
   generatedVideo?: string;
   voiceMessage?: string;
+  sttModel?: string;
+  status?: string;
   attachment?: {
     name: string;
     label: string;
