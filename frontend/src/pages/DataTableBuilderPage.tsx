@@ -253,9 +253,9 @@ export function DataTableBuilderPage() {
 				allowNavigationRef.current = true;
 				navigate(`/data/${result.name}`);
 			}
-		} catch (err: any) {
+		} catch (err: unknown) {
 			toast.error(isEdit ? 'Failed to update table' : 'Failed to create table', {
-				description: err.message,
+				description: err instanceof Error ? err.message : String(err),
 			});
 		} finally {
 			setSaving(false);
