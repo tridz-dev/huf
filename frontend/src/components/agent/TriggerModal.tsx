@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { TriggerFieldsRenderer } from './TriggerFieldsRenderer';
 import { triggerFieldsConfig } from './TriggerFieldsConfig';
+import { TriggerDocEventExtras } from './TriggerDocEventExtras';
 import type { AgentTriggerDoc, TriggerTypeOption } from '@/services/agentApi';
 import type { TriggerType } from '@/types/agent.types';
 
@@ -85,6 +86,20 @@ const triggerFormSchema = z.object({
   reference_doctype: z.string().optional(),
   doc_event: z.string().optional(),
   condition: z.string().optional(),
+  prompt_field: z.string().optional(),
+  file_attachments: z
+    .array(
+      z.object({
+        name: z.string().optional(),
+        source_type: z.enum(['DocField', 'Child Table Field']),
+        field_name: z.string().min(1, 'Attach field name is required'),
+        child_table: z.string().optional(),
+      }).refine(
+        (row) => row.source_type !== 'Child Table Field' || !!row.child_table,
+        { message: 'Child table is required', path: ['child_table'] }
+      )
+    )
+    .optional(),
   app_name: z.string().optional(),
   event_name: z.string().optional(),
   webhook_slug: z.string().optional(),
@@ -132,6 +147,7 @@ export function TriggerModal({
       trigger_type: 'Schedule',
       active: true,
       interval_count: undefined,
+      file_attachments: [],
     },
   });
 
@@ -150,6 +166,8 @@ export function TriggerModal({
           reference_doctype: editingTrigger.reference_doctype,
           doc_event: editingTrigger.doc_event,
           condition: editingTrigger.condition,
+          prompt_field: editingTrigger.prompt_field,
+          file_attachments: editingTrigger.file_attachments || [],
           app_name: editingTrigger.app_name,
           event_name: editingTrigger.event_name,
           webhook_slug: editingTrigger.webhook_slug,
@@ -165,6 +183,8 @@ export function TriggerModal({
           reference_doctype: undefined,
           doc_event: undefined,
           condition: undefined,
+          prompt_field: undefined,
+          file_attachments: [],
           app_name: undefined,
           event_name: undefined,
           webhook_slug: undefined,
@@ -278,6 +298,12 @@ export function TriggerModal({
                 loadingDocTypes={loadingDocTypes}
                 agentId={agentId}
               />
+            )}
+
+            {/* Doc Event extras: prompt field + file attachment mappings */}
+            {watchTriggerType === 'Doc Event' && (
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              <TriggerDocEventExtras control={triggerForm.control as unknown as Control<any>} />
             )}
 
             </DialogScrollBody>

@@ -204,6 +204,16 @@ export async function getAgent(name: string): Promise<AgentDoc> {
 }
 
 /**
+ * Child table row for Agent Trigger file attachments (Agent Trigger Attachment)
+ */
+export interface AgentTriggerAttachmentRow {
+  name?: string;
+  source_type: 'DocField' | 'Child Table Field';
+  child_table?: string;
+  field_name: string;
+}
+
+/**
  * Agent Trigger document from Frappe (for editing)
  */
 export interface AgentTriggerDoc {
@@ -217,6 +227,8 @@ export interface AgentTriggerDoc {
   reference_doctype?: string;
   doc_event?: string;
   condition?: string;
+  prompt_field?: string;
+  file_attachments?: AgentTriggerAttachmentRow[];
   webhook_key?: string;
   webhook_slug?: string;
   app_name?: string;
