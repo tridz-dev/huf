@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from huf.ai.transaction import commit_if_background
+
 # Helper Functions
 def _now_iso_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -123,7 +125,7 @@ def handle_set_conversation_data(
         new_json = json.dumps(state, ensure_ascii=False, indent=2)
         
         frappe.db.set_value("Agent Conversation", conversation_id, "conversation_data", new_json)
-        frappe.db.commit() # Persist changes immediately
+        commit_if_background() # Persist changes immediately
         
         return {"success": True, "message": f"Set '{name}' match successfully"}
     

@@ -82,7 +82,6 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
-	frappe.db.commit()
 	return {"flow_id": doc.flow_id, "version": doc.version}
 
 
@@ -376,6 +375,11 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
 
+	# Frappe's make_form_dict drops query string arguments if the request has a JSON body.
+	# We must manually extract webhook_key from request.args if it's missing.
+	if webhook_key is None and getattr(frappe, "request", None) and frappe.request.args:
+		webhook_key = frappe.request.args.get("webhook_key")
+
 	# Validate webhook auth — mandatory, fail closed.
 	if not _webhook_key_is_valid(defn, webhook_key):
 		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
@@ -472,8 +476,6 @@ def schedule_flow(flow_id: str, cron: str, schedule_name: str | None = None, tim
 		})
 		doc.insert()
 	
-	frappe.db.commit()
-	
 	return {
 		"schedule_id": doc.name,
 		"flow_id": flow_id,
@@ -507,7 +509,6 @@ def unschedule_flow(flow_id: str) -> dict:
 		}
 	
 	frappe.delete_doc("Scheduled Job Type", existing, ignore_missing=True)
-	frappe.db.commit()
 	
 	return {
 		"status": "unscheduled",

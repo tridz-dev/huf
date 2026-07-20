@@ -246,8 +246,7 @@ def upload_audio_and_transcribe_web(
     if stt_model_link:
         frappe.db.set_value("Agent Message", msg.name, "stt_model", stt_model_link)
     frappe.db.set_value("Agent Message", msg.name, "status", "Completed")
-    frappe.db.commit()
-
+    
     if transcribe_only:
         return {
             "success": True,

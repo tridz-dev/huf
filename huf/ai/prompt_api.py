@@ -66,8 +66,6 @@ def create_new_version(prompt_name, prompt_body, title=None, description=None):
 	# Update agents that point to the old version and are NOT locked
 	_update_agent_links(prompt_name, new_prompt.name, new_version)
 
-	frappe.db.commit()
-
 	return {"name": new_prompt.name, "version": new_version}
 
 
@@ -127,7 +125,6 @@ def fork_prompt(prompt_name, title=None):
 		"forked_from": prompt_name,
 	})
 	forked.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"name": forked.name, "version": 1}
 
@@ -165,7 +162,6 @@ def detach_from_template(agent_name):
 	agent.prompt_version_locked = 0
 	agent.template_version_at_attach = 0
 	agent.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"success": True, "prompt_mode": "Local"}
 
@@ -205,7 +201,6 @@ def save_as_template(agent_name, title, category=None, visibility="Private", des
 		"is_latest": 1,
 	})
 	prompt.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"name": prompt.name, "version": 1}
 
@@ -236,7 +231,6 @@ def attach_template(agent_name, prompt_name, lock_version=0):
 	agent.prompt_version_locked = cint(lock_version)
 	agent.template_version_at_attach = prompt.version
 	agent.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"success": True, "prompt_mode": "Template", "version": prompt.version}
 
@@ -314,8 +308,6 @@ def create_new_summary_version(prompt_name, prompt_body, title=None, description
 	# Update agents that point to the old version and are NOT locked
 	_update_summary_agent_links(prompt_name, new_prompt.name, new_version)
 
-	frappe.db.commit()
-
 	return {"name": new_prompt.name, "version": new_version}
 
 
@@ -375,7 +367,6 @@ def fork_summary_prompt(prompt_name, title=None):
 		"forked_from": prompt_name,
 	})
 	forked.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"name": forked.name, "version": 1}
 
@@ -412,7 +403,6 @@ def detach_from_summary_template(agent_name):
 	agent.summary_prompt_version_locked = 0
 	agent.summary_template_version_at_attach = 0
 	agent.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"success": True, "summary_prompt_mode": "Local"}
 
@@ -452,7 +442,6 @@ def save_as_summary_template(agent_name, title, category=None, visibility="Priva
 		"is_latest": 1,
 	})
 	prompt.insert(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"name": prompt.name, "version": 1}
 
@@ -483,7 +472,6 @@ def attach_summary_template(agent_name, prompt_name, lock_version=0):
 	agent.summary_prompt_version_locked = cint(lock_version)
 	agent.summary_template_version_at_attach = prompt.version
 	agent.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"success": True, "summary_prompt_mode": "Template", "version": prompt.version}
 

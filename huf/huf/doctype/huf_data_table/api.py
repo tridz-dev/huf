@@ -90,8 +90,6 @@ def create_data_table(
 	)
 	registry.insert(ignore_permissions=True)
 
-	frappe.db.commit()
-
 	return {
 		"success": True,
 		"data": {
@@ -135,7 +133,6 @@ def update_data_table(
 		registry.icon = icon
 
 	registry.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"success": True, "data": {"name": registry.name}}
 
@@ -156,7 +153,6 @@ def delete_data_table(name: str) -> dict:
 		frappe.delete_doc("DocType", doctype_name, force=True, ignore_permissions=True)
 
 	frappe.delete_doc("Huf Data Table", name, ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"success": True, "data": {"deleted_records": record_count}}
 

@@ -20,6 +20,8 @@ from typing import Optional
 import frappe
 from frappe.utils.background_jobs import enqueue
 
+from huf.ai.transaction import commit_if_background
+
 
 WEBHOOK_HEADER = "X-Telegram-Bot-Api-Secret-Token"
 
@@ -176,7 +178,7 @@ def process_telegram_update(settings_name: str, update: dict):
     except Exception as e:
         frappe.log_error(f"Error processing Telegram update: {e}", "Telegram Webhook")
     finally:
-        frappe.db.commit()
+        commit_if_background()
 
 
 def _extract_message(update: dict) -> Optional[dict]:
