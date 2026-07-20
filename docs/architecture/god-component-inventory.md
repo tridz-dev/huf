@@ -24,7 +24,7 @@ Allowing god-components to propagate has severely impacted development speed and
 
 The primary strategy for resolving god-component sprawl in this repository is transitioning from hand-wired components to **schema-driven configurations** (aligned with the PR #156 architectural plan):
 
-- **Pilot Project**: `AgentFormPage.tsx` (`frontend/src/pages/AgentFormPage.tsx`) is the pilot for the schema-driven form refactor. All individual agent form fields are being moved to a centralized JSON schema config.
+- **Pilot Project**: `AgentFormPage.tsx` (`frontend/src/pages/AgentFormPage.tsx`) is the pilot for the schema-driven form refactor. Individual agent form fields move to **per-tab TypeScript `FieldDefinition[]` schemas** (`fields/<tab>.fields.ts`) — deliberately NOT one centralized/global schema, which would recreate the god component in config form (PR-156 plan, amendment A2).
 - **Follow-on Adopters**: Forms such as `ToolCreationForm.tsx` (`frontend/src/components/tools/ToolCreationForm.tsx`), `AgentPromptFormPage.tsx` (`frontend/src/pages/AgentPromptFormPage.tsx`), and `AgentSummaryPromptFormPage.tsx` (`frontend/src/pages/AgentSummaryPromptFormPage.tsx`) will adopt this schema-driven architecture subsequently, eliminating custom field rendering within page-level files.
 
 ---
@@ -37,11 +37,11 @@ The following inventory lists all page/view components in the frontend that curr
 
 1. **`AgentFormPage.tsx` (`frontend/src/pages/AgentFormPage.tsx`)** (1902 lines, 48 `useState` hooks)
    - *Status*: Drifted from expected 1889 lines to 1902 lines.
-   - *Recommended Split*: Transition to the schema-driven form refactor (PR #156). Replace 48 standalone state hooks with a form framework (e.g., `react-hook-form`). Extract tab sections (General, Behavior, Tools, Knowledge, Advanced) and dialog handlers into isolated lazy-loaded child components.
+   - *Recommended Split*: Per the adopted PR-156 plan — note the file ALREADY uses react-hook-form + Zod for form values (`useForm<AgentFormValues>`); the 48 `useState` are async/resource/modal/UI state. Phase 0 regression suite → Phase 1 `transforms.ts` + domain-hook extraction (`useAgentLoad`, `useAgentSave`, `useAgentDirty`, `useAgentTools`, `useAgentMcp`, `useAgentKnowledge`, `useAgentTriggers`) → Phase 2 per-tab typed `FieldDefinition[]` + `FormRenderer` (scalar fields only, General first; Triggers/Tools/Knowledge are child-table workflows and keep dedicated components). Do NOT propose a value-store rewrite.
 
 2. **`prompt-input.tsx` (`frontend/src/components/ai-elements/prompt-input.tsx`)** (1366 lines, 7 `useState` hooks)
    - *Status*: Stable at 1366 lines.
-   - *Recommended Split*: Extract attachment handling and drag-and-drop logic to `PromptAttachmentManager`. Move token counting and pricing indicators to `PromptTokenCounter`. Extract trigger buttons to `PromptToolbar`.
+   - *Recommended Split*: Extract the two near-duplicate attachment contexts (`AttachmentsContext`, local attachment state — the real smell) into `PromptAttachmentManager`; extract the global drop-zone handler effect (`globalDrop`, `onDragOver`/`onDrop`); extract the dropdown action menu / header buttons. (No token-counting or pricing indicators exist in this file — do not plan around them.)
 
 3. **`ToolCreationForm.tsx` (`frontend/src/components/tools/ToolCreationForm.tsx`)** (1037 lines, 7 `useState` hooks)
    - *Status*: Drifted from expected 1036 lines to 1037 lines.
@@ -57,7 +57,7 @@ The following inventory lists all page/view components in the frontend that curr
 
 6. **`ChatListing.tsx` (`frontend/src/components/chat/ChatListing.tsx`)** (692 lines, 7 `useState` hooks)
    - *Status*: Stable at 692 lines.
-   - *Recommended Split*: Extract search/filters to `ChatSearchHeader`. Extract conversation list items and action menus to `ConversationListItem` and `ConversationMenu`.
+   - *Recommended Split*: Real seams (verified against the code): agent-grouping already has `AgentConversationItem` and recents has `RecentsConversationList` — extract the `handleNewConversation` custom-event listener and the `getAgentsWithConversationCounts` data fetching into a `useConversations` hook. (No search/filter UI exists in this file, and `ConversationMenu` is already extracted — earlier recommendations naming them were wrong.)
 
 7. **`NodeSelectionModal.tsx` (`frontend/src/components/modals/NodeSelectionModal.tsx`)** (680 lines, 10 `useState` hooks)
    - *Status*: Stable at 680 lines.
@@ -70,10 +70,10 @@ The following inventory lists all page/view components in the frontend that curr
 ### Additional Over-Limit Components (>400 Lines)
 
 9. **`RightSidebar.tsx` (`frontend/src/components/RightSidebar.tsx`)** (1210 lines, 15 `useState` hooks)
-   - *Recommended Split*: Split tab panels into independent components (`ContextPanel`, `ExecutionPropertiesPanel`, `RunHistoryPanel`).
+   - *Recommended Split*: This is the flow builder's selected node/edge configuration panel. Split per node type: `TriggerConfigPanel` (webhook/schedule/doc-event), `ActionConfigPanel` (agent-run/router/tool-call/human-in-loop), `EdgeConfigPanel` — and extract the four data-loading effects (agents, tools, DocTypes, roles) into hooks. (There are no Context/ExecutionProperties/RunHistory panels — an earlier recommendation naming them was wrong.)
 
 10. **`AdvancedTab.tsx` (`frontend/src/components/agent/AdvancedTab.tsx`)** (768 lines, 0 `useState` hooks)
-    - *Recommended Split*: Group advanced fields into isolated fieldsets or sub-sections: `ModelSettingsSection`, `TokenLimitSection`, `SystemTuningSection`.
+    - *Recommended Split*: Already sectioned into `FormSettingsSection` blocks with 0 `useState` — do not rename sections. It is a presentational tab absorbed by the schema-driven pilot (a per-tab `advanced.fields.ts` in Phase 2), not a standalone refactor target.
 
 11. **`ChatInput.tsx` (`frontend/src/components/chat/ChatInput.tsx`)** (716 lines, 4 `useState` hooks)
     - *Recommended Split*: Extract speech-to-text functionality to `SpeechInputButton` and move drag-and-drop attachment layout to `ChatAttachmentDropzone`.
@@ -116,3 +116,22 @@ The following inventory lists all page/view components in the frontend that curr
 
 24. **`KnowledgeInputsModal.tsx` (`frontend/src/components/knowledge/KnowledgeInputsModal.tsx`)** (408 lines, 12 `useState` hooks)
     - *Recommended Split*: Split modal configuration screens (File upload, Text input, URL scraping) into tabbed content panes (`FileInputPane`, `TextInputPane`, `UrlInputPane`).
+
+### Watchlist — additional over-limit and state-heavy components
+
+25. **`App.tsx` (`frontend/src/App.tsx`)** (502 lines) — root route/provider composition; likely **exempt** (composition, not logic) — stated explicitly rather than silently omitted.
+26. **`FlowContext.tsx` (`frontend/src/contexts/FlowContext.tsx`)** (468 lines) — context provider; exactly the co-located-state pattern this document warns about. *Recommended Split*: split provider by domain (definition state vs execution state) and extract side effects into hooks.
+27. **`SelectToolsModal.tsx` (`frontend/src/components/tools/SelectToolsModal.tsx`)** (393 lines, 12 `useState`) — under 400 lines but violates the 10-`useState` rule.
+28. **`ConsolePage.tsx` (`frontend/src/pages/ConsolePage.tsx`)** (212 lines, 12 `useState`) — same.
+29. **`UsersPage.tsx` (`frontend/src/pages/UsersPage.tsx`)** (346 lines, 11 `useState`) — same.
+
+### Re-verification ritual
+
+Counts drift within days (AgentFormPage 1889→1902 and ToolCreationForm 1036→1037 drifted within one week). Every per-component PR must re-run the scan and update this inventory:
+
+```bash
+for f in $(find frontend/src -name '*.tsx'); do
+  lines=$(wc -l < "$f"); states=$(grep -c useState "$f" || true)
+  [ "$lines" -gt 400 ] || [ "$states" -gt 10 ] && echo "$lines / $states  $f"
+done | sort -rn
+```
