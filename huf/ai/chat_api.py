@@ -3,6 +3,8 @@ import json
 import frappe
 from frappe import _
 
+from huf.permissions import has_capability
+
 from .agent_integration import run_agent_sync, _is_user_allowed
 from .conversation_manager import ConversationManager
 
@@ -60,12 +62,16 @@ def run_agent_sync_chat(
         channel_id = "api"
 
     if _as_bool(create_new):
+        allow_guest = frappe.db.get_value("Agent", agent_name, "allow_guest")
+        if allow_guest is None or (frappe.session.user == "Guest" and not allow_guest):
+            frappe.throw(_("Agent not found or access denied."), frappe.PermissionError)
+
         agent_doc = frappe.get_doc("Agent", agent_name)
 
-        if frappe.session.user == "Guest" and not agent_doc.allow_guest:
-            frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
-
         if not _is_user_allowed(agent_doc, frappe.session.user):
+            frappe.throw(_("You are not authorized to use this agent."), frappe.PermissionError)
+
+        if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
             frappe.throw(_("You are not authorized to use this agent."), frappe.PermissionError)
 
         conv_manager = ConversationManager(

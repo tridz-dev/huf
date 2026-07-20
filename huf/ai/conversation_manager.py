@@ -1,5 +1,8 @@
 import frappe
+from frappe import _
 from frappe.utils import now
+
+from huf.permissions import has_capability
 import json
 from collections import defaultdict
 from typing import Any
@@ -356,10 +359,20 @@ class ConversationManager:
         if conversation_id:
             try:
                 conversation = frappe.get_doc("Agent Conversation", conversation_id)
+            except frappe.DoesNotExistError:
+                conversation = None
+            if conversation:
+                if conversation.agent != self.agent_name or not (
+                    conversation.owner == frappe.session.user
+                    or conversation.session_id == self.session_id
+                    or has_capability(frappe.session.user, "chat.view_all")
+                ):
+                    frappe.throw(
+                        _("Conversation not found or access denied."),
+                        frappe.PermissionError
+                    )
                 if conversation.is_active:
                     return conversation
-            except frappe.DoesNotExistError:
-                pass
 
         # Try to get existing active conversation
         conversation = frappe.get_all(

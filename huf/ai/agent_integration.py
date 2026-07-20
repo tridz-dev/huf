@@ -10,6 +10,7 @@ from frappe.utils.background_jobs import enqueue
 from frappe.utils import now_datetime
 
 from frappe import _
+from huf.permissions import has_capability
 from .tool_functions import (
 	create_document,
     get_document,
@@ -657,19 +658,30 @@ def run_agent_sync(
     if not channel_id:
         channel_id = "api"
 
-    agent_doc = frappe.get_doc("Agent", agent_name)
-    
-    resolved_provider = provider if provider else agent_doc.provider
-    resolved_model = model if model else agent_doc.model
+    allow_guest = frappe.db.get_value("Agent", agent_name, "allow_guest")
+    if allow_guest is None or (frappe.session.user == "Guest" and not allow_guest):
+        frappe.throw(_("Agent not found or access denied."), frappe.PermissionError)
 
-    if frappe.session.user == "Guest" and not agent_doc.allow_guest:
-        frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
+    agent_doc = frappe.get_doc("Agent", agent_name)
 
     if not _is_user_allowed(agent_doc, frappe.session.user):
         frappe.throw(
             _("You are not authorized to use this agent."),
             frappe.PermissionError
         )
+
+    if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+        frappe.throw(
+            _("You are not authorized to use this agent."),
+            frappe.PermissionError
+        )
+
+    if frappe.session.user == "Guest":
+        provider = None
+        model = None
+
+    resolved_provider = provider if provider else agent_doc.provider
+    resolved_model = model if model else agent_doc.model
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -1352,15 +1364,16 @@ async def run_agent_stream(
         channel_id = "sse_stream"
     
     try:
-        agent_doc = frappe.get_doc("Agent", agent_name)
-
-        # 1. Guest Check
-        if frappe.session.user == "Guest" and not agent_doc.allow_guest:
+        # 1. Guest / existence check — before loading the doc, one generic error
+        allow_guest = frappe.db.get_value("Agent", agent_name, "allow_guest")
+        if allow_guest is None or (frappe.session.user == "Guest" and not allow_guest):
             yield {
                 "type": "error",
-                "error": "Access denied. This agent does not allow guest access."
+                "error": "Agent not found or access denied."
             }
             return
+
+        agent_doc = frappe.get_doc("Agent", agent_name)
 
         # 2. Permission Check (User/Role binding)
         if not _is_user_allowed(agent_doc, frappe.session.user):
@@ -1369,7 +1382,15 @@ async def run_agent_stream(
                 "error": "You are not authorized to use this agent."
             }
             return
-        
+
+        # 3. Capability check for logged-in users
+        if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+            yield {
+                "type": "error",
+                "error": "You are not authorized to use this agent."
+            }
+            return
+
         # Validate agent allows chat (for streaming UI)
         if not agent_doc.allow_chat:
             yield {
@@ -1417,6 +1438,11 @@ async def run_agent_stream(
                 exact_match = frappe.db.get_value("Agent Prompt", {"prompt_group": prompt_data.prompt_group, "version": int(prompt_version)}, "name")
                 if exact_match:
                     resolved_prompt_template = exact_match
+
+        # Guests may not override the agent's configured provider/model
+        if frappe.session.user == "Guest":
+            provider = None
+            model = None
 
         resolved_provider = provider if provider else agent_doc.provider
         resolved_model = model if model else agent_doc.model
