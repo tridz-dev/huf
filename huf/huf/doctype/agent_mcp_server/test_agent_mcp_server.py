@@ -4,10 +4,10 @@
 import json
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
-class TestAgentMCPServer(FrappeTestCase):
+class TestAgentMCPServer(IntegrationTestCase):
 	def _make_provider_and_model(self):
 		# Shared fixture: same provider/model can be reused across test
 		# methods, so get-or-create instead of a bare insert.

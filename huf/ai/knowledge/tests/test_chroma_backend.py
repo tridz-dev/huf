@@ -9,12 +9,12 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from huf.ai.knowledge.backends.chroma_backend import ChromaBackend, LLAMAINDEX_AVAILABLE
 
 
-class TestChromaBackend(FrappeTestCase):
+class TestChromaBackend(IntegrationTestCase):
 	"""Test cases for ChromaBackend."""
 	
 	def setUp(self):

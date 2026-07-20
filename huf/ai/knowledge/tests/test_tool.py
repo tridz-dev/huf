@@ -1,6 +1,6 @@
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from unittest.mock import patch, MagicMock
 from huf.ai.knowledge.tool import (
     create_knowledge_search_tool,
@@ -9,7 +9,7 @@ from huf.ai.knowledge.tool import (
     handle_get_knowledge_sources
 )
 
-class TestKnowledgeTool(FrappeTestCase):
+class TestKnowledgeTool(IntegrationTestCase):
     def setUp(self):
         # Create dependencies
         if not frappe.db.exists("AI Provider", "Test Provider"):
