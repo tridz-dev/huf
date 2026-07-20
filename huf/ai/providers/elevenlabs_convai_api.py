@@ -113,7 +113,7 @@ def _verify_webhook_signature(secret, sig_header, raw_body):
     return hmac.compare_digest(v0_part, calculated)
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist(allow_guest=True, methods=["POST"])
 def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
     """
     Handles ElevenLabs Post Call Transcription.
