@@ -2084,6 +2084,10 @@ Existing Agent Run with additional flow linkage fields.
 
 Edges are sorted by priority (descending); first match wins.
 
+**Approval routing**: On `human.approval`, the engine follows the edge whose `meta.outcome` matches the decision (`approved`/`rejected`). An approval falls back to the success path when no matching edge exists; a rejection without an explicit `meta.outcome=rejected` edge FAILS the run instead of falling through the success path.
+
+**Loop routing**: `loop` nodes route to their body or done node via the `next_node_id` returned by the loop executor; without a done node the flow completes gracefully when the loop finishes.
+
 ### Execution Modes
 
 **Normal Mode**: Engine follows edges deterministically. Agents run only when `agent.run` nodes are hit.
@@ -2126,7 +2130,8 @@ Registered via `huf_tools` hook so agents can interact with flows:
 ### Security
 
 - **Expression edges**: AST-based restricted evaluator; no imports, no function calls, no attribute access
-- **Human approval**: User/role verification before approve/reject
+- **Human approval**: User/role verification before approve/reject (`approval_type` `user` and `users` are treated as synonyms)
+- **Permissions**: Huf Manager has `create` on Flow Run (requires `bench migrate` on deploy to apply); agent tool handlers (`run_flow`, `get_flow_run`, `resume_flow_run`, `approve_flow_run`) enforce the same permission checks and approver-identity verification as the REST endpoints
 - **Hop limit**: Safety guard against infinite loops (default 100)
 
 ## Subsystems and Advanced Architectures
