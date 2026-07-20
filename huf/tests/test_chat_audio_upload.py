@@ -136,7 +136,7 @@ def _staged_file(name="FILE-0001", filename="clip.mp3"):
 
 
 def _conversation(name="CONV-1"):
-    return SimpleNamespace(name=name, owner="Administrator")
+    return SimpleNamespace(name=name, owner="Administrator", session_id="web:Administrator")
 
 
 def _install(agents=None, conversations=None, files=None):
@@ -295,19 +295,18 @@ class TestPrepareMessageWithFileWebAudio(unittest.TestCase):
         self.assertIsNone(result["files"])
 
         prompt = result["agent_prompt"]
-        self.assertIn("what did I say?", prompt)
-        self.assertIn("Attached Audio Transcript:", prompt)
-        self.assertIn("--- File: clip.mp3 ---", prompt)
-        self.assertIn("hello world", prompt)
+        self.assertEqual(prompt, "hello world")
 
         transcribe.assert_called_once_with(file_id="FILE-0001", agent_name="Agent-1")
         handle_ocr_document_mock.assert_not_called()
 
-        # Audio metadata stamped on the Agent Message (kind stays "Message").
+        # Audio metadata stamped on the Agent Message (kind becomes "Audio").
         frappe_mock.db.set_value.assert_any_call(
             "Agent Message",
             "MSG-0001",
             {
+                "kind": "Audio",
+                "content": "hello world",
                 "voice_message": "/private/files/clip.mp3",
                 "stt_model": "openai/whisper-1",
             },
@@ -339,7 +338,7 @@ class TestPrepareMessageWithFileWebAudio(unittest.TestCase):
             name="FILE-9", file_name="note.wav", file_url="/private/files/note.wav"
         )
         conversation_manager_stub.ConversationManager.return_value.create_new_conversation.return_value = SimpleNamespace(
-            name="CONV-NEW"
+            name="CONV-NEW", session_id="web:Administrator"
         )
 
         with patch.object(
@@ -364,7 +363,6 @@ class TestPrepareMessageWithFileWebAudio(unittest.TestCase):
         transcribe.assert_called_once_with(file_id="FILE-9", agent_name="Agent-1")
         handle_ocr_document_mock.assert_not_called()
         self.assertIn("transcribed words", result["agent_prompt"])
-        self.assertIn("--- File: note.wav ---", result["agent_prompt"])
 
     def test_non_audio_staged_file_uses_ocr(self):
         _install(
