@@ -155,7 +155,7 @@ def set_user_enabled(user: str, enabled: int) -> dict:
 	name = frappe.db.get_value("Huf User Role", {"user": user}, "name")
 	doc = frappe.get_doc("Huf User Role", name)
 	doc.enabled = int(enabled)
-	doc.save(ignore_permissions=True)
+	doc.save()
 
 	_bust_cache(user)
 	return doc.as_dict()
