@@ -128,10 +128,9 @@ def create_data_table(
 	registry.insert(ignore_permissions=True)
 
 	# Sync permissions so all roles with data.* capabilities get access
-	# to this new table immediately.
+	# to this new table immediately. No explicit commit — request-scoped
+	# endpoint, Frappe commits at request end (#404 transaction alignment).
 	sync_data_table_permissions()
-
-	frappe.db.commit()
 
 	return {
 		"success": True,
@@ -178,7 +177,6 @@ def update_data_table(
 		registry.icon = icon
 
 	registry.save(ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"success": True, "data": {"name": registry.name}}
 
@@ -201,7 +199,6 @@ def delete_data_table(name: str) -> dict:
 		frappe.delete_doc("DocType", doctype_name, force=True, ignore_permissions=True)
 
 	frappe.delete_doc("Huf Data Table", name, ignore_permissions=True)
-	frappe.db.commit()
 
 	return {"success": True, "data": {"deleted_records": record_count}}
 

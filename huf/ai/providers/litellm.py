@@ -27,6 +27,7 @@ from litellm import InternalServerError, RateLimitError, APIError, BadRequestErr
 from litellm.utils import trim_messages
 from huf.ai.tool_serializer import serialize_tools
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
+from huf.ai.transaction import transaction_checkpoint
 from huf.ai.cost_calculator import calculate_cost
 from huf.ai.conversation_manager import repair_message_sequence
 
@@ -684,7 +685,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                                 user=frappe.session.user,
                                 after_commit=False
                             )
-                            frappe.db.commit()
+                            transaction_checkpoint(reason="agent_streaming_progress")
                         
                         result_content = await _execute_tool_call(
                             tool_to_run, tool_args, context, tool_call.id
@@ -1071,7 +1072,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                             user=frappe.session.user,
                                             after_commit=False
                                         )
-                                        frappe.db.commit()
+                                        transaction_checkpoint(reason="agent_streaming_progress")
 
                                     try:
                                         result_content = await _execute_tool_call(
@@ -1174,7 +1175,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                 )
                                                 if getattr(frappe.local, "_realtime_log", None) is None:
                                                     frappe.local._realtime_log = []
-                                                frappe.db.commit()
+                                                transaction_checkpoint(reason="agent_streaming_progress")
                                         except Exception as e:
                                             frappe.log_error(
                                                 f"Error updating tool call result for call_id={call_id}: {e}",

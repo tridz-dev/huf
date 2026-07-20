@@ -146,6 +146,34 @@ export function ChatMessage({
                                         </AudioPlayerControlBar>
                                     </AudioPlayer>
                                 </div>
+                            ) : message.voiceMessage && message.from === 'user' ? (
+                                <div className="flex flex-col gap-2 w-full max-w-md">
+                                    <AudioPlayer>
+                                        <AudioPlayerElement src={resolveAudioSrc(message.voiceMessage)} />
+                                        <AudioPlayerControlBar>
+                                            <AudioPlayerPlayButton />
+                                            <AudioPlayerTimeDisplay />
+                                            <AudioPlayerTimeRange />
+                                            <AudioPlayerDurationDisplay />
+                                            <AudioPlayerMuteButton />
+                                            <AudioPlayerVolumeRange />
+                                        </AudioPlayerControlBar>
+                                    </AudioPlayer>
+                                    {message.versions[0]?.content && (
+                                        <details className="text-sm rounded-lg border border-black/10 dark:border-white/10 group [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="font-medium cursor-pointer select-none p-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors rounded-lg group-open:rounded-b-none list-none flex items-center justify-between opacity-80">
+                                                <span>Transcript</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open:rotate-180 opacity-50"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                            </summary>
+                                            <div className="p-3 pt-0 border-t border-black/10 dark:border-white/10 mt-2 opacity-90">
+                                                <MessageContentWithArtifacts
+                                                    content={message.versions[0].content}
+                                                    messageId={message.versions[0]?.id ?? message.key}
+                                                />
+                                            </div>
+                                        </details>
+                                    )}
+                                </div>
                             ) : message.kind === 'Image' ? (
                                 <div className="flex flex-col gap-2">
                                     {message.generatedImage ? (

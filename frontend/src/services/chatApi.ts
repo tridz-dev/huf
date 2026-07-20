@@ -46,6 +46,8 @@ export interface AgentMessageDoc {
   generated_audio?: string;
   generated_video?: string;
   voice_message?: string;
+  stt_model?: string;
+  status?: string;
   tool_name?: string;
   tool_status?: string;
   tool_args?: string | Record<string, unknown>;
@@ -63,6 +65,8 @@ export interface ChatMessage {
   generatedAudio?: string;
   generatedVideo?: string;
   voiceMessage?: string;
+  sttModel?: string;
+  status?: string;
   toolName?: string;
   toolStatus?: string;
   toolArgs?: string | Record<string, unknown>;
@@ -95,6 +99,8 @@ function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
     generatedAudio: doc.generated_audio,
     generatedVideo: doc.generated_video,
     voiceMessage: doc.voice_message,
+    sttModel: doc.stt_model,
+    status: doc.status,
     toolName: doc.tool_name,
     toolStatus: doc.tool_status,
     toolArgs: doc.tool_args,
@@ -303,7 +309,7 @@ export async function getConversationMessages(
 
   try {
     const messages = await db.getDocList(doctype['Agent Message'], {
-      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'generated_video', 'voice_message', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'generated_video', 'voice_message', 'stt_model', 'status', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
       filters: [['conversation', '=', conversation]],
       orderBy: { field: 'creation', order: 'desc' },
       limit,
@@ -338,6 +344,7 @@ export interface TranscribeAudioResponse {
   transcript?: string;
   message_id?: string;
   error?: string;
+  file_url?: string;
 }
 
 export async function transcribeAudio(
@@ -442,6 +449,10 @@ export interface PrepareMessageWithFileResponse {
   agent_prompt?: string;
   files?: PrepareMessageWithFileFile[];
   error?: string;
+  is_audio?: boolean;
+  transcript?: string;
+  voice_message?: string;
+  stt_model?: string;
 }
 
 export async function prepareMessageWithFile(
