@@ -115,6 +115,7 @@
    "label": "App Name"
   },
   {
+   "depends_on": "eval: doc.trigger_type == \"App Event\"",
    "fieldname": "event_name",
    "fieldtype": "Data",
    "label": "Event Name"
