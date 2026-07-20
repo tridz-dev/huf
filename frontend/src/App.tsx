@@ -387,7 +387,7 @@ function AppShell() {
           <Route
             path="/integration-services"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationServicesListingPageWrapper />
                 </Suspense>
@@ -397,7 +397,7 @@ function AppShell() {
           <Route
             path="/integration-services/:serviceId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationServiceFormPageWrapper />
                 </Suspense>
