@@ -848,8 +848,11 @@ def run_agent_sync(
                     # Insert right after summary but before user messages
                     insert_idx = 1 if stored_summary else 0
                     history.insert(insert_idx, {"role": "system", "content": data_msg})
-             except:
-                 pass
+             except (json.JSONDecodeError, TypeError, KeyError) as e:
+                 frappe.logger("huf").warning(
+                     f"Skipped conversation_data memory snapshot for conversation "
+                     f"{conversation.name}: {e}"
+                 )
         
         base_prompt = f"""
             Current user message:
@@ -1503,8 +1506,11 @@ async def run_agent_stream(
                          insert_idx = 1
                     
                     history.insert(insert_idx, {"role": "system", "content": data_msg})
-             except:
-                 pass
+             except (json.JSONDecodeError, TypeError, KeyError) as e:
+                 frappe.logger("huf").warning(
+                     f"Skipped conversation_data memory snapshot for conversation "
+                     f"{conversation.name}: {e}"
+                 )
 
         knowledge_context = None
         try:
