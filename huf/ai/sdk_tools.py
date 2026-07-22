@@ -1550,7 +1550,14 @@ async def handle_generate_image(
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
             except Exception:
-                conversation_index = 1
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"Failed to compute conversation_index for {conversation_id}"
+                )
+                frappe.throw(
+                    "Could not determine message order for this conversation. Please retry.",
+                    title="Message Ordering Error"
+                )
 
         # Process response and save images
         images = []
@@ -2092,7 +2099,14 @@ async def handle_generate_audio(
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
             except Exception:
-                conversation_index = 1
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"Failed to compute conversation_index for {conversation_id}"
+                )
+                frappe.throw(
+                    "Could not determine message order for this conversation. Please retry.",
+                    title="Message Ordering Error"
+                )
 
         # Generate filename
         filename = f"generated_audio_{conversation_index}.{response_format}"
