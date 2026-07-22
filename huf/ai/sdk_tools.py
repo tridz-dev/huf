@@ -1245,7 +1245,10 @@ def _load_state(state_json: str | None | dict) -> dict:
             data = json.loads(state_json)
             if isinstance(data, str): # Handle double encoded
                 try: data = json.loads(data)
-                except: pass
+                except (json.JSONDecodeError, TypeError, KeyError) as e:
+                    frappe.logger("huf").warning(
+                        f"Skipped double-decoding of conversation_data state: {e}"
+                    )
         except (json.JSONDecodeError, TypeError):
              return {"version": 1, "scope": {}, "items": []}
 
