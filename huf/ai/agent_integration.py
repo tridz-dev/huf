@@ -793,10 +793,10 @@ def run_agent_sync(
                 user_query=prompt,
                 max_tokens=agent_doc.max_knowledge_tokens or 4000
             )
-        except Exception as e:
+        except Exception:
             frappe.log_error(
-                f"Error building knowledge context: {str(e)}",
-                "Knowledge Context Error"
+                frappe.get_traceback(),
+                "Knowledge context build failed — agent run continuing without RAG context"
             )
 
         # Parse response_format if string
@@ -935,7 +935,11 @@ def run_agent_sync(
                 raw = item.raw_item
                 try:
                     tool_result = json.loads(raw.get("output")) if raw and raw.get("output") else None
-                except Exception:
+                except (json.JSONDecodeError, TypeError):
+                    frappe.log_error(
+                        frappe.get_traceback(),
+                        "Tool result JSON parse failed — using raw output"
+                    )
                     tool_result = raw.get("output")
 
                 updated_tool_call_id = log_tool_call(run_doc, conversation, raw, tool_result=tool_result, is_output=True)

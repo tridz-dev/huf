@@ -910,7 +910,11 @@ def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> di
 
 		try:
 			result_data = resp.json()
-		except Exception:
+		except (json.JSONDecodeError, TypeError):
+			frappe.log_error(
+				frappe.get_traceback(),
+				"HTTP response JSON parse failed — falling back to text"
+			)
 			result_data = resp.text
 
 		result = {
