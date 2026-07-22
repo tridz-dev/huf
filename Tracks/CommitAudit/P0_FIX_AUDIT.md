@@ -50,7 +50,7 @@ All four sites now catch `json.JSONDecodeError`, `TypeError`, and `KeyError`, lo
                  )
 ```
 
-**Test:** `huf.ai.tests.test_p0_bare_except.TestConversationDataLoadState`
+**Test:** `huf.ai.tests.test_p0_bare_except.TestAgentSyncConversationData.test_stream_malformed_conversation_data_does_not_abort_run`
 
 ---
 
@@ -101,7 +101,7 @@ All four sites now catch `json.JSONDecodeError`, `TypeError`, and `KeyError`, lo
 
 Same pattern as site 3.
 
-**Test:** `huf.ai.tests.test_p0_bare_except.TestConversationDataLoadState`
+**Test:** `huf.ai.tests.test_p0_bare_except.TestAgentSyncConversationData.test_malformed_conversation_data_does_not_abort_run`
 
 ---
 
