@@ -252,7 +252,7 @@ def _handle_create_bom(**kwargs) -> str:
                 },
             )
 
-        doc.insert(ignore_permissions=True)
+        doc.insert()
         return json.dumps({"success": True, "results": {"name": doc.name, "item": doc.item}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Create BOM Error: {e}", "ERPNext Tool")

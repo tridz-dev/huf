@@ -135,7 +135,7 @@ def _handle_create_sales_invoice(**kwargs) -> str:
                 },
             )
 
-        doc.insert(ignore_permissions=True)
+        doc.insert()
         return json.dumps(
             {"success": True, "results": {"name": doc.name, "customer": doc.customer}}
         )
@@ -332,7 +332,7 @@ def _handle_create_payment(**kwargs) -> str:
                     },
                 )
 
-        doc.insert(ignore_permissions=True)
+        doc.insert()
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Create Payment Error: {e}", "ERPNext Tool")
@@ -430,7 +430,7 @@ def _handle_create_quotation(**kwargs) -> str:
                 },
             )
 
-        doc.insert(ignore_permissions=True)
+        doc.insert()
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Create Quotation Error: {e}", "ERPNext Tool")
@@ -638,7 +638,7 @@ def _handle_create_journal_entry(**kwargs) -> str:
                 },
             )
 
-        doc.insert(ignore_permissions=True)
+        doc.insert()
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext Create Journal Entry Error: {e}", "ERPNext Tool")

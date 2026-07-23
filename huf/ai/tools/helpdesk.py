@@ -132,7 +132,7 @@ def _handle_create_ticket(**kwargs) -> str:
         doc.agent_group = kwargs.get("team", "")
         doc.raised_by = kwargs.get("raised_by") or kwargs.get("email", frappe.session.user)
         doc.contact = kwargs.get("contact", "")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         return json.dumps({"success": True, "results": {"name": doc.name, "subject": doc.subject}}, default=str)
     except Exception as e:
@@ -169,7 +169,7 @@ def _handle_update_ticket(**kwargs) -> str:
         if "resolution_details" in kwargs:
             doc.resolution_details = kwargs["resolution_details"]
 
-        doc.save(ignore_permissions=True)
+        doc.save()
 
         assigned_to = kwargs.get("assigned_to")
         if assigned_to:
@@ -200,7 +200,7 @@ def _handle_add_comment(**kwargs) -> str:
         comment.reference_ticket = ticket_id
         comment.content = content
         comment.commented_by = kwargs.get("commented_by", frappe.session.user)
-        comment.insert(ignore_permissions=True)
+        comment.insert()
 
         return json.dumps({"success": True, "results": {"name": comment.name}}, default=str)
     except Exception as e:
