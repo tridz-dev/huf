@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
 import { getAgent } from "@/services/agentApi";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent } from '@/hooks/useChatSocket';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { EmptyChatState } from './EmptyChatState';
@@ -14,6 +14,10 @@ import { useChatAgentIdentity } from './useChatAgentIdentity';
 import { useChatScrollToBottom } from './useChatScrollToBottom';
 import { useRunStatusPolling } from './useRunStatusPolling';
 import { usePendingRunHydration } from './usePendingRunHydration';
+import {
+    dispatchConversationTitleUpdated,
+    useConversationTitlePostSuccessFallback,
+} from './useConversationTitleFallback';
 import {
     filterMessagesForConversation,
     hasStaleConversationItems,
@@ -44,8 +48,10 @@ export function ChatMessageList({
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
     const [isModelMismatch, setIsModelMismatch] = useState(false);
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
+    const [conversationTitle, setConversationTitle] = useState<string | null>(null);
+    const [runSucceeded, setRunSucceeded] = useState(false);
 
-    const { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb, runImmediately } = useChatAgentIdentity(chatId, searchParams);
+    const { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb, runImmediately, autonamingOfConversationTitle } = useChatAgentIdentity(chatId, searchParams);
 
     // Check for model mismatch between conversation and agent
     useEffect(() => {
@@ -84,6 +90,32 @@ export function ChatMessageList({
             cancelled = true;
         };
     }, [chatId, agentName]);
+
+    useEffect(() => {
+        if (!chatId) {
+            setConversationTitle(null);
+            setRunSucceeded(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        getConversation(chatId)
+            .then((conversation) => {
+                if (!cancelled) {
+                    setConversationTitle(conversation?.title ?? null);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setConversationTitle(null);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [chatId]);
 
     // Memoize initialParams to ensure stable reference but detect chatId changes
     const initialParams = useMemo(() => {
@@ -164,7 +196,21 @@ export function ChatMessageList({
     // Handle queued agent run lifecycle events
     const handleAgentRunStatus = useCallback((event: AgentRunStatusEvent) => {
         if (event.conversation_id !== chatId) return;
+        if (event.status === 'Success') {
+            setRunSucceeded(true);
+        }
         setMessages((prev) => upsertAgentRunStatusFromSocket(prev, event));
+    }, [chatId]);
+
+    const handleConversationTitleUpdated = useCallback((event: ConversationTitleUpdatedEvent) => {
+        if (event.conversation_id !== chatId) return;
+        setConversationTitle(event.title);
+        setRunSucceeded(false);
+        dispatchConversationTitleUpdated({
+            conversationId: event.conversation_id,
+            title: event.title,
+            animate: true,
+        });
     }, [chatId]);
 
     useChatSocket({
@@ -172,6 +218,14 @@ export function ChatMessageList({
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
         onAgentRunStatus: handleAgentRunStatus,
+        onConversationTitleUpdated: handleConversationTitleUpdated,
+    });
+
+    useConversationTitlePostSuccessFallback({
+        conversationId: chatId,
+        currentTitle: conversationTitle,
+        autonamingEnabled: autonamingOfConversationTitle,
+        runSucceeded,
     });
 
     // Polling fallback: a missed socket event would otherwise leave pending
