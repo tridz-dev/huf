@@ -25,6 +25,7 @@ from .conversation_manager import ConversationManager, safe_history_slice, safe_
 from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name
+from huf.ai.transaction import safe_commit, transaction_checkpoint
 
 
 class AgentManager:
@@ -316,19 +317,6 @@ def _is_user_allowed(agent_doc, user: str) -> bool:
     
     return False
 
-def safe_commit():
-    if getattr(frappe.local, "_realtime_log", None) is None:
-        frappe.local._realtime_log = []
-    
-    try:
-        frappe.db.commit()
-    except AttributeError as e:
-        if "_realtime_log" in str(e):
-            pass
-        else:
-            raise
-
-
 # Canonical lifecycle status values. These must match the Agent Run doctype
 # Select options (Queued/Started/Success/Failed), the HTTP acknowledgement
 # returned by run_agent_sync, and the frontend AgentRunStatusEvent union in
@@ -527,7 +515,6 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
             doc.insert(ignore_permissions=True)
             return doc.name
 
-        frappe.db.commit()
     except Exception as e:
         frappe.log_error(f"Error processing tool call: {str(e)}", "Agent Tool Call Error")
         return None
@@ -632,7 +619,7 @@ def run_background_summarization(conversation_name, agent_name):
         )
         if new_summary_text:
             conv_manager.update_stored_summary(conversation_name, new_summary_text)
-            frappe.db.commit()
+            frappe.db.commit()  # nosemgrep: justified background-job commit
             
     except Exception as e:
         frappe.log_error(f"Background summarization failed: {str(e)}", "Agent Background Summarization")
@@ -676,9 +663,8 @@ def generate_conversation_title(conversation_name, agent_name):
         if title:
             title = title.strip().strip('"').strip("'")
             frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
-            frappe.db.commit()
+            frappe.db.commit()  # nosemgrep: justified background-job commit
             _emit_conversation_title_updated(conversation_name, title)
-
     except Exception as e:
         frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
 
@@ -1071,7 +1057,7 @@ def _execute_agent_run(
             "status": "Started", # Mark as started, but not "Success" yet
             "response": f"Orchestration started. Job ID: {orch_name}"
         })
-        safe_commit()
+        transaction_checkpoint(reason="agent_streaming_progress")
         return {
             "success": True,
             "response": f"Orchestration started: {orch_name}",
@@ -1085,6 +1071,7 @@ def _execute_agent_run(
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
         _emit_run_lifecycle_event(run_doc, conversation, "started")
         safe_commit()
+        transaction_checkpoint(reason="agent_streaming_progress")
 
         total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
         last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
@@ -1093,7 +1080,7 @@ def _execute_agent_run(
             "total_run": total_runs,
             "last_run": last_run_time
         },update_modified=False)
-        safe_commit()
+        transaction_checkpoint(reason="agent_streaming_progress")
 
         manager = AgentManager(agent_name)
         
@@ -1114,11 +1101,24 @@ def _execute_agent_run(
                 user_query=prompt,
                 max_tokens=agent_doc.max_knowledge_tokens or 4000
             )
-        except Exception as e:
+        except Exception:
+            # Abort the run instead of continuing with partial state.
+            # Mandatory knowledge context is required for this agent; failing here
+            # prevents inconsistent tool-call messages from being committed later.
+            error_msg = _("Failed to build knowledge context for this agent run.")
             frappe.log_error(
-                f"Error building knowledge context: {str(e)}",
-                "Knowledge Context Error"
+                frappe.get_traceback(),
+                "Knowledge context build failed — aborting agent run"
             )
+            run_doc.db_set("status", "Failed", update_modified=True)
+            run_doc.db_set("error_message", error_msg)
+            return {
+                "success": False,
+                "error": error_msg,
+                "agent_run_id": run_doc.name,
+                "conversation_id": conversation.name,
+                "session_id": conv_manager.session_id,
+            }
 
         # Parse response_format if string
         if response_format and isinstance(response_format, str):
@@ -1169,8 +1169,11 @@ def _execute_agent_run(
                     # Insert right after summary but before user messages
                     insert_idx = 1 if stored_summary else 0
                     history.insert(insert_idx, {"role": "system", "content": data_msg})
-             except:
-                 pass
+             except (json.JSONDecodeError, TypeError, KeyError) as e:
+                 frappe.logger("huf").warning(
+                     f"Skipped conversation_data memory snapshot for conversation "
+                     f"{conversation.name}: {e}"
+                 )
         
         base_prompt = f"""
             Current user message:
@@ -1250,13 +1253,17 @@ def _execute_agent_run(
                 )
                 if call_id:
                     tool_call_message_map[call_id] = message_doc.name
-                safe_commit()
+                transaction_checkpoint(reason="agent_streaming_progress")
 
             elif item.type == "tool_call_output_item":
                 raw = item.raw_item
                 try:
                     tool_result = json.loads(raw.get("output")) if raw and raw.get("output") else None
-                except Exception:
+                except (json.JSONDecodeError, TypeError):
+                    frappe.log_error(
+                        frappe.get_traceback(),
+                        "Tool result JSON parse failed — using raw output"
+                    )
                     tool_result = raw.get("output")
 
                 updated_tool_call_id = log_tool_call(run_doc, conversation, raw, tool_result=tool_result, is_output=True)
@@ -1414,7 +1421,9 @@ def _execute_agent_run(
                         litellm_response=mock_response
                     )
             except Exception as e:
-                frappe.log_error(f"Cost calculation failed for {resolved_model} in sync: {e}", "Agent Sync Cost")
+                frappe.logger("huf").warning(
+                    f"Cost calculation failed for {resolved_model} in sync: {e}"
+                )
                 cost = 0.0
 
             try:
@@ -1430,7 +1439,9 @@ def _execute_agent_run(
                     WHERE name = %s
                 """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
             except Exception as e:
-                frappe.log_error(f"Failed to update conversation metrics: {str(e)}")
+                frappe.logger("huf").warning(
+                    f"Failed to update conversation metrics: {str(e)}"
+                )
             
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
@@ -1459,6 +1470,7 @@ def _execute_agent_run(
             },
         )
         safe_commit()
+        transaction_checkpoint(reason="agent_streaming_progress")
 
         # Handle Sub-Agent Success Lifecycle Hook
         if parent_conversation_id and invoked_by_agent:
@@ -1546,7 +1558,7 @@ def _execute_agent_run(
         if "ContextWindowExceededError" in error_msg:
             try:
                 frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
-                safe_commit()
+                transaction_checkpoint(reason="agent_streaming_progress")
                 
                 error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
                 
@@ -1560,9 +1572,11 @@ def _execute_agent_run(
                     run_name=run_doc.name,
                     kind="Error"
                 )
-                safe_commit()
+                transaction_checkpoint(reason="agent_streaming_progress")
             except Exception as inner_e:
-                frappe.log_error(f"Failed to handle context window error in sync: {str(inner_e)}", "Agent Integration Error")
+                frappe.logger("huf").warning(
+                    f"Failed to handle context window error in sync: {str(inner_e)}"
+                )
                 
         elif "RateLimitError" in error_msg:
             try:
@@ -1578,9 +1592,11 @@ def _execute_agent_run(
                     run_name=run_doc.name,
                     kind="Error"
                 )
-                safe_commit()
+                transaction_checkpoint(reason="agent_streaming_progress")
             except Exception as inner_e:
-                frappe.log_error(f"Failed to handle rate limit error in sync: {str(inner_e)}", "Agent Integration Error")
+                frappe.logger("huf").warning(
+                    f"Failed to handle rate limit error in sync: {str(inner_e)}"
+                )
 
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
@@ -2065,7 +2081,7 @@ async def run_agent_stream(
         if not skip_user_message:
             conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
         run_doc.db_set("start_time", now_datetime())
-        safe_commit()
+        transaction_checkpoint(reason="agent_streaming_progress")
         
         # Update agent stats
         total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
@@ -2075,7 +2091,7 @@ async def run_agent_stream(
             "total_run": total_runs,
             "last_run": last_run_time
         },update_modified=False)
-        safe_commit()
+        transaction_checkpoint(reason="agent_streaming_progress")
         
         manager = AgentManager(agent_name)
         
@@ -2135,8 +2151,11 @@ async def run_agent_stream(
                          insert_idx = 1
                     
                     history.insert(insert_idx, {"role": "system", "content": data_msg})
-             except:
-                 pass
+             except (json.JSONDecodeError, TypeError, KeyError) as e:
+                 frappe.logger("huf").warning(
+                     f"Skipped conversation_data memory snapshot for conversation "
+                     f"{conversation.name}: {e}"
+                 )
 
         knowledge_context = None
         try:
@@ -2146,11 +2165,26 @@ async def run_agent_stream(
                 user_query=prompt,
                 max_tokens=agent_doc.max_knowledge_tokens or 4000
             )
-        except Exception as e:
+        except Exception:
+            # Abort the stream instead of continuing with partial state.
+            # Mandatory knowledge context is required for this agent; failing here
+            # prevents inconsistent tool-call messages from being committed later.
+            error_msg = _("Failed to build knowledge context for this agent run.")
             frappe.log_error(
-                f"Error building knowledge context: {str(e)}",
-                "Knowledge Context Error"
+                frappe.get_traceback(),
+                "Knowledge context build failed — aborting agent stream"
             )
+            frappe.db.set_value("Agent Run", run_doc.name, {
+                "status": "Failed",
+                "error_message": error_msg,
+                "end_time": now_datetime(),
+            }, update_modified=True)
+            transaction_checkpoint(reason="agent_streaming_progress")
+            yield {
+                "type": "error",
+                "error": error_msg,
+            }
+            return
 
         base_prompt = f"""
             Current user message:
@@ -2218,7 +2252,7 @@ async def run_agent_stream(
                         )
                         if call_id:
                             tool_call_message_map[call_id] = message_doc.name
-                        safe_commit()
+                        transaction_checkpoint(reason="agent_streaming_progress")
                         
                     yield chunk
                 
@@ -2269,7 +2303,9 @@ async def run_agent_stream(
                             output_tokens = token_counter(model=pricing_model, text=full_response)
                             total_tokens = input_tokens + output_tokens
                         except Exception as e:
-                            frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
+                            frappe.logger("huf").warning(
+                                f"Fallback token counting failed: {e}"
+                            )
                             
                     try:
                         # Prefer cost directly from the chunk (calculated by provider)
@@ -2300,7 +2336,9 @@ async def run_agent_stream(
                             )
 
                     except Exception as e:
-                        frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")
+                        frappe.logger("huf").warning(
+                            f"Cost calculation failed for {resolved_model}: {e}"
+                        )
                         cost = 0.0
 
                     # Update Conversation Metrics
@@ -2315,7 +2353,9 @@ async def run_agent_stream(
                             WHERE name = %s
                         """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
                     except Exception as e:
-                        frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
+                        frappe.logger("huf").warning(
+                            f"Failed to update conv metrics stream: {str(e)}"
+                        )
 
                     # Save final response
                     final_message = conv_manager.add_message(
@@ -2334,7 +2374,7 @@ async def run_agent_stream(
                         "cost": cost,
                         "end_time": now_datetime()
                     }, update_modified=True)
-                    safe_commit()
+                    transaction_checkpoint(reason="agent_streaming_progress")
 
                     # Handle Sub-Agent Success Lifecycle Hook
                     if parent_conversation_id and invoked_by_agent:
@@ -2392,7 +2432,7 @@ async def run_agent_stream(
                             
                     # Force commit to ensure enqueued background jobs are pushed to Redis
                     # This is necessary because streaming generators might not trigger the standard Frappe auto-commit lifecycle.
-                    safe_commit()
+                    transaction_checkpoint(reason="agent_streaming_progress")
                     
                     # Normalize complete event to match REST run_agent_sync response shape
                     chunk["conversation_id"] = conversation.name
@@ -2411,7 +2451,7 @@ async def run_agent_stream(
                     if "ContextWindowExceededError" in error_msg:
                         try:
                             frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
-                            safe_commit()
+                            transaction_checkpoint(reason="agent_streaming_progress")
                             
                             user_error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
                             
@@ -2425,11 +2465,13 @@ async def run_agent_stream(
                                 run_name=run_doc.name,
                                 kind="Error"
                             )
-                            safe_commit()
+                            transaction_checkpoint(reason="agent_streaming_progress")
                             chunk["error"] = user_error_msg # override so the client sees the same message
                             error_msg = user_error_msg
                         except Exception as inner_e:
-                            frappe.log_error(f"Failed to handle context window error in stream inner block: {str(inner_e)}", "Agent Integration Error")
+                            frappe.logger("huf").warning(
+                                f"Failed to handle context window error in stream inner block: {str(inner_e)}"
+                            )
 
                     elif "RateLimitError" in error_msg:
                         try:
@@ -2445,18 +2487,20 @@ async def run_agent_stream(
                                 run_name=run_doc.name,
                                 kind="Error"
                             )
-                            safe_commit()
+                            transaction_checkpoint(reason="agent_streaming_progress")
                             chunk["error"] = user_error_msg # override so the client sees the same message
                             error_msg = user_error_msg
                         except Exception as inner_e:
-                            frappe.log_error(f"Failed to handle rate limit in stream inner block: {str(inner_e)}", "Agent Integration Error")
+                            frappe.logger("huf").warning(
+                                f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
+                            )
                     
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Failed",
                         "error_message": error_msg,
                         "end_time": now_datetime()
                     }, update_modified=True)
-                    safe_commit()
+                    transaction_checkpoint(reason="agent_streaming_progress")
                     
                     # Handle Sub-Agent Failure Lifecycle Hook
                     if parent_conversation_id and invoked_by_agent:
@@ -2499,7 +2543,7 @@ async def run_agent_stream(
             if "ContextWindowExceededError" in error_msg:
                 try:
                     frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
-                    safe_commit()
+                    transaction_checkpoint(reason="agent_streaming_progress")
                     
                     error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
                     
@@ -2513,9 +2557,11 @@ async def run_agent_stream(
                         run_name=run_doc.name,
                         kind="Error"
                     )
-                    safe_commit()
+                    transaction_checkpoint(reason="agent_streaming_progress")
                 except Exception as inner_e:
-                    frappe.log_error(f"Failed to handle context window error in stream inner block: {str(inner_e)}", "Agent Integration Error")
+                    frappe.logger("huf").warning(
+                        f"Failed to handle context window error in stream inner block: {str(inner_e)}"
+                    )
 
             elif "RateLimitError" in error_msg:
                 try:
@@ -2531,9 +2577,11 @@ async def run_agent_stream(
                         run_name=run_doc.name,
                         kind="Error"
                     )
-                    safe_commit()
+                    transaction_checkpoint(reason="agent_streaming_progress")
                 except Exception as inner_e:
-                    frappe.log_error(f"Failed to handle rate limit in stream inner block: {str(inner_e)}", "Agent Integration Error")
+                    frappe.logger("huf").warning(
+                        f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
+                    )
 
             
             frappe.db.set_value("Agent Run", run_doc.name, {
@@ -2541,7 +2589,7 @@ async def run_agent_stream(
                 "error_message": error_msg,
                 "end_time": now_datetime()
             }, update_modified=True)
-            safe_commit()
+            transaction_checkpoint(reason="agent_streaming_progress")
             
             # Handle Sub-Agent Failure Lifecycle Hook
             if parent_conversation_id and invoked_by_agent:
@@ -2602,10 +2650,10 @@ def get_conversation_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	if "System Manager" in frappe.get_roles(user):
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
-	from huf.permissions import has_capability
 	if has_capability(user, "chat.view_all"):
 		return None
 
@@ -2621,10 +2669,10 @@ def get_message_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	if "System Manager" in frappe.get_roles(user):
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
-	from huf.permissions import has_capability
 	if has_capability(user, "chat.view_all"):
 		return None
 
@@ -2640,10 +2688,10 @@ def get_run_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	if "System Manager" in frappe.get_roles(user):
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
-	from huf.permissions import has_capability
 	if has_capability(user, "agent.view_all"):
 		return None
 

@@ -178,6 +178,10 @@ def handle_oauth_callback(server_name: str, code: str, state: str) -> dict:
         token_data = _exchange_code_for_tokens(server, config, code, code_verifier, redirect_uri)
         _save_tokens(server, token_data)
 
+        # Explicit commit required here because this is invoked via a GET request
+        # to a Web Page (www/mcp_oauth_callback.py), which Frappe rolls back by default.
+        frappe.db.commit() # nosemgrep
+
         return {"success": True}
 
     except Exception as exc:
@@ -198,7 +202,6 @@ def disconnect_oauth(server_name: str) -> dict:
         server.oauth_token_expires_at = None
         server.oauth_status = "Not Connected"
         server.save(ignore_permissions=True)
-        frappe.db.commit()
         return {"success": True}
     except Exception as exc:
         return {"error": str(exc)}
@@ -409,7 +412,6 @@ def _save_tokens(server, token_data: dict):
     server.oauth_token_expires_at = expires_at
     server.oauth_status = "Connected"
     server.save(ignore_permissions=True)
-    frappe.db.commit()
 
 
 def _is_token_expiring_soon(server_or_row, buffer_minutes: int = 5) -> bool:
@@ -425,7 +427,6 @@ def _set_expired_status(server):
     try:
         server.oauth_status = "Token Expired"
         server.save(ignore_permissions=True)
-        frappe.db.commit()
     except Exception:
         pass
 

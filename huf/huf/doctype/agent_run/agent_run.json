@@ -39,7 +39,11 @@
   "flow_node_id",
   "column_break_flow1",
   "flow_id",
-  "run_kind"
+  "run_kind",
+  "trigger_reference_section",
+  "reference_doctype",
+  "column_break_hbrm",
+  "reference_name"
  ],
  "fields": [
   {
@@ -209,6 +213,25 @@
    "read_only": 1
   },
   {
+   "fieldname": "trigger_reference_section",
+   "fieldtype": "Section Break",
+   "label": "Trigger Reference"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_doctype",
+   "read_only": 1
+  },
+  {
    "fieldname": "call_recording",
    "fieldtype": "Attach",
    "label": "Call Recording",
@@ -266,12 +289,16 @@
    "label": "Run Kind",
    "options": "agent\ntool\norchestrator",
    "read_only": 1
+  },
+  {
+   "fieldname": "column_break_hbrm",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-25 21:07:39.245567",
+ "modified": "2026-07-14 16:40:35.708364",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",

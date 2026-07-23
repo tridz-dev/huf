@@ -64,7 +64,7 @@ def _handle_send_message(**kwargs) -> str:
         doc.channel_id = channel_id
         doc.text = text
         doc.message_type = kwargs.get("message_type", "Text")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         return json.dumps({"success": True, "results": {"name": doc.name, "channel_id": channel_id}}, default=str)
     except Exception as e:
@@ -226,7 +226,7 @@ def _handle_create_channel(**kwargs) -> str:
         doc.type = ctype
         doc.workspace = workspace
         doc.channel_description = kwargs.get("channel_description", "")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         members = kwargs.get("members", [])
         if isinstance(members, str):
@@ -240,7 +240,7 @@ def _handle_create_channel(**kwargs) -> str:
                 member = frappe.new_doc("Raven Channel Member")
                 member.channel_id = doc.name
                 member.user_id = user_id
-                member.insert(ignore_permissions=True)
+                member.insert()
 
         return json.dumps({"success": True, "results": {"name": doc.name, "channel_name": doc.channel_name}}, default=str)
     except Exception as e:

@@ -4,6 +4,7 @@ import frappe
 from frappe.utils import now_datetime
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent_integration import run_agent_sync
+from huf.ai.transaction import commit_if_background
 
 
 def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversation_id=None, override_plan=None):
@@ -58,12 +59,12 @@ def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversati
         orch.status = "Failed"
         orch.error_log = "Planning failed: No steps available from Agent or Generator"
         orch.save()
-        frappe.db.commit()
+        commit_if_background()
         return orch.name
 
     orch.status = "Running"
     orch.save()
-    frappe.db.commit()
+    commit_if_background()
 
     return orch.name
 

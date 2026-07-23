@@ -53,7 +53,7 @@ huf/
 │   │   ├── flow_orchestrator.py  # Router/orchestrator prompt + JSON parsing
 │   │   ├── flow_tools.py         # Flow tool definitions for huf_tools hook
 │   │   └── orchestration/        # Multi-step workflow planning
-│   ├── huf/doctype/              # DocType definitions (35 total)
+│   ├── huf/doctype/              # DocType definitions (47 total)
 │   ├── hooks.py                  # Frappe integration hooks
 │   ├── install.py                # Installation/migration hooks
 │   ├── www/                      # Web routes
@@ -86,7 +86,7 @@ huf/
 ├── docker/                       # Docker quick-try environment
 │   ├── docker-compose.yml        # MariaDB, Redis, Frappe services
 │   └── init.sh                   # Automated setup script
-├── docs/                         # Documentation site (Next.js)
+├── docs/                         # PR screenshots and planning docs
 ├── .github/workflows/            # CI/CD definitions
 ├── pyproject.toml                # Python config and dependencies
 ├── package.json                  # Root scripts
@@ -547,7 +547,5 @@ Test files are located in:
 
 ## Related Documentation
 
-- **AGENTS.md**: Detailed architecture documentation
-- **KnowledgePlan.md**: Knowledge system architecture
-- **docs/**: Full documentation site
+- **AGENTS.md**: Context and instructions for AI coding agents
 - **README.md**: User-facing project documentation

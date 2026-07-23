@@ -27,6 +27,8 @@ from frappe.utils import now_datetime
 
 from agents import FunctionTool
 
+from huf.ai.transaction import commit_if_background
+
 
 # MCP Tool prefix to identify MCP-sourced tools during execution
 MCP_TOOL_PREFIX = "__mcp__"
@@ -425,7 +427,7 @@ def sync_mcp_server_tools(server_name: str) -> dict:
                 })
         
         mcp_server.save(ignore_permissions=True)
-        frappe.db.commit()
+        commit_if_background()
         
         return {
             "success": True,

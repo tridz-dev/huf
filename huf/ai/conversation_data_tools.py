@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from huf.ai.transaction import commit_if_background
+
 # Helper Functions
 def _now_iso_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -17,7 +19,10 @@ def _load_state(state_json: str | None | dict) -> dict:
             data = json.loads(state_json)
             if isinstance(data, str): # Handle double encoded
                 try: data = json.loads(data)
-                except: pass
+                except (json.JSONDecodeError, TypeError, KeyError) as e:
+                    frappe.logger("huf").warning(
+                        f"Skipped double-decoding of conversation_data state: {e}"
+                    )
         except (json.JSONDecodeError, TypeError):
              return {"version": 1, "scope": {}, "items": []}
              
@@ -123,7 +128,7 @@ def handle_set_conversation_data(
         new_json = json.dumps(state, ensure_ascii=False, indent=2)
         
         frappe.db.set_value("Agent Conversation", conversation_id, "conversation_data", new_json)
-        frappe.db.commit() # Persist changes immediately
+        commit_if_background() # Persist changes immediately
         
         return {"success": True, "message": f"Set '{name}' match successfully"}
     

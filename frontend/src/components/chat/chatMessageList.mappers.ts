@@ -499,6 +499,8 @@ export function mergeConversationItemsIntoMessages(
       generatedAudio: item.generatedAudio,
       generatedVideo: item.generatedVideo,
       voiceMessage: item.voiceMessage,
+      sttModel: item.sttModel,
+      status: item.status,
       versions: [
         {
           id: item.id,

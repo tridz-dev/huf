@@ -26,6 +26,7 @@ from huf.ai.flow_orchestrator import (
 	parse_decision,
 )
 from huf.ai.flow_tool_executor import execute as execute_tool
+from huf.ai.transaction import commit_if_background
 from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
@@ -108,7 +109,7 @@ def create_flow_run(
 		}
 	)
 	flow_run.insert(ignore_permissions=True)
-	frappe.db.commit()
+	commit_if_background()
 
 	return flow_run
 
@@ -138,7 +139,7 @@ def run_flow(flow_run_name: str):
 
 	# Update status to Running
 	flow_run.db_set({"status": "Running", "last_error": ""})
-	frappe.db.commit()
+	commit_if_background()
 
 	try:
 		_execute_loop(flow_run, nodes_map, edges_list, settings)
@@ -168,7 +169,7 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 
 	# Clear waiting state
 	flow_run.db_set({"waiting": None, "status": "Running"})
-	frappe.db.commit()
+	commit_if_background()
 
 	# Continue execution
 	run_flow(flow_run_name)
@@ -226,7 +227,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 		outgoing = [e for e in edges_list if e.get("from") == current_node]
 		if not outgoing:
 			flow_run.db_set({"waiting": None, "status": "Running"})
-			frappe.db.commit()
+			commit_if_background()
 			_complete_flow_run(flow_run)
 			return
 		_fail_flow_run(flow_run, f"No edge found for outcome '{decision}' from node '{current_node}'")
@@ -235,7 +236,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	# Move to the next node and resume
 	flow_run.db_set({"current_node_id": next_node, "waiting": None, "status": "Running"})
 	flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-	frappe.db.commit()
+	commit_if_background()
 
 	_clear_flow_notifications(flow_run)
 
@@ -298,7 +299,8 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		# Update hop count and completed list
 		completed_nodes.append(node_id)
 		flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-		frappe.db.commit()
+		# No explicit commit here; the node executor or completion/failure handler
+		# will commit the updated state in one go.
 
 		# Check for end node
 		if node.get("type") == "end":
@@ -356,7 +358,8 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 
 		# Move to next node
 		flow_run.db_set("current_node_id", next_node_id)
-		frappe.db.commit()
+		# No explicit commit here; the next node executor or completion/failure
+		# handler will persist the updated cursor in one go.
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +427,7 @@ def _exec_trigger_schedule(flow_run, node: dict, config: dict, settings: dict) -
 	# Merge with existing context
 	ctx["_schedule_trigger"] = schedule_info
 	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-	frappe.db.commit()
+	commit_if_background()
 	
 	return {
 		"status": "success",
@@ -468,7 +471,7 @@ def _exec_trigger_doc_event(flow_run, node: dict, config: dict, settings: dict) 
 	
 	# Persist updated context
 	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-	frappe.db.commit()
+	commit_if_background()
 	
 	return {
 		"status": "success",
@@ -525,7 +528,7 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			ctx[save_key] = result.get("response", "")
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
-		frappe.db.commit()
+		commit_if_background()
 
 		return {
 			"status": "success" if result.get("success") else "failed",
@@ -595,7 +598,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			ctx[save_key] = result.get("result", result)
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
-		frappe.db.commit()
+		commit_if_background()
 
 		return {
 			"status": "success" if result.get("success") else "failed",
@@ -604,7 +607,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		}
 	except Exception as e:
 		run_doc.db_set({"status": "Failed", "error_message": str(e), "end_time": now_datetime()})
-		frappe.db.commit()
+		commit_if_background()
 		return {"status": "failed", "error": str(e)}
 
 
@@ -664,7 +667,7 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
 		flow_run.db_set("last_agent_run", result.get("agent_run_id"))
-		frappe.db.commit()
+		commit_if_background()
 
 		return {
 			"status": "success",
@@ -711,7 +714,7 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 			"waiting": json.dumps(waiting_data),
 		}
 	)
-	frappe.db.commit()
+	commit_if_background()
 
 	# Send notifications to approvers
 	_send_approval_notifications(flow_run, node, config, waiting_data)
@@ -858,7 +861,7 @@ def _clear_flow_notifications(flow_run):
 			1,
 			update_modified=False
 		)
-		frappe.db.commit()
+		commit_if_background()
 	except Exception:
 		# Cleanup is best-effort
 		pass
@@ -911,7 +914,11 @@ def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> di
 
 		try:
 			result_data = resp.json()
-		except Exception:
+		except (json.JSONDecodeError, TypeError):
+			frappe.log_error(
+				frappe.get_traceback(),
+				"HTTP response JSON parse failed — falling back to text"
+			)
 			result_data = resp.text
 
 		result = {
@@ -928,7 +935,7 @@ def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> di
 			ctx[save_key] = result
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
-		frappe.db.commit()
+		commit_if_background()
 
 		is_success = 200 <= resp.status_code < 400
 		return {
@@ -1022,7 +1029,7 @@ def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			results[target] = f"Error: {str(e)}"
 
 	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-	frappe.db.commit()
+	commit_if_background()
 
 	return {"status": "success", "result": results}
 
@@ -1070,7 +1077,7 @@ def _exec_loop_node(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		ctx.pop(item_key, None)
 		ctx.pop(index_key, None)
 		flow_run.db_set("context_json", json.dumps(ctx, default=str))
-		frappe.db.commit()
+		commit_if_background()
 		return {"status": "success", "result": "max_iterations reached", "next_node_id": done_node}
 
 	if current_index < len(items):
@@ -1078,14 +1085,14 @@ def _exec_loop_node(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		ctx[item_key] = items[current_index]
 		ctx[index_key] = current_index + 1
 		flow_run.db_set("context_json", json.dumps(ctx, default=str))
-		frappe.db.commit()
+		commit_if_background()
 		return {"status": "success", "result": items[current_index], "next_node_id": loop_node}
 	else:
 		# Iteration complete - clean up loop variables
 		ctx.pop(item_key, None)
 		ctx.pop(index_key, None)
 		flow_run.db_set("context_json", json.dumps(ctx, default=str))
-		frappe.db.commit()
+		commit_if_background()
 		return {"status": "success", "result": "iteration_complete", "next_node_id": done_node}
 
 
@@ -1222,7 +1229,7 @@ def _call_orchestrator(
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
 		flow_run.db_set("last_agent_run", result.get("agent_run_id"))
-		frappe.db.commit()
+		commit_if_background()
 
 		return decision["next_node_id"]
 
@@ -1280,7 +1287,7 @@ def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = ""
 		}
 	)
 	run_doc.insert(ignore_permissions=True)
-	frappe.db.commit()
+	commit_if_background()
 	return run_doc
 
 
@@ -1297,7 +1304,7 @@ def _create_flow_conversation(flow_id: str, entry_node_id: str) -> "frappe.Docum
 		}
 	)
 	conv.insert(ignore_permissions=True)
-	frappe.db.commit()
+	commit_if_background()
 	return conv
 
 
@@ -1332,7 +1339,7 @@ def _complete_flow_run(flow_run):
 			"completed_at": now_datetime(),
 		}
 	)
-	frappe.db.commit()
+	commit_if_background()
 
 
 def _fail_flow_run(flow_run, error_msg: str):
@@ -1344,7 +1351,7 @@ def _fail_flow_run(flow_run, error_msg: str):
 			"completed_at": now_datetime(),
 		}
 	)
-	frappe.db.commit()
+	commit_if_background()
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
 
 

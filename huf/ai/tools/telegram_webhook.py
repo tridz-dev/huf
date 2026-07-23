@@ -20,6 +20,8 @@ from typing import Optional
 import frappe
 from frappe.utils.background_jobs import enqueue
 
+from huf.ai.transaction import commit_if_background
+
 
 WEBHOOK_HEADER = "X-Telegram-Bot-Api-Secret-Token"
 
@@ -106,8 +108,10 @@ def process_telegram_update(settings_name: str, update: dict):
     Background worker: parse a Telegram update, run the configured HUF Agent,
     and send the reply back to Telegram.
     """
+    original_user = frappe.session.user
     try:
-        frappe.set_user("Administrator")
+        if frappe.session.user != "Administrator":
+            frappe.set_user("Administrator")
 
         if not frappe.db.exists("Integration Settings", settings_name):
             frappe.log_error(f"Integration Settings {settings_name} not found", "Telegram Webhook")
@@ -177,7 +181,12 @@ def process_telegram_update(settings_name: str, update: dict):
     except Exception as e:
         frappe.log_error(f"Error processing Telegram update: {e}", "Telegram Webhook")
     finally:
-        frappe.db.commit()
+        if frappe.session.user != original_user:
+            try:
+                frappe.set_user(original_user)
+            except Exception:
+                pass
+        commit_if_background()
 
 
 def _extract_message(update: dict) -> Optional[dict]:

@@ -17,6 +17,8 @@
 import os
 import frappe
 
+from huf.ai.transaction import commit_if_background
+
 
 def require_credential(service: str, key: str) -> str:
 	"""
@@ -172,7 +174,7 @@ def update_last_error(service: str, error: str):
 			doc = frappe.get_doc("Integration Settings", settings[0].name)
 			doc.last_error = error[:140]  # Truncate to field length
 			doc.save(ignore_permissions=True)
-			frappe.db.commit()
+			commit_if_background()
 	except Exception:
 		# Silently fail - don't break tool execution for logging errors
 		pass

@@ -6,8 +6,8 @@ import frappe
 from frappe import _
 from frappe.utils.file_manager import save_file
 
+from huf.ai import audio_service
 from huf.ai import sdk_tools
-from huf.ai import transcription_handler
 from huf.ai.agent_integration import _is_truthy, _run_async_safely, run_agent_sync
 from huf.ai.conversation_manager import ConversationManager
 
@@ -34,74 +34,81 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
         chat.db_set("agent", agent)
         chat.agent = agent
 
+    conv_id = conversation or chat.conversation
+    session_id = None
+    if conv_id:
+        session_id = frappe.db.get_value("Agent Conversation", conv_id, "session_id")
+    
     msg = frappe.get_doc({
         "doctype": "Agent Message",
-        "conversation": conversation or chat.conversation,
+        "conversation": conv_id,
         "role": "user",
         "content": f"(voice message: {filename})",
         "kind": "Audio",
-        "user": frappe.session.user
+        "user": frappe.session.user,
+        "session_id": session_id,
     })
     msg.insert(ignore_permissions=True)
 
     try:
-        saved_file = save_file(
-            filename, 
-            audio_bytes, 
-            "Agent Message", 
-            msg.name, 
-            is_private=False
+        saved_file = audio_service.save_audio_upload(
+            filename,
+            b64data,
+            attached_to_doctype="Agent Message",
+            attached_to_name=msg.name,
+            is_private=0,
         )
     except Exception as e:
         frappe.log_error(message=f"Save File Failed: {e}", title="Save File Failed")
-        return {"success": False, "error": "Could not save audio file to database."}
+        return {"success": False, "error": str(e)}
 
-    file_id = None
-    file_url = None
-    if hasattr(saved_file, "name"):
-        file_id = saved_file.name
-        file_url = saved_file.file_url 
-        # Link file URL to voice_message field
+    file_id = saved_file["file_id"]
+    file_url = saved_file["file_url"]
+    if file_url:
         frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-    elif isinstance(saved_file, dict):
-        file_id = saved_file.get("name")
-        file_url = saved_file.get("file_url")
-        if file_url:
-             frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-    
-    if not file_id:
-        file_id = frappe.db.get_value("File", {
-            "attached_to_doctype": "Agent Message", 
-            "attached_to_name": msg.name
-        }, "name", order_by="creation desc")
-        
-    if file_id and not file_url:
-        file_url = frappe.db.get_value("File", file_id, "file_url")
-        if file_url:
-            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-
-    if not file_id:
-        return {"success": False, "error": "File was saved but ID could not be retrieved."}
 
     provider = frappe.db.get_value("Agent", chat.agent, "provider")
 
+    stt_model_link = frappe.db.get_value("Agent", chat.agent, "stt_model")
+
     try:
-        res = _run_async_safely(
-            sdk_tools.handle_transcribe_audio(
-                file_id=file_id,
-                agent_name=chat.agent,
-                conversation_id=conversation or chat.conversation,
-                message_id=msg.name,
-            )
+        res = audio_service.transcribe_audio_file(
+            file_id=file_id,
+            agent_name=chat.agent,
         )
+
+        conv_id = conversation or chat.conversation
+        if res.get("success") and conv_id:
+            try:
+                audio_service.create_audio_user_message(
+                    conv_id,
+                    file_id,
+                    res["text"],
+                    metadata={
+                        "agent_name": chat.agent,
+                        "message_id": msg.name,
+                        "stt_model": stt_model_link,
+                        "status": "Completed",
+                    },
+                )
+            except Exception as e:
+                frappe.log_error(
+                    f"Error creating Agent Message for transcription: {e!s}",
+                    "Audio Transcription Message Creation"
+                )
     except Exception as e:
          frappe.log_error(f"Transcription Error: {str(e)}")
+         frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
          return {"success": False, "error": str(e)}
 
     if not res.get("success"):
+        frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
         return res
 
     transcript = res.get("text")
+    frappe.db.set_value("Agent Message", msg.name, "status", "Completed")
+    if stt_model_link:
+        frappe.db.set_value("Agent Message", msg.name, "stt_model", stt_model_link)
     if not chat.conversation: chat.reload()
     
     run_result = run_agent_sync(
@@ -111,7 +118,8 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
         model=frappe.db.get_value("Agent", chat.agent, "model"),
         channel_id="chat",
         external_id=frappe.session.user,
-        conversation_id=chat.conversation
+        conversation_id=chat.conversation,
+        skip_user_message=True
     )
     
     if run_result.get("conversation_id") and not chat.conversation:
@@ -172,81 +180,80 @@ def upload_audio_and_transcribe_web(
         "content": f"(voice message: {filename})",
         "kind": "Audio",
         "user": frappe.session.user,
+        "session_id": conv.session_id,
     })
     msg.insert(ignore_permissions=True)
 
     # Save file attached to Agent Message
     try:
-        saved_file = save_file(
+        saved_file = audio_service.save_audio_upload(
             filename,
-            audio_bytes,
-            "Agent Message",
-            msg.name,
-            is_private=False,
+            b64data,
+            attached_to_doctype="Agent Message",
+            attached_to_name=msg.name,
+            is_private=0,
         )
     except Exception as e:
         frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
-        return {"success": False, "error": "Could not save audio file to database."}
+        return {"success": False, "error": str(e)}
 
-    file_id = None
-    file_url = None
-    if hasattr(saved_file, "name"):
-        file_id = saved_file.name
-        file_url = saved_file.file_url
+    file_id = saved_file["file_id"]
+    file_url = saved_file["file_url"]
+    if file_url:
         frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-    elif isinstance(saved_file, dict):
-        file_id = saved_file.get("name")
-        file_url = saved_file.get("file_url")
-        if file_url:
-            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-
-    if not file_id:
-        file_id = frappe.db.get_value(
-            "File",
-            {"attached_to_doctype": "Agent Message", "attached_to_name": msg.name},
-            "name",
-            order_by="creation desc",
-        )
-
-    if file_id and not file_url:
-        file_url = frappe.db.get_value("File", file_id, "file_url")
-        if file_url:
-            frappe.db.set_value("Agent Message", msg.name, "voice_message", file_url)
-
-    if not file_id:
-        return {"success": False, "error": "File was saved but ID could not be retrieved."}
 
     provider = frappe.db.get_value("Agent", agent, "provider")
 
-    # Transcribe using SDK STT tool
+    # Transcribe via the canonical audio service
     try:
-        res = _run_async_safely(
-            sdk_tools.handle_transcribe_audio(
-                file_id=file_id,
-                agent_name=agent,
-                conversation_id=conversation_id,
-                message_id=msg.name,
-            )
+        res = audio_service.transcribe_audio_file(
+            file_id=file_id,
+            agent_name=agent,
         )
     except Exception as e:
         frappe.log_error(f"Transcription Error (web): {str(e)}")
+        frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
         return {"success": False, "error": str(e)}
 
     if not res.get("success"):
+        frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
         return res
 
-    transcript = res.get("text")
+    transcript = res["text"]
+    stt_model_link = frappe.db.get_value("Agent", agent, "stt_model")
 
     # Update user message with the actual transcript
-    frappe.db.set_value("Agent Message", msg.name, "content", transcript)
-    frappe.db.commit()
+    try:
+        audio_service.create_audio_user_message(
+            conversation_id,
+            file_id,
+            transcript,
+            metadata={
+                "agent_name": agent,
+                "message_id": msg.name,
+                "stt_model": stt_model_link,
+                "status": "Completed",
+            },
+        )
+    except Exception as e:
+        frappe.log_error(
+            f"Error creating Agent Message for transcription: {e!s}",
+            "Audio Transcription Message Creation"
+        )
 
+    # Ensure the transcript is stored even if message update failed above
+    frappe.db.set_value("Agent Message", msg.name, "content", transcript)
+    if stt_model_link:
+        frappe.db.set_value("Agent Message", msg.name, "stt_model", stt_model_link)
+    frappe.db.set_value("Agent Message", msg.name, "status", "Completed")
+    
     if transcribe_only:
         return {
             "success": True,
             "conversation_id": conversation_id,
             "transcript": transcript,
             "message_id": msg.name,
+            "file_url": file_url,
         }
 
     # Run agent with transcript as prompt, within the same conversation
@@ -450,7 +457,7 @@ def send_message_to_conversation(conversation: str, message: str, skip_user_mess
 @frappe.whitelist()
 def upload_file_and_process(docname: str, filename: str, b64data: str, agent: str = None, conversation: str = None):
     """
-    Upload a file (PDF/Image) and process it with OCR/Vision.
+    Upload a file (PDF/Image/Audio) and process it with OCR/Vision/STT.
     Returns the extracted text and optionally creates an Agent Message.
     """
     if not b64data or not filename:
@@ -477,14 +484,20 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
     
     # Save file
     
+    conv_id = conversation or chat.conversation
+    session_id = None
+    if conv_id:
+        session_id = frappe.db.get_value("Agent Conversation", conv_id, "session_id")
+        
     try:
         msg = frappe.get_doc({
             "doctype": "Agent Message",
-            "conversation": conversation or chat.conversation,
+            "conversation": conv_id,
             "role": "user",
             "kind":"Message",
             "content": f"Uploaded file: {filename}",
-            "user": frappe.session.user
+            "user": frappe.session.user,
+            "session_id": session_id,
         })
         msg.insert()
 
@@ -502,13 +515,19 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
     file_id = saved_file.name
 
     try:
-        result = _run_async_safely(
-            sdk_tools.handle_ocr_document(
+        if audio_service.is_audio_file(filename):
+            result = audio_service.transcribe_audio_file(
                 file_id=file_id,
                 agent_name=chat.agent,
-                conversation_id=conversation or chat.conversation,
             )
-        )
+        else:
+            result = _run_async_safely(
+                sdk_tools.handle_ocr_document(
+                    file_id=file_id,
+                    agent_name=chat.agent,
+                    conversation_id=conversation or chat.conversation,
+                )
+            )
 
         if not result.get("success"):
             return result
@@ -516,7 +535,7 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
         return result
 
     except Exception as e:
-        frappe.log_error(f"OCR Processing Error: {str(e)}")
+        frappe.log_error(f"File Processing Error: {str(e)}")
         return {"success": False, "error": str(e)}
 
 
@@ -527,8 +546,8 @@ def upload_file_and_process_web(
     agent: str,
     conversation: str | None = None,
 ):
-    """Web endpoint: save an uploaded document/image against a real Agent Conversation
-    and extract its text via OCR/vision, honoring the agent's upload capability flags.
+    """Web endpoint: save an uploaded document/image/audio against a real Agent Conversation
+    and extract its text via OCR/vision or STT transcription, honoring the agent's upload capability flags.
     """
     if not b64data or not filename:
         frappe.throw(_("Filename and file data are required"))
@@ -557,16 +576,28 @@ def upload_file_and_process_web(
             "error": _("File exceeds the maximum allowed size of {0} MB.").format(min(max_upload_size_mb, 25)),
         }
 
-    model_name = agent_doc.get("model")
-    modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
-    supported = {m.strip() for m in modalities.split(",") if m.strip()}
+    # Audio attachments bypass the OCR/Vision modality gate: they only need a
+    # resolvable STT configuration for the agent.
+    is_audio = audio_service.is_audio_file(filename)
+    if is_audio:
+        try:
+            audio_service.resolve_stt_config(agent)
+        except ValueError:
+            return {
+                "success": False,
+                "error": _("This agent has no transcription model configured for audio files."),
+            }
+    else:
+        model_name = agent_doc.get("model")
+        modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
+        supported = {m.strip() for m in modalities.split(",") if m.strip()}
 
-    is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
-    use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
-    use_vision = "Vision" in supported and is_image_or_pdf
+        is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
+        use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
+        use_vision = "Vision" in supported and is_image_or_pdf
 
-    if not use_ocr and not use_vision:
-        return {"success": False, "error": _("This model does not support file analysis.")}
+        if not use_ocr and not use_vision:
+            return {"success": False, "error": _("This model does not support file analysis.")}
 
     # Ensure conversation exists (or create a new one)
     conv = None
@@ -592,6 +623,7 @@ def upload_file_and_process_web(
         "kind": "Message",
         "content": f"Uploaded file: {filename}",
         "user": frappe.session.user,
+        "session_id": conv.session_id,
     })
     msg.insert()
 
@@ -608,15 +640,21 @@ def upload_file_and_process_web(
         return {"success": False, "error": "File was saved but ID could not be retrieved."}
 
     try:
-        result = _run_async_safely(
-            sdk_tools.handle_ocr_document(
+        if is_audio:
+            result = audio_service.transcribe_audio_file(
                 file_id=file_id,
                 agent_name=agent,
-                conversation_id=conversation_id,
             )
-        )
+        else:
+            result = _run_async_safely(
+                sdk_tools.handle_ocr_document(
+                    file_id=file_id,
+                    agent_name=agent,
+                    conversation_id=conversation_id,
+                )
+            )
     except Exception as e:
-        frappe.log_error(f"OCR Processing Error (web): {str(e)}")
+        frappe.log_error(f"File Processing Error (web): {str(e)}")
         return {"success": False, "error": str(e)}
 
     if not result.get("success"):
@@ -647,6 +685,18 @@ def _validate_web_file_upload(agent: str, filename: str, file_bytes: bytes):
             "success": False,
             "error": _("File exceeds the maximum allowed size of {0} MB.").format(min(max_upload_size_mb, 25)),
         }
+
+    # Audio attachments bypass the OCR/Vision modality gate: they only need a
+    # resolvable STT configuration for the agent.
+    if audio_service.is_audio_file(filename):
+        try:
+            audio_service.resolve_stt_config(agent)
+        except ValueError:
+            return None, {
+                "success": False,
+                "error": _("This agent has no transcription model configured for audio files."),
+            }
+        return agent_doc, None
 
     model_name = agent_doc.get("model")
     modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
@@ -792,6 +842,7 @@ def prepare_message_with_file_web(
         "kind": "Message",
         "content": display_content,
         "user": frappe.session.user,
+        "session_id": conv.session_id,
     })
     msg.insert(ignore_permissions=True)
 
@@ -823,8 +874,9 @@ def prepare_message_with_file_web(
     if not resolved_file_url:
         resolved_file_url = frappe.db.get_value("File", resolved_file_id, "file_url")
 
-    mime_type, _ = mimetypes.guess_type(resolved_filename)
+    mime_type, _unused = mimetypes.guess_type(resolved_filename)
     is_image = bool(mime_type and mime_type.startswith("image/"))
+    is_audio = audio_service.is_audio_file(resolved_filename, mime_type)
 
     agent_prompt = display_content
     files_payload = None
@@ -836,6 +888,41 @@ def prepare_message_with_file_web(
             "filename": resolved_filename,
             "is_image": 1,
         }]
+    elif is_audio:
+        result = audio_service.transcribe_audio_file(
+            file_id=resolved_file_id,
+            agent_name=agent,
+        )
+
+        if not result.get("success"):
+            return result
+
+        transcript = result.get("transcript") or result.get("text") or ""
+        agent_prompt = transcript
+
+        msg_meta = frappe.get_meta("Agent Message")
+        msg_updates = {
+            "kind": "Audio",
+            "content": transcript
+        }
+        if resolved_file_url and msg_meta.get_field("voice_message"):
+            msg_updates["voice_message"] = resolved_file_url
+        if result.get("stt_model") and msg_meta.get_field("stt_model"):
+            msg_updates["stt_model"] = result["stt_model"]
+        if msg_updates:
+            frappe.db.set_value("Agent Message", msg.name, msg_updates, update_modified=False)
+
+        return {
+            "success": True,
+            "conversation_id": conversation_id,
+            "message_id": msg.name,
+            "agent_prompt": agent_prompt,
+            "is_audio": True,
+            "transcript": transcript,
+            "voice_message": resolved_file_url,
+            "stt_model": result.get("stt_model"),
+            "files": files_payload,
+        }
     else:
         try:
             result = _run_async_safely(

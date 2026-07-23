@@ -6,6 +6,8 @@ import requests
 from frappe import _, client
 from frappe.utils.file_manager import save_file
 
+from huf.ai.transaction import commit_if_background
+
 
 def get_document(doctype: str, document_id: str):
 
@@ -535,7 +537,7 @@ def attach_file_to_document(doctype: str, document_id: str, **kwargs):
     if updates:
         try:
             frappe.db.set_value(doctype, document_id, updates)
-            frappe.db.commit()
+            commit_if_background()
         except Exception as e:
             return {
                 "success": True,

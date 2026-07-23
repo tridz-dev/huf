@@ -16,6 +16,8 @@ export type MessageType = {
   /** Links a user bubble to the Agent Run that created it (for merge/hydration). */
   agentRunId?: string;
   error?: string;
+  sttModel?: string;
+  status?: string;
   attachment?: {
     name: string;
     label: string;

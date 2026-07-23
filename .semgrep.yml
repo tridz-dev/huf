@@ -1,0 +1,28 @@
+rules:
+  - id: huf-no-explicit-frappe-commit
+    languages:
+      - python
+    message: >
+      Avoid explicit frappe.db.commit() in request/CRUD code.
+      Use huf.ai.transaction helpers or add '# nosemgrep' with a justification.
+    pattern: frappe.db.commit()
+    paths:
+      include:
+        - huf/**
+      exclude:
+        # Install hooks and data migrations run outside Frappe's request/job
+        # transaction wrapper, so explicit commits are required.
+        - huf/install.py
+        - huf/patches/**/*.py
+        # CSRF token must be persisted before the boot page is rendered.
+        - huf/www/huf.py
+        # Long-running background jobs that report progress to the UI.
+        - huf/ai/knowledge/indexer.py
+        - huf/ai/orchestration/orchestrator.py
+        - huf/ai/orchestration/scheduler.py
+        - huf/ai/agent_scheduler.py
+        # Test fixtures may need explicit commits.
+        - huf/ai/app_seeding/tests/test_seed_fk.py
+        # The centralized transaction wrapper itself is allowed to commit.
+        - huf/ai/transaction.py
+    severity: ERROR
