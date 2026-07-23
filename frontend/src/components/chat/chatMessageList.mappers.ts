@@ -1,5 +1,5 @@
 import type { ToolCallEvent, NewAgentMessageEvent, AgentRunStatusEvent } from '@/hooks/useChatSocket';
-import type { AgentRunStatusResponse, ChatMessage } from '@/services/chatApi';
+import type { AgentRunStatusResponse, ChatMessage, PendingConversationRun } from '@/services/chatApi';
 import { mapToolStatusToState } from './utils';
 import type { MessageType } from './types';
 
@@ -330,6 +330,147 @@ export function applyPolledRunStatus(
   return withStatus;
 }
 
+const PENDING_RUN_STATUSES = new Set<MessageType['runStatus']>(['Queued', 'Started']);
+
+function isPendingRunMessage(msg: MessageType): boolean {
+  return msg.runStatus === 'Queued' || msg.runStatus === 'Started';
+}
+
+function normalizeRunStatus(status: string): 'Queued' | 'Started' | null {
+  const normalized = CANONICAL_RUN_STATUSES[status.trim().toLowerCase()];
+  if (normalized === 'Queued' || normalized === 'Started') {
+    return normalized;
+  }
+  return null;
+}
+
+export function filterMessagesForConversation(
+  conversationItems: ChatMessage[],
+  conversationId: string
+): ChatMessage[] {
+  return conversationItems.filter((item) => item.conversation === conversationId);
+}
+
+export function hasStaleConversationItems(
+  conversationItems: ChatMessage[],
+  conversationId: string
+): boolean {
+  return (
+    conversationItems.length > 0 &&
+    !conversationItems.some((item) => item.conversation === conversationId)
+  );
+}
+
+function messageContent(msg: MessageType): string {
+  return msg.versions[0]?.content?.trim() ?? '';
+}
+
+function hasPersistedUserForRun(
+  run: PendingConversationRun,
+  conversationItems: ChatMessage[],
+  prev: MessageType[]
+): boolean {
+  const prompt = run.prompt?.trim();
+  if (!prompt) {
+    return false;
+  }
+
+  if (
+    conversationItems.some(
+      (item) =>
+        !item.isAgent &&
+        (item.agentRun === run.name || item.content?.trim() === prompt)
+    )
+  ) {
+    return true;
+  }
+
+  return prev.some(
+    (msg) =>
+      msg.from === 'user' &&
+      (msg.agentRunId === run.name || messageContent(msg) === prompt)
+  );
+}
+
+function isHydratedUserMessageKey(key: string): boolean {
+  return key.startsWith('pending-user-');
+}
+
+/**
+ * Rebuild pending user/assistant bubbles from open Agent Run records.
+ * Idempotent: skips runs already represented in prev or conversationItems.
+ */
+export function mergePendingRunsIntoMessages(
+  prev: MessageType[],
+  runs: PendingConversationRun[],
+  conversationItems: ChatMessage[]
+): MessageType[] {
+  if (runs.length === 0) {
+    return prev;
+  }
+
+  const completedAssistantRunIds = new Set(
+    conversationItems
+      .filter((item) => item.isAgent && item.agentRun)
+      .map((item) => item.agentRun as string)
+  );
+
+  const runsToHydrate = runs
+    .map((run) => ({ run, status: normalizeRunStatus(run.status) }))
+    .filter((entry): entry is { run: PendingConversationRun; status: 'Queued' | 'Started' } =>
+      entry.status !== null
+    )
+    .filter(({ run }) => !completedAssistantRunIds.has(run.name))
+    .filter(({ run }) => !run.prompt?.startsWith('[SILENT_TRIGGER]'))
+    .sort((a, b) => {
+      const seqA = a.run.sequence ?? 0;
+      const seqB = b.run.sequence ?? 0;
+      if (seqA !== seqB) return seqA - seqB;
+      return a.run.name.localeCompare(b.run.name);
+    });
+
+  if (runsToHydrate.length === 0) {
+    return prev;
+  }
+
+  let result = [...prev];
+  const existingKeys = new Set(prev.map((msg) => msg.key));
+
+  for (const { run, status } of runsToHydrate) {
+    const prompt = run.prompt?.trim();
+    if (prompt && !hasPersistedUserForRun(run, conversationItems, result)) {
+      const userKey = `pending-user-${run.name}`;
+      if (!existingKeys.has(userKey)) {
+        result.push({
+          key: userKey,
+          from: 'user',
+          agentRunId: run.name,
+          versions: [{ id: userKey, content: prompt }],
+        });
+        existingKeys.add(userKey);
+      }
+    }
+
+    if (!existingKeys.has(run.name)) {
+      result.push({
+        key: run.name,
+        from: 'assistant',
+        runStatus: status,
+        versions: [{ id: run.name, content: '' }],
+      });
+      existingKeys.add(run.name);
+    } else {
+      result = result.map((msg) =>
+        msg.key === run.name && PENDING_RUN_STATUSES.has(msg.runStatus)
+          ? { ...msg, runStatus: status }
+          : msg
+      );
+    }
+  }
+
+  return result;
+}
+
 export function mergeConversationItemsIntoMessages(
   prev: MessageType[],
   conversationItems: ChatMessage[],
@@ -352,6 +493,7 @@ export function mergeConversationItemsIntoMessages(
     const baseMessage: MessageType = {
       key: item.id,
       from: item.isAgent ? 'assistant' : 'user',
+      agentRunId: !item.isAgent ? item.agentRun : undefined,
       kind: item.kind,
       generatedImage: item.generatedImage,
       generatedAudio: item.generatedAudio,
@@ -397,14 +539,35 @@ export function mergeConversationItemsIntoMessages(
   });
 
   const apiMessageIds = new Set(conversationItems.map((item) => item.id));
-  
+
+  const shouldPreserveTempMessage = (msg: MessageType): boolean => {
+    if (apiMessageIds.has(msg.key)) return false;
+    if (isPendingRunMessage(msg)) return true;
+    if (msg.tools && msg.tools.length > 0) return true;
+
+    const runId = msg.agentRunId ?? (isHydratedUserMessageKey(msg.key)
+      ? msg.key.slice('pending-user-'.length)
+      : undefined);
+    const content = messageContent(msg);
+
+    if (runId || isHydratedUserMessageKey(msg.key)) {
+      const userPersisted = conversationItems.some(
+        (item) =>
+          !item.isAgent &&
+          (item.agentRun === runId ||
+            (content.length > 0 && item.content?.trim() === content))
+      );
+      if (!userPersisted) return true;
+    }
+
+    return false;
+  };
+
   // During transition, preserve all messages not in API response
-  // Otherwise, only preserve temporary messages with tools
+  // Otherwise, preserve pending runs, linked user bubbles, and tool UI state
   const remainingTempMessages = preserveDuringTransition
     ? prev.filter((msg) => !apiMessageIds.has(msg.key))
-    : prev.filter(
-        (msg) => !apiMessageIds.has(msg.key) && msg.tools && msg.tools.length > 0
-      );
+    : prev.filter(shouldPreserveTempMessage);
 
   return [...mapped, ...remainingTempMessages];
 }
