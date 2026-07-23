@@ -28,6 +28,8 @@ import frappe
 from frappe import _
 from frappe.utils.file_manager import save_file
 
+from huf.ai.transaction import commit_if_background
+
 # Maximum accepted size for a decoded audio upload (25 MB).
 MAX_AUDIO_FILE_SIZE = 25 * 1024 * 1024
 
@@ -712,7 +714,7 @@ def create_audio_user_message(
             message_doc.status = message_status
         if file_doc and file_doc.file_url:
             message_doc.voice_message = file_doc.file_url
-        message_doc.save(ignore_permissions=True)
+        message_doc.save()
     else:
         message_doc = frappe.get_doc({
             "doctype": "Agent Message",
@@ -756,7 +758,7 @@ def create_audio_user_message(
     else:
         frappe.db.set_value("Agent Conversation", conversation_id, "last_activity", frappe.utils.now())
 
-    frappe.db.commit()
+    commit_if_background()
 
     # Emit socket event for new message
     try:
