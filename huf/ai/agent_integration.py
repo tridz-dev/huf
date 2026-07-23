@@ -371,6 +371,25 @@ def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
         pass
 
 
+def _emit_conversation_title_updated(conversation_name, title):
+    """Emit a realtime event when a conversation title is auto-named."""
+    try:
+        owner = frappe.db.get_value("Agent Conversation", conversation_name, "owner")
+        if not owner:
+            return
+        frappe.publish_realtime(
+            event=f"conversation:{conversation_name}",
+            message={
+                "type": "conversation_title_updated",
+                "conversation_id": conversation_name,
+                "title": title,
+            },
+            user=owner,
+        )
+    except Exception:
+        pass
+
+
 def _parse_prompt_cache_options(prompt_cache_options):
     """Parse prompt caching options passed via API/runtime and return a dict."""
     if not prompt_cache_options:
@@ -658,7 +677,8 @@ def generate_conversation_title(conversation_name, agent_name):
             title = title.strip().strip('"').strip("'")
             frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
             frappe.db.commit()
-            
+            _emit_conversation_title_updated(conversation_name, title)
+
     except Exception as e:
         frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
 
@@ -1481,7 +1501,11 @@ def _execute_agent_run(
         # Auto-naming check
         if agent_doc.autonaming_of_conversation_title:
             conv_title = conversation.title
-            if conv_title and (conv_title.startswith("Chat with") or conv_title.startswith("Conversation with")):
+            if conv_title and (
+                conv_title.startswith("Chat with")
+                or conv_title.startswith("Conversation with")
+                or conv_title.startswith("Streaming chat with")
+            ):
                 frappe.enqueue(
                     "huf.ai.agent_integration.generate_conversation_title",
                     queue="default",
