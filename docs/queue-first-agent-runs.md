@@ -33,6 +33,8 @@ SSE streaming (`POST /huf/stream/<agent>`) remains as the **explicit direct-exec
 
 If the realtime socket misses a lifecycle event, the chat falls back to polling `get_agent_run_status` for runs stuck in `Queued`/`Started`, reconciling through the same state transitions as the socket events.
 
+On conversation load (including page reload and switching back to a chat), the React client **hydrates** open runs from the `Agent Run` table (`Queued`/`Started` for that conversation), rebuilds pending user/assistant bubbles, and immediately calls `get_agent_run_status` once per open run so recovery does not depend on in-memory state or the socket grace period. User bubbles submitted in the current session are linked to `agent_run_id` so message merges do not drop them before the worker persists the user `Agent Message`. Streaming (`run_immediately`) uses the same hydration path for in-flight `Started` runs: the client recovers the **final** answer via status polling, not live token replay.
+
 File and audio turns persist their user message in the prepare/transcribe step; those endpoints forward `skip_user_message` (and `files`) so the worker never creates a second user message and file content still reaches the run.
 
 ## Conversation ordering and strict FIFO
