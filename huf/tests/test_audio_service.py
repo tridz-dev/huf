@@ -35,6 +35,7 @@ frappe_mock._ = lambda x, *a, **k: x
 frappe_mock.throw = MagicMock(side_effect=_throw)
 frappe_mock.whitelist = MagicMock(return_value=lambda fn: fn)
 frappe_mock.log_error = MagicMock()
+frappe_mock.logger = MagicMock()
 frappe_mock.publish_realtime = MagicMock()
 frappe_mock.get_doc = MagicMock()
 frappe_mock.get_all = MagicMock()
