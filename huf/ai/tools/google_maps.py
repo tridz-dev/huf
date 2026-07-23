@@ -1,5 +1,6 @@
 import json
 import frappe
+logger = frappe.logger("huf")
 from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
@@ -55,7 +56,7 @@ def handle_search_places(**kwargs):
 			"results": results
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Maps Error (Search): {str(e)}", "Google Maps Tool")
+		logger.warning(f"Google Maps Error (Search): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -98,7 +99,7 @@ def handle_get_directions(**kwargs):
 			}
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Maps Error (Directions): {str(e)}", "Google Maps Tool")
+		logger.warning(f"Google Maps Error (Directions): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -137,7 +138,7 @@ def handle_geocode(**kwargs):
 			}
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Maps Error (Geocode): {str(e)}", "Google Maps Tool")
+		logger.warning(f"Google Maps Error (Geocode): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -175,6 +176,6 @@ def handle_reverse_geocode(**kwargs):
 			}
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Maps Error (Reverse Geocode): {str(e)}", "Google Maps Tool")
+		logger.warning(f"Google Maps Error (Reverse Geocode): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})

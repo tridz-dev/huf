@@ -5,6 +5,7 @@ Uses direct Frappe DocType APIs – no external HTTP calls.
 
 import json
 import frappe
+logger = frappe.logger("huf")
 
 
 def _crm_installed():
@@ -73,7 +74,7 @@ def _handle_get_leads(**kwargs) -> str:
 
         return json.dumps({"success": True, "count": len(leads), "results": leads}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Get Leads Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Get Leads Error: {e}")
         return _error(str(e))
 
 
@@ -93,7 +94,7 @@ def _handle_get_lead(**kwargs) -> str:
         doc = frappe.get_doc("CRM Lead", name)
         return json.dumps({"success": True, "results": doc.as_dict()}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Get Lead Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Get Lead Error: {e}")
         return _error(str(e))
 
 
@@ -133,7 +134,7 @@ def _handle_create_lead(**kwargs) -> str:
 
         return json.dumps({"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Create Lead Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Create Lead Error: {e}")
         return _error(str(e))
 
 
@@ -178,7 +179,7 @@ def _handle_update_lead(**kwargs) -> str:
         doc.save()
         return json.dumps({"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Update Lead Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Update Lead Error: {e}")
         return _error(str(e))
 
 
@@ -236,7 +237,7 @@ def _handle_get_deals(**kwargs) -> str:
 
         return json.dumps({"success": True, "count": len(deals), "results": deals}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Get Deals Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Get Deals Error: {e}")
         return _error(str(e))
 
 
@@ -255,7 +256,7 @@ def _handle_get_deal(**kwargs) -> str:
         doc = frappe.get_doc("CRM Deal", name)
         return json.dumps({"success": True, "results": doc.as_dict()}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Get Deal Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Get Deal Error: {e}")
         return _error(str(e))
 
 
@@ -316,7 +317,7 @@ def _handle_create_deal(**kwargs) -> str:
         doc.insert()
         return json.dumps({"success": True, "results": {"name": doc.name, "organization": doc.organization_name or doc.organization}}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Create Deal Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Create Deal Error: {e}")
         return _error(str(e))
 
 
@@ -362,7 +363,7 @@ def _handle_update_deal(**kwargs) -> str:
         doc.save()
         return json.dumps({"success": True, "results": {"name": doc.name, "organization": doc.organization}}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Update Deal Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Update Deal Error: {e}")
         return _error(str(e))
 
 
@@ -394,7 +395,7 @@ def _handle_add_note(**kwargs) -> str:
 
         return json.dumps({"success": True, "results": {"name": note.name, "title": note.title}}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Add Note Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Add Note Error: {e}")
         return _error(str(e))
 
 
@@ -427,7 +428,7 @@ def _handle_add_task(**kwargs) -> str:
 
         return json.dumps({"success": True, "results": {"name": task.name, "title": task.title}}, default=str)
     except Exception as e:
-        frappe.log_error(f"CRM Add Task Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Add Task Error: {e}")
         return _error(str(e))
 
 
@@ -516,7 +517,7 @@ def _handle_get_contacts(**kwargs) -> str:
     except frappe.DoesNotExistError:
         return _error("Contact DocType does not exist on this site.")
     except Exception as e:
-        frappe.log_error(f"CRM Get Contacts Error: {e}", "CRM Tool")
+        logger.warning(f"CRM Get Contacts Error: {e}")
         return _error(str(e))
 
 

@@ -5,6 +5,7 @@ Uses HUF Integration Settings for credential management.
 
 import json
 import frappe
+logger = frappe.logger("huf")
 import httpx
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
 
@@ -50,7 +51,7 @@ def handle_send_message(**kwargs) -> str:
         return json.dumps({"success": True, "results": data}, default=str)
     except Exception as e:
         error_msg = f"Slack Send Message Error: {str(e)}"
-        frappe.log_error(error_msg, "Slack Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -85,7 +86,7 @@ def handle_send_message_thread(**kwargs) -> str:
         return json.dumps({"success": True, "results": data}, default=str)
     except Exception as e:
         error_msg = f"Slack Thread Reply Error: {str(e)}"
-        frappe.log_error(error_msg, "Slack Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -120,7 +121,7 @@ def handle_list_channels(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"Slack List Channels Error: {str(e)}"
-        frappe.log_error(error_msg, "Slack Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -160,7 +161,7 @@ def handle_get_channel_history(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"Slack Get History Error: {str(e)}"
-        frappe.log_error(error_msg, "Slack Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -201,7 +202,7 @@ def handle_search_messages(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"Slack Search Error: {str(e)}"
-        frappe.log_error(error_msg, "Slack Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -238,6 +239,6 @@ def handle_list_users(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"Slack List Users Error: {str(e)}"
-        frappe.log_error(error_msg, "Slack Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
