@@ -165,6 +165,17 @@ export function ChatInput({
         [setMessages]
     );
 
+    const linkUserMessageToRun = useCallback(
+        (userMessageKey: string, agentRunId: string) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === userMessageKey ? { ...msg, agentRunId } : msg
+                )
+            );
+        },
+        [setMessages]
+    );
+
     const readFileAsBase64 = useCallback((file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -261,6 +272,7 @@ export function ChatInput({
 
                 assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
                 if (queued && agentRunId) {
+                    linkUserMessageToRun(userMessageKey, agentRunId);
                     setMessages((prev) =>
                         prev.map((msg) =>
                             msg.key === assistantMessageId
@@ -347,6 +359,7 @@ export function ChatInput({
             });
             assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
             if (queued && agentRunId) {
+                linkUserMessageToRun(userMessageKey, agentRunId);
                 setMessages((prev) =>
                     prev.map((msg) =>
                         msg.key === assistantMessageId
@@ -378,7 +391,7 @@ export function ChatInput({
         } finally {
             setIsSubmitting(false);
         }
-    }, [message, agentName, chatId, pendingFile, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId]);
+    }, [message, agentName, chatId, pendingFile, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun]);
 
     const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
         const filename = `recording-${Date.now()}.webm`;
@@ -448,6 +461,7 @@ export function ChatInput({
                 });
                 currentAssistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
                 if (queued && agentRunId) {
+                    linkUserMessageToRun(userMessageKey, agentRunId);
                     setMessages((prev) =>
                         prev.map((msg) =>
                             msg.key === assistantMessageId
@@ -483,7 +497,7 @@ export function ChatInput({
             });
             throw err;
         }
-    }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId]);
+    }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun]);
 
     const handleTranscriptionChange = useCallback((text: string) => {
         if (isAudioRecordingFlowRef.current) {
