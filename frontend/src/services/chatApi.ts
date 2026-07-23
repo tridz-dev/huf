@@ -41,6 +41,7 @@ export interface AgentMessageDoc {
   conversation: string;
   content: string;
   is_agent_message?: 0 | 1 | string;
+  agent_run?: string;
   kind?: string;
   generated_image?: string;
   generated_audio?: string;
@@ -58,6 +59,7 @@ export interface ChatMessage {
   conversation: string;
   content: string;
   isAgent: boolean;
+  agentRun?: string;
   kind?: string;
   generatedImage?: string;
   generatedAudio?: string;
@@ -68,6 +70,15 @@ export interface ChatMessage {
   toolArgs?: string | Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** Open Agent Run for a conversation (Queued or Started). */
+export interface PendingConversationRun {
+  name: string;
+  status: 'Queued' | 'Started' | string;
+  prompt?: string | null;
+  sequence?: number | null;
+  conversation?: string | null;
 }
 
 /**
@@ -90,6 +101,7 @@ function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
     conversation: doc.conversation,
     content: doc.content || '',
     isAgent,
+    agentRun: doc.agent_run || undefined,
     kind: doc.kind,
     generatedImage: doc.generated_image,
     generatedAudio: doc.generated_audio,
@@ -303,7 +315,7 @@ export async function getConversationMessages(
 
   try {
     const messages = await db.getDocList(doctype['Agent Message'], {
-      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'generated_video', 'voice_message', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'agent_run', 'kind', 'generated_image', 'generated_audio', 'generated_video', 'voice_message', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
       filters: [['conversation', '=', conversation]],
       orderBy: { field: 'creation', order: 'desc' },
       limit,
@@ -642,6 +654,41 @@ export interface AgentRunStatusResponse {
  * Fetch the status of a queued agent run.
  * Polling fallback for missed `agent_run_status` socket events.
  */
+/**
+ * Fetch open (Queued/Started) agent runs for a conversation.
+ * Used to hydrate pending bubbles after reload or chat switch.
+ */
+export async function getPendingConversationRuns(
+  conversationId: string
+): Promise<PendingConversationRun[]> {
+  if (!conversationId) {
+    return [];
+  }
+
+  try {
+    const runs = await db.getDocList(doctype['Agent Run'], {
+      fields: ['name', 'status', 'prompt', 'sequence', 'conversation'],
+      filters: [
+        ['conversation', '=', conversationId],
+        ['status', 'in', ['Queued', 'Started']],
+        ['is_child', '=', 0],
+      ],
+      orderBy: { field: 'sequence', order: 'asc' },
+      limit: 50,
+    });
+
+    return (runs as PendingConversationRun[]).slice().sort((a, b) => {
+      const seqA = a.sequence ?? 0;
+      const seqB = b.sequence ?? 0;
+      if (seqA !== seqB) return seqA - seqB;
+      return a.name.localeCompare(b.name);
+    });
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching pending conversation runs');
+    return [];
+  }
+}
+
 export async function getAgentRunStatus(agentRunId: string): Promise<AgentRunStatusResponse> {
   try {
     const result = await call.get('huf.ai.agent_integration.get_agent_run_status', {

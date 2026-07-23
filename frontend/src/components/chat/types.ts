@@ -13,6 +13,8 @@ export type MessageType = {
   generatedVideo?: string;
   voiceMessage?: string;
   runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed';
+  /** Links a user bubble to the Agent Run that created it (for merge/hydration). */
+  agentRunId?: string;
   error?: string;
   attachment?: {
     name: string;
