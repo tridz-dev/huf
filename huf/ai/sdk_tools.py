@@ -1720,7 +1720,6 @@ async def handle_generate_image(
                 "error": "Image generation succeeded but no images were returned"
             }
 
-        print("Returned images: ", images)
         return {
             "success": True,
             "images": images,

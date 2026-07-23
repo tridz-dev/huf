@@ -118,7 +118,7 @@ def _handle_create_lead(**kwargs) -> str:
         doc.industry = kwargs.get("industry", "")
         doc.territory = kwargs.get("territory", "")
         doc.website = kwargs.get("website", "")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         return json.dumps(
             {"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}}
@@ -150,7 +150,7 @@ def _handle_update_lead(**kwargs) -> str:
                 if df.fieldtype not in ("Table", "Table MultiSelect"):
                     setattr(doc, field, value)
 
-        doc.save(ignore_permissions=True)
+        doc.save()
         return json.dumps(
             {"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}}
         )
@@ -233,7 +233,7 @@ def _handle_create_opportunity(**kwargs) -> str:
         doc.sales_stage = kwargs.get("sales_stage", "")
         doc.probability = float(kwargs.get("probability", 0))
         doc.currency = kwargs.get("currency", "")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
@@ -266,7 +266,7 @@ def _handle_update_opportunity(**kwargs) -> str:
                     else:
                         setattr(doc, field, value)
 
-        doc.save(ignore_permissions=True)
+        doc.save()
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
         frappe.log_error(f"ERPNext CRM Update Opportunity Error: {e}", "ERPNext CRM Tool")

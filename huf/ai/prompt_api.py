@@ -16,6 +16,17 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from huf.permissions import has_capability
+
+
+def _require(capability: str) -> None:
+	"""Throw a PermissionError if the current user lacks *capability*."""
+	if not has_capability(frappe.session.user, capability):
+		frappe.throw(
+			_("You don't have permission to perform this action."),
+			frappe.PermissionError,
+		)
+
 
 @frappe.whitelist()
 def create_new_version(prompt_name, prompt_body, title=None, description=None):
@@ -34,7 +45,10 @@ def create_new_version(prompt_name, prompt_body, title=None, description=None):
 
 	Returns:
 		dict: ``{"name": "<new_prompt_name>", "version": <int>}``
+
+	Requires: agent.create
 	"""
+	_require("agent.create")
 	current = frappe.get_doc("Agent Prompt", prompt_name)
 
 	if current.is_system:
@@ -61,7 +75,7 @@ def create_new_version(prompt_name, prompt_body, title=None, description=None):
 		"forked_from": current.forked_from,
 		"prompt_group": current.prompt_group or prompt_name,
 	})
-	new_prompt.insert(ignore_permissions=True)
+	new_prompt.insert()
 
 	# Update agents that point to the old version and are NOT locked
 	_update_agent_links(prompt_name, new_prompt.name, new_version)
@@ -106,7 +120,10 @@ def fork_prompt(prompt_name, title=None):
 
 	Returns:
 		dict: ``{"name": "<new_prompt_name>", "version": 1}``
+
+	Requires: agent.create
 	"""
+	_require("agent.create")
 	source = frappe.get_doc("Agent Prompt", prompt_name)
 
 	forked = frappe.get_doc({
@@ -124,7 +141,7 @@ def fork_prompt(prompt_name, title=None):
 		"previous_version": None,
 		"forked_from": prompt_name,
 	})
-	forked.insert(ignore_permissions=True)
+	forked.insert()
 
 	return {"name": forked.name, "version": 1}
 
@@ -142,7 +159,10 @@ def detach_from_template(agent_name):
 
 	Returns:
 		dict: ``{"success": True, "prompt_mode": "Local"}``
+
+	Requires: agent.edit
 	"""
+	_require("agent.edit")
 	agent = frappe.get_doc("Agent", agent_name)
 
 	if (agent.prompt_mode or "Local") != "Template":
@@ -161,7 +181,7 @@ def detach_from_template(agent_name):
 	agent.prompt_mode = "Local"
 	agent.prompt_version_locked = 0
 	agent.template_version_at_attach = 0
-	agent.save(ignore_permissions=True)
+	agent.save()
 
 	return {"success": True, "prompt_mode": "Local"}
 
@@ -182,7 +202,10 @@ def save_as_template(agent_name, title, category=None, visibility="Private", des
 
 	Returns:
 		dict: ``{"name": "<prompt_name>", "version": 1}``
+
+	Requires: agent.create
 	"""
+	_require("agent.create")
 	agent = frappe.get_doc("Agent", agent_name)
 
 	if not agent.instructions:
@@ -200,7 +223,7 @@ def save_as_template(agent_name, title, category=None, visibility="Private", des
 		"version": 1,
 		"is_latest": 1,
 	})
-	prompt.insert(ignore_permissions=True)
+	prompt.insert()
 
 	return {"name": prompt.name, "version": 1}
 
@@ -219,7 +242,10 @@ def attach_template(agent_name, prompt_name, lock_version=0):
 
 	Returns:
 		dict: ``{"success": True, "prompt_mode": "Template", "version": <int>}``
+
+	Requires: agent.edit
 	"""
+	_require("agent.edit")
 	agent = frappe.get_doc("Agent", agent_name)
 	prompt = frappe.get_doc("Agent Prompt", prompt_name)
 
@@ -230,7 +256,7 @@ def attach_template(agent_name, prompt_name, lock_version=0):
 	agent.agent_prompt = prompt_name
 	agent.prompt_version_locked = cint(lock_version)
 	agent.template_version_at_attach = prompt.version
-	agent.save(ignore_permissions=True)
+	agent.save()
 
 	return {"success": True, "prompt_mode": "Template", "version": prompt.version}
 
@@ -249,7 +275,10 @@ def get_version_history(prompt_name):
 		list[dict]: Ordered list of versions (newest first) with
 		            ``name``, ``version``, ``title``, ``is_latest``,
 		            ``modified``, and ``owner``.
+
+	Requires: agent.use
 	"""
+	_require("agent.use")
 	return _get_version_history("Agent Prompt", prompt_name)
 
 
@@ -274,7 +303,10 @@ def create_new_summary_version(prompt_name, prompt_body, title=None, description
 
 	Returns:
 		dict: ``{"name": "<new_prompt_name>", "version": <int>}``
+
+	Requires: agent.create
 	"""
+	_require("agent.create")
 	current = frappe.get_doc("Agent Summary Prompt", prompt_name)
 
 	if current.is_system:
@@ -303,7 +335,7 @@ def create_new_summary_version(prompt_name, prompt_body, title=None, description
 		"forked_from": current.forked_from,
 		"prompt_group": current.prompt_group or prompt_name,
 	})
-	new_prompt.insert(ignore_permissions=True)
+	new_prompt.insert()
 
 	# Update agents that point to the old version and are NOT locked
 	_update_summary_agent_links(prompt_name, new_prompt.name, new_version)
@@ -348,7 +380,10 @@ def fork_summary_prompt(prompt_name, title=None):
 
 	Returns:
 		dict: ``{"name": "<new_prompt_name>", "version": 1}``
+
+	Requires: agent.create
 	"""
+	_require("agent.create")
 	source = frappe.get_doc("Agent Summary Prompt", prompt_name)
 
 	forked = frappe.get_doc({
@@ -366,7 +401,7 @@ def fork_summary_prompt(prompt_name, title=None):
 		"previous_version": None,
 		"forked_from": prompt_name,
 	})
-	forked.insert(ignore_permissions=True)
+	forked.insert()
 
 	return {"name": forked.name, "version": 1}
 
@@ -384,7 +419,10 @@ def detach_from_summary_template(agent_name):
 
 	Returns:
 		dict: ``{"success": True, "summary_prompt_mode": "Local"}``
+
+	Requires: agent.edit
 	"""
+	_require("agent.edit")
 	agent = frappe.get_doc("Agent", agent_name)
 
 	if (agent.summary_prompt_mode or "Local") != "Template":
@@ -402,7 +440,7 @@ def detach_from_summary_template(agent_name):
 	agent.summary_prompt_mode = "Local"
 	agent.summary_prompt_version_locked = 0
 	agent.summary_template_version_at_attach = 0
-	agent.save(ignore_permissions=True)
+	agent.save()
 
 	return {"success": True, "summary_prompt_mode": "Local"}
 
@@ -423,7 +461,10 @@ def save_as_summary_template(agent_name, title, category=None, visibility="Priva
 
 	Returns:
 		dict: ``{"name": "<prompt_name>", "version": 1}``
+
+	Requires: agent.create
 	"""
+	_require("agent.create")
 	agent = frappe.get_doc("Agent", agent_name)
 
 	if not agent.summary_prompt:
@@ -441,7 +482,7 @@ def save_as_summary_template(agent_name, title, category=None, visibility="Priva
 		"version": 1,
 		"is_latest": 1,
 	})
-	prompt.insert(ignore_permissions=True)
+	prompt.insert()
 
 	return {"name": prompt.name, "version": 1}
 
@@ -460,7 +501,10 @@ def attach_summary_template(agent_name, prompt_name, lock_version=0):
 
 	Returns:
 		dict: ``{"success": True, "summary_prompt_mode": "Template", "version": <int>}``
+
+	Requires: agent.edit
 	"""
+	_require("agent.edit")
 	agent = frappe.get_doc("Agent", agent_name)
 	prompt = frappe.get_doc("Agent Summary Prompt", prompt_name)
 
@@ -471,14 +515,18 @@ def attach_summary_template(agent_name, prompt_name, lock_version=0):
 	agent.summary_prompt_template = prompt_name
 	agent.summary_prompt_version_locked = cint(lock_version)
 	agent.summary_template_version_at_attach = prompt.version
-	agent.save(ignore_permissions=True)
+	agent.save()
 
 	return {"success": True, "summary_prompt_mode": "Template", "version": prompt.version}
 
 
 @frappe.whitelist()
 def get_summary_version_history(prompt_name):
-	"""Return the full version history for a summary prompt lineage."""
+	"""Return the full version history for a summary prompt lineage.
+
+	Requires: agent.use
+	"""
+	_require("agent.use")
 	return _get_version_history("Agent Summary Prompt", prompt_name)
 
 
