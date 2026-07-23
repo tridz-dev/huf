@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
@@ -13,7 +13,10 @@ import type { LoadingType } from './ChatInput';
 import { useChatAgentIdentity } from './useChatAgentIdentity';
 import { useChatScrollToBottom } from './useChatScrollToBottom';
 import { useRunStatusPolling } from './useRunStatusPolling';
+import { usePendingRunHydration } from './usePendingRunHydration';
 import {
+    filterMessagesForConversation,
+    hasStaleConversationItems,
     mergeConversationItemsIntoMessages,
     upsertAgentMessageFromSocket,
     upsertAgentRunStatusFromSocket,
@@ -185,6 +188,33 @@ export function ChatMessageList({
         }
     }, [messagesError, chatId]);
 
+    const previousChatIdRef = useRef<string | null>(chatId);
+
+    // Clear message state before merge/hydration when switching conversations.
+    useLayoutEffect(() => {
+        if (!chatId) {
+            previousChatIdRef.current = chatId;
+            return;
+        }
+
+        if (chatId === previousChatIdRef.current) {
+            return;
+        }
+
+        const isNewConversationTransition = chatId === newlyCreatedConversationIdRef.current;
+        if (!isNewConversationTransition) {
+            setMessages([]);
+            setIsTransitioningToNewConversation(false);
+        }
+
+        previousChatIdRef.current = chatId;
+    }, [chatId]);
+
+    const conversationItemsForChat = useMemo(
+        () => (chatId ? filterMessagesForConversation(conversationItems, chatId) : []),
+        [chatId, conversationItems]
+    );
+
     // Transform conversationItems to MessageType and merge with socket messages
     useEffect(() => {
         if (!chatId) {
@@ -198,48 +228,43 @@ export function ChatMessageList({
             return;
         }
 
+        if (hasStaleConversationItems(conversationItems, chatId)) {
+            return;
+        }
+
         // During transition to new conversation, preserve existing messages
         // Only merge when we have actual API data
         if (isTransitioningToNewConversation) {
             // If we have conversationItems, merge them; otherwise preserve existing messages
-            if (conversationItems.length > 0) {
-                setMessages((prev) => mergeConversationItemsIntoMessages(prev, conversationItems, true));
+            if (conversationItemsForChat.length > 0) {
+                setMessages((prev) => mergeConversationItemsIntoMessages(prev, conversationItemsForChat, true));
             }
             // If conversationItems is empty, keep existing messages (don't clear)
             return;
         }
 
         // Normal merge for existing conversations
-        setMessages((prev) => mergeConversationItemsIntoMessages(prev, conversationItems, false));
-    }, [chatId, conversationItems, isTransitioningToNewConversation]);
+        setMessages((prev) => mergeConversationItemsIntoMessages(prev, conversationItemsForChat, false));
+    }, [chatId, conversationItems, conversationItemsForChat, isTransitioningToNewConversation]);
 
-    // Reset state when switching chats
-    const previousChatIdRef = useRef<string | null>(chatId);
+    // Hydrate open Agent Runs after persisted messages are merged (reload / chat switch).
+    usePendingRunHydration({
+        chatId,
+        conversationItems,
+        initialLoading,
+        setMessages,
+    });
+
+    // Finish new-conversation transition bookkeeping
     useEffect(() => {
-        if (chatId && chatId !== previousChatIdRef.current) {
-            const isNewConversationTransition = chatId === newlyCreatedConversationIdRef.current;
-            
-            if (!isNewConversationTransition) {
-                // Clear messages when switching to a different conversation
-                setMessages([]);
-                // Ensure transition state is cleared for non-transition cases
+        if (chatId && chatId === newlyCreatedConversationIdRef.current) {
+            const timeoutId = setTimeout(() => {
+                newlyCreatedConversationIdRef.current = null;
                 setIsTransitioningToNewConversation(false);
-            }
-            
-            // Delay clearing the ref until after messages are safely loaded
-            // This prevents race conditions with the merge effect
-            if (isNewConversationTransition) {
-                // Clear ref after transition period and message loading
-                // Also clear transition state to ensure fetching is enabled
-                const timeoutId = setTimeout(() => {
-                    newlyCreatedConversationIdRef.current = null;
-                    setIsTransitioningToNewConversation(false);
-                }, 1000); // Longer delay to ensure messages are loaded
-                
-                return () => clearTimeout(timeoutId);
-            }
+            }, 1000);
+
+            return () => clearTimeout(timeoutId);
         }
-        previousChatIdRef.current = chatId;
     }, [chatId]);
 
     const { scrollContainerRef, scrollToBottomAfterPaint } = useChatScrollToBottom({
