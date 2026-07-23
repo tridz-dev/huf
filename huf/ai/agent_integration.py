@@ -794,10 +794,23 @@ def run_agent_sync(
                 max_tokens=agent_doc.max_knowledge_tokens or 4000
             )
         except Exception:
+            # Abort the run instead of continuing with partial state.
+            # Mandatory knowledge context is required for this agent; failing here
+            # prevents inconsistent tool-call messages from being committed later.
+            error_msg = _("Failed to build knowledge context for this agent run.")
             frappe.log_error(
                 frappe.get_traceback(),
-                "Knowledge context build failed — agent run continuing without RAG context"
+                "Knowledge context build failed — aborting agent run"
             )
+            run_doc.db_set("status", "Failed", update_modified=True)
+            run_doc.db_set("error_message", error_msg)
+            return {
+                "success": False,
+                "error": error_msg,
+                "agent_run_id": run_doc.name,
+                "conversation_id": conversation.name,
+                "session_id": conv_manager.session_id,
+            }
 
         # Parse response_format if string
         if response_format and isinstance(response_format, str):
@@ -1100,7 +1113,9 @@ def run_agent_sync(
                         litellm_response=mock_response
                     )
             except Exception as e:
-                frappe.log_error(f"Cost calculation failed for {resolved_model} in sync: {e}", "Agent Sync Cost")
+                frappe.logger("huf").warning(
+                    f"Cost calculation failed for {resolved_model} in sync: {e}"
+                )
                 cost = 0.0
 
             try:
@@ -1116,7 +1131,9 @@ def run_agent_sync(
                     WHERE name = %s
                 """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
             except Exception as e:
-                frappe.log_error(f"Failed to update conversation metrics: {str(e)}")
+                frappe.logger("huf").warning(
+                    f"Failed to update conversation metrics: {str(e)}"
+                )
             
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
@@ -1230,7 +1247,9 @@ def run_agent_sync(
                 )
                 transaction_checkpoint(reason="agent_streaming_progress")
             except Exception as inner_e:
-                frappe.log_error(f"Failed to handle context window error in sync: {str(inner_e)}", "Agent Integration Error")
+                frappe.logger("huf").warning(
+                    f"Failed to handle context window error in sync: {str(inner_e)}"
+                )
                 
         elif "RateLimitError" in error_msg:
             try:
@@ -1248,7 +1267,9 @@ def run_agent_sync(
                 )
                 transaction_checkpoint(reason="agent_streaming_progress")
             except Exception as inner_e:
-                frappe.log_error(f"Failed to handle rate limit error in sync: {str(inner_e)}", "Agent Integration Error")
+                frappe.logger("huf").warning(
+                    f"Failed to handle rate limit error in sync: {str(inner_e)}"
+                )
 
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
@@ -1524,11 +1545,26 @@ async def run_agent_stream(
                 user_query=prompt,
                 max_tokens=agent_doc.max_knowledge_tokens or 4000
             )
-        except Exception as e:
+        except Exception:
+            # Abort the stream instead of continuing with partial state.
+            # Mandatory knowledge context is required for this agent; failing here
+            # prevents inconsistent tool-call messages from being committed later.
+            error_msg = _("Failed to build knowledge context for this agent run.")
             frappe.log_error(
-                f"Error building knowledge context: {str(e)}",
-                "Knowledge Context Error"
+                frappe.get_traceback(),
+                "Knowledge context build failed — aborting agent stream"
             )
+            frappe.db.set_value("Agent Run", run_doc.name, {
+                "status": "Failed",
+                "error_message": error_msg,
+                "end_time": now_datetime(),
+            }, update_modified=True)
+            transaction_checkpoint(reason="agent_streaming_progress")
+            yield {
+                "type": "error",
+                "error": error_msg,
+            }
+            return
 
         base_prompt = f"""
             Current user message:
@@ -1647,7 +1683,9 @@ async def run_agent_stream(
                             output_tokens = token_counter(model=pricing_model, text=full_response)
                             total_tokens = input_tokens + output_tokens
                         except Exception as e:
-                            frappe.log_error(f"Fallback token counting failed: {e}", "Agent Stream Fallback")
+                            frappe.logger("huf").warning(
+                                f"Fallback token counting failed: {e}"
+                            )
                             
                     try:
                         # Prefer cost directly from the chunk (calculated by provider)
@@ -1678,7 +1716,9 @@ async def run_agent_stream(
                             )
 
                     except Exception as e:
-                        frappe.log_error(f"Cost calculation failed for {resolved_model}: {e}", "Agent Stream Cost")
+                        frappe.logger("huf").warning(
+                            f"Cost calculation failed for {resolved_model}: {e}"
+                        )
                         cost = 0.0
 
                     # Update Conversation Metrics
@@ -1693,7 +1733,9 @@ async def run_agent_stream(
                             WHERE name = %s
                         """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
                     except Exception as e:
-                        frappe.log_error(f"Failed to update conv metrics stream: {str(e)}")
+                        frappe.logger("huf").warning(
+                            f"Failed to update conv metrics stream: {str(e)}"
+                        )
 
                     # Save final response
                     final_message = conv_manager.add_message(
@@ -1807,7 +1849,9 @@ async def run_agent_stream(
                             chunk["error"] = user_error_msg # override so the client sees the same message
                             error_msg = user_error_msg
                         except Exception as inner_e:
-                            frappe.log_error(f"Failed to handle context window error in stream inner block: {str(inner_e)}", "Agent Integration Error")
+                            frappe.logger("huf").warning(
+                                f"Failed to handle context window error in stream inner block: {str(inner_e)}"
+                            )
 
                     elif "RateLimitError" in error_msg:
                         try:
@@ -1827,7 +1871,9 @@ async def run_agent_stream(
                             chunk["error"] = user_error_msg # override so the client sees the same message
                             error_msg = user_error_msg
                         except Exception as inner_e:
-                            frappe.log_error(f"Failed to handle rate limit in stream inner block: {str(inner_e)}", "Agent Integration Error")
+                            frappe.logger("huf").warning(
+                                f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
+                            )
                     
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Failed",
@@ -1893,7 +1939,9 @@ async def run_agent_stream(
                     )
                     transaction_checkpoint(reason="agent_streaming_progress")
                 except Exception as inner_e:
-                    frappe.log_error(f"Failed to handle context window error in stream inner block: {str(inner_e)}", "Agent Integration Error")
+                    frappe.logger("huf").warning(
+                        f"Failed to handle context window error in stream inner block: {str(inner_e)}"
+                    )
 
             elif "RateLimitError" in error_msg:
                 try:
@@ -1911,7 +1959,9 @@ async def run_agent_stream(
                     )
                     transaction_checkpoint(reason="agent_streaming_progress")
                 except Exception as inner_e:
-                    frappe.log_error(f"Failed to handle rate limit in stream inner block: {str(inner_e)}", "Agent Integration Error")
+                    frappe.logger("huf").warning(
+                        f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
+                    )
 
             
             frappe.db.set_value("Agent Run", run_doc.name, {
@@ -1980,10 +2030,10 @@ def get_conversation_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	if "System Manager" in frappe.get_roles(user):
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
-	from huf.permissions import has_capability
 	if has_capability(user, "chat.view_all"):
 		return None
 
@@ -1999,10 +2049,10 @@ def get_message_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	if "System Manager" in frappe.get_roles(user):
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
-	from huf.permissions import has_capability
 	if has_capability(user, "chat.view_all"):
 		return None
 
@@ -2018,10 +2068,10 @@ def get_run_permission_conditions(user):
 	if not user:
 		user = frappe.session.user
 
-	if "System Manager" in frappe.get_roles(user):
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return None
 
-	from huf.permissions import has_capability
 	if has_capability(user, "agent.view_all"):
 		return None
 
