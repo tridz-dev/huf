@@ -89,9 +89,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             mcp_tools = create_mcp_tools(agent)
             tools.extend(mcp_tools)
         except Exception as e:
-            frappe.log_error(
-                f"Error loading MCP tools for agent: {e!s}",
-                "MCP Tool Loading Error"
+            frappe.logger("huf").warning(
+                f"Error loading MCP tools for agent: {e!s}"
             )
 
     # Load native tools from Agent Tool Function documents
@@ -165,8 +164,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         try:
                             params = json.loads(function_doc.params)
                         except Exception as e:
-                            frappe.log_error(
-                                "SDK Functions Debug",
+                            frappe.logger("huf").debug(
                                 f"Error parsing params for {function_doc.name}: {e!s}"
                             )
 
@@ -212,8 +210,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         tools.append(tool)
 
             except Exception as e:
-                frappe.log_error(
-                    "SDK Functions Debug",
+                frappe.logger("huf").debug(
                     f"Error processing function {function_doc.name}: {e!s}"
                 )
 
@@ -400,7 +397,9 @@ def create_function_tool(
                 return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
 
             except Exception as e:
-                frappe.log_error(f"Error in on_invoke_tool for tool '{name}': {e!s}", "SDK Functions Debug")
+                frappe.logger("huf").debug(
+                    f"Error in on_invoke_tool for tool '{name}': {e!s}"
+                )
                 return json.dumps({"error": str(e)})
 
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', (name or ""))
@@ -421,7 +420,9 @@ def create_function_tool(
         return tool
 
     except Exception as e:
-        frappe.log_error(f"Error creating FunctionTool for {name}: {e!s}", "SDK Functions Debug")
+        frappe.logger("huf").debug(
+            f"Error creating FunctionTool for {name}: {e!s}"
+        )
         return None
 
 
@@ -440,27 +441,26 @@ def get_function_from_name(tool_name: str) -> Callable:
 		try:
 			module_name, func_name = tool_name.rsplit(".", 1)
 		except ValueError:
-			frappe.log_error(
-				"SDK Functions Debug",
-				f"Invalid function name format: {tool_name}. Should be 'module.function'",
+			frappe.logger("huf").debug(
+				f"Invalid function name format: {tool_name}. Should be 'module.function'"
 			)
 			return None
 
 		try:
 			module = __import__(module_name, fromlist=[func_name])
 		except ImportError as ie:
-			frappe.log_error("SDK Functions Debug", f"Module import error: {ie!s}")
+			frappe.logger("huf").debug(f"Module import error: {ie!s}")
 			return None
 
 		try:
 			available_attrs = dir(module)
 		except Exception as e:
-			frappe.log_error("SDK Functions Debug", f"Error getting module attributes: {e!s}")
+			frappe.logger("huf").debug(f"Error getting module attributes: {e!s}")
 
 		try:
 			function = getattr(module, func_name)
 		except AttributeError as ae:
-			frappe.log_error("SDK Functions Debug", f"Function not found in module: {ae!s}")
+			frappe.logger("huf").debug(f"Function not found in module: {ae!s}")
 			return None
 
 		if not callable(function):
@@ -469,8 +469,8 @@ def get_function_from_name(tool_name: str) -> Callable:
 		return function
 
 	except Exception as e:
-		frappe.log_error(
-			"SDK Functions Debug", f"Unexpected error getting function {tool_name}: {e!s}"
+		frappe.logger("huf").debug(
+			f"Unexpected error getting function {tool_name}: {e!s}"
 		)
 		return None
 
@@ -1587,14 +1587,16 @@ async def handle_generate_image(
 
                 if image_url and image_url.startswith('http'):
                     # Download from URL (with SSRF protection)
-                    from huf.ai.http_handler import validate_url
-                    is_valid, _err = validate_url(image_url)
-                    if not is_valid:
-                        frappe.log_error(f"Image URL blocked by SSRF filter: {image_url}", "Image Generation")
+                    from huf.ai.http_handler import _http_request
+                    try:
+                        img_response = _http_request("GET", image_url, timeout=30)
+                        img_response.raise_for_status()
+                        image_bytes = img_response.content
+                    except ValueError as e:
+                        frappe.logger("huf").warning(
+                            f"Image URL blocked by SSRF filter: {image_url} — {e}"
+                        )
                         continue
-                    img_response = requests.get(image_url, timeout=30)
-                    img_response.raise_for_status()
-                    image_bytes = img_response.content
                 elif image_b64:
                     # Base64 encoded
                     image_bytes = base64.b64decode(image_b64)
@@ -1689,9 +1691,8 @@ async def handle_generate_image(
                             after_commit=False
                         )
                     except Exception as e:
-                        frappe.log_error(
-                            f"Error emitting new_agent_message socket event: {e!s}",
-                            "Image Generation Socket Event"
+                        frappe.logger("huf").debug(
+                            f"Error emitting new_agent_message socket event: {e!s}"
                         )
 
                 images.append({
@@ -1709,9 +1710,8 @@ async def handle_generate_image(
                     WHERE name = %s
                 """, (final_index, conversation_id))
             except Exception as e:
-                frappe.log_error(
-                    f"Error updating conversation total_messages: {e!s}",
-                    "Image Generation Message Creation"
+                frappe.logger("huf").debug(
+                    f"Error updating conversation total_messages: {e!s}"
                 )
 
         if not images:
@@ -2202,9 +2202,8 @@ async def handle_generate_audio(
                     after_commit=False
                 )
             except Exception as e:
-                frappe.log_error(
-                    f"Error emitting new_agent_message socket event: {e!s}",
-                    "Audio Generation Socket Event"
+                frappe.logger("huf").debug(
+                    f"Error emitting new_agent_message socket event: {e!s}"
                 )
 
         # Update conversation total_messages
@@ -2216,9 +2215,8 @@ async def handle_generate_audio(
                     WHERE name = %s
                 """, (conversation_index, conversation_id))
             except Exception as e:
-                frappe.log_error(
-                    f"Error updating conversation total_messages: {e!s}",
-                    "Audio Generation Message Creation"
+                frappe.logger("huf").debug(
+                    f"Error updating conversation total_messages: {e!s}"
                 )
 
         return {
