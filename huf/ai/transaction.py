@@ -38,9 +38,15 @@ def commit_if_background():
 
 def transaction_checkpoint(reason: str):
     """
-    Force a commit to persist intermediate state for long-running operations.
+    Persist intermediate state for long-running operations.
+
+    Only commits when Frappe is not managing an HTTP request transaction
+    (i.e., in background workers or non-request contexts). In request
+    handlers the intermediate state is still visible within the same
+    transaction, so an explicit commit would break rollback guarantees.
+
     Used ONLY when UI polling, progress tracking, or worker recovery
     depend on the committed state (e.g., Agent Streaming, Flow Engine nodes).
     """
     # Documenting the reason helps future audits
-    safe_commit()
+    commit_if_background()
