@@ -299,7 +299,8 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		# Update hop count and completed list
 		completed_nodes.append(node_id)
 		flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-		commit_if_background()
+		# No explicit commit here; the node executor or completion/failure handler
+		# will commit the updated state in one go.
 
 		# Check for end node
 		if node.get("type") == "end":
@@ -357,7 +358,8 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 
 		# Move to next node
 		flow_run.db_set("current_node_id", next_node_id)
-		commit_if_background()
+		# No explicit commit here; the next node executor or completion/failure
+		# handler will persist the updated cursor in one go.
 
 
 # ---------------------------------------------------------------------------

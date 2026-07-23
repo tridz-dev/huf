@@ -47,6 +47,7 @@ def get_users() -> list[dict]:
 	"""
 	_require("users.manage")
 
+	# ignore_permissions is safe: callers were already capability-checked above.
 	rows = frappe.get_all(
 		"Huf User Role",
 		fields=["user", "full_name", "huf_role", "enabled", "invited_by", "invited_on"],
@@ -93,6 +94,7 @@ def invite_user(email: str, full_name: str, huf_role: str) -> dict:
 			"send_welcome_email": 0,
 			"user_type": "System User",
 		})
+		# ignore_permissions is safe: caller passed _require("users.invite") above.
 		user_doc.insert(ignore_permissions=True)
 
 	# Create Huf User Role (controller syncs the Frappe role).
@@ -109,6 +111,7 @@ def invite_user(email: str, full_name: str, huf_role: str) -> dict:
 		"invited_by": frappe.session.user,
 		"invited_on": now_datetime(),
 	})
+	# ignore_permissions is safe: caller passed _require("users.invite") above.
 	doc.insert(ignore_permissions=True)
 
 	return doc.as_dict()
@@ -155,6 +158,7 @@ def set_user_enabled(user: str, enabled: int) -> dict:
 	name = frappe.db.get_value("Huf User Role", {"user": user}, "name")
 	doc = frappe.get_doc("Huf User Role", name)
 	doc.enabled = int(enabled)
+	# ignore_permissions is safe: caller passed _require("users.manage") above.
 	doc.save(ignore_permissions=True)
 
 	_bust_cache(user)
@@ -177,6 +181,7 @@ def get_huf_roles() -> list[dict]:
 	        has_capability(frappe.session.user, "roles.manage")):
 		_require("users.manage")  # will throw with a clear message
 
+	# ignore_permissions is safe: callers were already capability-checked above.
 	roles = frappe.get_all(
 		"Huf Role",
 		fields=["role_name", "description", "is_system_role", "frappe_role"],
@@ -185,6 +190,7 @@ def get_huf_roles() -> list[dict]:
 	)
 
 	for role in roles:
+		# ignore_permissions is safe: callers were already capability-checked above.
 		cap_rows = frappe.get_all(
 			"Huf Role Permission",
 			filters={"parent": role["role_name"]},
@@ -233,6 +239,7 @@ def create_huf_role(role_name: str, description: str, capabilities: list) -> dic
 	for cap in capabilities:
 		doc.append("permissions", {"capability": cap})
 
+	# ignore_permissions is safe: caller passed _require("roles.manage") above.
 	doc.insert(ignore_permissions=True)
 	return doc.as_dict()
 
@@ -263,5 +270,6 @@ def update_huf_role(role_name: str, capabilities: list, description: str = None)
 	for cap in capabilities:
 		doc.append("permissions", {"capability": cap})
 
+	# ignore_permissions is safe: caller passed _require("roles.manage") above.
 	doc.save(ignore_permissions=True)
 	return doc.as_dict()
