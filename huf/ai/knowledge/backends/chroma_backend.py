@@ -28,6 +28,46 @@ class ChromaBackend(LlamaIndexBackend, KnowledgeBackend):
 
 	_backend_type = "chroma"
 
+	@classmethod
+	def get_advanced_config_schema(cls) -> list[dict[str, Any]]:
+		return [
+			{
+				"key": "chroma_hnsw_space",
+				"label": "HNSW Space",
+				"type": "select",
+				"default": "cosine",
+				"options": ["cosine", "l2", "ip"],
+				"help_text": "Distance function used by the HNSW index. Choose the metric that matches your embedding model (cosine is the most common).",
+			},
+			{
+				"key": "chroma_hnsw_m",
+				"label": "HNSW M",
+				"type": "number",
+				"default": 16,
+				"min": 4,
+				"max": 200,
+				"help_text": "Max connections per node in the HNSW graph. Higher values improve recall at the cost of more memory and slower index builds.",
+			},
+			{
+				"key": "chroma_hnsw_construction_ef",
+				"label": "HNSW Construction EF",
+				"type": "number",
+				"default": 100,
+				"min": 4,
+				"max": 1000,
+				"help_text": "Size of the dynamic candidate list used during HNSW index construction. Higher values improve index quality at the cost of build time.",
+			},
+			{
+				"key": "chroma_hnsw_search_ef",
+				"label": "HNSW Search EF",
+				"type": "number",
+				"default": 100,
+				"min": 1,
+				"max": 1000,
+				"help_text": "Size of the dynamic candidate list used during HNSW search. Higher values improve recall at the cost of search speed.",
+			},
+		]
+
 	def __init__(self):
 		super().__init__()
 		self.client = None
@@ -59,9 +99,23 @@ class ChromaBackend(LlamaIndexBackend, KnowledgeBackend):
 			self.client = chromadb.HttpClient(host=host, port=port, ssl=ssl)
 
 		collection_name = self.config.get("collection_name") or f"huf_{frappe.scrub(self.knowledge_source)}"
+		metadata = {"knowledge_source": self.knowledge_source}
+		# Only include HNSW knobs the user explicitly set, so unset values fall
+		# back to Chroma's own defaults. get_or_create_collection applies this
+		# metadata only on CREATE — existing collections keep their HNSW config.
+		hnsw_key_map = {
+			"chroma_hnsw_space": "hnsw:space",
+			"chroma_hnsw_m": "hnsw:M",
+			"chroma_hnsw_construction_ef": "hnsw:construction_ef",
+			"chroma_hnsw_search_ef": "hnsw:search_ef",
+		}
+		for config_key, metadata_key in hnsw_key_map.items():
+			value = self.config.get(config_key)
+			if value is not None:
+				metadata[metadata_key] = value if metadata_key == "hnsw:space" else int(value)
 		self.collection = self.client.get_or_create_collection(
 			name=collection_name,
-			metadata={"knowledge_source": self.knowledge_source},
+			metadata=metadata,
 		)
 
 		return ChromaVectorStore(chroma_collection=self.collection)
