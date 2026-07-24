@@ -45,6 +45,7 @@ class KnowledgeSource(Document):
 		if self.sqlite_file:
 			try:
 				file_doc = frappe.get_doc("File", {"file_url": self.sqlite_file})
+				# System-level cleanup during knowledge source deletion; permissions were already verified by Frappe controller lifecycle.
 				file_doc.delete(ignore_permissions=True)
 			except Exception:
 				pass

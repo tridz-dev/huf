@@ -195,6 +195,7 @@ def get_user_capabilities(user: str | None = None) -> list[str]:
 		"Huf Role Permission",
 		filters={"parent": huf_role},
 		fields=["capability"],
+		# Capability lookup must read its own permission table without requiring the caller to hold role-permission read rights.
 		ignore_permissions=True,
 	)
 	result = [r.capability for r in rows if r.capability in CAPABILITIES]
