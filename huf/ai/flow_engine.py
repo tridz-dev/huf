@@ -108,7 +108,15 @@ def create_flow_run(
 			"started_at": now_datetime(),
 		}
 	)
-	flow_run.insert(ignore_permissions=True)
+	# Authenticated callers are already verified by the public API.
+	# Webhook triggers run as Guest after HMAC validation, so the internal
+	# Flow Run record must be created on behalf of the system.
+	if frappe.session.user == "Guest":
+		flow_run.insert(ignore_permissions=True)
+	else:
+		if not frappe.has_permission("Flow Run", "create", doc=flow_run):
+			frappe.throw(_("Not permitted to create Flow Run"), frappe.PermissionError)
+		flow_run.insert()
 	commit_if_background()
 
 	return flow_run
@@ -1286,7 +1294,15 @@ def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = ""
 			"start_time": now_datetime(),
 		}
 	)
-	run_doc.insert(ignore_permissions=True)
+	# Agent Run records are internal execution logs. Authenticated users
+	# create them through normal permission checks; Guest/webhook paths are
+	# allowed because the engine is acting on behalf of the system.
+	if frappe.session.user == "Guest":
+		run_doc.insert(ignore_permissions=True)
+	else:
+		if not frappe.has_permission("Agent Run", "create", doc=run_doc):
+			frappe.throw(_("Not permitted to create Agent Run"), frappe.PermissionError)
+		run_doc.insert()
 	commit_if_background()
 	return run_doc
 
@@ -1303,7 +1319,14 @@ def _create_flow_conversation(flow_id: str, entry_node_id: str) -> "frappe.Docum
 			"is_active": 1,
 		}
 	)
-	conv.insert(ignore_permissions=True)
+	# Flow conversations are created by the engine. Authenticated callers
+	# use standard permissions; Guest/webhook triggers rely on the system.
+	if frappe.session.user == "Guest":
+		conv.insert(ignore_permissions=True)
+	else:
+		if not frappe.has_permission("Agent Conversation", "create", doc=conv):
+			frappe.throw(_("Not permitted to create Agent Conversation"), frappe.PermissionError)
+		conv.insert()
 	commit_if_background()
 	return conv
 

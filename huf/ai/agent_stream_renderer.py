@@ -49,7 +49,7 @@ class AgentStreamRenderer(BaseRenderer):
 		if agent_name:
 			try:
 				agent_name = urllib.parse.unquote(agent_name)
-			except Exception:
+			except (ValueError, TypeError):
 				pass
 			return self._render_agent_stream(agent_name)
 			
@@ -97,9 +97,9 @@ class AgentStreamRenderer(BaseRenderer):
 					if not prompt_template: prompt_template = body.get("prompt_template")
 					if not prompt_version: prompt_version = body.get("prompt_version")
 					if not prompt_cache_options: prompt_cache_options = body.get("prompt_cache_options")
-			except Exception:
+			except (json.JSONDecodeError, TypeError, ValueError):
 				pass
-		
+
 		if not prompt:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": "Prompt parameter required"}
@@ -138,10 +138,11 @@ class AgentStreamRenderer(BaseRenderer):
 				},
 			)
 		except Exception as e:
+			frappe.log_error(frappe.get_traceback(), "Agent Stream Renderer Error")
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": f"Error loading agent: {str(e)}"}
 				yield f"data: {json.dumps(error_data)}\n\n"
-			
+
 			return Response(
 				error_generator(),
 				mimetype="text/event-stream",
@@ -151,7 +152,7 @@ class AgentStreamRenderer(BaseRenderer):
 					"X-Accel-Buffering": "no",
 				},
 			)
-		
+
 		# Queue-first policy: streaming is a direct-execution compatibility path,
 		# allowed only when the agent opts in via the 'Run Immediately' policy.
 		if not getattr(agent_doc, "run_immediately", 0):
@@ -176,7 +177,7 @@ class AgentStreamRenderer(BaseRenderer):
 				create_new = body.get("create_new", create_new)
 				skip_user_message = body.get("skip_user_message", skip_user_message)
 				files = body.get("files")
-		except Exception:
+		except (json.JSONDecodeError, TypeError, ValueError):
 			pass
 
 		create_new = bool(create_new)
@@ -241,10 +242,12 @@ class AgentStreamRenderer(BaseRenderer):
 					except StopAsyncIteration:
 						break
 					except Exception as e:
+						frappe.log_error(frappe.get_traceback(), "Agent Stream Chunk Error")
 						error_data = {"type": "error", "error": str(e)}
 						yield f"data: {json.dumps(error_data)}\n\n"
 						break
 			except Exception as e:
+				frappe.log_error(frappe.get_traceback(), "Agent Stream Setup Error")
 				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}"}
 				yield f"data: {json.dumps(error_data)}\n\n"
 			finally:
@@ -258,7 +261,7 @@ class AgentStreamRenderer(BaseRenderer):
 						if pending:
 							loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
 						loop.close()
-					except Exception:
+					except (RuntimeError, ValueError, TypeError, AttributeError, KeyError):
 						pass
 					finally:
 						asyncio.set_event_loop(None)
