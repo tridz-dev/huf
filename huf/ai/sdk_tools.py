@@ -90,7 +90,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             from huf.ai.mcp_client import create_mcp_tools
             mcp_tools = create_mcp_tools(agent)
             tools.extend(mcp_tools)
-        except Exception as e:
+        except (ImportError, frappe.FrappeException, ValueError, KeyError) as e:
             frappe.logger("huf").warning(
                 f"Error loading MCP tools for agent: {e!s}"
             )
@@ -211,7 +211,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     if tool:
                         tools.append(tool)
 
-            except Exception as e:
+            except (frappe.FrappeException, ValueError, KeyError, AttributeError) as e:
                 frappe.logger("huf").debug(
                     f"Error processing function {function_doc.name}: {e!s}"
                 )
@@ -751,7 +751,10 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
         result_dict = {"name": doc.name, "creation": str(doc.creation)}
 
         return {"success": True, "result": result_dict, "message": f"{reference_doctype} created"}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_create_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -789,7 +792,10 @@ def handle_delete_document(document_id=None, reference_doctype=None, ignore_perm
         frappe.delete_doc(reference_doctype, document_id, ignore_permissions=ignore_permissions)
 
         return {"success": True, "message": f"{reference_doctype} {document_id} deleted"}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_delete_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -960,7 +966,10 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
             "result": result_dict,
             "message": f"{reference_doctype} {document_id} updated successfully.",
         }
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_update_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -1011,7 +1020,10 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
             "message": f"{reference_doctype} '{doc_name}' fetched successfully",
         }
 
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_get_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -1143,7 +1155,10 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
             "new_value": doc.get(fieldname)
         }
 
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_set_value failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -1198,7 +1213,10 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
             "message": "The task is currently being processed in the background. IMPORTANT: DO NOT tell the user that the task is completed or successful yet. Inform the user that you are working on it and will provide an update shortly. Do not mention the terms 'sub-agent' or 'background queue' explicitly, keep it natural (e.g., 'I am processing this for you now...').",
             "job_id": job.id
         }
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_run_agent failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -1228,7 +1246,10 @@ def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
             **normalized_kwargs,
         )
         return {"success": True, "result": result}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_attach_file_to_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -1277,7 +1298,10 @@ def handle_get_conversation_data(name: str, default: Any = None, conversation_id
                 break
 
         return {"success": True, "value": value}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_get_conversation_data failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -1360,7 +1384,10 @@ def handle_set_conversation_data(
 
         return {"success": True, "message": f"Set '{name}' match successfully"}
 
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_set_conversation_data failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -1433,7 +1460,10 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
 
         # Unreachable because of the allow-list, but kept as defense-in-depth.
         return {"success": False, "error": "Unexpected DocType."}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_get_result_context failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -1553,7 +1583,7 @@ async def handle_generate_image(
                 """, (conversation_id,), as_dict=1)
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-            except Exception:
+            except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException):
                 # Hard failure: message ordering is required; abort and alert admin.
                 frappe.log_error(
                     frappe.get_traceback(),
@@ -1637,7 +1667,7 @@ async def handle_generate_image(
                             "user": "Agent"
                         })
                         message_doc.insert(ignore_permissions=True)
-                    except Exception as e:
+                    except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
                         logger.warning(f"Create image message failed: {e!s}")
                         # Continue even if message creation fails
 
@@ -1692,7 +1722,7 @@ async def handle_generate_image(
                             user=frappe.session.user,
                             after_commit=False
                         )
-                    except Exception as e:
+                    except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
                         frappe.logger("huf").debug(
                             f"Error emitting new_agent_message socket event: {e!s}"
                         )
@@ -1711,7 +1741,7 @@ async def handle_generate_image(
                     SET total_messages = %s, last_activity = NOW()
                     WHERE name = %s
                 """, (final_index, conversation_id))
-            except Exception as e:
+            except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
                 frappe.logger("huf").debug(
                     f"Error updating conversation total_messages: {e!s}"
                 )
@@ -1728,7 +1758,7 @@ async def handle_generate_image(
             "message": f"Generated {len(images)} image(s) successfully"
         }
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
         # Hard provider/tool failure: retain Error Log for admin attention.
         frappe.log_error(f"Image generation error: {e!s}", "Image Generation Tool")
         return {"success": False, "error": str(e)}
@@ -1799,7 +1829,7 @@ async def handle_ocr_document(
 
         return result.as_dict()
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
         # Hard OCR failure: retain Error Log for admin attention.
         frappe.log_error(f"OCR error: {e!s}", "OCR Tool")
         return {"success": False, "error": str(e)}
@@ -2101,7 +2131,7 @@ async def handle_generate_audio(
                 """, (conversation_id,), as_dict=1)
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-            except Exception:
+            except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException):
                 # Hard failure: message ordering is required; abort and alert admin.
                 frappe.log_error(
                     frappe.get_traceback(),
@@ -2149,7 +2179,7 @@ async def handle_generate_audio(
                     )
                     message_doc.tts_model = agent_doc.tts_model
 
-            except Exception as e:
+            except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
                 logger.warning(f"Create audio message failed: {e!s}")
                 message_doc = None
 
@@ -2202,7 +2232,7 @@ async def handle_generate_audio(
                     user=frappe.session.user,
                     after_commit=False
                 )
-            except Exception as e:
+            except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
                 frappe.logger("huf").debug(
                     f"Error emitting new_agent_message socket event: {e!s}"
                 )
@@ -2215,7 +2245,7 @@ async def handle_generate_audio(
                     SET total_messages = %s, last_activity = NOW()
                     WHERE name = %s
                 """, (conversation_index, conversation_id))
-            except Exception as e:
+            except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
                 frappe.logger("huf").debug(
                     f"Error updating conversation total_messages: {e!s}"
                 )
@@ -2238,7 +2268,7 @@ async def handle_generate_audio(
             "conversation_id": conversation_id
         }
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
         # Hard provider/tool failure: retain Error Log for admin attention.
         frappe.log_error(title="Audio Generation Tool", message=f"Audio generation error: {e!s}")
         return {"success": False, "error": str(e)}
@@ -2322,7 +2352,7 @@ async def handle_transcribe_audio(
             "provider": result.get("provider"),
         }
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, AttributeError, KeyError, ValueError, frappe.FrappeException) as e:
         # Hard transcription failure: retain Error Log for admin attention.
         frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
         return {"success": False, "error": str(e)}
