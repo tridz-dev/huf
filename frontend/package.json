@@ -12,6 +12,8 @@
     "test": "vitest run --config vitest.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:e2e:deployed": "playwright test -c playwright.deployed.config.ts",
+    "test:e2e:report": "playwright show-report e2e-report",
     "copy-html-entry": "cp ../huf/public/frontend/index.html ../huf/www/huf.html"
   },
   "dependencies": {
