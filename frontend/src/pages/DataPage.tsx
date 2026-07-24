@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useState } from 'react';
-import { Database, Settings, Table2, Trash2, Pencil } from 'lucide-react';
+import { Bot, Database, Settings, Table2, Trash2, Pencil } from 'lucide-react';
 import { TABLE_ICON_MAP } from '@/data/tableIcons';
 import {
 	PageLayout,
@@ -12,8 +12,9 @@ import {
 	LoadMoreButton,
 } from '../components/dashboard';
 import { DeleteTableDialog } from '../components/data-table/DeleteTableDialog';
+import { TableAgentAccessModal } from '../components/data-table/TableAgentAccessModal';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getDataTables, deleteDataTable } from '../services/dataTableApi';
+import { getDataTables, deleteDataTable, getTableAgentAccessCounts } from '../services/dataTableApi';
 import { formatTimeAgo } from '../utils/time';
 import type { HufDataTable } from '../types/dataTable.types';
 
@@ -24,6 +25,18 @@ function DataPage() {
 	const navigate = useNavigate();
 	const [deleteTable, setDeleteTable] = useState<HufDataTable | null>(null);
 	const [deleting, setDeleting] = useState(false);
+	const [accessTable, setAccessTable] = useState<HufDataTable | null>(null);
+	const [agentCounts, setAgentCounts] = useState<Record<string, number>>({});
+
+	// "N agents" badge counts, keyed by table doctype (one bulk fetch, not per card)
+	const loadAgentCounts = useCallback(async () => {
+		const counts = await getTableAgentAccessCounts();
+		setAgentCounts(counts);
+	}, []);
+
+	useEffect(() => {
+		loadAgentCounts();
+	}, [loadAgentCounts]);
 
 	const {
 		items: tables,
@@ -107,42 +120,60 @@ function DataPage() {
 						</p>
 					</div>
 				}
-				renderItem={(table) => (
-					<ItemCard
-						title={table.table_name}
-						description={table.description || 'No description'}
-						icon={table.icon ? TABLE_ICON_MAP[table.icon] ?? Table2 : Table2}
-						status={
-							table.is_active
-								? { label: 'Active', variant: 'success' }
-								: { label: 'Inactive', variant: 'secondary' }
-						}
-						metadata={[
-							{ label: 'Fields', value: table.field_count?.toString() || '0', icon: Table2 },
-							{
-								label: 'Records',
-								value: table.record_count?.toString() || '0',
-								icon: Database,
-							},
-							{ label: 'Modified', value: formatTimeAgo(table.modified) },
-						]}
-						menuIcon={Settings}
-						menuActions={[
-							{
-								icon: Pencil,
-								label: 'Edit Table',
-								onClick: () => navigate(`/data/${table.name}/edit`),
-							},
-							{
-								icon: Trash2,
-								label: 'Delete Table',
-								variant: 'destructive',
-								onClick: () => setDeleteTable(table),
-							},
-						]}
-						onClick={() => navigate(`/data/${table.name}`)}
-					/>
-				)}
+				renderItem={(table) => {
+					const agentCount = agentCounts[table.doctype_name] ?? 0;
+					return (
+						<ItemCard
+							title={table.table_name}
+							description={table.description || 'No description'}
+							icon={table.icon ? TABLE_ICON_MAP[table.icon] ?? Table2 : Table2}
+							status={
+								table.is_active
+									? { label: 'Active', variant: 'success' }
+									: { label: 'Inactive', variant: 'secondary' }
+							}
+							metadata={[
+								{ label: 'Fields', value: table.field_count?.toString() || '0', icon: Table2 },
+								{
+									label: 'Records',
+									value: table.record_count?.toString() || '0',
+									icon: Database,
+								},
+								{ label: 'Modified', value: formatTimeAgo(table.modified) },
+							]}
+							badges={
+								agentCount > 0
+									? [
+											{
+												label: `${agentCount} agent${agentCount > 1 ? 's' : ''}`,
+												variant: 'secondary',
+											},
+										]
+									: []
+							}
+							menuIcon={Settings}
+							menuActions={[
+								{
+									icon: Pencil,
+									label: 'Edit Table',
+									onClick: () => navigate(`/data/${table.name}/edit`),
+								},
+								{
+									icon: Bot,
+									label: 'Add to agent…',
+									onClick: () => setAccessTable(table),
+								},
+								{
+									icon: Trash2,
+									label: 'Delete Table',
+									variant: 'destructive',
+									onClick: () => setDeleteTable(table),
+								},
+							]}
+							onClick={() => navigate(`/data/${table.name}`)}
+						/>
+					);
+				}}
 				keyExtractor={(table) => table.name}
 			/>
 			<LoadMoreButton
@@ -166,6 +197,12 @@ function DataPage() {
 				recordCount={deleteTable?.record_count || 0}
 				onConfirm={handleDeleteConfirm}
 				loading={deleting}
+			/>
+			<TableAgentAccessModal
+				open={!!accessTable}
+				onOpenChange={(open) => !open && setAccessTable(null)}
+				table={accessTable}
+				onSaved={loadAgentCounts}
 			/>
 		</PageLayout>
 	);

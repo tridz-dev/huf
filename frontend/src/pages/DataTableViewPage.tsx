@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DataRecordList } from '@/components/data-table/DataRecordList';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
+import { TableAgentAccessModal } from '@/components/data-table/TableAgentAccessModal';
 import {
 	getTableSchema,
 	getTableRecords,
@@ -32,6 +33,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+	const [agentAccessOpen, setAgentAccessOpen] = useState(false);
 
 	const loadSchema = useCallback(async () => {
 		if (!tableId) return;
@@ -117,6 +119,10 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 						<DropdownMenuItem onClick={() => navigate(`/data/${tableId}/edit`)}>
 							<Pencil className="w-3.5 h-3.5 mr-2" />
 							Edit Table
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={() => setAgentAccessOpen(true)}>
+							<Bot className="w-3.5 h-3.5 mr-2" />
+							Add to agent…
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							onClick={() => setDeleteDialogOpen(true)}
@@ -250,6 +256,13 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				recordCount={recordCount}
 				onConfirm={handleDeleteTable}
 				loading={deleting}
+			/>
+
+			{/* Add to agent Dialog */}
+			<TableAgentAccessModal
+				open={agentAccessOpen}
+				onOpenChange={setAgentAccessOpen}
+				table={{ name: schema.name, table_name: schema.table_name }}
 			/>
 		</div>
 	);

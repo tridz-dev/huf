@@ -6,6 +6,8 @@ import type {
 	DataTableFieldDef,
 	DataTableSchema,
 	HufDataTable,
+	TableAgentAccess,
+	TableAgentAction,
 } from '@/types/dataTable.types';
 
 /**
@@ -175,6 +177,90 @@ export async function deleteDataTable(name: string): Promise<{ deleted_records: 
 		return result.message.data;
 	} catch (error) {
 		handleFrappeError(error, 'Error deleting data table');
+	}
+}
+
+// ─── Agent access ("Add to agent") ───
+
+/**
+ * Which agents currently have access to a table, and with which plain actions
+ * (backend scaffolds/attaches Agent Tool Functions; see huf_data_table/api.py).
+ */
+export async function getTableAgentAccess(table: string): Promise<TableAgentAccess[]> {
+	try {
+		const result = await call.get(
+			'huf.huf.doctype.huf_data_table.api.get_table_agent_access',
+			{ table }
+		);
+		return (result.message ?? []) as TableAgentAccess[];
+	} catch (error) {
+		handleFrappeError(error, 'Error fetching agent access');
+	}
+}
+
+/**
+ * Make an agent's access to a table EXACTLY the given actions (idempotent).
+ * Returns the resulting state for that agent.
+ */
+export async function setTableAgentAccess(
+	table: string,
+	agent: string,
+	actions: TableAgentAction[]
+): Promise<TableAgentAccess> {
+	try {
+		const result = await call.post(
+			'huf.huf.doctype.huf_data_table.api.set_table_agent_access',
+			{ table, agent, actions }
+		);
+		return result.message as TableAgentAccess;
+	} catch (error) {
+		handleFrappeError(error, 'Error updating agent access');
+	}
+}
+
+/**
+ * Bulk "N agents" counts per table doctype (e.g. { "HF Customers": 2 }), for
+ * the list-page badge. Two REST calls total regardless of table count: all
+ * Agent Tool Functions pointing at HF doctypes, then their Agent Tool child
+ * rows — grouped client-side. Non-critical: returns {} on any failure.
+ */
+export async function getTableAgentAccessCounts(): Promise<Record<string, number>> {
+	try {
+		const tools = (await db.getDocList(doctype['Agent Tool Function'], {
+			fields: ['name', 'reference_doctype'],
+			filters: [['reference_doctype', 'like', 'HF %']],
+			limit: 1000,
+		})) as Array<{ name: string; reference_doctype: string }>;
+		if (tools.length === 0) return {};
+
+		const doctypeByTool = new Map<string, string>();
+		for (const tool of tools) {
+			doctypeByTool.set(tool.name, tool.reference_doctype);
+		}
+
+		const links = (await db.getDocList(doctype['Agent Tool'], {
+			fields: ['parent', 'tool'],
+			filters: [['tool', 'in', Array.from(doctypeByTool.keys())]],
+			limit: 10000,
+		})) as Array<{ parent: string; tool: string }>;
+
+		const agentsByDoctype = new Map<string, Set<string>>();
+		for (const link of links) {
+			const doctypeName = doctypeByTool.get(link.tool);
+			if (!doctypeName) continue;
+			const agents = agentsByDoctype.get(doctypeName) ?? new Set<string>();
+			agents.add(link.parent);
+			agentsByDoctype.set(doctypeName, agents);
+		}
+
+		const counts: Record<string, number> = {};
+		for (const [doctypeName, agents] of agentsByDoctype) {
+			counts[doctypeName] = agents.size;
+		}
+		return counts;
+	} catch {
+		// Badge enrichment only — never break the list page over it
+		return {};
 	}
 }
 

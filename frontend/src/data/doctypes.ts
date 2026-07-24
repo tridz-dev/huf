@@ -6,6 +6,7 @@ export const doctype = {
   "AI Model": "AI Model",
   "Agent Tool Function": "Agent Tool Function",
   "Agent Tool Type": "Agent Tool Type",
+  "Agent Tool": "Agent Tool",
   "Agent Trigger": "Agent Trigger",
   "Agent Conversation": "Agent Conversation",
   "Agent Message": "Agent Message",
