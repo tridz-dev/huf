@@ -53,8 +53,8 @@ class PermissionAwareToolRegistry:
                 if cls._can_use_tool(tool_doc, user):
                     all_tools.append(tool_doc)
 
-            except Exception as e:
-                logger.warning(f"Error checking tool permission for {tool_link.tool}: {e}")
+            except (frappe.FrappeException, AttributeError, KeyError) as e:
+                logger.warning(f"Error checking tool permission for {tool_link.tool}: {e!s}")
         
         return all_tools
     
@@ -113,8 +113,8 @@ def _get_app_modified_time(app_name):
         if os.path.exists(hooks_path):
             mtime = os.path.getmtime(hooks_path)
             return datetime.fromtimestamp(mtime)
-    except Exception:
-        # Cache probe is best-effort; ignore failures.
+    except (OSError, frappe.FrappeException, AttributeError, ValueError):
+        # Cache probe is best-effort; fail silently
         pass
     return None
 
@@ -130,8 +130,8 @@ def _get_cached_scans():
             settings = frappe.get_single(CACHE_DOCTYPE)
             if hasattr(settings, "last_app_scans") and settings.last_app_scans:
                 return json.loads(settings.last_app_scans)
-    except Exception:
-        # Cache may not exist yet; fail silently.
+    except (json.JSONDecodeError, frappe.FrappeException, AttributeError, TypeError):
+        # Cache may not exist yet; fail silently
         pass
     return {}
 
@@ -160,8 +160,8 @@ def _update_cached_scans(apps_scanned):
         
         settings.last_app_scans = json.dumps(cache)
         settings.save(ignore_permissions=True)
-    except Exception:
-        # Cache update is non-critical; fail silently.
+    except (frappe.FrappeException, TypeError, ValueError, json.JSONDecodeError):
+        # Cache update is non-critical; fail silently
         pass
 
 def _get_apps_to_scan():
@@ -289,7 +289,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             for d in tools:
                 if d:  # Skip None/empty tools
                     tools_to_process.append((app, d))
-        except Exception as e:
+        except (frappe.FrappeException, ValueError, KeyError, AttributeError, TypeError) as e:
             errors.append(f"App '{app}': Failed to process tools list: {str(e)}")
             logger.warning(f"Failed to process tools for app '{app}': {e!s}")
             continue
@@ -343,7 +343,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 validated_tools.append((app, d))
             else:
                 errors.append(f"App '{app}': Tool '{tool_name}': Function '{func_path}' is not callable")
-        except Exception as e:
+        except (frappe.FrappeException, ValueError, KeyError, AttributeError, TypeError) as e:
             errors.append(f"App '{app}': Error processing tool: {str(e)}")
             logger.warning(f"Error processing tool in app '{app}': {e!s}")
             continue
@@ -404,7 +404,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             else:
                 payload["doctype"] = "Agent Tool Function"
                 to_create.append(payload)
-        except Exception as e:
+        except (frappe.FrappeException, ValueError, KeyError, AttributeError, TypeError) as e:
             errors.append(f"App '{app}': Failed to prepare tool '{d.get('tool_name', 'unknown')}': {str(e)}")
             logger.warning(f"Failed to prepare tool in app '{app}': {e!s}")
             continue
@@ -479,5 +479,7 @@ def sync_app_tools(app_name=None):
     try:
         result = sync_discovered_tools(apps_to_scan=[app_name])
         logger.info(f"Synced tools for app '{app_name}': {result.get('total_tools', 0)} tools")
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"Failed to sync tools for app '{app_name}': {e!s}")

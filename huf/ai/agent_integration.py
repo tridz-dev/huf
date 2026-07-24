@@ -351,8 +351,8 @@ def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
             message=message,
             user=frappe.session.user,
         )
-    except Exception:
-        pass
+    except Exception as exc:  # non-critical UI notification
+        frappe.logger("huf").debug(f"Realtime publish failed: {exc!s}")
 
 
 def _emit_conversation_title_updated(conversation_name, title):
@@ -370,8 +370,8 @@ def _emit_conversation_title_updated(conversation_name, title):
             },
             user=owner,
         )
-    except Exception:
-        pass
+    except Exception as exc:  # non-critical UI notification
+        frappe.logger("huf").debug(f"Realtime title update publish failed: {exc!s}")
 
 
 def _parse_prompt_cache_options(prompt_cache_options):
@@ -916,8 +916,8 @@ def run_agent_sync(
     if _has_queued_runs(conversation.name, exclude_run_id=run_doc.name):
         try:
             frappe.cache().delete(lock_key)
-        except Exception:
-            pass
+        except Exception as exc:  # best-effort cache cleanup
+            frappe.logger("huf").debug(f"Cache lock delete failed: {exc!s}")
         frappe.throw(
             _(
                 "This conversation has queued runs pending. Wait for them to complete before using the direct-execution override."
@@ -941,14 +941,14 @@ def run_agent_sync(
         heartbeat.stop()
         try:
             frappe.cache().delete(lock_key)
-        except Exception:
-            pass
+        except Exception as exc:  # best-effort cache cleanup
+            frappe.logger("huf").debug(f"Cache lock delete failed: {exc!s}")
         # A queued run may have arrived while we held the lock; wake a drainer.
         try:
             if _has_queued_runs(conversation.name):
                 _enqueue_drain(conversation.name)
-        except Exception:
-            pass
+        except Exception as exc:  # best-effort drain enqueue
+            frappe.logger("huf").warning(f"Drain enqueue failed: {exc!s}")
 
 
 def _is_truthy(value):
@@ -1520,7 +1520,11 @@ def _execute_agent_run(
                     channel_id=channel_id,
                     external_id=external_id,
                 )
-            except Exception as hook_err:
+            except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as hook_err:
+
+                frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+            except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
                 frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
 
             # 3. Real-Time UI Notification
@@ -1647,7 +1651,11 @@ def _execute_agent_run(
                     channel_id=channel_id,
                     external_id=external_id,
                 )
-            except Exception as hook_err:
+            except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as hook_err:
+
+                frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+            except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
                 frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
 
             # 3. Real-Time UI Notification
@@ -1733,8 +1741,8 @@ def _reset_run_to_queued(run_id: str, error_message: str = None):
             values["error_message"] = error_message
         frappe.db.set_value("Agent Run", run_id, values, update_modified=True)
         frappe.db.commit()
-    except Exception:
-        pass
+    except (frappe.FrappeException, Exception) as exc:  # best-effort recovery cleanup
+        frappe.logger("huf").debug(f"Failed to reset run {run_id} to queued: {exc!s}")
 
 
 class _RunHeartbeat:
@@ -1759,8 +1767,8 @@ class _RunHeartbeat:
         while not self._stop.wait(self.interval):
             try:
                 frappe.cache().expire(self.lock_key, _QUEUE_LOCK_TTL)
-            except Exception:
-                pass
+            except (frappe.FrappeException, Exception) as exc:  # best-effort heartbeat renewal
+                frappe.logger("huf").debug(f"Lock heartbeat renewal failed for {self.lock_key}: {exc!s}")
 
 
 def _run_queued_agent(lock_attempt=0, **kwargs):
@@ -1799,15 +1807,15 @@ def _run_queued_agent(lock_attempt=0, **kwargs):
     finally:
         try:
             frappe.cache().delete(lock_key)
-        except Exception:
-            pass
+        except Exception as exc:  # best-effort cache cleanup
+            frappe.logger("huf").debug(f"Cache lock delete failed: {exc!s}")
         # Re-check after releasing lock. If a submit happened between our last
         # SELECT and the delete, enqueue a sweeper so the run is not orphaned.
         try:
             if _has_queued_runs(conversation_id):
                 _enqueue_drain(conversation_id)
-        except Exception:
-            pass
+        except (frappe.FrappeException, Exception) as exc:  # best-effort post-release drain enqueue
+            frappe.logger("huf").warning(f"Post-release drain enqueue failed for {conversation_id}: {exc!s}")
 
 
 def _drain_run(run_doc, lock_key: str):
@@ -1856,8 +1864,8 @@ def _drain_run(run_doc, lock_key: str):
                 "failed",
                 {"error": str(e)},
             )
-        except Exception:
-            pass
+        except (frappe.FrappeException, Exception) as exc:  # non-critical lifecycle event notification
+            frappe.logger("huf").debug(f"Failed-run lifecycle event emission failed for {run_doc.name}: {exc!s}")
         frappe.log_error(f"Queued agent run failed: {frappe.get_traceback()}", "Huf")
     finally:
         heartbeat.stop()
@@ -1895,8 +1903,8 @@ def _fail_queued_run(run_id, error_message):
                 "error_message": error_message,
             }, update_modified=True)
             frappe.db.commit()
-    except Exception:
-        pass
+    except (frappe.FrappeException, Exception) as exc:  # best-effort failure status update
+        frappe.logger("huf").warning(f"Failed to mark run {run_id} as Failed: {exc!s}")
 
 
 def recover_stalled_agent_runs():
@@ -2421,7 +2429,11 @@ async def run_agent_stream(
                                 channel_id=channel_id,
                                 external_id=external_id
                             )
-                        except Exception as hook_err:
+                        except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as hook_err:
+
+                            frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+                        except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
                             frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
 
                         frappe.publish_realtime(
@@ -2548,7 +2560,11 @@ async def run_agent_stream(
                                 channel_id=channel_id,
                                 external_id=external_id
                             )
-                        except Exception as hook_err:
+                        except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as hook_err:
+
+                            frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+                        except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
                             frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
 
                         frappe.publish_realtime(
@@ -2637,7 +2653,11 @@ async def run_agent_stream(
                         channel_id=channel_id,
                         external_id=external_id
                     )
-                except Exception as hook_err:
+                except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as hook_err:
+
+                    frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+                except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
                     frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
 
                 frappe.publish_realtime(

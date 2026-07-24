@@ -132,7 +132,9 @@ def _file_dict_to_data_image_url(file_dict: dict) -> dict | None:
         with open(file_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode("utf-8")
         return {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}}
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"Failed to embed image for LLM: {e}")
         return None
 
@@ -723,7 +725,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             cost=total_cost,
         )
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError) as e:
+        frappe.logger("huf").warning(f"Expected failure: {e!s}")
+    except Exception as e:  # boundary exception handler: unexpected system error boundary
         frappe.log_error(message=f"LiteLLM Provider Error: {str(e)}", title="LiteLLM Provider")
         
         if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
@@ -766,7 +770,9 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         
         return response.choices[0].message.content
         
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"LiteLLM simple completion failed: {e!s}")
         return ""
 
@@ -1269,6 +1275,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         }
 
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError) as e:
+        frappe.logger("huf").warning(f"Expected failure: {e!s}")
+    except Exception as e:  # boundary exception handler: unexpected system error boundary
         frappe.log_error(message=f"LiteLLM Streaming Error: {str(e)}", title="LiteLLM Streaming")
         yield {"type": "error", "error": f"LiteLLM Streaming Error: {str(e)}"}
