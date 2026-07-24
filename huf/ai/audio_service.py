@@ -714,6 +714,8 @@ def create_audio_user_message(
             message_doc.status = message_status
         if file_doc and file_doc.file_url:
             message_doc.voice_message = file_doc.file_url
+        if agent_run_id:
+            message_doc.agent_run = agent_run_id
         message_doc.save()
     else:
         message_doc = frappe.get_doc({
