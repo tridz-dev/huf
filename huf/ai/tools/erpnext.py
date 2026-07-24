@@ -82,7 +82,9 @@ def _handle_get_sales_invoices(**kwargs) -> str:
             inv["docstatus_label"] = _docstatus_label(inv.get("docstatus"))
 
         return json.dumps({"success": True, "count": len(invoices), "results": invoices}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Sales Invoices Error: {e}")
         return _error(str(e))
 
@@ -103,7 +105,9 @@ def _handle_get_sales_invoice(**kwargs) -> str:
         result = doc.as_dict()
         result["docstatus_label"] = _docstatus_label(result.get("docstatus"))
         return json.dumps({"success": True, "results": result}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Sales Invoice Error: {e}")
         return _error(str(e))
 
@@ -140,7 +144,9 @@ def _handle_create_sales_invoice(**kwargs) -> str:
         return json.dumps(
             {"success": True, "results": {"name": doc.name, "customer": doc.customer}}
         )
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Create Sales Invoice Error: {e}")
         return _error(str(e))
 
@@ -206,7 +212,9 @@ def _handle_get_purchase_invoices(**kwargs) -> str:
             inv["docstatus_label"] = _docstatus_label(inv.get("docstatus"))
 
         return json.dumps({"success": True, "count": len(invoices), "results": invoices}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Purchase Invoices Error: {e}")
         return _error(str(e))
 
@@ -227,7 +235,9 @@ def _handle_get_purchase_invoice(**kwargs) -> str:
         result = doc.as_dict()
         result["docstatus_label"] = _docstatus_label(result.get("docstatus"))
         return json.dumps({"success": True, "results": result}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Purchase Invoice Error: {e}")
         return _error(str(e))
 
@@ -282,7 +292,9 @@ def _handle_get_payments(**kwargs) -> str:
         )
 
         return json.dumps({"success": True, "count": len(payments), "results": payments}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Payments Error: {e}")
         return _error(str(e))
 
@@ -335,7 +347,9 @@ def _handle_create_payment(**kwargs) -> str:
 
         doc.insert()
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Create Payment Error: {e}")
         return _error(str(e))
 
@@ -393,7 +407,9 @@ def _handle_get_quotations(**kwargs) -> str:
             q["docstatus_label"] = _docstatus_label(q.get("docstatus"))
 
         return json.dumps({"success": True, "count": len(quotes), "results": quotes}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Quotations Error: {e}")
         return _error(str(e))
 
@@ -433,7 +449,9 @@ def _handle_create_quotation(**kwargs) -> str:
 
         doc.insert()
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Create Quotation Error: {e}")
         return _error(str(e))
 
@@ -488,7 +506,9 @@ def _handle_get_customers(**kwargs) -> str:
         )
 
         return json.dumps({"success": True, "count": len(customers), "results": customers}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Customers Error: {e}")
         return _error(str(e))
 
@@ -539,7 +559,9 @@ def _handle_get_customer(**kwargs) -> str:
             result["contacts"].append(contact.as_dict())
 
         return json.dumps({"success": True, "results": result}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Customer Error: {e}")
         return _error(str(e))
 
@@ -602,7 +624,9 @@ def _handle_get_account_ledger(**kwargs) -> str:
             entry["running_balance"] = running_balance
 
         return json.dumps({"success": True, "count": len(entries), "results": entries}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Account Ledger Error: {e}")
         return _error(str(e))
 
@@ -641,7 +665,9 @@ def _handle_create_journal_entry(**kwargs) -> str:
 
         doc.insert()
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Create Journal Entry Error: {e}")
         return _error(str(e))
 
@@ -680,7 +706,9 @@ def _handle_get_rfqs(**kwargs) -> str:
         )
 
         return json.dumps({"success": True, "count": len(rfqs), "results": rfqs}, default=str)
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get RFQs Error: {e}")
         return _error(str(e))
 

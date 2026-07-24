@@ -67,8 +67,8 @@ class ExtractionResult:
 def _log_error(message: str, title: str = "OCR Engine"):
     try:
         frappe.log_error(message, title)
-    except Exception:
-        pass
+    except (frappe.FrappeException, Exception) as exc:  # fallback logging protection
+        frappe.logger("huf").warning(f"Error logging failed: {exc!s}")
 
 
 def _file_hash(file_path: str, algorithm: str = "sha256") -> str:
@@ -322,7 +322,7 @@ async def _process_with_ocr_endpoint(
                 page_list = [int(p.strip()) for p in str(pages).split(",") if p.strip()]
                 if page_list:
                     ocr_params["pages"] = page_list
-            except Exception:
+            except (ValueError, AttributeError, TypeError):  # optional page list parsing fallback
                 pass
 
         if include_images:
@@ -547,7 +547,7 @@ async def extract_document(
                 file_id=file_doc.name,
                 file_name=file_doc.file_name,
             )
-    except Exception:
+    except (OSError, frappe.FrappeException, AttributeError):  # path resolution fallback
         pass
 
     if not os.path.exists(file_path):
