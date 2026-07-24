@@ -52,6 +52,9 @@ select = [
     "UP",
     "B",
     "RUF",
+    "BLE",
+    "S",
+    "TRY",
 ]
 ignore = [
     "B017", # assertRaises(Exception) - should be more specific

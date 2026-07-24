@@ -9,8 +9,8 @@ try:
 	_huf_logger = frappe.logger("huf")
 	if _huf_logger.level > logging.INFO:
 		_huf_logger.setLevel(logging.INFO)
-except Exception:
-	pass
+except (frappe.FrappeException, Exception) as exc:  # best-effort non-critical cleanup
+        frappe.logger("huf").debug(f"Ignored non-critical failure: {exc!s}")
 
 # Use pysqlite3 (loadable extensions) instead of stdlib sqlite3 for sqlite_vec
 try:
