@@ -27,6 +27,8 @@ from huf.ai.knowledge.context_builder import build_knowledge_context, inject_kno
 from huf.ai.providers.litellm import _normalize_model_name
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 
+logger = frappe.logger("huf")
+
 
 class AgentManager:
     """Manages the creation and execution of agents."""
@@ -49,10 +51,7 @@ class AgentManager:
             if agent_tools:
                 self.tools.extend(agent_tools)
         except Exception as e:
-            frappe.log_error(
-                f"Error loading Agent Tool Function: {str(e)}",
-                "Agent Tool Function Error",
-            )
+            logger.warning(f"Failed to load agent tools: {e!s}")
         
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
         try:
@@ -88,10 +87,7 @@ class AgentManager:
                 self.tools.append(get_knowledge_sources_tool)
 
         except Exception as e:
-            frappe.log_error(
-                f"Error loading knowledge tools: {str(e)}",
-                "Knowledge Tool Error",
-            )
+            logger.warning(f"Failed to load knowledge tools: {e!s}")
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
@@ -390,7 +386,7 @@ def _parse_prompt_cache_options(prompt_cache_options):
         try:
             parsed = json.loads(prompt_cache_options)
             return parsed if isinstance(parsed, dict) else {}
-        except Exception:
+        except json.JSONDecodeError:
             return {}
 
     return {}
@@ -416,7 +412,7 @@ def _resolve_prompt_cache_options(channel_id: str, prompt_cache_options=None) ->
     if isinstance(site_defaults, str):
         try:
             site_defaults = json.loads(site_defaults)
-        except Exception:
+        except json.JSONDecodeError:
             site_defaults = {}
 
     if isinstance(site_defaults, dict):
@@ -516,6 +512,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
             return doc.name
 
     except Exception as e:
+        # Tool-call persistence boundary: any failure here corrupts run audit state.
         frappe.log_error(f"Error processing tool call: {str(e)}", "Agent Tool Call Error")
         return None
 
@@ -622,7 +619,7 @@ def run_background_summarization(conversation_name, agent_name):
             frappe.db.commit()  # nosemgrep: justified background-job commit
             
     except Exception as e:
-        frappe.log_error(f"Background summarization failed: {str(e)}", "Agent Background Summarization")
+        logger.warning(f"Background summarization failed: {e!s}")
 
 @frappe.whitelist()
 def generate_conversation_title(conversation_name, agent_name):
@@ -666,7 +663,7 @@ def generate_conversation_title(conversation_name, agent_name):
             frappe.db.commit()  # nosemgrep: justified background-job commit
             _emit_conversation_title_updated(conversation_name, title)
     except Exception as e:
-        frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
+        logger.warning(f"Conversation title generation failed: {e!s}")
 
 def _history_without_pending_user_turn(history, skip_user_message: bool):
 	"""When the user message was already persisted (e.g. file prepare), drop it from history.
@@ -676,6 +673,32 @@ def _history_without_pending_user_turn(history, skip_user_message: bool):
 	if skip_user_message and history and history[-1].get("role") == "user":
 		return history[:-1]
 	return history
+
+
+def _link_preexisting_user_message(conversation_name: str, run_name: str):
+	"""Link an existing unlinked user message in a conversation to the newly created Agent Run."""
+	if not conversation_name or not run_name:
+		return
+	msg_name = frappe.db.get_value(
+		"Agent Message",
+		{"conversation": conversation_name, "role": "user", "agent_run": ("is", "not set")},
+		"name",
+		order_by="conversation_index desc",
+	)
+	if not msg_name:
+		unlinked = frappe.get_all(
+			"Agent Message",
+			filters={"conversation": conversation_name, "role": "user"},
+			fields=["name", "agent_run"],
+			order_by="conversation_index desc",
+			limit=5,
+		)
+		for m in unlinked:
+			if not m.get("agent_run"):
+				msg_name = m.name
+				break
+	if msg_name:
+		frappe.db.set_value("Agent Message", msg_name, "agent_run", run_name, update_modified=False)
 
 
 @frappe.whitelist(allow_guest=True)
@@ -909,6 +932,8 @@ def run_agent_sync(
     try:
         if prompt and not str(prompt).startswith("[SILENT_TRIGGER]") and not skip_user_message:
             conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+        else:
+            _link_preexisting_user_message(conversation.name, run_doc.name)
         safe_commit()
 
         return _execute_agent_run(**execution_kwargs)
@@ -1124,7 +1149,7 @@ def _execute_agent_run(
         if response_format and isinstance(response_format, str):
             try:
                 response_format = json.loads(response_format)
-            except Exception:
+            except json.JSONDecodeError:
                 pass
 
         resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
@@ -1817,7 +1842,10 @@ def _drain_run(run_doc, lock_key: str):
                     execution_kwargs.get("agent_name"),
                     run_doc.name,
                 )
-                frappe.db.commit()
+                safe_commit()
+        else:
+            _link_preexisting_user_message(run_doc.conversation, run_doc.name)
+            safe_commit()
 
         result = _execute_agent_run(**execution_kwargs)
         return result
@@ -2080,8 +2108,10 @@ async def run_agent_stream(
         run_doc.insert(ignore_permissions=True)
         if not skip_user_message:
             conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+        else:
+            _link_preexisting_user_message(conversation.name, run_doc.name)
         run_doc.db_set("start_time", now_datetime())
-        transaction_checkpoint(reason="agent_streaming_progress")
+        safe_commit()
         
         # Update agent stats
         total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
@@ -2091,7 +2121,7 @@ async def run_agent_stream(
             "total_run": total_runs,
             "last_run": last_run_time
         },update_modified=False)
-        transaction_checkpoint(reason="agent_streaming_progress")
+        safe_commit()
         
         manager = AgentManager(agent_name)
         
@@ -2252,7 +2282,7 @@ async def run_agent_stream(
                         )
                         if call_id:
                             tool_call_message_map[call_id] = message_doc.name
-                        transaction_checkpoint(reason="agent_streaming_progress")
+                        safe_commit()
                         
                     yield chunk
                 
@@ -2374,7 +2404,7 @@ async def run_agent_stream(
                         "cost": cost,
                         "end_time": now_datetime()
                     }, update_modified=True)
-                    transaction_checkpoint(reason="agent_streaming_progress")
+                    safe_commit()
 
                     # Handle Sub-Agent Success Lifecycle Hook
                     if parent_conversation_id and invoked_by_agent:
@@ -2419,6 +2449,7 @@ async def run_agent_stream(
                                     agent_name=agent_name
                                 )
                     except Exception:
+                        # Best-effort auto-naming enqueue; ignore failures.
                         pass
                         
                     if context_strategy == "Summarize":
@@ -2430,9 +2461,9 @@ async def run_agent_stream(
                                 agent_name=agent_name
                             )
                             
-                    # Force commit to ensure enqueued background jobs are pushed to Redis
-                    # This is necessary because streaming generators might not trigger the standard Frappe auto-commit lifecycle.
-                    transaction_checkpoint(reason="agent_streaming_progress")
+                    # Force commit to ensure messages, Agent Run, and background jobs are persisted to MariaDB
+                    # This is necessary because streaming generators bypass the standard Frappe auto-commit lifecycle.
+                    safe_commit()
                     
                     # Normalize complete event to match REST run_agent_sync response shape
                     chunk["conversation_id"] = conversation.name

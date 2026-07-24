@@ -10,6 +10,8 @@ import json
 import frappe
 from huf.utils import is_frappe_16
 
+logger = frappe.logger("huf")
+
 def setup_desktop_icon_as_workspace(app_name):
 	"""
 	Replace the External App desktop icon with a Workspace Sidebar icon.
@@ -123,23 +125,19 @@ def after_migrate():
 		sync_tool_types()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
-		frappe.log_error(
-			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps",
-			"Tool Sync"
+		logger.info(
+			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps"
 		)
 	except Exception as e:
-		frappe.log_error(
-			f"Failed to sync tools after migrate: {str(e)}",
-			"Tool Sync Error"
-		)
+		logger.warning(f"Failed to sync tools after migrate: {e!s}")
 		
 	try:
 		from huf.ai.app_seeding.seeder import seed_all
 		results = list(seed_all())
-		logger = frappe.logger("app_seeding")
-		_log_seed_results(results, logger)
+		seed_logger = frappe.logger("app_seeding")
+		_log_seed_results(results, seed_logger)
 	except Exception as e:
-		frappe.log_error(f"App seeding failed: {e}", "App Seeding")
+		logger.warning(f"App seeding failed: {e!s}")
 
 
 def _log_seed_results(results, logger):
@@ -340,7 +338,7 @@ def create_image_generation_tool():
     try:
         tool_doc.insert()
     except Exception as e:
-        frappe.log_error(f"Error creating image generation tool: {str(e)}", "Image Generation Tool Creation")
+        logger.warning(f"Error creating image generation tool: {e!s}")
 
 
 def create_ocr_document_tool():
@@ -365,7 +363,7 @@ def create_ocr_document_tool():
         try:
             tool_doc.save()
         except Exception as e:
-            frappe.log_error(f"Error updating ocr_document tool: {str(e)}", "OCR Document Tool Update")
+            logger.warning(f"Error updating ocr_document tool: {e!s}")
     else:
         # Create new tool
         parameters = [
@@ -420,7 +418,7 @@ def create_ocr_document_tool():
         try:
             tool_doc.insert()
         except Exception as e:
-            frappe.log_error(f"Error creating ocr_document tool: {str(e)}", "OCR Document Tool Creation")
+            logger.warning(f"Error creating ocr_document tool: {e!s}")
 
 def create_generate_audio_tool():
     """Create or update the generate_audio tool in Agent Tool Function DocType."""
@@ -493,7 +491,7 @@ def create_generate_audio_tool():
         try:
             tool_doc.save()
         except Exception as e:
-            frappe.log_error(f"Error updating generate_audio tool: {str(e)}", "Generate Audio Tool Update")
+            logger.warning(f"Error updating generate_audio tool: {e!s}")
     else:
         # Create new tool
         tool_doc = frappe.get_doc({
@@ -510,7 +508,7 @@ def create_generate_audio_tool():
         try:
             tool_doc.insert()
         except Exception as e:
-            frappe.log_error(f"Error creating generate_audio tool: {str(e)}", "Generate Audio Tool Creation")
+            logger.warning(f"Error creating generate_audio tool: {e!s}")
 
 def create_transcribe_audio_tool():
     """Create or update the transcribe_audio tool in Agent Tool Function DocType."""
@@ -576,7 +574,7 @@ def create_transcribe_audio_tool():
         try:
             tool_doc.save()
         except Exception as e:
-            frappe.log_error(f"Error updating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Update")
+            logger.warning(f"Error updating transcribe_audio tool: {e!s}")
     else:
         # Create new tool
         tool_doc = frappe.get_doc({
@@ -593,7 +591,7 @@ def create_transcribe_audio_tool():
         try:
             tool_doc.insert()
         except Exception as e:
-            frappe.log_error(f"Error creating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Creation")
+            logger.warning(f"Error creating transcribe_audio tool: {e!s}")
 
 def create_huf_roles():
 	"""
@@ -751,7 +749,7 @@ def create_flow_tools():
             try:
                 tool_doc.save(ignore_permissions=True)
             except Exception as e:
-                frappe.log_error(f"Error updating {tool_name} tool: {str(e)}", "Flow Tool Update")
+                logger.warning(f"Error updating {tool_name} tool: {e!s}")
         else:
             # Create new tool
             tool_doc = frappe.get_doc({
@@ -768,7 +766,7 @@ def create_flow_tools():
             try:
                 tool_doc.insert(ignore_permissions=True)
             except Exception as e:
-                frappe.log_error(f"Error creating {tool_name} tool: {str(e)}", "Flow Tool Creation")
+                logger.warning(f"Error creating {tool_name} tool: {e!s}")
 
 def remove_deprecated_gemini_audio_tools():
     """Remove deprecated Gemini-native audio tools replaced by unified generate/transcribe tools."""
@@ -780,10 +778,7 @@ def remove_deprecated_gemini_audio_tools():
             try:
                 frappe.delete_doc("Agent Tool Function", tool_docname, ignore_permissions=True, force=True)
             except Exception as e:
-                frappe.log_error(
-                    f"Error removing deprecated tool {tool_name}: {str(e)}",
-                    "Deprecated Tool Cleanup"
-                )
+                logger.warning(f"Error removing deprecated tool {tool_name}: {e!s}")
 
 def register_integration_services():
 	"""
@@ -920,7 +915,7 @@ def register_integration_services():
 				doc.insert()
 				
 		except Exception as e:
-			frappe.log_error(f"Failed to register integration service {service_data['service_name']}: {e}")
+			logger.warning(f"Failed to register integration service {service_data['service_name']}: {e!s}")
 			continue
 	
 	frappe.db.commit()
@@ -948,7 +943,7 @@ def sync_tool_types():
 				})
 				doc.insert()
 		except Exception as e:
-			frappe.log_error(f"Failed to create tool type {category}: {e}")
+			logger.warning(f"Failed to create tool type {category}: {e!s}")
 			continue
 	
 	frappe.db.commit()

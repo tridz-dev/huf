@@ -1,10 +1,13 @@
 import base64
+import binascii
 import json
 import mimetypes
 
 import frappe
 from frappe import _
 from frappe.utils.file_manager import save_file
+
+logger = frappe.logger("huf")
 
 from huf.ai import audio_service
 from huf.ai import sdk_tools
@@ -23,7 +26,7 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
     
     try:
         audio_bytes = base64.b64decode(b64data)
-    except Exception:
+    except (ValueError, binascii.Error):
         frappe.throw("Invalid base64 audio data")
 
     if len(audio_bytes) == 0:
@@ -59,7 +62,7 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
             is_private=0,
         )
     except Exception as e:
-        frappe.log_error(message=f"Save File Failed: {e}", title="Save File Failed")
+        logger.warning(f"Save audio upload failed: {e}")
         return {"success": False, "error": str(e)}
 
     file_id = saved_file["file_id"]
@@ -92,14 +95,11 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
                     },
                 )
             except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for transcription: {e!s}",
-                    "Audio Transcription Message Creation"
-                )
+                logger.warning(f"Create audio user message failed: {e!s}")
     except Exception as e:
-         frappe.log_error(f"Transcription Error: {str(e)}")
-         frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
-         return {"success": False, "error": str(e)}
+        logger.warning(f"Audio transcription failed: {e!s}")
+        frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
+        return {"success": False, "error": str(e)}
 
     if not res.get("success"):
         frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
@@ -149,7 +149,7 @@ def upload_audio_and_transcribe_web(
 
     try:
         audio_bytes = base64.b64decode(b64data)
-    except Exception:
+    except (ValueError, binascii.Error):
         frappe.throw(_("Invalid base64 audio data"))
 
     if len(audio_bytes) == 0:
@@ -194,7 +194,7 @@ def upload_audio_and_transcribe_web(
             is_private=0,
         )
     except Exception as e:
-        frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
+        logger.warning(f"Save audio upload failed (web): {e}")
         return {"success": False, "error": str(e)}
 
     file_id = saved_file["file_id"]
@@ -211,7 +211,7 @@ def upload_audio_and_transcribe_web(
             agent_name=agent,
         )
     except Exception as e:
-        frappe.log_error(f"Transcription Error (web): {str(e)}")
+        logger.warning(f"Audio transcription failed (web): {e!s}")
         frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
         return {"success": False, "error": str(e)}
 
@@ -236,10 +236,7 @@ def upload_audio_and_transcribe_web(
             },
         )
     except Exception as e:
-        frappe.log_error(
-            f"Error creating Agent Message for transcription: {e!s}",
-            "Audio Transcription Message Creation"
-        )
+        logger.warning(f"Create audio user message failed (web): {e!s}")
 
     # Ensure the transcript is stored even if message update failed above
     frappe.db.set_value("Agent Message", msg.name, "content", transcript)
@@ -293,7 +290,7 @@ def get_history(conversation_id: str = None, limit: int = 200):
         try:
             if not isinstance(content, str):
                 content = json.dumps(content)
-        except Exception:
+        except (TypeError, ValueError):
             pass
         return {
             "role": m.role,
@@ -351,6 +348,7 @@ def render_markdown(content: str = "") -> str:
         from frappe.utils import markdown as md
         return md(content or "")
     except Exception:
+        # Broad boundary: any markdown failure should fall back to escaped HTML safely.
         return frappe.utils.escape_html(content or "")
 
 
@@ -368,6 +366,7 @@ def create_conversation(agent: str, channel: str = "Chat"):
             "conversation_id": conversation.name,
         }
     except Exception:
+        # API boundary: log unexpected failure with traceback, then re-raise.
         frappe.log_error(
             message=f"create_conversation error: {frappe.get_traceback()}",
             title="Huf API",
@@ -401,6 +400,7 @@ def new_conversation(agent: str, message: str, skip_user_message=0, files=None):
             try:
                 frappe.db.set_value("Agent Conversation", conversation.name, "name", conversation.name)
             except Exception:
+                # Best-effort defensive update; ignore failures.
                 pass
 
         return {
@@ -410,6 +410,7 @@ def new_conversation(agent: str, message: str, skip_user_message=0, files=None):
         }
 
     except Exception as e:
+        # API boundary: log unexpected failure with traceback, then re-raise.
         frappe.log_error(message=f"new_conversation error: {frappe.get_traceback()}", title="Huf API")
         raise
 
@@ -451,6 +452,7 @@ def send_message_to_conversation(conversation: str, message: str, skip_user_mess
         return result
 
     except Exception as e:
+        # API boundary: log unexpected failure with traceback, then re-raise.
         frappe.log_error(message=f"send_message_to_conversation error: {frappe.get_traceback()}", title="Huf API")
         raise
 
@@ -469,7 +471,7 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
     
     try:
         file_bytes = base64.b64decode(b64data)
-    except Exception:
+    except (ValueError, binascii.Error):
         frappe.throw(_("Invalid base64 data"))
 
     # Get Chat Doc
@@ -509,8 +511,8 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
             is_private=False
         )
     except Exception as e:
-         frappe.log_error(f"File Save Error: {str(e)}")
-         frappe.throw(_("Failed to save file"))
+        logger.warning(f"File save failed: {e!s}")
+        frappe.throw(_("Failed to save file"))
 
     file_id = saved_file.name
 
@@ -535,7 +537,7 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
         return result
 
     except Exception as e:
-        frappe.log_error(f"File Processing Error: {str(e)}")
+        logger.warning(f"File processing failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -565,7 +567,7 @@ def upload_file_and_process_web(
 
     try:
         file_bytes = base64.b64decode(b64data)
-    except Exception:
+    except (ValueError, binascii.Error):
         frappe.throw(_("Invalid base64 data"))
 
     max_upload_size_mb = agent_doc.get("max_upload_size_mb") or 25
@@ -630,7 +632,7 @@ def upload_file_and_process_web(
     try:
         saved_file = save_file(filename, file_bytes, "Agent Message", msg.name, is_private=True)
     except Exception as e:
-        frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
+        logger.warning(f"Save file failed (web): {e}")
         return {"success": False, "error": "Could not save file to database."}
 
     file_id = getattr(saved_file, "name", None) or (
@@ -654,7 +656,7 @@ def upload_file_and_process_web(
                 )
             )
     except Exception as e:
-        frappe.log_error(f"File Processing Error (web): {str(e)}")
+        logger.warning(f"File processing failed (web): {e!s}")
         return {"success": False, "error": str(e)}
 
     if not result.get("success"):
@@ -741,7 +743,7 @@ def upload_file_attachment_web(filename: str, b64data: str, agent: str):
 
     try:
         file_bytes = base64.b64decode(b64data)
-    except Exception:
+    except (ValueError, binascii.Error):
         frappe.throw(_("Invalid base64 data"))
 
     _, error = _validate_web_file_upload(agent, filename, file_bytes)
@@ -751,7 +753,7 @@ def upload_file_attachment_web(filename: str, b64data: str, agent: str):
     try:
         saved_file = save_file(filename, file_bytes, "Agent", agent, is_private=True)
     except Exception as e:
-        frappe.log_error(message=f"Attachment upload failed (web): {e}", title="Attachment Upload Failed (web)")
+        logger.warning(f"Attachment upload failed (web): {e}")
         return {"success": False, "error": "Could not save file to database."}
 
     file_id = getattr(saved_file, "name", None) or (
@@ -811,7 +813,7 @@ def prepare_message_with_file_web(
             b64data = b64data.split(",", 1)[1]
         try:
             file_bytes = base64.b64decode(b64data)
-        except Exception:
+        except (ValueError, binascii.Error):
             frappe.throw(_("Invalid base64 data"))
 
         _, error = _validate_web_file_upload(agent, filename, file_bytes)
@@ -859,7 +861,7 @@ def prepare_message_with_file_web(
         try:
             saved_file = save_file(resolved_filename, file_bytes, "Agent Message", msg.name, is_private=True)
         except Exception as e:
-            frappe.log_error(message=f"Save File Failed (web): {e}", title="Save File Failed (web)")
+            logger.warning(f"Save file failed (web): {e}")
             return {"success": False, "error": "Could not save file to database."}
 
         resolved_file_id = getattr(saved_file, "name", None) or (
@@ -934,7 +936,7 @@ def prepare_message_with_file_web(
                 )
             )
         except Exception as e:
-            frappe.log_error(f"OCR Processing Error (web prepare): {str(e)}")
+            logger.warning(f"OCR processing failed (web prepare): {e!s}")
             return {"success": False, "error": str(e)}
 
         if not result.get("success"):
@@ -1010,5 +1012,6 @@ def add_message(
             "message_id": msg.name
         }
     except Exception as e:
+        # API boundary: log unexpected failure with traceback, then re-raise.
         frappe.log_error(message=f"add_message API error: {frappe.get_traceback()}", title="Huf API")
         raise

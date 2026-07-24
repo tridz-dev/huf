@@ -26,6 +26,8 @@ from datetime import datetime, timedelta
 from .tool_registry import PermissionAwareToolRegistry
 from huf.ai.transaction import commit_if_background
 from huf.ai import audio_service
+
+logger = frappe.logger("huf")
 MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
 
 # Guest-allowed tools of these types MUST pin a reference_doctype; otherwise the
@@ -163,7 +165,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     if function_doc.params:
                         try:
                             params = json.loads(function_doc.params)
-                        except Exception as e:
+                        except json.JSONDecodeError as e:
                             frappe.logger("huf").debug(
                                 f"Error parsing params for {function_doc.name}: {e!s}"
                             )
@@ -454,7 +456,7 @@ def get_function_from_name(tool_name: str) -> Callable:
 
 		try:
 			available_attrs = dir(module)
-		except Exception as e:
+		except (TypeError, AttributeError) as e:
 			frappe.logger("huf").debug(f"Error getting module attributes: {e!s}")
 
 		try:
@@ -500,7 +502,7 @@ def wrap_frappe_function(func: Callable) -> Callable:
 
 			return {"success": True, "result": result}
 		except Exception as e:
-			frappe.log_error(f"Error in function {func.__name__}: {e}")
+			logger.warning(f"Wrapped function {func.__name__} failed: {e}")
 			return {"success": False, "error": str(e)}
 
 
@@ -535,6 +537,7 @@ def _sanitize_for_doctype(doctype: str, data: dict) -> dict:
 
         return cleaned
     except Exception:
+        # Defensive fallback: if meta lookup fails, return original data unchanged.
         return data or {}
 
 # Standard CRUD function generators
@@ -749,7 +752,7 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
 
         return {"success": True, "result": result_dict, "message": f"{reference_doctype} created"}
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_create_document: {e!s}")
+        logger.warning(f"handle_create_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -787,7 +790,7 @@ def handle_delete_document(document_id=None, reference_doctype=None, ignore_perm
 
         return {"success": True, "message": f"{reference_doctype} {document_id} deleted"}
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_delete_document: {e!s}")
+        logger.warning(f"handle_delete_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -907,7 +910,7 @@ def handle_get_list(
 
 		return response
 	except Exception as e:
-		frappe.log_error("SDK Functions Debug", f"Error in handle_get_list: {e!s}")
+		logger.warning(f"handle_get_list failed: {e!s}")
 		return {"success": False, "error": str(e)}
 
 
@@ -958,7 +961,7 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
             "message": f"{reference_doctype} {document_id} updated successfully.",
         }
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_update_document: {e!s}")
+        logger.warning(f"handle_update_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -1009,7 +1012,7 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
         }
 
     except Exception as e:
-        frappe.log_error(f"Error in handle_get_document: {e!s}", "SDK Functions Debug")
+        logger.warning(f"handle_get_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_create_documents(reference_doctype: str, documents: list = None, data: list = None, **kwargs):
@@ -1141,7 +1144,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         }
 
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "handle_set_value failed")
+        logger.warning(f"handle_set_value failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -1196,7 +1199,7 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
             "job_id": job.id
         }
     except Exception as e:
-        frappe.log_error("Run Agent Tool Error", str(e))
+        logger.warning(f"handle_run_agent failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
@@ -1226,7 +1229,7 @@ def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
         )
         return {"success": True, "result": result}
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "handle_attach_file_to_document: failed")
+        logger.warning(f"handle_attach_file_to_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -1275,7 +1278,7 @@ def handle_get_conversation_data(name: str, default: Any = None, conversation_id
 
         return {"success": True, "value": value}
     except Exception as e:
-        frappe.log_error(f"Error getting conversation data: {e!s}", "Conversation Data")
+        logger.warning(f"handle_get_conversation_data failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_set_conversation_data(
@@ -1358,7 +1361,7 @@ def handle_set_conversation_data(
         return {"success": True, "message": f"Set '{name}' match successfully"}
 
     except Exception as e:
-        frappe.log_error(f"Error setting conversation data: {e!s}", "Conversation Data")
+        logger.warning(f"handle_set_conversation_data failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_load_conversation_data(conversation_id: str = None, **kwargs):
@@ -1391,6 +1394,7 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
             return {"success": False, "error": "Both reference_doctype and reference_name are required."}
 
         if reference_doctype not in ALLOWED_RESULT_CONTEXT_DOCTYPES:
+            # Security event: retain Error Log for unauthorized allow-list attempts.
             frappe.log_error(
                 f"get_result_context rejected for {reference_doctype}",
                 "Security: get_result_context allow-list"
@@ -1430,7 +1434,7 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
         # Unreachable because of the allow-list, but kept as defense-in-depth.
         return {"success": False, "error": "Unexpected DocType."}
     except Exception as e:
-        frappe.log_error(f"Error in handle_get_result_context: {str(e)}", "SDK Functions Debug")
+        logger.warning(f"handle_get_result_context failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def _get_default_image_model(provider_name: str) -> str:
@@ -1550,6 +1554,7 @@ async def handle_generate_image(
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
             except Exception:
+                # Hard failure: message ordering is required; abort and alert admin.
                 frappe.log_error(
                     frappe.get_traceback(),
                     f"Failed to compute conversation_index for {conversation_id}"
@@ -1601,7 +1606,7 @@ async def handle_generate_image(
                     # Base64 encoded
                     image_bytes = base64.b64decode(image_b64)
                 elif image_url:
-                    # Local file path or other format
+                    # Unexpected image URL format; retain Error Log for investigation.
                     frappe.log_error(f"Unsupported image URL format: {image_url}", "Image Generation")
                     continue
 
@@ -1633,10 +1638,7 @@ async def handle_generate_image(
                         })
                         message_doc.insert(ignore_permissions=True)
                     except Exception as e:
-                        frappe.log_error(
-                            f"Error creating Agent Message for generated image: {e!s}",
-                            "Image Generation Message Creation"
-                        )
+                        logger.warning(f"Create image message failed: {e!s}")
                         # Continue even if message creation fails
 
                 # Save file attached to the Agent Message (or conversation if message creation failed)
@@ -1727,6 +1729,7 @@ async def handle_generate_image(
         }
 
     except Exception as e:
+        # Hard provider/tool failure: retain Error Log for admin attention.
         frappe.log_error(f"Image generation error: {e!s}", "Image Generation Tool")
         return {"success": False, "error": str(e)}
 
@@ -1797,6 +1800,7 @@ async def handle_ocr_document(
         return result.as_dict()
 
     except Exception as e:
+        # Hard OCR failure: retain Error Log for admin attention.
         frappe.log_error(f"OCR error: {e!s}", "OCR Tool")
         return {"success": False, "error": str(e)}
 
@@ -2098,6 +2102,7 @@ async def handle_generate_audio(
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
             except Exception:
+                # Hard failure: message ordering is required; abort and alert admin.
                 frappe.log_error(
                     frappe.get_traceback(),
                     f"Failed to compute conversation_index for {conversation_id}"
@@ -2145,10 +2150,7 @@ async def handle_generate_audio(
                     message_doc.tts_model = agent_doc.tts_model
 
             except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for generated audio: {e!s}",
-                    "Audio Generation Message Creation"
-                )
+                logger.warning(f"Create audio message failed: {e!s}")
                 message_doc = None
 
         # Save file attached to the Agent Message
@@ -2237,6 +2239,7 @@ async def handle_generate_audio(
         }
 
     except Exception as e:
+        # Hard provider/tool failure: retain Error Log for admin attention.
         frappe.log_error(title="Audio Generation Tool", message=f"Audio generation error: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -2320,5 +2323,6 @@ async def handle_transcribe_audio(
         }
 
     except Exception as e:
+        # Hard transcription failure: retain Error Log for admin attention.
         frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
         return {"success": False, "error": str(e)}

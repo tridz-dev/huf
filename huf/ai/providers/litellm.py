@@ -31,6 +31,7 @@ from huf.ai.transaction import transaction_checkpoint
 from huf.ai.cost_calculator import calculate_cost
 from huf.ai.conversation_manager import repair_message_sequence
 
+logger = frappe.logger("huf")
 
 # Default request timeout for LiteLLM completion calls (seconds)
 _DEFAULT_LITELLM_TIMEOUT = 180
@@ -74,12 +75,12 @@ async def _litellm_completion_with_retry(**completion_kwargs):
         try:
             return await asyncio.to_thread(litellm.completion, **completion_kwargs)
         except Exception as exc:
+            # Broad catch so _is_transient_litellm_error can classify and retry only known transient failures.
             last_exc = exc
             if attempt < max_retries and _is_transient_litellm_error(exc):
                 delay = base_delay * (2 ** attempt)
-                frappe.log_error(
-                    f"LiteLLM transient error (attempt {attempt + 1}/{max_retries + 1}): {exc}. Retrying in {delay}s",
-                    "LiteLLM Retry"
+                logger.warning(
+                    f"LiteLLM transient error (attempt {attempt + 1}/{max_retries + 1}): {exc}. Retrying in {delay}s"
                 )
                 await asyncio.sleep(delay)
                 continue
@@ -132,7 +133,7 @@ def _file_dict_to_data_image_url(file_dict: dict) -> dict | None:
             encoded = base64.b64encode(f.read()).decode("utf-8")
         return {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}}
     except Exception as e:
-        frappe.log_error(f"Failed to embed image for LLM: {e}", "LiteLLM Image Embed")
+        logger.warning(f"Failed to embed image for LLM: {e}")
         return None
 
 
@@ -193,7 +194,7 @@ def _get_agent_max_context_chars(agent_doc) -> int:
     """Return the agent's configured tool-result context threshold."""
     try:
         value = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
-    except Exception:
+    except (ValueError, TypeError):
         value = 2000
     # Enforce a sensible floor so truncation notices still fit.
     return max(value, 500)
@@ -337,7 +338,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         if context and context.get("agent_name"):
             try:
                 agent_doc = frappe.get_doc("Agent", context.get("agent_name"))
-            except Exception:
+            except frappe.DoesNotExistError:
                 # Will fall back to agent.model_settings if DocType load fails
                 pass
 
@@ -377,6 +378,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
             except Exception:
+                # Prompt-caching check failed; disable caching and log for investigation.
                 model_supports_caching = False
                 frappe.log_error(
                     f"Failed to check prompt caching support for model {normalized_model}",
@@ -478,7 +480,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             try:
                 messages = trim_messages(messages=messages, model=normalized_model)
             except Exception as e:
-                frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
+                logger.warning(f"Failed to trim messages: {e!s}; continuing with untrimmed messages")
                 # Continue with untrimmed messages if trimming fails
                 pass
 
@@ -577,6 +579,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     )
                     total_cost += round_cost
                 except Exception:
+                    # Cost calculation is best-effort; ignore rounding failures.
                     pass
 
             except InternalServerError as e:
@@ -764,7 +767,7 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         return response.choices[0].message.content
         
     except Exception as e:
-        frappe.log_error(f"LiteLLM Simple Completion Error: {str(e)}", "LiteLLM Provider")
+        logger.warning(f"LiteLLM simple completion failed: {e!s}")
         return ""
 
 
@@ -798,7 +801,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         if context and context.get("agent_name"):
             try:
                 agent_doc = frappe.get_doc("Agent", context.get("agent_name"))
-            except Exception:
+            except frappe.DoesNotExistError:
+                # Will fall back to agent.model_settings if DocType load fails
                 pass
 
         max_context_chars = _get_agent_max_context_chars(agent_doc)
@@ -838,6 +842,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
             except Exception:
+                # Prompt-caching check failed; disable caching and log for investigation.
                 model_supports_caching = False
                 frappe.log_error(
                     message=f"Failed to check prompt caching support for model {normalized_model}",
@@ -933,7 +938,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         try:
             messages = trim_messages(messages=messages, model=normalized_model)
         except Exception as e:
-            frappe.log_error(f"Failed to trim messages: {str(e)}", "LiteLLM Provider")
+            logger.warning(f"Failed to trim messages: {e!s}; continuing with untrimmed messages")
             pass
 
         messages = repair_message_sequence(
@@ -1253,6 +1258,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     cached_tokens=s_cached,
                 )
             except Exception:
+                # Stream cost calculation is best-effort; ignore failures.
                 pass
 
         yield {
