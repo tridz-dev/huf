@@ -96,7 +96,7 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
                 )
             except Exception as e:
                 logger.warning(f"Create audio user message failed: {e!s}")
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, RuntimeError) as e:
         logger.warning(f"Audio transcription failed: {e!s}")
         frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
         return {"success": False, "error": str(e)}
@@ -193,7 +193,7 @@ def upload_audio_and_transcribe_web(
             attached_to_name=msg.name,
             is_private=0,
         )
-    except Exception as e:
+    except (frappe.FrappeException, OSError, ValueError, KeyError) as e:
         logger.warning(f"Save audio upload failed (web): {e}")
         return {"success": False, "error": str(e)}
 
@@ -210,7 +210,7 @@ def upload_audio_and_transcribe_web(
             file_id=file_id,
             agent_name=agent,
         )
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, RuntimeError) as e:
         logger.warning(f"Audio transcription failed (web): {e!s}")
         frappe.db.set_value("Agent Message", msg.name, "status", "Failed")
         return {"success": False, "error": str(e)}
@@ -365,7 +365,7 @@ def create_conversation(agent: str, channel: str = "Chat"):
             "success": True,
             "conversation_id": conversation.name,
         }
-    except Exception:
+    except Exception:  # boundary exception handler: API endpoint
         # API boundary: log unexpected failure with traceback, then re-raise.
         frappe.log_error(
             message=f"create_conversation error: {frappe.get_traceback()}",
@@ -409,7 +409,7 @@ def new_conversation(agent: str, message: str, skip_user_message=0, files=None):
             "run": run_result
         }
 
-    except Exception as e:
+    except Exception as e:  # boundary exception handler: API endpoint
         # API boundary: log unexpected failure with traceback, then re-raise.
         frappe.log_error(message=f"new_conversation error: {frappe.get_traceback()}", title="Huf API")
         raise
@@ -451,7 +451,7 @@ def send_message_to_conversation(conversation: str, message: str, skip_user_mess
 
         return result
 
-    except Exception as e:
+    except Exception as e:  # boundary exception handler: API endpoint
         # API boundary: log unexpected failure with traceback, then re-raise.
         frappe.log_error(message=f"send_message_to_conversation error: {frappe.get_traceback()}", title="Huf API")
         raise
@@ -510,7 +510,7 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
             msg.name, 
             is_private=False
         )
-    except Exception as e:
+    except (frappe.FrappeException, OSError, ValueError, KeyError) as e:
         logger.warning(f"File save failed: {e!s}")
         frappe.throw(_("Failed to save file"))
 
@@ -536,7 +536,7 @@ def upload_file_and_process(docname: str, filename: str, b64data: str, agent: st
 
         return result
 
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, RuntimeError) as e:
         logger.warning(f"File processing failed: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -631,7 +631,7 @@ def upload_file_and_process_web(
 
     try:
         saved_file = save_file(filename, file_bytes, "Agent Message", msg.name, is_private=True)
-    except Exception as e:
+    except (frappe.FrappeException, OSError, ValueError, KeyError) as e:
         logger.warning(f"Save file failed (web): {e}")
         return {"success": False, "error": "Could not save file to database."}
 
@@ -655,7 +655,7 @@ def upload_file_and_process_web(
                     conversation_id=conversation_id,
                 )
             )
-    except Exception as e:
+    except (frappe.FrappeException, ValueError, KeyError, RuntimeError) as e:
         logger.warning(f"File processing failed (web): {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -752,7 +752,7 @@ def upload_file_attachment_web(filename: str, b64data: str, agent: str):
 
     try:
         saved_file = save_file(filename, file_bytes, "Agent", agent, is_private=True)
-    except Exception as e:
+    except (frappe.FrappeException, OSError, ValueError, KeyError) as e:
         logger.warning(f"Attachment upload failed (web): {e}")
         return {"success": False, "error": "Could not save file to database."}
 
@@ -935,7 +935,7 @@ def prepare_message_with_file_web(
                     create_message=False,
                 )
             )
-        except Exception as e:
+        except (frappe.FrappeException, ValueError, KeyError, RuntimeError) as e:
             logger.warning(f"OCR processing failed (web prepare): {e!s}")
             return {"success": False, "error": str(e)}
 
@@ -1011,7 +1011,7 @@ def add_message(
             "success": True,
             "message_id": msg.name
         }
-    except Exception as e:
+    except Exception as e:  # boundary exception handler: API endpoint
         # API boundary: log unexpected failure with traceback, then re-raise.
         frappe.log_error(message=f"add_message API error: {frappe.get_traceback()}", title="Huf API")
         raise
