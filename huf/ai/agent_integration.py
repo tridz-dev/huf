@@ -2663,6 +2663,38 @@ async def run_agent_stream(
             "type": "error",
             "error": error_msg
         }
+    finally:
+        if 'run_doc' in locals() and run_doc:
+            try:
+                current_status = frappe.db.get_value("Agent Run", run_doc.name, "status")
+                if current_status == "Started":
+                    response_text = locals().get("full_response", "")
+                    if response_text and str(response_text).strip():
+                        # Save generated text so user sees the response upon reload (ChatGPT pattern)
+                        if 'conv_manager' in locals() and 'conversation' in locals():
+                            conv_manager.add_message(
+                                conversation,
+                                "agent",
+                                response_text,
+                                locals().get("resolved_provider"),
+                                locals().get("resolved_model"),
+                                agent_name,
+                                run_doc.name
+                            )
+                        frappe.db.set_value("Agent Run", run_doc.name, {
+                            "status": "Success",
+                            "response": response_text,
+                            "end_time": now_datetime()
+                        }, update_modified=True)
+                    else:
+                        frappe.db.set_value("Agent Run", run_doc.name, {
+                            "status": "Failed",
+                            "error_message": "Stream disconnected before response was generated",
+                            "end_time": now_datetime()
+                        }, update_modified=True)
+                    safe_commit()
+            except Exception as clean_err:
+                frappe.logger("huf").warning(f"Error in stream disconnect response recovery: {clean_err}")
 
 # ---------------------------------------------------------------------------
 # Permission query conditions — used by hooks.py permission_query_conditions
