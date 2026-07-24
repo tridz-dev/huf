@@ -67,7 +67,7 @@ class ExtractionResult:
 def _log_error(message: str, title: str = "OCR Engine"):
     try:
         frappe.log_error(message, title)
-    except (frappe.FrappeException, Exception) as exc:  # fallback logging protection
+    except Exception as exc:  # fallback logging protection
         frappe.logger("huf").warning(f"Error logging failed: {exc!s}")
 
 
@@ -98,7 +98,7 @@ def _resolve_file_doc(file_id: str | None = None, file_url: str | None = None):
             return frappe.get_doc("File", file_id)
         except frappe.DoesNotExistError:
             raise ValueError(f"File document '{file_id}' not found")
-        except Exception as e:
+        except (frappe.DoesNotExistError, frappe.DataError) as e:
             raise ValueError(f"Error loading File '{file_id}': {e}")
 
     if file_url:
@@ -547,7 +547,7 @@ async def extract_document(
                 file_id=file_doc.name,
                 file_name=file_doc.file_name,
             )
-    except (OSError, frappe.FrappeException, AttributeError):  # path resolution fallback
+    except (OSError, frappe.DoesNotExistError, frappe.ValidationError, AttributeError):  # path resolution fallback
         pass
 
     if not os.path.exists(file_path):
@@ -700,7 +700,15 @@ async def extract_document(
                     "user": "Agent",
                 }
             )
-            message_doc.insert(ignore_permissions=True)
+            # OCR messages are created during agent execution. Authenticated
+            # users must have Agent Message create permission; Guest agents
+            # (allow_guest) create the internal message on behalf of the system.
+            if frappe.session.user == "Guest":
+                message_doc.insert(ignore_permissions=True)
+            else:
+                if not frappe.has_permission("Agent Message", "create", doc=message_doc):
+                    frappe.throw(_("Not permitted to create Agent Message"), frappe.PermissionError)
+                message_doc.insert()
 
             frappe.db.sql(
                 """

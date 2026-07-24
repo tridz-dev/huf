@@ -186,7 +186,7 @@ def save_audio_upload(
             attached_to_name,
             is_private=is_private,
         )
-    except Exception as e:
+    except (OSError, ValueError, frappe.ValidationError) as e:
         frappe.log_error(message=f"Save File Failed: {e}", title="Save File Failed")
         frappe.throw(_("Could not save audio file to database."))
 
@@ -336,7 +336,7 @@ def _find_transcription_model(provider: str) -> str:
             order_by="modified desc",
             limit=1,
         )
-    except Exception:
+    except frappe.DoesNotExistError:
         return None
 
     return models[0].model_name if models else None
@@ -457,7 +457,7 @@ def _resolve_file_doc(file_id: str = None, file_url: str = None):
     if file_url:
         try:
             file_doc = frappe.get_doc("File", {"file_url": file_url})
-        except Exception:
+        except (frappe.DoesNotExistError, frappe.DataError):
             # Try alternative lookup
             file_name = file_url.replace("/files/", "")
             file_doc = frappe.get_doc("File", {"file_name": file_name})
@@ -738,7 +738,15 @@ def create_audio_user_message(
             message_doc.status = message_status
         if file_doc and file_doc.file_url:
             message_doc.voice_message = file_doc.file_url
-        message_doc.insert(ignore_permissions=True)
+        # Audio user messages are created during agent/chat execution.
+        # Authenticated users require Agent Message create permission;
+        # Guest agents rely on the system-level bypass.
+        if frappe.session.user == "Guest":
+            message_doc.insert(ignore_permissions=True)
+        else:
+            if not frappe.has_permission("Agent Message", "create", doc=message_doc):
+                frappe.throw(_("Not permitted to create Agent Message"), frappe.PermissionError)
+            message_doc.insert()
 
     # Check if file is already attached to this message
     if file_doc and message_doc:

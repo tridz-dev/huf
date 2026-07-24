@@ -75,7 +75,7 @@ def _handle_get_items(**kwargs) -> str:
         )
 
         return json.dumps({"success": True, "count": len(items), "results": items}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Items Error: {e}")
@@ -97,7 +97,7 @@ def _handle_get_item(**kwargs) -> str:
         doc = frappe.get_doc("Item", name)
         result = doc.as_dict()
         return json.dumps({"success": True, "results": result}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Item Error: {e}")
@@ -147,7 +147,7 @@ def _handle_get_item_prices(**kwargs) -> str:
         )
 
         return json.dumps({"success": True, "count": len(prices), "results": prices}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Item Prices Error: {e}")
@@ -202,7 +202,7 @@ def _handle_get_boms(**kwargs) -> str:
         )
 
         return json.dumps({"success": True, "count": len(boms), "results": boms}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get BOMs Error: {e}")
@@ -224,7 +224,7 @@ def _handle_get_bom(**kwargs) -> str:
         doc = frappe.get_doc("BOM", name)
         result = doc.as_dict()
         return json.dumps({"success": True, "results": result}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get BOM Error: {e}")
@@ -265,7 +265,7 @@ def _handle_create_bom(**kwargs) -> str:
 
         doc.insert()
         return json.dumps({"success": True, "results": {"name": doc.name, "item": doc.item}}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Create BOM Error: {e}")
@@ -328,7 +328,7 @@ def _handle_get_stock_balance(**kwargs) -> str:
             })
 
         return json.dumps({"success": True, "count": len(results), "results": results}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Stock Balance Error: {e}")
@@ -383,7 +383,7 @@ def _handle_get_stock_movements(**kwargs) -> str:
         )
 
         return json.dumps({"success": True, "count": len(entries), "results": entries}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Stock Movements Error: {e}")
@@ -432,7 +432,7 @@ def _handle_get_stock_entries(**kwargs) -> str:
             entry["docstatus_label"] = _docstatus_label(entry.get("docstatus"))
 
         return json.dumps({"success": True, "count": len(entries), "results": entries}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Stock Entries Error: {e}")
@@ -473,7 +473,7 @@ def _handle_get_warehouses(**kwargs) -> str:
         )
 
         return json.dumps({"success": True, "count": len(warehouses), "results": warehouses}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Warehouses Error: {e}")
@@ -523,7 +523,7 @@ def _handle_get_delivery_notes(**kwargs) -> str:
             note["docstatus_label"] = _docstatus_label(note.get("docstatus"))
 
         return json.dumps({"success": True, "count": len(notes), "results": notes}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Delivery Notes Error: {e}")
@@ -573,7 +573,7 @@ def _handle_get_purchase_receipts(**kwargs) -> str:
             receipt["docstatus_label"] = _docstatus_label(receipt.get("docstatus"))
 
         return json.dumps({"success": True, "count": len(receipts), "results": receipts}, default=str)
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"ERPNext Get Purchase Receipts Error: {e}")

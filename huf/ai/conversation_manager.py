@@ -1,4 +1,5 @@
 import frappe
+from frappe import _
 from frappe.utils import now
 import json
 from collections import defaultdict
@@ -133,7 +134,7 @@ def _synthesize_assistant_tool_call(tool_call_id: str, conversation_name: str | 
                 }
             ],
         }
-    except Exception:
+    except (frappe.DoesNotExistError, frappe.DataError):
         return None
 
 
@@ -163,7 +164,7 @@ def update_tool_call_message(
 
     try:
         msg_doc = frappe.get_doc("Agent Message", message_name)
-    except Exception as e:
+    except (frappe.DoesNotExistError, frappe.DataError) as e:
         frappe.log_error(
             f"Could not load Agent Message '{message_name}' for tool result update: {e}",
             "Tool Call Message Update"
@@ -182,7 +183,7 @@ def update_tool_call_message(
         if agent_doc:
             try:
                 max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
-            except Exception:
+            except (ValueError, TypeError):
                 max_context_chars = 2000
         max_context_chars = max(max_context_chars, 500)
 
@@ -207,9 +208,17 @@ def update_tool_call_message(
                 else tool_call
             )
 
-        msg_doc.save(ignore_permissions=True)
+        # Only users who can write Agent Messages should be able to mutate a
+        # persisted tool-call row. Standard permissions cover authenticated
+        # Huf users; system callers must run as a user with this permission.
+        if not frappe.has_permission("Agent Message", "write", doc=msg_doc):
+            frappe.throw(
+                _("Not permitted to update Agent Message {0}").format(msg_doc.name),
+                frappe.PermissionError,
+            )
+        msg_doc.save()
         return True
-    except Exception as e:
+    except (frappe.ValidationError, frappe.PermissionError, frappe.TimestampMismatchError) as e:
         frappe.log_error(
             f"Error updating tool call message '{message_name}': {e}",
             "Tool Call Message Update"
@@ -348,7 +357,12 @@ class ConversationManager:
             "is_active": 1,
             "model": frappe.db.get_value("Agent", self.agent_name, "model")
         })
-        conv.insert(ignore_permissions=True)
+        if not frappe.has_permission("Agent Conversation", "create"):
+            frappe.throw(
+                _("Not permitted to create Agent Conversation"),
+                frappe.PermissionError,
+            )
+        conv.insert()
         return conv
 
     def get_or_create_conversation(self, title=None, conversation_id=None):
@@ -390,7 +404,12 @@ class ConversationManager:
             "is_active": 1,
             "model": frappe.db.get_value("Agent", self.agent_name, "model")
         })
-        conv.insert(ignore_permissions=True)
+        if not frappe.has_permission("Agent Conversation", "create"):
+            frappe.throw(
+                _("Not permitted to create Agent Conversation"),
+                frappe.PermissionError,
+            )
+        conv.insert()
         return conv
 
     def add_message(
@@ -478,7 +497,12 @@ class ConversationManager:
                 doc_data["token_estimate"] = token_estimate
 
             message = frappe.get_doc(doc_data)
-            message.insert(ignore_permissions=True)
+            if not frappe.has_permission("Agent Message", "create"):
+                frappe.throw(
+                    _("Not permitted to create Agent Message"),
+                    frappe.PermissionError,
+                )
+            message.insert()
 
             frappe.db.set_value("Agent Conversation", conversation.name, {
                 "total_messages": last_index + 1,
@@ -600,7 +624,7 @@ class ConversationManager:
                     )
                     if isinstance(parsed, list):
                         tool_calls = parsed
-                except Exception:
+                except (json.JSONDecodeError, TypeError):
                     tool_calls = []
 
             if not tool_calls and (stored_tool_call_id or tool_call_link):

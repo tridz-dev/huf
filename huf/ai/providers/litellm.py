@@ -132,10 +132,10 @@ def _file_dict_to_data_image_url(file_dict: dict) -> dict | None:
         with open(file_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode("utf-8")
         return {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}}
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
-        logger.warning(f"Failed to embed image for LLM: {e}")
+        logger.warning(f"Failed to embed image for LLM: {e}\n{frappe.get_traceback()}")
         return None
 
 
@@ -379,7 +379,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         if enable_prompt_caching:
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
-            except Exception:
+            except (ImportError, AttributeError, ValueError, TypeError, RuntimeError):
                 # Prompt-caching check failed; disable caching and log for investigation.
                 model_supports_caching = False
                 frappe.log_error(
@@ -482,7 +482,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             try:
                 messages = trim_messages(messages=messages, model=normalized_model)
             except Exception as e:
-                logger.warning(f"Failed to trim messages: {e!s}; continuing with untrimmed messages")
+                logger.warning(
+                    f"Failed to trim messages: {e!s}; continuing with untrimmed messages\n{frappe.get_traceback()}"
+                )
                 # Continue with untrimmed messages if trimming fails
                 pass
 
@@ -580,7 +582,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         litellm_response=response,
                     )
                     total_cost += round_cost
-                except Exception:
+                except (ValueError, TypeError, AttributeError, KeyError):
                     # Cost calculation is best-effort; ignore rounding failures.
                     pass
 
@@ -597,7 +599,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
                 try:
                     full_trace = frappe.get_traceback()
-                except Exception:
+                except (AttributeError, TypeError, RuntimeError):
                     full_trace = str(e)
 
                 frappe.log_error(message=full_trace, title=title)
@@ -614,7 +616,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
             except Exception as e:
                 msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                frappe.log_error(message=msg, title="LiteLLM Provider")
+                frappe.log_error(
+                    message=f"{msg}\n\n{frappe.get_traceback()}",
+                    title="LiteLLM Provider"
+                )
                 
                 if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
                     raise e
@@ -696,6 +701,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                             tool_to_run, tool_args, context, tool_call.id
                         )
                     except Exception as e:
+                        frappe.log_error(
+                            message=f"Error executing tool {tool_name}: {str(e)}\n\n{frappe.get_traceback()}",
+                            title="LiteLLM Tool Execution Error"
+                        )
                         result_content = f"Error executing tool {tool_name}: {str(e)}"
                 else:
                     result_content = f"Tool '{tool_name}' not found."
@@ -728,7 +737,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
     except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError) as e:
         frappe.logger("huf").warning(f"Expected failure: {e!s}")
     except Exception as e:  # boundary exception handler: unexpected system error boundary
-        frappe.log_error(message=f"LiteLLM Provider Error: {str(e)}", title="LiteLLM Provider")
+        frappe.log_error(
+            message=f"LiteLLM Provider Error: {str(e)}\n\n{frappe.get_traceback()}",
+            title="LiteLLM Provider"
+        )
         
         if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
             raise e
@@ -770,10 +782,10 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         
         return response.choices[0].message.content
         
-    except (frappe.FrappeException, ValueError, KeyError, TypeError, AttributeError) as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
         logger.warning(f"Validation/Operation warning: {e!s}")
     except Exception as e:  # boundary exception handler: external provider/tool boundary
-        logger.warning(f"LiteLLM simple completion failed: {e!s}")
+        logger.warning(f"LiteLLM simple completion failed: {e!s}\n{frappe.get_traceback()}")
         return ""
 
 
@@ -847,7 +859,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         if enable_prompt_caching:
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
-            except Exception:
+            except (ImportError, AttributeError, ValueError, TypeError, RuntimeError):
                 # Prompt-caching check failed; disable caching and log for investigation.
                 model_supports_caching = False
                 frappe.log_error(
@@ -944,7 +956,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         try:
             messages = trim_messages(messages=messages, model=normalized_model)
         except Exception as e:
-            logger.warning(f"Failed to trim messages: {e!s}; continuing with untrimmed messages")
+            logger.warning(
+                f"Failed to trim messages: {e!s}; continuing with untrimmed messages\n{frappe.get_traceback()}"
+            )
             pass
 
         messages = repair_message_sequence(
@@ -1090,6 +1104,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                             tool_to_run, tool_args, context, tool_call.get("id")
                                         )
                                     except Exception as e:
+                                        frappe.log_error(
+                                            message=f"Error executing tool {tool_name}: {str(e)}\n\n{frappe.get_traceback()}",
+                                            title="LiteLLM Streaming Tool Execution Error"
+                                        )
                                         result_content = f"Error executing tool {tool_name}: {str(e)}"
 
                                     # Update Agent Tool Call with result (runs even if tool raised)
@@ -1111,7 +1129,15 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     tc_doc.tool_result = result_content
                                                 else:
                                                     tc_doc.tool_result = {"output": str(result_content)[:140000]}
-                                                tc_doc.save(ignore_permissions=True)
+                                                # Tool-call audit records are updated by the provider
+                                                # during execution. Authenticated users use standard
+                                                # permissions; Guest/system paths bypass permissions.
+                                                if frappe.session.user == "Guest":
+                                                    tc_doc.save(ignore_permissions=True)
+                                                else:
+                                                    if not frappe.has_permission("Agent Tool Call", "write", doc=tc_doc):
+                                                        frappe.throw(_("Not permitted to update Agent Tool Call"), frappe.PermissionError)
+                                                    tc_doc.save()
 
                                                 # Find the Agent Message to update. Prefer the in-memory
                                                 # map passed via context, then fall back to DB lookups.
@@ -1189,8 +1215,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                 transaction_checkpoint(reason="agent_streaming_progress")
                                         except Exception as e:
                                             frappe.log_error(
-                                                f"Error updating tool call result for call_id={call_id}: {e}",
-                                                "Tool Call Message Update"
+                                                message=f"Error updating tool call result for call_id={call_id}: {e}\n\n{frappe.get_traceback()}",
+                                                title="Tool Call Message Update"
                                             )
                                 else:
                                     result_content = f"Tool '{tool_name}' not found."
@@ -1238,6 +1264,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 yield {"type": "error", "error": f"API error: {str(e)}"}
                 return
             except Exception as e:
+                frappe.log_error(
+                    message=f"LiteLLM streaming round error: {str(e)}\n\n{frappe.get_traceback()}",
+                    title="LiteLLM Streaming"
+                )
                 yield {"type": "error", "error": f"LiteLLM error: {str(e)}"}
                 return
 
@@ -1263,7 +1293,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     output_tokens=s_output,
                     cached_tokens=s_cached,
                 )
-            except Exception:
+            except (ValueError, TypeError, AttributeError, KeyError):
                 # Stream cost calculation is best-effort; ignore failures.
                 pass
 
@@ -1278,5 +1308,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
     except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError) as e:
         frappe.logger("huf").warning(f"Expected failure: {e!s}")
     except Exception as e:  # boundary exception handler: unexpected system error boundary
-        frappe.log_error(message=f"LiteLLM Streaming Error: {str(e)}", title="LiteLLM Streaming")
-        yield {"type": "error", "error": f"LiteLLM Streaming Error: {str(e)}"}
+        frappe.log_error(
+            message=f"LiteLLM Streaming Error: {str(e)}\n\n{frappe.get_traceback()}",
+            title="LiteLLM Streaming"
+        )
+        yield {"type": "error", "error": f"LiteLLM Streaming Error: {str(e)}",}
