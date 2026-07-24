@@ -75,7 +75,9 @@ export function TableAgentAccessModal({
 			setAgents(agentList as AgentDoc[]);
 			setAccess(accessList);
 		} catch (err) {
-			setLoadError(getFrappeErrorMessage(err));
+			// Technical detail stays in the console; the user gets actionable copy.
+			console.error('[TableAgentAccessModal] failed to load agent access:', err);
+			setLoadError('Failed to load current access — check your connection and retry.');
 		} finally {
 			setLoading(false);
 		}

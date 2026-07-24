@@ -26,6 +26,21 @@ const DATA_TABLE_LIST_FIELDS = [
 ];
 
 /**
+ * frappe-js-sdk getDocList filter shape, spelled out with plain string field
+ * names (the SDK does not re-export its Filter type at the package root, and
+ * its Filter<T> is keyed to a specific document type which dynamic HUF table
+ * doctypes don't have). Mirrors Filter<T> from the SDK's db/types.
+ */
+type DocListFilters = Array<
+	| [
+			string,
+			'=' | '>' | '<' | '>=' | '<=' | '<>' | 'like' | '!=' | 'Timespan',
+			string | number | boolean | Date | null,
+	  ]
+	| [string, 'in' | 'not in' | 'between', Array<string | number | boolean | Date | null>]
+>;
+
+/**
  * Pagination params for data tables listing
  */
 export interface GetDataTablesParams {
@@ -58,14 +73,14 @@ export async function getDataTables(
 			search,
 		} = params || {};
 
-		const filters: Array<[string, string, unknown]> = [];
+		const filters: DocListFilters = [];
 		if (search && search.trim()) {
 			filters.push(['table_name', 'like', `%${search.trim()}%`]);
 		}
 
 		const tables = await db.getDocList(doctype['Huf Data Table'], {
 			fields: DATA_TABLE_LIST_FIELDS,
-			filters: filters.length > 0 ? (filters as any) : undefined,
+			filters: filters.length > 0 ? filters : undefined,
 			limit: limit + 1,
 			...(start > 0 && { limit_start: start }),
 			orderBy: { field: 'modified', order: 'desc' },
@@ -220,44 +235,18 @@ export async function setTableAgentAccess(
 
 /**
  * Bulk "N agents" counts per table doctype (e.g. { "HF Customers": 2 }), for
- * the list-page badge. Two REST calls total regardless of table count: all
- * Agent Tool Functions pointing at HF doctypes, then their Agent Tool child
- * rows — grouped client-side. Non-critical: returns {} on any failure.
+ * the list-page badge. One backend call: the server counts DISTINCT agents
+ * per table. This must come from the backend — the `Agent Tool` child table
+ * cannot be queried over REST (Frappe strips all fields from child-table
+ * rows queried without a parent context). Non-critical: returns {} on any
+ * failure.
  */
 export async function getTableAgentAccessCounts(): Promise<Record<string, number>> {
 	try {
-		const tools = (await db.getDocList(doctype['Agent Tool Function'], {
-			fields: ['name', 'reference_doctype'],
-			filters: [['reference_doctype', 'like', 'HF %']],
-			limit: 1000,
-		})) as Array<{ name: string; reference_doctype: string }>;
-		if (tools.length === 0) return {};
-
-		const doctypeByTool = new Map<string, string>();
-		for (const tool of tools) {
-			doctypeByTool.set(tool.name, tool.reference_doctype);
-		}
-
-		const links = (await db.getDocList(doctype['Agent Tool'], {
-			fields: ['parent', 'tool'],
-			filters: [['tool', 'in', Array.from(doctypeByTool.keys())]],
-			limit: 10000,
-		})) as Array<{ parent: string; tool: string }>;
-
-		const agentsByDoctype = new Map<string, Set<string>>();
-		for (const link of links) {
-			const doctypeName = doctypeByTool.get(link.tool);
-			if (!doctypeName) continue;
-			const agents = agentsByDoctype.get(doctypeName) ?? new Set<string>();
-			agents.add(link.parent);
-			agentsByDoctype.set(doctypeName, agents);
-		}
-
-		const counts: Record<string, number> = {};
-		for (const [doctypeName, agents] of agentsByDoctype) {
-			counts[doctypeName] = agents.size;
-		}
-		return counts;
+		const result = await call.get(
+			'huf.huf.doctype.huf_data_table.api.get_tables_agent_counts'
+		);
+		return (result.message ?? {}) as Record<string, number>;
 	} catch {
 		// Badge enrichment only — never break the list page over it
 		return {};
@@ -292,7 +281,7 @@ export async function getTableRecords(
 	doctypeName: string,
 	params?: {
 		fields?: string[];
-		filters?: Array<[string, string, unknown]>;
+		filters?: DocListFilters;
 		limit?: number;
 		start?: number;
 		orderBy?: { field: string; order: 'asc' | 'desc' };
@@ -302,7 +291,7 @@ export async function getTableRecords(
 		const limit = params?.limit || 20;
 		const records = await db.getDocList(doctypeName, {
 			fields: params?.fields || ['*'],
-			filters: params?.filters as any,
+			filters: params?.filters,
 			limit: limit + 1,
 			...(params?.start && { limit_start: params.start }),
 			orderBy: params?.orderBy || { field: 'modified', order: 'desc' },

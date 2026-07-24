@@ -22,6 +22,7 @@ from huf.huf.doctype.huf_data_table.api import (
 	create_data_table,
 	delete_data_table,
 	get_table_agent_access,
+	get_tables_agent_counts,
 	set_table_agent_access,
 	update_data_table,
 )
@@ -30,9 +31,12 @@ from huf.huf.doctype.huf_data_table.api import (
 class TestTableAgentAccess(IntegrationTestCase):
 	TABLE_NAME = "Test Agent Access Books"
 	DOCTYPE_NAME = f"HF {TABLE_NAME}"
+	EMPTY_TABLE_NAME = "Test Agent Access Empty"
+	EMPTY_DOCTYPE_NAME = f"HF {EMPTY_TABLE_NAME}"
 	PROVIDER = "Test Agent Access Provider"
 	MODEL = "test-agent-access-model"
 	AGENT = "Test Agent Access Agent"
+	AGENT2 = "Test Agent Access Agent Two"
 
 	@classmethod
 	def setUpClass(cls):
@@ -54,6 +58,13 @@ class TestTableAgentAccess(IntegrationTestCase):
 		)
 		cls.registry_name = result["data"]["name"]
 
+		# A second table that never gets any agents (bulk-count "absent" case).
+		empty = create_data_table(
+			table_name=cls.EMPTY_TABLE_NAME,
+			fields=[{"label": "Title", "fieldtype": "Data"}],
+		)
+		cls.empty_registry_name = empty["data"]["name"]
+
 		frappe.get_doc(
 			{
 				"doctype": "AI Provider",
@@ -69,15 +80,16 @@ class TestTableAgentAccess(IntegrationTestCase):
 				"provider": cls.PROVIDER,
 			}
 		).insert()
-		frappe.get_doc(
-			{
-				"doctype": "Agent",
-				"agent_name": cls.AGENT,
-				"provider": cls.PROVIDER,
-				"model": cls.MODEL,
-				"instructions": "Fixture agent for table agent access tests.",
-			}
-		).insert()
+		for agent_name in (cls.AGENT, cls.AGENT2):
+			frappe.get_doc(
+				{
+					"doctype": "Agent",
+					"agent_name": agent_name,
+					"provider": cls.PROVIDER,
+					"model": cls.MODEL,
+					"instructions": "Fixture agent for table agent access tests.",
+				}
+			).insert()
 		# DocType DDL implicitly commits in MariaDB; make fixture rows durable so
 		# per-test rollback cannot remove them.
 		frappe.db.commit()  # nosemgrep: test fixtures must survive DocType DDL
@@ -87,6 +99,7 @@ class TestTableAgentAccess(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		for doctype, name in [
 			("Agent", cls.AGENT),
+			("Agent", cls.AGENT2),
 			("AI Model", cls.MODEL),
 			("AI Provider", cls.PROVIDER),
 		]:
@@ -98,8 +111,9 @@ class TestTableAgentAccess(IntegrationTestCase):
 			pluck="name",
 		):
 			frappe.delete_doc("Agent Tool Function", tool, ignore_permissions=True, force=True)
-		if frappe.db.exists("Huf Data Table", cls.registry_name):
-			delete_data_table(cls.registry_name)
+		for registry in (cls.registry_name, cls.empty_registry_name):
+			if frappe.db.exists("Huf Data Table", registry):
+				delete_data_table(registry)
 		frappe.db.commit()  # nosemgrep: test fixture cleanup after DocType DDL
 		super().tearDownClass()
 
@@ -287,6 +301,34 @@ class TestTableAgentAccess(IntegrationTestCase):
 		agent_tools = self._agent_tools()
 		self.assertEqual(len(agent_tools), 3)
 		self.assertEqual(len(agent_tools), len(set(agent_tools)), "duplicate child rows")
+
+	def test_tables_agent_counts(self):
+		# Converge to an exact state: AGENT holds 5 tools (all four actions),
+		# AGENT2 holds 2 (view) — 7 tool rows across 2 distinct agents.
+		set_table_agent_access(self.registry_name, self.AGENT, ["view", "create", "edit", "delete"])
+		set_table_agent_access(self.registry_name, self.AGENT2, ["view"])
+
+		tool_rows = frappe.get_all(
+			"Agent Tool",
+			filters={"parenttype": "Agent", "parent": ["in", [self.AGENT, self.AGENT2]]},
+			pluck="name",
+		)
+		self.assertGreater(len(tool_rows), 2, "fixture must have multiple tools per table")
+
+		counts = get_tables_agent_counts()
+
+		# Two agents on one table -> 2. Explicitly NOT 7: the easy bug here is
+		# counting attached tool rows instead of distinct agents.
+		self.assertEqual(counts[self.DOCTYPE_NAME], 2)
+		# A table with no agents is absent (or 0) — never a bogus count.
+		self.assertEqual(counts.get(self.EMPTY_DOCTYPE_NAME, 0), 0)
+
+	def test_tables_agent_counts_requires_read_capability(self):
+		frappe.set_user("Guest")
+		try:
+			self.assertRaises(frappe.PermissionError, get_tables_agent_counts)
+		finally:
+			frappe.set_user("Administrator")
 
 	def test_uncheck_detaches_but_keeps_tool_doc(self):
 		set_table_agent_access(self.registry_name, self.AGENT, ["view", "create"])

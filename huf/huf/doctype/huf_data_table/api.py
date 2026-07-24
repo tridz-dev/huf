@@ -488,6 +488,30 @@ def get_table_agent_access(table: str) -> list:
 
 
 @frappe.whitelist()
+def get_tables_agent_counts() -> dict:
+	"""Distinct-agent counts per HUF Data Table, in ONE call (list-page badge).
+
+	Returns: {<doctype_name>: <distinct agent count>} for every Huf Data Table
+	that has at least one agent with access; tables with no agents are absent.
+	Counts distinct AGENTS, not tools — an agent holding several tools for the
+	same table counts once (_compute_access already groups by agent).
+
+	This endpoint exists because the frontend cannot compute these counts over
+	REST: the `Agent Tool` child table queried without a parent context returns
+	rows with every field stripped, so any client-side grouping yields nothing.
+
+	Requires: flows.use
+	"""
+	_require_read()
+	counts = {}
+	for registry in frappe.get_all("Huf Data Table", fields=["doctype_name"]):
+		agents = {entry["agent"] for entry in _compute_access(registry.doctype_name)}
+		if agents:
+			counts[registry.doctype_name] = len(agents)
+	return counts
+
+
+@frappe.whitelist()
 def set_table_agent_access(table: str, agent: str, actions: str | list) -> dict:
 	"""Make the agent's access to this table EXACTLY `actions` (idempotent).
 
