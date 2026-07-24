@@ -63,9 +63,17 @@ export function ChatMessage({
 }: ChatMessageProps) {
     const { user } = useUser();
     const isUser = message.from === 'user';
+    const isAssistant = message.from === 'assistant';
+    const isEmpty = !message.versions[0]?.content || message.versions[0].content.trim() === '';
     const timestamp = message.versions[0]?.id ? undefined : undefined; // We'll get timestamp from message if available
     const timeDisplay = timestamp ? formatTime(timestamp) : '';
     const userInitials = user?.full_name ? getInitials(user.full_name) : 'You';
+
+    const showLoading = isAssistant && !message.error && (
+        ((status === 'submitted' || status === 'streaming') && isEmpty) ||
+        message.runStatus === 'Queued' ||
+        message.runStatus === 'Started'
+    );
 
     // Skip rendering ALL tool-related messages when tool execution details are hidden
     if (!showToolExecutionDetails) {
@@ -123,14 +131,15 @@ export function ChatMessage({
                     <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
                         <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
                             {/* Show loading state while message is generating */}
-                            {(status === 'submitted' || status === 'streaming') && 
-                             message.from === 'assistant' && 
-                             (!message.versions[0]?.content || message.versions[0].content.trim() === '') && (
+                            {showLoading && (
                                 <MessageLoadingState
                                     type={showToolExecutionDetails && message.tools?.length ? 'tool-execution' : loadingType}
                                     hasTools={showToolExecutionDetails && !!message.tools && message.tools.length > 0}
                                     toolName={showToolExecutionDetails ? message.tools?.[0]?.name : undefined}
                                 />
+                            )}
+                            {message.runStatus === 'Failed' && message.error && (
+                                <div className="text-sm text-destructive mb-2">{message.error}</div>
                             )}
                             {message.generatedAudio && message.from === 'assistant' ? (
                                 <div className="w-full max-w-md">
@@ -212,10 +221,7 @@ export function ChatMessage({
                                         />
                                     )}
                                 </div>
-                            ) : !message.generatedAudio && !((status === 'submitted' || status === 'streaming') &&
-                                  message.from === 'assistant' && 
-                                  (!message.versions[0]?.content || message.versions[0].content.trim() === '') && 
-                                  !message.tools) && (
+                            ) : !message.generatedAudio && !(showLoading && !message.tools) && (
                                 <>
                                     {message.attachment && (
                                         <ChatAttachmentCard

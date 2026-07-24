@@ -514,6 +514,7 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			flow_run_id=flow_run.name,
 			flow_node_id=node.get("id"),
 			run_kind="agent",
+			now=True,
 		)
 
 		# Update last_agent_run
@@ -651,6 +652,7 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 			flow_run_id=flow_run.name,
 			flow_node_id=node.get("id"),
 			run_kind="orchestrator",
+			now=True,
 		)
 
 		if not result.get("success"):
@@ -1212,6 +1214,7 @@ def _call_orchestrator(
 			flow_run_id=flow_run.name,
 			flow_node_id=current_node_id,
 			run_kind="orchestrator",
+			now=True,
 		)
 
 		if not result.get("success"):

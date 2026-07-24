@@ -41,6 +41,7 @@ export interface AgentMessageDoc {
   conversation: string;
   content: string;
   is_agent_message?: 0 | 1 | string;
+  agent_run?: string;
   kind?: string;
   generated_image?: string;
   generated_audio?: string;
@@ -60,6 +61,7 @@ export interface ChatMessage {
   conversation: string;
   content: string;
   isAgent: boolean;
+  agentRun?: string;
   kind?: string;
   generatedImage?: string;
   generatedAudio?: string;
@@ -72,6 +74,15 @@ export interface ChatMessage {
   toolArgs?: string | Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** Open Agent Run for a conversation (Queued or Started). */
+export interface PendingConversationRun {
+  name: string;
+  status: 'Queued' | 'Started' | string;
+  prompt?: string | null;
+  sequence?: number | null;
+  conversation?: string | null;
 }
 
 /**
@@ -94,6 +105,7 @@ function mapAgentMessage(doc: AgentMessageDoc): ChatMessage {
     conversation: doc.conversation,
     content: doc.content || '',
     isAgent,
+    agentRun: doc.agent_run || undefined,
     kind: doc.kind,
     generatedImage: doc.generated_image,
     generatedAudio: doc.generated_audio,
@@ -309,7 +321,7 @@ export async function getConversationMessages(
 
   try {
     const messages = await db.getDocList(doctype['Agent Message'], {
-      fields: ['name', 'conversation', 'content', 'is_agent_message', 'kind', 'generated_image', 'generated_audio', 'generated_video', 'voice_message', 'stt_model', 'status', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
+      fields: ['name', 'conversation', 'content', 'is_agent_message', 'agent_run', 'kind', 'generated_image', 'generated_audio', 'generated_video', 'voice_message', 'stt_model', 'status', 'tool_name', 'tool_status', 'tool_args', 'creation', 'modified'],
       filters: [['conversation', '=', conversation]],
       orderBy: { field: 'creation', order: 'desc' },
       limit,
@@ -479,13 +491,21 @@ export async function prepareMessageWithFile(
 export interface NewConversationParams {
   agent: string;
   message: string;
+  /** The user message was already persisted (e.g. file/audio prepare step). */
+  skip_user_message?: boolean;
+  files?: PrepareMessageWithFileFile[];
 }
 
 export interface NewConversationResponse {
   message: {
     success: boolean;
     conversation_id: string;
-    run: {
+    queued?: boolean;
+    status?: string;
+    agent_run_id?: string;
+    agent_message_id?: string;
+    sequence?: number;
+    run?: {
       success: boolean;
       response: string;
       structured: unknown;
@@ -503,17 +523,24 @@ export interface NewConversationResponse {
 export interface SendMessageParams {
   conversation: string;
   message: string;
+  /** The user message was already persisted (e.g. file/audio prepare step). */
+  skip_user_message?: boolean;
+  files?: PrepareMessageWithFileFile[];
 }
 
 export interface SendMessageResponse {
   message: {
     success: boolean;
-    response: string;
-    structured: unknown;
-    provider: string;
+    response?: string;
+    structured?: unknown;
+    provider?: string;
     agent_run_id: string;
     conversation_id: string;
     session_id: string;
+    queued?: boolean;
+    status?: string;
+    agent_message_id?: string;
+    sequence?: number;
   };
 }
 
@@ -527,6 +554,8 @@ export async function newConversation(
     const result = await call.post('huf.ai.agent_chat.new_conversation', {
       agent: params.agent,
       message: params.message,
+      skip_user_message: params.skip_user_message ? 1 : 0,
+      files: params.files,
     });
     return result as NewConversationResponse;
   } catch (error) {
@@ -544,6 +573,8 @@ export async function sendMessageToConversation(
     const result = await call.post('huf.ai.agent_chat.send_message_to_conversation', {
       conversation: params.conversation,
       message: params.message,
+      skip_user_message: params.skip_user_message ? 1 : 0,
+      files: params.files,
     });
     return result as SendMessageResponse;
   } catch (error) {
@@ -611,6 +642,72 @@ export async function getAgentMessageIdForRun(agentRunId: string): Promise<strin
     return first?.name;
   } catch (error) {
     handleFrappeError(error, 'Error fetching agent message for run');
+  }
+}
+
+/**
+ * Response of huf.ai.agent_integration.get_agent_run_status.
+ * Statuses match the Agent Run doctype Select options.
+ */
+export interface AgentRunStatusResponse {
+  success: boolean;
+  queued?: boolean;
+  status: 'Queued' | 'Started' | 'Success' | 'Failed';
+  response?: string | null;
+  error?: string | null;
+  agent_run_id: string;
+  conversation_id?: string;
+  agent?: string;
+  agent_message_id?: string | null;
+}
+
+/**
+ * Fetch the status of a queued agent run.
+ * Polling fallback for missed `agent_run_status` socket events.
+ */
+/**
+ * Fetch open (Queued/Started) agent runs for a conversation.
+ * Used to hydrate pending bubbles after reload or chat switch.
+ */
+export async function getPendingConversationRuns(
+  conversationId: string
+): Promise<PendingConversationRun[]> {
+  if (!conversationId) {
+    return [];
+  }
+
+  try {
+    const runs = await db.getDocList(doctype['Agent Run'], {
+      fields: ['name', 'status', 'prompt', 'sequence', 'conversation'],
+      filters: [
+        ['conversation', '=', conversationId],
+        ['status', 'in', ['Queued', 'Started']],
+        ['is_child', '=', 0],
+      ],
+      orderBy: { field: 'sequence', order: 'asc' },
+      limit: 50,
+    });
+
+    return (runs as PendingConversationRun[]).slice().sort((a, b) => {
+      const seqA = a.sequence ?? 0;
+      const seqB = b.sequence ?? 0;
+      if (seqA !== seqB) return seqA - seqB;
+      return a.name.localeCompare(b.name);
+    });
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching pending conversation runs');
+    return [];
+  }
+}
+
+export async function getAgentRunStatus(agentRunId: string): Promise<AgentRunStatusResponse> {
+  try {
+    const result = await call.get('huf.ai.agent_integration.get_agent_run_status', {
+      agent_run_id: agentRunId,
+    });
+    return (result?.message ?? result) as AgentRunStatusResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching agent run status');
   }
 }
 

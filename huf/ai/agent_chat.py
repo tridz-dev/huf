@@ -11,7 +11,7 @@ logger = frappe.logger("huf")
 
 from huf.ai import audio_service
 from huf.ai import sdk_tools
-from huf.ai.agent_integration import _run_async_safely, run_agent_sync
+from huf.ai.agent_integration import _is_truthy, _run_async_safely, run_agent_sync
 from huf.ai.conversation_manager import ConversationManager
 
 
@@ -374,8 +374,8 @@ def create_conversation(agent: str, channel: str = "Chat"):
         raise
 
 @frappe.whitelist()
-def new_conversation(agent: str, message: str):
-    
+def new_conversation(agent: str, message: str, skip_user_message=0, files=None):
+
     if not agent:
         frappe.throw(_("agent is required"))
     if not message:
@@ -391,7 +391,9 @@ def new_conversation(agent: str, message: str):
             provider=frappe.db.get_value("Agent", agent, "provider"),
             model=frappe.db.get_value("Agent", agent, "model"),
             channel_id="Chat",
-            conversation_id=conversation.name
+            conversation_id=conversation.name,
+            skip_user_message=_is_truthy(skip_user_message),
+            files=files,
         )
 
         if run_result.get("conversation_id"):
@@ -414,7 +416,7 @@ def new_conversation(agent: str, message: str):
 
 
 @frappe.whitelist()
-def send_message_to_conversation(conversation: str, message: str):
+def send_message_to_conversation(conversation: str, message: str, skip_user_message=0, files=None):
     if not conversation:
         frappe.throw(_("conversation is required"))
     if not message:
@@ -439,7 +441,9 @@ def send_message_to_conversation(conversation: str, message: str):
             provider=frappe.db.get_value("Agent", agent_name, "provider"),
             model=frappe.db.get_value("Agent", agent_name, "model"),
             channel_id=conv_doc.channel or "Chat",
-            conversation_id=conv_doc.name
+            conversation_id=conv_doc.name,
+            skip_user_message=_is_truthy(skip_user_message),
+            files=files,
         )
 
         if result.get("conversation_id") and not conv_doc.name:

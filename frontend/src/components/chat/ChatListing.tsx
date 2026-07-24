@@ -25,6 +25,10 @@ import { SidebarTrigger } from '../ui/sidebar';
 import { getAgent } from '@/services/agentApi';
 import ConversationTitle, { type ConversationTitleRef } from './ConversationTitle';
 import ConversationMenu from './ConversationMenu';
+import {
+  type ConversationTitleUpdatedDetail,
+  useConversationTitleSwitchFallback,
+} from './useConversationTitleFallback';
 
 function getRecentBucketLabel(ts?: string): string {
   const d = toDate(ts);
@@ -60,6 +64,9 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
   });
 
   const [activeTab, setActiveTab] = useState('recents');
+  const [animatingConversationId, setAnimatingConversationId] = useState<string | null>(null);
+  const [selectedConversationTitle, setSelectedConversationTitle] = useState<string | null>(null);
+  const [selectedAutonamingEnabled, setSelectedAutonamingEnabled] = useState(false);
 
   // Ref map to store refs for each conversation title
   const titleRefs = useRef<Map<string, ConversationTitleRef>>(new Map());
@@ -108,6 +115,104 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedChatId) {
+      setSelectedConversationTitle(null);
+      setSelectedAutonamingEnabled(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const conversationId = selectedChatId;
+
+    async function loadSelectedConversation() {
+      try {
+        const conversationDoc = await getConversation(conversationId);
+        if (cancelled || !conversationDoc) return;
+
+        setSelectedConversationTitle(conversationDoc.title ?? null);
+
+        if (conversationDoc.agent) {
+          const agentData = await getAgent(conversationDoc.agent);
+          if (!cancelled) {
+            setSelectedAutonamingEnabled(agentData.autonaming_of_conversation_title !== 0);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading selected conversation:', error);
+      }
+    }
+
+    void loadSelectedConversation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChatId]);
+
+  useConversationTitleSwitchFallback({
+    conversationId: selectedChatId,
+    currentTitle: selectedConversationTitle,
+    autonamingEnabled: selectedAutonamingEnabled,
+  });
+
+  const applyTitleUpdate = useCallback(async (detail: ConversationTitleUpdatedDetail) => {
+    const { conversationId, title, animate } = detail;
+
+    if (animate && conversationId === selectedChatId) {
+      setAnimatingConversationId(conversationId);
+      const duration = Math.max(title.length * 35 + 200, 500);
+      window.setTimeout(() => {
+        setAnimatingConversationId((current) => (current === conversationId ? null : current));
+      }, duration);
+    }
+
+    if (conversationId === selectedChatId) {
+      setSelectedConversationTitle(title);
+    }
+
+    try {
+      const conversationDoc = await getConversation(conversationId);
+      if (!conversationDoc) return;
+
+      const conversationItem: ChatListItem = {
+        id: conversationId,
+        title,
+        agent: conversationDoc.agent || '',
+        timestamp: conversationDoc.last_activity || conversationDoc.modified,
+        timestampLabel: conversationDoc.last_activity || conversationDoc.modified
+          ? formatTimeAgo(conversationDoc.last_activity || conversationDoc.modified)
+          : undefined,
+      };
+
+      if (recentsAddItemRef.current) {
+        recentsAddItemRef.current(conversationItem);
+      }
+
+      const agentName = conversationDoc.agent;
+      if (agentName && agentAddItemRefs.current.has(agentName)) {
+        const agentAddItem = agentAddItemRefs.current.get(agentName);
+        agentAddItem?.(conversationItem);
+      }
+    } catch (error) {
+      console.error('Error updating conversation title in list:', error);
+    }
+  }, [selectedChatId]);
+
+  // Listen for conversation title updates
+  useEffect(() => {
+    const handleTitleUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<ConversationTitleUpdatedDetail>;
+      void applyTitleUpdate(customEvent.detail);
+    };
+
+    window.addEventListener('huf:conversation-title-updated', handleTitleUpdated);
+    return () => {
+      window.removeEventListener('huf:conversation-title-updated', handleTitleUpdated);
+    };
+  }, [applyTitleUpdate]);
 
   // Listen for new conversation events
   useEffect(() => {
@@ -249,6 +354,7 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
                   isOpen={openAgents.includes(agent.name)}
                   onRename={handleRename}
                   titleRefs={titleRefs}
+                  animatingConversationId={animatingConversationId}
                   onAddItemReady={(addItem: (item: ChatListItem) => void) => {
                     agentAddItemRefs.current.set(agent.name, addItem);
                   }}
@@ -264,6 +370,7 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
             isActive={activeTab === 'recents'}
             onRename={handleRename}
             titleRefs={titleRefs}
+            animatingConversationId={animatingConversationId}
             onAddItemReady={(addItem) => {
               recentsAddItemRef.current = addItem;
             }}
@@ -282,6 +389,7 @@ function AgentConversationItem({
   isOpen,
   onRename,
   titleRefs,
+  animatingConversationId,
   onAddItemReady,
 }: {
   agent: AgentWithCount;
@@ -289,6 +397,7 @@ function AgentConversationItem({
   isOpen: boolean;
   onRename: (conversationId: string) => void;
   titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  animatingConversationId: string | null;
   onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
 }) {
   const navigate = useNavigate();
@@ -412,6 +521,7 @@ function AgentConversationItem({
                       variant="agent_list"
                       value={chat.title}
                       conversationId={chat.id}
+                      animate={animatingConversationId === chat.id}
                     />
                     <p className="ps-1 text-[10px] text-steel-soft truncate mt-0.5 group-hover:text-steel">
                       {chat.timestampLabel ?? ''}
@@ -448,12 +558,14 @@ function RecentsConversationList({
   isActive,
   onRename,
   titleRefs,
+  animatingConversationId,
   onAddItemReady,
 }: {
   selectedChatId: string | null;
   isActive: boolean;
   onRename: (conversationId: string) => void;
   titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  animatingConversationId: string | null;
   onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -608,6 +720,7 @@ function RecentsConversationList({
                                 variant="recents_list"
                                 value={chat.title}
                                 conversationId={chat.id}
+                                animate={animatingConversationId === chat.id}
                               />
                               <p className="ps-1 text-xs truncate text-steel">{chat.agent}</p>
                             </div>

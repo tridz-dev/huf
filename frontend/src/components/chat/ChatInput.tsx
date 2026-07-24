@@ -33,6 +33,12 @@ interface ChatInputProps {
     scrollToBottomAfterPaint?: (instant?: boolean) => void;
     allowFileUpload?: boolean;
     maxUploadSizeMb?: number | null;
+    /**
+     * Agent policy: run turns directly (no queue). When true and the SSE
+     * endpoint is reachable, the chat streams; otherwise turns are
+     * queue-first.
+     */
+    runImmediately?: boolean;
 }
 
 export function ChatInput({ 
@@ -48,6 +54,7 @@ export function ChatInput({
     scrollToBottomAfterPaint,
     allowFileUpload = false,
     maxUploadSizeMb,
+    runImmediately = false,
 }: ChatInputProps) {
     const navigate = useNavigate();
     const [message, setMessage] = useState('');
@@ -88,7 +95,12 @@ export function ChatInput({
             skipUserMessage?: boolean;
             files?: PrepareMessageWithFileFile[];
         }) => {
-            const useStreaming = streamingAvailable;
+            // Queue-first by default: turns go through the REST path and
+            // reconcile from run lifecycle socket events. SSE streaming is the
+            // explicit direct-execution mode, used only for agents with the
+            // advanced `run_immediately` policy when the stream endpoint is
+            // reachable.
+            const useStreaming = streamingAvailable && runImmediately;
             const response = await sendMessage(
                 {
                     agent: agentName,
@@ -111,16 +123,29 @@ export function ChatInput({
             const responseTextRaw =
                 (msg?.run as Record<string, unknown>)?.response ?? msg?.response;
             const responseText = typeof responseTextRaw === 'string' ? responseTextRaw : '';
-            if (!useStreaming && responseText) {
+            // `new_conversation` nests the run ack under `msg.run`; `send_message_to_conversation`
+            // returns it flattened at the top level. Check both, like the other run fields below —
+            // otherwise the very first message in a brand-new conversation is never marked queued,
+            // so the pending bubble never gets `runStatus` and the polling fallback never engages.
+            const queued =
+                msg?.queued === true || (msg?.run as Record<string, unknown>)?.queued === true;
+            if (!useStreaming && responseText && !queued) {
                 params.updateAssistantContent(responseText);
             }
             const agentMessageId =
                 (msg?.agent_message_id as string) ||
                 ((msg?.run as Record<string, unknown>)?.agent_message_id as string) ||
                 undefined;
-            return { conversationId, agentMessageId };
+            const agentRunId =
+                (msg?.agent_run_id as string) ||
+                ((msg?.run as Record<string, unknown>)?.agent_run_id as string) ||
+                undefined;
+            const status =
+                (msg?.status as string | undefined) ??
+                ((msg?.run as Record<string, unknown>)?.status as string | undefined);
+            return { conversationId, agentMessageId, agentRunId, queued, status };
         },
-        [agentName]
+        [agentName, runImmediately]
     );
 
     const syncAssistantMessageId = useCallback(
@@ -135,6 +160,17 @@ export function ChatInput({
                         versions: [{ id: realId, content: existingContent }],
                     };
                 })
+            );
+        },
+        [setMessages]
+    );
+
+    const linkUserMessageToRun = useCallback(
+        (userMessageKey: string, agentRunId: string) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === userMessageKey ? { ...msg, agentRunId } : msg
+                )
             );
         },
         [setMessages]
@@ -203,6 +239,7 @@ export function ChatInput({
                 );
                 scrollToBottomAfterPaint?.(false);
             };
+            let assistantKey = assistantMessageId;
 
             try {
                 const prepareRes = await prepareMessageWithFile({
@@ -241,7 +278,7 @@ export function ChatInput({
                 setPendingFile(null);
                 if (!chatId) isCreatingConversationRef.current = true;
 
-                const { conversationId, agentMessageId } = await runAgentAndUpdateAssistant({
+                const { conversationId, agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
                     message: prepareRes.agent_prompt,
                     conversationId: prepareRes.conversation_id ?? chatId ?? undefined,
                     assistantMessageId,
@@ -250,8 +287,20 @@ export function ChatInput({
                     files: prepareRes.files,
                 });
 
-                if (agentMessageId) {
-                    syncAssistantMessageId(assistantMessageId, agentMessageId);
+                assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+                if (queued && agentRunId) {
+                    linkUserMessageToRun(userMessageKey, agentRunId);
+                    setMessages((prev) =>
+                        prev.map((msg) =>
+                            msg.key === assistantMessageId
+                                ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
+                                : msg
+                        )
+                    );
+                }
+
+                if (agentMessageId && !queued) {
+                    syncAssistantMessageId(assistantKey, agentMessageId);
                 }
                 onStatusChange('ready');
                 if (conversationId && onConversationCreated) {
@@ -274,7 +323,7 @@ export function ChatInput({
                     error: error instanceof Error ? error.message : 'Failed to send file',
                 });
                 setMessages((prev) =>
-                    prev.filter((msg) => msg.key !== userMessageKey && msg.key !== assistantMessageId)
+                    prev.filter((msg) => msg.key !== userMessageKey && msg.key !== assistantKey)
                 );
                 toast.error('Failed to send message with attachment', {
                     description: error instanceof Error ? error.message : 'An error occurred',
@@ -316,16 +365,28 @@ export function ChatInput({
             scrollToBottomAfterPaint?.(false);
         };
 
+        let assistantKey = assistantMessageId;
         try {
             if (!chatId) isCreatingConversationRef.current = true;
-            const { conversationId, agentMessageId } = await runAgentAndUpdateAssistant({
+            const { conversationId, agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
                 message: messageText,
                 conversationId: chatId ?? undefined,
                 assistantMessageId,
                 updateAssistantContent,
             });
-            if (agentMessageId) {
-                syncAssistantMessageId(assistantMessageId, agentMessageId);
+            assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            if (queued && agentRunId) {
+                linkUserMessageToRun(userMessageKey, agentRunId);
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.key === assistantMessageId
+                            ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
+                            : msg
+                    )
+                );
+            }
+            if (agentMessageId && !queued) {
+                syncAssistantMessageId(assistantKey, agentMessageId);
             }
             onStatusChange('ready');
             if (conversationId && onConversationCreated) {
@@ -343,11 +404,11 @@ export function ChatInput({
             toast.error('Failed to send message', {
                 description: error instanceof Error ? error.message : 'An error occurred',
             });
-            setMessages((prev) => prev.filter((msg) => msg.key !== assistantMessageId));
+            setMessages((prev) => prev.filter((msg) => msg.key !== assistantKey));
         } finally {
             setIsSubmitting(false);
         }
-    }, [message, agentName, chatId, pendingFile, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId]);
+    }, [message, agentName, chatId, pendingFile, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun]);
 
     const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
         const filename = `recording-${Date.now()}.webm`;
@@ -433,16 +494,31 @@ export function ChatInput({
             );
             scrollToBottomAfterPaint?.(false);
         };
+        let currentAssistantKey = assistantMessageId;
         try {
-            const { agentMessageId } = await runAgentAndUpdateAssistant({
+            // The transcribe endpoint already persisted the user message;
+            // skip persisting it again in the run (queue-first workers
+            // otherwise add a second user message).
+            const { agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
                 message: transcript,
                 conversationId: res?.conversation_id,
                 assistantMessageId,
                 updateAssistantContent,
                 skipUserMessage: true,
             });
-            if (agentMessageId) {
-                syncAssistantMessageId(assistantMessageId, agentMessageId);
+            currentAssistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            if (queued && agentRunId) {
+                linkUserMessageToRun(userMessageKey, agentRunId);
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.key === assistantMessageId
+                            ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
+                            : msg
+                    )
+                );
+            }
+            if (agentMessageId && !queued) {
+                syncAssistantMessageId(currentAssistantKey, agentMessageId);
             }
             onStatusChange('ready');
             if (res?.conversation_id && onConversationCreated) {
@@ -452,14 +528,14 @@ export function ChatInput({
             return transcript;
         } catch (agentErr) {
             isCreatingConversationRef.current = false;
-            setMessages((prev) => prev.filter((m) => m.key !== assistantMessageId));
+            setMessages((prev) => prev.filter((m) => m.key !== currentAssistantKey));
             onStatusChange('error');
             toast.error('Failed to send message', {
                 description: agentErr instanceof Error ? agentErr.message : 'An error occurred',
             });
             throw agentErr;
         }
-    }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId]);
+    }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun]);
 
     const handleTranscriptionChange = useCallback((text: string) => {
         if (isAudioRecordingFlowRef.current) {
