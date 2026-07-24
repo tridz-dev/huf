@@ -173,8 +173,13 @@ def update_last_error(service: str, error: str):
 		if settings:
 			doc = frappe.get_doc("Integration Settings", settings[0].name)
 			doc.last_error = error[:140]  # Truncate to field length
-			doc.save(ignore_permissions=True)
-			commit_if_background()
+			if frappe.has_permission("Integration Settings", "write", doc=doc):
+				doc.save()
+				commit_if_background()
+			else:
+				frappe.logger("huf").error(
+					f"Not permitted to persist last_error on Integration Settings {doc.name}: {doc.last_error}"
+				)
 	except Exception:
 		# Silently fail - don't break tool execution for logging errors
 		pass
