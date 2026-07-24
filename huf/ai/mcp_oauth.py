@@ -181,6 +181,9 @@ def handle_oauth_callback(server_name: str, code: str, state: str) -> dict:
 
         redirect_uri = _get_redirect_uri(server)
 
+        if not frappe.has_permission("MCP Server", "write", server_name):
+            return {"error": "Not permitted to update MCP Server."}
+
         token_data = _exchange_code_for_tokens(server, config, code, code_verifier, redirect_uri)
         _save_tokens(server, token_data)
 
@@ -210,9 +213,9 @@ def disconnect_oauth(server_name: str) -> dict:
         server.oauth_refresh_token = ""
         server.oauth_token_expires_at = None
         server.oauth_status = "Not Connected"
-        server.save(ignore_permissions=True)
+        server.save()
         return {"success": True}
-    except (frappe.FrappeException, ValueError, KeyError) as exc:
+    except (frappe.AuthenticationError, frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError) as exc:
         frappe.logger("huf").warning(f"Disconnect OAuth warning for {server_name}: {exc!s}")
         return {"error": str(exc)}
     except Exception as exc:  # boundary exception handler: disconnect_oauth endpoint
@@ -267,15 +270,15 @@ def refresh_oauth_token(server_name: str) -> str:
 
     try:
         refresh_token = server.get_password("oauth_refresh_token")
-    except (frappe.FrappeException, KeyError, AttributeError):  # optional refresh token lookup
+    except (frappe.AuthenticationError, frappe.DoesNotExistError, KeyError, AttributeError):  # optional refresh token lookup
         refresh_token = None
 
     if not refresh_token:
-        _set_expired_status(server)
+        _set_expired_status(server, ignore_permissions=True)
         raise ValueError(f"No refresh token stored for MCP Server '{server_name}'.")
 
     if not config.get("token_endpoint") or not config.get("client_id"):
-        _set_expired_status(server)
+        _set_expired_status(server, ignore_permissions=True)
         raise ValueError(f"OAuth configuration missing for MCP Server '{server_name}'.")
 
     try:
@@ -287,7 +290,7 @@ def refresh_oauth_token(server_name: str) -> str:
         client_secret = None
         try:
             client_secret = server.get_password("oauth_client_secret")
-        except (frappe.FrappeException, KeyError, AttributeError):  # PKCE public clients may omit client_secret
+        except (frappe.AuthenticationError, frappe.DoesNotExistError, KeyError, AttributeError):  # PKCE public clients may omit client_secret
             client_secret = None
         if client_secret:
             payload["client_secret"] = client_secret
@@ -304,11 +307,11 @@ def refresh_oauth_token(server_name: str) -> str:
         if "error" in token_data:
             raise ValueError(token_data.get("error_description", token_data["error"]))
 
-        _save_tokens(server, token_data)
+        _save_tokens(server, token_data, ignore_permissions=True)
         return server.get_password("oauth_access_token")
 
     except Exception as exc:  # boundary exception handler: token refresh endpoint call
-        _set_expired_status(server)
+        _set_expired_status(server, ignore_permissions=True)
         raise
 
 
@@ -372,7 +375,7 @@ def _exchange_code_for_tokens(server, config: dict, code: str, code_verifier: st
     client_secret = None
     try:
         client_secret = server.get_password("oauth_client_secret")
-    except (frappe.FrappeException, AttributeError, KeyError) as exc:  # non-critical cleanup
+    except (frappe.AuthenticationError, frappe.DoesNotExistError, AttributeError, KeyError) as exc:  # non-critical cleanup
         frappe.logger("huf").debug(f"Helper exception ignored: {exc!s}")
     if client_secret:
         payload["client_secret"] = client_secret
@@ -398,7 +401,7 @@ def _exchange_code_for_tokens(server, config: dict, code: str, code_verifier: st
     return data
 
 
-def _save_tokens(server, token_data: dict):
+def _save_tokens(server, token_data: dict, ignore_permissions: bool = False):
     """Persist access_token, refresh_token, expiry and status to the server doc."""
     expires_in = token_data.get("expires_in")
     expires_at = add_to_date(now_datetime(), seconds=int(expires_in)) if expires_in else None
@@ -423,7 +426,10 @@ def _save_tokens(server, token_data: dict):
         server.oauth_refresh_token = token_data["refresh_token"]
     server.oauth_token_expires_at = expires_at
     server.oauth_status = "Connected"
-    server.save(ignore_permissions=True)
+    # ignore_permissions is used only for automatic system-level token refresh
+    # (scheduled job or proactive refresh during MCP tool execution) where no
+    # end-user is directly editing the MCP Server document.
+    server.save(ignore_permissions=ignore_permissions)
 
 
 def _is_token_expiring_soon(server_or_row, buffer_minutes: int = 5) -> bool:
@@ -435,11 +441,14 @@ def _is_token_expiring_soon(server_or_row, buffer_minutes: int = 5) -> bool:
     return get_datetime(expires_at) <= get_datetime(threshold)
 
 
-def _set_expired_status(server):
+def _set_expired_status(server, ignore_permissions: bool = False):
     try:
         server.oauth_status = "Token Expired"
-        server.save(ignore_permissions=True)
-    except (frappe.FrappeException, AttributeError, KeyError) as exc:  # non-critical cleanup
+        # ignore_permissions is kept for automatic refresh failures in system
+        # contexts (scheduler or tool execution) where the current user may not
+        # have write access to the MCP Server configuration document.
+        server.save(ignore_permissions=ignore_permissions)
+    except (frappe.AuthenticationError, frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError, AttributeError, KeyError) as exc:  # non-critical cleanup
         frappe.logger("huf").debug(f"Helper exception ignored: {exc!s}")
 
 
