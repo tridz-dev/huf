@@ -179,3 +179,270 @@ partial-view semantics, unknown-action validation, capability guard (Guest denie
 
 - Whether the frontend phase wants `parameters` child rows scaffolded per writable
   field (would give Create/Update tools a real field schema). Flagged, not decided.
+
+---
+
+# Phase 4a-2: parameter population
+
+Corrective pass on the phase 4a UNKNOWN above. Confirmed problem:
+`build_params_json_from_table` (`agent_tool_function.py:592-676`) builds
+`properties` ONLY from the tool's `parameters` child rows and sets
+`additionalProperties: False`. A scaffolded Create Document tool therefore
+presented the LLM an empty parameter object it could not fill; an Update
+Document tool only had `document_id`. Scaffolded tools looked wired up but
+could not do their job.
+
+## What changed (`huf/huf/doctype/huf_data_table/api.py` only)
+
+- New `_table_field_params(doctype_name, types)` builds `Agent Function Params`
+  rows from the generated `HF {table}` DocType meta. Child doctype field names
+  taken from `agent_function_params.json` (`label`, `fieldname`, `type`,
+  `required`, `description`, `options`, `child_table_name` — the last unused,
+  HF tables have no Table fields).
+- `_scaffold_tool` now inserts new tools WITH `parameters` rows for the types
+  that consume them, and routes reused tools through `_sync_tool_params`.
+- New `_sync_tool_params(tool_name, doctype_name, types)` rewrites the rows
+  ONLY when they differ from the current meta (compare-then-save), so
+  re-running without a schema change is a strict no-op.
+
+### Which tool types get parameters, and why
+
+- **Create Document** — properties come ONLY from `parameters`; required.
+- **Update Document** — same, controller auto-adds `document_id`.
+- **Get List** — YES. `prepare_function_params` (`agent_tool_function.py:317-348`)
+  turns `parameters` rows into typed `filters.properties`; `filters` keeps
+  `additionalProperties: True`, so the rows document the real fields without
+  restricting anything.
+- Get Document / Delete Document — NO: their schemas are fixed
+  (`document_id` only) and ignore `parameters`.
+
+### Fieldtype → param `type` mapping
+
+`param.type` is passed straight into JSON Schema `"type"`
+(`agent_tool_function.py:611-613`), and the child doctype Select allows
+`string/integer/number/float/boolean/object/array`. `float` is NOT valid JSON
+Schema, so all float-ish types map to `number`:
+
+- `Int`, `Duration` → `integer`
+- `Float`, `Currency`, `Percent`, `Rating` → `number`
+- `Check` → `boolean`
+- everything else HUF Tables allow (`Data`, `Small Text`, `Text`, `Long Text`,
+  `Date`, `Datetime`, `Time`, `Phone`, `Color`, `Link`, `Select`) → `string`
+- `Select` additionally carries its newline-separated `options` → the
+  controller emits them as a JSON Schema `enum`
+  (`agent_tool_function.py:623-624`). Link `options` (a target doctype) are
+  deliberately NOT carried — they would become a bogus one-value enum.
+
+### Exclusion rule (explicit)
+
+A field is scaffolded as a parameter UNLESS: `fieldtype ∈ {Section Break,
+Column Break, Tab Break, HTML, Heading}` (layout/presentational — HUF Tables
+only generate the first two, the rest are guarded for robustness), OR
+`field.hidden`, OR `field.read_only`. Rationale: none of those are values an
+LLM should supply.
+
+### `required` semantics (deliberate)
+
+`reqd` is carried to the param's `required` flag ONLY for Create Document. On
+Update tools a required field would force the LLM to resend every required
+field on every partial update (the controller already requires `document_id`
+there); on Get List filters are never mandatory.
+
+## C2 — refresh decision
+
+**Re-running `set_table_agent_access` refreshes parameters on the tools this
+feature created (deterministic tool name), replacing all rows when the table
+schema changed.** Tradeoff accepted: hand-edited parameter rows on a
+scaffolded tool are overwritten. Justification: (a) a stale schema is a silent
+bug — `additionalProperties: False` makes a field added after scaffolding
+literally unsettable by the LLM; (b) the deterministic name already defines
+ownership — phase 4a's reuse-if-exists treats any tool with that name as
+feature-owned; (c) compare-then-save means no churn when nothing changed (no
+duplicate rows, no needless saves, unchanged `modified` timestamps).
+
+## Tests — now 14 (6 new)
+
+Fixture table enriched: `Title` (Data, reqd), `Qty` (Int), `Price` (Float),
+`Status` (Select `Open\nClosed`), `Active` (Check), Section Break, `Notes`
+(Small Text), `Internal Code` (Data, read_only). New tests:
+
+- `test_create_tool_schema_has_table_fields` — asserts real field names +
+  types, Select enum, `required == ["title"]`.
+- `test_update_tool_has_document_id_plus_fields` — `document_id` + all data
+  fields, `required == ["document_id"]`.
+- `test_get_list_tool_has_typed_filter_properties` — typed `filters.properties`,
+  `additionalProperties` stays True.
+- `test_scaffolded_schema_excludes_layout_and_read_only` — `internal_code`
+  absent, `notes` (after the Section Break) present, no layout/hidden/read_only
+  param rows.
+- `test_rescaffold_does_not_duplicate_param_rows`.
+- `test_rescaffold_refreshes_params_after_schema_change` — `update_data_table`
+  adds `isbn`, re-run picks it up without duplicating rows; schema restored
+  afterwards for the other tests.
+
+### Test run (gate)
+
+```
+$ bench --site huf.localhost run-tests --app huf --module huf.huf.doctype.huf_data_table.test_agent_access
+Running 14 integration tests for huf
+ ✔ test_action_map_covers_four_plain_actions
+ ✔ test_create_tool_schema_has_table_fields
+ ✔ test_get_list_tool_has_typed_filter_properties
+ ✔ test_get_round_trips_set
+ ✔ test_requires_manage_capability
+ ✔ test_rescaffold_does_not_duplicate_param_rows
+ ✔ test_rescaffold_refreshes_params_after_schema_change
+ ✔ test_scaffold_creates_expected_tools
+ ✔ test_scaffolded_schema_excludes_layout_and_read_only
+ ✔ test_set_is_idempotent
+ ✔ test_uncheck_detaches_but_keeps_tool_doc
+ ✔ test_unknown_action_throws
+ ✔ test_update_tool_has_document_id_plus_fields
+ ✔ test_view_counts_with_only_one_view_tool
+Ran 14 tests in 5.590s
+OK
+```
+
+**14 passed / 0 failed.**
+
+## C4 — runtime proof on huf.localhost (verbatim)
+
+Seeded a real HUF Table `Probe 4a2 Books` (Title Data reqd, Qty Int, Price
+Float, Status Select `Open\nIn Review\nClosed`, Active Check, Section Break,
+Published On Date, Rating, Notes Small Text, Internal Code Data read_only),
+plus a probe Provider/Model/Agent, ran
+`set_table_agent_access(registry, agent, ["view", "create", "edit"])`, dumped
+`function_definition` verbatim, then deleted the probe agent, provider, model,
+all probe tools and the table (probe script removed afterwards). Actual output:
+
+```
+===== Create Document :: HF_Probe_4a2_Books_-_Create_Document =====
+{
+    "name": "HF_Probe_4a2_Books_-_Create_Document",
+    "description": "Create a new Probe 4a2 Books record",
+    "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "Title"
+            },
+            "qty": {
+                "type": "integer",
+                "description": "Qty"
+            },
+            "price": {
+                "type": "number",
+                "description": "Price"
+            },
+            "status": {
+                "type": "string",
+                "description": "Status",
+                "enum": [
+                    "Open",
+                    "In Review",
+                    "Closed"
+                ]
+            },
+            "active": {
+                "type": "boolean",
+                "description": "Active"
+            },
+            "published_on": {
+                "type": "string",
+                "description": "Published On"
+            },
+            "rating": {
+                "type": "number",
+                "description": "Rating"
+            },
+            "notes": {
+                "type": "string",
+                "description": "Notes"
+            }
+        },
+        "required": [
+            "title"
+        ]
+    }
+}
+
+===== Update Document :: HF_Probe_4a2_Books_-_Update_Document =====
+{
+    "name": "HF_Probe_4a2_Books_-_Update_Document",
+    "description": "Update an existing Probe 4a2 Books record",
+    "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "document_id": {
+                "type": "string",
+                "description": "The ID of the HF Probe 4a2 Books to update"
+            },
+            "title": {
+                "type": "string",
+                "description": "Title"
+            },
+            "qty": {
+                "type": "integer",
+                "description": "Qty"
+            },
+            "price": {
+                "type": "number",
+                "description": "Price"
+            },
+            "status": {
+                "type": "string",
+                "description": "Status",
+                "enum": [
+                    "Open",
+                    "In Review",
+                    "Closed"
+                ]
+            },
+            "active": {
+                "type": "boolean",
+                "description": "Active"
+            },
+            "published_on": {
+                "type": "string",
+                "description": "Published On"
+            },
+            "rating": {
+                "type": "number",
+                "description": "Rating"
+            },
+            "notes": {
+                "type": "string",
+                "description": "Notes"
+            }
+        },
+        "required": [
+            "document_id"
+        ]
+    }
+}
+```
+
+Read against the requirements: Section Break and read-only `internal_code`
+absent; `status` enum carried; `title` required only on Create; Update has
+`document_id` + all fields with only `document_id` required.
+
+Site verified clean afterwards: 0 `HF %` DocTypes, 0 `HF %` tool docs, 0
+probe/test agents. The shared `Data Table` Agent Tool Type row remains (same
+policy as phase 4a — created on demand, harmless, reusable).
+
+## Other gates
+
+- `ruff check` + `ruff format --check` on `huf/huf/doctype/huf_data_table/` →
+  all passed (5 files already formatted).
+- `git status` shows unrelated pre-existing modifications under `frontend/`
+  (phase 4b's files — NOT touched in this phase) and untracked
+  `ongoing/` state dirs. The 4a-2 commit stages ONLY
+  `huf/huf/doctype/huf_data_table/api.py`,
+  `huf/huf/doctype/huf_data_table/test_agent_access.py` and this log.
+
+## UNKNOWNs (4a-2)
+
+- None.

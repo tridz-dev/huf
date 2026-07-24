@@ -23,6 +23,7 @@ from huf.huf.doctype.huf_data_table.api import (
 	delete_data_table,
 	get_table_agent_access,
 	set_table_agent_access,
+	update_data_table,
 )
 
 
@@ -41,8 +42,14 @@ class TestTableAgentAccess(IntegrationTestCase):
 		result = create_data_table(
 			table_name=cls.TABLE_NAME,
 			fields=[
-				{"label": "Title", "fieldtype": "Data"},
+				{"label": "Title", "fieldtype": "Data", "reqd": 1},
 				{"label": "Qty", "fieldtype": "Int"},
+				{"label": "Price", "fieldtype": "Float"},
+				{"label": "Status", "fieldtype": "Select", "options": "Open\nClosed"},
+				{"label": "Active", "fieldtype": "Check"},
+				{"fieldtype": "Section Break"},
+				{"label": "Notes", "fieldtype": "Small Text"},
+				{"label": "Internal Code", "fieldtype": "Data", "read_only": 1},
 			],
 		)
 		cls.registry_name = result["data"]["name"]
@@ -143,6 +150,116 @@ class TestTableAgentAccess(IntegrationTestCase):
 			sorted(self._agent_tools()),
 			sorted(_table_tool_name(self.DOCTYPE_NAME, t) for t in expected),
 		)
+
+	# -- parameter population tests (phase 4a-2) -----------------------------
+
+	def test_create_tool_schema_has_table_fields(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+
+		doc = self._tool_doc("Create Document")
+		properties = json.loads(doc.function_definition)["parameters"]["properties"]
+
+		# Real field names, not just non-empty.
+		self.assertEqual(properties["title"]["type"], "string")
+		self.assertEqual(properties["qty"]["type"], "integer")
+		self.assertEqual(properties["price"]["type"], "number")
+		self.assertEqual(properties["active"]["type"], "boolean")
+		# Select options become a JSON Schema enum.
+		self.assertEqual(properties["status"]["enum"], ["Open", "Closed"])
+		# Required fields land in the schema's required array.
+		self.assertEqual(json.loads(doc.params)["required"], ["title"])
+
+	def test_scaffolded_schema_excludes_layout_and_read_only(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+
+		properties = json.loads(self._tool_doc("Create Document").params)["properties"]
+		param_fieldnames = [row.fieldname for row in self._tool_doc("Create Document").parameters]
+
+		self.assertNotIn("internal_code", properties, "read_only field must be excluded")
+		self.assertIn("notes", properties, "data field after a Section Break must be kept")
+		for fieldname in param_fieldnames:
+			field = frappe.get_meta(self.DOCTYPE_NAME).get_field(fieldname)
+			self.assertNotIn(field.fieldtype, ("Section Break", "Column Break"))
+			self.assertFalse(field.hidden)
+			self.assertFalse(field.read_only)
+
+	def test_update_tool_has_document_id_plus_fields(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["edit"])
+
+		params = json.loads(self._tool_doc("Update Document").params)
+		self.assertIn("document_id", params["properties"])
+		for fieldname in ("title", "qty", "price", "status", "active", "notes"):
+			self.assertIn(fieldname, params["properties"])
+		# Only document_id is required: table `reqd` fields must NOT become
+		# required on update, or every partial update would be impossible.
+		self.assertEqual(params["required"], ["document_id"])
+
+	def test_get_list_tool_has_typed_filter_properties(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["view"])
+
+		filters = json.loads(self._tool_doc("Get List").params)["properties"]["filters"]
+		self.assertEqual(filters["properties"]["title"]["type"], "string")
+		self.assertEqual(filters["properties"]["qty"]["type"], "integer")
+		# Filters stay open: scaffolded params document fields, not restrict them.
+		self.assertTrue(filters["additionalProperties"])
+
+	def test_rescaffold_does_not_duplicate_param_rows(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+		first = [(r.fieldname, r.type) for r in self._tool_doc("Create Document").parameters]
+
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+		rows = self._tool_doc("Create Document").parameters
+		second = [(r.fieldname, r.type) for r in rows]
+
+		self.assertEqual(first, second)
+		self.assertEqual(len(rows), len({r.fieldname for r in rows}), "duplicate parameter rows")
+
+	def test_rescaffold_refreshes_params_after_schema_change(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+		self.assertNotIn(
+			"isbn",
+			json.loads(self._tool_doc("Create Document").params)["properties"],
+		)
+
+		# Add a field to the table, then re-run: the tool's schema must follow.
+		update_data_table(
+			self.registry_name,
+			fields=[
+				{"label": "Title", "fieldtype": "Data", "reqd": 1},
+				{"label": "Qty", "fieldtype": "Int"},
+				{"label": "Price", "fieldtype": "Float"},
+				{"label": "Status", "fieldtype": "Select", "options": "Open\nClosed"},
+				{"label": "Active", "fieldtype": "Check"},
+				{"fieldtype": "Section Break"},
+				{"label": "Notes", "fieldtype": "Small Text"},
+				{"label": "Internal Code", "fieldtype": "Data", "read_only": 1},
+				{"label": "Isbn", "fieldtype": "Data"},
+			],
+		)
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+
+		doc = self._tool_doc("Create Document")
+		properties = json.loads(doc.params)["properties"]
+		self.assertIn("isbn", properties, "new field missing after rescaffold")
+		rows = [r.fieldname for r in doc.parameters]
+		self.assertEqual(len(rows), len(set(rows)), "refresh duplicated parameter rows")
+
+		# Restore the original schema for other tests in this class.
+		update_data_table(
+			self.registry_name,
+			fields=[
+				{"label": "Title", "fieldtype": "Data", "reqd": 1},
+				{"label": "Qty", "fieldtype": "Int"},
+				{"label": "Price", "fieldtype": "Float"},
+				{"label": "Status", "fieldtype": "Select", "options": "Open\nClosed"},
+				{"label": "Active", "fieldtype": "Check"},
+				{"fieldtype": "Section Break"},
+				{"label": "Notes", "fieldtype": "Small Text"},
+				{"label": "Internal Code", "fieldtype": "Data", "read_only": 1},
+			],
+		)
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+		self.assertNotIn("isbn", json.loads(self._tool_doc("Create Document").params)["properties"])
 
 	def test_set_is_idempotent(self):
 		first = set_table_agent_access(self.registry_name, self.AGENT, ["view", "edit"])
