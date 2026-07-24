@@ -886,7 +886,7 @@ def run_agent_sync(
     # existing immediate behavior — persist the user message up front and
     # execute inline. To keep the ordering guarantee, it must not jump ahead
     # of queued runs for the same conversation and must hold the same lock.
-    if _has_queued_runs(conversation.name):
+    if _has_queued_runs(conversation.name, exclude_run_id=run_doc.name):
         frappe.throw(
             _(
                 "This conversation has queued runs pending. Wait for them to complete before using the direct-execution override."
@@ -913,7 +913,7 @@ def run_agent_sync(
     # Close the check-then-lock race: a queued run may have been submitted
     # between the _has_queued_runs() check above and the lock acquisition.
     # Re-check while holding the lock; queued runs must not be jumped.
-    if _has_queued_runs(conversation.name):
+    if _has_queued_runs(conversation.name, exclude_run_id=run_doc.name):
         try:
             frappe.cache().delete(lock_key)
         except Exception:
@@ -1707,13 +1707,11 @@ def _next_queued_run(conversation_id: str):
     )
 
 
-def _has_queued_runs(conversation_id: str) -> bool:
-    return bool(
-        frappe.db.exists(
-            "Agent Run",
-            {"conversation": conversation_id, "status": "Queued"},
-        )
-    )
+def _has_queued_runs(conversation_id: str, exclude_run_id: str = None) -> bool:
+    filters = {"conversation": conversation_id, "status": "Queued"}
+    if exclude_run_id:
+        filters["name"] = ("!=", exclude_run_id)
+    return bool(frappe.db.exists("Agent Run", filters))
 
 
 def _enqueue_drain(conversation_id: str):
