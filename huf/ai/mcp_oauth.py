@@ -93,13 +93,16 @@ def start_oauth_flow(server_name: str) -> dict:
                 extra_params = json.loads(config["extra_authorize_params"])
                 if isinstance(extra_params, dict):
                     params.update(extra_params)
-            except Exception as e:
-                frappe.log_error("MCP OAuth", message=f"Invalid JSON in oauth_extra_authorize_params for {server_name}: {e}")
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                frappe.logger("huf").warning(f"Invalid JSON in oauth_extra_authorize_params for {server_name}: {e!s}")
 
         auth_url = config["authorization_endpoint"] + "?" + urllib.parse.urlencode(params)
         return {"auth_url": auth_url}
 
-    except Exception as exc:
+    except (frappe.PermissionError, ValueError, KeyError) as exc:
+        frappe.logger("huf").warning(f"OAuth start_flow validation error for {server_name}: {exc!s}")
+        return {"error": str(exc)}
+    except Exception as exc:  # boundary exception handler: OAuth start_flow endpoint
         frappe.log_error("MCP OAuth", message=f"MCP OAuth start_flow error for {server_name}: {exc}")
         return {"error": str(exc)}
 
@@ -136,7 +139,10 @@ def resolve_and_start_oauth_flow(server_name: str) -> dict:
 
         return start_oauth_flow(server_name)
 
-    except Exception as exc:
+    except (frappe.PermissionError, ValueError, KeyError) as exc:
+        frappe.logger("huf").warning(f"OAuth resolve error for {server_name}: {exc!s}")
+        return {"error": str(exc)}
+    except Exception as exc:  # boundary exception handler: OAuth resolve_and_start endpoint
         frappe.log_error("MCP OAuth", message=f"MCP OAuth resolve_and_start error for {server_name}: {exc}")
         return {"error": str(exc)}
 
@@ -184,7 +190,10 @@ def handle_oauth_callback(server_name: str, code: str, state: str) -> dict:
 
         return {"success": True}
 
-    except Exception as exc:
+    except (frappe.PermissionError, ValueError, KeyError, json.JSONDecodeError) as exc:
+        frappe.logger("huf").warning(f"OAuth callback validation error for {server_name}: {exc!s}")
+        return {"error": str(exc)}
+    except Exception as exc:  # boundary exception handler: OAuth callback endpoint
         frappe.log_error("MCP OAuth", message=f"MCP OAuth callback error for {server_name}: {exc}")
         return {"error": str(exc)}
 
@@ -203,7 +212,10 @@ def disconnect_oauth(server_name: str) -> dict:
         server.oauth_status = "Not Connected"
         server.save(ignore_permissions=True)
         return {"success": True}
-    except Exception as exc:
+    except (frappe.FrappeException, ValueError, KeyError) as exc:
+        frappe.logger("huf").warning(f"Disconnect OAuth warning for {server_name}: {exc!s}")
+        return {"error": str(exc)}
+    except Exception as exc:  # boundary exception handler: disconnect_oauth endpoint
         return {"error": str(exc)}
 
 
@@ -235,7 +247,7 @@ def get_valid_access_token(server_name: str) -> str:
     if _is_token_expiring_soon(server):
         try:
             access_token = refresh_oauth_token(server_name)
-        except Exception as exc:
+        except Exception as exc:  # boundary exception handler: proactive refresh fallback
             frappe.log_error("MCP OAuth", message=f"MCP OAuth proactive refresh failed for {server_name}: {exc}")
             # Return existing token — it may still work for a few minutes
             # (executor will get a 401 and retry once)
@@ -255,7 +267,7 @@ def refresh_oauth_token(server_name: str) -> str:
 
     try:
         refresh_token = server.get_password("oauth_refresh_token")
-    except Exception:
+    except (frappe.FrappeException, KeyError, AttributeError):  # optional refresh token lookup
         refresh_token = None
 
     if not refresh_token:
@@ -275,8 +287,8 @@ def refresh_oauth_token(server_name: str) -> str:
         client_secret = None
         try:
             client_secret = server.get_password("oauth_client_secret")
-        except Exception:
-            pass
+        except (frappe.FrappeException, KeyError, AttributeError):  # PKCE public clients may omit client_secret
+            client_secret = None
         if client_secret:
             payload["client_secret"] = client_secret
 
@@ -295,7 +307,7 @@ def refresh_oauth_token(server_name: str) -> str:
         _save_tokens(server, token_data)
         return server.get_password("oauth_access_token")
 
-    except Exception as exc:
+    except Exception as exc:  # boundary exception handler: token refresh endpoint call
         _set_expired_status(server)
         raise
 
@@ -314,7 +326,7 @@ def auto_refresh_oauth_tokens():
         if _is_token_expiring_soon(s, buffer_minutes=65):
             try:
                 refresh_oauth_token(s.name)
-            except Exception as exc:
+            except Exception as exc:  # boundary exception handler: scheduled auto-refresh job
                 frappe.log_error("MCP OAuth Auto Refresh", message=f"Auto refresh failed for {s.name}: {exc}")
 
 
@@ -360,8 +372,8 @@ def _exchange_code_for_tokens(server, config: dict, code: str, code_verifier: st
     client_secret = None
     try:
         client_secret = server.get_password("oauth_client_secret")
-    except Exception:
-        pass
+    except (frappe.FrappeException, AttributeError, KeyError) as exc:  # non-critical cleanup
+        frappe.logger("huf").debug(f"Helper exception ignored: {exc!s}")
     if client_secret:
         payload["client_secret"] = client_secret
 
@@ -427,8 +439,8 @@ def _set_expired_status(server):
     try:
         server.oauth_status = "Token Expired"
         server.save(ignore_permissions=True)
-    except Exception:
-        pass
+    except (frappe.FrappeException, AttributeError, KeyError) as exc:  # non-critical cleanup
+        frappe.logger("huf").debug(f"Helper exception ignored: {exc!s}")
 
 
 def _get_effective_oauth_config(server) -> dict:
