@@ -9,7 +9,23 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-# Inject a mock frappe package before importing Huf code.
+# This module replaces sys.modules["frappe"] with a mock, which is fatal to a
+# real bench process. If a real Frappe site is initialized (e.g. bench
+# run-tests discovering this file), skip the whole module instead of
+# polluting. A bare `import frappe` without a site (standalone unittest run)
+# still proceeds with the mocks.
+try:
+	import frappe as _maybe_real_frappe
+
+	_HAS_REAL_FRAPPE = bool(getattr(_maybe_real_frappe.local, "site", None))
+except Exception:
+	_HAS_REAL_FRAPPE = False
+
+_SKIP_REASON = "mocked standalone tests — run outside bench: python3 -m pytest huf/ai/tests/test_memory_tools.py"
+
+# Mock objects are defined unconditionally (class-level @patch decorators bind
+# them at import time); only the sys.modules injection is gated on the absence
+# of a real Frappe site.
 _mock_frappe = MagicMock()
 _mock_frappe.session.user = "test_user@example.com"
 _mock_frappe.get_roles.return_value = {"Huf User"}
@@ -28,20 +44,23 @@ _mock_frappe_background_jobs = MagicMock()
 _mock_frappe_file_manager = MagicMock()
 _mock_frappe.client = MagicMock()
 
-sys.modules["frappe"] = _mock_frappe
-sys.modules["frappe.utils"] = _mock_frappe_utils
-sys.modules["frappe.utils.background_jobs"] = _mock_frappe_background_jobs
-sys.modules["frappe.utils.file_manager"] = _mock_frappe_file_manager
-sys.modules["frappe.client"] = _mock_frappe.client
-
 _mock_agents = MagicMock()
 _mock_agents.FunctionTool = MagicMock()
-sys.modules["agents"] = _mock_agents
+
+if not _HAS_REAL_FRAPPE:
+	# Inject a mock frappe package before importing Huf code.
+	sys.modules["frappe"] = _mock_frappe
+	sys.modules["frappe.utils"] = _mock_frappe_utils
+	sys.modules["frappe.utils.background_jobs"] = _mock_frappe_background_jobs
+	sys.modules["frappe.utils.file_manager"] = _mock_frappe_file_manager
+	sys.modules["frappe.client"] = _mock_frappe.client
+	sys.modules["agents"] = _mock_agents
 
 from huf.ai import memory_tools
 from huf.ai.sdk_tools import create_agent_tools
 
 
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
 class TestCanWriteMemory(unittest.TestCase):
     """Unit tests for _can_write_memory policy + role gates (B3 fix)."""
 
@@ -128,6 +147,7 @@ class TestCanWriteMemory(unittest.TestCase):
         )
 
 
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
 class TestCanReadMemory(unittest.TestCase):
     """Unit tests for _can_read_memory, especially conversation ownership."""
 
@@ -179,6 +199,7 @@ class TestCanReadMemory(unittest.TestCase):
         self.assertTrue(memory_tools._can_read_memory(row))
 
 
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
 class TestMemoryToolAutoWiring(unittest.TestCase):
     """Unit tests for B2 auto-wiring of memory tools from Agent flags."""
 
