@@ -16,6 +16,7 @@
   "max_knowledge_tokens": 4000,
   "max_context_chars": 2000,
   "autonaming_of_conversation_title": 1,
+  "run_immediately": 1,
   "show_tool_execution_details": 1,
   "enable_multi_run": 0,
   "persist_user_history": 0,

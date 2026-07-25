@@ -108,6 +108,13 @@ HUF_ROLE_FRAPPE_ROLE_MAP: dict[str, str] = {
 	"Huf Viewer": "Huf Viewer",
 }
 
+# Standard Frappe role constants.
+# Prefer these over string literals so renames/customizations are localized.
+SYSTEM_MANAGER = "System Manager"
+ADMINISTRATOR = "Administrator"
+GUEST = "Guest"
+ALL_ROLES = "All"
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -124,7 +131,7 @@ def _bust_cache(user: str) -> None:
 
 
 def _is_system_manager(user: str) -> bool:
-	return "System Manager" in frappe.get_roles(user)
+	return SYSTEM_MANAGER in frappe.get_roles(user)
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +144,7 @@ def get_user_huf_role(user: str | None = None) -> str | None:
 	if not user:
 		user = frappe.session.user
 
-	if user == "Administrator" or _is_system_manager(user):
+	if user == ADMINISTRATOR or _is_system_manager(user):
 		return "Huf Admin"
 
 	huf_role = frappe.db.get_value(
@@ -171,7 +178,7 @@ def get_user_capabilities(user: str | None = None) -> list[str]:
 		user = frappe.session.user
 
 	# Administrator / System Manager get every capability.
-	if user == "Administrator" or _is_system_manager(user):
+	if user == ADMINISTRATOR or _is_system_manager(user):
 		return list(CAPABILITIES.keys())
 
 	cached = frappe.cache().get_value(_cache_key(user))

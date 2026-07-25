@@ -20,7 +20,6 @@ import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
-import { toast } from 'sonner';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const AgentsPage = lazy(() => import('./pages/AgentsPage'));
@@ -495,16 +494,13 @@ const router = createBrowserRouter(
 
 function App() {
   useEffect(() => {
-    console.log("Checking streaming availability");
+    // Streaming (SSE) is the explicit direct-execution mode: it is only used
+    // for agents with the advanced `run_immediately` policy enabled. Ordinary
+    // chat turns go through the queue-first REST path regardless of this
+    // probe, so a failed probe is informational, not an error.
     checkStreamingAvailable().then((ok) => {
       console.log("Streaming available:", ok);
       setStreamingAvailable(ok);
-      if (!ok) {
-        toast.error("Streaming not working", {
-          description: 'Some features may be disabled or not work as expected. Please refresh the page to retry.',
-          duration: 5000,
-        });
-      }
     });
   }, []);
 

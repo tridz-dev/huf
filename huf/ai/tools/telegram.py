@@ -25,6 +25,7 @@ import os
 from typing import Optional
 
 import frappe
+logger = frappe.logger("huf")
 import httpx
 
 from huf.ai.tools.credentials import get_credential, update_last_error
@@ -139,19 +140,19 @@ def _api_request(method: str, payload: dict, files: Optional[dict] = None, token
         return json.dumps({"success": True, "results": data.get("result")}, default=str)
     except httpx.TimeoutException:
         error_msg = f"Telegram {method} timed out"
-        frappe.log_error(error_msg, "Telegram Tool")
+        logger.warning(error_msg)
         update_last_error(SERVICE_NAME, error_msg)
         return _error(error_msg)
     except httpx.HTTPStatusError as e:
         safe_error = _sanitize_token(str(e), token)
         error_msg = f"Telegram {method} error: {safe_error}"
-        frappe.log_error(error_msg, "Telegram Tool")
+        logger.warning(error_msg)
         update_last_error(SERVICE_NAME, error_msg)
         return _error(safe_error)
     except Exception as e:
         safe_error = _sanitize_token(str(e), token)
         error_msg = f"Telegram {method} error: {safe_error}"
-        frappe.log_error(error_msg, "Telegram Tool")
+        logger.warning(error_msg)
         update_last_error(SERVICE_NAME, error_msg)
         return _error(safe_error)
     finally:

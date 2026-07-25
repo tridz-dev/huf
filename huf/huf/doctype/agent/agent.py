@@ -351,7 +351,8 @@ class Agent(Document):
                 prompt=planning_prompt,
                 provider=self.provider,
                 model=self.model,
-                channel_id="orchestration_planning"
+                channel_id="orchestration_planning",
+                now=True
             )
             
             planning_run_id = result.get("agent_run_id")

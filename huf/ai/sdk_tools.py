@@ -24,6 +24,10 @@ from datetime import datetime, timedelta
 
 
 from .tool_registry import PermissionAwareToolRegistry
+from huf.ai.transaction import commit_if_background
+from huf.ai import audio_service
+
+logger = frappe.logger("huf")
 MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
 
 # Guest-allowed tools of these types MUST pin a reference_doctype; otherwise the
@@ -87,9 +91,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             mcp_tools = create_mcp_tools(agent)
             tools.extend(mcp_tools)
         except Exception as e:
-            frappe.log_error(
-                f"Error loading MCP tools for agent: {e!s}",
-                "MCP Tool Loading Error"
+            frappe.logger("huf").warning(
+                f"Error loading MCP tools for agent: {e!s}"
             )
 
     # Load native tools from Agent Tool Function documents
@@ -162,9 +165,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     if function_doc.params:
                         try:
                             params = json.loads(function_doc.params)
-                        except Exception as e:
-                            frappe.log_error(
-                                "SDK Functions Debug",
+                        except json.JSONDecodeError as e:
+                            frappe.logger("huf").debug(
                                 f"Error parsing params for {function_doc.name}: {e!s}"
                             )
 
@@ -210,8 +212,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         tools.append(tool)
 
             except Exception as e:
-                frappe.log_error(
-                    "SDK Functions Debug",
+                frappe.logger("huf").debug(
                     f"Error processing function {function_doc.name}: {e!s}"
                 )
 
@@ -398,7 +399,9 @@ def create_function_tool(
                 return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
 
             except Exception as e:
-                frappe.log_error(f"Error in on_invoke_tool for tool '{name}': {e!s}", "SDK Functions Debug")
+                frappe.logger("huf").debug(
+                    f"Error in on_invoke_tool for tool '{name}': {e!s}"
+                )
                 return json.dumps({"error": str(e)})
 
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', (name or ""))
@@ -419,7 +422,9 @@ def create_function_tool(
         return tool
 
     except Exception as e:
-        frappe.log_error(f"Error creating FunctionTool for {name}: {e!s}", "SDK Functions Debug")
+        frappe.logger("huf").debug(
+            f"Error creating FunctionTool for {name}: {e!s}"
+        )
         return None
 
 
@@ -438,27 +443,26 @@ def get_function_from_name(tool_name: str) -> Callable:
 		try:
 			module_name, func_name = tool_name.rsplit(".", 1)
 		except ValueError:
-			frappe.log_error(
-				"SDK Functions Debug",
-				f"Invalid function name format: {tool_name}. Should be 'module.function'",
+			frappe.logger("huf").debug(
+				f"Invalid function name format: {tool_name}. Should be 'module.function'"
 			)
 			return None
 
 		try:
 			module = __import__(module_name, fromlist=[func_name])
 		except ImportError as ie:
-			frappe.log_error("SDK Functions Debug", f"Module import error: {ie!s}")
+			frappe.logger("huf").debug(f"Module import error: {ie!s}")
 			return None
 
 		try:
 			available_attrs = dir(module)
-		except Exception as e:
-			frappe.log_error("SDK Functions Debug", f"Error getting module attributes: {e!s}")
+		except (TypeError, AttributeError) as e:
+			frappe.logger("huf").debug(f"Error getting module attributes: {e!s}")
 
 		try:
 			function = getattr(module, func_name)
 		except AttributeError as ae:
-			frappe.log_error("SDK Functions Debug", f"Function not found in module: {ae!s}")
+			frappe.logger("huf").debug(f"Function not found in module: {ae!s}")
 			return None
 
 		if not callable(function):
@@ -467,8 +471,8 @@ def get_function_from_name(tool_name: str) -> Callable:
 		return function
 
 	except Exception as e:
-		frappe.log_error(
-			"SDK Functions Debug", f"Unexpected error getting function {tool_name}: {e!s}"
+		frappe.logger("huf").debug(
+			f"Unexpected error getting function {tool_name}: {e!s}"
 		)
 		return None
 
@@ -498,7 +502,7 @@ def wrap_frappe_function(func: Callable) -> Callable:
 
 			return {"success": True, "result": result}
 		except Exception as e:
-			frappe.log_error(f"Error in function {func.__name__}: {e}")
+			logger.warning(f"Wrapped function {func.__name__} failed: {e}")
 			return {"success": False, "error": str(e)}
 
 
@@ -533,6 +537,7 @@ def _sanitize_for_doctype(doctype: str, data: dict) -> dict:
 
         return cleaned
     except Exception:
+        # Defensive fallback: if meta lookup fails, return original data unchanged.
         return data or {}
 
 # Standard CRUD function generators
@@ -747,7 +752,7 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
 
         return {"success": True, "result": result_dict, "message": f"{reference_doctype} created"}
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_create_document: {e!s}")
+        logger.warning(f"handle_create_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -785,7 +790,7 @@ def handle_delete_document(document_id=None, reference_doctype=None, ignore_perm
 
         return {"success": True, "message": f"{reference_doctype} {document_id} deleted"}
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_delete_document: {e!s}")
+        logger.warning(f"handle_delete_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -905,7 +910,7 @@ def handle_get_list(
 
 		return response
 	except Exception as e:
-		frappe.log_error("SDK Functions Debug", f"Error in handle_get_list: {e!s}")
+		logger.warning(f"handle_get_list failed: {e!s}")
 		return {"success": False, "error": str(e)}
 
 
@@ -942,7 +947,7 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
             doc.set(field, value)
 
         doc.save(ignore_permissions=ignore_permissions)
-        frappe.db.commit()
+        commit_if_background()
 
         # Build a concise result dict
         result_dict = {"name": doc.name, "modified": str(doc.modified)}
@@ -956,7 +961,7 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
             "message": f"{reference_doctype} {document_id} updated successfully.",
         }
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_update_document: {e!s}")
+        logger.warning(f"handle_update_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -1007,7 +1012,7 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
         }
 
     except Exception as e:
-        frappe.log_error(f"Error in handle_get_document: {e!s}", "SDK Functions Debug")
+        logger.warning(f"handle_get_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_create_documents(reference_doctype: str, documents: list = None, data: list = None, **kwargs):
@@ -1128,7 +1133,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         doc = frappe.get_doc(doctype, doc_name)
         doc.set(fieldname, value)
         doc.save(ignore_permissions=ignore_permissions)
-        frappe.db.commit()
+        commit_if_background()
 
         return {
             "success": True,
@@ -1139,7 +1144,7 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         }
 
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "handle_set_value failed")
+        logger.warning(f"handle_set_value failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -1194,7 +1199,7 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
             "job_id": job.id
         }
     except Exception as e:
-        frappe.log_error("Run Agent Tool Error", str(e))
+        logger.warning(f"handle_run_agent failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
@@ -1224,7 +1229,7 @@ def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
         )
         return {"success": True, "result": result}
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "handle_attach_file_to_document: failed")
+        logger.warning(f"handle_attach_file_to_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -1243,7 +1248,10 @@ def _load_state(state_json: str | None | dict) -> dict:
             data = json.loads(state_json)
             if isinstance(data, str): # Handle double encoded
                 try: data = json.loads(data)
-                except: pass
+                except (json.JSONDecodeError, TypeError, KeyError) as e:
+                    frappe.logger("huf").warning(
+                        f"Skipped double-decoding of conversation_data state: {e}"
+                    )
         except (json.JSONDecodeError, TypeError):
              return {"version": 1, "scope": {}, "items": []}
 
@@ -1270,7 +1278,7 @@ def handle_get_conversation_data(name: str, default: Any = None, conversation_id
 
         return {"success": True, "value": value}
     except Exception as e:
-        frappe.log_error(f"Error getting conversation data: {e!s}", "Conversation Data")
+        logger.warning(f"handle_get_conversation_data failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_set_conversation_data(
@@ -1348,12 +1356,12 @@ def handle_set_conversation_data(
         new_json = json.dumps(state, ensure_ascii=False, indent=2)
 
         frappe.db.set_value("Agent Conversation", conversation_id, "conversation_data", new_json)
-        frappe.db.commit() # Persist changes immediately
+        commit_if_background() # Persist changes immediately
 
         return {"success": True, "message": f"Set '{name}' match successfully"}
 
     except Exception as e:
-        frappe.log_error(f"Error setting conversation data: {e!s}", "Conversation Data")
+        logger.warning(f"handle_set_conversation_data failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_load_conversation_data(conversation_id: str = None, **kwargs):
@@ -1386,6 +1394,7 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
             return {"success": False, "error": "Both reference_doctype and reference_name are required."}
 
         if reference_doctype not in ALLOWED_RESULT_CONTEXT_DOCTYPES:
+            # Security event: retain Error Log for unauthorized allow-list attempts.
             frappe.log_error(
                 f"get_result_context rejected for {reference_doctype}",
                 "Security: get_result_context allow-list"
@@ -1425,7 +1434,7 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
         # Unreachable because of the allow-list, but kept as defense-in-depth.
         return {"success": False, "error": "Unexpected DocType."}
     except Exception as e:
-        frappe.log_error(f"Error in handle_get_result_context: {str(e)}", "SDK Functions Debug")
+        logger.warning(f"handle_get_result_context failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def _get_default_image_model(provider_name: str) -> str:
@@ -1545,7 +1554,15 @@ async def handle_generate_image(
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
             except Exception:
-                conversation_index = 1
+                # Hard failure: message ordering is required; abort and alert admin.
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"Failed to compute conversation_index for {conversation_id}"
+                )
+                frappe.throw(
+                    "Could not determine message order for this conversation. Please retry.",
+                    title="Message Ordering Error"
+                )
 
         # Process response and save images
         images = []
@@ -1575,19 +1592,21 @@ async def handle_generate_image(
 
                 if image_url and image_url.startswith('http'):
                     # Download from URL (with SSRF protection)
-                    from huf.ai.http_handler import validate_url
-                    is_valid, _err = validate_url(image_url)
-                    if not is_valid:
-                        frappe.log_error(f"Image URL blocked by SSRF filter: {image_url}", "Image Generation")
+                    from huf.ai.http_handler import _http_request
+                    try:
+                        img_response = _http_request("GET", image_url, timeout=30)
+                        img_response.raise_for_status()
+                        image_bytes = img_response.content
+                    except ValueError as e:
+                        frappe.logger("huf").warning(
+                            f"Image URL blocked by SSRF filter: {image_url} — {e}"
+                        )
                         continue
-                    img_response = requests.get(image_url, timeout=30)
-                    img_response.raise_for_status()
-                    image_bytes = img_response.content
                 elif image_b64:
                     # Base64 encoded
                     image_bytes = base64.b64decode(image_b64)
                 elif image_url:
-                    # Local file path or other format
+                    # Unexpected image URL format; retain Error Log for investigation.
                     frappe.log_error(f"Unsupported image URL format: {image_url}", "Image Generation")
                     continue
 
@@ -1619,10 +1638,7 @@ async def handle_generate_image(
                         })
                         message_doc.insert(ignore_permissions=True)
                     except Exception as e:
-                        frappe.log_error(
-                            f"Error creating Agent Message for generated image: {e!s}",
-                            "Image Generation Message Creation"
-                        )
+                        logger.warning(f"Create image message failed: {e!s}")
                         # Continue even if message creation fails
 
                 # Save file attached to the Agent Message (or conversation if message creation failed)
@@ -1657,7 +1673,7 @@ async def handle_generate_image(
                 # This ensures the Attach Image field displays the image correctly
                 if message_doc and file_url:
                     message_doc.db_set("generated_image", file_url)
-                    frappe.db.commit()
+                    commit_if_background()
 
                     # Emit socket event for new agent message (Image)
                     try:
@@ -1677,9 +1693,8 @@ async def handle_generate_image(
                             after_commit=False
                         )
                     except Exception as e:
-                        frappe.log_error(
-                            f"Error emitting new_agent_message socket event: {e!s}",
-                            "Image Generation Socket Event"
+                        frappe.logger("huf").debug(
+                            f"Error emitting new_agent_message socket event: {e!s}"
                         )
 
                 images.append({
@@ -1697,9 +1712,8 @@ async def handle_generate_image(
                     WHERE name = %s
                 """, (final_index, conversation_id))
             except Exception as e:
-                frappe.log_error(
-                    f"Error updating conversation total_messages: {e!s}",
-                    "Image Generation Message Creation"
+                frappe.logger("huf").debug(
+                    f"Error updating conversation total_messages: {e!s}"
                 )
 
         if not images:
@@ -1708,7 +1722,6 @@ async def handle_generate_image(
                 "error": "Image generation succeeded but no images were returned"
             }
 
-        print("Returned images: ", images)
         return {
             "success": True,
             "images": images,
@@ -1716,6 +1729,7 @@ async def handle_generate_image(
         }
 
     except Exception as e:
+        # Hard provider/tool failure: retain Error Log for admin attention.
         frappe.log_error(f"Image generation error: {e!s}", "Image Generation Tool")
         return {"success": False, "error": str(e)}
 
@@ -1786,6 +1800,7 @@ async def handle_ocr_document(
         return result.as_dict()
 
     except Exception as e:
+        # Hard OCR failure: retain Error Log for admin attention.
         frappe.log_error(f"OCR error: {e!s}", "OCR Tool")
         return {"success": False, "error": str(e)}
 
@@ -1961,14 +1976,10 @@ def _resolve_tts_config(
 def _get_default_stt_model(provider_name: str) -> str:
     """
     Get default STT model for a provider.
+
+    Backward-compatible alias for ``audio_service._get_default_stt_model``.
     """
-    defaults = {
-        "openai": "whisper-1",
-        "azure": "whisper-1",
-        "groq": "groq/whisper-large-v3",
-        "deepgram": "deepgram/nova-2",
-    }
-    return defaults.get(provider_name.lower())
+    return audio_service._get_default_stt_model(provider_name)
 
 def _resolve_stt_config(
     agent_doc,
@@ -1980,81 +1991,11 @@ def _resolve_stt_config(
     1. Tool-call parameter
     2. Agent-level STT configuration
     3. Provider default
+
+    Backward-compatible alias for ``audio_service.resolve_stt_config``.
     """
-    from huf.ai.providers.litellm import _normalize_model_name
-
-    if tool_model:
-        stt_provider_name = None
-        search_model = tool_model
-        if "/" in search_model:
-            search_model = search_model.split("/")[-1]
-
-        model_doc = frappe.get_all("AI Model", filters={"name": search_model}, fields=["provider"])
-        if model_doc:
-            stt_provider_name = model_doc[0].provider
-        elif "/" in tool_model:
-            provider_slug = tool_model.split("/")[0]
-            provs = frappe.get_all("AI Provider", filters={"slug": provider_slug}, fields=["name"])
-            if provs:
-                stt_provider_name = provs[0].name
-
-        if not stt_provider_name:
-            stt_provider_name = agent_doc.provider
-
-        provider_doc = frappe.get_doc("AI Provider", stt_provider_name)
-        api_key = provider_doc.get_password("api_key")
-        if not api_key:
-            raise ValueError(f"API key is not configured for provider '{provider_doc.provider_name}'.")
-
-        provider_name = provider_doc.provider_name.lower()
-        normalized = _normalize_model_name(tool_model, stt_provider_name)
-        return {
-            "stt_model":     normalized,
-            "api_key":       api_key,
-            "provider_name": provider_name,
-            "provider_doc":  provider_doc,
-            "source":        "tool_param",
-        }
-
-    if getattr(agent_doc, "stt_model", None):
-        stt_model_doc = frappe.get_doc("AI Model", agent_doc.stt_model)
-        if not stt_model_doc.provider:
-            raise ValueError(f"STT model '{agent_doc.stt_model}' has no provider linked.")
-
-        stt_provider_doc = frappe.get_doc("AI Provider", stt_model_doc.provider)
-        api_key = stt_provider_doc.get_password("api_key")
-        if not api_key:
-            raise ValueError(f"API key is not configured for STT provider '{stt_provider_doc.provider_name}'.")
-
-        provider_name = stt_provider_doc.provider_name.lower()
-        normalized = _normalize_model_name(stt_model_doc.model_name, stt_model_doc.provider)
-        return {
-            "stt_model":     normalized,
-            "api_key":       api_key,
-            "provider_name": provider_name,
-            "provider_doc":  stt_provider_doc,
-            "source":        "agent_config",
-        }
-
-    provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-    api_key = provider_doc.get_password("api_key")
-    if not api_key:
-        raise ValueError(f"API key is not configured for provider '{provider_doc.provider_name}'.")
-
-    provider_name = provider_doc.provider_name.lower()
-    stt_model = _get_default_stt_model(provider_name)
-
-    if not stt_model:
-        stt_model = "whisper-1" # Safe ultimate fallback
-
-    normalized = _normalize_model_name(stt_model, agent_doc.provider)
-    return {
-        "stt_model":     normalized,
-        "api_key":       api_key,
-        "provider_name": provider_name,
-        "provider_doc":  provider_doc,
-        "source":        "provider_default",
-    }
+    agent_name = getattr(agent_doc, "name", None) or agent_doc
+    return audio_service.resolve_stt_config(agent_name, model=tool_model)
 
 
 @frappe.whitelist()
@@ -2161,7 +2102,15 @@ async def handle_generate_audio(
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
             except Exception:
-                conversation_index = 1
+                # Hard failure: message ordering is required; abort and alert admin.
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"Failed to compute conversation_index for {conversation_id}"
+                )
+                frappe.throw(
+                    "Could not determine message order for this conversation. Please retry.",
+                    title="Message Ordering Error"
+                )
 
         # Generate filename
         filename = f"generated_audio_{conversation_index}.{response_format}"
@@ -2201,10 +2150,7 @@ async def handle_generate_audio(
                     message_doc.tts_model = agent_doc.tts_model
 
             except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for generated audio: {e!s}",
-                    "Audio Generation Message Creation"
-                )
+                logger.warning(f"Create audio message failed: {e!s}")
                 message_doc = None
 
         # Save file attached to the Agent Message
@@ -2237,7 +2183,7 @@ async def handle_generate_audio(
         # Update the message with the file URL
         if message_doc and file_url:
             message_doc.db_set("generated_audio", file_url)
-            frappe.db.commit()
+            commit_if_background()
 
             # Emit socket event for new agent message (Audio)
             try:
@@ -2257,9 +2203,8 @@ async def handle_generate_audio(
                     after_commit=False
                 )
             except Exception as e:
-                frappe.log_error(
-                    f"Error emitting new_agent_message socket event: {e!s}",
-                    "Audio Generation Socket Event"
+                frappe.logger("huf").debug(
+                    f"Error emitting new_agent_message socket event: {e!s}"
                 )
 
         # Update conversation total_messages
@@ -2271,9 +2216,8 @@ async def handle_generate_audio(
                     WHERE name = %s
                 """, (conversation_index, conversation_id))
             except Exception as e:
-                frappe.log_error(
-                    f"Error updating conversation total_messages: {e!s}",
-                    "Audio Generation Message Creation"
+                frappe.logger("huf").debug(
+                    f"Error updating conversation total_messages: {e!s}"
                 )
 
         return {
@@ -2295,6 +2239,7 @@ async def handle_generate_audio(
         }
 
     except Exception as e:
+        # Hard provider/tool failure: retain Error Log for admin attention.
         frappe.log_error(title="Audio Generation Tool", message=f"Audio generation error: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -2302,6 +2247,7 @@ async def handle_generate_audio(
 async def handle_transcribe_audio(
     file_id: str = None,
     file_url: str = None,
+    file_path: str = None,
     language: str = None,
     model: str = None,
     agent_name: str = None,
@@ -2310,255 +2256,73 @@ async def handle_transcribe_audio(
 ):
     """
     Transcribe audio using LiteLLM's transcription function.
-    
+
+    This is a pure agent tool: it resolves the audio file, calls the
+    canonical audio service, and returns the transcript. It does **not**
+    create or update Agent Message records. Callers that need chat/UI
+    persistence should use ``huf.ai.audio_api.transcribe`` or the chat
+    endpoints, which layer message creation on top of the same service.
+
     Uses LiteLLM's transcription() function. The model used is either:
     1. The explicitly provided model parameter, OR
     2. An auto-detected suitable transcription model based on the provider
-    
+
     Args:
         file_id: File document ID (preferred) - File must exist in Frappe
         file_url: File URL/path (alternative) - e.g., "/files/audio.mp3"
+        file_path: Absolute server path inside an allowed audio import
+               directory (alternative to file_id/file_url)
         language: Optional language code (e.g., "en", "es", "fr") - ISO 639-1 format
         model: Optional model name (e.g., "whisper-1", "whisper-large-v3")
                If not provided, defaults based on provider
         agent_name: Automatically passed from context
-        conversation_id: Automatically passed from context
-    
+        conversation_id: Present for context but ignored; this tool does
+            not create messages.
+
     Returns:
         dict: {
             "success": bool,
             "text": str,
+            "transcript": str,
             "file_id": str,
-            "message_id": str,
-            "language": str
+            "file_url": str,
+            "local_path": str,
+            "language": str,
+            "model": str,
+            "provider": str
         }
     """
     try:
-        # Get message_id for upsert logic
-        message_id = kwargs.get("message_id")
+        # Pure transcription (no message/socket side effects) via the
+        # canonical audio service.
+        result = await asyncio.to_thread(
+            audio_service.transcribe_audio_file,
+            file_id=file_id,
+            file_url=file_url,
+            local_path=file_path,
+            agent_name=agent_name,
+            language=language,
+            model=model,
+        )
 
-        # Get agent configuration from context
-        if not agent_name:
-            return {"success": False, "error": "Agent name not found in context"}
+        if not result.get("success"):
+            return result
 
-        agent_doc = frappe.get_doc("Agent", agent_name)
-
-        # Get audio file
-        file_doc = None
-        if file_id:
-            try:
-                file_doc = frappe.get_doc("File", file_id)
-            except Exception as e:
-                return {"success": False, "error": f"File not found: {e!s}"}
-        elif file_url:
-            # Try to find file by URL
-            try:
-                file_doc = frappe.get_doc("File", {"file_url": file_url})
-            except Exception:
-                # Try alternative lookup
-                file_name = file_url.replace("/files/", "")
-                file_doc = frappe.get_doc("File", {"file_name": file_name})
-
-            if not file_doc:
-                return {"success": False, "error": f"File not found at URL: {file_url}"}
-        else:
-            return {"success": False, "error": "Either file_id or file_url is required"}
-
-        # Get file path for LiteLLM
-        # LiteLLM transcription accepts file path or file-like object
-        try:
-            file_path = file_doc.get_full_path()
-        except Exception as e:
-            return {"success": False, "error": f"Error getting file path: {e!s}"}
-
-        # Determine transcription model
-        try:
-            stt_config = _resolve_stt_config(agent_doc, tool_model=model)
-        except ValueError as exc:
-            return {"success": False, "error": str(exc)}
-
-        normalized_model = stt_config["stt_model"]
-        api_key          = stt_config["api_key"]
-        provider_name    = stt_config["provider_name"]
-        stt_source       = stt_config["source"]
-        stt_provider_doc = stt_config["provider_doc"]
-
-        # Call LiteLLM transcription
-        import litellm
-
-        if provider_name in ["google", "gemini", "vertex_ai"]:
-            import base64
-            import mimetypes
-
-            with open(file_path, "rb") as audio_file:
-                audio_data = audio_file.read()
-
-            mime_type, _ = mimetypes.guess_type(file_path)
-            if not mime_type:
-                mime_type = "audio/mp3"
-
-            if file_path.lower().endswith(".webm") or mime_type == "video/webm":
-                mime_type = "audio/webm"
-
-            base64_audio = base64.b64encode(audio_data).decode('utf-8')
-            audio_url = f"data:{mime_type};base64,{base64_audio}"
-
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Please transcribe this audio exactly as it is spoken. Do not add any extra commentary or formatting. If there are multiple languages, transcribe them as spoken. If it is silent, just write [Silence]."},
-                        {"type": "image_url", "image_url": {"url": audio_url}}
-                    ]
-                }
-            ]
-
-            try:
-                response = await asyncio.to_thread(
-                    litellm.completion,
-                    model=normalized_model,
-                    messages=messages,
-                    api_key=api_key
-                )
-                transcribed_text = response.choices[0].message.content
-            except Exception as e:
-                return {"success": False, "error": f"Transcription failed: {e!s}"}
-
-        else:
-            # Standard transcription handling (OpenAI, Deepgram, Groq, etc.)
-            transcription_params = {
-                "model": normalized_model,
-                "file": file_path,
-                "api_key": api_key
-            }
-
-            # Add optional parameters
-            if language:
-                transcription_params["language"] = language
-
-            # Call LiteLLM transcription
-            def _sync_transcribe(params):
-                with open(file_path, "rb") as audio_file:
-                    params["file"] = audio_file
-                    return litellm.transcription(**params)
-
-            try:
-                response = await asyncio.to_thread(_sync_transcribe, transcription_params)
-            except Exception as e:
-                return {"success": False, "error": f"Transcription failed: {e!s}"}
-
-            # Extract text from response
-            # LiteLLM transcription returns a dict with 'text' key or object
-            if hasattr(response, "text"):
-                transcribed_text = response.text
-            elif isinstance(response, dict):
-                transcribed_text = response.get("text", "")
-            else:
-                 transcribed_text = str(response)
-
-        if not transcribed_text:
-            return {"success": False, "error": "Transcription returned empty result"}
-
-        # Create Agent Message with transcription result
-        message_doc = None
-        if conversation_id:
-            try:
-                # Get conversation_index
-                last_index = frappe.db.sql("""
-                    SELECT MAX(conversation_index) as last_index
-                    FROM `tabAgent Message`
-                    WHERE conversation = %s
-                """, (conversation_id,), as_dict=1)
-
-                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-
-                # Create or Update Agent Message
-                if message_id and frappe.db.exists("Agent Message", message_id):
-                    message_doc = frappe.get_doc("Agent Message", message_id)
-                    message_doc.content = transcribed_text
-                    if not message_doc.kind: message_doc.kind = "Audio"
-                    if stt_source == "agent_config" and getattr(agent_doc, "stt_model", None):
-                        message_doc.stt_model = agent_doc.stt_model
-                    message_doc.save(ignore_permissions=True)
-
-                else:
-                    message_doc = frappe.get_doc({
-                        "doctype": "Agent Message",
-                        "conversation": conversation_id,
-                        "role": "user",
-                        "content": transcribed_text,
-                        "kind": "Audio",
-                        "agent": agent_name,
-                        "provider": agent_doc.provider,
-                        "model": agent_doc.model,
-                        "agent_run": kwargs.get("agent_run_id"),
-                        "conversation_index": conversation_index,
-                        "is_agent_message": 0,
-                        "user": frappe.session.user
-                    })
-                    if stt_source == "agent_config" and getattr(agent_doc, "stt_model", None):
-                        message_doc.stt_model = agent_doc.stt_model
-                    message_doc.insert(ignore_permissions=True)
-
-                # Check if file is already attached to this message
-                if file_doc and message_doc:
-                    if not file_doc.attached_to_name:
-                        file_doc.db_set("attached_to_name", message_doc.name)
-                        file_doc.db_set("attached_to_doctype", "Agent Message")
-                        file_doc.db_set("is_private", 0)
-
-                # Update conversation total_messages
-                if not message_id:
-                    frappe.db.sql("""
-                        UPDATE `tabAgent Conversation`
-                        SET total_messages = %s, last_activity = NOW()
-                        WHERE name = %s
-                    """, (conversation_index, conversation_id))
-                else:
-                    frappe.db.set_value("Agent Conversation", conversation_id, "last_activity", frappe.utils.now())
-
-                frappe.db.commit()
-
-                # Emit socket event for new message
-                try:
-                    frappe.publish_realtime(
-                        event=f'conversation:{conversation_id}',
-                        message={
-                            "type": "update_message" if message_id else "new_user_message",
-                            "conversation_id": conversation_id,
-                            "message_id": message_doc.name,
-                            "content": transcribed_text,
-                            "kind": "Audio",
-                            "file": {
-                                "file_name": file_doc.file_name,
-                                "file_url": file_doc.file_url
-                            } if file_doc else None,
-                            "conversation_index": conversation_index,
-                        },
-                        user=frappe.session.user,
-                        after_commit=False
-                    )
-                except Exception as e:
-                    frappe.log_error(
-                        f"Error emitting new_user_message socket event: {e!s}",
-                        "Audio Transcription Socket Event"
-                    )
-
-            except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for transcription: {e!s}",
-                    "Audio Transcription Message Creation"
-                )
+        transcribed_text = result["text"]
 
         return {
             "success": True,
             "text": transcribed_text,
-            "file_id": file_doc.name,
-            "message_id": message_doc.name if message_doc else None,
-            "language": language or "auto-detected",
-            "model": normalized_model
+            "transcript": transcribed_text,
+            "file_id": result.get("file_id"),
+            "file_url": result.get("file_url"),
+            "local_path": result.get("local_path"),
+            "language": result.get("language") or "auto-detected",
+            "model": result.get("stt_model"),
+            "provider": result.get("provider"),
         }
 
     except Exception as e:
+        # Hard transcription failure: retain Error Log for admin attention.
         frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
         return {"success": False, "error": str(e)}

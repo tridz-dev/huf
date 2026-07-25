@@ -5,6 +5,7 @@ Uses direct Frappe DocType APIs – no external HTTP calls.
 
 import json
 import frappe
+logger = frappe.logger("huf")
 
 
 def _raven_installed():
@@ -64,11 +65,11 @@ def _handle_send_message(**kwargs) -> str:
         doc.channel_id = channel_id
         doc.text = text
         doc.message_type = kwargs.get("message_type", "Text")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         return json.dumps({"success": True, "results": {"name": doc.name, "channel_id": channel_id}}, default=str)
     except Exception as e:
-        frappe.log_error(f"Raven Send Message Error: {e}", "Raven Tool")
+        logger.warning(f"Raven Send Message Error: {e}")
         return _error(str(e))
 
 
@@ -117,7 +118,7 @@ def _handle_get_messages(**kwargs) -> str:
 
         return json.dumps({"success": True, "count": len(messages), "results": messages}, default=str)
     except Exception as e:
-        frappe.log_error(f"Raven Get Messages Error: {e}", "Raven Tool")
+        logger.warning(f"Raven Get Messages Error: {e}")
         return _error(str(e))
 
 
@@ -162,7 +163,7 @@ def _handle_list_channels(**kwargs) -> str:
 
         return json.dumps({"success": True, "count": len(channels), "results": channels}, default=str)
     except Exception as e:
-        frappe.log_error(f"Raven List Channels Error: {e}", "Raven Tool")
+        logger.warning(f"Raven List Channels Error: {e}")
         return _error(str(e))
 
 
@@ -192,7 +193,7 @@ def _handle_get_channel_members(**kwargs) -> str:
 
         return json.dumps({"success": True, "count": len(members), "results": members}, default=str)
     except Exception as e:
-        frappe.log_error(f"Raven Get Channel Members Error: {e}", "Raven Tool")
+        logger.warning(f"Raven Get Channel Members Error: {e}")
         return _error(str(e))
 
 
@@ -226,7 +227,7 @@ def _handle_create_channel(**kwargs) -> str:
         doc.type = ctype
         doc.workspace = workspace
         doc.channel_description = kwargs.get("channel_description", "")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         members = kwargs.get("members", [])
         if isinstance(members, str):
@@ -240,11 +241,11 @@ def _handle_create_channel(**kwargs) -> str:
                 member = frappe.new_doc("Raven Channel Member")
                 member.channel_id = doc.name
                 member.user_id = user_id
-                member.insert(ignore_permissions=True)
+                member.insert()
 
         return json.dumps({"success": True, "results": {"name": doc.name, "channel_name": doc.channel_name}}, default=str)
     except Exception as e:
-        frappe.log_error(f"Raven Create Channel Error: {e}", "Raven Tool")
+        logger.warning(f"Raven Create Channel Error: {e}")
         return _error(str(e))
 
 
@@ -294,7 +295,7 @@ def _handle_search_messages(**kwargs) -> str:
 
         return json.dumps({"success": True, "count": len(messages), "results": messages}, default=str)
     except Exception as e:
-        frappe.log_error(f"Raven Search Messages Error: {e}", "Raven Tool")
+        logger.warning(f"Raven Search Messages Error: {e}")
         return _error(str(e))
 
 

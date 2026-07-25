@@ -39,6 +39,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
           return;
         }
         toast.error('Socket connection failed', {
+          id: 'socket-connection-failed',
           description: connectionDescription,
           duration: 5000,
         });
@@ -60,6 +61,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       connection.on('connect_error', (error) => {
         console.error('❌ Socket connection error:', error);
         toast.error('Socket connection failed', {
+          id: 'socket-connection-failed',
           description: connectionDescription,
           duration: 5000,
         });

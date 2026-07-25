@@ -16,6 +16,7 @@
   "column_break_df8m",
   "model",
   "async",
+  "run_immediately",
   "top_p",
   "disabled",
   "prompt_caching_section",
@@ -256,6 +257,13 @@
    "fieldtype": "Check",
    "hidden": 1,
    "label": "Async"
+  },
+  {
+   "default": "1",
+   "description": "When disabled, runs are queued to avoid holding web workers during long LLM and tool calls. Enable only for trusted calls that require a direct response.",
+   "fieldname": "run_immediately",
+   "fieldtype": "Check",
+   "label": "Run immediately (advanced)"
   },
   {
    "default": "0",

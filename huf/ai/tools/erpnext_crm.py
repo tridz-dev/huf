@@ -6,6 +6,7 @@ Uses direct Frappe DocType APIs – no external HTTP calls.
 
 import json
 import frappe
+logger = frappe.logger("huf")
 
 
 def _erpnext_installed():
@@ -72,7 +73,7 @@ def _handle_get_leads(**kwargs) -> str:
 
         return json.dumps({"success": True, "count": len(leads), "results": leads}, default=str)
     except Exception as e:
-        frappe.log_error(f"ERPNext CRM Get Leads Error: {e}", "ERPNext CRM Tool")
+        logger.warning(f"ERPNext CRM Get Leads Error: {e}")
         return _error(str(e))
 
 
@@ -91,7 +92,7 @@ def _handle_get_lead(**kwargs) -> str:
         doc = frappe.get_doc("Lead", name)
         return json.dumps({"success": True, "results": doc.as_dict()}, default=str)
     except Exception as e:
-        frappe.log_error(f"ERPNext CRM Get Lead Error: {e}", "ERPNext CRM Tool")
+        logger.warning(f"ERPNext CRM Get Lead Error: {e}")
         return _error(str(e))
 
 
@@ -118,13 +119,13 @@ def _handle_create_lead(**kwargs) -> str:
         doc.industry = kwargs.get("industry", "")
         doc.territory = kwargs.get("territory", "")
         doc.website = kwargs.get("website", "")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         return json.dumps(
             {"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}}
         )
     except Exception as e:
-        frappe.log_error(f"ERPNext CRM Create Lead Error: {e}", "ERPNext CRM Tool")
+        logger.warning(f"ERPNext CRM Create Lead Error: {e}")
         return _error(str(e))
 
 
@@ -150,12 +151,12 @@ def _handle_update_lead(**kwargs) -> str:
                 if df.fieldtype not in ("Table", "Table MultiSelect"):
                     setattr(doc, field, value)
 
-        doc.save(ignore_permissions=True)
+        doc.save()
         return json.dumps(
             {"success": True, "results": {"name": doc.name, "lead_name": doc.lead_name}}
         )
     except Exception as e:
-        frappe.log_error(f"ERPNext CRM Update Lead Error: {e}", "ERPNext CRM Tool")
+        logger.warning(f"ERPNext CRM Update Lead Error: {e}")
         return _error(str(e))
 
 
@@ -206,7 +207,7 @@ def _handle_get_opportunities(**kwargs) -> str:
             {"success": True, "count": len(opportunities), "results": opportunities}
         )
     except Exception as e:
-        frappe.log_error(f"ERPNext CRM Get Opportunities Error: {e}", "ERPNext CRM Tool")
+        logger.warning(f"ERPNext CRM Get Opportunities Error: {e}")
         return _error(str(e))
 
 
@@ -233,11 +234,11 @@ def _handle_create_opportunity(**kwargs) -> str:
         doc.sales_stage = kwargs.get("sales_stage", "")
         doc.probability = float(kwargs.get("probability", 0))
         doc.currency = kwargs.get("currency", "")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
-        frappe.log_error(f"ERPNext CRM Create Opportunity Error: {e}", "ERPNext CRM Tool")
+        logger.warning(f"ERPNext CRM Create Opportunity Error: {e}")
         return _error(str(e))
 
 
@@ -266,10 +267,10 @@ def _handle_update_opportunity(**kwargs) -> str:
                     else:
                         setattr(doc, field, value)
 
-        doc.save(ignore_permissions=True)
+        doc.save()
         return json.dumps({"success": True, "results": {"name": doc.name}}, default=str)
     except Exception as e:
-        frappe.log_error(f"ERPNext CRM Update Opportunity Error: {e}", "ERPNext CRM Tool")
+        logger.warning(f"ERPNext CRM Update Opportunity Error: {e}")
         return _error(str(e))
 
 

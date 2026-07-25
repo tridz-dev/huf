@@ -1,5 +1,6 @@
 import json
 import frappe
+logger = frappe.logger("huf")
 from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
@@ -52,7 +53,7 @@ def handle_read_sheet(**kwargs):
 			}
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Sheets Error (Read): {str(e)}", "Google Sheets Tool")
+		logger.warning(f"Google Sheets Error (Read): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -87,7 +88,7 @@ def handle_update_sheet(**kwargs):
 			}
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Sheets Error (Update): {str(e)}", "Google Sheets Tool")
+		logger.warning(f"Google Sheets Error (Update): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -117,6 +118,6 @@ def handle_create_sheet(**kwargs):
 			}
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Sheets Error (Create): {str(e)}", "Google Sheets Tool")
+		logger.warning(f"Google Sheets Error (Create): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
