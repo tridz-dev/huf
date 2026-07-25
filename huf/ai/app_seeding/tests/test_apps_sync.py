@@ -14,7 +14,7 @@ import frappe
 from huf.ai.app_seeding import apps_loader
 from huf.ai.app_seeding.apps_loader import sync_huf_apps, upsert_huf_app, validate_manifest
 from huf.ai.app_seeding.seeder import seed_app
-from huf.ai.apps_api import get_huf_app, get_huf_apps
+from huf.ai.apps_api import get_huf_app, get_huf_apps, set_huf_app_enabled
 
 
 def allow_all(user=None, app=None):
@@ -286,6 +286,182 @@ class TestAppsSync(unittest.TestCase):
 
 		self.assertFalse(frappe.db.exists("HUF App", app_id))
 
+	# ------------------------------------------------------------------
+	# Manual-disable-wins
+	# ------------------------------------------------------------------
+
+	def test_enabled_applied_on_initial_insert(self):
+		"""The manifest's enabled flag applies when a record is first created."""
+		app_id = self._app_id("insertdisabled")
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, enabled=False),
+			self.test_app,
+			"huf/apps/insert_disabled.app.json",
+		)
+		self.assertTrue(ok, error)
+		self.assertEqual(frappe.db.get_value("HUF App", app_id, "enabled"), 0)
+
+	def test_manual_disable_wins_on_resync(self):
+		"""Re-syncing never re-enables an app an admin disabled manually."""
+		app_id = self._app_id("manualdisable")
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, enabled=True),
+			self.test_app,
+			"huf/apps/manual_disable.app.json",
+		)
+		self.assertTrue(ok, error)
+		frappe.db.set_value("HUF App", app_id, "enabled", 0)
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, enabled=True, title="Renamed App"),
+			self.test_app,
+			"huf/apps/manual_disable.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.enabled, 0, "Manual disable must survive re-sync")
+		self.assertEqual(doc.title, "Renamed App", "Other manifest changes still apply")
+
+	def test_enabled_only_change_updates_hash_not_flag(self):
+		"""A manifest whose only change is `enabled` updates manifest_hash
+		but leaves the stored enabled flag untouched."""
+		app_id = self._app_id("enabledonly")
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, enabled=True),
+			self.test_app,
+			"huf/apps/enabled_only.app.json",
+		)
+		self.assertTrue(ok, error)
+		hash_before = frappe.db.get_value("HUF App", app_id, "manifest_hash")
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, enabled=False),
+			self.test_app,
+			"huf/apps/enabled_only.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.enabled, 1, "Stored flag must not flip on update")
+		self.assertNotEqual(doc.manifest_hash, hash_before, "manifest_hash must still update")
+
+	# ------------------------------------------------------------------
+	# Category conventions
+	# ------------------------------------------------------------------
+
+	def test_nonstandard_category_accepted_and_noted(self):
+		"""A custom single-line category syncs fine and is noted in the
+		sync summary (never rejected)."""
+		app_id = self._app_id("customcat")
+		self._write_manifest(
+			self.huf_dir,
+			"customcat.app.json",
+			self._valid_manifest(app_id, category="Growth Hacks"),
+		)
+
+		original_find_seed_dirs = apps_loader.find_seed_dirs
+		original_get_installed_apps = frappe.get_installed_apps
+		apps_loader.find_seed_dirs = lambda: {self.test_app: self.huf_dir}
+		frappe.get_installed_apps = lambda: original_get_installed_apps() + [self.test_app]
+		try:
+			summary = sync_huf_apps()
+		finally:
+			apps_loader.find_seed_dirs = original_find_seed_dirs
+			frappe.get_installed_apps = original_get_installed_apps
+
+		self.assertEqual(summary["invalid"], 0, f"Unexpected errors: {summary['errors']}")
+		self.assertEqual(frappe.db.get_value("HUF App", app_id, "category"), "Growth Hacks")
+		self.assertEqual(frappe.db.get_value("HUF App", app_id, "sync_status"), "Active")
+		self.assertTrue(
+			any("Growth Hacks" in note for note in summary["notes"]),
+			"Non-standard category should be noted in the sync summary",
+		)
+
+	def test_bad_categories_rejected(self):
+		"""Overlong, multi-line and HTML categories are rejected; a synced
+		manifest with one is recorded Invalid."""
+		for bad in ("x" * 31, "Multi\nLine", "<b>Evil</b>"):
+			normalized, error = validate_manifest(self._valid_manifest("tapps_x", category=bad))
+			self.assertIsNone(normalized)
+			self.assertIn("category", error)
+
+		app_id = self._app_id("longcat")
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, category="x" * 31),
+			self.test_app,
+			"huf/apps/longcat.app.json",
+		)
+		self.assertFalse(ok)
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.sync_status, "Invalid")
+		self.assertIn("category", doc.sync_error)
+
+	# ------------------------------------------------------------------
+	# exposed_tables
+	# ------------------------------------------------------------------
+
+	def test_exposed_tables_shape_validated(self):
+		"""exposed_tables must be a list of at most 20 single-line strings."""
+		normalized, error = validate_manifest(
+			self._valid_manifest("tapps_x", exposed_tables="HUF App")
+		)
+		self.assertIsNone(normalized)
+		self.assertIn("exposed_tables", error)
+
+		normalized, error = validate_manifest(
+			self._valid_manifest("tapps_x", exposed_tables=[f"Table {i}" for i in range(21)])
+		)
+		self.assertIsNone(normalized)
+		self.assertIn("exposed_tables", error)
+
+	def test_exposed_tables_valid_syncs_and_is_exposed(self):
+		"""Tables owned by the provider app sync (stored comma-joined) and
+		are exposed as a list by get_huf_app."""
+		app_id = self._app_id("tables")
+		manifest = self._valid_manifest(
+			app_id, exposed_tables=["Fake Table One", "Fake Table Two"]
+		)
+
+		original_get_doctype_module = apps_loader._get_doctype_module
+		original_get_module_app = apps_loader._get_module_app
+		apps_loader._get_doctype_module = lambda doctype: "Test Apps Sync"
+		apps_loader._get_module_app = lambda module: self.test_app
+		try:
+			ok, error = upsert_huf_app(manifest, self.test_app, "huf/apps/tables.app.json")
+		finally:
+			apps_loader._get_doctype_module = original_get_doctype_module
+			apps_loader._get_module_app = original_get_module_app
+
+		self.assertTrue(ok, error)
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.exposed_tables, "Fake Table One,Fake Table Two")
+
+		app = get_huf_app(app_id)
+		self.assertEqual(app["exposed_tables"], ["Fake Table One", "Fake Table Two"])
+
+	def test_exposed_tables_unknown_doctype_recorded_invalid(self):
+		"""An unknown DocType in exposed_tables records the manifest
+		Invalid without crashing the sync."""
+		app_id = self._app_id("badtables")
+		manifest = self._valid_manifest(app_id, exposed_tables=["No Such DocType"])
+
+		original_get_doctype_module = apps_loader._get_doctype_module
+
+		def fake_get_doctype_module(doctype):
+			raise frappe.DoesNotExistError(doctype)
+
+		apps_loader._get_doctype_module = fake_get_doctype_module
+		try:
+			ok, error = upsert_huf_app(manifest, self.test_app, "huf/apps/badtables.app.json")
+		finally:
+			apps_loader._get_doctype_module = original_get_doctype_module
+
+		self.assertFalse(ok)
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.sync_status, "Invalid")
+		self.assertIn("unknown DocType", doc.sync_error)
+
 
 class TestAppsApiPermissions(unittest.TestCase):
 	"""Permission filtering in the launcher API."""
@@ -452,6 +628,41 @@ class TestAppsApiPermissions(unittest.TestCase):
 				sync_endpoint()
 		finally:
 			frappe.set_user("Administrator")
+
+	def test_set_huf_app_enabled_requires_system_manager(self):
+		"""Non-System-Managers cannot toggle registry records."""
+		frappe.set_user(self.normal_user)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				set_huf_app_enabled(self.enabled_id, False)
+		finally:
+			frappe.set_user("Administrator")
+		self.assertEqual(frappe.db.get_value("HUF App", self.enabled_id, "enabled"), 1)
+
+	def test_set_huf_app_enabled_toggles_flag(self):
+		"""Administrator can toggle the flag; truthy strings are parsed."""
+		result = set_huf_app_enabled(self.enabled_id, "false")
+		self.assertEqual(result, {"ok": True, "app_id": self.enabled_id, "enabled": False})
+		self.assertEqual(frappe.db.get_value("HUF App", self.enabled_id, "enabled"), 0)
+
+		result = set_huf_app_enabled(self.enabled_id, "1")
+		self.assertTrue(result["enabled"])
+		self.assertEqual(frappe.db.get_value("HUF App", self.enabled_id, "enabled"), 1)
+
+	def test_enabled_field_only_exposed_to_system_manager(self):
+		"""get_huf_apps includes enabled/exposed_tables for System Managers,
+		never for normal users."""
+		admin_apps = {a["app_id"]: a for a in get_huf_apps()["apps"]}
+		self.assertIn("enabled", admin_apps[self.enabled_id])
+		self.assertIn("exposed_tables", admin_apps[self.enabled_id])
+
+		frappe.set_user(self.normal_user)
+		try:
+			user_apps = {a["app_id"]: a for a in get_huf_apps()["apps"]}
+		finally:
+			frappe.set_user("Administrator")
+		self.assertNotIn("enabled", user_apps[self.enabled_id])
+		self.assertNotIn("exposed_tables", user_apps[self.enabled_id])
 
 
 if __name__ == "__main__":

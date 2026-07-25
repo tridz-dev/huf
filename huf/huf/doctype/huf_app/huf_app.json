@@ -18,6 +18,7 @@
   "launch_mode",
   "required_huf_version",
   "permission_method",
+  "exposed_tables",
   "enabled",
   "section_break_sync",
   "source_app",
@@ -105,6 +106,12 @@
    "label": "Permission Method"
   },
   {
+   "fieldname": "exposed_tables",
+   "fieldtype": "Small Text",
+   "label": "Exposed Tables",
+   "read_only": 1
+  },
+  {
    "default": "1",
    "fieldname": "enabled",
    "fieldtype": "Check",
@@ -162,7 +169,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-25 05:33:00.000000",
+ "modified": "2026-07-25 16:30:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "HUF App",
