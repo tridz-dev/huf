@@ -226,6 +226,8 @@ scheduler_events = {
     "daily": [
         "huf.ai.knowledge.maintenance.cleanup_orphaned_files",
         "huf.ai.knowledge.maintenance.optimize_indexes",
+        # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
+        "huf.ai.memory_tools.expire_stale_memory_records",
     ],
     "cron": {
         "*/1 * * * *": [
