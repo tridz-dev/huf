@@ -6,16 +6,13 @@ import frappe
 
 def on_knowledge_source_created(doc, method):
 	"""Initialize knowledge source after creation."""
-	# Initialize SQLite database
 	from .backends import get_backend
-	
+	from .indexer import _build_backend_config
+
 	try:
 		backend_class = get_backend(doc.knowledge_type)
 		backend = backend_class()
-		backend.initialize(doc.name, {
-			"chunk_size": doc.chunk_size,
-			"chunk_overlap": doc.chunk_overlap,
-		})
+		backend.initialize(doc.name, _build_backend_config(doc))
 	except Exception as e:
 		frappe.log_error(
 			f"Error initializing knowledge source {doc.name}: {str(e)}",
