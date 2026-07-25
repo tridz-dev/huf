@@ -29,7 +29,7 @@ export const createToolFormSchema = (availableToolTypes: ToolType[]) => {
     tool_name: z.string().min(1, 'Tool name is required').max(128, 'Tool name must be at most 128 characters'),
     tool_type: z.string().min(1, 'Tool category is required'),
     types: toolTypesEnum,
-    description: z.string().min(1, 'Description is required'),
+    description: z.string(),
     reference_doctype: z.string().optional(),
     agent: z.string().optional(),
     function_path: z.string().optional(),
@@ -498,6 +498,31 @@ export function deriveDocumentOperationDefaults(
     requiredPermission: OPERATION_PERMISSION[verb] || 'read',
     defaultParameters,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Default Tool Category per creation template
+// ---------------------------------------------------------------------------
+
+/** Fallback category when a template has no specific mapping. */
+export const FALLBACK_TOOL_CATEGORY = 'Miscellaneous';
+
+/**
+ * Default Tool Category (Agent Tool Type) per creation template.
+ * Keys are the template ids from frontend/src/config/toolTemplates.json
+ * (the five "Create New" picker cards). Values must match the curated
+ * categories seeded by sync_default_tool_categories() in huf/install.py.
+ */
+const TEMPLATE_DEFAULT_CATEGORY: Record<string, string> = {
+  document_operation: 'Data Operations',
+  external_api: 'Integrations',
+  platform_utility: 'AI & Generation',
+  run_agent: 'Automation & Workflow',
+  custom_function: 'Automation & Workflow',
+};
+
+export function getDefaultToolCategory(templateId?: string | null): string {
+  return (templateId && TEMPLATE_DEFAULT_CATEGORY[templateId]) || FALLBACK_TOOL_CATEGORY;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle, FlaskConical, ChevronDown, FileText } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { linkRoutes } from '@/lib/link-routes';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -50,6 +51,7 @@ import {
   buildFunctionDefinition,
   buildMissingMandatoryParameters,
   deriveDocumentOperationDefaults,
+  getDefaultToolCategory,
   isDocumentOperationType,
   parseParameterOptions,
   createToolFormSchema,
@@ -57,7 +59,7 @@ import {
   shouldShowField,
 } from './toolCreationForm.utils';
 
-type AutoFieldKey = 'tool_name' | 'description' | 'is_read_only' | 'required_permission' | 'parameters';
+type AutoFieldKey = 'tool_name' | 'tool_type' | 'description' | 'is_read_only' | 'required_permission' | 'parameters';
 type AutoFieldState = Record<AutoFieldKey, 'auto' | 'edited'>;
 
 interface ToolCreationFormProps {
@@ -96,6 +98,7 @@ export function ToolCreationForm({
   // Flips to 'edited' as soon as the user changes the field manually.
   const autoStateRef = useRef<AutoFieldState>({
     tool_name: mode === 'create' ? 'auto' : 'edited',
+    tool_type: mode === 'create' ? 'auto' : 'edited',
     description: mode === 'create' ? 'auto' : 'edited',
     is_read_only: mode === 'create' ? 'auto' : 'edited',
     required_permission: mode === 'create' ? 'auto' : 'edited',
@@ -162,6 +165,16 @@ export function ToolCreationForm({
   // Fields the user has manually edited are never overwritten.
   useEffect(() => {
     if (mode !== 'create') return;
+
+    // Default Tool Category from the creation template — applies to all five
+    // tool-type bodies, independent of verb/DocType selection.
+    if (autoStateRef.current.tool_type === 'auto') {
+      const category = getDefaultToolCategory(template.id);
+      if (form.getValues('tool_type') !== category) {
+        form.setValue('tool_type', category, { shouldDirty: true });
+      }
+    }
+
     if (!selectedType || !selectedReferenceDoctype) return;
 
     const defaults = deriveDocumentOperationDefaults(selectedType, selectedReferenceDoctype);
@@ -182,7 +195,7 @@ export function ToolCreationForm({
     if (autoStateRef.current.parameters === 'auto' && defaults.defaultParameters.length > 0) {
       form.setValue('parameters', defaults.defaultParameters, { shouldDirty: true });
     }
-  }, [selectedType, selectedReferenceDoctype, mode, form]);
+  }, [selectedType, selectedReferenceDoctype, mode, form, template.id]);
 
   // Auto-fill mandatory params for Create Document / Create Multiple Documents
   useEffect(() => {
@@ -326,8 +339,19 @@ export function ToolCreationForm({
   const parameters = form.watch('parameters') || [];
   const httpHeaders = form.watch('http_headers') || [];
   const formToolName = form.watch('tool_name');
+  const formToolType = form.watch('tool_type');
   const description = form.watch('description');
   const autoAddToAgent = form.watch('auto_add_to_agent');
+
+  const [contractOpen, setContractOpen] = useState(false);
+
+  // One-line summary shown on the collapsed "Contract" section header.
+  const contractSummary = useMemo(() => {
+    const category = formToolType || 'No category';
+    const desc = (description || '').trim();
+    const truncated = desc.length > 60 ? `${desc.slice(0, 60)}…` : desc;
+    return truncated ? `${category} · ${truncated}` : category;
+  }, [formToolType, description]);
 
   const { parameterSchema, functionDefinition } = useMemo(() => {
     const properties: Record<string, Record<string, unknown>> = {};
@@ -376,7 +400,10 @@ export function ToolCreationForm({
     mode === 'create' && isDocumentOperationType(selectedType) && !!selectedReferenceDoctype;
 
   const renderAutoBadge = (key: AutoFieldKey) => {
-    if (!showAutoBadges) return null;
+    // tool_type is auto-derived from the template for all five tool-type
+    // bodies, so its badge does not depend on verb/DocType selection.
+    const visible = key === 'tool_type' ? mode === 'create' : showAutoBadges;
+    if (!visible) return null;
     return autoBadges[key] === 'auto' ? (
       <Badge variant="secondary" className="text-[10px] ml-2 font-normal">
         Auto
@@ -538,56 +565,80 @@ export function ToolCreationForm({
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="tool_type"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Tool Category<span className="text-destructive">*</span>
-              </FormLabel>
-              <FormControl>
-                <Combobox
-                  options={toolTypeOptions}
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  placeholder="Select Tool Category..."
-                  searchPlaceholder="Search tool categories..."
-                  emptyText="No tool category found."
-                  disabled={loading}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Description<span className="text-destructive">*</span>
-                {renderAutoBadge('description')}
-              </FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Describe what this tool does. The AI uses this description to decide when to call it."
-                  className="min-h-[100px]"
-                  {...field}
-                  onChange={(e) => {
-                    field.onChange(e);
-                    markEdited('description');
-                  }}
-                  disabled={loading}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
       </div>
+
+      {/* CONTRACT Section (Tool Category + Description, collapsed by default) */}
+      <Collapsible open={contractOpen} onOpenChange={setContractOpen} className="space-y-4">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="group flex w-full items-center gap-2 text-left"
+            disabled={loading}
+          >
+            <FileText className="w-5 h-5 text-steel-soft shrink-0" />
+            <h3 className="font-semibold text-foreground shrink-0">Contract</h3>
+            {!contractOpen && (
+              <span className="text-sm text-steel truncate ml-1">— {contractSummary}</span>
+            )}
+            <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4">
+          <FormField
+            control={form.control}
+            name="tool_type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Tool Category<span className="text-destructive">*</span>
+                  {renderAutoBadge('tool_type')}
+                </FormLabel>
+                <FormControl>
+                  <Combobox
+                    options={toolTypeOptions}
+                    value={field.value}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      markEdited('tool_type');
+                    }}
+                    placeholder="Select Tool Category..."
+                    searchPlaceholder="Search tool categories..."
+                    emptyText="No tool category found."
+                    disabled={loading}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Description
+                  {renderAutoBadge('description')}
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Describe what this tool does. The AI uses this description to decide when to call it."
+                    className="min-h-[100px]"
+                    {...field}
+                    onChange={(e) => {
+                      field.onChange(e);
+                      markEdited('description');
+                    }}
+                    disabled={loading}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* OPERATION DETAILS Section */}
       <div className="space-y-4">
