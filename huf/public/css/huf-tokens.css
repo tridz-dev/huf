@@ -35,6 +35,7 @@
 
   /* Signal (accent) & status */
   --huf-accent:      #E8531F; /* signal orange — hover, focus ring, highlights */
+  --huf-on-accent: #ffffff;
   --huf-accent-ink:  #BC3E0F; /* signal text on light surfaces */
   --huf-success:     #3F7A4E;
   --huf-warning:     #E8531F; /* warnings use the signal color */

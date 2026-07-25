@@ -18,5 +18,5 @@ export interface HufApp {
 	 */
 	enabled?: 0 | 1;
 	/** Comma-separated DocType names the app exposes to the Data page. */
-	exposed_tables?: string;
+	exposed_tables?: string | string[];
 }
