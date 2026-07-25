@@ -12,6 +12,7 @@ from .loaders import (
     upsert_agent,
     upsert_trigger
 )
+from .apps_loader import upsert_huf_app
 
 @dataclass
 class SeedResult:
@@ -21,13 +22,16 @@ class SeedResult:
     errors: List[str]
     skipped_records: List[dict] = field(default_factory=list)
 
-# Load order matters for dependency resolution
+# Load order matters for dependency resolution.
+# Apps load last so a manifest may later reference agents/capabilities
+# seeded by the same provider app.
 LOAD_ORDER = [
     ("prompts", upsert_prompt),
     ("tools", upsert_tool),
     ("knowledge", upsert_knowledge),
     ("agents", upsert_agent),
-    ("triggers", upsert_trigger)
+    ("triggers", upsert_trigger),
+    ("apps", upsert_huf_app)
 ]
 
 def seed_app(app_name: str, huf_dir: Path) -> SeedResult:
@@ -51,7 +55,7 @@ def seed_app(app_name: str, huf_dir: Path) -> SeedResult:
                     else:
                         result.skipped += 1
                         # Use a fallback name if the key isn't standard across all types
-                        item_name = item.get('name') or item.get('title') or item.get('agent_name') or item.get('tool_name') or item.get('source_name') or file_path.name
+                        item_name = item.get('name') or item.get('app_id') or item.get('title') or item.get('agent_name') or item.get('tool_name') or item.get('source_name') or file_path.name
 
                         if isinstance(error, dict) and error.get("reason") == "missing_refs":
                             missing_refs = error.get("missing_refs", [])
