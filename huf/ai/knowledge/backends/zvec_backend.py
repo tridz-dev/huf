@@ -212,9 +212,7 @@ class ZvecBackend(KnowledgeBackend):
 					)
 				return
 		frappe.throw(
-			_("zvec collection at '{0}' has no '{1}' vector field").format(
-				self.db_path, self.VECTOR_FIELD
-			)
+			_("zvec collection at '{0}' has no '{1}' vector field").format(self.db_path, self.VECTOR_FIELD)
 		)
 
 	def _build_schema(self) -> Any:
