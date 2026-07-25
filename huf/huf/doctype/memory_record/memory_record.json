@@ -23,7 +23,7 @@
   {"fieldname": "conversation", "fieldtype": "Link", "label": "Conversation", "options": "Agent Conversation"},
   {"fieldname": "run", "fieldtype": "Link", "label": "Run", "options": "Agent Run"},
   {"fieldname": "column_break_source", "fieldtype": "Column Break"},
-  {"default": "Manual", "fieldname": "source_type", "fieldtype": "Select", "label": "Source Type", "options": "Conversation\nRun\nManual\nEvent\nScheduled\nImported\nTool Output", "reqd": 1},
+  {"default": "Manual", "fieldname": "source_type", "fieldtype": "Select", "label": "Source Type", "options": "Conversation\nRun\nManual\nEvent\nScheduled\nImported\nTool Output\nExtracted", "reqd": 1},
   {"fieldname": "source_message", "fieldtype": "Data", "label": "Source Message"},
   {"fieldname": "raw_context_excerpt", "fieldtype": "Long Text", "label": "Raw Context Excerpt"},
   {"fieldname": "quality_section", "fieldtype": "Section Break", "label": "Quality"},
