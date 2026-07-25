@@ -1082,7 +1082,10 @@ def create_default_memory_policies():
             "inject_mode": "Relevant Only",
             "max_records": 20,
             "token_budget": 4000,
-            "auto_promote_to_knowledge": 1,
+            # No Knowledge Source exists at migrate time, and MemoryPolicy.validate()
+            # requires one when auto-promote is on — seed with it off; admins can
+            # enable auto-promote after assigning a Knowledge Source.
+            "auto_promote_to_knowledge": 0,
             "promotion_min_confidence": 0.5,
             "promotion_min_importance": 0.5
         },
@@ -1101,6 +1104,13 @@ def create_default_memory_policies():
 
     for p in presets:
         if not frappe.db.exists("Memory Policy", p["policy_name"]):
-            doc = frappe.new_doc("Memory Policy")
-            doc.update(p)
-            doc.insert(ignore_permissions=True)
+            try:
+                doc = frappe.new_doc("Memory Policy")
+                doc.update(p)
+                doc.insert(ignore_permissions=True)
+            except Exception as e:
+                # One bad preset must not abort after_migrate's seeding chain
+                frappe.log_error(
+                    f"Error creating memory policy {p['policy_name']}: {str(e)}",
+                    "Memory Policy Creation",
+                )
