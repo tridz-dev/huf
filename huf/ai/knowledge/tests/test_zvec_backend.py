@@ -64,6 +64,11 @@ class TestZvecBackend(unittest.TestCase):
 
 		self.mock_zvec = MagicMock()
 		self.mock_collection = MagicMock()
+		# Opened collections are validated against the configured dimension.
+		vector_field = MagicMock()
+		vector_field.name = "embedding"
+		vector_field.dimension = int(config.get("vector_dimension") or 1536)
+		self.mock_collection.schema.vectors = [vector_field]
 		self.mock_zvec.create_and_open.return_value = self.mock_collection
 		self.mock_zvec.open.return_value = self.mock_collection
 		# MetricType.COSINE etc. are looked up on the mocked module.

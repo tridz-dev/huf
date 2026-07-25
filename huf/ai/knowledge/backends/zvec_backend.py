@@ -186,10 +186,36 @@ class ZvecBackend(KnowledgeBackend):
 
 		if os.path.exists(self.db_path):
 			self.collection = zvec.open(self.db_path)
+			self._validate_existing_collection()
 		else:
 			self.collection = zvec.create_and_open(path=self.db_path, schema=self._build_schema())
 
 		self._initialized = True
+
+	def _validate_existing_collection(self) -> None:
+		"""Ensure an opened collection's vector field matches this source's config.
+
+		A collection created with a different embedding dimension cannot accept
+		this source's embeddings — fail loudly at initialization instead of at
+		the first insert.
+		"""
+		for vector_field in self.collection.schema.vectors:
+			if vector_field.name == self.VECTOR_FIELD:
+				if int(vector_field.dimension) != self.dimension:
+					frappe.throw(
+						_(
+							"zvec collection at '{0}' has vector dimension {1}, but this "
+							"Knowledge Source is configured for dimension {2}. Clear the "
+							"knowledge source (or remove the collection directory) so it "
+							"can be recreated."
+						).format(self.db_path, int(vector_field.dimension), self.dimension)
+					)
+				return
+		frappe.throw(
+			_("zvec collection at '{0}' has no '{1}' vector field").format(
+				self.db_path, self.VECTOR_FIELD
+			)
+		)
 
 	def _build_schema(self) -> Any:
 		"""Build the CollectionSchema: scalar fields + one dense vector field."""
