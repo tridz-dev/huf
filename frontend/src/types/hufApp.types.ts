@@ -11,4 +11,12 @@ export interface HufApp {
 	icon?: string;
 	category?: string;
 	version?: string;
+	/**
+	 * Present only for System Managers: 1 = enabled, 0 = disabled. The
+	 * frontend treats the mere presence of this field as the signal to
+	 * show the enable/disable admin action (no client-side role check).
+	 */
+	enabled?: 0 | 1;
+	/** Comma-separated DocType names the app exposes to the Data page. */
+	exposed_tables?: string;
 }

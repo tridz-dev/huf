@@ -1,14 +1,54 @@
-import { useCallback, useEffect, useState } from 'react';
-import { AppWindow, ExternalLink, TriangleAlert } from 'lucide-react';
-import { PageLayout, GridView, BaseCard } from '../components/dashboard';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+	AppWindow,
+	CircleHelp,
+	ExternalLink,
+	MoreVertical,
+	Power,
+	TriangleAlert,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { PageLayout, GridView, BaseCard, FilterBar } from '../components/dashboard';
 import { CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { getHufApps } from '../services/appsApi';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from '@/components/ui/dialog';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
+import { getHufApps, setHufAppEnabled } from '../services/appsApi';
 import type { HufApp } from '@/types/hufApp.types';
 
 export { AppsPage };
 export default AppsPage;
+
+/**
+ * Search + category filters only appear once the launcher holds enough
+ * apps to be worth filtering.
+ */
+const FILTER_THRESHOLD = 8;
+
+/** Known HUF App categories; chips also pick up custom ones from data. */
+const DEFAULT_CATEGORIES = [
+	'Create',
+	'Plan',
+	'Research',
+	'Automate',
+	'Analyze',
+	'Communicate',
+	'Manage',
+	'Other',
+];
 
 /**
  * Resolve the launch URL for a registered HUF App. Apps are independent
@@ -51,13 +91,54 @@ function AppIcon({ app }: { app: HufApp }) {
 	);
 }
 
-function AppCard({ app }: { app: HufApp }) {
-	const route = appRoute(app);
+function CategoryChip({
+	label,
+	active,
+	onClick,
+}: {
+	label: string;
+	active: boolean;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className={cn(
+				'inline-flex items-center rounded-none border px-2 py-1 font-mono text-[10.5px] uppercase tracking-wide transition-colors',
+				active
+					? 'border-ink text-ink'
+					: 'border-line bg-paper-deep text-steel hover:text-ink'
+			)}
+		>
+			{label}
+		</button>
+	);
+}
+
+function AppCard({
+	app,
+	onToggleEnabled,
+}: {
+	app: HufApp;
+	onToggleEnabled: (app: HufApp) => void;
+}) {
+	// `enabled` is only present for System Managers; its presence doubles
+	// as the signal to offer the admin enable/disable action.
+	const canAdminister = typeof app.enabled === 'number';
+	const isDisabled = app.enabled === 0;
+	const route = isDisabled ? null : appRoute(app);
 
 	// The whole card is a real anchor: left-click navigates (full page
-	// load), cmd/ctrl/middle-click opens a new tab natively.
+	// load), cmd/ctrl/middle-click opens a new tab natively. Disabled apps
+	// never get the anchor — the card is inert and can't be opened.
 	const card = (
-		<BaseCard className="flex flex-col cursor-pointer hover:border-ink">
+		<BaseCard
+			className={cn(
+				'flex flex-col',
+				isDisabled ? 'opacity-60' : 'cursor-pointer hover:border-ink'
+			)}
+		>
 			<CardHeader className="pb-3">
 				<CardTitle className="font-body font-semibold text-[15px] line-clamp-1 flex items-center gap-2">
 					<AppIcon app={app} />
@@ -67,6 +148,11 @@ function AppCard({ app }: { app: HufApp }) {
 					{app.description || 'No description'}
 				</CardDescription>
 				<CardAction className="top-5 flex items-center gap-1">
+					{isDisabled && (
+						<Badge variant="secondary" className="text-xs">
+							Disabled
+						</Badge>
+					)}
 					{app.category && (
 						<Badge variant="secondary" className="text-xs">
 							{app.category}
@@ -88,6 +174,42 @@ function AppCard({ app }: { app: HufApp }) {
 							<ExternalLink className="w-3.5 h-3.5" />
 						</Button>
 					)}
+					{canAdminister && (
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-7 w-7 text-steel-soft hover:text-ink"
+									title="App actions"
+									onClick={(e) => {
+										e.stopPropagation();
+										e.preventDefault();
+									}}
+								>
+									<MoreVertical className="w-3.5 h-3.5" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent
+								align="end"
+								onClick={(e) => {
+									e.stopPropagation();
+									e.preventDefault();
+								}}
+							>
+								<DropdownMenuItem
+									onClick={(e) => {
+										e.stopPropagation();
+										e.preventDefault();
+										onToggleEnabled(app);
+									}}
+								>
+									<Power className="w-3.5 h-3.5" />
+									{isDisabled ? 'Enable app' : 'Disable app'}
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					)}
 				</CardAction>
 			</CardHeader>
 		</BaseCard>
@@ -103,10 +225,61 @@ function AppCard({ app }: { app: HufApp }) {
 	);
 }
 
+function AppsHelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>About HUF Apps</DialogTitle>
+					<DialogDescription>
+						What shows up here, and why.
+					</DialogDescription>
+				</DialogHeader>
+				<div className="space-y-4 text-sm font-body text-steel">
+					<section className="space-y-1">
+						<h3 className="font-semibold text-ink">What is a HUF App?</h3>
+						<p>
+							A HUF App is an independently installed Frappe app that registers
+							itself with HUF. Each one gets a card here so you can launch its
+							own frontend.
+						</p>
+					</section>
+					<section className="space-y-1">
+						<h3 className="font-semibold text-ink">Where do apps come from?</h3>
+						<p>
+							Apps are installed server-side with bench and discovered
+							automatically once they register. Nothing is ever installed from
+							this screen — it's a launcher, not an installer.
+						</p>
+					</section>
+					<section className="space-y-1">
+						<h3 className="font-semibold text-ink">Why is the list filtered?</h3>
+						<p>
+							You only see apps you're allowed to open. Apps an administrator
+							has disabled are hidden entirely.
+						</p>
+					</section>
+					<section className="space-y-1">
+						<h3 className="font-semibold text-ink">What does HUF give them?</h3>
+						<p>
+							Registered apps build on HUF's agents, runs, knowledge, and tools,
+							so they share the same automation backbone as the rest of your
+							workspace.
+						</p>
+					</section>
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
 function AppsPage() {
 	const [apps, setApps] = useState<HufApp[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [helpOpen, setHelpOpen] = useState(false);
+	const [search, setSearch] = useState('');
+	const [category, setCategory] = useState<string>('All');
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -124,10 +297,92 @@ function AppsPage() {
 		load();
 	}, [load]);
 
+	const handleToggleEnabled = useCallback(
+		async (app: HufApp) => {
+			const enabling = app.enabled === 0;
+			try {
+				await setHufAppEnabled(app.app_id, enabling);
+				toast.success(`${app.title} ${enabling ? 'enabled' : 'disabled'}`);
+				await load();
+			} catch (err: any) {
+				toast.error(`Failed to update ${app.title}`, {
+					description: err?.message,
+				});
+			}
+		},
+		[load]
+	);
+
+	// Chip set: the known categories plus any custom ones present in data.
+	const categories = useMemo(() => {
+		const seen = new Set(DEFAULT_CATEGORIES.map((c) => c.toLowerCase()));
+		const custom: string[] = [];
+		for (const app of apps) {
+			const cat = app.category?.trim();
+			if (cat && !seen.has(cat.toLowerCase())) {
+				seen.add(cat.toLowerCase());
+				custom.push(cat);
+			}
+		}
+		return [...DEFAULT_CATEGORIES, ...custom];
+	}, [apps]);
+
+	const showFilters = apps.length >= FILTER_THRESHOLD;
+
+	const visibleApps = useMemo(() => {
+		if (!showFilters) return apps;
+		const query = search.trim().toLowerCase();
+		return apps.filter((app) => {
+			if (category !== 'All' && (app.category || 'Other') !== category) return false;
+			if (!query) return true;
+			return (
+				app.title.toLowerCase().includes(query) ||
+				(app.description || '').toLowerCase().includes(query)
+			);
+		});
+	}, [apps, showFilters, search, category]);
+
 	return (
 		<PageLayout
 			title="Apps"
 			subtitle="Launch applications built on HUF"
+			toolbar={
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-9 w-9 text-steel-soft hover:text-ink"
+					title="About HUF Apps"
+					onClick={() => setHelpOpen(true)}
+				>
+					<CircleHelp className="w-5 h-5" />
+				</Button>
+			}
+			filters={
+				showFilters ? (
+					<FilterBar
+						searchPlaceholder="Search apps..."
+						searchValue={search}
+						onSearchChange={setSearch}
+						actions={
+							<div className="flex flex-wrap items-center gap-1.5">
+								<CategoryChip
+									label="All"
+									active={category === 'All'}
+									onClick={() => setCategory('All')}
+								/>
+								{categories.map((cat) => (
+									<CategoryChip
+										key={cat}
+										label={cat}
+										active={category === cat}
+										onClick={() => setCategory(cat)}
+									/>
+								))}
+							</div>
+						}
+					/>
+				) : undefined
+			}
 		>
 			{error ? (
 				<div className="flex flex-col items-center justify-center py-12 text-center">
@@ -140,22 +395,27 @@ function AppsPage() {
 				</div>
 			) : (
 				<GridView
-					items={apps}
+					items={visibleApps}
 					columns={{ sm: 1, md: 2, lg: 3 }}
 					loading={loading}
 					emptyState={
 						<div className="text-center py-12">
 							<AppWindow className="w-12 h-12 text-steel-soft mx-auto mb-4" />
-							<p className="font-body text-steel-soft mb-2">No apps available yet</p>
+							<p className="font-body text-steel-soft mb-2">
+								{apps.length > 0 ? 'No apps match your filters' : 'No apps available yet'}
+							</p>
 							<p className="text-sm text-steel">
-								Installed apps that depend on HUF will appear here.
+								{apps.length > 0
+									? 'Try a different search or category.'
+									: 'Installed apps that depend on HUF will appear here.'}
 							</p>
 						</div>
 					}
-					renderItem={(app) => <AppCard app={app} />}
+					renderItem={(app) => <AppCard app={app} onToggleEnabled={handleToggleEnabled} />}
 					keyExtractor={(app) => app.app_id}
 				/>
 			)}
+			<AppsHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
 		</PageLayout>
 	);
 }

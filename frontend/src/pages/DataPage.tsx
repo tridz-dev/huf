@@ -12,6 +12,7 @@ import {
 	LoadMoreButton,
 } from '../components/dashboard';
 import { DeleteTableDialog } from '../components/data-table/DeleteTableDialog';
+import { AppTablesSection } from '../components/data-table/AppTablesSection';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getDataTables, deleteDataTable } from '../services/dataTableApi';
 import { formatTimeAgo } from '../utils/time';
@@ -158,6 +159,8 @@ function DataPage() {
 						: 'No more tables to load'}
 				</div>
 			)}
+
+			<AppTablesSection />
 
 			<DeleteTableDialog
 				open={!!deleteTable}
