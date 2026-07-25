@@ -171,10 +171,10 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 		: (record && titleField && (record[titleField] as string)) || (recordName as string);
 
 	return (
-		<div className="h-full overflow-auto">
-			<div className="p-6 space-y-6 max-w-5xl mx-auto">
+		<div className="h-full overflow-auto p-6">
+			<div className="p-6 space-y-6 max-w-5xl mx-auto bg-panel border border-line rounded-lg shadow-sm">
 				<div className="space-y-1">
-					<h2 className="text-xl font-semibold">{recordTitle}</h2>
+					<h2 className="text-xl font-semibold text-foreground">{recordTitle}</h2>
 					<p className="text-sm text-steel">{schema.table_name}</p>
 				</div>
 
@@ -185,7 +185,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 						<div key={index}>
 							{index > 0 && <Separator className="my-4" />}
 							{section.label && (
-								<p className="text-sm font-medium text-steel mb-3">
+								<p className="text-sm font-medium text-foreground mb-3">
 									{section.label}
 								</p>
 							)}
@@ -225,7 +225,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 					))}
 
 					{dataFields.length === 0 && (
-						<p className="text-sm font-body text-steel text-center py-8">
+						<p className="text-sm text-muted-foreground text-center py-8">
 							No fields defined
 						</p>
 					)}

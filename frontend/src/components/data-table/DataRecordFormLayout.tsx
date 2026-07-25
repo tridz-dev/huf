@@ -63,7 +63,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 
 	return (
 		<div className="space-y-1.5">
-			<Label htmlFor={`field-${field.fieldname}`} className="text-sm">
+			<Label htmlFor={`field-${field.fieldname}`} className="text-sm font-medium text-foreground">
 				{field.label}
 				{isRequired && <span className="text-destructive ml-1">*</span>}
 			</Label>
@@ -76,7 +76,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					onChange={(event) => onChange(event.target.value)}
 					disabled={isReadOnly}
 					placeholder={field.description || ''}
-					className="h-8 text-sm"
+					className="h-8 text-sm bg-background"
 				/>
 			)}
 
@@ -90,7 +90,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					disabled={isReadOnly}
 					placeholder={field.description || ''}
 					rows={field.fieldtype === 'Long Text' ? 6 : 3}
-					className="text-sm"
+					className="text-sm bg-background"
 				/>
 			)}
 
@@ -115,7 +115,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					disabled={isReadOnly}
 					min={field.non_negative === 1 ? 0 : undefined}
 					step={field.fieldtype === 'Int' ? 1 : 'any'}
-					className="h-8 text-sm"
+					className="h-8 text-sm bg-background"
 				/>
 			)}
 
@@ -140,7 +140,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					value={(value as string) || ''}
 					onChange={(event) => onChange(event.target.value)}
 					disabled={isReadOnly}
-					className="h-8 text-sm"
+					className="h-8 text-sm bg-background"
 				/>
 			)}
 
@@ -151,7 +151,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					value={(value as string) || ''}
 					onChange={(event) => onChange(event.target.value)}
 					disabled={isReadOnly}
-					className="h-8 text-sm"
+					className="h-8 text-sm bg-background"
 				/>
 			)}
 
@@ -163,7 +163,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					onChange={(event) => onChange(event.target.value)}
 					disabled={isReadOnly}
 					placeholder="e.g. 1h 30m"
-					className="h-8 text-sm"
+					className="h-8 text-sm bg-background"
 				/>
 			)}
 
@@ -173,7 +173,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					onValueChange={onChange}
 					disabled={isReadOnly}
 				>
-					<SelectTrigger className="h-8 text-sm">
+					<SelectTrigger className="h-8 text-sm bg-background">
 						<SelectValue placeholder="Select..." />
 					</SelectTrigger>
 					<SelectContent>
@@ -197,7 +197,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					onChange={(event) => onChange(event.target.value)}
 					disabled={isReadOnly}
 					placeholder={`Link to ${field.options || 'table'}...`}
-					className="h-8 text-sm"
+					className="h-8 text-sm bg-background"
 				/>
 			)}
 
@@ -211,7 +211,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					value={value !== undefined && value !== null && value !== '' ? String(value) : ''}
 					onChange={(event) => onChange(parseFloat(event.target.value) || 0)}
 					disabled={isReadOnly}
-					className="h-8 text-sm"
+					className="h-8 text-sm bg-background"
 				/>
 			)}
 
@@ -222,7 +222,7 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					value={(value as string) || '#000000'}
 					onChange={(event) => onChange(event.target.value)}
 					disabled={isReadOnly}
-					className="h-8 w-16"
+					className="h-8 w-16 bg-background"
 				/>
 			)}
 

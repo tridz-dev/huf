@@ -2,8 +2,14 @@ import json
 
 import frappe
 from frappe import _
+from frappe.model import display_fieldtypes, no_value_fields, table_fields
 
-from huf.permissions import has_capability
+from huf.permissions import (
+	DEFAULT_ROLE_CAPABILITIES,
+	HUF_ROLE_FRAPPE_ROLE_MAP,
+	SYSTEM_MANAGER,
+	has_capability,
+)
 from .validators import (
 	LAYOUT_FIELD_TYPES,
 	get_search_fields,
@@ -26,6 +32,62 @@ def _require_write():
 def _require_read():
 	if not has_capability(frappe.session.user, _READ_CAPABILITY):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+
+def _import_permitted_roles() -> list[str]:
+	"""Frappe roles allowed to import into generated HF DocTypes.
+
+	Mirrors the HUF capability gate: every default Huf role holding the
+	write capability maps to a backing Frappe role that receives an
+	import-enabled DocPerm on generated tables.
+	"""
+	roles = {SYSTEM_MANAGER}
+	for huf_role, capabilities in DEFAULT_ROLE_CAPABILITIES.items():
+		if _WRITE_CAPABILITY in capabilities:
+			frappe_role = HUF_ROLE_FRAPPE_ROLE_MAP.get(huf_role)
+			if frappe_role:
+				roles.add(frappe_role)
+	return [r for r in sorted(roles) if r == SYSTEM_MANAGER or frappe.db.exists("Role", r)]
+
+
+def _table_permission_row(role: str) -> dict:
+	return {
+		"role": role,
+		"read": 1,
+		"write": 1,
+		"create": 1,
+		"delete": 1,
+		"print": 1,
+		"email": 1,
+		"share": 1,
+		"import": 1,
+	}
+
+
+def _ensure_import_enabled(doctype_name: str) -> None:
+	"""Retrofit allow_import + import DocPerm onto a generated HF DocType.
+
+	Tables created before bulk-import support lack these flags, and
+	Frappe's Data Import validates against them.
+	"""
+	dt = frappe.get_doc("DocType", doctype_name)
+	changed = False
+	if not dt.allow_import:
+		dt.allow_import = 1
+		changed = True
+
+	existing = {p.role: p for p in dt.permissions}
+	for role in _import_permitted_roles():
+		perm = existing.get(role)
+		if perm is None:
+			dt.append("permissions", _table_permission_row(role))
+			changed = True
+		elif not perm.get("import"):
+			perm.import = 1
+			changed = True
+
+	if changed:
+		dt.save(ignore_permissions=True)
 
 
 @frappe.whitelist()
@@ -77,22 +139,12 @@ def create_data_table(
 			"sort_order": "DESC",
 			"track_changes": 1,
 			"allow_rename": 1,
+			"allow_import": 1,
 		}
 	)
 	dt.set(
 		"permissions",
-		[
-			{
-				"role": "System Manager",
-				"read": 1,
-				"write": 1,
-				"create": 1,
-				"delete": 1,
-				"print": 1,
-				"email": 1,
-				"share": 1,
-			}
-		],
+		[_table_permission_row(role) for role in _import_permitted_roles()],
 	)
 	dt.insert()
 
