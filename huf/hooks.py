@@ -134,7 +134,7 @@ after_uninstall = "huf.ai.tool_registry.sync_app_tools"
 # Name of the app being uninstalled is passed as an argument
 
 # before_app_uninstall = "huf.utils.before_app_uninstall"
-# after_app_uninstall = "huf.utils.after_app_uninstall"
+after_app_uninstall = "huf.ai.app_seeding.apps_loader.on_app_uninstalled"
 
 # Desk Notifications
 # ------------------

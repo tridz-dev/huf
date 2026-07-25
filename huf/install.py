@@ -147,6 +147,16 @@ def after_migrate():
 	except Exception as e:
 		logger.warning(f"Failed to seed Hub Orchestrator agent after migrate: {e!s}")
 
+	try:
+		from huf.ai.app_seeding.apps_loader import sync_huf_apps
+		summary = sync_huf_apps()
+		logger.info(
+			f"Synced HUF Apps after migrate: {summary.get('synced', 0)} synced, "
+			f"{summary.get('invalid', 0)} invalid, {summary.get('deleted', 0)} deleted"
+		)
+	except Exception as e:
+		logger.warning(f"HUF Apps sync failed: {e!s}")
+
 
 def _log_seed_results(results, logger):
 	"""Emit WARNING-level structured logs for skipped seed records and per-app summaries."""

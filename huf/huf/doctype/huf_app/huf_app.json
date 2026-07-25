@@ -1,0 +1,190 @@
+{
+ "actions": [],
+ "autoname": "field:app_id",
+ "creation": "2026-07-25 05:33:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "app_id",
+  "title",
+  "description",
+  "column_break_main",
+  "route",
+  "icon",
+  "category",
+  "sort_order",
+  "section_break_details",
+  "version",
+  "launch_mode",
+  "required_huf_version",
+  "permission_method",
+  "enabled",
+  "section_break_sync",
+  "source_app",
+  "source_file",
+  "manifest_hash",
+  "column_break_sync",
+  "last_synced_at",
+  "sync_status",
+  "sync_error"
+ ],
+ "fields": [
+  {
+   "fieldname": "app_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "App ID",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "route",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Route",
+   "reqd": 1
+  },
+  {
+   "fieldname": "icon",
+   "fieldtype": "Data",
+   "label": "Icon"
+  },
+  {
+   "default": "Other",
+   "fieldname": "category",
+   "fieldtype": "Data",
+   "label": "Category"
+  },
+  {
+   "default": "100",
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order"
+  },
+  {
+   "fieldname": "section_break_details",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Data",
+   "label": "Version"
+  },
+  {
+   "default": "Route",
+   "fieldname": "launch_mode",
+   "fieldtype": "Select",
+   "label": "Launch Mode",
+   "options": "\nRoute"
+  },
+  {
+   "fieldname": "required_huf_version",
+   "fieldtype": "Data",
+   "label": "Required HUF Version"
+  },
+  {
+   "fieldname": "permission_method",
+   "fieldtype": "Data",
+   "label": "Permission Method"
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "section_break_sync",
+   "fieldtype": "Section Break",
+   "label": "Sync Metadata"
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source App",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "label": "Source File",
+   "read_only": 1
+  },
+  {
+   "fieldname": "manifest_hash",
+   "fieldtype": "Data",
+   "label": "Manifest Hash",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_sync",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_synced_at",
+   "fieldtype": "Datetime",
+   "label": "Last Synced At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sync_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Sync Status",
+   "options": "\nActive\nInvalid\nMissing",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sync_error",
+   "fieldtype": "Small Text",
+   "label": "Sync Error",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-25 05:33:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "HUF App",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title"
+}
