@@ -360,7 +360,7 @@ export function ToolCreationForm({
   const [contractOpen, setContractOpen] = useState(false);
   const [guardrailsOpen, setGuardrailsOpen] = useState(false);
 
-  // One-line summary shown on the collapsed "Contract" section header.
+  // One-line summary shown on the collapsed "Details" section header.
   const contractSummary = useMemo(() => {
     const category = formToolType || 'No category';
     const desc = (description || '').trim();
@@ -979,7 +979,7 @@ export function ToolCreationForm({
                   disabled={loading}
                 >
                   <FileText className="w-4 h-4 text-steel-soft shrink-0" />
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Contract</h3>
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Details</h3>
                   {!contractOpen && (
                     <span className="text-sm text-steel truncate ml-1">— {contractSummary}</span>
                   )}
