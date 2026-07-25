@@ -9,7 +9,7 @@ import { useUser } from '@/contexts/UserContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { HubConversationView } from '@/components/hub/HubConversationView';
 import { SlashCommandMenu } from '@/components/hub/SlashCommandMenu';
-import { getProviders } from '@/services/providerApi';
+import { getHubReadiness, HubReadiness } from '@/services/hubApi';
 import { sendMessage, streamingAvailable } from '@/services/streamChatApi';
 
 interface Message { role: 'user' | 'assistant'; content: string; _key?: string; }
@@ -77,6 +77,7 @@ export default function HubSimplePage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [hasProvider, setHasProvider] = useState<boolean | null>(null);
+  const [readiness, setReadiness] = useState<HubReadiness | null>(null);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [isStreaming, setIsStreaming] = useState(false);
 
@@ -94,11 +95,11 @@ export default function HubSimplePage() {
     setShowSlashMenu(false);
   }, [inputValue]);
 
-  // Check providers on mount
+  // Check hub readiness on mount
   useEffect(() => {
-    getProviders({ limit: 1 }).then(result => {
-      const items = Array.isArray(result) ? result : result.items;
-      setHasProvider(items.length > 0);
+    getHubReadiness().then(result => {
+      setReadiness(result);
+      setHasProvider(result.ready);
     }).catch(() => setHasProvider(false));
   }, []);
 
@@ -359,6 +360,7 @@ export default function HubSimplePage() {
                 onSlashSelect={handleSlashSelect}
                 onNewChat={handleNewChat}
                 isStreaming={isStreaming}
+                remediation={readiness?.remediation}
               />
             </motion.div>
           )}

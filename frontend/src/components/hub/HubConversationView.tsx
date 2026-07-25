@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Send, Sparkles, Plus } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { SlashCommandMenu } from './SlashCommandMenu';
+import type { HubRemediation } from '@/services/hubApi';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -19,12 +20,13 @@ interface HubConversationViewProps {
   onSlashSelect: (cmd: string) => void;
   onNewChat: () => void;
   isStreaming?: boolean;
+  remediation?: HubRemediation[];
 }
 
 export function HubConversationView({
   messages, inputValue, setInputValue, onSend,
   showSlashMenu, slashQuery, onSlashSelect, onNewChat,
-  isStreaming,
+  isStreaming, remediation,
 }: HubConversationViewProps) {
   const { user } = useUser();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -76,8 +78,16 @@ export function HubConversationView({
               {msg.content === '__NO_PROVIDER__' ? (
                 <div className="inline-block max-w-[85%] px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-left">
                   <p className="text-sm font-medium text-amber-800 mb-1">No AI Provider configured</p>
-                  <p className="text-xs text-amber-700 mb-3">Add a provider and model to start using Hub Orchestrator.</p>
-                  <a href="/huf/models" className="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors inline-block">
+                  {remediation && remediation.length > 0 ? (
+                    <ul className="text-xs text-amber-700 mb-3 space-y-1">
+                      {remediation.map((item) => (
+                        <li key={item.code}>{item.message}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-amber-700 mb-3">Add a provider and model to start using Hub Orchestrator.</p>
+                  )}
+                  <a href={remediation?.[0]?.action_route || '/models'} className="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700 transition-colors inline-block">
                     Add Provider →
                   </a>
                 </div>
