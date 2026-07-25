@@ -8,6 +8,14 @@ from unittest.mock import patch
 from huf.huf.doctype.agent.agent import get_permission_query_conditions
 
 NON_MANAGER_ROLES = ["Huf User"]
+MANAGER_ROLES = ["System Manager"]
+
+
+def _any_model_and_provider():
+    rows = frappe.get_all("AI Model", fields=["name", "provider"], limit=1)
+    if not rows:
+        return None, None
+    return rows[0].name, rows[0].provider
 
 
 class TestAgent(FrappeTestCase):
@@ -29,95 +37,97 @@ class TestAgent(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             agent.before_rename("__test_system_agent__", "__renamed_system_agent__")
 
-    def test_system_agent_tamper_guard(self):
-        """Non-admins cannot flip is_system on an existing agent."""
-        agent = frappe.new_doc("Agent")
-        agent.name = "__test_tamper_agent__"
-        agent.agent_name = "__test_tamper_agent__"
-        agent.is_system = 0
-        # new_doc sets __islocal=1, and the guards no-op on is_new(); mark as persisted
-        agent.__islocal = 0
-
-        # Simulate an existing document by setting a previous value and changing the field
-        agent._doc_before_save = frappe.new_doc("Agent")
-        agent._doc_before_save.name = "__test_tamper_agent__"
-        agent._doc_before_save.is_system = 0
-        agent.is_system = 1
-
-        # frappe.set_user is unreliable under run-tests (cached user doc);
-        # patch roles to a deterministic non-System-Manager set instead.
-        with patch("frappe.get_roles", return_value=NON_MANAGER_ROLES):
-            with self.assertRaises(frappe.ValidationError):
-                agent._validate_system_field_tamper()
-
 
 class TestSystemAgentLocking(FrappeTestCase):
-    """Guards for system-agent (is_system=1) locking: immutability and list hiding."""
+    """Guards for system-agent (is_system=1) locking: immutability and list hiding.
 
-    def _make_system_agent(self):
-        """In-memory Agent that looks persisted: is_system=1 plus a before-save snapshot."""
-        before = frappe.new_doc("Agent")
-        before.name = "__test_system_lock__"
-        before.agent_name = "__test_system_lock__"
-        before.is_system = 1
-        before.instructions = "original instructions"
+    DB-backed: real inserts/saves so the guards run through the full controller
+    path (in-memory new_doc construction is unreliable across test harnesses).
+    """
 
-        agent = frappe.new_doc("Agent")
-        agent.name = before.name
-        agent.agent_name = before.agent_name
-        agent.is_system = 1
-        agent.instructions = "original instructions"
-        # new_doc sets __islocal=1, and the guards no-op on is_new(); mark as persisted
-        agent.__islocal = 0
-        agent._doc_before_save = before
-        return agent
+    SYSTEM = "__test_system_lock__"
+    NORMAL = "__test_normal_lock__"
+
+    def setUp(self):
+        self._cleanup()
+        model, provider = _any_model_and_provider()
+        if not model:
+            self.skipTest("no AI Model records on this site")
+        self.model = model
+        self.provider = provider
+        frappe.get_doc(
+            {
+                "doctype": "Agent",
+                "agent_name": self.SYSTEM,
+                "is_system": 1,
+                "provider": provider,
+                "model": model,
+                "instructions": "original instructions",
+            }
+        ).insert(ignore_permissions=True)
+
+    def tearDown(self):
+        self._cleanup()
+
+    def _cleanup(self):
+        # Raw delete: on_trash blocks system-agent deletion by design.
+        for name in (self.SYSTEM, self.NORMAL):
+            if frappe.db.exists("Agent", name):
+                frappe.db.delete("Agent", {"name": name})
 
     def test_protected_field_edit_blocked_for_non_manager(self):
         """Non-System-Managers cannot edit protected fields on a system agent."""
-        agent = self._make_system_agent()
+        agent = frappe.get_doc("Agent", self.SYSTEM)
         agent.instructions = "tampered instructions"
 
         with patch("frappe.get_roles", return_value=NON_MANAGER_ROLES):
             with self.assertRaises(frappe.ValidationError):
-                agent._validate_system_agent_immutability()
+                agent.save(ignore_permissions=True)
 
     def test_protected_field_edit_allowed_for_system_manager(self):
         """System Managers can still edit protected fields on a system agent."""
-        if "System Manager" not in frappe.get_roles():
-            self.skipTest("test session user is not a System Manager")
-
-        agent = self._make_system_agent()
+        agent = frappe.get_doc("Agent", self.SYSTEM)
         agent.instructions = "manager update"
-        # Must not raise
-        agent._validate_system_agent_immutability()
+
+        with patch("frappe.get_roles", return_value=MANAGER_ROLES):
+            agent.save(ignore_permissions=True)
+
+        self.assertEqual(
+            frappe.db.get_value("Agent", self.SYSTEM, "instructions"), "manager update"
+        )
 
     def test_tool_table_edit_blocked_for_non_manager(self):
         """Changing the agent_tool child table is also locked for non-managers."""
-        agent = self._make_system_agent()
-        agent.append("agent_tool", {"tool": "Some Tool"})
+        tools = frappe.get_all("Agent Tool Function", pluck="name", limit=1)
+        if not tools:
+            self.skipTest("no Agent Tool Function records on this site")
+
+        agent = frappe.get_doc("Agent", self.SYSTEM)
+        agent.append("agent_tool", {"tool": tools[0]})
 
         with patch("frappe.get_roles", return_value=NON_MANAGER_ROLES):
             with self.assertRaises(frappe.ValidationError):
-                agent._validate_system_agent_immutability()
+                agent.save(ignore_permissions=True)
 
     def test_is_system_flip_blocked_for_non_manager(self):
         """Regression guard: non-managers cannot flip is_system on an existing agent."""
-        agent = frappe.new_doc("Agent")
-        agent.name = "__test_tamper_lock__"
-        agent.agent_name = "__test_tamper_lock__"
-        agent.is_system = 0
-        # new_doc sets __islocal=1, and the guards no-op on is_new(); mark as persisted
-        agent.__islocal = 0
+        frappe.get_doc(
+            {
+                "doctype": "Agent",
+                "agent_name": self.NORMAL,
+                "is_system": 0,
+                "provider": self.provider,
+                "model": self.model,
+                "instructions": "normal agent instructions",
+            }
+        ).insert(ignore_permissions=True)
 
-        before = frappe.new_doc("Agent")
-        before.name = agent.name
-        before.is_system = 0
-        agent._doc_before_save = before
+        agent = frappe.get_doc("Agent", self.NORMAL)
         agent.is_system = 1
 
         with patch("frappe.get_roles", return_value=NON_MANAGER_ROLES):
             with self.assertRaises(frappe.ValidationError):
-                agent._validate_system_field_tamper()
+                agent.save(ignore_permissions=True)
 
     def test_permission_query_conditions_hide_system_agents(self):
         """Non-System-Manager list queries exclude system agents."""

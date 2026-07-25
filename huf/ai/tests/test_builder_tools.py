@@ -23,7 +23,26 @@ from unittest.mock import MagicMock, patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from huf.ai.tools import builder
+
+class _LazyModule:
+    """Defer heavy app imports until first use.
+
+    bench run-tests discovers (imports) test modules before frappe.init
+    completes on some Frappe versions; importing huf.ai.tools.builder eagerly
+    pulls tool_registry, whose module-level frappe.logger() call then crashes
+    discovery.
+    """
+
+    def __init__(self, module_path):
+        self._module_path = module_path
+
+    def __getattr__(self, name):
+        import importlib
+
+        return getattr(importlib.import_module(self._module_path), name)
+
+
+builder = _LazyModule("huf.ai.tools.builder")
 
 BUILDER_ROLES = ["System Manager"]
 MANAGER_ROLES = ["Huf Manager"]
@@ -156,9 +175,16 @@ class TestCreateHufTable(FrappeTestCase):
 class TestDraftAgent(FrappeTestCase):
 	def _draft(self, provider_key="sk-test"):
 		captured = []
+
+		def _exists_router(doctype, name=None):
+			# The Agent itself must NOT exist (happy path); providers/models do.
+			if doctype == "Agent":
+				return False
+			return True
+
 		with (
 			patch("frappe.get_roles", return_value=BUILDER_ROLES),
-			patch("frappe.db.exists", return_value=True),
+			patch("frappe.db.exists", side_effect=_exists_router),
 			patch(
 				"huf.ai.tools.builder._sanitize_for_doctype",
 				side_effect=lambda doctype, data: data,

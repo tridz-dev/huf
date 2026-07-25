@@ -16,7 +16,22 @@ from unittest.mock import patch
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from huf.ai import hub_api
+
+class _LazyModule:
+    """Defer heavy app imports until first use (bench run-tests discovers test
+    modules before frappe.init completes on some Frappe versions; eager imports
+    of app modules with module-level frappe.logger() crash discovery)."""
+
+    def __init__(self, module_path):
+        self._module_path = module_path
+
+    def __getattr__(self, name):
+        import importlib
+
+        return getattr(importlib.import_module(self._module_path), name)
+
+
+hub_api = _LazyModule("huf.ai.hub_api")
 
 TEST_PROVIDER = "ZZ Test Hub Provider"
 TEST_SECRET = "sk-hub-test-secret-0001"

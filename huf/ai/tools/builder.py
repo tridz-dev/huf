@@ -38,7 +38,13 @@ def _require_builder_capability():
 
 def _provider_has_key(provider: str) -> bool:
 	"""Presence check only — the key value never leaves get_password."""
-	return bool(frappe.get_doc("AI Provider", provider).get_password("api_key"))
+	if not provider or not frappe.db.exists("AI Provider", provider):
+		return False
+	try:
+		return bool(frappe.get_doc("AI Provider", provider).get_password("api_key"))
+	except frappe.ValidationError:
+		# Frappe raises "Password not found" when no password row exists at all.
+		return False
 
 
 def _get_agent(agent_name: str):

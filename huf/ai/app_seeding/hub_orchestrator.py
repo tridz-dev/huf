@@ -106,7 +106,11 @@ def _provider_has_key(provider_name) -> bool:
     """True only if the provider exists and has an api_key. Never logs/returns the value."""
     if not provider_name or not frappe.db.exists("AI Provider", provider_name):
         return False
-    return bool(frappe.get_doc("AI Provider", provider_name).get_password("api_key"))
+    try:
+        return bool(frappe.get_doc("AI Provider", provider_name).get_password("api_key"))
+    except frappe.ValidationError:
+        # Frappe raises "Password not found" when no password row exists at all.
+        return False
 
 
 def _find_keyed_provider():
