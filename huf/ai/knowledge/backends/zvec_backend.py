@@ -456,8 +456,8 @@ class ZvecBackend(KnowledgeBackend):
 
 		if self.collection:
 			try:
-				# Buffered upserts are not reflected in stats until flushed.
-				self.collection.flush()
+				# add_chunks flushes after writing; flushing here can fail on a
+				# leftover collection LOCK and must not zero out the count.
 				stats["chunk_count"] = int(self.collection.stats["doc_count"])
 			except Exception as exc:
 				frappe.logger().warning(f"zvec get_stats count error: {exc!s}")
