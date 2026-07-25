@@ -56,9 +56,9 @@ class TestHubReadiness(FrappeTestCase):
         fake_orchestrator = {"present": True, "disabled": True, "provider": None, "model": None}
 
         with (
-            patch.object(hub_api, "_orchestrator_info", return_value=dict(fake_orchestrator)),
-            patch.object(hub_api, "_provider_has_key", return_value=False),
-            patch.object(hub_api, "_count_keyed_providers", return_value=0),
+            patch("huf.ai.hub_api._orchestrator_info", return_value=dict(fake_orchestrator)),
+            patch("huf.ai.hub_api._provider_has_key", return_value=False),
+            patch("huf.ai.hub_api._count_keyed_providers", return_value=0),
             patch("frappe.has_permission", return_value=True),
         ):
             result = hub_api.get_hub_readiness()
