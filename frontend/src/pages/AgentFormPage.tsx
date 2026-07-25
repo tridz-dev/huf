@@ -1806,7 +1806,6 @@ export function AgentFormPage() {
                   onEditTool={handleEditTool}
                   mcpServers={mcpServers}
                   onAddMCP={() => setShowMCPServersModal(true)}
-                  onCreateMCP={handleCreateMCP}
                   onRemoveMCP={handleRemoveMCPServer}
                   onToggleMCP={handleToggleMCPServer}
                   onSyncMCP={handleSyncMCPServer}
@@ -1874,6 +1873,7 @@ export function AgentFormPage() {
           transport_type: 'http' as const,
         })) as MCPServerDoc[]}
         onAddServers={handleAddMCPServers}
+        onCreateNew={handleCreateMCP}
       />
 
       {/* Agent Knowledge Modal */}
