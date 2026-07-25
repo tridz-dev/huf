@@ -340,3 +340,12 @@ to_sync_tools = "huf.ai.tool_registry.sync_discovered_tools"
 
 # Register integration tools from _registry
 huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
+
+# Knowledge Backends Hook
+# -----------------------
+# Register additional knowledge backends with the hook-based backend
+# registry (see huf.ai.knowledge.backends). Built-in backends
+# (sqlite_fts, sqlite_vec, chroma, pgvector) cannot be overridden.
+huf_knowledge_backends = {
+    "redis": "huf.ai.knowledge.backends.redis_backend.RedisBackend",
+}

@@ -7,7 +7,7 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
-VECTOR_KNOWLEDGE_TYPES = {"sqlite_vec", "chroma", "pgvector"}
+VECTOR_KNOWLEDGE_TYPES = {"sqlite_vec", "chroma", "pgvector", "redis"}
 PGVECTOR_DISTANCE_METRICS = {"cosine", "l2", "inner_product"}
 PGVECTOR_INDEX_TYPES = {"none", "hnsw", "ivfflat"}
 PGVECTOR_SSLMODES = {"prefer", "require", "disable", "allow", "verify-ca", "verify-full"}

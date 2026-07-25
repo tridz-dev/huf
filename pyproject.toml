@@ -18,6 +18,7 @@ dependencies = [
     "chromadb",
     "llama-index-vector-stores-chroma",
     "llama-index-vector-stores-postgres",
+    "redisvl>=0.5",
     "psycopg[binary]>=3.1.0",
     "pypdf",
     "python-docx",
