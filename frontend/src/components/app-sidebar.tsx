@@ -1,28 +1,20 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, ChevronRight, Shield } from "lucide-react"
-import { NavLink, useLocation } from "react-router-dom"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, Shield } from "lucide-react"
+import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
+import { NavCollapsibleGroup } from "@/components/nav-collapsible"
 import { NavUser } from "@/components/nav-user"
 import { AppSidebarHeader } from "@/components/app-sidebar-header"
 import { usePermissions } from "@/contexts/PermissionsContext"
 import { fetchDocCountQuiet } from "@/services/utilsApi"
 import { doctype } from "@/data/doctypes"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar"
 
 /**
@@ -58,14 +50,22 @@ const buildNavItems = [
     icon: Workflow,
     capability: "flows.use",
   },
+]
+
+/**
+ * Data + retrieval surfaces live under a single collapsible "Knowledge"
+ * group, named by user action: Tables for structured/relational data,
+ * Documents for unstructured retrieval (RAG).
+ */
+const knowledgeNavItems = [
   {
-    title: "Data",
+    title: "Tables",
     url: "/data",
     icon: Database,
     capability: "agent.view_all",
   },
   {
-    title: "Knowledge",
+    title: "Documents",
     url: "/knowledge",
     icon: BookOpen,
     capability: "agent.use",
@@ -93,19 +93,11 @@ const operateNavItems = [
 	},
 ]
 
-const peopleNavItems = [
-  {
-    title: "Users",
-    url: "/users",
-    icon: Users,
-    capability: "users.manage",
-  },
-]
-
 /**
  * Settings-adjacent pages are grouped under a single collapsible sidebar
  * entry instead of each getting a top-level item, to keep the primary nav
- * short. Same capability-gating rules as allNavItems.
+ * short. User management lives here too — it's an admin task, not a daily
+ * destination. Same capability-gating rules as allNavItems.
  */
 const settingsNavItems = [
   {
@@ -156,12 +148,17 @@ const settingsNavItems = [
     icon: Shield,
     capability: "roles.manage",
   },
+  {
+    title: "Users",
+    url: "/users",
+    icon: Users,
+    capability: "users.manage",
+  },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { hasCapability, isLoading } = usePermissions()
-  const { state: sidebarState, isMobile, setOpen } = useSidebar()
   const [agentCount, setAgentCount] = React.useState<number | undefined>(undefined)
 
   React.useEffect(() => {
@@ -185,35 +182,37 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 		)
 	}
 
+	const isPathInItems = (items: { url: string }[]) =>
+		items.some(
+			(item) =>
+				location.pathname === item.url || location.pathname.startsWith(item.url + "/"),
+		)
+
 	// While permissions are loading show only uncapability-gated items so the
 	// sidebar doesn't flash/jump once capabilities resolve.
 	const dashboardItems = filterItemsByCapability(dashboardNavItems)
 	const buildItems = filterItemsByCapability(buildNavItems).map((item) =>
 		item.title === "Agents" ? { ...item, count: agentCount } : item
 	)
+	const knowledgeItems = filterItemsByCapability(knowledgeNavItems)
 	const operateItems = filterItemsByCapability(operateNavItems)
-	const peopleItems = filterItemsByCapability(peopleNavItems)
   const settingsItems = isLoading
     ? []
     : settingsNavItems.filter((item) => item.capability === null || hasCapability(item.capability))
-  const isSettingsActive = settingsItems.some((item) => location.pathname.startsWith(item.url))
-  const [isSettingsOpen, setIsSettingsOpen] = React.useState(isSettingsActive)
+
+  // Accordion: at most one collapsible group open at a time. The group
+  // containing the active route auto-opens on navigation.
+  const [openGroup, setOpenGroup] = React.useState<string | null>(null)
+  const knowledgeActive = isPathInItems(knowledgeItems)
+  const settingsActive = isPathInItems(settingsItems)
 
   React.useEffect(() => {
-    if (isSettingsActive) {
-      setIsSettingsOpen(true)
+    if (knowledgeActive) {
+      setOpenGroup("knowledge")
+    } else if (settingsActive) {
+      setOpenGroup("settings")
     }
-  }, [isSettingsActive])
-
-  const handleSettingsClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    // In icon-collapsed desktop mode, open sidebar first so the submenu
-    // becomes visible immediately instead of appearing unresponsive.
-    if (!isMobile && sidebarState === "collapsed") {
-      event.preventDefault()
-      setOpen(true)
-      setIsSettingsOpen(true)
-    }
-  }
+  }, [knowledgeActive, settingsActive])
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -223,50 +222,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
 			{dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
 			{buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
+			{knowledgeItems.length > 0 && (
+			  <NavCollapsibleGroup
+			    title="Knowledge"
+			    icon={BookOpen}
+			    items={knowledgeItems}
+			    open={openGroup === "knowledge"}
+			    onOpenChange={(open) => setOpenGroup(open ? "knowledge" : null)}
+			  />
+			)}
 			{operateItems.length > 0 && <NavMain items={operateItems} label="Operate" />}
-			{peopleItems.length > 0 && <NavMain items={peopleItems} label="People" />}
-        {settingsItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarMenu>
-              <Collapsible
-                open={isSettingsOpen}
-                onOpenChange={setIsSettingsOpen}
-                className="group/settings"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip="Settings"
-                      isActive={isSettingsActive}
-                      onClick={handleSettingsClick}
-                    >
-                      <Settings />
-                      <span>Settings</span>
-                      <ChevronRight className="ml-auto transition-transform group-data-[state=open]/settings:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {settingsItems.map((item) => {
-                        const isActive = location.pathname.startsWith(item.url)
-                        return (
-                          <SidebarMenuSubItem key={item.title}>
-                            <SidebarMenuSubButton asChild isActive={isActive}>
-                              <NavLink to={item.url}>
-                                <item.icon />
-                                <span>{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        )
-                      })}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
+			{settingsItems.length > 0 && (
+			  <NavCollapsibleGroup
+			    title="Settings"
+			    icon={Settings}
+			    items={settingsItems}
+			    open={openGroup === "settings"}
+			    onOpenChange={(open) => setOpenGroup(open ? "settings" : null)}
+			  />
+			)}
       </SidebarContent>
       <SidebarFooter className="p-0 mb-1 mt-2 border-t border-sidebar-border">
         <NavUser />
