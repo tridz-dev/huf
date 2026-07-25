@@ -233,7 +233,10 @@ def get_injected_memory_text(agent_name, policy, conversation_id=None):
 	if policy.inject_mode in ("Never", "Tool Only") or policy.inject_mode not in ("Always", "Relevant Only"):
 		return None
 
-	limit = policy.max_records or 5
+	# max_records=0 must mean "inject nothing", not "fall back to 5".
+	limit = policy.max_records if policy.max_records is not None else 5
+	if limit <= 0:
+		return None
 	budget = policy.token_budget or 1000
 
 	# Use search to get active memories the agent is allowed to read
@@ -375,13 +378,18 @@ def expire_stale_memory_records():
 	"""
 	try:
 		now = now_datetime()
-		# Find Active records with a past effective_until
+		# Find Active records with a past effective_until.
+		# NB: a plain {"effective_until": ["<", now]} filter also matches rows
+		# where effective_until is NULL (Frappe wraps the comparison in
+		# ifnull(...)), which would expire records that never expire. The
+		# "is set" guard is required.
 		expired = frappe.get_all(
 			"Memory Record",
-			filters={
-				"status": "Active",
-				"effective_until": ["<", now],
-			},
+			filters=[
+				["status", "=", "Active"],
+				["effective_until", "is", "set"],
+				["effective_until", "<", now],
+			],
 			fields=["name"],
 			limit_page_length=500,
 		)
