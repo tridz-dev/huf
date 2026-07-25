@@ -24,6 +24,8 @@ interface InstructionsTextareaProps {
   showOptimize?: boolean;
   showExpand?: boolean;
   onExpand?: () => void;
+  /** Force the textarea read-only (e.g. locked system agent). */
+  disabled?: boolean;
   // Modal props
   modalTitle?: string;
   modalOpen?: boolean;
@@ -44,6 +46,7 @@ export function InstructionsTextarea({
   showOptimize = true,
   showExpand = true,
   onExpand,
+  disabled = false,
   modalTitle = "Instructions",
   modalOpen: externalModalOpen,
   onModalOpenChange: externalOnModalOpenChange,
@@ -110,7 +113,7 @@ export function InstructionsTextarea({
       className={className}
       value={currentValue}
       onChange={(e) => handleChange(e.target.value)}
-      disabled={isFormMode ? field?.disabled : false}
+      disabled={disabled || (isFormMode ? field?.disabled : false)}
     />
   );
   
@@ -148,6 +151,7 @@ export function InstructionsTextarea({
               size="sm"
               variant="secondary"
               onClick={handleExpand}
+              disabled={disabled}
             >
               <Expand className="w-4 h-4" />
             </Button>

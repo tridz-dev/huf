@@ -732,7 +732,13 @@ def run_agent_sync(
         channel_id = "api"
 
     agent_doc = frappe.get_doc("Agent", agent_name)
-    
+
+    if agent_doc.disabled:
+        frappe.throw(
+            _("Agent '{0}' is disabled.").format(agent_name),
+            frappe.ValidationError,
+        )
+
     resolved_provider = provider if provider else agent_doc.provider
     resolved_model = model if model else agent_doc.model
 
@@ -2014,6 +2020,14 @@ async def run_agent_stream(
     
     try:
         agent_doc = frappe.get_doc("Agent", agent_name)
+
+        # 0. Disabled agents cannot run
+        if agent_doc.disabled:
+            yield {
+                "type": "error",
+                "error": f"Agent '{agent_name}' is disabled."
+            }
+            return
 
         # 1. Guest Check
         if frappe.session.user == "Guest" and not agent_doc.allow_guest:

@@ -194,6 +194,9 @@ doc_events = {
         "on_update": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
         "on_trash": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
     },
+    "AI Provider": {
+        "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
+    },
     "Knowledge Source": {
         "after_insert": "huf.ai.knowledge.hooks.on_knowledge_source_created",
         "on_update": "huf.ai.knowledge.hooks.on_knowledge_source_updated",

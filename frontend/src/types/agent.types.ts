@@ -112,6 +112,7 @@ export type Agent = {
   top_p?: number;
   disabled?: boolean;
   allow_chat?: boolean;
+  is_system?: boolean;
   persist_conversation?: boolean;
   triggers: AgentTrigger[];
   tags?: string[];
@@ -241,6 +242,7 @@ export interface AgentDoc {
   agent_color?: string | null; // Hex color code for agent background
   show_tool_execution_details?: 0 | 1; // 0 or 1
   allow_guest?: number; // 0 or 1
+  is_system?: number; // 0 or 1 — system agents are locked and hidden from non-admins
   allowed_users?: AgentPermissionUserRow[];
   allowed_roles?: AgentPermissionRoleRow[];
   default_plan: AgentOrchestrationPlanRow[];

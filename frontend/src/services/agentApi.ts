@@ -46,6 +46,7 @@ const AGENT_LIST_FIELDS = [
   'enable_multi_run',
   'enable_prompt_caching',
   'allow_guest',
+  'is_system',
   'provider_brand',
   'modified',
 ];

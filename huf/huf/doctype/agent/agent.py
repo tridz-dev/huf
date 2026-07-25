@@ -31,18 +31,19 @@ def get_permission_query_conditions(user):
     # 2. OR User is in the 'Agent User' table
     # 3. OR User has a role that is in the 'Agent Role' table
     # 4. OR (CRITICAL) If BOTH tables are empty, allow access (Public)
-    
+    # 5. AND the agent is not a system agent (hidden from non-System-Managers)
+
     conditions = f"""
         (
             `tabAgent`.owner = '{user}'
             OR
             `tabAgent`.name IN (
-                SELECT parent FROM `tabAgent User` 
+                SELECT parent FROM `tabAgent User`
                 WHERE user = '{user}'
             )
             OR
             `tabAgent`.name IN (
-                SELECT parent FROM `tabAgent Role` 
+                SELECT parent FROM `tabAgent Role`
                 WHERE role IN ('{user_roles_str}')
             )
             OR
@@ -52,6 +53,7 @@ def get_permission_query_conditions(user):
                 NOT EXISTS (SELECT 1 FROM `tabAgent Role` WHERE parent = `tabAgent`.name)
             )
         )
+        AND `tabAgent`.is_system = 0
     """
     return conditions
 
@@ -111,6 +113,7 @@ class Agent(Document):
         self._validate_prompt()
         self._validate_summary_prompt()
         self._validate_system_field_tamper()
+        self._validate_system_agent_immutability()
 
         if self.allow_chat == 1 and self.persist_conversation == 0:
             frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
@@ -142,6 +145,51 @@ class Agent(Document):
             _("Only System Managers can change the system-agent flag."),
             title=_("System Agent Protected"),
         )
+
+    def _validate_system_agent_immutability(self):
+        """Lock protected fields on system agents for non-admins.
+
+        System agents (is_system=1) may only be modified by System Managers
+        or by install/migrate/seeding code. Protected fields cover the
+        agent's identity and behavior: prompts, provider/model, tools, and
+        activation flags.
+        """
+        if not self.is_system or self.is_new():
+            return
+
+        if (
+            frappe.flags.in_seeding
+            or frappe.flags.in_install
+            or frappe.flags.in_migrate
+            or "System Manager" in frappe.get_roles()
+        ):
+            return
+
+        protected_fields = (
+            "instructions",
+            "agent_prompt",
+            "prompt_mode",
+            "provider",
+            "model",
+            "disabled",
+            "allow_chat",
+        )
+        changed = [field for field in protected_fields if self.has_value_changed(field)]
+
+        before = self.get_doc_before_save()
+        if before:
+            current_tools = [row.as_dict() for row in self.get("agent_tool") or []]
+            previous_tools = [row.as_dict() for row in before.get("agent_tool") or []]
+            if frappe.as_json(current_tools) != frappe.as_json(previous_tools):
+                changed.append("agent_tool")
+
+        if changed:
+            frappe.throw(
+                _("Only System Managers can modify {0} on a system agent.").format(
+                    ", ".join(changed)
+                ),
+                title=_("System Agent Protected"),
+            )
 
     def _update_mcp_tool_counts(self):
         """Populate each agent_mcp_server row's tool_count from its linked MCP Server.

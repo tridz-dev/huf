@@ -24,6 +24,8 @@ interface GeneralTabProps {
   promptOptions: AgentPromptOption[];
   loadingPrompts: boolean;
   showAddNewPrompt?: boolean;
+  /** True when protected fields must be read-only (system agent + non-admin). */
+  locked?: boolean;
 }
 
 export function GeneralTab({
@@ -36,6 +38,7 @@ export function GeneralTab({
   promptOptions,
   loadingPrompts,
   showAddNewPrompt = true,
+  locked = false,
 }: GeneralTabProps) {
   const watchEnablePromptCaching = form.watch('enable_prompt_caching');
   const promptMode = form.watch('prompt_mode');
@@ -105,6 +108,7 @@ export function GeneralTab({
                         form.setValue('model', '');
                       }}
                       value={field.value || undefined}
+                      disabled={locked}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select provider" />
@@ -133,7 +137,7 @@ export function GeneralTab({
                 <FormLabel>Model</FormLabel>
                 <FormControl>
                   <LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel} disabled={!watchProvider}>
-                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!watchProvider}>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!watchProvider || locked}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select model" />
                       </SelectTrigger>
@@ -223,7 +227,7 @@ We generally recommend altering this or temperature but not both.`}
             render={({ field }) => (
               <FormItem className="sm:col-span-2">
                 <FormLabel>Prompt Mode</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={locked}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select prompt mode" />
@@ -265,6 +269,7 @@ We generally recommend altering this or temperature but not both.`}
                     onOptimizePrompt={onOptimizePrompt}
                     showOptimize={true}
                     showExpand={true}
+                    disabled={locked}
                   />
                   <FormDescription>
                     The system prompt or instructions that define the agent&apos;s personality, goals, and constraints. This is the core logic of the agent.
@@ -281,6 +286,7 @@ We generally recommend altering this or temperature but not both.`}
           promptOptions={promptOptions}
           loadingPrompts={loadingPrompts}
           showAddNew={showAddNewPrompt}
+          locked={locked}
         />
       )}
 

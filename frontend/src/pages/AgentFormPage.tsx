@@ -2,9 +2,12 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useBlocker, type Location } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Lock } from 'lucide-react';
 import { Form } from '../components/ui/form';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
 import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
@@ -131,6 +134,12 @@ export function AgentFormPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const isNew = id === 'new';
+  const { hufRole } = usePermissions();
+  // Backend maps Administrator / System Manager to the "Huf Admin" Huf role.
+  const isAdmin = hufRole === 'Huf Admin';
+  const [isSystemAgent, setIsSystemAgent] = useState(false);
+  // System agents are locked: protected fields are read-only for non-admins.
+  const systemLocked = isSystemAgent && !isAdmin;
   const [pendingSelectedPrompt, setPendingSelectedPrompt] = useState<string | null>(null);
   const [pendingSelectedPromptField, setPendingSelectedPromptField] = useState<string | null>(null);
   const [pendingScrollToPromptField, setPendingScrollToPromptField] = useState(false);
@@ -910,6 +919,7 @@ export function AgentFormPage() {
         // Track initial disabled state and persisted allow_chat
         setInitialDisabled(data.disabled === 1);
         setAllowChat(data.allow_chat === 1);
+        setIsSystemAgent(data.is_system === 1);
         setAgentStats({ last_run: data.last_run ?? null, total_run: data.total_run ?? null });
         // Load tools from agent_tool field
         // agent_tool is a child table with format: [{ tool: "tool-name" }, ...]
@@ -1727,6 +1737,17 @@ export function AgentFormPage() {
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
+        {isSystemAgent && (
+          <Alert>
+            <Lock className="h-4 w-4" />
+            <AlertTitle>System agent — locked</AlertTitle>
+            <AlertDescription>
+              {systemLocked
+                ? 'This is a protected system agent. Instructions, prompt, provider, model, tools, disabled and chat settings are read-only for your role. Contact a Huf Admin to change them.'
+                : 'This is a protected system agent. As a Huf Admin you have full edit access; non-admin users see these fields as read-only.'}
+            </AlertDescription>
+          </Alert>
+        )}
         <AgentHeader
           form={form}
           watchDisabled={watchDisabled}
@@ -1734,6 +1755,8 @@ export function AgentFormPage() {
           models={models}
           activeTriggerCount={activeTriggerCount}
           isNew={isNew}
+          isSystem={isSystemAgent}
+          locked={systemLocked}
           showSaveButton={showSaveButton}
           saving={saving}
           runningTest={runningTest}
@@ -1775,11 +1798,12 @@ export function AgentFormPage() {
                   promptOptions={promptOptions}
                   loadingPrompts={loadingPrompts}
                   showAddNewPrompt
+                  locked={systemLocked}
                 />
               </TabsContent>
 
               <TabsContent value="behavior" className="space-y-4">
-                <BehaviorTab form={form} />
+                <BehaviorTab form={form} locked={systemLocked} />
               </TabsContent>
 
               <TabsContent value="triggers" className="space-y-4">
@@ -1804,6 +1828,7 @@ export function AgentFormPage() {
                   onAddTools={() => setShowToolsModal(true)}
                   onRemoveTool={handleRemoveTool}
                   onEditTool={handleEditTool}
+                  locked={systemLocked}
                   mcpServers={mcpServers}
                   onAddMCP={() => setShowMCPServersModal(true)}
                   onCreateMCP={handleCreateMCP}
