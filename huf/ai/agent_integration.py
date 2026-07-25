@@ -297,11 +297,12 @@ class AgentManager:
             if getattr(self.agent_doc, "memory_policy", None):
                 try:
                     policy = frappe.get_doc("Memory Policy", self.agent_doc.memory_policy)
-                    if policy.inject_mode == "Always":
-                        from huf.ai.memory_tools import get_injected_memory_text
-                        injected_memory = get_injected_memory_text(self.agent_doc.name, policy)
-                        if injected_memory:
-                            instructions += f"\n\n[INJECTED RELEVANT MEMORY]\n{injected_memory}\n"
+                    # inject-mode gating (Always/Relevant Only/Never/Tool Only) and the
+                    # prompt-injection envelope are handled inside get_injected_memory_text.
+                    from huf.ai.memory_tools import get_injected_memory_text
+                    injected_memory = get_injected_memory_text(self.agent_doc.name, policy)
+                    if injected_memory:
+                        instructions += f"\n\n{injected_memory}\n"
                 except Exception as e:
                     frappe.log_error(title="Memory Injection Failed", message=str(e))
 
@@ -672,7 +673,9 @@ def generate_conversation_title(conversation_name, agent_name):
     except Exception as e:
         frappe.log_error(title="Agent Auto-naming Error", message=f"Title generation failed: {str(e)}")
 
-@frappe.whitelist()
+# P1-5: @frappe.whitelist() removed — this function is only called via frappe.enqueue()
+# (dotted path), which does not require whitelisting. Being whitelisted allowed any
+# authenticated user to trigger arbitrary extraction / spend LLM budget.
 def run_background_memory_extraction(conversation_name, agent_name):
     """
     Background job to extract memory from conversation transcripts.
@@ -681,19 +684,71 @@ def run_background_memory_extraction(conversation_name, agent_name):
         agent_doc = frappe.get_doc("Agent", agent_name)
         if not getattr(agent_doc, "enable_memory", False) or not getattr(agent_doc, "memory_policy", None):
             return
-            
+
         policy = frappe.get_doc("Memory Policy", agent_doc.memory_policy)
+        # P2-1: Respect disabled policies
+        if not getattr(policy, "enabled", True):
+            return
         if policy.capture_mode not in ["Automatic", "Agent Suggested"]:
             return
-            
+
         conv_manager = ConversationManager(agent_name=agent_name)
         history = conv_manager.get_conversation_history(conversation_name, limit=15)
         if not history:
             return
-            
+
+        # P1-6: Fetch existing active/draft memory titles to avoid re-extracting known facts
+        # P2-5: Use conversation owner; bail out if none found rather than silently scoping to Administrator
+        conv_owner = frappe.db.get_value("Agent Conversation", conversation_name, "owner")
+        if not conv_owner or conv_owner in ("Administrator", "Guest"):
+            frappe.log_error(
+                f"Memory extraction skipped for {conversation_name}: no valid conversation owner (got {conv_owner!r})",
+                "Memory Extraction Skipped"
+            )
+            return
+        # B4: Build permitted scopes from policy write switches; fall back to all scopes if no policy.
+        if policy:
+            permitted_scopes = []
+            if getattr(policy, "allow_user_scope_write", True):
+                permitted_scopes.append("User")
+            if getattr(policy, "allow_agent_scope_write", True):
+                permitted_scopes.append("Agent")
+            if getattr(policy, "allow_role_scope_write", False):
+                permitted_scopes.append("Role")
+            if getattr(policy, "allow_site_scope_write", False):
+                permitted_scopes.append("Site")
+            if not permitted_scopes:
+                permitted_scopes = ["User"]
+        else:
+            permitted_scopes = ["Conversation", "User", "Agent", "Role", "Site", "Global"]
+
+        dedup_filters = {
+            "scope_type": ["in", permitted_scopes],
+            "status": ["in", ["Active", "Draft"]],
+            "agent": agent_name,
+        }
+        dedup_or_filters = []
+        if "User" in permitted_scopes:
+            # Keep user-context dedup: include non-User scopes broadly, but User-scope records only for this owner.
+            dedup_or_filters.append(["Memory Record", "scope_type", "!=", "User"])
+            dedup_or_filters.append(["Memory Record", "scope_key", "=", conv_owner])
+
+        existing_titles = frappe.get_all(
+            "Memory Record",
+            filters=dedup_filters,
+            or_filters=dedup_or_filters or None,
+            fields=["title"],
+            limit_page_length=50,
+            order_by="modified desc",
+        )
+        existing_titles_text = ""
+        if existing_titles:
+            titles_list = "\n".join(f"- {r['title']}" for r in existing_titles)
+            existing_titles_text = f"\n\nAlready stored memories (do NOT repeat or re-extract these):\n{titles_list}"
+
         prompt = f"""
         Review the following recent conversation. Extract any new, durable Facts, Preferences, or Decisions about the user or the context.
-        Only extract information that is explicitly stated or strongly implied and is worth remembering across sessions.
+        Only extract information that is explicitly stated or strongly implied and is worth remembering across sessions.{existing_titles_text}
         Output ONLY valid JSON matching this schema:
         {{
             "memories": [
@@ -707,30 +762,43 @@ def run_background_memory_extraction(conversation_name, agent_name):
             ]
         }}
         If there is nothing new to remember, output {{"memories": []}}
-        
+
         Conversation:
         {json.dumps(history, indent=2)}
         """
-        
+
         provider = agent_doc.provider
         model = agent_doc.model
-        
-        # Phase 4: Use Learning Agent if configured
-        if getattr(policy, "learning_agent", None):
-            learning_agent = frappe.get_doc("Agent", policy.learning_agent)
-            provider = learning_agent.provider
-            model = learning_agent.model
-            
+
+        # B5: Use Learning Agent only if it exists and is enabled; otherwise fall back to primary agent.
+        learning_agent_name = getattr(policy, "learning_agent", None)
+        if learning_agent_name:
+            if frappe.db.exists("Agent", learning_agent_name):
+                learning_agent_doc = frappe.get_doc("Agent", learning_agent_name)
+                if not getattr(learning_agent_doc, "disabled", False):
+                    provider = learning_agent_doc.provider
+                    model = learning_agent_doc.model
+                else:
+                    frappe.log_error(
+                        f"Memory extraction: learning agent '{learning_agent_name}' is disabled; falling back to primary agent '{agent_name}'.",
+                        "Memory Extraction Warning"
+                    )
+            else:
+                frappe.log_error(
+                    f"Memory extraction: learning agent '{learning_agent_name}' not found; falling back to primary agent '{agent_name}'.",
+                    "Memory Extraction Warning"
+                )
+
         from huf.ai.providers.litellm import get_simple_completion
-        
+
         messages = [{"role": "user", "content": prompt}]
-        
+
         result_text = _run_async_safely(
             get_simple_completion(model, messages, provider)
         )
         if not result_text:
             return
-            
+
         # Clean up markdown code blocks if present
         result_text = result_text.strip()
         if result_text.startswith("```json"):
@@ -739,11 +807,11 @@ def run_background_memory_extraction(conversation_name, agent_name):
             result_text = result_text[3:]
         if result_text.endswith("```"):
             result_text = result_text[:-3]
-            
-        import json
+
+        # json is imported at module top; local import removed (P0-2 fix)
         data = json.loads(result_text)
         memories = data.get("memories", [])
-        
+
         if memories:
             from huf.ai.memory_tools import save_memory_record
             for mem in memories:
@@ -752,7 +820,8 @@ def run_background_memory_extraction(conversation_name, agent_name):
                     summary_text=mem.get("summary_text"),
                     record_type=mem.get("record_type", "Fact"),
                     scope_type="User", # Default to User for auto-extraction
-                    scope_key=frappe.db.get_value("Agent Conversation", conversation_name, "owner") or frappe.session.user,
+                    # P2-5: Use conv_owner already validated above (not re-queried with Administrator fallback)
+                    scope_key=conv_owner,
                     status="Draft" if policy.approval_required else policy.default_status,
                     confidence=mem.get("confidence", 0.5),
                     importance_score=mem.get("importance_score", 0.5),
@@ -761,7 +830,7 @@ def run_background_memory_extraction(conversation_name, agent_name):
                     agent_name=agent_name
                 )
             frappe.db.commit()
-            
+
     except Exception as e:
         frappe.log_error(title="Memory Extraction Error", message=f"Extraction failed: {str(e)}")
 
@@ -1256,6 +1325,8 @@ def run_agent_sync(
             frappe.enqueue(
                 "huf.ai.agent_integration.run_background_memory_extraction",
                 queue="default",
+                job_id=f"memory_extract_{conversation.name}",
+                deduplicate=True,
                 conversation_name=conversation.name,
                 agent_name=agent_name
             )
@@ -1819,6 +1890,8 @@ async def run_agent_stream(
                             frappe.enqueue(
                                 "huf.ai.agent_integration.run_background_memory_extraction",
                                 queue="default",
+                                job_id=f"memory_extract_{conversation.name}",
+                                deduplicate=True,
                                 conversation_name=conversation.name,
                                 agent_name=agent_name
                             )
