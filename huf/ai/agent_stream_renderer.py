@@ -13,7 +13,7 @@ import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 from werkzeug.wrappers import Response
 
-from huf.ai.agent_integration import run_agent_stream
+from huf.ai.agent_integration import _has_queued_runs, run_agent_stream
 
 
 class AgentStreamRenderer(BaseRenderer):
@@ -57,6 +57,22 @@ class AgentStreamRenderer(BaseRenderer):
 			return self._render_html_page()
 		else:
 			return self._render_error("Invalid path format. Expected: /huf/stream/<agent_name>")
+
+	def _sse_error_response(self, error_message: str):
+		"""Return a single-event SSE error response (same chunk shape the stream uses for errors)."""
+		def error_generator() -> Generator[str, None, None]:
+			error_data = {"type": "error", "error": error_message}
+			yield f"data: {json.dumps(error_data)}\n\n"
+
+		return Response(
+			error_generator(),
+			mimetype="text/event-stream",
+			headers={
+				"Cache-Control": "no-cache",
+				"Connection": "keep-alive",
+				"X-Accel-Buffering": "no",
+			},
+		)
 
 	def _render_agent_stream(self, agent_name: str):
 		"""Generate SSE stream for agent response."""
@@ -136,6 +152,14 @@ class AgentStreamRenderer(BaseRenderer):
 				},
 			)
 		
+		# Queue-first policy: streaming is a direct-execution compatibility path,
+		# allowed only when the agent opts in via the 'Run Immediately' policy.
+		if not getattr(agent_doc, "run_immediately", 0):
+			return self._sse_error_response(
+				"Streaming requires the agent's 'Run Immediately' policy. "
+				"This agent runs queue-first; use the standard chat API instead."
+			)
+
 		# Get optional parameters
 		channel_id = frappe.form_dict.get("channel_id", "sse_stream")
 		external_id = frappe.form_dict.get("external_id") or frappe.session.user
@@ -157,6 +181,17 @@ class AgentStreamRenderer(BaseRenderer):
 
 		create_new = bool(create_new)
 		skip_user_message = bool(skip_user_message)
+
+		# Queue-ordering parity with run_agent_sync's direct path: a direct
+		# stream must not jump ahead of queued runs for the same conversation.
+		# If no conversation id is available here the stream starts a brand-new
+		# conversation, which by definition has no queued runs — skip the check.
+		stream_conversation_id = None if create_new else conversation_id
+		if stream_conversation_id and _has_queued_runs(stream_conversation_id):
+			return self._sse_error_response(
+				"This conversation has queued runs pending. "
+				"Wait for them to complete before using the direct-execution override."
+			)
 		
 		# Create async generator wrapper
 		def stream_generator() -> Generator[str, None, None]:

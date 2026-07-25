@@ -9,6 +9,27 @@ from requests.exceptions import RequestException
 
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}
 MAX_RESPONSE_SIZE = 10 * 1024 * 1024  # 10MB
+DEFAULT_TIMEOUT = 30
+
+
+def _http_request(method, url, **kwargs):
+    """
+    Internal HTTP request helper for non-whitelisted Huf code.
+
+    Applies SSRF validation and a default timeout. Prefer this over raw
+    requests/httpx calls so security policy is applied consistently.
+    """
+    if method.upper() not in ALLOWED_METHODS:
+        raise ValueError(f"HTTP method '{method}' is not allowed")
+
+    is_valid, error_msg = validate_url(url)
+    if not is_valid:
+        raise ValueError(error_msg)
+
+    request_kwargs = {"timeout": kwargs.get("timeout", DEFAULT_TIMEOUT)}
+    request_kwargs.update(kwargs)
+
+    return requests.request(method, url, **request_kwargs)
 
 def _is_public_ip(ip_str: str) -> bool:
 	"""Return True only if ip_str is a routable public address.

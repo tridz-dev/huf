@@ -5,6 +5,7 @@ Uses HUF Integration Settings for credential management.
 
 import json
 import frappe
+logger = frappe.logger("huf")
 import httpx
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
 
@@ -47,7 +48,7 @@ def handle_send_message(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"Discord Send Message Error: {str(e)}"
-        frappe.log_error(error_msg, "Discord Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -82,7 +83,7 @@ def handle_get_channel_messages(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"Discord Get Messages Error: {str(e)}"
-        frappe.log_error(error_msg, "Discord Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -115,7 +116,7 @@ def handle_list_channels(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"Discord List Channels Error: {str(e)}"
-        frappe.log_error(error_msg, "Discord Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -144,6 +145,6 @@ def handle_delete_message(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"Discord Delete Message Error: {str(e)}"
-        frappe.log_error(error_msg, "Discord Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)

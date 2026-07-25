@@ -5,6 +5,7 @@ Uses HUF Integration Settings for GitHub credentials.
 
 import json
 import frappe
+logger = frappe.logger("huf")
 import httpx
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
 
@@ -71,7 +72,7 @@ def handle_list_repos(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"GitHub List Repos Error: {str(e)}"
-        frappe.log_error(error_msg, "GitHub Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -108,7 +109,7 @@ def handle_get_repo(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"GitHub Get Repo Error: {str(e)}"
-        frappe.log_error(error_msg, "GitHub Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -144,7 +145,7 @@ def handle_create_issue(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"GitHub Create Issue Error: {str(e)}"
-        frappe.log_error(error_msg, "GitHub Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -187,7 +188,7 @@ def handle_create_pull_request(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"GitHub Create PR Error: {str(e)}"
-        frappe.log_error(error_msg, "GitHub Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -222,7 +223,7 @@ def handle_get_file_content(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"GitHub Get File Content Error: {str(e)}"
-        frappe.log_error(error_msg, "GitHub Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)
 
@@ -255,6 +256,6 @@ def handle_search_code(**kwargs) -> str:
         })
     except Exception as e:
         error_msg = f"GitHub Search Code Error: {str(e)}"
-        frappe.log_error(error_msg, "GitHub Tool")
+        logger.warning(error_msg)
         update_last_error(service_name, error_msg)
         return json.dumps({"success": False, "error": str(e)}, default=str)

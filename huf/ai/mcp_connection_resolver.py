@@ -186,7 +186,6 @@ def discover_mcp_server(server_name: str) -> dict:
             server.oauth_discovery_status = result.get("discovery_status", "Failed")
             server.oauth_discovery_error = result.get("discovery_error")
             server.save(ignore_permissions=True)
-            frappe.db.commit()
             return result
 
         # Persist discovered metadata
@@ -215,7 +214,6 @@ def discover_mcp_server(server_name: str) -> dict:
             server.oauth_scope = " ".join(result["scopes_supported"])
 
         server.save(ignore_permissions=True)
-        frappe.db.commit()
 
         # Return a sanitized version (no full metadata dump to frontend)
         return {

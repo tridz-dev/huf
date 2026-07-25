@@ -1,13 +1,31 @@
 import json
 
 import frappe
+from frappe import _
 
+from huf.permissions import has_capability
 from .validators import (
 	LAYOUT_FIELD_TYPES,
 	get_search_fields,
 	resolve_autoname,
 	validate_and_prepare_fields,
 )
+
+
+# Data tables do not have a dedicated capability yet; reuse flow capabilities
+# as the closest admin-level permission boundary.
+_WRITE_CAPABILITY = "flows.manage"
+_READ_CAPABILITY = "flows.use"
+
+
+def _require_write():
+	if not has_capability(frappe.session.user, _WRITE_CAPABILITY):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+
+def _require_read():
+	if not has_capability(frappe.session.user, _READ_CAPABILITY):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 
 @frappe.whitelist()
@@ -19,7 +37,11 @@ def create_data_table(
 	autoname_method: str = "Autoincrement",
 	title_field: str = "",
 ) -> dict:
-	"""Create a new data table (DocType + registry entry)."""
+	"""Create a new data table (DocType + registry entry).
+
+	Requires: flows.manage
+	"""
+	_require_write()
 	if isinstance(fields, str):
 		fields = json.loads(fields)
 
@@ -72,7 +94,7 @@ def create_data_table(
 			}
 		],
 	)
-	dt.insert(ignore_permissions=True)
+	dt.insert()
 
 	data_field_count = len([f for f in validated_fields if f["fieldtype"] not in LAYOUT_FIELD_TYPES])
 
@@ -88,9 +110,7 @@ def create_data_table(
 			"title_field_name": title_field,
 		}
 	)
-	registry.insert(ignore_permissions=True)
-
-	frappe.db.commit()
+	registry.insert()
 
 	return {
 		"success": True,
@@ -109,7 +129,11 @@ def update_data_table(
 	description: str | None = None,
 	icon: str | None = None,
 ) -> dict:
-	"""Update table structure (add/remove/reorder fields, update metadata)."""
+	"""Update table structure (add/remove/reorder fields, update metadata).
+
+	Requires: flows.manage
+	"""
+	_require_write()
 	registry = frappe.get_doc("Huf Data Table", name)
 
 	if fields is not None:
@@ -123,7 +147,7 @@ def update_data_table(
 		for field_data in validated_fields:
 			dt.append("fields", field_data)
 		dt.search_fields = get_search_fields(validated_fields)
-		dt.save(ignore_permissions=True)
+		dt.save()
 
 		registry.field_count = len(
 			[f for f in validated_fields if f["fieldtype"] not in LAYOUT_FIELD_TYPES]
@@ -134,15 +158,18 @@ def update_data_table(
 	if icon is not None:
 		registry.icon = icon
 
-	registry.save(ignore_permissions=True)
-	frappe.db.commit()
+	registry.save()
 
 	return {"success": True, "data": {"name": registry.name}}
 
 
 @frappe.whitelist()
 def delete_data_table(name: str) -> dict:
-	"""Delete a data table and all its records."""
+	"""Delete a data table and all its records.
+
+	Requires: flows.manage
+	"""
+	_require_write()
 	registry = frappe.get_doc("Huf Data Table", name)
 	doctype_name = registry.doctype_name
 
@@ -153,10 +180,9 @@ def delete_data_table(name: str) -> dict:
 		pass
 
 	if frappe.db.exists("DocType", doctype_name):
-		frappe.delete_doc("DocType", doctype_name, force=True, ignore_permissions=True)
+		frappe.delete_doc("DocType", doctype_name, force=True)
 
-	frappe.delete_doc("Huf Data Table", name, ignore_permissions=True)
-	frappe.db.commit()
+	frappe.delete_doc("Huf Data Table", name)
 
 	return {"success": True, "data": {"deleted_records": record_count}}
 
@@ -167,7 +193,10 @@ def get_table_record_counts(names: str | list[str]) -> dict:
 
 	Standard REST can't count records across dynamic DocTypes,
 	so this helper exists for the listing page enrichment.
+
+	Requires: flows.use
 	"""
+	_require_read()
 	if isinstance(names, str):
 		names = json.loads(names)
 
@@ -184,7 +213,11 @@ def get_table_record_counts(names: str | list[str]) -> dict:
 
 @frappe.whitelist()
 def get_table_schema(name: str) -> dict:
-	"""Get complete table schema (fields with all properties)."""
+	"""Get complete table schema (fields with all properties).
+
+	Requires: flows.use
+	"""
+	_require_read()
 	registry = frappe.get_doc("Huf Data Table", name)
 	meta = frappe.get_meta(registry.doctype_name)
 

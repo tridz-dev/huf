@@ -236,5 +236,4 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
             )
             msg_doc.db_set("creation", msg_timestamp)
 
-    frappe.db.commit()
     return {"status": "success", "run_id": run_doc.name}
