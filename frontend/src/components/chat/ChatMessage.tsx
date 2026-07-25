@@ -63,9 +63,17 @@ export function ChatMessage({
 }: ChatMessageProps) {
     const { user } = useUser();
     const isUser = message.from === 'user';
+    const isAssistant = message.from === 'assistant';
+    const isEmpty = !message.versions[0]?.content || message.versions[0].content.trim() === '';
     const timestamp = message.versions[0]?.id ? undefined : undefined; // We'll get timestamp from message if available
     const timeDisplay = timestamp ? formatTime(timestamp) : '';
     const userInitials = user?.full_name ? getInitials(user.full_name) : 'You';
+
+    const showLoading = isAssistant && !message.error && (
+        ((status === 'submitted' || status === 'streaming') && isEmpty) ||
+        message.runStatus === 'Queued' ||
+        message.runStatus === 'Started'
+    );
 
     // Skip rendering ALL tool-related messages when tool execution details are hidden
     if (!showToolExecutionDetails) {
@@ -123,14 +131,15 @@ export function ChatMessage({
                     <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
                         <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
                             {/* Show loading state while message is generating */}
-                            {(status === 'submitted' || status === 'streaming') && 
-                             message.from === 'assistant' && 
-                             (!message.versions[0]?.content || message.versions[0].content.trim() === '') && (
+                            {showLoading && (
                                 <MessageLoadingState
                                     type={showToolExecutionDetails && message.tools?.length ? 'tool-execution' : loadingType}
                                     hasTools={showToolExecutionDetails && !!message.tools && message.tools.length > 0}
                                     toolName={showToolExecutionDetails ? message.tools?.[0]?.name : undefined}
                                 />
+                            )}
+                            {message.runStatus === 'Failed' && message.error && (
+                                <div className="text-sm text-destructive mb-2">{message.error}</div>
                             )}
                             {message.generatedAudio && message.from === 'assistant' ? (
                                 <div className="w-full max-w-md">
@@ -145,6 +154,34 @@ export function ChatMessage({
                                             <AudioPlayerVolumeRange />
                                         </AudioPlayerControlBar>
                                     </AudioPlayer>
+                                </div>
+                            ) : message.voiceMessage && message.from === 'user' ? (
+                                <div className="flex flex-col gap-2 w-full max-w-md">
+                                    <AudioPlayer>
+                                        <AudioPlayerElement src={resolveAudioSrc(message.voiceMessage)} />
+                                        <AudioPlayerControlBar>
+                                            <AudioPlayerPlayButton />
+                                            <AudioPlayerTimeDisplay />
+                                            <AudioPlayerTimeRange />
+                                            <AudioPlayerDurationDisplay />
+                                            <AudioPlayerMuteButton />
+                                            <AudioPlayerVolumeRange />
+                                        </AudioPlayerControlBar>
+                                    </AudioPlayer>
+                                    {message.versions[0]?.content && (
+                                        <details className="text-sm rounded-lg border border-black/10 dark:border-white/10 group [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="font-medium cursor-pointer select-none p-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors rounded-lg group-open:rounded-b-none list-none flex items-center justify-between opacity-80">
+                                                <span>Transcript</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open:rotate-180 opacity-50"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                            </summary>
+                                            <div className="p-3 pt-0 border-t border-black/10 dark:border-white/10 mt-2 opacity-90">
+                                                <MessageContentWithArtifacts
+                                                    content={message.versions[0].content}
+                                                    messageId={message.versions[0]?.id ?? message.key}
+                                                />
+                                            </div>
+                                        </details>
+                                    )}
                                 </div>
                             ) : message.kind === 'Image' ? (
                                 <div className="flex flex-col gap-2">
@@ -184,10 +221,7 @@ export function ChatMessage({
                                         />
                                     )}
                                 </div>
-                            ) : !message.generatedAudio && !((status === 'submitted' || status === 'streaming') &&
-                                  message.from === 'assistant' && 
-                                  (!message.versions[0]?.content || message.versions[0].content.trim() === '') && 
-                                  !message.tools) && (
+                            ) : !message.generatedAudio && !(showLoading && !message.tools) && (
                                 <>
                                     {message.attachment && (
                                         <ChatAttachmentCard

@@ -1,5 +1,6 @@
 import json
 import frappe
+logger = frappe.logger("huf")
 from datetime import datetime
 from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
@@ -59,7 +60,7 @@ def handle_list_events(**kwargs):
 			"results": events
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Calendar Error (List): {str(e)}", "Google Calendar Tool")
+		logger.warning(f"Google Calendar Error (List): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -94,7 +95,7 @@ def handle_create_event(**kwargs):
 			}
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Calendar Error (Create): {str(e)}", "Google Calendar Tool")
+		logger.warning(f"Google Calendar Error (Create): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -122,7 +123,7 @@ def handle_update_event(**kwargs):
 		resp.raise_for_status()
 		return json.dumps({"success": True, "results": {"event_id": event_id}})
 	except Exception as e:
-		frappe.log_error(f"Google Calendar Error (Update): {str(e)}", "Google Calendar Tool")
+		logger.warning(f"Google Calendar Error (Update): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -143,6 +144,6 @@ def handle_delete_event(**kwargs):
 		resp.raise_for_status()
 		return json.dumps({"success": True, "results": {"event_id": event_id}})
 	except Exception as e:
-		frappe.log_error(f"Google Calendar Error (Delete): {str(e)}", "Google Calendar Tool")
+		logger.warning(f"Google Calendar Error (Delete): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})

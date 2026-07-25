@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   File,
+  FileAudio,
   FileCode,
   FileImage,
   FileSpreadsheet,
@@ -28,6 +29,9 @@ export function getFileTypeInfo(file: File | string): FileTypeInfo {
 
   if (mimeType?.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
     return { label: 'Image', extension: ext || 'img', Icon: FileImage, isImage: true };
+  }
+  if (mimeType?.startsWith('audio/') || ['webm', 'mp3', 'wav', 'm4a', 'ogg', 'flac'].includes(ext)) {
+    return { label: 'Audio', extension: ext || 'audio', Icon: FileAudio, isImage: false };
   }
   if (ext === 'pdf') {
     return { label: 'PDF', extension: ext, Icon: FileText, isImage: false };

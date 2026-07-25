@@ -1,5 +1,6 @@
 import json
 import frappe
+logger = frappe.logger("huf")
 from huf.ai.tools.credentials import require_credential, update_last_error
 import requests
 
@@ -45,7 +46,7 @@ def handle_list_files(**kwargs):
 			"results": files
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Drive Error (List): {str(e)}", "Google Drive Tool")
+		logger.warning(f"Google Drive Error (List): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -71,7 +72,7 @@ def handle_get_file(**kwargs):
 			"results": data
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Drive Error (Get File): {str(e)}", "Google Drive Tool")
+		logger.warning(f"Google Drive Error (Get File): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -105,6 +106,6 @@ def handle_search_files(**kwargs):
 			"results": files
 		})
 	except Exception as e:
-		frappe.log_error(f"Google Drive Error (Search): {str(e)}", "Google Drive Tool")
+		logger.warning(f"Google Drive Error (Search): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})

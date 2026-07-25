@@ -40,6 +40,7 @@ import { HttpHeaderCard, type HttpHeaderData } from './HttpHeaderCard';
 import { SelectDocTypeFieldsDialog } from './SelectDocTypeFieldsDialog';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import type { AgentToolType, ToolType } from '@/types/agent.types';
+import { getToolTypeDisplayLabel } from '@/data/ai';
 import { getDocTypeMeta } from '@/services/agentApi';
 import { fetchToolParametersFromCode, getAgentsUsingTool } from '@/services/toolApi';
 import { toast } from 'sonner';
@@ -163,7 +164,7 @@ export function ToolCreationForm({
 
   const toolTypeOptions = toolTypes.map((type) => ({
     value: type.name,
-    label: type.name1 || type.name,
+    label: getToolTypeDisplayLabel(type.name1 || type.name),
   }));
 
   const operationTypeOptions = template.toolTypes;

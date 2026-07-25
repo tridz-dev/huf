@@ -11,6 +11,7 @@ export const agentFormSchema = z.object({
   persist_conversation: z.boolean(),
   persist_user_history: z.boolean(),
   enable_multi_run: z.boolean(),
+  run_immediately: z.boolean().optional(),
   description: z.string().optional(),
   instructions: z.string(),
 
