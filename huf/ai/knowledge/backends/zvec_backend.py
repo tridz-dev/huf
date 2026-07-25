@@ -294,7 +294,11 @@ class ZvecBackend(KnowledgeBackend):
 		# Upsert so re-indexing the same chunk ids stays graceful.
 		result = self.collection.upsert(docs)
 		statuses = result if isinstance(result, list) else [result]
-		return sum(1 for status in statuses if status.ok())
+		added = sum(1 for status in statuses if status.ok())
+		# Persist buffered writes so stats, reopen, and crash-safety behave.
+		if added:
+			self.collection.flush()
+		return added
 
 	def _build_filter_expression(self, filters: dict[str, Any] | None) -> str | None:
 		"""Build an injection-safe zvec filter expression from caller filters.
