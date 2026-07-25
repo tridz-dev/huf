@@ -559,7 +559,7 @@ export function ToolCreationForm({
       {editingParameterIndex !== null ? renderParameterEditorView() : (
         <div className="space-y-8 pb-2">
       {/* CORE CONFIGURATION Section */}
-      <div className="space-y-4">
+      <div className="space-y-4 rounded-none border border-line bg-panel p-4">
         <SectionHeader icon={Settings} title="Core configuration" />
 
         <FormField
@@ -574,6 +574,7 @@ export function ToolCreationForm({
               <FormControl>
                 <Input
                   placeholder="e.g. create_sales_order"
+                  className="bg-background"
                   {...field}
                   onChange={(e) => {
                     field.onChange(e);
@@ -590,7 +591,7 @@ export function ToolCreationForm({
       </div>
 
       {/* OPERATION DETAILS Section */}
-      <div className="space-y-4 border-t border-line pt-6">
+      <div className="space-y-4 rounded-none border border-line bg-panel p-4">
         <SectionHeader icon={Zap} title="Operation details" />
 
         <FormField
@@ -607,7 +608,7 @@ export function ToolCreationForm({
                 disabled={loading}
               >
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Select Operation Type..." />
                   </SelectTrigger>
                 </FormControl>
@@ -643,6 +644,7 @@ export function ToolCreationForm({
                     searchPlaceholder="Search DocTypes..."
                     emptyText="No DocType found."
                     disabled={loading || loadingData}
+                    className="bg-background"
                   />
                 </FormControl>
                 <FormMessage />
@@ -670,6 +672,7 @@ export function ToolCreationForm({
                     emptyText="No agent found."
                     disabled={loading || loadingData}
                     linkTo={linkRoutes.agent}
+                    className="bg-background"
                   />
                 </FormControl>
                 <FormMessage />
@@ -688,6 +691,7 @@ export function ToolCreationForm({
                 <FormControl>
                   <Input
                     placeholder="e.g., my_app.api.my_function"
+                    className="bg-background"
                     {...field}
                     disabled={loading}
                   />
@@ -708,6 +712,7 @@ export function ToolCreationForm({
                 <FormControl>
                   <Input
                     placeholder="e.g., myClientFunction"
+                    className="bg-background"
                     {...field}
                     disabled={loading}
                   />
@@ -728,6 +733,7 @@ export function ToolCreationForm({
                 <FormControl>
                   <Input
                     placeholder="e.g., my_app"
+                    className="bg-background"
                     {...field}
                     disabled={loading}
                   />
@@ -748,6 +754,7 @@ export function ToolCreationForm({
                 <FormControl>
                   <Input
                     placeholder="e.g., https://api.example.com"
+                    className="bg-background"
                     {...field}
                     disabled={loading}
                   />
@@ -785,7 +792,7 @@ export function ToolCreationForm({
 
       {/* HTTP Headers Section (for GET/POST) */}
       {selectedType && shouldShowField('http_headers', selectedType) && (
-        <div className="space-y-4 border-t border-line pt-6">
+        <div className="space-y-4 rounded-none border border-line bg-panel p-4">
           <div className="flex items-center justify-between">
             <SectionHeader title="HTTP Headers" />
             <Button
@@ -820,7 +827,7 @@ export function ToolCreationForm({
       )}
 
       {/* Parameters Section */}
-      <div className="space-y-4 border-t border-line pt-6">
+      <div className="space-y-4 rounded-none border border-line bg-panel p-4">
         <div className="flex items-center justify-between">
           <SectionHeader title={<>Parameters{renderAutoBadge('parameters')}</>} />
           <div className="flex items-center gap-2">
@@ -979,7 +986,7 @@ export function ToolCreationForm({
                   <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
                 </button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-4 pt-1">
+              <CollapsibleContent className="space-y-4 rounded-none border border-line bg-panel p-4">
                 <FormField
                   control={form.control}
                   name="tool_type"
@@ -1001,6 +1008,7 @@ export function ToolCreationForm({
                           searchPlaceholder="Search tool categories..."
                           emptyText="No tool category found."
                           disabled={loading}
+                          className="bg-background"
                         />
                       </FormControl>
                       <FormMessage />
@@ -1020,7 +1028,7 @@ export function ToolCreationForm({
                       <FormControl>
                         <Textarea
                           placeholder="Describe what this tool does. The AI uses this description to decide when to call it."
-                          className="min-h-[100px]"
+                          className="min-h-[100px] bg-background"
                           {...field}
                           onChange={(e) => {
                             field.onChange(e);
@@ -1052,7 +1060,7 @@ export function ToolCreationForm({
                   <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
                 </button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-4 pt-1">
+              <CollapsibleContent className="space-y-4 rounded-none border border-line bg-panel p-4">
                 <FormField
                   control={form.control}
                   name="required_permission"
@@ -1071,7 +1079,7 @@ export function ToolCreationForm({
                         disabled={loading}
                       >
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="bg-background">
                             <SelectValue placeholder="Select permission level..." />
                           </SelectTrigger>
                         </FormControl>
