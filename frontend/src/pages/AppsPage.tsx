@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AppWindow, TriangleAlert } from 'lucide-react';
+import { AppWindow, ExternalLink, TriangleAlert } from 'lucide-react';
 import { PageLayout, GridView, BaseCard } from '../components/dashboard';
 import { CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,18 +11,20 @@ export { AppsPage };
 export default AppsPage;
 
 /**
- * Launch a registered HUF App. Apps are independent Frappe apps with
- * their own frontends, so this is a full-page site-local navigation —
- * never an iframe, never SPA router navigation.
+ * Resolve the launch URL for a registered HUF App. Apps are independent
+ * Frappe apps with their own frontends, so cards are plain anchors doing
+ * full-page site-local navigation — never an iframe, never SPA router
+ * navigation.
+ *
+ * Defensive: manifests are validated server-side, but never link to
+ * anything that isn't a plain site-local path.
  */
-function launchApp(app: HufApp) {
+function appRoute(app: HufApp): string | null {
 	const route = app.route;
-	// Defensive: manifests are validated server-side, but never navigate
-	// to anything that isn't a plain site-local path.
 	if (typeof route !== 'string' || !route.startsWith('/') || route.startsWith('//')) {
-		return;
+		return null;
 	}
-	window.location.assign(route);
+	return route;
 }
 
 function AppIcon({ app }: { app: HufApp }) {
@@ -50,8 +52,12 @@ function AppIcon({ app }: { app: HufApp }) {
 }
 
 function AppCard({ app }: { app: HufApp }) {
-	return (
-		<BaseCard onClick={() => launchApp(app)} className="flex flex-col">
+	const route = appRoute(app);
+
+	// The whole card is a real anchor: left-click navigates (full page
+	// load), cmd/ctrl/middle-click opens a new tab natively.
+	const card = (
+		<BaseCard className="flex flex-col cursor-pointer hover:border-ink">
 			<CardHeader className="pb-3">
 				<CardTitle className="font-body font-semibold text-[15px] line-clamp-1 flex items-center gap-2">
 					<AppIcon app={app} />
@@ -60,15 +66,40 @@ function AppCard({ app }: { app: HufApp }) {
 				<CardDescription className="text-steel text-[13px] line-clamp-2 min-h-[2.5rem]">
 					{app.description || 'No description'}
 				</CardDescription>
-				{app.category && (
-					<CardAction className="top-5">
+				<CardAction className="top-5 flex items-center gap-1">
+					{app.category && (
 						<Badge variant="secondary" className="text-xs">
 							{app.category}
 						</Badge>
-					</CardAction>
-				)}
+					)}
+					{route && (
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-7 w-7 text-steel-soft hover:text-ink"
+							title="Open in new tab"
+							onClick={(e) => {
+								// Don't let the click reach the wrapping anchor.
+								e.stopPropagation();
+								e.preventDefault();
+								window.open(route, '_blank', 'noopener');
+							}}
+						>
+							<ExternalLink className="w-3.5 h-3.5" />
+						</Button>
+					)}
+				</CardAction>
 			</CardHeader>
 		</BaseCard>
+	);
+
+	if (!route) {
+		return card;
+	}
+	return (
+		<a href={route} className="block h-full text-inherit no-underline">
+			{card}
+		</a>
 	);
 }
 
