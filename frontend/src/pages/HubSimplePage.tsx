@@ -127,11 +127,15 @@ export default function HubSimplePage() {
         { agent: 'Hub Orchestrator', message: msg, conversationId },
         { useStreaming: useStream, onDelta: useStream ? updateAssistantContent : undefined }
       );
-      const message = result.message;
+      const message = result.message as {
+        response?: string;
+        conversation_id?: string;
+        run?: { response?: string; conversation_id?: string };
+      };
       const responseText: string =
-        ('run' in message ? message.run.response : message.response) ?? "I've processed your request.";
+        message.run?.response ?? message.response ?? "I've processed your request.";
       const newConvId: string =
-        ('run' in message ? message.run.conversation_id : message.conversation_id) ?? '';
+        message.run?.conversation_id ?? message.conversation_id ?? '';
       if (!useStream) updateAssistantContent(responseText);
       setConversationId(newConvId || undefined);
     } catch {
