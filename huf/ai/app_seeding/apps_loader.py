@@ -25,6 +25,21 @@ APP_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_\-]*$")
 ICON_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_\-]*$")
 URL_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 
+# Documented default launcher categories. Custom categories are allowed (only
+# shape-checked) but noted at sync time; see _nonstandard_category_note.
+DEFAULT_CATEGORIES = (
+	"Create",
+	"Plan",
+	"Research",
+	"Automate",
+	"Analyze",
+	"Communicate",
+	"Manage",
+	"Other",
+)
+CATEGORY_MAX_LENGTH = 30
+MAX_EXPOSED_TABLES = 20
+
 # Top-level fields a manifest may declare. Anything else (including
 # provenance/sync fields such as source_app or manifest_hash) is rejected.
 ALLOWED_FIELDS = {
@@ -41,6 +56,7 @@ ALLOWED_FIELDS = {
 	"permission_method",
 	"sort_order",
 	"enabled",
+	"exposed_tables",
 }
 
 STRING_FIELDS = (
@@ -102,6 +118,66 @@ def _validate_permission_method(path) -> str | None:
 	return None
 
 
+def _validate_category(category) -> str | None:
+	"""Return an error message if the category has an invalid shape.
+
+	Only the shape is enforced (single line, no HTML, length cap); custom
+	categories are accepted and merely noted at sync time.
+	"""
+	if "\n" in category or "\r" in category:
+		return "category must be a single line"
+	if len(category) > CATEGORY_MAX_LENGTH:
+		return f"category must be at most {CATEGORY_MAX_LENGTH} characters"
+	if "<" in category or ">" in category:
+		return "category must not contain HTML"
+	return None
+
+
+def _validate_exposed_tables_shape(value) -> str | None:
+	"""Return an error message unless exposed_tables is a list of at most
+	MAX_EXPOSED_TABLES single-line DocType name strings."""
+	if not isinstance(value, list) or len(value) > MAX_EXPOSED_TABLES:
+		return f"exposed_tables must be a list of at most {MAX_EXPOSED_TABLES} DocType names"
+	for table in value:
+		if not isinstance(table, str) or not table.strip() or "\n" in table or "\r" in table:
+			return "exposed_tables entries must be single-line DocType name strings"
+	return None
+
+
+def _get_module_app(module: str) -> str | None:
+	"""App that owns the given Module Def (seam for tests)."""
+	return frappe.db.get_value("Module Def", module, "app_name")
+
+
+def _get_doctype_module(doctype: str) -> str:
+	"""Module of an existing DocType; raises for unknown ones (seam for tests)."""
+	return frappe.get_meta(doctype).module
+
+
+def _validate_exposed_tables(tables: list, source_app: str) -> str | None:
+	"""Return an error message unless every exposed table is an existing
+	DocType whose module belongs to the provider app. Never raises."""
+	for table in tables:
+		try:
+			module = _get_doctype_module(table)
+		except Exception:
+			return f"exposed_tables references unknown DocType '{table}'"
+		owner_app = _get_module_app(module)
+		if owner_app != source_app:
+			return (
+				f"exposed_tables DocType '{table}' is owned by app "
+				f"'{owner_app}', not provider app '{source_app}'"
+			)
+	return None
+
+
+def _nonstandard_category_note(app_id: str, category: str) -> str | None:
+	"""Info note for accepted categories outside the documented defaults."""
+	if category in DEFAULT_CATEGORIES:
+		return None
+	return f"HUF App '{app_id}' declares non-standard category '{category}'"
+
+
 def validate_manifest(data) -> tuple:
 	"""
 	Validate a raw manifest dict against the MVP grammar.
@@ -145,6 +221,15 @@ def validate_manifest(data) -> tuple:
 		if error := _validate_icon(icon):
 			return None, error
 
+	category = (data.get("category") or "").strip()
+	if category:
+		if error := _validate_category(category):
+			return None, error
+
+	exposed_tables = data.get("exposed_tables", [])
+	if error := _validate_exposed_tables_shape(exposed_tables):
+		return None, error
+
 	launch_mode = data.get("launch_mode", "route")
 	if not isinstance(launch_mode, str) or launch_mode.lower() != "route":
 		return None, "launch_mode must be 'route'"
@@ -167,12 +252,14 @@ def validate_manifest(data) -> tuple:
 		"version": (data.get("version") or "").strip(),
 		"route": route,
 		"icon": icon,
-		"category": (data.get("category") or "").strip() or "Other",
+		"category": category or "Other",
 		"launch_mode": "Route",
 		"required_huf_version": (data.get("required_huf_version") or "").strip(),
 		"permission_method": permission_method,
 		"sort_order": data.get("sort_order", 100),
 		"enabled": 1 if data.get("enabled", True) else 0,
+		# Stored on the DocType as a comma-joined string.
+		"exposed_tables": ",".join(t.strip() for t in exposed_tables),
 	}
 	return normalized, None
 
@@ -197,8 +284,17 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 		_record_invalid_manifest(data, error, source_app, source_file)
 		return False, error
 
+	# DocType existence/ownership can only be checked against the live site.
+	tables = [t for t in normalized["exposed_tables"].split(",") if t]
+	if error := _validate_exposed_tables(tables, source_app):
+		_record_invalid_manifest(data, error, source_app, source_file)
+		return False, error
+
 	app_id = normalized["app_id"]
 	manifest_hash = compute_manifest_hash(normalized)
+
+	if note := _nonstandard_category_note(app_id, normalized["category"]):
+		frappe.logger().info(note)
 
 	existing = frappe.db.get_value(
 		"HUF App",
@@ -240,6 +336,10 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 
 	try:
 		if existing:
+			# Manual-disable-wins: the manifest's enabled applies only when
+			# inserting a new record; updates never touch the stored flag
+			# (an admin may have disabled the app manually).
+			values.pop("enabled", None)
 			doc = frappe.get_doc("HUF App", app_id)
 			doc.update(values)
 			doc.save(ignore_permissions=True)
@@ -346,6 +446,7 @@ def sync_huf_apps() -> dict:
 		"deleted": 0,
 		"errors": [],
 		"deleted_apps": [],
+		"notes": [],
 	}
 	seen = set()
 
@@ -373,6 +474,10 @@ def sync_huf_apps() -> dict:
 					ok, error = upsert_huf_app(item, app_name, source_file)
 					if ok:
 						summary["synced"] += 1
+						if isinstance(item, dict):
+							category = (item.get("category") or "").strip() or "Other"
+							if note := _nonstandard_category_note(item.get("app_id"), category):
+								summary["notes"].append(note)
 					else:
 						summary["invalid"] += 1
 						summary["errors"].append(
