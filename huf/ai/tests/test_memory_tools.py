@@ -9,7 +9,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-# Inject a mock frappe package before importing Huf code.
+# Build a mock frappe package for the permission-gate tests below.
 _mock_frappe = MagicMock()
 _mock_frappe.session.user = "test_user@example.com"
 _mock_frappe.get_roles.return_value = {"Huf User"}
@@ -28,24 +28,57 @@ _mock_frappe_background_jobs = MagicMock()
 _mock_frappe_file_manager = MagicMock()
 _mock_frappe.client = MagicMock()
 
-sys.modules["frappe"] = _mock_frappe
-sys.modules["frappe.utils"] = _mock_frappe_utils
-sys.modules["frappe.utils.background_jobs"] = _mock_frappe_background_jobs
-sys.modules["frappe.utils.file_manager"] = _mock_frappe_file_manager
-sys.modules["frappe.client"] = _mock_frappe.client
-
 _mock_agents = MagicMock()
 _mock_agents.FunctionTool = MagicMock()
-sys.modules["agents"] = _mock_agents
 
-from huf.ai import memory_tools
+
+def _has_real_frappe() -> bool:
+    """True when running inside a Frappe environment (e.g. bench run-tests)."""
+    try:
+        import frappe as real_frappe
+    except ImportError:
+        return False
+    # A MagicMock already injected into sys.modules has no string __file__.
+    return isinstance(getattr(real_frappe, "__file__", None), str)
+
+
+if not _has_real_frappe():
+    # Standalone pytest (no Frappe installed): inject mocks so the huf imports
+    # below work at all. Never do this under bench — replacing
+    # sys.modules["frappe"] at import time leaks into every other test module
+    # discovered in the same run and breaks their DB work with MagicMocks.
+    sys.modules["frappe"] = _mock_frappe
+    sys.modules["frappe.utils"] = _mock_frappe_utils
+    sys.modules["frappe.utils.background_jobs"] = _mock_frappe_background_jobs
+    sys.modules["frappe.utils.file_manager"] = _mock_frappe_file_manager
+    sys.modules["frappe.client"] = _mock_frappe.client
+    sys.modules["agents"] = _mock_agents
+
+from huf.ai import memory_tools, sdk_tools
 from huf.ai.sdk_tools import create_agent_tools
 
 
-class TestCanWriteMemory(unittest.TestCase):
+class _MockFrappeTestCase(unittest.TestCase):
+    """Point the modules under test at the mock frappe for each test.
+
+    Under bench the huf modules are already imported with the real frappe
+    module bound, so swap the module-global reference per test and restore it
+    afterwards. In standalone mode the modules were imported against the mock
+    already, making this a harmless no-op.
+    """
+
+    def setUp(self):
+        for module in (memory_tools, sdk_tools):
+            patcher = patch.object(module, "frappe", _mock_frappe)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+
+class TestCanWriteMemory(_MockFrappeTestCase):
     """Unit tests for _can_write_memory policy + role gates (B3 fix)."""
 
     def setUp(self):
+        super().setUp()
         # Reset shared mock state
         _mock_frappe.session.user = "test_user@example.com"
         _mock_frappe.get_roles.return_value = {"Huf User"}
@@ -128,10 +161,11 @@ class TestCanWriteMemory(unittest.TestCase):
         )
 
 
-class TestCanReadMemory(unittest.TestCase):
+class TestCanReadMemory(_MockFrappeTestCase):
     """Unit tests for _can_read_memory, especially conversation ownership."""
 
     def setUp(self):
+        super().setUp()
         _mock_frappe.session.user = "test_user@example.com"
         _mock_frappe.get_roles.return_value = {"Huf User"}
 
@@ -179,7 +213,7 @@ class TestCanReadMemory(unittest.TestCase):
         self.assertTrue(memory_tools._can_read_memory(row))
 
 
-class TestMemoryToolAutoWiring(unittest.TestCase):
+class TestMemoryToolAutoWiring(_MockFrappeTestCase):
     """Unit tests for B2 auto-wiring of memory tools from Agent flags."""
 
     def _make_agent(self, **kwargs):
