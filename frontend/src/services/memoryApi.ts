@@ -10,7 +10,9 @@ export const memoryApi = {
         status: 'Active',
         limit: 50
       });
-      return response.message || response.results || [];
+      // frappe-js-sdk resolves the full body {message: {...}}; the backend
+      // returns {success, results}, so the array lives at message.results.
+      return response.message?.results ?? [];
     } catch (error) {
       throw handleFrappeError(error, 'Failed to fetch memory records');
     }
