@@ -417,7 +417,7 @@ class ZvecBackend(KnowledgeBackend):
 		try:
 			# Count first: a filter-only query returns matching docs in
 			# storage order, capped by topk, so bound it by the doc count.
-			topk = max(int(self.collection.stats["doc_count"]), 1)
+			topk = max(self._doc_count(), 1)
 			matching = list(self.collection.query(filter=filter_expr, topk=topk))
 			if not matching:
 				return 0
@@ -456,13 +456,19 @@ class ZvecBackend(KnowledgeBackend):
 
 		if self.collection:
 			try:
-				# add_chunks flushes after writing; flushing here can fail on a
-				# leftover collection LOCK and must not zero out the count.
-				stats["chunk_count"] = int(self.collection.stats["doc_count"])
+				stats["chunk_count"] = self._doc_count()
 			except Exception as exc:
 				frappe.logger().warning(f"zvec get_stats count error: {exc!s}")
 
 		return stats
+
+	def _doc_count(self) -> int:
+		"""Return the collection's document count.
+
+		``collection.stats`` is a ``CollectionStats`` object whose repr looks
+		like a dict but is not subscriptable — use attribute access.
+		"""
+		return int(getattr(self.collection.stats, "doc_count", 0) or 0)
 
 	def health_check(self) -> tuple[bool, str]:
 		try:
@@ -473,7 +479,7 @@ class ZvecBackend(KnowledgeBackend):
 			if not self.db_path or not os.path.exists(self.db_path):
 				return (False, f"zvec collection path '{self.db_path}' does not exist")
 			# Touch the collection to prove it is readable.
-			int(self.collection.stats["doc_count"])
+			self._doc_count()
 			return (True, "Healthy")
 		except Exception as exc:
 			return (False, str(exc))

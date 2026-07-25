@@ -10,6 +10,7 @@ filter-expression and score-normalisation logic is exercised for real.
 
 import os
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
@@ -288,7 +289,7 @@ class TestZvecBackend(unittest.TestCase):
 	def test_delete_chunks(self):
 		"""Deletion counts matching docs via a filter-only query, then deletes."""
 		self._initialize()
-		self.mock_collection.stats = {"doc_count": 10}
+		self.mock_collection.stats = SimpleNamespace(doc_count=10)
 		self.mock_collection.query.return_value = [
 			self._make_doc("chunk_1", 0.0),
 			self._make_doc("chunk_2", 0.0),
@@ -306,7 +307,7 @@ class TestZvecBackend(unittest.TestCase):
 	def test_delete_chunks_escapes_input_id(self):
 		"""Quotes in the input_id cannot break out of the delete filter."""
 		self._initialize()
-		self.mock_collection.stats = {"doc_count": 0}
+		self.mock_collection.stats = SimpleNamespace(doc_count=0)
 		self.mock_collection.query.return_value = []
 
 		deleted = self.backend.delete_chunks("x' OR '1'='1")
@@ -319,7 +320,7 @@ class TestZvecBackend(unittest.TestCase):
 	def test_delete_chunks_error_returns_zero(self):
 		"""A zvec failure during delete is logged and reported as 0."""
 		self._initialize()
-		self.mock_collection.stats = {"doc_count": 5}
+		self.mock_collection.stats = SimpleNamespace(doc_count=5)
 		self.mock_collection.query.side_effect = RuntimeError("boom")
 
 		self.assertEqual(self.backend.delete_chunks("input_1"), 0)
@@ -336,7 +337,7 @@ class TestZvecBackend(unittest.TestCase):
 	def test_get_stats(self):
 		"""Stats report backend_type and doc_count from collection stats."""
 		self._initialize()
-		self.mock_collection.stats = {"doc_count": 7}
+		self.mock_collection.stats = SimpleNamespace(doc_count=7)
 
 		stats = self.backend.get_stats()
 
@@ -350,7 +351,7 @@ class TestZvecBackend(unittest.TestCase):
 	def test_health_check(self):
 		"""Health check verifies initialization and collection readability."""
 		self._initialize()
-		self.mock_collection.stats = {"doc_count": 0}
+		self.mock_collection.stats = SimpleNamespace(doc_count=0)
 
 		with patch("os.path.exists", return_value=True):
 			is_healthy, message = self.backend.health_check()
