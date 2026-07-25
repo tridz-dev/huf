@@ -244,6 +244,12 @@ huf_knowledge_backends = {
 * Duplicate type keys across apps keep the first registration encountered and warn on subsequent ones.
 * Malformed hook entries (non-dict values) are skipped with a warning.
 
+> **Frappe hook-merge note:** Frappe merges dict-valued hooks across declarations
+> into a single dict whose values are *lists* (`{"qdrant": ["path.to.Class", ...]}`).
+> The registry normalises this internally and the **first declaration for a type
+> key wins** — within one app and across apps. Declare each backend type at most
+> once per app; do not rely on later entries overriding earlier ones.
+
 Once registered, the backend is immediately usable from the `Knowledge Source` DocType and from `get_advanced_config_schema()` through the whitelisted API.
 
 ## Live-test bar for new backends

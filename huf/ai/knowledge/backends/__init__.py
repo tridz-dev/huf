@@ -81,8 +81,10 @@ def _discover_backends() -> dict[str, str]:
 	"""Return the merged registry of built-in + hooked knowledge backends.
 
 	Built-in backends are loaded first. Each installed app may contribute
-	additional backends via the ``huf_knowledge_backends`` hook. Hook entries
-	must be dicts mapping ``backend_type`` to ``dotted.path.to.Class``.
+	additional backends via the ``huf_knowledge_backends`` hook. The hook value
+	must be a dict mapping ``backend_type`` to ``dotted.path.to.Class``; Frappe
+	merges dict-valued hooks into a single dict of lists, which
+	:func:`_iter_hook_backends` normalises.
 
 	Hook-provided type keys that collide with a built-in key are skipped and
 	logged as a warning so external apps cannot shadow HUF's built-ins.
@@ -90,7 +92,41 @@ def _discover_backends() -> dict[str, str]:
 	backends = dict(_BUILTIN_BACKENDS)
 
 	for app in frappe.get_installed_apps():
-		app_hooks = frappe.get_hooks("huf_knowledge_backends", app_name=app) or []
+		for backend_type, dotted_path in _iter_hook_backends(app):
+			if backend_type in _BUILTIN_BACKENDS:
+				frappe.logger().warning(
+					_(
+						"huf_knowledge_backends in app '{0}' tried to override built-in "
+						"backend '{1}'; skipping."
+					).format(app, backend_type)
+				)
+				continue
+			if backend_type in backends:
+				frappe.logger().warning(
+					_(
+						"huf_knowledge_backends in app '{0}' declares duplicate backend "
+						"type '{1}'; keeping first registration."
+					).format(app, backend_type)
+				)
+				continue
+			backends[backend_type] = dotted_path
+
+	return backends
+
+
+def _iter_hook_backends(app: str):
+	"""Yield ``(backend_type, dotted_path)`` declared by one app's hook.
+
+	Frappe merges dict-valued hooks into a single dict whose values are lists
+	of declared values (one per declaration). The first declaration for a type
+	wins. A plain list of dicts is also accepted defensively.
+	"""
+	app_hooks = frappe.get_hooks("huf_knowledge_backends", app_name=app) or {}
+
+	if isinstance(app_hooks, dict):
+		entries = app_hooks.items()
+	elif isinstance(app_hooks, list):
+		entries = []
 		for hook_entry in app_hooks:
 			if not isinstance(hook_entry, dict):
 				frappe.logger().warning(
@@ -99,27 +135,21 @@ def _discover_backends() -> dict[str, str]:
 					)
 				)
 				continue
+			entries.extend(hook_entry.items())
+	else:
+		frappe.logger().warning(
+			_("huf_knowledge_backends entry in app '{0}' must be a dict; got {1}").format(
+				app, type(app_hooks).__name__
+			)
+		)
+		return
 
-			for backend_type, dotted_path in hook_entry.items():
-				if backend_type in _BUILTIN_BACKENDS:
-					frappe.logger().warning(
-						_(
-							"huf_knowledge_backends in app '{0}' tried to override built-in "
-							"backend '{1}'; skipping."
-						).format(app, backend_type)
-					)
-					continue
-				if backend_type in backends:
-					frappe.logger().warning(
-						_(
-							"huf_knowledge_backends in app '{0}' declares duplicate backend "
-							"type '{1}'; keeping first registration."
-						).format(app, backend_type)
-					)
-					continue
-				backends[backend_type] = dotted_path
-
-	return backends
+	for backend_type, dotted_paths in entries:
+		if isinstance(dotted_paths, str):
+			dotted_paths = [dotted_paths]
+		if not dotted_paths:
+			continue
+		yield backend_type, dotted_paths[0]
 
 
 def _get_backend_registry() -> dict[str, str]:
