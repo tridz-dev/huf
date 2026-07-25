@@ -57,8 +57,13 @@ export async function getExposedAppTables(): Promise<ExposedAppTable[]> {
 		if (!Array.isArray(apps)) return [];
 		const rows: ExposedAppTable[] = [];
 		for (const app of apps as HufApp[]) {
-			if (typeof app?.exposed_tables !== 'string' || !app.exposed_tables.trim()) continue;
-			for (const raw of app.exposed_tables.split(',')) {
+			// Backend may return a list (current) or a comma-joined string.
+			const rawTables: string[] = Array.isArray(app?.exposed_tables)
+				? app.exposed_tables
+				: typeof app?.exposed_tables === 'string'
+					? app.exposed_tables.split(',')
+					: [];
+			for (const raw of rawTables) {
 				const doctype = raw.trim();
 				if (!doctype) continue;
 				rows.push({
