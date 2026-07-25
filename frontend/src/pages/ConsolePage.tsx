@@ -73,6 +73,10 @@ function ConsolePage() {
       prompt: prompt.trim(),
       provider: provider || undefined,
       model: model || undefined,
+      // The Console is an explicit direct-execution surface: it exists to run
+      // an agent synchronously and show the final response in the same
+      // request, so it always opts out of the queue-first default.
+      now: true,
     });
     setRunning(false);
     if (!result.success) {

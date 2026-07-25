@@ -234,7 +234,8 @@ scheduler_events = {
     ],
     "cron": {
         "*/1 * * * *": [
-            "huf.ai.orchestration.scheduler.process_orchestrations"
+            "huf.ai.orchestration.scheduler.process_orchestrations",
+            "huf.ai.agent_integration.recover_stalled_agent_runs"
         ]
     },
     "hourly": [

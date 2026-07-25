@@ -6,7 +6,7 @@ import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
@@ -76,6 +76,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     persist_conversation: agent.persist_conversation === 1,
     persist_user_history: agent.persist_user_history === 1,
     enable_multi_run: agent.enable_multi_run === 1,
+    run_immediately: agent.run_immediately === 1,
     description: agent.description || '',
     instructions: agent.instructions || '',
     default_plan: agent.default_plan || [],
@@ -140,7 +141,7 @@ export function AgentFormPage() {
   const tabConfig = {
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
+      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'run_immediately', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
       default: true,
       disabled: false,
     },
@@ -300,6 +301,7 @@ export function AgentFormPage() {
         persist_conversation: true,
         persist_user_history: true,
         enable_multi_run: false,
+        run_immediately: true,
         description: '',
         instructions: '',
         default_plan: [],
@@ -329,7 +331,7 @@ export function AgentFormPage() {
         enable_conversation_data: false,
         inject_conversation_data: true,
         conversation_data_api_permission: '',
-        autonaming_of_conversation_title: false,
+        autonaming_of_conversation_title: true,
         agent_color: '',
         show_tool_execution_details: false,
         image_generation_model: undefined,
@@ -858,6 +860,7 @@ export function AgentFormPage() {
             persist_conversation: data.persist_conversation === 1,
             persist_user_history: data.persist_user_history === 1,
             enable_multi_run: data.enable_multi_run === 1,
+            run_immediately: data.run_immediately === 1,
             description: data.description || '',
             instructions: data.instructions || '',
             default_plan: data.default_plan || [],
@@ -1035,6 +1038,7 @@ export function AgentFormPage() {
         persist_conversation: values.persist_conversation ? 1 : 0,
         persist_user_history: values.persist_user_history ? 1 : 0,
         enable_multi_run: values.enable_multi_run ? 1 : 0,
+        run_immediately: values.run_immediately ? 1 : 0,
         description: values.description || '',
         instructions: values.instructions,
         default_plan: values.default_plan || [],
@@ -1111,6 +1115,7 @@ export function AgentFormPage() {
           persist_conversation: newAgent.persist_conversation === 1,
           persist_user_history: newAgent.persist_user_history === 1,
           enable_multi_run: newAgent.enable_multi_run === 1,
+          run_immediately: newAgent.run_immediately === 1,
           description: newAgent.description || '',
           instructions: newAgent.instructions || '',
           default_plan: newAgent.default_plan || [],
@@ -1185,6 +1190,7 @@ export function AgentFormPage() {
           persist_conversation: values.persist_conversation,
           persist_user_history: values.persist_user_history,
           enable_multi_run: values.enable_multi_run,
+          run_immediately: values.run_immediately,
           description: values.description,
           instructions: values.instructions,
           default_plan: values.default_plan || [],
@@ -1637,6 +1643,8 @@ export function AgentFormPage() {
     reference_doctype?: string;
     doc_event?: string;
     condition?: string;
+    prompt_field?: string;
+    file_attachments?: AgentTriggerAttachmentRow[];
     app_name?: string;
     event_name?: string;
     webhook_slug?: string;
@@ -1670,6 +1678,17 @@ export function AgentFormPage() {
         webhook_slug: values.webhook_slug,
         webhook_key: values.webhook_key,
       };
+
+      // Doc Event extras: field to read the prompt from + file/audio attachment mappings
+      if (values.trigger_type === 'Doc Event') {
+        triggerData.prompt_field = values.prompt_field || '';
+        triggerData.file_attachments = (values.file_attachments || []).map((row) => ({
+          ...(row.name ? { name: row.name } : {}),
+          source_type: row.source_type,
+          field_name: row.field_name,
+          child_table: row.source_type === 'Child Table Field' ? row.child_table || '' : '',
+        }));
+      }
 
       if (editingTrigger) {
         // Update existing trigger

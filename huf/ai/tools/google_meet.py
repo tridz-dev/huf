@@ -1,5 +1,6 @@
 import json
 import frappe
+logger = frappe.logger("huf")
 import requests
 from huf.ai.tools.credentials import require_credential, update_last_error
 
@@ -52,7 +53,7 @@ def handle_create_meet_space(**kwargs):
 			resp.raise_for_status()
 		except requests.exceptions.HTTPError as e:
 			error_details = resp.text
-			frappe.log_error(title="Google Meet Tool API Error", message=f"Status: {e}, Details: {error_details}")
+			logger.warning(f"Status: {e}, Details: {error_details}")
 			raise Exception(f"Google API Error: {resp.status_code} - {error_details}")
 
 		data = resp.json()
@@ -67,7 +68,7 @@ def handle_create_meet_space(**kwargs):
 			}
 		})
 	except Exception as e:
-		frappe.log_error(title="Google Meet Tool", message=f"Google Meet Error (Create Space): {str(e)}")
+		logger.warning(f"Google Meet Error (Create Space): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
 
@@ -106,7 +107,7 @@ def handle_create_meet_event(**kwargs):
 			resp.raise_for_status()
 		except requests.exceptions.HTTPError as e:
 			error_details = resp.text
-			frappe.log_error(title="Google Meet Tool API Error", message=f"Status: {e}, Details: {error_details}")
+			logger.warning(f"Status: {e}, Details: {error_details}")
 			raise Exception(f"Google API Error: {resp.status_code} - {error_details}")
 
 		data = resp.json()
@@ -127,6 +128,6 @@ def handle_create_meet_event(**kwargs):
 			}
 		})
 	except Exception as e:
-		frappe.log_error(title="Google Meet Tool", message=f"Google Meet Error (Create Event): {str(e)}")
+		logger.warning(f"Google Meet Error (Create Event): {str(e)}")
 		update_last_error(service_name, str(e))
 		return json.dumps({"success": False, "error": str(e)})
