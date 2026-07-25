@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DataRecordList } from '@/components/data-table/DataRecordList';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
+import { BulkImportModal } from '@/components/data-table/BulkImportModal';
 import {
 	getTableSchema,
 	getTableRecords,
@@ -32,6 +33,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+	const [importModalOpen, setImportModalOpen] = useState(false);
 
 	const loadSchema = useCallback(async () => {
 		if (!tableId) return;
@@ -105,6 +107,10 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				<Button size="sm" onClick={handleAddRecord}>
 					<Plus className="w-3.5 h-3.5 mr-1.5" />
 					Add Record
+				</Button>
+				<Button size="sm" variant="outline" onClick={() => setImportModalOpen(true)}>
+					<Upload className="w-3.5 h-3.5 mr-1.5" />
+					Import Data
 				</Button>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
@@ -251,6 +257,17 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				onConfirm={handleDeleteTable}
 				loading={deleting}
 			/>
+
+			{/* Bulk Import Modal */}
+			{tableId && (
+				<BulkImportModal
+					open={importModalOpen}
+					onOpenChange={setImportModalOpen}
+					tableId={tableId}
+					tableName={schema.table_name}
+					onImportComplete={() => loadRecords(true)}
+				/>
+			)}
 		</div>
 	);
 }

@@ -178,6 +178,87 @@ export async function deleteDataTable(name: string): Promise<{ deleted_records: 
 	}
 }
 
+// ─── Bulk Import (wraps Frappe Data Import via HUF backend bridge) ───
+
+export interface BulkImportTemplate {
+	file_url: string;
+	file_name: string;
+}
+
+/**
+ * Generate a CSV import template for a table and get its download URL
+ */
+export async function getBulkImportTemplateUrl(
+	tableId: string,
+	exportRecords = false
+): Promise<BulkImportTemplate> {
+	try {
+		const result = await call.get(
+			'huf.huf.doctype.huf_data_table.api.get_bulk_import_template_url',
+			{ table_id: tableId, export_records: exportRecords }
+		);
+		return result.message.data as BulkImportTemplate;
+	} catch (error) {
+		handleFrappeError(error, 'Error generating import template');
+	}
+}
+
+export interface StartBulkImportResult {
+	import_name: string;
+	status: string;
+	enqueued: boolean;
+}
+
+/**
+ * Create a Data Import for an uploaded CSV file and enqueue the import
+ */
+export async function startTableBulkImport(
+	tableId: string,
+	fileUrl: string
+): Promise<StartBulkImportResult> {
+	try {
+		const result = await call.post(
+			'huf.huf.doctype.huf_data_table.api.start_table_bulk_import',
+			{ table_id: tableId, file_url: fileUrl }
+		);
+		return result.message.data as StartBulkImportResult;
+	} catch (error) {
+		handleFrappeError(error, 'Error starting bulk import');
+	}
+}
+
+export interface BulkImportRowError {
+	row_indexes: string;
+	messages: string;
+	exception: string;
+}
+
+export interface BulkImportStatus {
+	import_name: string;
+	status: string;
+	success: number;
+	failed: number;
+	total: number;
+	errors: BulkImportRowError[];
+}
+
+/**
+ * Poll the status of a running/completed bulk import
+ */
+export async function getTableBulkImportStatus(
+	importName: string
+): Promise<BulkImportStatus> {
+	try {
+		const result = await call.get(
+			'huf.huf.doctype.huf_data_table.api.get_table_bulk_import_status',
+			{ import_name: importName }
+		);
+		return result.message.data as BulkImportStatus;
+	} catch (error) {
+		handleFrappeError(error, 'Error fetching import status');
+	}
+}
+
 /**
  * Get list of Huf table names for Link field target selection (standard Frappe REST)
  */
