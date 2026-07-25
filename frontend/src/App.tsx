@@ -22,6 +22,7 @@ import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
+const AppsPage = lazy(() => import('./pages/AppsPage'));
 const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
 const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
@@ -82,6 +83,18 @@ function AppShell() {
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <HomePage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/apps"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AppsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

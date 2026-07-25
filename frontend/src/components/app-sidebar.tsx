@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, ChevronRight, Shield } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, ChevronRight, Shield, LayoutGrid } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -36,6 +36,19 @@ const dashboardNavItems = [
     url: "/",
     icon: Home,
     capability: null,
+  },
+]
+
+/**
+ * The "Use" side of the platform: end-user HUF Apps discovered from
+ * installed provider apps. Build/Operate/People remain the manage side.
+ */
+const useNavItems = [
+  {
+    title: "Apps",
+    url: "/apps",
+    icon: LayoutGrid,
+    capability: "agent.use",
   },
 ]
 
@@ -188,6 +201,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	// While permissions are loading show only uncapability-gated items so the
 	// sidebar doesn't flash/jump once capabilities resolve.
 	const dashboardItems = filterItemsByCapability(dashboardNavItems)
+	const useItems = filterItemsByCapability(useNavItems)
 	const buildItems = filterItemsByCapability(buildNavItems).map((item) =>
 		item.title === "Agents" ? { ...item, count: agentCount } : item
 	)
@@ -222,6 +236,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
 			{dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
+			{useItems.length > 0 && <NavMain items={useItems} label="Use" />}
 			{buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
 			{operateItems.length > 0 && <NavMain items={operateItems} label="Operate" />}
 			{peopleItems.length > 0 && <NavMain items={peopleItems} label="People" />}
