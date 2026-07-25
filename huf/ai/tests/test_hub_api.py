@@ -59,6 +59,7 @@ class TestHubReadiness(FrappeTestCase):
             patch.object(hub_api, "_orchestrator_info", return_value=dict(fake_orchestrator)),
             patch.object(hub_api, "_provider_has_key", return_value=False),
             patch.object(hub_api, "_count_keyed_providers", return_value=0),
+            patch("frappe.has_permission", return_value=True),
         ):
             result = hub_api.get_hub_readiness()
 
@@ -93,7 +94,8 @@ class TestProviderStatus(FrappeTestCase):
     def test_provider_status_never_leaks_key_material(self):
         _ensure_test_provider()
 
-        rows = hub_api.get_provider_status()
+        with patch("frappe.has_permission", return_value=True):
+            rows = hub_api.get_provider_status()
 
         target = [r for r in rows if r["name"] == TEST_PROVIDER]
         self.assertTrue(target, "test provider must appear in provider status")
@@ -125,7 +127,8 @@ class TestApproveModelProposals(FrappeTestCase):
             frappe.delete_doc("AI Model", OPENAI_CANDIDATE, ignore_permissions=True, force=True)
 
     def test_approve_creates_model_and_is_idempotent(self):
-        first = hub_api.approve_model_proposals([OPENAI_CANDIDATE])
+        with patch("frappe.has_permission", return_value=True):
+            first = hub_api.approve_model_proposals([OPENAI_CANDIDATE])
 
         self.assertIn(OPENAI_CANDIDATE, first["created"])
         self.assertNotIn(OPENAI_CANDIDATE, first["skipped"])
@@ -135,12 +138,14 @@ class TestApproveModelProposals(FrappeTestCase):
         brand = frappe.db.get_value("AI Provider", doc.provider, "provider_brand")
         self.assertEqual(brand, "openai")
 
-        second = hub_api.approve_model_proposals([OPENAI_CANDIDATE])
+        with patch("frappe.has_permission", return_value=True):
+            second = hub_api.approve_model_proposals([OPENAI_CANDIDATE])
         self.assertNotIn(OPENAI_CANDIDATE, second["created"])
         self.assertIn(OPENAI_CANDIDATE, second["skipped"])
 
     def test_approve_skips_unknown_and_unmatched_proposals(self):
-        result = hub_api.approve_model_proposals(["not-a-catalog-model"])
+        with patch("frappe.has_permission", return_value=True):
+            result = hub_api.approve_model_proposals(["not-a-catalog-model"])
         self.assertEqual(result["created"], [])
         self.assertIn("not-a-catalog-model", result["skipped"])
 

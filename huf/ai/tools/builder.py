@@ -4,8 +4,8 @@ Hub builder tools — typed, capability-gated tools for the hub chat.
 These handlers let privileged users (System Manager / Huf Manager) create
 huf data tables, draft agents, edit agent prompts, attach tools, and publish
 agents from an agent conversation. Every mutating tool enforces the builder
-capability up front, and the edit/publish tools follow a two-phase contract:
-call with ``confirm=False`` to preview a diff, then again with
+capability up front, and the creation/edit/publish tools follow a two-phase
+contract: call with ``confirm=False`` to preview a diff, then again with
 ``confirm=True`` to apply. Nothing mutates without ``confirm=True``.
 
 Secrets are never read out: provider key checks use ``get_password`` for
@@ -64,6 +64,17 @@ def _check_system_agent_editable(agent):
 		)
 
 
+def _require_doc_permission(doctype: str, permission: str, name: str | None = None):
+	"""Enforce Frappe document-level permission in addition to role checks."""
+	if not frappe.has_permission(doctype, permission, doc=name):
+		frappe.throw(
+			_("You don't have permission to {0} {1} records.").format(
+				permission, doctype
+			),
+			frappe.PermissionError,
+		)
+
+
 def _parse_list(value, fieldname: str) -> list:
 	"""Accept a list or a JSON-encoded list (LLMs often stringify arguments)."""
 	if value is None:
@@ -85,6 +96,7 @@ def create_huf_table(
 	icon: str = "",
 	autoname_method: str = "Autoincrement",
 	title_field: str = "",
+	confirm: bool = False,
 ) -> dict:
 	"""Create a huf data table (custom DocType + registry entry).
 
@@ -92,8 +104,53 @@ def create_huf_table(
 	existing validators. Returns the new DocType name and its live schema.
 	"""
 	_require_builder_capability()
+	_require_doc_permission("Huf Data Table", "create")
 
 	from huf.huf.doctype.huf_data_table.api import create_data_table, get_table_schema
+	from huf.huf.doctype.huf_data_table.validators import (
+		get_search_fields,
+		resolve_autoname,
+		validate_and_prepare_fields,
+	)
+
+	if isinstance(fields, str):
+		fields = json.loads(fields)
+
+	table_name = table_name.strip()
+	if not table_name:
+		frappe.throw(_("Table name is required"))
+
+	doctype_name = f"HF {table_name}"
+
+	if frappe.db.exists("DocType", doctype_name):
+		frappe.throw(f"Table '{table_name}' already exists")
+
+	if frappe.db.exists("Huf Data Table", {"table_name": table_name}):
+		frappe.throw(f"Table '{table_name}' already exists")
+
+	validated_fields = validate_and_prepare_fields(fields)
+	autoname = resolve_autoname(autoname_method, title_field)
+	search_fields = get_search_fields(validated_fields)
+
+	diff = {
+		"table_name": table_name,
+		"doctype_name": doctype_name,
+		"description": description,
+		"icon": icon,
+		"autoname_method": autoname_method,
+		"autoname": autoname,
+		"title_field": title_field,
+		"search_fields": search_fields,
+		"fields": validated_fields,
+	}
+
+	if not confirm:
+		return {
+			"created": False,
+			"confirm_required": True,
+			"diff": diff,
+			"message": "Review the diff and call again with confirm=True to create the table.",
+		}
 
 	result = create_data_table(
 		table_name=table_name,
@@ -110,6 +167,7 @@ def create_huf_table(
 		"created": True,
 		"doctype": data.get("doctype_name"),
 		"schema": schema,
+		"diff": diff,
 	}
 
 
@@ -119,6 +177,7 @@ def draft_agent(
 	model: str,
 	instructions: str,
 	description: str = "",
+	confirm: bool = False,
 ) -> dict:
 	"""Create a disabled (draft) Agent with a local prompt.
 
@@ -134,8 +193,12 @@ def draft_agent(
 		frappe.throw(
 			_("AI Provider '{0}' does not exist. Create and configure it first.").format(provider)
 		)
+	_require_doc_permission("AI Provider", "read", provider)
 	if not frappe.db.exists("AI Model", model):
 		frappe.throw(_("AI Model '{0}' does not exist.").format(model))
+	_require_doc_permission("AI Model", "read", model)
+
+	_require_doc_permission("Agent", "create")
 
 	payload = _sanitize_for_doctype(
 		"Agent",
@@ -149,10 +212,21 @@ def draft_agent(
 			"disabled": 1,
 		},
 	)
+
+	diff = {"payload": payload}
+
+	if not confirm:
+		return {
+			"created": False,
+			"confirm_required": True,
+			"diff": diff,
+			"message": "Review the diff and call again with confirm=True to create the draft agent.",
+		}
+
 	agent = frappe.get_doc({"doctype": "Agent", **payload})
 	agent.insert()
 
-	result = {"created": True, "agent": agent.name, "disabled": True}
+	result = {"created": True, "agent": agent.name, "disabled": True, "diff": diff}
 	if not _provider_has_key(provider):
 		result["warning"] = (
 			f"Provider '{provider}' has no API key configured. "
@@ -176,6 +250,7 @@ def update_agent_prompt(
 	_require_builder_capability()
 	agent = _get_agent(agent_name)
 	_check_system_agent_editable(agent)
+	_require_doc_permission("Agent", "write", agent.name)
 
 	proposed = {}
 	if instructions is not None and instructions != (agent.instructions or ""):
@@ -220,6 +295,7 @@ def attach_agent_tools(agent_name: str, tool_names, confirm: bool = False) -> di
 	_require_builder_capability()
 	agent = _get_agent(agent_name)
 	_check_system_agent_editable(agent)
+	_require_doc_permission("Agent", "write", agent.name)
 
 	tool_names = _parse_list(tool_names, "tool_names")
 	for tool_name in tool_names:
@@ -260,6 +336,7 @@ def publish_agent(agent_name: str, confirm: bool = False) -> dict:
 	_require_builder_capability()
 	agent = _get_agent(agent_name)
 	_check_system_agent_editable(agent)
+	_require_doc_permission("Agent", "write", agent.name)
 
 	if not agent.disabled:
 		return {
@@ -302,6 +379,7 @@ def create_agent_tool(
 	description: str,
 	tool_type: str = "Builder",
 	parameters=None,
+	confirm: bool = False,
 	**kwargs,
 ) -> dict:
 	"""Create a declarative Agent Tool Function record.
@@ -312,6 +390,7 @@ def create_agent_tool(
 	tool cannot create arbitrary code or HTTP tools.
 	"""
 	_require_builder_capability()
+	_require_doc_permission("Agent Tool Function", "create")
 
 	forbidden = [key for key in _FORBIDDEN_TOOL_FIELDS if kwargs.get(key)]
 	if forbidden:
@@ -325,10 +404,7 @@ def create_agent_tool(
 	if frappe.db.exists("Agent Tool Function", tool_name):
 		frappe.throw(_("Agent Tool Function '{0}' already exists.").format(tool_name))
 
-	if not frappe.db.exists("Agent Tool Type", tool_type):
-		type_doc = frappe.new_doc("Agent Tool Type")
-		type_doc.name1 = tool_type
-		type_doc.insert(ignore_permissions=True)
+	tool_type_missing = not frappe.db.exists("Agent Tool Type", tool_type)
 
 	rows = []
 	for raw in _parse_list(parameters, "parameters"):
@@ -343,22 +419,41 @@ def create_agent_tool(
 		row.setdefault("type", "string")
 		rows.append(row)
 
-	doc = frappe.get_doc(
-		{
-			"doctype": "Agent Tool Function",
-			"tool_name": tool_name,
-			"description": description,
-			"types": "Custom Function",
-			"tool_type": tool_type,
-			"parameters": rows,
+	payload = {
+		"doctype": "Agent Tool Function",
+		"tool_name": tool_name,
+		"description": description,
+		"types": "Custom Function",
+		"tool_type": tool_type,
+		"parameters": rows,
+	}
+
+	diff = {
+		"payload": payload,
+		"tool_type_will_be_created": tool_type_missing,
+	}
+
+	if not confirm:
+		return {
+			"created": False,
+			"confirm_required": True,
+			"diff": diff,
+			"message": "Review the diff and call again with confirm=True to create the tool.",
 		}
-	)
+
+	if tool_type_missing:
+		type_doc = frappe.new_doc("Agent Tool Type")
+		type_doc.name1 = tool_type
+		type_doc.insert(ignore_permissions=True)
+
+	doc = frappe.get_doc(payload)
 	doc.insert()
 
 	return {
 		"created": True,
 		"tool_name": doc.name,
 		"requires_admin_completion": True,
+		"diff": diff,
 		"message": (
 			"Declarative tool record created without an implementation. An admin must set "
 			"the function_path in the desk UI before this tool can run — do not treat it as "

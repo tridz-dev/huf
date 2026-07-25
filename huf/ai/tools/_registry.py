@@ -667,7 +667,8 @@ BUILDER_TOOLS = [
 			"Create a new huf data table (a custom DocType plus registry entry) that agents "
 			"and flows can then read/write. 'fields' is a JSON list of field definitions, e.g. "
 			"[{\"fieldname\": \"title\", \"fieldtype\": \"Data\", \"label\": \"Title\", \"reqd\": 1}]. "
-			"Returns the new DocType name and its live schema. Fails with a clear error if a "
+			+ _CONFIRM_NOTE
+			+ " Returns the new DocType name and its live schema. Fails with a clear error if a "
 			"table with the same name already exists."
 		),
 		"function_path": "huf.ai.tools.builder.create_huf_table",
@@ -679,6 +680,7 @@ BUILDER_TOOLS = [
 			_p("icon", description="Optional icon name for the table"),
 			_p("autoname_method", description="Naming method (default 'Autoincrement')"),
 			_p("title_field", description="Field to use as document title"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = create the table"),
 		],
 	},
 	{
@@ -687,7 +689,8 @@ BUILDER_TOOLS = [
 			"Create a new AI Agent in DRAFT state (disabled=1 — it cannot run yet) with a "
 			"local prompt from 'instructions'. The provider must already exist; if it has no "
 			"API key configured the draft is still created but the result includes a warning. "
-			"Use update_agent_prompt to refine the prompt, attach_agent_tools to give it tools, "
+			+ _CONFIRM_NOTE
+			+ " Use update_agent_prompt to refine the prompt, attach_agent_tools to give it tools, "
 			"and publish_agent to enable it. Fails with a clear error if the agent already exists."
 		),
 		"function_path": "huf.ai.tools.builder.draft_agent",
@@ -698,6 +701,7 @@ BUILDER_TOOLS = [
 			_p("model", required=True, description="Existing AI Model name"),
 			_p("instructions", required=True, description="System prompt / instructions for the agent"),
 			_p("description", description="Short human description of the agent"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = create the draft agent"),
 		],
 	},
 	{
@@ -754,7 +758,8 @@ BUILDER_TOOLS = [
 			"schema). LIMITATION: the record is created WITHOUT an implementation — an admin "
 			"must set its function_path in the desk UI before it can run. Never claim the tool "
 			"already works after calling this. This tool cannot create arbitrary code "
-			"(function_path) or HTTP (base_url) tools."
+			"(function_path) or HTTP (base_url) tools. "
+			+ _CONFIRM_NOTE
 		),
 		"function_path": "huf.ai.tools.builder.create_agent_tool",
 		"category": "Builder",
@@ -763,6 +768,7 @@ BUILDER_TOOLS = [
 			_p("description", required=True, description="What the tool does — this is what LLMs will see"),
 			_p("tool_type", description="Agent Tool Type category (default 'Builder'; auto-created if missing)"),
 			_p("parameters", description="JSON list of parameter definitions [{fieldname, type, label, required, description}]. type one of: string, integer, number, float, boolean, object, array"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = create the tool record"),
 		],
 	},
 ]

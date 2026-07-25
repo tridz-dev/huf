@@ -35,48 +35,65 @@ CATALOG_RETRIEVED_AT = "2026-07-25"
 CATALOG_CANDIDATES = [
     # OpenAI — GPT-5.2 family is the current flagship line.
     {"model_name": "gpt-5.2", "provider_brand": "openai", "modalities": "Text, Vision",
+     "source_url": "https://platform.openai.com/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     {"model_name": "gpt-5.2-mini", "provider_brand": "openai", "modalities": "Text, Vision",
+     "source_url": "https://platform.openai.com/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     {"model_name": "gpt-5.2-nano", "provider_brand": "openai", "modalities": "Text",
+     "source_url": "https://platform.openai.com/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     # Anthropic — Opus 4.8 flagship; Sonnet 5 is the current default Sonnet.
     {"model_name": "claude-opus-4.8", "provider_brand": "anthropic", "modalities": "Text, Vision",
+     "source_url": "https://docs.anthropic.com/en/docs/about-claude/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     {"model_name": "claude-sonnet-5", "provider_brand": "anthropic", "modalities": "Text, Vision",
+     "source_url": "https://docs.anthropic.com/en/docs/about-claude/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     # Google — 3.1 Pro preview is the flagship; 3.5 Flash is the GA default;
     # 3 Flash preview is the cheap value pick.
     {"model_name": "gemini-3.1-pro-preview", "provider_brand": "google", "modalities": "Text, Vision",
+     "source_url": "https://ai.google.dev/gemini-api/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     {"model_name": "gemini-3.5-flash", "provider_brand": "google", "modalities": "Text, Vision",
+     "source_url": "https://ai.google.dev/gemini-api/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     {"model_name": "gemini-3-flash-preview", "provider_brand": "google", "modalities": "Text, Vision",
+     "source_url": "https://ai.google.dev/gemini-api/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     # OpenRouter — namespaced IDs, following the seeded convention.
     {"model_name": "openai/gpt-5.2", "provider_brand": "openrouter", "modalities": "Text, Vision",
+     "source_url": "https://openrouter.ai/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     {"model_name": "google/gemini-3.5-flash", "provider_brand": "openrouter", "modalities": "Text, Vision",
+     "source_url": "https://openrouter.ai/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     # xAI — grok-4.5 flagship; grok-4.1-fast is the cheap high-context pick.
     {"model_name": "grok-4.5", "provider_brand": "xai", "modalities": "Text",
+     "source_url": "https://docs.x.ai/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     {"model_name": "grok-4.1-fast", "provider_brand": "xai", "modalities": "Text",
+     "source_url": "https://docs.x.ai/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     # Groq — fast LPU serving of open-weight Llama.
     {"model_name": "llama-3.3-70b-versatile", "provider_brand": "groq", "modalities": "Text",
+     "source_url": "https://console.groq.com/docs/models",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     # DeepSeek — official V4 API IDs (deepseek-chat/-reasoner deprecated 2026-07-24).
     {"model_name": "deepseek-v4-pro", "provider_brand": "deepseek", "modalities": "Text",
+     "source_url": "https://api-docs.deepseek.com/quick_start/pricing",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     {"model_name": "deepseek-v4-flash", "provider_brand": "deepseek", "modalities": "Text",
+     "source_url": "https://api-docs.deepseek.com/quick_start/pricing",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     # Moonshot — K2.6 is the current flagship; K2.5 the cheaper tier.
     # NOTE: "moonshot" is not (yet) an AI Provider.provider_brand option, so
     # these proposals resolve provider=None until a matching provider exists.
     {"model_name": "kimi-k2.6", "provider_brand": "moonshot", "modalities": "Text, Vision",
+     "source_url": "https://platform.moonshot.cn/docs/intro",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     {"model_name": "kimi-k2.5", "provider_brand": "moonshot", "modalities": "Text, Vision",
+     "source_url": "https://platform.moonshot.cn/docs/intro",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
 ]
 
@@ -89,6 +106,24 @@ def _require_agent_read() -> None:
     if not frappe.has_permission("Agent", "read"):
         frappe.throw(
             _("You don't have permission to view hub status."),
+            frappe.PermissionError,
+        )
+
+
+def _require_provider_read() -> None:
+    """Provider introspection requires AI Provider read access."""
+    if not frappe.has_permission("AI Provider", "read"):
+        frappe.throw(
+            _("You don't have permission to view provider status."),
+            frappe.PermissionError,
+        )
+
+
+def _require_model_read() -> None:
+    """Catalog proposals require AI Model read access."""
+    if not frappe.has_permission("AI Model", "read"):
+        frappe.throw(
+            _("You don't have permission to view model catalog proposals."),
             frappe.PermissionError,
         )
 
@@ -208,6 +243,24 @@ def _provider_for_brand(provider_brand):
     )
 
 
+def _set_catalog_metadata(doc, candidate: dict):
+    """Persist catalog source/audit fields if the AI Model DocType supports them.
+
+    Keeps the approval auditable without requiring a schema migration: if the
+    hidden fields exist they are populated, otherwise the doc proceeds with the
+    core fields only.
+    """
+    for field, value in (
+        ("catalog_source", candidate.get("source")),
+        ("catalog_source_url", candidate.get("source_url")),
+        ("catalog_retrieved_at", candidate.get("retrieved_at")),
+        ("catalog_approved_by", frappe.session.user),
+        ("catalog_approved_at", frappe.utils.now()),
+    ):
+        if field in doc.meta.fields:
+            doc.set(field, value)
+
+
 @frappe.whitelist()
 def get_hub_readiness():
     """Hub readiness summary for the simplified hub homepage.
@@ -307,6 +360,9 @@ def get_model_catalog_proposals():
             "model_name": candidate["model_name"],
             "provider": _provider_for_brand(candidate["provider_brand"]),
             "modalities": candidate["modalities"],
+            "source": candidate.get("source"),
+            "source_url": candidate.get("source_url"),
+            "retrieved_at": candidate.get("retrieved_at"),
             "already_exists": candidate["model_name"] in existing,
         })
     return {"proposals": proposals}
@@ -330,6 +386,11 @@ def approve_model_proposals(model_names):
     Requires: System Manager or Huf Manager role.
     """
     _require_model_manager()
+    if not frappe.has_permission("AI Model", "create"):
+        frappe.throw(
+            _("You don't have permission to create AI Model records."),
+            frappe.PermissionError,
+        )
 
     if isinstance(model_names, str):
         model_names = frappe.parse_json(model_names)
@@ -350,12 +411,14 @@ def approve_model_proposals(model_names):
             skipped.append(name)
             continue
 
-        frappe.get_doc({
+        doc = frappe.get_doc({
             "doctype": "AI Model",
             "model_name": name,
             "provider": provider,
             "modalities": candidate["modalities"],
-        }).insert(ignore_permissions=True)  # role already enforced above
+        })
+        _set_catalog_metadata(doc, candidate)
+        doc.insert()
         created.append(name)
 
     return {"created": created, "skipped": skipped}

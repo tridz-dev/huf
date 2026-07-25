@@ -139,6 +139,7 @@ class TestBuilderCapability(FrappeTestCase):
 		"""Huf Manager passes the capability gate (fails later on missing fixtures)."""
 		with (
 			patch("frappe.get_roles", return_value=MANAGER_ROLES),
+			patch("frappe.has_permission", return_value=True),
 			patch("frappe.db.exists", return_value=True),
 			patch("frappe.get_doc", side_effect=_get_doc_router(agent=_FakeAgent())),
 		):
@@ -155,6 +156,7 @@ class TestCreateHufTable(FrappeTestCase):
 		schema = {"name": "HDT-0001", "doctype_name": "HF Feedback", "fields": []}
 		with (
 			patch("frappe.get_roles", return_value=BUILDER_ROLES),
+			patch("frappe.has_permission", return_value=True),
 			patch(
 				"huf.huf.doctype.huf_data_table.api.create_data_table", return_value=create_result
 			) as mock_create,
@@ -164,6 +166,7 @@ class TestCreateHufTable(FrappeTestCase):
 				table_name="Feedback",
 				fields=[{"fieldname": "title", "fieldtype": "Data", "label": "Title"}],
 				description="Customer feedback",
+				confirm=True,
 			)
 
 		self.assertTrue(result["created"])
@@ -184,6 +187,7 @@ class TestDraftAgent(FrappeTestCase):
 
 		with (
 			patch("frappe.get_roles", return_value=BUILDER_ROLES),
+			patch("frappe.has_permission", return_value=True),
 			patch("frappe.db.exists", side_effect=_exists_router),
 			patch(
 				"huf.ai.tools.builder._sanitize_for_doctype",
@@ -199,6 +203,7 @@ class TestDraftAgent(FrappeTestCase):
 				provider="Test Provider",
 				model="test-model",
 				instructions="Be helpful.",
+				confirm=True,
 			)
 		return result, captured
 
@@ -257,6 +262,7 @@ class TestUpdateAgentPrompt(FrappeTestCase):
 	def _run(self, agent, roles=BUILDER_ROLES, **kwargs):
 		with (
 			patch("frappe.get_roles", return_value=roles),
+			patch("frappe.has_permission", return_value=True),
 			patch("frappe.db.exists", return_value=True),
 			patch("frappe.get_doc", side_effect=_get_doc_router(agent=agent)),
 		):
@@ -316,6 +322,7 @@ class TestAttachAgentTools(FrappeTestCase):
 	def _run(self, agent, **kwargs):
 		with (
 			patch("frappe.get_roles", return_value=BUILDER_ROLES),
+			patch("frappe.has_permission", return_value=True),
 			patch("frappe.db.exists", return_value=True),
 			patch("frappe.get_doc", side_effect=_get_doc_router(agent=agent)),
 		):
@@ -347,6 +354,7 @@ class TestAttachAgentTools(FrappeTestCase):
 		agent = _FakeAgent()
 		with (
 			patch("frappe.get_roles", return_value=BUILDER_ROLES),
+			patch("frappe.has_permission", return_value=True),
 			patch(
 				"frappe.db.exists",
 				side_effect=lambda doctype, name=None: doctype == "Agent",
@@ -366,6 +374,7 @@ class TestPublishAgent(FrappeTestCase):
 	def _run(self, agent, provider_key="sk-test", **kwargs):
 		with (
 			patch("frappe.get_roles", return_value=BUILDER_ROLES),
+			patch("frappe.has_permission", return_value=True),
 			patch("frappe.db.exists", return_value=True),
 			patch("frappe.get_doc", side_effect=_get_doc_router(agent=agent, provider_key=provider_key)),
 		):
@@ -420,6 +429,7 @@ class TestCreateAgentTool(FrappeTestCase):
 
 		with (
 			patch("frappe.get_roles", return_value=BUILDER_ROLES),
+			patch("frappe.has_permission", return_value=True),
 			patch("frappe.db.exists", side_effect=_exists),
 			patch(
 				"huf.ai.tools.builder._sanitize_for_doctype",
@@ -427,7 +437,7 @@ class TestCreateAgentTool(FrappeTestCase):
 			),
 			patch("frappe.get_doc", side_effect=_get_doc_router(captured=captured)),
 		):
-			return builder.create_agent_tool(**kwargs), captured
+			return builder.create_agent_tool(confirm=True, **kwargs), captured
 
 	def test_happy_path_declarative_only(self):
 		result, captured = self._run(
