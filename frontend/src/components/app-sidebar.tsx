@@ -53,11 +53,12 @@ const buildNavItems = [
 ]
 
 /**
- * Data + retrieval surfaces live under a single collapsible "Knowledge"
- * group, named by user action: Tables for structured/relational data,
- * Documents for unstructured retrieval (RAG).
+ * Knowledge surfaces live in a flat "Know" label group, matching Build and
+ * Operate: Tables for structured/relational data, Sources for retrieval
+ * knowledge stores backed by any vector/FTS backend (RAG). Future source
+ * types (Files, Repos, Drives) nest here as additional items.
  */
-const knowledgeNavItems = [
+const knowNavItems = [
   {
     title: "Tables",
     url: "/data",
@@ -65,7 +66,7 @@ const knowledgeNavItems = [
     capability: "agent.view_all",
   },
   {
-    title: "Documents",
+    title: "Sources",
     url: "/knowledge",
     icon: BookOpen,
     capability: "agent.use",
@@ -194,25 +195,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const buildItems = filterItemsByCapability(buildNavItems).map((item) =>
 		item.title === "Agents" ? { ...item, count: agentCount } : item
 	)
-	const knowledgeItems = filterItemsByCapability(knowledgeNavItems)
+	const knowledgeItems = filterItemsByCapability(knowNavItems)
 	const operateItems = filterItemsByCapability(operateNavItems)
   const settingsItems = isLoading
     ? []
     : settingsNavItems.filter((item) => item.capability === null || hasCapability(item.capability))
 
-  // Accordion: at most one collapsible group open at a time. The group
-  // containing the active route auto-opens on navigation.
-  const [openGroup, setOpenGroup] = React.useState<string | null>(null)
-  const knowledgeActive = isPathInItems(knowledgeItems)
+  // Settings is the only collapsible group; its open state is owned here so
+  // the active route auto-opens it on navigation.
   const settingsActive = isPathInItems(settingsItems)
+  const [settingsOpen, setSettingsOpen] = React.useState(settingsActive)
 
   React.useEffect(() => {
-    if (knowledgeActive) {
-      setOpenGroup("knowledge")
-    } else if (settingsActive) {
-      setOpenGroup("settings")
+    if (settingsActive) {
+      setSettingsOpen(true)
     }
-  }, [knowledgeActive, settingsActive])
+  }, [settingsActive])
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -222,23 +220,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
 			{dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
 			{buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
-			{knowledgeItems.length > 0 && (
-			  <NavCollapsibleGroup
-			    title="Knowledge"
-			    icon={BookOpen}
-			    items={knowledgeItems}
-			    open={openGroup === "knowledge"}
-			    onOpenChange={(open) => setOpenGroup(open ? "knowledge" : null)}
-			  />
-			)}
+			{knowledgeItems.length > 0 && <NavMain items={knowledgeItems} label="Know" />}
 			{operateItems.length > 0 && <NavMain items={operateItems} label="Operate" />}
 			{settingsItems.length > 0 && (
 			  <NavCollapsibleGroup
 			    title="Settings"
 			    icon={Settings}
 			    items={settingsItems}
-			    open={openGroup === "settings"}
-			    onOpenChange={(open) => setOpenGroup(open ? "settings" : null)}
+			    open={settingsOpen}
+			    onOpenChange={setSettingsOpen}
 			  />
 			)}
       </SidebarContent>
