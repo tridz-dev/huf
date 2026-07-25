@@ -125,6 +125,9 @@ class TestSkillImportAndExport(FrappeTestCase):
 		if frappe.db.exists("Skill", {"skill_name": self.skill_name}):
 			name = frappe.db.get_value("Skill", {"skill_name": self.skill_name}, "name")
 			frappe.delete_doc("Skill", name, force=True)
+		# test_huf_export_import_roundtrip commits mid-test, so the deletion
+		# must be committed too or the re-imported skill leaks into the site DB.
+		frappe.db.commit()
 
 	def test_build_skill_md(self):
 		skill_doc = frappe.get_doc("Skill", {"skill_name": self.skill_name})
