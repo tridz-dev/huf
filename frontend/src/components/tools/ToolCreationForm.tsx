@@ -1,6 +1,6 @@
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle, FlaskConical, ChevronDown, FileText, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle, FlaskConical, ChevronDown, FileText, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -353,8 +353,12 @@ export function ToolCreationForm({
   const formToolType = form.watch('tool_type');
   const description = form.watch('description');
   const autoAddToAgent = form.watch('auto_add_to_agent');
+  const requiredPermission = form.watch('required_permission');
+  const isReadOnly = form.watch('is_read_only');
+  const allowedForGuest = form.watch('allowed_for_guest');
 
   const [contractOpen, setContractOpen] = useState(false);
+  const [guardrailsOpen, setGuardrailsOpen] = useState(false);
 
   // One-line summary shown on the collapsed "Contract" section header.
   const contractSummary = useMemo(() => {
@@ -363,6 +367,16 @@ export function ToolCreationForm({
     const truncated = desc.length > 60 ? `${desc.slice(0, 60)}…` : desc;
     return truncated ? `${category} · ${truncated}` : category;
   }, [formToolType, description]);
+
+  // One-line summary shown on the collapsed "Guardrails" section header.
+  const guardrailsSummary = useMemo(() => {
+    const permission = requiredPermission
+      ? requiredPermission.charAt(0).toUpperCase() + requiredPermission.slice(1)
+      : 'Any permission';
+    const mutability = isReadOnly ? 'Read-only' : 'Writable';
+    const guests = allowedForGuest ? 'Guest access' : 'Not for guests';
+    return `${permission} · ${mutability} · ${guests}`;
+  }, [requiredPermission, isReadOnly, allowedForGuest]);
 
   const { parameterSchema, functionDefinition } = useMemo(() => {
     const properties: Record<string, Record<string, unknown>> = {};
@@ -574,79 +588,6 @@ export function ToolCreationForm({
         />
 
       </div>
-
-      {/* CONTRACT Section (Tool Category + Description, collapsed by default) */}
-      <Collapsible open={contractOpen} onOpenChange={setContractOpen} className="space-y-4 border-t border-line pt-6">
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="group flex w-full items-center gap-2 rounded-none border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
-            disabled={loading}
-          >
-            <FileText className="w-4 h-4 text-steel-soft shrink-0" />
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Contract</h3>
-            {!contractOpen && (
-              <span className="text-sm text-steel truncate ml-1">— {contractSummary}</span>
-            )}
-            <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-4 pt-1">
-          <FormField
-            control={form.control}
-            name="tool_type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>
-                  Tool Category<span className="text-destructive">*</span>
-                  {renderAutoBadge('tool_type')}
-                </FormLabel>
-                <FormControl>
-                  <Combobox
-                    options={toolTypeOptions}
-                    value={field.value}
-                    onValueChange={(value) => {
-                      field.onChange(value);
-                      markEdited('tool_type');
-                    }}
-                    placeholder="Select Tool Category..."
-                    searchPlaceholder="Search tool categories..."
-                    emptyText="No tool category found."
-                    disabled={loading}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>
-                  Description
-                  {renderAutoBadge('description')}
-                </FormLabel>
-                <FormControl>
-                  <Textarea
-                    placeholder="Describe what this tool does. The AI uses this description to decide when to call it."
-                    className="min-h-[100px]"
-                    {...field}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      markEdited('description');
-                    }}
-                    disabled={loading}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </CollapsibleContent>
-      </Collapsible>
 
       {/* OPERATION DETAILS Section */}
       <div className="space-y-4 border-t border-line pt-6">
@@ -975,97 +916,6 @@ export function ToolCreationForm({
         )}
       </div>
 
-      {/* Optional Fields Section */}
-      <div className="space-y-4 border-t border-line pt-6">
-        <SectionHeader title="Additional Settings" />
-
-        <FormField
-          control={form.control}
-          name="required_permission"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Required Permission
-                {renderAutoBadge('required_permission')}
-              </FormLabel>
-              <Select
-                onValueChange={(value) => {
-                  field.onChange(value);
-                  markEdited('required_permission');
-                }}
-                value={field.value}
-                disabled={loading}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select permission level..." />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="read">Read</SelectItem>
-                  <SelectItem value="write">Write</SelectItem>
-                  <SelectItem value="create">Create</SelectItem>
-                  <SelectItem value="delete">Delete</SelectItem>
-                  <SelectItem value="submit">Submit</SelectItem>
-                  <SelectItem value="cancel">Cancel</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormDescription>Permission level required to use this tool</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="is_read_only"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
-              <div className="space-y-0.5">
-                <FormLabel>
-                  Read Only
-                  {renderAutoBadge('is_read_only')}
-                </FormLabel>
-                <p className="text-sm text-steel">
-                  If checked, this tool does not modify data
-                </p>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={(checked) => {
-                    field.onChange(checked);
-                    markEdited('is_read_only');
-                  }}
-                  disabled={loading}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="allowed_for_guest"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
-              <div className="space-y-0.5">
-                <FormLabel>Allowed for Guest</FormLabel>
-                <p className="text-sm text-steel">
-                  If checked, Guest users can use this tool
-                </p>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  disabled={loading}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-      </div>
         </div>
       )}
     </div>
@@ -1111,8 +961,187 @@ export function ToolCreationForm({
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
           <div className="min-w-0">{renderSettingsView()}</div>
 
-          {/* Persistent live function definition preview + test call */}
+          {/* Right rail: contract, guardrails, then the persistent live preview */}
           <aside className="min-w-0 self-start xl:sticky xl:top-16 space-y-3">
+            {/* CONTRACT (Tool Category + Description, collapsed by default) */}
+            <Collapsible open={contractOpen} onOpenChange={setContractOpen} className="space-y-3">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="group flex w-full items-center gap-2 rounded-none border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
+                  disabled={loading}
+                >
+                  <FileText className="w-4 h-4 text-steel-soft shrink-0" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Contract</h3>
+                  {!contractOpen && (
+                    <span className="text-sm text-steel truncate ml-1">— {contractSummary}</span>
+                  )}
+                  <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-4 pt-1">
+                <FormField
+                  control={form.control}
+                  name="tool_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Tool Category<span className="text-destructive">*</span>
+                        {renderAutoBadge('tool_type')}
+                      </FormLabel>
+                      <FormControl>
+                        <Combobox
+                          options={toolTypeOptions}
+                          value={field.value}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            markEdited('tool_type');
+                          }}
+                          placeholder="Select Tool Category..."
+                          searchPlaceholder="Search tool categories..."
+                          emptyText="No tool category found."
+                          disabled={loading}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Description
+                        {renderAutoBadge('description')}
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Describe what this tool does. The AI uses this description to decide when to call it."
+                          className="min-h-[100px]"
+                          {...field}
+                          onChange={(e) => {
+                            field.onChange(e);
+                            markEdited('description');
+                          }}
+                          disabled={loading}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* GUARDRAILS (permission + access switches, collapsed by default) */}
+            <Collapsible open={guardrailsOpen} onOpenChange={setGuardrailsOpen} className="space-y-3">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="group flex w-full items-center gap-2 rounded-none border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
+                  disabled={loading}
+                >
+                  <ShieldCheck className="w-4 h-4 text-steel-soft shrink-0" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Guardrails</h3>
+                  {!guardrailsOpen && (
+                    <span className="text-sm text-steel truncate ml-1">— {guardrailsSummary}</span>
+                  )}
+                  <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-4 pt-1">
+                <FormField
+                  control={form.control}
+                  name="required_permission"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Required Permission
+                        {renderAutoBadge('required_permission')}
+                      </FormLabel>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          markEdited('required_permission');
+                        }}
+                        value={field.value}
+                        disabled={loading}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select permission level..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="read">Read</SelectItem>
+                          <SelectItem value="write">Write</SelectItem>
+                          <SelectItem value="create">Create</SelectItem>
+                          <SelectItem value="delete">Delete</SelectItem>
+                          <SelectItem value="submit">Submit</SelectItem>
+                          <SelectItem value="cancel">Cancel</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Permission level required to use this tool</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="is_read_only"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel>
+                          Read Only
+                          {renderAutoBadge('is_read_only')}
+                        </FormLabel>
+                        <p className="text-sm text-steel">
+                          If checked, this tool does not modify data
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            markEdited('is_read_only');
+                          }}
+                          disabled={loading}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="allowed_for_guest"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel>Allowed for Guest</FormLabel>
+                        <p className="text-sm text-steel">
+                          If checked, Guest users can use this tool
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={loading}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+
             <div className="flex items-center justify-between gap-2">
               <SectionHeader icon={Braces} title="Function Definition" />
               <Button
