@@ -169,8 +169,9 @@ class SQLiteFTSBackend(KnowledgeBackend):
 		# Escape special FTS5 characters
 		safe_query = self._escape_fts_query(query)
 		
+		from . import validate_filter_key
 		filter_clauses = []
-		params: List[Any] = [safe_query, top_k]
+		filter_values: List[Any] = []
 
 		if filters:
 			top_level_cols = ["input_id", "input_type", "source_title", "chunk_index"]
@@ -178,8 +179,13 @@ class SQLiteFTSBackend(KnowledgeBackend):
 				if key in top_level_cols:
 					filter_clauses.append(f"c.{key} = ?")
 				else:
+					validate_filter_key(key)
 					filter_clauses.append(f"json_extract(c.metadata, '$.{key}') = ?")
-				params.append(value)
+				filter_values.append(value)
+
+		# Param order must match SQL placeholder order:
+		# MATCH ? → {filter ?s} → LIMIT ?
+		params: List[Any] = [safe_query] + filter_values + [top_k]
 
 		where_sql = ""
 		if filter_clauses:
