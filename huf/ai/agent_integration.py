@@ -89,35 +89,10 @@ class AgentManager:
                 "Knowledge Tool Error",
             )
 
-        # Add memory tools if agent has memory enabled
-        try:
-            if getattr(self.agent_doc, "enable_memory", False):
-                from huf.ai.memory_tools import (
-                    handle_save_memory_record,
-                    handle_search_memory_records
-                )
-                from agents import function_tool
-
-                if getattr(self.agent_doc, "enable_memory_search_tool", True):
-                    @function_tool
-                    def search_memory_records(query: str = None, record_type: str = None, scope_type: str = None, status: str = None, limit: int = 10) -> str:
-                        """Search through saved memory records. Use to recall facts, preferences, prior decisions, or any stored information."""
-                        res = handle_search_memory_records(query=query, record_type=record_type, scope_type=scope_type, status=status, limit=limit)
-                        return json.dumps(res, default=str)
-                    self.tools.append(search_memory_records)
-
-                if getattr(self.agent_doc, "enable_memory_write_tool", True):
-                    @function_tool
-                    def save_memory_record(title: str, summary_text: str, record_type: str = "Fact", scope_type: str = "Conversation", scope_key: str = None, data_json: dict = None, status: str = "Draft", visibility: str = "Private", tags: str = None, confidence: float = 0.0, importance_score: float = 0.0) -> str:
-                        """Save a new memory record. Use this to store facts, preferences, decisions, observations, or other information."""
-                        res = handle_save_memory_record(title=title, summary_text=summary_text, record_type=record_type, scope_type=scope_type, scope_key=scope_key, data_json=data_json, status=status, visibility=visibility, tags=tags, confidence=confidence, importance_score=importance_score)
-                        return json.dumps(res, default=str)
-                    self.tools.append(save_memory_record)
-        except Exception as e:
-            frappe.log_error(
-                f"Error loading memory tools: {str(e)}",
-                "Memory Tool Error",
-            )
+        # Memory tools are wired exclusively through sdk_tools.create_agent_tools
+        # (B2 auto-wiring from Agent flags, deduped against the agent's child
+        # table). Inline closures were removed (P0-7, port from #282): they
+        # duplicated the sdk_tools path and passed no conversation/agent context.
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
