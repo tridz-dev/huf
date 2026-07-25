@@ -1,8 +1,8 @@
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle, FlaskConical, ChevronDown, FileText } from 'lucide-react';
+import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle, FlaskConical, ChevronDown, FileText, type LucideIcon } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ColumnDef,
   flexRender,
@@ -61,6 +61,17 @@ import {
 
 type AutoFieldKey = 'tool_name' | 'tool_type' | 'description' | 'is_read_only' | 'required_permission' | 'parameters';
 type AutoFieldState = Record<AutoFieldKey, 'auto' | 'edited'>;
+
+// Consistent 2-level type scale: section headers (this) sit above field labels
+// (FormLabel). One shared treatment for every zone header in the form.
+function SectionHeader({ icon: Icon, title }: { icon?: LucideIcon; title: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      {Icon ? <Icon className="w-4 h-4 text-steel-soft shrink-0" /> : null}
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-steel">{title}</h3>
+    </div>
+  );
+}
 
 interface ToolCreationFormProps {
   template: ToolTemplate;
@@ -535,10 +546,7 @@ export function ToolCreationForm({
         <div className="space-y-8 pb-2">
       {/* CORE CONFIGURATION Section */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Settings className="w-5 h-5 text-steel-soft" />
-          <h3 className="font-semibold text-foreground">Core configuration</h3>
-        </div>
+        <SectionHeader icon={Settings} title="Core configuration" />
 
         <FormField
           control={form.control}
@@ -568,22 +576,22 @@ export function ToolCreationForm({
       </div>
 
       {/* CONTRACT Section (Tool Category + Description, collapsed by default) */}
-      <Collapsible open={contractOpen} onOpenChange={setContractOpen} className="space-y-4">
+      <Collapsible open={contractOpen} onOpenChange={setContractOpen} className="space-y-4 border-t border-line pt-6">
         <CollapsibleTrigger asChild>
           <button
             type="button"
-            className="group flex w-full items-center gap-2 text-left"
+            className="group flex w-full items-center gap-2 rounded-none border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
             disabled={loading}
           >
-            <FileText className="w-5 h-5 text-steel-soft shrink-0" />
-            <h3 className="font-semibold text-foreground shrink-0">Contract</h3>
+            <FileText className="w-4 h-4 text-steel-soft shrink-0" />
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Contract</h3>
             {!contractOpen && (
               <span className="text-sm text-steel truncate ml-1">— {contractSummary}</span>
             )}
             <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-4">
+        <CollapsibleContent className="space-y-4 pt-1">
           <FormField
             control={form.control}
             name="tool_type"
@@ -641,11 +649,8 @@ export function ToolCreationForm({
       </Collapsible>
 
       {/* OPERATION DETAILS Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-5 h-5 text-steel-soft" />
-          <h3 className="font-semibold text-foreground">Operation details</h3>
-        </div>
+      <div className="space-y-4 border-t border-line pt-6">
+        <SectionHeader icon={Zap} title="Operation details" />
 
         <FormField
           control={form.control}
@@ -839,9 +844,9 @@ export function ToolCreationForm({
 
       {/* HTTP Headers Section (for GET/POST) */}
       {selectedType && shouldShowField('http_headers', selectedType) && (
-        <div className="space-y-4">
+        <div className="space-y-4 border-t border-line pt-6">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-foreground">HTTP Headers</h3>
+            <SectionHeader title="HTTP Headers" />
             <Button
               type="button"
               variant="outline"
@@ -874,12 +879,9 @@ export function ToolCreationForm({
       )}
 
       {/* Parameters Section */}
-      <div className="space-y-4">
+      <div className="space-y-4 border-t border-line pt-6">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-foreground">
-            Parameters
-            {renderAutoBadge('parameters')}
-          </h3>
+          <SectionHeader title={<>Parameters{renderAutoBadge('parameters')}</>} />
           <div className="flex items-center gap-2">
             {selectedReferenceDoctype && (
               <Button
@@ -974,8 +976,8 @@ export function ToolCreationForm({
       </div>
 
       {/* Optional Fields Section */}
-      <div className="space-y-4 pt-1">
-        <h3 className="font-semibold text-foreground">Additional Settings</h3>
+      <div className="space-y-4 border-t border-line pt-6">
+        <SectionHeader title="Additional Settings" />
 
         <FormField
           control={form.control}
@@ -1082,7 +1084,7 @@ export function ToolCreationForm({
           />
         )}
         {editingParameterIndex === null && (
-          <div className="sticky top-0 z-10 bg-panel border-b border-line pb-3 -mx-1 px-1 mb-4">
+          <div className="sticky top-0 z-10 bg-background border-b border-line py-3 mb-4">
             <div className="flex items-center justify-between gap-4">
               <Button
                 type="button"
@@ -1112,10 +1114,7 @@ export function ToolCreationForm({
           {/* Persistent live function definition preview + test call */}
           <aside className="min-w-0 self-start xl:sticky xl:top-16 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Braces className="w-4 h-4 text-steel-soft" />
-                <h3 className="font-semibold text-foreground text-sm">Function Definition</h3>
-              </div>
+              <SectionHeader icon={Braces} title="Function Definition" />
               <Button
                 type="button"
                 variant="outline"

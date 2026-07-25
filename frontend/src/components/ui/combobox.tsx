@@ -57,7 +57,7 @@ export function Combobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="h-9 w-full justify-between px-3 py-2"
+          className="h-9 w-full justify-between bg-transparent px-3 py-2 font-normal"
           disabled={disabled}
         >
           {selectedOption ? (
