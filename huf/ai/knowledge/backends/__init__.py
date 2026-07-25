@@ -2,7 +2,7 @@
 Knowledge Backend Abstraction
 
 This module provides a unified interface for knowledge storage backends.
-Supported: SQLite FTS (keyword search), SQLite Vec (vector search), ChromaDB (vector search), PGVector (vector search)
+Supported: SQLite FTS (keyword search), SQLite Vec (vector search), ChromaDB (vector search), PGVector (vector search), Zvec (vector search)
 """
 
 from abc import ABC, abstractmethod
@@ -18,6 +18,7 @@ _BUILTIN_BACKENDS = {
 	"sqlite_vec": "huf.ai.knowledge.backends.sqlite_vec_backend.SQLiteVecBackend",
 	"chroma": "huf.ai.knowledge.backends.chroma_backend.ChromaBackend",
 	"pgvector": "huf.ai.knowledge.backends.pgvector_backend.PGVectorBackend",
+	"zvec": "huf.ai.knowledge.backends.zvec_backend.ZvecBackend",
 }
 
 
