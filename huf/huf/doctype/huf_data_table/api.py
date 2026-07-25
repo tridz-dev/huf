@@ -83,7 +83,7 @@ def _ensure_import_enabled(doctype_name: str) -> None:
 			dt.append("permissions", _table_permission_row(role))
 			changed = True
 		elif not perm.get("import"):
-			perm.import = 1
+			perm.set("import", 1)
 			changed = True
 
 	if changed:
