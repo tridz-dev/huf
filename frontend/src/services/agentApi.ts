@@ -679,3 +679,34 @@ export async function getAgentModels(
   }
 }
 
+export interface CacheableModelsResponse {
+  supported: boolean;
+  alternatives: string[];
+}
+
+/**
+ * Check if a provider/model combination supports prompt caching
+ */
+export async function checkCacheableModels(
+  provider?: string,
+  model?: string
+): Promise<CacheableModelsResponse> {
+  if (!provider) {
+    return { supported: false, alternatives: [] };
+  }
+  try {
+    const response = await call.get('huf.huf.doctype.agent.agent.get_cacheable_models', {
+      provider,
+      model: model || undefined,
+    });
+    const data = response?.message || response;
+    return {
+      supported: Boolean(data?.supported),
+      alternatives: Array.isArray(data?.alternatives) ? data.alternatives : [],
+    };
+  } catch (error) {
+    return { supported: false, alternatives: [] };
+  }
+}
+
+
