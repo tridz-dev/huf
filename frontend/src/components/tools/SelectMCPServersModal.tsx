@@ -24,6 +24,7 @@ interface SelectMCPServersModalProps {
   onOpenChange: (open: boolean) => void;
   selectedServers: MCPServerDoc[];
   onAddServers: (servers: MCPServerDoc[]) => void;
+  onCreateNew?: () => void;
 }
 
 export function SelectMCPServersModal({
@@ -31,6 +32,7 @@ export function SelectMCPServersModal({
   onOpenChange,
   selectedServers,
   onAddServers,
+  onCreateNew,
 }: SelectMCPServersModalProps) {
   const [allServers, setAllServers] = useState<MCPServerDoc[]>([]);
   const [loading, setLoading] = useState(false);
@@ -122,9 +124,9 @@ export function SelectMCPServersModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="sm:max-w-[700px]">
         <DialogScrollHeader>
-          <DialogTitle>Select MCP Servers</DialogTitle>
+          <DialogTitle>Connect MCP servers</DialogTitle>
           <DialogDescription>
-            Choose MCP servers to connect to this agent. Select multiple servers at once.
+            Select from your registered servers, or register a new one.
           </DialogDescription>
         </DialogScrollHeader>
 
@@ -151,11 +153,18 @@ export function SelectMCPServersModal({
             </div>
           ) : filteredServers.length === 0 ? (
             <div className="flex items-center justify-center py-12">
-              <div className="text-steel">
-                {searchQuery
-                  ? 'No MCP servers match your search'
-                  : 'No MCP servers available'}
-              </div>
+              {searchQuery ? (
+                <div className="text-steel">No MCP servers match your search</div>
+              ) : allServers.length === 0 && onCreateNew ? (
+                <div className="flex flex-col items-center gap-4">
+                  <div className="text-steel">No MCP servers registered yet</div>
+                  <Button variant="default" onClick={onCreateNew}>
+                    Register your first MCP server →
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-steel">No MCP servers available</div>
+              )}
             </div>
           ) : (
             filteredServers.map((server) => (
@@ -172,16 +181,27 @@ export function SelectMCPServersModal({
         </DialogScrollBody>
 
         <DialogScrollFooter className="items-center justify-between sm:justify-between">
-          <div className="text-sm text-steel">
-            {selectedCount > 0 ? (
-              <>
-                {selectedCount} server{selectedCount > 1 ? 's' : ''} selected
-                {selectedCount !== filteredServers.length && (
-                  <> • {filteredServers.length} total</>
-                )}
-              </>
-            ) : (
-              <>{filteredServers.length} server{filteredServers.length !== 1 ? 's' : ''} available</>
+          <div className="flex flex-col gap-1">
+            <div className="text-sm text-steel">
+              {selectedCount > 0 ? (
+                <>
+                  {selectedCount} server{selectedCount > 1 ? 's' : ''} selected
+                  {selectedCount !== filteredServers.length && (
+                    <> • {filteredServers.length} total</>
+                  )}
+                </>
+              ) : (
+                <>{filteredServers.length} server{filteredServers.length !== 1 ? 's' : ''} available</>
+              )}
+            </div>
+            {onCreateNew && (
+              <Button
+                variant="link"
+                className="h-auto p-0 self-start"
+                onClick={onCreateNew}
+              >
+                Don't see it? Register a new MCP server →
+              </Button>
             )}
           </div>
           <div className="flex gap-2">

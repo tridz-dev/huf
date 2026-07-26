@@ -37,7 +37,6 @@ export interface MCPServerDoc {
     oauth_registration_endpoint?: string;
     oauth_client_id?: string;
     oauth_client_secret?: string;
-    oauth_token_response_path?: string;
     oauth_access_token?: string;
     oauth_refresh_token?: string;
     oauth_token_expires_at?: string;
