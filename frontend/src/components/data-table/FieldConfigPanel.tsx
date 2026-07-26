@@ -70,14 +70,14 @@ export function FieldConfigPanel({
 					<h3 className="font-medium text-sm">
 						{isLayout ? field.fieldtype : 'Field Properties'}
 					</h3>
-					<p className="text-xs text-muted-foreground mt-1">
+					<p className="text-xs text-steel mt-1">
 						{isLayout ? 'Layout element settings' : field.fieldtype}
 					</p>
 				</div>
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-7 w-7 text-muted-foreground"
+					className="h-7 w-7 text-steel"
 					onClick={onOpenTableSettings}
 					title="Open table settings"
 				>
@@ -100,7 +100,7 @@ export function FieldConfigPanel({
 						className="h-8 text-sm"
 					/>
 					{!isLayout && (
-						<p className="text-[10px] text-muted-foreground">
+						<p className="text-[10px] text-steel">
 							Name: {field.fieldname}
 						</p>
 					)}
@@ -146,40 +146,48 @@ export function FieldConfigPanel({
 				</div>
 			)}
 
-			{properties.includes('default') && (
-				<div className="space-y-1.5">
-					<Label htmlFor="field-default" className="text-xs">
-						Default Value
-					</Label>
-					<Input
-						id="field-default"
-						value={field.default || ''}
-						onChange={(e) => onUpdate({ default: e.target.value })}
-						placeholder="Default value"
-						className="h-8 text-sm"
-					/>
-				</div>
-			)}
+			{(properties.includes('default') || properties.includes('description')) && (
+				<div className="space-y-3 pt-2 border-t border-line">
+					<h4 className="text-xs font-medium text-steel-soft uppercase tracking-wide">
+						Additional Settings
+					</h4>
 
-			{properties.includes('description') && (
-				<div className="space-y-1.5">
-					<Label htmlFor="field-description" className="text-xs">
-						Help Text
-					</Label>
-					<Input
-						id="field-description"
-						value={field.description || ''}
-						onChange={(e) => onUpdate({ description: e.target.value })}
-						placeholder="Help text shown below field"
-						className="h-8 text-sm"
-					/>
+					{properties.includes('default') && (
+						<div className="space-y-1">
+							<Label htmlFor="field-default" className="text-xs text-steel">
+								Default Value
+							</Label>
+							<Input
+								id="field-default"
+								value={field.default || ''}
+								onChange={(e) => onUpdate({ default: e.target.value })}
+								placeholder="Default value"
+								className="h-7 text-xs"
+							/>
+						</div>
+					)}
+
+					{properties.includes('description') && (
+						<div className="space-y-1">
+							<Label htmlFor="field-description" className="text-xs text-steel">
+								Help Text
+							</Label>
+							<Input
+								id="field-description"
+								value={field.description || ''}
+								onChange={(e) => onUpdate({ description: e.target.value })}
+								placeholder="Help text shown below field"
+								className="h-7 text-xs"
+							/>
+						</div>
+					)}
 				</div>
 			)}
 
 			{!isLayout && (
 				<div className="space-y-3">
 					<Separator />
-					<p className="text-xs font-medium text-muted-foreground">Properties</p>
+					<p className="text-xs font-medium text-steel">Properties</p>
 
 					{properties.includes('reqd') && (
 						<div className="flex items-center gap-2">

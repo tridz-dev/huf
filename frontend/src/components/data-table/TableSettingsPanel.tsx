@@ -64,6 +64,7 @@ export function TableSettingsPanel({
 				</p>
 			</div>
 
+			{/* Primary fields — what the table is */}
 			<div className="space-y-1.5">
 				<Label htmlFor="table-name" className="text-xs">
 					Table Name *
@@ -76,31 +77,6 @@ export function TableSettingsPanel({
 					className="h-8 text-sm"
 					disabled={isEdit}
 				/>
-			</div>
-
-			<div className="space-y-1.5">
-				<Label htmlFor="table-group" className="text-xs">
-					Group
-				</Label>
-				<Input
-					id="table-group"
-					value={tableGroup}
-					onChange={(e) => onTableGroupChange(e.target.value)}
-					placeholder="e.g. Customers"
-					className="h-8 text-sm"
-					list="existing-table-groups"
-					autoComplete="off"
-				/>
-				<datalist id="existing-table-groups">
-					{existingGroups.map((g) => (
-						<option key={g} value={g} />
-					))}
-				</datalist>
-				{existingGroups.length > 0 && (
-					<p className="text-[10px] text-steel">
-						Existing groups: {existingGroups.join(', ')}
-					</p>
-				)}
 			</div>
 
 			<div className="space-y-1.5">
@@ -117,73 +93,107 @@ export function TableSettingsPanel({
 				/>
 			</div>
 
-			<div className="space-y-1.5">
-				<Label htmlFor="table-icon" className="text-xs">
-					Icon
-				</Label>
-				<Select value={icon || '_none'} onValueChange={(v) => onIconChange(v === '_none' ? '' : v)}>
-					<SelectTrigger className="h-8 text-sm">
-						{icon && TABLE_ICON_MAP[icon] ? (
-							<div className="flex items-center gap-2 justify-start w-full">
-								{(() => {
-									const Icon = TABLE_ICON_MAP[icon];
-									return <Icon className="w-3.5 h-3.5" />;
-								})()}
-								{TABLE_ICONS.find((i) => i.name === icon)?.label ?? icon}
-							</div>
-						) : (
-							<SelectValue placeholder="Select an icon" />
-						)}
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="_none">No icon</SelectItem>
-						{TABLE_ICONS.map((entry) => (
-							<SelectItem key={entry.name} value={entry.name}>
-								<span className="flex items-center gap-2">
-									<entry.icon className="w-3.5 h-3.5" />
-									{entry.label}
-								</span>
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-			</div>
+			{/* Additional Settings — secondary/organizational metadata, most tables never
+			    touch these beyond their defaults, so they get less visual weight and sit
+			    below the fields that define what the table actually is. */}
+			<div className="space-y-3 pt-2 border-t border-line">
+				<h4 className="text-xs font-medium text-steel-soft uppercase tracking-wide">
+					Additional Settings
+				</h4>
 
-			<div className="space-y-1.5">
-				<Label htmlFor="table-autoname" className="text-xs">
-					Naming Method
-				</Label>
-				<Select value={autonameMethod} onValueChange={onAutonameMethodChange}>
-					<SelectTrigger className="h-8 text-sm">
-						<SelectValue />
-					</SelectTrigger>
-					<SelectContent>
-						<SelectItem value="Autoincrement">Auto-increment (1, 2, 3...)</SelectItem>
-						<SelectItem value="Hash">Random Hash</SelectItem>
-						<SelectItem value="By Field">By Field Value</SelectItem>
-					</SelectContent>
-				</Select>
-			</div>
-
-			{autonameMethod === 'By Field' && (
-				<div className="space-y-1.5">
-					<Label htmlFor="table-title-field" className="text-xs">
-						Title Field
+				<div className="space-y-1">
+					<Label htmlFor="table-group" className="text-xs text-steel">
+						Group
 					</Label>
-					<Select value={titleField} onValueChange={onTitleFieldChange}>
-						<SelectTrigger className="h-8 text-sm">
-							<SelectValue placeholder="Select a field" />
+					<Input
+						id="table-group"
+						value={tableGroup}
+						onChange={(e) => onTableGroupChange(e.target.value)}
+						placeholder="e.g. Customers"
+						className="h-7 text-xs"
+						list="existing-table-groups"
+						autoComplete="off"
+					/>
+					<datalist id="existing-table-groups">
+						{existingGroups.map((g) => (
+							<option key={g} value={g} />
+						))}
+					</datalist>
+					{existingGroups.length > 0 && (
+						<p className="text-[10px] text-steel-soft">
+							Existing groups: {existingGroups.join(', ')}
+						</p>
+					)}
+				</div>
+
+				<div className="space-y-1">
+					<Label htmlFor="table-icon" className="text-xs text-steel">
+						Icon
+					</Label>
+					<Select value={icon || '_none'} onValueChange={(v) => onIconChange(v === '_none' ? '' : v)}>
+						<SelectTrigger className="h-7 text-xs">
+							{icon && TABLE_ICON_MAP[icon] ? (
+								<div className="flex items-center gap-2 justify-start w-full">
+									{(() => {
+										const Icon = TABLE_ICON_MAP[icon];
+										return <Icon className="w-3.5 h-3.5" />;
+									})()}
+									{TABLE_ICONS.find((i) => i.name === icon)?.label ?? icon}
+								</div>
+							) : (
+								<SelectValue placeholder="Select an icon" />
+							)}
 						</SelectTrigger>
 						<SelectContent>
-							{dataFields.map((f) => (
-								<SelectItem key={f.fieldname} value={f.fieldname}>
-									{f.label}
+							<SelectItem value="_none">No icon</SelectItem>
+							{TABLE_ICONS.map((entry) => (
+								<SelectItem key={entry.name} value={entry.name}>
+									<span className="flex items-center gap-2">
+										<entry.icon className="w-3.5 h-3.5" />
+										{entry.label}
+									</span>
 								</SelectItem>
 							))}
 						</SelectContent>
 					</Select>
 				</div>
-			)}
+
+				<div className="space-y-1">
+					<Label htmlFor="table-autoname" className="text-xs text-steel">
+						Naming Method
+					</Label>
+					<Select value={autonameMethod} onValueChange={onAutonameMethodChange}>
+						<SelectTrigger className="h-7 text-xs">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="Autoincrement">Auto-increment (1, 2, 3...)</SelectItem>
+							<SelectItem value="Hash">Random Hash</SelectItem>
+							<SelectItem value="By Field">By Field Value</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
+
+				{autonameMethod === 'By Field' && (
+					<div className="space-y-1">
+						<Label htmlFor="table-title-field" className="text-xs text-steel">
+							Title Field
+						</Label>
+						<Select value={titleField} onValueChange={onTitleFieldChange}>
+							<SelectTrigger className="h-7 text-xs">
+								<SelectValue placeholder="Select a field" />
+							</SelectTrigger>
+							<SelectContent>
+								{dataFields.map((f) => (
+									<SelectItem key={f.fieldname} value={f.fieldname}>
+										{f.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+				)}
+			</div>
 		</div>
 	);
 }
