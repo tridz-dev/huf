@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 import unittest
 from unittest.mock import MagicMock, patch
+from datetime import datetime
 
 from huf.ai import gateway_service
 
@@ -83,6 +84,15 @@ class TestGatewayRouting(unittest.TestCase):
 
 
 class TestGatewayIngress(unittest.TestCase):
+    def setUp(self):
+        self.now_datetime = patch(
+            "huf.ai.gateway_service.now_datetime", return_value=datetime(2026, 7, 26, 0, 0, 0)
+        )
+        self.now_datetime.start()
+
+    def tearDown(self):
+        self.now_datetime.stop()
+
     def test_payload_redaction_removes_provider_secrets(self):
         assert gateway_service._redact_payload(
             {"token": "top-secret", "body": {"signature": "sig", "message": "hello"}}
