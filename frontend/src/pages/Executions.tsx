@@ -219,6 +219,34 @@ export default function Executions() {
         },
       },
       {
+        accessorKey: 'cached_tokens',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
+            >
+              Cached Tokens
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          );
+        },
+        cell: ({ row }) => {
+          const cached = row.original.cached_tokens;
+          return (
+            <div className="font-mono text-[12px] text-steel">
+              {typeof cached === 'number' ? cached.toLocaleString() : '0'}
+            </div>
+          );
+        },
+        sortingFn: (rowA, rowB) => {
+          const valA = rowA.original.cached_tokens ?? 0;
+          const valB = rowB.original.cached_tokens ?? 0;
+          return valA - valB;
+        },
+      },
+      {
         id: 'duration',
         header: 'Duration',
         cell: ({ row }) => {
