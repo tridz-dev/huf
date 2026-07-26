@@ -19,6 +19,8 @@ ALLOWED_FIELD_TYPES = {
 	"Rating",
 	"Color",
 	"Phone",
+	"Attach",
+	"Attach Image",
 	"Tab Break",
 	"Section Break",
 	"Column Break",
