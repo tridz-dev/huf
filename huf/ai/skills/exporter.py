@@ -18,6 +18,7 @@ from typing import Any
 import frappe
 import yaml
 from frappe import _
+from frappe.exceptions import ValidationError
 
 SKILL_DOCTYPE = "Skill"
 TOOL_DOCTYPE = "Agent Tool Function"
@@ -26,7 +27,7 @@ PROMPT_DOCTYPE = "Agent Prompt"
 MCP_DOCTYPE = "MCP Server"
 
 
-class SkillExportError(frappe.ValidationError):
+class SkillExportError(ValidationError):
 	"""Raised when a skill export fails."""
 
 

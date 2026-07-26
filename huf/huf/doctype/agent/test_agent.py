@@ -2,10 +2,16 @@
 # See license.txt
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from unittest.mock import patch
 
-from huf.huf.doctype.agent.agent import get_permission_query_conditions
+
+def _get_permission_query_conditions():
+	"""Defer controller import until test time (bench run-tests discovers test
+	modules before frappe.init completes on some Frappe versions)."""
+	from huf.huf.doctype.agent.agent import get_permission_query_conditions
+
+	return get_permission_query_conditions
 
 NON_MANAGER_ROLES = ["Huf User"]
 MANAGER_ROLES = ["System Manager"]
@@ -18,7 +24,7 @@ def _any_model_and_provider():
     return rows[0].name, rows[0].provider
 
 
-class TestAgent(FrappeTestCase):
+class TestAgent(IntegrationTestCase):
     def test_system_agent_delete_guard(self):
         """Deleting an is_system agent should be blocked outside install/migrate/uninstall."""
         agent = frappe.new_doc("Agent")
@@ -38,7 +44,7 @@ class TestAgent(FrappeTestCase):
             agent.before_rename("__test_system_agent__", "__renamed_system_agent__")
 
 
-class TestSystemAgentLocking(FrappeTestCase):
+class TestSystemAgentLocking(IntegrationTestCase):
     """Guards for system-agent (is_system=1) locking: immutability and list hiding.
 
     DB-backed: real inserts/saves so the guards run through the full controller
@@ -131,7 +137,7 @@ class TestSystemAgentLocking(FrappeTestCase):
 
     def test_permission_query_conditions_hide_system_agents(self):
         """Non-System-Manager list queries exclude system agents."""
-        conditions = get_permission_query_conditions("Guest")
+        conditions = _get_permission_query_conditions()("Guest")
         self.assertIsNotNone(conditions)
         self.assertIn("`tabAgent`.is_system = 0", conditions)
 
@@ -139,7 +145,7 @@ class TestSystemAgentLocking(FrappeTestCase):
         """System Managers still see all agents (no conditions)."""
         if "System Manager" not in frappe.get_roles():
             self.skipTest("test session user is not a System Manager")
-        self.assertIsNone(get_permission_query_conditions(frappe.session.user))
+        self.assertIsNone(_get_permission_query_conditions()(frappe.session.user))
 
 
 # Python execution gating tests from PR #358.

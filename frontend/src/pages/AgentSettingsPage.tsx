@@ -34,7 +34,7 @@ export function AgentSettingsPage() {
   useEffect(() => {
     getAgentSettings()
       .then((doc) => {
-        setJsonValue(formatDestinations(doc.skill_destinations));
+        setJsonValue(formatDestinations(doc?.skill_destinations));
       })
       .catch((error) => {
         toast.error(getFrappeErrorMessage(error) || 'Failed to load Agent Settings');

@@ -1034,11 +1034,74 @@ BUILDER_TOOLS = [
 		],
 	},
 	{
+		"tool_name": "list_table_rows",
+		"description": (
+			"Read rows from an existing huf data table (created with create_huf_table). "
+			"Read-only. Returns the rows plus the total count for pagination."
+		),
+		"function_path": "huf.ai.tools.builder.list_table_rows",
+		"category": "Builder",
+		"parameters": [
+			_p("table_name", required=True, description="Human table name or Huf Data Table registry name"),
+			_p("filters", description="JSON filter object or list, e.g. {\"status\": \"Open\"}"),
+			_p("fields", description="JSON list of fieldnames to return (default: all)"),
+			_p("limit", type="integer", description="Max rows (default 20)"),
+			_p("start", type="integer", description="Offset for pagination (default 0)"),
+		],
+	},
+	{
+		"tool_name": "add_table_row",
+		"description": (
+			"Add a row to an existing huf data table. 'data' is a JSON object of "
+			"fieldname/value pairs matching the table's schema (unknown fields are dropped). "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.add_table_row",
+		"category": "Builder",
+		"parameters": [
+			_p("table_name", required=True, description="Human table name or Huf Data Table registry name"),
+			_p("data", required=True, description="JSON object of fieldname/value pairs, e.g. {\"title\": \"Hello\", \"status\": \"Open\"}"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = insert the row"),
+		],
+	},
+	{
+		"tool_name": "update_table_row",
+		"description": (
+			"Update fields of an existing row in a huf data table. 'data' is a JSON object "
+			"of fieldname/value pairs; only changed fields are applied. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.update_table_row",
+		"category": "Builder",
+		"parameters": [
+			_p("table_name", required=True, description="Human table name or Huf Data Table registry name"),
+			_p("row_name", required=True, description="Name (ID) of the row to update"),
+			_p("data", required=True, description="JSON object of fieldname/value pairs to change"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = apply and save"),
+		],
+	},
+	{
+		"tool_name": "delete_table_row",
+		"description": (
+			"Delete a row from a huf data table. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.delete_table_row",
+		"category": "Builder",
+		"parameters": [
+			_p("table_name", required=True, description="Human table name or Huf Data Table registry name"),
+			_p("row_name", required=True, description="Name (ID) of the row to delete"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = delete the row"),
+		],
+	},
+	{
 		"tool_name": "draft_agent",
 		"description": (
 			"Create a new AI Agent in DRAFT state (disabled=1 - it cannot run yet) with a "
 			"local prompt from 'instructions'. The provider must already exist; if it has no "
 			"API key configured the draft is still created but the result includes a warning. "
+			"The agent is chat-enabled by default (allow_chat=true) so it appears in chat "
+			"pickers once published. "
 			+ _CONFIRM_NOTE
 			+ " Use update_agent_prompt to refine the prompt, attach_agent_tools to give it tools, "
 			"and publish_agent to enable it. Fails with a clear error if the agent already exists."
@@ -1051,6 +1114,7 @@ BUILDER_TOOLS = [
 			_p("model", required=True, description="Existing AI Model name"),
 			_p("instructions", required=True, description="System prompt / instructions for the agent"),
 			_p("description", description="Short human description of the agent"),
+			_p("allow_chat", type="boolean", description="true (default) = chat-enabled so it appears in chat UIs; false = headless/automation-only agent"),
 			_p("confirm", type="boolean", description="false = preview diff only; true = create the draft agent"),
 		],
 	},
@@ -1104,21 +1168,63 @@ BUILDER_TOOLS = [
 	{
 		"tool_name": "create_agent_tool",
 		"description": (
-			"Create a DECLARATIVE Agent Tool Function record (name, description, parameter "
-			"schema). LIMITATION: the record is created WITHOUT an implementation - an admin "
-			"must set its function_path in the desk UI before it can run. Never claim the tool "
-			"already works after calling this. This tool cannot create arbitrary code "
-			"(function_path) or HTTP (base_url) tools. "
+			"Create a WORKING declarative document tool (Agent Tool Function) bound to a "
+			"DocType. The tool executes immediately — attach it to an agent with "
+			"attach_agent_tools and it is callable right away. Use this to give agents "
+			"data tools, e.g. an 'add_row'-style named tool for a huf data table's "
+			"dynamic doctype like 'HF Social Media Campaign' (types='Create Document'). "
+			"Parameters are validated against the DocType: Select fields get options "
+			"auto-filled, unknown fields are dropped (see dropped_params in the result). "
+			"Custom Function/code/HTTP tools CANNOT be created by this tool. "
 			+ _CONFIRM_NOTE
 		),
 		"function_path": "huf.ai.tools.builder.create_agent_tool",
 		"category": "Builder",
 		"parameters": [
 			_p("tool_name", required=True, description="Unique tool name (also the document ID)"),
-			_p("description", required=True, description="What the tool does - this is what LLMs will see"),
-			_p("tool_type", description="Agent Tool Type category (default 'Builder'; auto-created if missing)"),
-			_p("parameters", description="JSON list of parameter definitions [{fieldname, type, label, required, description}]. type one of: string, integer, number, float, boolean, object, array"),
+			_p("description", required=True, description="What the tool does — this is what LLMs will see"),
+			_p("types", required=True, description="Document tool type, one of: Create Document, Create Multiple Documents, Get Document, Get Multiple Documents, Get List, Update Document, Update Multiple Documents, Delete Document, Delete Multiple Documents, Get Value, Set Value"),
+			_p("reference_doctype", required=True, description="DocType the tool operates on, e.g. 'HF Social Media Campaign' for a huf data table"),
+			_p("parameters", description="JSON list of parameter definitions [{fieldname, type, label, required, description}]. fieldnames must exist on the reference_doctype (unknown ones are dropped); Select fields get options auto-filled. type one of: string, integer, number, float, boolean, object, array"),
 			_p("confirm", type="boolean", description="false = preview diff only; true = create the tool record"),
+		],
+	},
+	{
+		"tool_name": "list_provider_options",
+		"description": (
+			"List every AI Provider with whether it has an API key configured and which "
+			"AI Models exist for it, plus a 'suggested' provider+model pair (the first "
+			"configured provider and its default chat model). Read-only — call this before "
+			"draft_agent to pick a valid provider/model instead of guessing. API key values "
+			"are never returned, only a configured true/false flag."
+		),
+		"function_path": "huf.ai.tools.builder.list_provider_options",
+		"category": "Builder",
+		"parameters": [],
+	},
+	{
+		"tool_name": "ask_user",
+		"description": (
+			"Ask the user a structured question in the chat. Returns a fenced 'ask-user' "
+			"block — include the returned 'block' value VERBATIM in your reply, then STOP "
+			"and wait for the user's answer. kind is one of yes_no|single_choice|multi_choice|"
+			"input|textarea; the choice kinds require options as "
+			"[{id, label, icon?, description?}] (icon must be a supported lucide name; "
+			"unsupported icons are dropped with a warning). Use this ONLY when structured UI "
+			"is clearly better than a typed reply: confirming right before executing a "
+			"mutating plan, choosing from a defined set of options, or collecting a "
+			"required value. Do NOT use it for greetings, small talk, open-ended "
+			"questions, or normal conversation — answer those in plain prose."
+		),
+		"function_path": "huf.ai.tools.ask_user.ask_user",
+		"category": "Builder",
+		"parameters": [
+			_p("question", required=True, description="The question to show the user"),
+			_p("kind", required=True, description="One of: yes_no, single_choice, multi_choice, input, textarea"),
+			_p("options", description="JSON list of options [{id, label, icon?, description?}] — required for single_choice/multi_choice"),
+			_p("allow_free_text", type="boolean", description="Allow a free-text answer in addition to options (default true)"),
+			_p("suggested_answers", description="JSON list of suggested free-text answers"),
+			_p("note", description="Optional extra context shown with the question"),
 		],
 	},
 ]

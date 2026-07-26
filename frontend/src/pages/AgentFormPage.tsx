@@ -136,6 +136,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     autonaming_of_conversation_title: agent.autonaming_of_conversation_title === 1,
     agent_color: agent.agent_color?.trim() || '',
     show_tool_execution_details: agent.show_tool_execution_details === 1,
+    agent_skill: (agent.agent_skill ?? []) as any,
     image_generation_model: agent.image_generation_model || undefined,
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
@@ -1447,7 +1448,7 @@ export function AgentFormPage() {
           allow_file_upload: values.allow_file_upload,
           enable_ocr: values.enable_ocr,
           max_upload_size_mb: values.max_upload_size_mb,
-          agent_skill: agentSkills,
+          agent_skill: agentSkills as any,
         });
         // Reset tools, disabled state, and persisted allow_chat after successful update
         setInitialTools([...selectedTools]);
@@ -2072,10 +2073,9 @@ export function AgentFormPage() {
 
               <TabsContent value="skills" className="space-y-4">
                 <SkillsTab
-                  agentSkills={agentSkills}
+                  skills={agentSkills as any}
                   skillOptions={skillOptions}
                   onChange={setAgentSkills}
-                  disabled={systemLocked}
                 />
               </TabsContent>
 

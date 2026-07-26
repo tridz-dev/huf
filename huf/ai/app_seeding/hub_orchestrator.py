@@ -45,11 +45,17 @@ _NON_CHAT_MARKERS = ("embedding", "whisper", "dall-e", "gpt-image", "tts", "imag
 # after_migrate) that let the hub chat create tables/agents/tools/prompts.
 BUILDER_TOOL_NAMES = (
     "create_huf_table",
+    "list_table_rows",
+    "add_table_row",
+    "update_table_row",
+    "delete_table_row",
     "draft_agent",
     "update_agent_prompt",
     "attach_agent_tools",
     "publish_agent",
     "create_agent_tool",
+    "list_provider_options",
+    "ask_user",
 )
 
 

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -71,6 +72,7 @@ const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 
 import { useEffect } from 'react';
+import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
 import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
@@ -98,13 +100,28 @@ function ChatOnlyRedirectGuard() {
 }
 
 function AppShell() {
+  const location = useLocation();
+
+  useEffect(() => {
+    clearChunkReloadFlag();
+  }, []);
+
   return (
     <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
           <ChatOnlyRedirectGuard />
           <Suspense fallback={<AuthenticatingPage />}>
-            <Routes>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="h-full"
+              >
+                <Routes location={location}>
           <Route
             path="/"
             element={
@@ -587,7 +604,9 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-            </Routes>
+                </Routes>
+              </motion.div>
+            </AnimatePresence>
           </Suspense>
           <Toaster />
         </PermissionsProvider>
@@ -597,7 +616,7 @@ function AppShell() {
 }
 
 const router = createBrowserRouter(
-  [{ path: '*', element: <AppShell /> }],
+  [{ path: '*', element: <AppShell />, errorElement: <RouteErrorBoundary /> }],
   { basename: '/huf' },
 );
 

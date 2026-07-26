@@ -27,7 +27,14 @@ from huf.ai.knowledge.context_builder import build_knowledge_context, inject_kno
 from huf.ai.providers.litellm import _normalize_model_name
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 
-logger = frappe.logger("huf")
+class _LazyLogger:
+	"""Defer frappe.logger() until first use so test discovery can import this module."""
+
+	def __getattr__(self, name):
+		return getattr(frappe.logger("huf"), name)
+
+
+logger = _LazyLogger()
 
 
 class AgentManager:
@@ -359,8 +366,16 @@ class AgentManager:
 
         if self.agent_doc.allow_chat:
             from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
+            from huf.ai.artifact_instructions import (
+                AI_ELEMENT_INSTRUCTIONS,
+                MEDIA_ELEMENT_INSTRUCTIONS,
+                agent_has_media_tools,
+            )
 
             instructions += CHART_ARTIFACT_INSTRUCTIONS
+            instructions += AI_ELEMENT_INSTRUCTIONS
+            if agent_has_media_tools(self.agent_doc):
+                instructions += MEDIA_ELEMENT_INSTRUCTIONS
 
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,

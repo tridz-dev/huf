@@ -14,7 +14,7 @@ Covers:
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
 class _LazyModule:
@@ -49,7 +49,7 @@ def _ensure_test_provider():
         }).insert(ignore_permissions=True)
 
 
-class TestHubReadiness(FrappeTestCase):
+class TestHubReadiness(IntegrationTestCase):
     """Readiness must report not-ready with remediation when nothing is keyed."""
 
     def test_readiness_shape_with_no_keyed_provider(self):
@@ -88,7 +88,7 @@ class TestHubReadiness(FrappeTestCase):
             self.assertTrue(entry["action_route"])
 
 
-class TestProviderStatus(FrappeTestCase):
+class TestProviderStatus(IntegrationTestCase):
     """get_provider_status must report configured state without leaking keys."""
 
     def test_provider_status_never_leaks_key_material(self):
@@ -114,7 +114,7 @@ class TestProviderStatus(FrappeTestCase):
         self.assertEqual(configured_flags, sorted(configured_flags, reverse=True))
 
 
-class TestApproveModelProposals(FrappeTestCase):
+class TestApproveModelProposals(IntegrationTestCase):
     """approve_model_proposals creates AI Model rows idempotently, manager-only."""
 
     def setUp(self):

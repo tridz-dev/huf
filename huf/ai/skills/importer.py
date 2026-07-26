@@ -28,6 +28,7 @@ import frappe
 import requests
 import yaml
 from frappe import _
+from frappe.exceptions import ValidationError
 
 SKILL_DOCTYPE = "Skill"
 CATEGORY_DOCTYPE = "Skill Category"
@@ -53,7 +54,7 @@ ALLOWED_GIT_DOMAINS = {
 }
 
 
-class SkillImportError(frappe.ValidationError):
+class SkillImportError(ValidationError):
 	"""Raised when a skill import fails."""
 
 

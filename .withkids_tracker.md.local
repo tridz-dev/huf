@@ -1,0 +1,39 @@
+# withkids tracker
+
+## Goal
+Create the `withkids` multi-agent orchestration skill and use it to harden PR #243 (hub-as-builder) so it is mergeable, fully planned, and tested on a real bench.
+
+## Phase
+Done — branch pushed, tests green, live chat verified.
+
+## Todos
+- [x] T0: Create and install `withkids` skill across available agents (Kimi, Claude, OpenCode; Pi has no skills dir).
+- [x] T1: Verify live k2.7 child agent works.
+- [x] T2: Verify PR #243 is at parity with develop (no commits behind).
+- [x] T3: Run consultant reviews (Claude UX + Codex security).
+- [x] T4: Add two-phase confirm to `create_huf_table`, `draft_agent`, `create_agent_tool`.
+- [x] T5: Harden builder authorization with `frappe.has_permission` checks.
+- [x] T6: Harden hub APIs against provider metadata disclosure and unsafe catalog trust.
+- [x] T7: Update tests for new confirm/permission behavior.
+- [x] T8: Run real tests on devcontainer bench.
+- [x] T9: Push final branch and deliver PR list.
+
+## Test results
+- `huf.ai.tests.test_builder_tools` — 30/30 PASS
+- `huf.ai.tests.test_hub_api` — 5/5 PASS
+- `huf.huf.doctype.agent.test_agent` — 8/8 PASS
+- Live hub chat: Hub Orchestrator responds via keyed Google provider.
+- Live builder tool: `create_huf_table` preview + confirm created `HF Withkids Demo`.
+
+## Commits on branch
+- a745c49 feat(agents): system-agent locking, hiding, and seeded Hub Orchestrator
+- 35664c8 feat(hub): readiness/provider introspection APIs and hub builder tools
+- b1c0b75 fix(hub): harden provider-key checks and test harness compatibility
+- bb4482c feat(hub): two-phase confirm, permission hardening, catalog audit for builder tools
+- 05cb47a test(hub): fix readiness test patch + lazy logger for test discovery
+
+## Blockers
+None.
+
+## Status
+Complete. PR #243 is at develop parity, conflicts resolved, consultant findings applied, tests green, branch pushed.
