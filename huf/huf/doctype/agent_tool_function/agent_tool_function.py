@@ -584,6 +584,24 @@ class AgentToolFunction(Document):
 				"additionalProperties": False
 			}
 
+		elif self.types == "Google Search":
+			params = {
+				"type": "object",
+				"properties": {
+					"query": {
+						"type": "string",
+						"description": "The search query string."
+					},
+					"max_results": {
+						"type": "integer",
+						"description": "Maximum number of results to return (default: 5).",
+						"default": 5
+					}
+				},
+				"required": ["query"],
+				"additionalProperties": False
+			}
+
 		else:
 			params = self.build_params_json_from_table()
 
