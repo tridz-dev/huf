@@ -30,11 +30,13 @@ import {
 interface ChatMessageListProps {
     chatId?: string | null;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
+    getNewConversationPath?: (agentName: string) => string;
 }
 
 export function ChatMessageList({ 
     chatId: chatIdProp, 
-    onConversationCreated 
+    onConversationCreated,
+    getNewConversationPath,
 }: ChatMessageListProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
@@ -413,6 +415,7 @@ export function ChatMessageList({
                 chatId={chatId} 
                 agentName={agentName}
                 onConversationCreated={onConversationCreated}
+                getNewConversationPath={getNewConversationPath}
                 onStatusChange={setStatus}
                 onLoadingTypeChange={setLoadingType}
                 isCreatingConversationRef={isCreatingConversationRef}
