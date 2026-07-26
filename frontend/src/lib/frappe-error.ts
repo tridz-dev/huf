@@ -169,7 +169,7 @@ export function createFrappeError(error: unknown, defaultMessage?: string): Erro
 export function handleFrappeError(error: unknown, context?: string): never {
   // Log the full error for debugging
   if (context) {
-    console.error(`${context}:`, error);
+    console.error('Frappe API error context:', context, error);
   } else {
     console.error('Frappe API error:', error);
   }
@@ -177,4 +177,3 @@ export function handleFrappeError(error: unknown, context?: string): never {
   // Throw user-friendly error
   throw createFrappeError(error, context);
 }
-
