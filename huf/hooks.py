@@ -60,6 +60,8 @@ add_to_apps_screen = [
 # Home Pages
 # ----------
 website_route_rules = [
+    {"from_route": "/huf/sw.js", "to_route": "huf/sw.js"},
+    {"from_route": "/huf/manifest.json", "to_route": "huf/manifest.json"},
     {"from_route": "/huf/stream/ping", "to_route": "huf/stream/ping"},
     {"from_route": "/huf/stream/<path:agent_name>", "to_route": "huf/stream"},
     {"from_route": "/huf/stream", "to_route": "huf/stream"},
