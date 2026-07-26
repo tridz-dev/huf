@@ -275,7 +275,9 @@ class PineconeBackend(LlamaIndexBackend, KnowledgeBackend):
 				stats["index_vector_count"] = int(_stat_get(index_stats, "total_vector_count", 0) or 0)
 				namespace_stats = _stat_get(index_stats, "namespaces", None) or {}
 				if self.namespace in namespace_stats:
-					stats["chunk_count"] = int(_stat_get(namespace_stats[self.namespace], "vector_count", 0) or 0)
+					stats["chunk_count"] = int(
+						_stat_get(namespace_stats[self.namespace], "vector_count", 0) or 0
+					)
 			except Exception as exc:
 				frappe.logger().warning(f"Pinecone get_stats error for {self.knowledge_source}: {exc!s}")
 
