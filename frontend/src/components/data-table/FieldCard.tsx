@@ -36,26 +36,26 @@ export function FieldCard({
 				onDrop={(e) => onDrop(e, index)}
 				onClick={onSelect}
 				className={cn(
-					'group flex items-center gap-2 px-3 py-2 rounded-md border border-dashed cursor-pointer transition-colors',
+					'group flex items-center gap-2 px-3 py-2 rounded-none border border-dashed cursor-pointer transition-colors',
 					isSelected
-						? 'border-primary bg-primary/5'
+						? 'border-line-dark bg-paper-deep'
 						: 'border-muted-foreground/30 hover:border-muted-foreground/50'
 				)}
 			>
-				<GripVertical className="w-4 h-4 text-muted-foreground cursor-grab shrink-0" />
+				<GripVertical className="w-4 h-4 text-steel cursor-grab shrink-0" />
 				<div className="flex items-center gap-2 flex-1 min-w-0">
 					{field.fieldtype === 'Section Break' ? (
 						<>
-							<span className="text-xs text-muted-foreground">---</span>
-							<span className="text-sm text-muted-foreground">
+							<span className="text-xs text-steel">---</span>
+							<span className="text-sm text-steel">
 								{field.label || 'Section Break'}
 							</span>
-							<span className="text-xs text-muted-foreground">---</span>
+							<span className="text-xs text-steel">---</span>
 						</>
 					) : (
 						<>
-							<span className="text-xs text-muted-foreground">|</span>
-							<span className="text-sm text-muted-foreground">
+							<span className="text-xs text-steel">|</span>
+							<span className="text-sm text-steel">
 								{field.label || 'Column Break'}
 							</span>
 						</>
@@ -84,13 +84,13 @@ export function FieldCard({
 			onDrop={(e) => onDrop(e, index)}
 			onClick={onSelect}
 			className={cn(
-				'group flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors',
+				'group flex items-center gap-3 px-3 py-2.5 rounded-none border cursor-pointer transition-colors',
 				isSelected
-					? 'border-primary bg-primary/5 shadow-sm'
+					? 'border-line-dark bg-paper-deep text-ink font-medium '
 					: 'border-border hover:border-muted-foreground/50'
 			)}
 		>
-			<GripVertical className="w-4 h-4 text-muted-foreground cursor-grab shrink-0" />
+			<GripVertical className="w-4 h-4 text-steel cursor-grab shrink-0" />
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-2">
 					<span className="text-sm font-medium truncate">{field.label || 'Untitled'}</span>
@@ -102,7 +102,7 @@ export function FieldCard({
 					<Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
 						{field.fieldtype}
 					</Badge>
-					<span className="text-[10px] text-muted-foreground">{field.fieldname}</span>
+					<span className="text-[10px] text-steel">{field.fieldname}</span>
 				</div>
 			</div>
 			<Button

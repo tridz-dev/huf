@@ -366,7 +366,7 @@ export function DataTableBuilderPage() {
 							type="button"
 							size="icon"
 							variant="outline"
-							className="fixed bottom-20 right-4 z-20 rounded-full bg-panel"
+							className="fixed bottom-20 right-4 z-20 rounded-none bg-panel"
 							onClick={() => setIsSidebarOpen(true)}
 						>
 							<Settings2 className="w-4 h-4" />

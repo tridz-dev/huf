@@ -48,7 +48,7 @@ export function TableSettingsPanel({
 		<div className="space-y-4">
 			<div>
 				<h3 className="font-medium text-sm">Table Settings</h3>
-				<p className="text-xs text-muted-foreground mt-1">
+				<p className="text-xs text-steel mt-1">
 					Configure your table properties
 				</p>
 			</div>

@@ -42,8 +42,8 @@ export function TableBuilderCanvas({
 	return (
 		<div className="space-y-2">
 			{fields.length === 0 ? (
-				<div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-lg">
-					<p className="text-sm text-muted-foreground mb-4">
+				<div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-none">
+					<p className="text-sm text-steel mb-4">
 						No fields yet. Add your first field to get started.
 					</p>
 					<FieldTypeSelector

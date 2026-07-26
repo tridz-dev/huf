@@ -128,7 +128,7 @@ export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps)
 				<div className="p-3 max-h-96 overflow-y-auto space-y-4">
 					{GROUPS.map((group) => (
 						<div key={group.label}>
-							<p className="text-xs font-medium text-muted-foreground mb-2">
+							<p className="text-xs font-medium text-steel mb-2">
 								{group.label}
 							</p>
 							<div className="grid grid-cols-2 gap-1">
@@ -142,7 +142,7 @@ export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps)
 											className="justify-start gap-2 h-8 text-xs font-normal"
 											onClick={() => handleSelect(ft.type)}
 										>
-											<Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+											<Icon className="w-3.5 h-3.5 text-steel shrink-0" />
 											{ft.label}
 										</Button>
 									);

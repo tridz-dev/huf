@@ -70,14 +70,14 @@ export function FieldConfigPanel({
 					<h3 className="font-medium text-sm">
 						{isLayout ? field.fieldtype : 'Field Properties'}
 					</h3>
-					<p className="text-xs text-muted-foreground mt-1">
+					<p className="text-xs text-steel mt-1">
 						{isLayout ? 'Layout element settings' : field.fieldtype}
 					</p>
 				</div>
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-7 w-7 text-muted-foreground"
+					className="h-7 w-7 text-steel"
 					onClick={onOpenTableSettings}
 					title="Open table settings"
 				>
@@ -100,7 +100,7 @@ export function FieldConfigPanel({
 						className="h-8 text-sm"
 					/>
 					{!isLayout && (
-						<p className="text-[10px] text-muted-foreground">
+						<p className="text-[10px] text-steel">
 							Name: {field.fieldname}
 						</p>
 					)}
@@ -179,7 +179,7 @@ export function FieldConfigPanel({
 			{!isLayout && (
 				<div className="space-y-3">
 					<Separator />
-					<p className="text-xs font-medium text-muted-foreground">Properties</p>
+					<p className="text-xs font-medium text-steel">Properties</p>
 
 					{properties.includes('reqd') && (
 						<div className="flex items-center gap-2">
