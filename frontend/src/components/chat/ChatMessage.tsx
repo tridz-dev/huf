@@ -5,8 +5,10 @@ import { useUser } from "@/contexts/UserContext";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
+import type { ToolUIPart } from 'ai';
 import { MessageActions } from './MessageActions';
 import { MessageLoadingState } from './MessageLoadingState';
+import { ChatErrorCard } from './ChatErrorCard';
 import { CopyButton } from './CopyButton';
 import { Image } from '@/components/ai-elements/image';
 import { Video } from '@/components/ai-elements/video';
@@ -115,7 +117,7 @@ export function ChatMessage({
                         <Tool key={`${message.key}-tool-${toolIndex}`}>
                             <ToolHeader
                                 title={tool.name}
-                                type={`tool-${tool.name}` as any}
+                                type={`tool-${tool.name}` as ToolUIPart['type']}
                                 state={tool.status}
                             />
                             <ToolContent>
@@ -138,10 +140,9 @@ export function ChatMessage({
                                     toolName={showToolExecutionDetails ? message.tools?.[0]?.name : undefined}
                                 />
                             )}
-                            {message.runStatus === 'Failed' && message.error && (
-                                <div className="text-sm text-destructive mb-2">{message.error}</div>
-                            )}
-                            {message.generatedAudio && message.from === 'assistant' ? (
+                            {message.error ? (
+                                <ChatErrorCard error={message.error} />
+                            ) : message.generatedAudio && message.from === 'assistant' ? (
                                 <div className="w-full max-w-md">
                                     <AudioPlayer>
                                         <AudioPlayerElement src={resolveAudioSrc(message.generatedAudio)} />

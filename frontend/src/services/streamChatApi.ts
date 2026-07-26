@@ -34,8 +34,12 @@ export interface StreamChunk {
   tool_call?: { function?: { name?: string } };
 }
 
+type FrappeWindow = Window & {
+  csrf_token?: string;
+};
+
 function getCsrfToken(): string {
-  return (window as any).csrf_token || '';
+  return (window as FrappeWindow).csrf_token || '';
 }
 
 /**
@@ -216,6 +220,7 @@ export async function sendMessage(
     const runShape = {
       success: data.success ?? true,
       response: data.response ?? data.full_response ?? '',
+      error: data.error ?? null,
       conversation_id: data.conversation_id,
       agent_run_id: data.agent_run_id,
       agent_message_id: data.agent_message_id,
@@ -227,10 +232,11 @@ export async function sendMessage(
     if (params.conversationId) {
       return {
         message: {
-          success: true,
+          success: runShape.success,
           queued: false,
-          status: 'Success',
+          status: runShape.success ? 'Success' : 'Failed',
           response: runShape.response,
+          error: runShape.error ?? undefined,
           conversation_id: data.conversation_id ?? '',
           agent_run_id: data.agent_run_id ?? '',
           agent_message_id: data.agent_message_id ?? '',
@@ -243,9 +249,9 @@ export async function sendMessage(
 
     return {
       message: {
-        success: true,
+        success: runShape.success,
         queued: false,
-        status: 'Success',
+        status: runShape.success ? 'Success' : 'Failed',
         conversation_id: data.conversation_id ?? '',
         agent_message_id: data.agent_message_id ?? '',
         run: runShape,

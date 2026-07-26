@@ -1,4 +1,4 @@
-import { Settings, Loader2 } from 'lucide-react';
+import { Settings, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -12,14 +12,17 @@ import {
 } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Checkbox } from '../components/ui/checkbox';
 import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getProviders, getProvider, updateProvider, createProvider } from '../services/providerApi';
+import { getProviders, getProvider, updateProvider, createProvider, testProviderConnection } from '../services/providerApi';
 import { getModels } from '../services/providerApi';
+import type { ProviderConnectionTestResult } from '../services/providerApi';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIProvider, AIModel } from '../types/agent.types';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { ProviderBrandSelect } from '@/components/providers/ProviderBrandSelect';
 import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
 import { suggestBrandFromProviderName, resolveProviderBrand } from '@/utils/providerBrands';
@@ -42,7 +45,19 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     provider_name: '',
     api_key: '',
     provider_brand: '',
+    is_local_llm: false,
+    api_base_url: '',
   });
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionTest, setConnectionTest] = useState<ProviderConnectionTestResult | null>(null);
+
+  const emptyFormData = {
+    provider_name: '',
+    api_key: '',
+    provider_brand: '',
+    is_local_llm: false,
+    api_base_url: '',
+  };
 
   const {
     items: providers,
@@ -101,7 +116,9 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
 
   useEffect(() => {
     getModels().then((modelsData) => {
-      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as any).items;
+      const modelsArray: AIModel[] = Array.isArray(modelsData)
+        ? modelsData
+        : ((modelsData as { items?: AIModel[] }).items ?? []);
       setModels(modelsArray);
     }).catch((error) => {
       console.error('Error fetching models:', error);
@@ -119,11 +136,8 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   const handleAddProvider = () => {
     setSelectedProvider(null);
     setIsEditing(false);
-    setFormData({
-      provider_name: '',
-      api_key: '',
-      provider_brand: '',
-    });
+    setConnectionTest(null);
+    setFormData({ ...emptyFormData });
     setConfigureModalOpen(true);
   };
 
@@ -140,13 +154,16 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     setIsEditing(true);
     setConfigureModalOpen(true);
     setLoadingProvider(true);
-    
+    setConnectionTest(null);
+
     try {
       const details = await getProvider(provider.name);
       setFormData({
         provider_name: details.provider_name || '',
         api_key: details.api_key || '',
         provider_brand: details.provider_brand || '',
+        is_local_llm: details.is_local_llm === 1,
+        api_base_url: details.api_base_url || '',
       });
     } catch (error) {
       toast.error('Failed to load provider details');
@@ -201,6 +218,12 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       return;
     }
 
+    // Local providers need an endpoint URL instead of an API key
+    if (formData.is_local_llm && !formData.api_base_url.trim()) {
+      toast.error('API Base URL is required for local providers');
+      return;
+    }
+
     const providerBrand =
       formData.provider_brand ||
       suggestBrandFromProviderName(formData.provider_name) ||
@@ -212,6 +235,8 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         await updateProvider(selectedProvider.name, {
           api_key: formData.api_key,
           provider_brand: providerBrand,
+          is_local_llm: formData.is_local_llm ? 1 : 0,
+          api_base_url: formData.api_base_url.trim(),
         });
         toast.success('Provider updated successfully');
       } else {
@@ -219,23 +244,43 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
           provider_name: formData.provider_name.trim(),
           api_key: formData.api_key,
           provider_brand: providerBrand,
+          is_local_llm: formData.is_local_llm ? 1 : 0,
+          api_base_url: formData.api_base_url.trim(),
         });
         toast.success('Provider created successfully');
       }
       setConfigureModalOpen(false);
       // Reset form
-      setFormData({
-        provider_name: '',
-        api_key: '',
-        provider_brand: '',
-      });
+      setFormData({ ...emptyFormData });
       // Refresh the list
       reset();
     } catch (error) {
-      toast.error(`Failed to ${isEditing ? 'update' : 'create'} provider`);
+      toast.error(`Failed to ${isEditing ? 'update' : 'create'} provider`, {
+        description: getFrappeErrorMessage(error),
+        duration: 8000,
+      });
       console.error(error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    if (!selectedProvider) return;
+
+    setTestingConnection(true);
+    setConnectionTest(null);
+    try {
+      const result = await testProviderConnection(selectedProvider.name);
+      setConnectionTest(result);
+    } catch (error) {
+      toast.error('Connection test failed', {
+        description: getFrappeErrorMessage(error),
+        duration: 8000,
+      });
+      console.error(error);
+    } finally {
+      setTestingConnection(false);
     }
   };
 
@@ -370,7 +415,9 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="api_key">API Key</Label>
+                <Label htmlFor="api_key">
+                  {formData.is_local_llm ? 'API Key (optional for local)' : 'API Key'}
+                </Label>
                 <Input
                   id="api_key"
                   type="password"
@@ -380,12 +427,105 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                 />
               </div>
 
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is_local_llm"
+                  checked={formData.is_local_llm}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, is_local_llm: checked === true })
+                  }
+                />
+                <Label htmlFor="is_local_llm" className="font-normal cursor-pointer">
+                  Is Local LLM (self-hosted endpoint)
+                </Label>
+              </div>
+
+              {formData.is_local_llm && (
+                <div className="space-y-2">
+                  <Label htmlFor="api_base_url">
+                    API Base URL <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="api_base_url"
+                    type="text"
+                    placeholder="http://host.docker.internal:11434"
+                    value={formData.api_base_url}
+                    onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
+                  />
+                </div>
+              )}
+
               <ProviderBrandSelect
                 value={formData.provider_brand}
                 onChange={(provider_brand) => setFormData({ ...formData, provider_brand })}
                 providerName={formData.provider_name}
                 required
               />
+
+              {isEditing && (
+                <div className="space-y-3 rounded-md border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm">Connection</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleTestConnection}
+                      disabled={testingConnection || saving}
+                    >
+                      {testingConnection ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Testing...
+                        </>
+                      ) : (
+                        'Test Connection'
+                      )}
+                    </Button>
+                  </div>
+                  {connectionTest && (
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-start gap-2">
+                        {connectionTest.provider.ok ? (
+                          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
+                        ) : (
+                          <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
+                        )}
+                        <div className="min-w-0">
+                          <span className={connectionTest.provider.ok ? 'text-green-700' : 'text-destructive'}>
+                            {connectionTest.provider.ok ? 'Endpoint reachable' : 'Endpoint unreachable'}
+                          </span>
+                          {connectionTest.provider.error && (
+                            <p className="text-xs text-destructive break-words">{connectionTest.provider.error}</p>
+                          )}
+                        </div>
+                      </div>
+                      {connectionTest.models.map((model) => (
+                        <div key={model.name} className="flex items-start gap-2">
+                          {model.ok ? (
+                            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
+                          ) : (
+                            <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="font-medium">{model.name}</span>
+                              {model.capabilities?.map((cap) => (
+                                <Badge key={cap} variant="secondary" className="text-xs">
+                                  {cap}
+                                </Badge>
+                              ))}
+                            </div>
+                            {model.error && (
+                              <p className="text-xs text-destructive break-words">{model.error}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

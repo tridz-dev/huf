@@ -2,6 +2,10 @@ export type AIProvider = {
   name: string;
   provider_name: string;
   provider_brand?: string;
+  /** 1 when this is a self-hosted/local endpoint (Ollama, LM Studio, ...). */
+  is_local_llm?: number;
+  /** Base URL for local endpoints, e.g. http://host.docker.internal:11434 */
+  api_base_url?: string;
 };
 
 export type AIModel = {

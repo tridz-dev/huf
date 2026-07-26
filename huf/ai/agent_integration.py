@@ -24,7 +24,7 @@ from .tool_functions import (
 from .conversation_manager import ConversationManager, safe_history_slice, safe_history_split
 from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
-from huf.ai.providers.litellm import _normalize_model_name
+from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 
 logger = frappe.logger("huf")
@@ -1013,6 +1013,64 @@ def get_agent_run_status(agent_run_id: str):
     }
 
 
+def _update_agent_run_stats(agent_name):
+    """Update the denormalized run stats on the Agent doc.
+
+    Uses a single atomic UPDATE that does not bump ``modified`` and performs
+    no optimistic-lock read, so parallel runs on the same agent cannot trip
+    the ``tabAgent`` TimestampMismatchError race. A stats failure must never
+    fail a user run.
+    """
+    try:
+        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
+        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
+        frappe.db.sql(
+            "UPDATE `tabAgent` SET `total_run`=%s, `last_run`=%s WHERE `name`=%s",
+            (total_runs, last_run_time, agent_name),
+        )
+    except frappe.TimestampMismatchError:
+        pass
+    except Exception as e:
+        frappe.logger("huf").warning(
+            f"Failed to update run stats for agent '{agent_name}': {e}"
+        )
+
+
+def _notify_sub_agent_failure(agent_name, error_msg, parent_conversation_id, invoked_by_agent, channel_id=None, external_id=None):
+    """Sub-Agent Failure Lifecycle Hook: silent auto-awaken trigger + realtime notice."""
+    # 1. Silent Auto-Awaken Trigger
+    try:
+        silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
+        # NOTE: no ``now=1`` — the direct path can deadlock against the
+        # parent conversation lock.
+        frappe.enqueue(
+            "huf.ai.agent_integration.run_agent_sync",
+            queue="default",
+            timeout=300,
+            is_async=True,
+            agent_name=invoked_by_agent,
+            prompt=silent_trigger,
+            parent_conversation_id=None,
+            conversation_id=parent_conversation_id,
+            channel_id=channel_id,
+            external_id=external_id,
+        )
+    except Exception as hook_err:
+        frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+
+    # 2. Real-Time UI Notification
+    frappe.publish_realtime(
+        event=f"conversation:{parent_conversation_id}",
+        message={
+            "type": "sub_agent_failed",
+            "agent_name": agent_name,
+            "status": "Failed",
+            "result": error_msg
+        },
+        user=frappe.session.user
+    )
+
+
 def _execute_agent_run(
     agent_name,
     run_id,
@@ -1098,13 +1156,7 @@ def _execute_agent_run(
         safe_commit()
         transaction_checkpoint(reason="agent_streaming_progress")
 
-        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
-        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
-
-        frappe.db.set_value("Agent", agent_name, {
-            "total_run": total_runs,
-            "last_run": last_run_time
-        },update_modified=False)
+        _update_agent_run_stats(agent_name)
         transaction_checkpoint(reason="agent_streaming_progress")
 
         manager = AgentManager(agent_name)
@@ -1577,9 +1629,31 @@ def _execute_agent_run(
             "session_id": conv_manager.session_id
         }
 
+    except ProviderUnavailableError as e:
+        # Provider-level failure (connection refused, model not pulled, bad
+        # model prefix, empty response). Surface it as a failed run — never
+        # as assistant message content.
+        error_msg = str(e)
+        run_doc.db_set("status", "Failed", update_modified=True)
+        run_doc.db_set("error_message", error_msg)
+        frappe.log_error(f"Provider unavailable for agent '{agent_name}': {error_msg}", "Huf Provider")
+        _emit_run_lifecycle_event(run_doc, conversation, "failed", {"error": error_msg})
+
+        # Handle Sub-Agent Failure Lifecycle Hook
+        if parent_conversation_id and invoked_by_agent:
+            _notify_sub_agent_failure(agent_name, error_msg, parent_conversation_id, invoked_by_agent, channel_id, external_id)
+
+        return {
+            "success": False,
+            "error": error_msg,
+            "agent_run_id": run_doc.name,
+            "conversation_id": conversation.name,
+            "session_id": conv_manager.session_id
+        }
+
     except Exception as e:
         error_msg = str(e)
-        
+
         if "ContextWindowExceededError" in error_msg:
             try:
                 frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
@@ -1630,37 +1704,7 @@ def _execute_agent_run(
 
         # Handle Sub-Agent Failure Lifecycle Hook
         if parent_conversation_id and invoked_by_agent:
-            # 1. Silent Auto-Awaken Trigger
-            try:
-                silent_trigger = f"[SILENT_TRIGGER] The sub-agent '{agent_name}' encountered an error during its background task.\nError:\n{error_msg}"
-                # NOTE: no ``now=1`` — see the success hook above; the direct
-                # path can deadlock against the parent conversation lock.
-                frappe.enqueue(
-                    "huf.ai.agent_integration.run_agent_sync",
-                    queue="default",
-                    timeout=300,
-                    is_async=True,
-                    agent_name=invoked_by_agent,
-                    prompt=silent_trigger,
-                    parent_conversation_id=None,
-                    conversation_id=parent_conversation_id,
-                    channel_id=channel_id,
-                    external_id=external_id,
-                )
-            except Exception as hook_err:
-                frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
-
-            # 3. Real-Time UI Notification
-            frappe.publish_realtime(
-                event=f"conversation:{parent_conversation_id}",
-                message={
-                    "type": "sub_agent_failed",
-                    "agent_name": agent_name,
-                    "status": "Failed",
-                    "result": error_msg
-                },
-                user=frappe.session.user
-            )
+            _notify_sub_agent_failure(agent_name, error_msg, parent_conversation_id, invoked_by_agent, channel_id, external_id)
 
         return {
             "success": False,
@@ -2112,13 +2156,7 @@ async def run_agent_stream(
         safe_commit()
         
         # Update agent stats
-        total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
-        last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
-        
-        frappe.db.set_value("Agent", agent_name, {
-            "total_run": total_runs,
-            "last_run": last_run_time
-        },update_modified=False)
+        _update_agent_run_stats(agent_name)
         safe_commit()
         
         manager = AgentManager(agent_name)
@@ -2286,6 +2324,32 @@ async def run_agent_stream(
                 
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
+
+                    if not (full_response or "").strip() and not tool_call_message_map:
+                        # Empty completion with no tool calls — the provider
+                        # failed to generate content (known with reasoning
+                        # models on the 'ollama/' endpoint). Never store an
+                        # empty assistant message; fail the run and emit an
+                        # error frame instead of a success-looking complete.
+                        error_msg = _(
+                            "The provider returned an empty response. For reasoning models on Ollama, use the 'ollama_chat/' model prefix."
+                        )
+                        frappe.log_error(f"Empty provider response for agent '{agent_name}' (model '{resolved_model}')", "Huf Provider")
+                        frappe.db.set_value("Agent Run", run_doc.name, {
+                            "status": "Failed",
+                            "error_message": error_msg,
+                            "end_time": now_datetime()
+                        }, update_modified=True)
+                        safe_commit()
+                        yield {
+                            "type": "error",
+                            "error": error_msg,
+                            "success": False,
+                            "agent_run_id": run_doc.name,
+                            "conversation_id": conversation.name
+                        }
+                        return
+
                     usage = chunk.get("usage", {})
                     
                     # Calculate metrics
@@ -2529,8 +2593,8 @@ async def run_agent_stream(
                         "error_message": error_msg,
                         "end_time": now_datetime()
                     }, update_modified=True)
-                    transaction_checkpoint(reason="agent_streaming_progress")
-                    
+                    safe_commit()
+
                     # Handle Sub-Agent Failure Lifecycle Hook
                     if parent_conversation_id and invoked_by_agent:
                         # Silent Auto-Awaken Trigger
@@ -2562,12 +2626,21 @@ async def run_agent_stream(
                             user=frappe.session.user
                         )
 
+                    chunk["success"] = False
+                    chunk["agent_run_id"] = run_doc.name
+                    chunk["conversation_id"] = conversation.name
                     yield chunk
                     return
         
         except Exception as e:
             error_msg = str(e)
-            frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
+            if isinstance(e, ProviderUnavailableError):
+                # Expected operational failure (connection refused, model not
+                # pulled, bad model prefix) — message is self-explanatory, no
+                # traceback needed. The run is still marked Failed below.
+                frappe.log_error(f"Provider unavailable for agent '{agent_name}': {error_msg}", "Huf Provider")
+            else:
+                frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
             
             if "ContextWindowExceededError" in error_msg:
                 try:
@@ -2618,8 +2691,8 @@ async def run_agent_stream(
                 "error_message": error_msg,
                 "end_time": now_datetime()
             }, update_modified=True)
-            transaction_checkpoint(reason="agent_streaming_progress")
-            
+            safe_commit()
+
             # Handle Sub-Agent Failure Lifecycle Hook
             if parent_conversation_id and invoked_by_agent:
                 # Silent Auto-Awaken Trigger
@@ -2653,7 +2726,10 @@ async def run_agent_stream(
 
             yield {
                 "type": "error",
-                "error": error_msg
+                "error": error_msg,
+                "success": False,
+                "agent_run_id": run_doc.name,
+                "conversation_id": conversation.name
             }
     
     except Exception as e:

@@ -28,8 +28,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
 
       const siteName = (window as FrappeWindow).frappe?.boot?.sitename;
-      const hasPort = !!window.location?.port;
-      const port = (hasPort ? (window as FrappeWindow).frappe?.boot?.socketio_port : '') ?? '';
+      // Port resolution: boot (when the backend provides it) → the page's own
+      // port (dev/standalone socket.io) → Frappe's default socket.io port.
+      const port =
+        (window as FrappeWindow).frappe?.boot?.socketio_port ||
+        window.location?.port ||
+        '9000';
 
       if (!siteName) {
         if (attemptsLeft > 0) {
@@ -52,6 +56,9 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
     const connect = (siteName: string, port: string) => {
       console.log('Creating shared socket connection for site:', siteName);
+      // Rebuilt here (createFrappeSocket keeps its own copy) so failures can
+      // log the exact URL that was attempted.
+      const attemptedUrl = `${window.location.protocol.replace(':', '')}://${window.location.hostname}${port ? `:${port}` : ''}/${siteName}`;
       const connection = createFrappeSocket({ siteName, port });
 
       connection.on('connect', () => {
@@ -59,7 +66,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       });
 
       connection.on('connect_error', (error) => {
-        console.error('❌ Socket connection error:', error);
+        console.error('❌ Socket connection error:', error, '— attempted URL:', attemptedUrl);
         toast.error('Socket connection failed', {
           id: 'socket-connection-failed',
           description: connectionDescription,
