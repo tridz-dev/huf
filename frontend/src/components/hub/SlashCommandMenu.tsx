@@ -55,11 +55,11 @@ export function SlashCommandMenu({ isVisible, query, onSelect }: SlashCommandMen
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: 4 }}
+        initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.1 }}
-        className="absolute left-0 right-0 bottom-full mb-1 bg-white rounded-xl border border-violet-300 shadow-xl overflow-hidden z-50"
+        className="absolute left-0 right-0 top-full mt-1 bg-panel rounded border border-line shadow-xl overflow-hidden z-50"
         style={{ maxHeight: 320 }}
       >
         <div className="overflow-y-auto py-1" style={{ maxHeight: 280 }}>
@@ -69,26 +69,26 @@ export function SlashCommandMenu({ isVisible, query, onSelect }: SlashCommandMen
               ref={el => { itemRefs.current[i] = el; }}
               onClick={() => onSelect(cmd.id)}
               onMouseEnter={() => setSelectedIndex(i)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${i === selectedIndex ? 'bg-violet-50' : 'hover:bg-slate-50'}`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${i === selectedIndex ? 'bg-paper-deep' : 'hover:bg-paper-deep'}`}
             >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${i === selectedIndex ? 'bg-violet-100 text-violet-600' : 'bg-slate-100 text-slate-500'}`}>
+              <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${i === selectedIndex ? 'bg-panel border border-signal text-signal-ink' : 'bg-paper-deep text-steel'}`}>
                 <cmd.icon className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <code className={`text-sm font-mono font-medium ${i === selectedIndex ? 'text-violet-700' : 'text-slate-700'}`}>{cmd.id}</code>
-                  <span className="text-xs text-slate-400">—</span>
-                  <span className="text-sm text-slate-600">{cmd.label}</span>
+                  <code className={`text-sm font-mono font-medium ${i === selectedIndex ? 'text-signal-ink' : 'text-ink'}`}>{cmd.id}</code>
+                  <span className="text-xs text-steel-soft">—</span>
+                  <span className="text-sm text-steel">{cmd.label}</span>
                 </div>
-                <p className="text-xs text-slate-500 truncate">{cmd.description}</p>
+                <p className="text-xs text-steel-soft truncate">{cmd.description}</p>
               </div>
-              {i === selectedIndex && <ArrowRight className="w-4 h-4 text-violet-500 flex-shrink-0" />}
+              {i === selectedIndex && <ArrowRight className="w-4 h-4 text-signal flex-shrink-0" />}
             </button>
           ))}
         </div>
-        <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/50 flex items-center gap-4 text-[11px] text-slate-400">
-          <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 bg-white rounded border text-slate-500">↑↓</kbd> navigate</span>
-          <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 bg-white rounded border text-slate-500">↵</kbd> select</span>
+        <div className="px-3 py-2 border-t border-line bg-paper flex items-center gap-4 text-[11px] text-steel-soft">
+          <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 bg-panel rounded-sm border border-line text-steel font-mono">↑↓</kbd> navigate</span>
+          <span className="flex items-center gap-1"><kbd className="px-1.5 py-0.5 bg-panel rounded-sm border border-line text-steel font-mono">↵</kbd> select</span>
         </div>
       </motion.div>
     </AnimatePresence>

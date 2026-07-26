@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -61,6 +62,7 @@ const IntegrationServiceFormPageWrapper = lazy(
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 
 import { useEffect } from 'react';
+import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
 import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
@@ -70,12 +72,27 @@ const UsersPage = lazy(() => import('./pages/UsersPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
 
 function AppShell() {
+  const location = useLocation();
+
+  useEffect(() => {
+    clearChunkReloadFlag();
+  }, []);
+
   return (
     <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
           <Suspense fallback={<AuthenticatingPage />}>
-            <Routes>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="h-full"
+              >
+                <Routes location={location}>
           <Route
             path="/"
             element={
@@ -478,7 +495,9 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-            </Routes>
+                </Routes>
+              </motion.div>
+            </AnimatePresence>
           </Suspense>
           <Toaster />
         </PermissionsProvider>
@@ -488,7 +507,7 @@ function AppShell() {
 }
 
 const router = createBrowserRouter(
-  [{ path: '*', element: <AppShell /> }],
+  [{ path: '*', element: <AppShell />, errorElement: <RouteErrorBoundary /> }],
   { basename: '/huf' },
 );
 

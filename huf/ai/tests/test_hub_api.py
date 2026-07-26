@@ -14,7 +14,7 @@ Covers:
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
 class _LazyModule:
@@ -49,16 +49,16 @@ def _ensure_test_provider():
         }).insert(ignore_permissions=True)
 
 
-class TestHubReadiness(FrappeTestCase):
+class TestHubReadiness(IntegrationTestCase):
     """Readiness must report not-ready with remediation when nothing is keyed."""
 
     def test_readiness_shape_with_no_keyed_provider(self):
         fake_orchestrator = {"present": True, "disabled": True, "provider": None, "model": None}
 
         with (
-            patch.object(hub_api, "_orchestrator_info", return_value=dict(fake_orchestrator)),
-            patch.object(hub_api, "_provider_has_key", return_value=False),
-            patch.object(hub_api, "_count_keyed_providers", return_value=0),
+            patch("huf.ai.hub_api._orchestrator_info", return_value=dict(fake_orchestrator)),
+            patch("huf.ai.hub_api._provider_has_key", return_value=False),
+            patch("huf.ai.hub_api._count_keyed_providers", return_value=0),
             patch("frappe.has_permission", return_value=True),
         ):
             result = hub_api.get_hub_readiness()
@@ -88,7 +88,7 @@ class TestHubReadiness(FrappeTestCase):
             self.assertTrue(entry["action_route"])
 
 
-class TestProviderStatus(FrappeTestCase):
+class TestProviderStatus(IntegrationTestCase):
     """get_provider_status must report configured state without leaking keys."""
 
     def test_provider_status_never_leaks_key_material(self):
@@ -114,7 +114,7 @@ class TestProviderStatus(FrappeTestCase):
         self.assertEqual(configured_flags, sorted(configured_flags, reverse=True))
 
 
-class TestApproveModelProposals(FrappeTestCase):
+class TestApproveModelProposals(IntegrationTestCase):
     """approve_model_proposals creates AI Model rows idempotently, manager-only."""
 
     def setUp(self):

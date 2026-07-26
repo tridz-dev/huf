@@ -57,6 +57,20 @@ def _frappe_run_context_dict(ctx) -> dict:
     return inner if isinstance(inner, dict) else {}
 
 
+def _merge_run_context(args_dict: dict, ctx) -> dict:
+    """Inject run-context values into tool args without clobbering the LLM's.
+
+    conversation_id / agent_run_id / agent_name from the huf run context are
+    only injected when the key is NOT already present in args_dict — the
+    LLM's explicit arguments always win (setdefault semantics).
+    """
+    huf_ctx = _frappe_run_context_dict(ctx)
+    for key in ("conversation_id", "agent_run_id", "agent_name"):
+        if key in huf_ctx:
+            args_dict.setdefault(key, huf_ctx[key])
+    return args_dict
+
+
 def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_guest: bool = False):
     """Guard function to block dangerous tools for Guest users"""
     user = frappe.session.user
@@ -344,13 +358,7 @@ def create_function_tool(
 
                 args_dict = json.loads(args_json or "{}")
 
-                huf_ctx = _frappe_run_context_dict(ctx)
-                if "conversation_id" in huf_ctx:
-                    args_dict["conversation_id"] = huf_ctx["conversation_id"]
-                if "agent_run_id" in huf_ctx:
-                    args_dict["agent_run_id"] = huf_ctx["agent_run_id"]
-                if "agent_name" in huf_ctx:
-                    args_dict["agent_name"] = huf_ctx["agent_name"]
+                _merge_run_context(args_dict, ctx)
 
                 if _extra_args:
                     args_dict.update(_extra_args)

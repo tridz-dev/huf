@@ -4,12 +4,17 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, MessageSquare, Bot, Workflow,
   Database, BookOpen, Cpu, LayoutDashboard, Settings, Send,
+  PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
+import { IconRail, IconRailButton } from '@/components/IconRail';
 import { HubConversationView } from '@/components/hub/HubConversationView';
+import { AutoGrowTextarea } from '@/components/hub/AutoGrowTextarea';
+import { HubRecentChats } from '@/components/hub/HubRecentChats';
 import { SlashCommandMenu } from '@/components/hub/SlashCommandMenu';
 import { getHubReadiness, HubReadiness } from '@/services/hubApi';
+import { getConversationMessages } from '@/services/chatApi';
 import { sendMessage, streamingAvailable } from '@/services/streamChatApi';
 
 interface Message { role: 'user' | 'assistant'; content: string; _key?: string; }
@@ -19,12 +24,6 @@ interface StarterPrompt {
   route?: string;
   message?: string;
 }
-
-const GREETINGS: Record<string, string> = {
-  admin: 'What would you like to orchestrate?',
-  builder: 'What are you building today?',
-  viewer: 'What insights are you looking for?',
-};
 
 const STARTER_PROMPTS: Record<string, StarterPrompt[]> = {
   admin: [
@@ -56,6 +55,16 @@ const NAV_ITEMS = [
   { icon: Cpu, label: 'AI Providers', path: '/models' },
 ];
 
+const RAIL_VISIBLE_KEY = 'hub:rail-visible';
+
+function readRailVisible(): boolean {
+  try {
+    return localStorage.getItem(RAIL_VISIBLE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
 export default function HubSimplePage() {
   const navigate = useNavigate();
   const { user } = useUser();
@@ -80,6 +89,19 @@ export default function HubSimplePage() {
   const [readiness, setReadiness] = useState<HubReadiness | null>(null);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [railVisible, setRailVisible] = useState<boolean>(readRailVisible);
+
+  const toggleRail = () => {
+    setRailVisible(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem(RAIL_VISIBLE_KEY, String(next));
+      } catch {
+        void 0;
+      }
+      return next;
+    });
+  };
 
   // Detect slash commands
   useEffect(() => {
@@ -155,6 +177,12 @@ export default function HubSimplePage() {
     sendToAgent(msg);
   };
 
+  // Send an explicit string (e.g. an ask-user card answer) without touching the input state
+  const sendText = (text: string) => {
+    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    sendToAgent(text);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey && !showSlashMenu) {
       e.preventDefault();
@@ -165,7 +193,7 @@ export default function HubSimplePage() {
   const handleSlashSelect = (cmd: string) => {
     const routeMap: Record<string, string> = {
       '/flow': '/flows', '/agent': '/agents', '/users': '/users',
-      '/runs': '/executions', '/knowledge': '/knowledge', '/settings': '/models', '/cost': '/',
+      '/runs': '/executions', '/knowledge': '/knowledge', '/settings': '/models', '/cost': '/dashboard',
     };
     const lastSlash = inputValue.lastIndexOf('/');
     setInputValue(inputValue.slice(0, lastSlash) + cmd + ' ');
@@ -174,7 +202,7 @@ export default function HubSimplePage() {
     // Navigate if it's a pure command (nothing before slash)
     if (lastSlash === 0 || lastSlash === -1) {
       const route = routeMap[cmd];
-      if (route && route !== '/') { navigate(route); return; }
+      if (route) { navigate(route); return; }
     }
   };
 
@@ -192,6 +220,29 @@ export default function HubSimplePage() {
     setMessages([]);
     setInputValue('');
     setShowSlashMenu(false);
+    setConversationId(undefined);
+  };
+
+  // Leave the conversation view back to the hub greeting without destroying
+  // the conversation — conversationId is preserved so the chat stays
+  // resumable via the HubRecentChats flyout.
+  const handleGoHome = () => {
+    setMessages([]);
+    setInputValue('');
+    setShowSlashMenu(false);
+    setSlashQuery('');
+  };
+
+  // Resume a previous Hub Orchestrator conversation picked from HubRecentChats
+  const handleLoadConversation = async (id: string) => {
+    const res = await getConversationMessages({ conversation: id, limit: 100 });
+    const loaded: Message[] = (res?.data ?? []).map(m => ({
+      role: m.isAgent ? 'assistant' : 'user',
+      content: m.content,
+      _key: m.id,
+    }));
+    setMessages(loaded);
+    setConversationId(id);
   };
 
   const handleSwitchToAdvanced = () => {
@@ -199,67 +250,68 @@ export default function HubSimplePage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-white">
-      {/* Collapsed Sidebar */}
-      <aside className="w-[60px] bg-white border-r border-slate-100 flex flex-col py-3 flex-shrink-0">
-        {/* Logo */}
-        <div className="px-3 mb-4">
-          <div className="w-9 h-9 rounded-lg bg-violet-600 flex items-center justify-center">
-            <span className="text-white text-xs font-bold">H</span>
-          </div>
-        </div>
+    <div className="h-screen flex bg-paper overflow-hidden">
+      {/* Collapsed rail — same 48px look as the dashboard's collapsed sidebar */}
+      <motion.div
+        initial={false}
+        animate={{ width: railVisible ? 48 : 0 }}
+        transition={{ duration: 0.2, ease: 'easeInOut' }}
+        className="flex flex-shrink-0 overflow-hidden"
+      >
+        <IconRail
+          header={
+            /* Matches AppSidebarHeader's collapsed mark (signal square) */
+            <div className="flex items-center gap-2 px-2 py-3">
+              <span className="inline-block w-2 h-2 bg-signal flex-shrink-0" />
+            </div>
+          }
+          actions={
+            <>
+              <IconRailButton icon={Plus} label="New chat" onClick={handleNewChat} />
+              <HubRecentChats onSelect={handleLoadConversation} />
+            </>
+          }
+          items={NAV_ITEMS.map((item, i) => ({
+            key: item.label,
+            icon: item.icon,
+            label: item.label,
+            active: i === 0,
+            onClick: () => navigate(item.path),
+          }))}
+          footer={
+            <>
+              <IconRailButton
+                icon={LayoutDashboard}
+                label="Switch to Advanced Hub"
+                onClick={handleSwitchToAdvanced}
+              />
+              <IconRailButton
+                icon={Settings}
+                label="Settings"
+                onClick={() => navigate('/models')}
+              />
+            </>
+          }
+        />
+      </motion.div>
 
-        {/* New chat */}
-        <div className="px-2 mb-3">
-          <button
-            onClick={handleNewChat}
-            title="New chat"
-            className="w-10 h-10 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:border-violet-300 hover:text-violet-600 hover:bg-violet-50 transition-all"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 px-2 space-y-1">
-          {NAV_ITEMS.map((item, i) => (
-            <button
-              key={item.label}
-              title={item.label}
-              onClick={() => navigate(item.path)}
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
-                i === 0 ? 'bg-violet-100 text-violet-700' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-              }`}
-            >
-              <item.icon className="w-4 h-4" />
-            </button>
-          ))}
-        </nav>
-
-        {/* Bottom actions */}
-        <div className="px-2 pt-3 border-t border-slate-100 space-y-1">
-          <button
-            onClick={handleSwitchToAdvanced}
-            title="Switch to Advanced Hub"
-            className="w-10 h-10 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-          >
-            <LayoutDashboard className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => navigate('/models')}
-            title="Settings"
-            className="w-10 h-10 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
-        </div>
-      </aside>
+      {/* Rail hide/show toggle — stays visible when the rail is hidden */}
+      <button
+        onClick={toggleRail}
+        title={railVisible ? 'Hide sidebar' : 'Show sidebar'}
+        aria-label={railVisible ? 'Hide sidebar' : 'Show sidebar'}
+        className={`fixed top-3 z-50 flex size-7 items-center justify-center rounded-sm border border-line bg-panel text-steel shadow-sm hover:border-steel-soft hover:text-ink transition-all duration-200 ${
+          railVisible ? 'left-[60px]' : 'left-3'
+        }`}
+      >
+        {railVisible ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+      </button>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden">
+      <main className="flex-1 flex flex-col h-full relative overflow-hidden">
         {/* User avatar top-right */}
         <div className="absolute top-3 right-4 z-10">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
+          <div className="w-7 h-7 rounded-full bg-ink flex items-center justify-center text-paper text-xs font-medium">
             {initials}
           </div>
         </div>
@@ -270,36 +322,26 @@ export default function HubSimplePage() {
               key="home"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              exit={{ opacity: 0, y: 24 }}
               transition={{ duration: 0.2 }}
               className="flex-1 flex flex-col"
             >
-              <motion.div
-                className="absolute inset-x-0 bottom-0 top-0 flex flex-col items-center px-4"
-                animate={{
-                  justifyContent: isInputFocused ? 'flex-start' : 'center',
-                  paddingTop: isInputFocused ? '80px' : '0px',
-                }}
-                transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
+              {/* Composer stays centered — focusing must not move it */}
+              <div className="absolute inset-x-0 bottom-0 top-0 flex flex-col items-center justify-center px-4">
                 {/* Greeting */}
-                <motion.div
-                  animate={{ opacity: isInputFocused ? 0 : 1, height: isInputFocused ? 0 : 'auto', marginBottom: isInputFocused ? 0 : 32 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
-                  <h1 className="text-2xl font-medium text-slate-800 text-center">
-                    {GREETINGS[role] || GREETINGS.admin}
+                <div className="mb-8">
+                  <h1 className="font-display font-bold text-2xl uppercase tracking-wide text-ink text-center">
+                    What can I do for you.
                   </h1>
-                </motion.div>
+                </div>
 
                 {/* Input composer */}
                 <div className="w-full max-w-2xl relative">
                   <SlashCommandMenu isVisible={showSlashMenu} query={slashQuery} onSelect={handleSlashSelect} />
-                  <div className={`relative bg-white border transition-all duration-200 ${
-                    isInputFocused ? 'rounded-xl border-violet-400 shadow-lg shadow-violet-100' : 'rounded-xl border-slate-200 shadow-sm hover:border-slate-300'
+                  <div className={`relative bg-panel border transition-all duration-200 ${
+                    isInputFocused ? 'rounded-xl border-signal' : 'rounded-xl border-line hover:border-steel-soft'
                   }`}>
-                    <textarea
+                    <AutoGrowTextarea
                       ref={textareaRef}
                       value={inputValue}
                       onChange={e => setInputValue(e.target.value)}
@@ -307,13 +349,12 @@ export default function HubSimplePage() {
                       onFocus={() => setIsInputFocused(true)}
                       onBlur={() => setTimeout(() => setIsInputFocused(false), 150)}
                       placeholder="Ask anything or type / for commands..."
-                      rows={1}
-                      className="w-full px-4 py-3 pr-12 text-sm resize-none outline-none bg-transparent text-slate-700 placeholder:text-slate-400 min-h-[52px]"
+                      className="w-full px-4 py-3 pr-12 text-sm resize-none outline-none bg-transparent text-ink placeholder:text-steel-soft min-h-[52px]"
                     />
                     <button
                       onClick={handleSend}
                       disabled={!inputValue.trim()}
-                      className="absolute right-3 bottom-3 p-1.5 rounded-md bg-violet-600 text-white disabled:bg-slate-200 disabled:text-slate-400 hover:bg-violet-700 transition-colors"
+                      className="absolute right-3 bottom-3 p-1.5 rounded-md bg-ink text-paper disabled:bg-paper-deep disabled:text-steel-soft hover:bg-signal transition-colors"
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>
@@ -321,7 +362,7 @@ export default function HubSimplePage() {
 
                   {/* Starter prompts */}
                   <motion.div
-                    animate={{ opacity: showSlashMenu ? 0 : (isInputFocused ? 0.4 : 1) }}
+                    animate={{ opacity: showSlashMenu ? 0 : 1 }}
                     transition={{ duration: 0.15 }}
                     className="mt-5 grid grid-cols-2 gap-2"
                   >
@@ -332,14 +373,14 @@ export default function HubSimplePage() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.05 + i * 0.05 }}
                         onClick={() => handlePromptClick(prompt)}
-                        className="p-3 text-left rounded-lg border border-slate-200 hover:border-violet-300 hover:bg-violet-50/40 transition-all group"
+                        className="p-3 text-left rounded-lg border border-line hover:border-steel-soft hover:bg-paper-deep transition-all group"
                       >
-                        <p className="text-xs text-slate-600 group-hover:text-violet-700 transition-colors line-clamp-2">{prompt.label}</p>
+                        <p className="text-xs text-steel group-hover:text-ink transition-colors line-clamp-2">{prompt.label}</p>
                       </motion.button>
                     ))}
                   </motion.div>
                 </div>
-              </motion.div>
+              </div>
             </motion.div>
           ) : (
             <motion.div
@@ -348,7 +389,7 @@ export default function HubSimplePage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="flex-1 flex flex-col h-full pt-10"
+              className="flex-1 flex flex-col min-h-0 pt-10"
             >
               <HubConversationView
                 messages={messages}
@@ -359,6 +400,8 @@ export default function HubSimplePage() {
                 slashQuery={slashQuery}
                 onSlashSelect={handleSlashSelect}
                 onNewChat={handleNewChat}
+                onHome={handleGoHome}
+                onSendText={sendText}
                 isStreaming={isStreaming}
                 remediation={readiness?.remediation}
               />
