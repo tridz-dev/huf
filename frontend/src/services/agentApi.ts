@@ -63,6 +63,17 @@ const AGENT_MODEL_FIELDS = [
   'description',
 ];
 
+// Only fields that exist on the Agent doctype may be listed here: Frappe
+// validates get_list fields for non-System-Manager users and rejects unknown
+// ones with HTTP 417 ("Field not permitted in query").
+const CHAT_AGENT_FIELDS = [
+  'name',
+  'agent_name',
+  'description',
+  'model',
+  'agent_color',
+];
+
 /**
  * Fields needed for agent triggers listing
  */
@@ -118,6 +129,14 @@ export interface PaginatedAgentsResponse {
   items: AgentDoc[];
   hasMore: boolean;
   total?: number;
+}
+
+export interface ChatAgentItem {
+  name: string;
+  agent_name: string;
+  description?: string | null;
+  model?: string | null;
+  agent_color?: string | null;
 }
 
 /**
@@ -186,6 +205,25 @@ export async function getAgents(
     };
   } catch (error) {
     handleFrappeError(error, 'Error fetching agents');
+  }
+}
+
+export async function getChatAgents(): Promise<ChatAgentItem[]> {
+  try {
+    const agents = await db.getDocList(doctype.Agent, {
+      fields: CHAT_AGENT_FIELDS,
+      filters: [
+        ['allow_chat', '=', 1],
+        ['disabled', '=', 0],
+      ],
+      limit: 1000,
+      orderBy: { field: 'modified', order: 'desc' },
+    });
+
+    return agents as ChatAgentItem[];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching chat agents');
+    return [];
   }
 }
 
@@ -702,7 +740,7 @@ export async function checkCacheableModels(
       supported: Boolean(data?.supported),
       alternatives: Array.isArray(data?.alternatives) ? data.alternatives : [],
     };
-  } catch (error) {
+  } catch {
     return { supported: false, alternatives: [] };
   }
 }

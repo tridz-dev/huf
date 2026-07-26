@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
-import { PermissionsProvider } from './contexts/PermissionsContext';
+import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
@@ -34,6 +34,7 @@ const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper')
 const DataPage = lazy(() => import('./pages/DataPage'));
 const AiProvidersPageWrapper = lazy(() => import('./pages/AiProvidersPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
+const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
 const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
@@ -71,11 +72,30 @@ import {
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
 
+function ChatOnlyRedirectGuard() {
+  const location = useLocation();
+  const { capabilities, isLoading } = usePermissions();
+  // Chat-only users get `chat.use` plus nothing outside the chat.* namespace
+  // (e.g. `chat.view_own` is fine, but `agent.use` means they are a full user).
+  const isChatOnlyUser =
+    capabilities.includes('chat.use') &&
+    capabilities.every((capability) => capability.startsWith('chat.'));
+  const isAllowedChatOnlyPath =
+    location.pathname.startsWith('/ui/chat') || location.pathname.startsWith('/view/');
+
+  if (isLoading || !isChatOnlyUser || isAllowedChatOnlyPath) {
+    return null;
+  }
+
+  return <Navigate to="/ui/chat" replace />;
+}
+
 function AppShell() {
   return (
     <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
+          <ChatOnlyRedirectGuard />
           <Suspense fallback={<AuthenticatingPage />}>
             <Routes>
           <Route
@@ -305,6 +325,26 @@ function AppShell() {
                     <ChatPage />
                   </Suspense>
                 </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ui/chat"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChatOnlyPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ui/chat/:chatId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChatOnlyPage />
+                </Suspense>
               </ProtectedRoute>
             }
           />

@@ -24,6 +24,7 @@ interface ChatInputProps {
     chatId: string | null;
     agentName: string;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
+    getNewConversationPath?: (agentName: string) => string;
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
     onLoadingTypeChange?: (type: LoadingType) => void;
     isCreatingConversationRef: React.MutableRefObject<boolean>;
@@ -45,6 +46,7 @@ export function ChatInput({
     chatId, 
     agentName,
     onConversationCreated,
+    getNewConversationPath,
     onStatusChange,
     onLoadingTypeChange,
     isCreatingConversationRef,
@@ -665,9 +667,9 @@ export function ChatInput({
 
     const handleNewConversation = useCallback(() => {
         if (agentName) {
-            navigate(`/chat/new?agent=${agentName}`);
+            navigate(getNewConversationPath?.(agentName) ?? `/chat/new?agent=${agentName}`);
         }
-    }, [navigate, agentName]);
+    }, [navigate, agentName, getNewConversationPath]);
 
     if (!agentName) {
         return null;

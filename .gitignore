@@ -10,6 +10,9 @@ __pycache__
 huf/public/frontend
 huf/public/docs
 huf/www/huf.html
+huf/www/chat.html
+huf/www/huf/sw.js
+huf/www/huf/manifest.json
 huf/www/docs.html
 docs/.next
 docs/out
