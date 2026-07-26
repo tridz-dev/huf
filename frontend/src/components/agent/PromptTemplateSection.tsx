@@ -23,6 +23,8 @@ interface PromptTemplateSectionProps {
   promptOptions: AgentPromptOption[];
   loadingPrompts?: boolean;
   showAddNew?: boolean;
+  /** True when protected fields must be read-only (system agent + non-admin). */
+  locked?: boolean;
 }
 
 export function PromptTemplateSection({
@@ -30,6 +32,7 @@ export function PromptTemplateSection({
   promptOptions,
   loadingPrompts = false,
   showAddNew = true,
+  locked = false,
 }: PromptTemplateSectionProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -61,7 +64,7 @@ export function PromptTemplateSection({
                     value={field.value}
                     onValueChange={field.onChange}
                     placeholder={loadingPrompts ? 'Loading templates...' : 'Select an Agent Prompt'}
-                    disabled={loadingPrompts}
+                    disabled={loadingPrompts || locked}
                     searchPlaceholder="Search templates..."
                     emptyText="No active prompt templates found."
                     linkTo={linkRoutes.agentPrompt}
@@ -129,7 +132,7 @@ export function PromptTemplateSection({
                 </FormDescription>
               </div>
               <FormControl>
-                <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                <Switch checked={field.value ?? false} onCheckedChange={field.onChange} disabled={locked} />
               </FormControl>
             </FormItem>
           )}

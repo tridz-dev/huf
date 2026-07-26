@@ -31,7 +31,14 @@ from huf.ai.transaction import transaction_checkpoint
 from huf.ai.cost_calculator import calculate_cost
 from huf.ai.conversation_manager import repair_message_sequence
 
-logger = frappe.logger("huf")
+class _LazyLogger:
+	"""Defer frappe.logger() until first use so test discovery can import this module."""
+
+	def __getattr__(self, name):
+		return getattr(frappe.logger("huf"), name)
+
+
+logger = _LazyLogger()
 
 # Default request timeout for LiteLLM completion calls (seconds)
 _DEFAULT_LITELLM_TIMEOUT = 180

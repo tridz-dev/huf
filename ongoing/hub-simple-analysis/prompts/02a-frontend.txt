@@ -1,0 +1,17 @@
+GROUND FACTS (already verified — do not re-derive):
+- Repo: /Users/safwan/Code/HUF/huf, on branch feat/design-simplified-hub-homepage-interface, already merged with develop.
+- Hub Simple = chat-first home at `/` (PR #243). Key files: frontend/src/pages/HubSimplePage.tsx, frontend/src/components/hub/SlashCommandMenu.tsx, frontend/src/components/hub/HubConversationView.tsx, frontend/src/services/commandParser.ts, App.tsx routing changes.
+- READ-ONLY recon. DO NOT modify files. DO NOT push. Other agents cover backend and conventions — stay in your lane.
+
+READ FIRST: ongoing/hub-simple-analysis/01-merge.md (merge log; note anything it flagged as uncertain).
+
+TASKS:
+F1. FILE-BY-FILE READ: read every hub file fully + App.tsx diff vs develop (git diff develop...HEAD -- frontend/src/App.tsx). Summarize each file: purpose, data flow, state management, how chat streaming is wired (which API, SSE path, fallback path, error path).
+F2. ROLE MODEL: how are roles (admin/builder/operator/viewer) detected in the frontend? Real Frappe roles or invented client-side heuristics? Trace the source of role data.
+F3. COMMAND PARSER: what commands exist, how parsed, robustness issues, commands pointing at routes that don't exist post-merge (cross-check against App.tsx routes).
+F4. UX/STATE GAPS (code-observable): loading/error/empty states; conversation persistence (does hub chat create an Agent Conversation? resumable? appears in /chat list?); what happens on navigation mid-stream; mobile behavior; keyboard nav/accessibility reality vs PR claims; provider-check UX.
+F5. HARDCODING/TODOs: hardcoded strings (agent name, greetings, prompts), TODO markers, dead code.
+
+OUTPUT: write detailed findings to ongoing/hub-simple-analysis/02a-frontend.md organized by task ID with file:line refs and short quotes where they matter.
+
+REPLY ONLY with: one line per task ID summarizing issue count, then top 3 findings one line each, then <verdict: SOLID|MIXED|WEAK>.

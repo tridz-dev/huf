@@ -58,6 +58,7 @@ const IntegrationServicesListingPageWrapper = lazy(
 const IntegrationServiceFormPageWrapper = lazy(
   () => import('./pages/IntegrationServiceFormPageWrapper'),
 );
+const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 
 import { useEffect } from 'react';
 import { SocketProvider } from './contexts/SocketContext';
@@ -77,6 +78,16 @@ function AppShell() {
             <Routes>
           <Route
             path="/"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <HubSimplePage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
