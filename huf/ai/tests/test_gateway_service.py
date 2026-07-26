@@ -11,6 +11,7 @@ from huf.ai import gateway_service
 def gateway(**overrides):
     values = {
         "name": "Support Telegram",
+        "provider": "Telegram",
         "is_enabled": 1,
         "default_target_type": "",
         "default_agent": "",
