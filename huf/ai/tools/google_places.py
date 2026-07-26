@@ -3,7 +3,7 @@ import json
 import frappe
 import requests
 
-from huf.ai.tools.credentials import require_credential, update_last_error
+from huf.ai.tools.credentials import get_credential, require_credential, update_last_error
 
 logger = frappe.logger("huf")
 
@@ -16,25 +16,44 @@ _MAX_ERROR_LENGTH = 500
 # Practical limit for autocomplete input — place names are never this long
 _MAX_INPUT_LENGTH = 200
 
-# Cache TTL in seconds (24 hours) — place names are geographically stable data
-_CACHE_TTL = 86400
-
 # Coordinate range constants
 _LATITUDE_MIN, _LATITUDE_MAX = -90.0, 90.0
 _LONGITUDE_MIN, _LONGITUDE_MAX = -180.0, 180.0
 _RADIUS_MIN = 1.0  # metres
 
-_DEFAULT_RADIUS = 50000.0
-
 # Non-country place types covering cities, states, districts and neighborhoods.
 # Google Places API (New) allows at most 5 types in includedPrimaryTypes.
-_DEFAULT_INCLUDED_PRIMARY_TYPES = [
-	"locality",
-	"sublocality",
-	"administrative_area_level_1",
-	"administrative_area_level_2",
-	"neighborhood",
-]
+_DEFAULT_INCLUDED_PRIMARY_TYPES_CSV = (
+	"locality,sublocality,administrative_area_level_1,administrative_area_level_2,neighborhood"
+)
+
+
+def _cfg(key, default=None, cast=None):
+	"""Read optional configuration from the google_maps Integration Service."""
+	raw = get_credential(SERVICE_NAME, key, None)
+	if raw is None or raw == "":
+		return default
+	if cast is bool:
+		return _as_bool(raw)
+	if cast is int:
+		try:
+			return int(float(raw))
+		except (TypeError, ValueError):
+			return default
+	if cast is float:
+		try:
+			return float(raw)
+		except (TypeError, ValueError):
+			return default
+	return raw
+
+
+def _cache_ttl():
+	return _cfg("places_cache_ttl", 86400, int)
+
+
+def _cache_enabled():
+	return _cfg("places_cache_enabled", True, bool)
 
 SEARCH_FIELD_MASK = (
 	"places.id,places.displayName,places.formattedAddress,places.primaryType,"
@@ -54,6 +73,12 @@ DETAILS_FIELD_MASK = (
 
 def _key():
 	return require_credential(SERVICE_NAME, "api_key")
+
+
+def _request_timeout(autocomplete=False):
+	key = "autocomplete_request_timeout" if autocomplete else "places_request_timeout"
+	default = 5 if autocomplete else 15
+	return _cfg(key, default, int)
 
 
 def _as_bool(value):
@@ -101,25 +126,31 @@ def _request_error(resp):
 	return f"Google Places API Error ({resp.status_code}): {str(message)[:_MAX_ERROR_LENGTH]}"
 
 
-def _post(endpoint, body, field_mask=None):
+def _post(endpoint, body, field_mask=None, timeout=None):
 	"""POST to the Places API (New). Returns (data, error_message)."""
+	if timeout is None:
+		timeout = _request_timeout()
 	headers = {
 		"Content-Type": "application/json",
 		"X-Goog-Api-Key": _key(),
 	}
 	if field_mask:
 		headers["X-Goog-FieldMask"] = field_mask
-	resp = requests.post(f"{BASE_URL}/{endpoint}", headers=headers, json=body, timeout=15)
+	resp = requests.post(f"{BASE_URL}/{endpoint}", headers=headers, json=body, timeout=timeout)
 	if not resp.ok:
 		return None, _request_error(resp)
 	return resp.json(), None
+
+
+def _default_radius():
+	return _cfg("places_default_radius", 50000.0, float)
 
 
 def _build_circle(latitude, longitude, radius):
 	"""Validate coordinates and build a circle dict. Returns (circle, error_message)."""
 	lat = _as_float(latitude)
 	lng = _as_float(longitude)
-	rad = _as_float(radius if radius is not None else _DEFAULT_RADIUS)
+	rad = _as_float(radius if radius is not None else _default_radius())
 	if lat is None or lng is None:
 		return None, "latitude and longitude must be numeric"
 	if rad is None:
@@ -162,6 +193,8 @@ def _is_country_prediction(place_prediction):
 
 
 def _cache_get(cache_key):
+	if not _cache_enabled():
+		return None
 	try:
 		return frappe.cache().get_value(cache_key)
 	except Exception:
@@ -170,8 +203,13 @@ def _cache_get(cache_key):
 
 
 def _cache_set(cache_key, value):
+	if not _cache_enabled():
+		return
+	ttl = _cache_ttl()
+	if ttl <= 0:
+		return
 	try:
-		frappe.cache().set_value(cache_key, value, expires_in_sec=_CACHE_TTL)
+		frappe.cache().set_value(cache_key, value, expires_in_sec=ttl)
 	except Exception:
 		# Cache write failure is non-fatal
 		pass
@@ -267,7 +305,7 @@ def handle_gplaces_place_details(**kwargs):
 			f"{BASE_URL}/places/{place_id}",
 			headers={"X-Goog-Api-Key": _key(), "X-Goog-FieldMask": DETAILS_FIELD_MASK},
 			params=params or None,
-			timeout=15,
+			timeout=_request_timeout(),
 		)
 		if not resp.ok:
 			error = _request_error(resp)
@@ -346,19 +384,20 @@ def handle_gplaces_place_photo(**kwargs):
 		if not photo_name:
 			return json.dumps({"success": False, "error": "photo_name is required"})
 
-		max_height = _as_int(kwargs.get("max_height_px")) or 800
-		max_width = _as_int(kwargs.get("max_width_px")) or 800
+		max_height = _as_int(kwargs.get("max_height_px")) or _cfg("places_photo_max_px", 800, int)
+		max_width = _as_int(kwargs.get("max_width_px")) or _cfg("places_photo_max_px", 800, int)
 		skip_redirect = kwargs.get("skip_http_redirect")
 		skip_redirect = True if skip_redirect is None else _as_bool(skip_redirect)
 
 		url = f"{BASE_URL}/{photo_name}/media"
 		headers = {"X-Goog-Api-Key": _key()}
 		params = {"maxHeightPx": max_height, "maxWidthPx": max_width}
+		timeout = _request_timeout()
 
 		if skip_redirect:
 			# skipHttpRedirect returns a JSON body with a pre-signed photoUri
 			params["skipHttpRedirect"] = "true"
-			resp = requests.get(url, headers=headers, params=params, timeout=15)
+			resp = requests.get(url, headers=headers, params=params, timeout=timeout)
 			if not resp.ok:
 				error = _request_error(resp)
 				update_last_error(SERVICE_NAME, error)
@@ -366,7 +405,7 @@ def handle_gplaces_place_photo(**kwargs):
 			photo_url = resp.json().get("photoUri")
 		else:
 			# Manually capture the redirect to the actual image CDN URL
-			resp = requests.get(url, headers=headers, params=params, timeout=15, allow_redirects=False)
+			resp = requests.get(url, headers=headers, params=params, timeout=timeout, allow_redirects=False)
 			if resp.status_code in (301, 302, 303, 307, 308):
 				photo_url = resp.headers.get("Location")
 			elif resp.ok:
@@ -405,7 +444,11 @@ def handle_gplaces_autocomplete(**kwargs):
 				}
 			)
 
-		primary_types = _as_csv(kwargs.get("included_primary_types")) or list(_DEFAULT_INCLUDED_PRIMARY_TYPES)
+		primary_types = (
+			_as_csv(kwargs.get("included_primary_types"))
+			or _as_csv(_cfg("places_autocomplete_primary_types", None))
+			or _as_csv(_DEFAULT_INCLUDED_PRIMARY_TYPES_CSV)
+		)
 		language_code = kwargs.get("language_code")
 		region_code = kwargs.get("region_code")
 
@@ -476,7 +519,7 @@ def handle_gplaces_autocomplete(**kwargs):
 		if origin:
 			body["origin"] = origin
 
-		data, error = _post("places:autocomplete", body)
+		data, error = _post("places:autocomplete", body, timeout=_request_timeout(autocomplete=True))
 		if error:
 			update_last_error(SERVICE_NAME, error)
 			return json.dumps({"success": False, "error": error})
