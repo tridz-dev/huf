@@ -1,13 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowUpDown, Loader2 } from 'lucide-react';
 import { FilterBar, PageLayout, LoadMoreButton } from '@/components/dashboard';
+import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getAgentRuns, type AgentRunDoc } from '@/services/agentRunApi';
 import { formatTimeAgo, calculateDuration } from '@/utils/time';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { getAgentRunStatusVariant } from '@/utils/status';
 import { Combobox } from '@/components/ui/combobox';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
@@ -28,6 +27,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+
+function getRunStatusDot(status?: string): { variant: StatusDotVariant; label: string } {
+  const normalized = status?.toLowerCase() || '';
+  if (normalized === 'success') return { variant: 'ok', label: status || 'Success' };
+  if (normalized === 'failed') return { variant: 'fail', label: status || 'Failed' };
+  if (normalized === 'queued') return { variant: 'idle', label: status || 'Queued' };
+  return { variant: 'run', label: status || 'Started' };
+}
 
 export default function Executions() {
   const navigate = useNavigate();
@@ -55,7 +62,7 @@ export default function Executions() {
         limit: params.limit,
         start: params.start,
         search: params.search,
-        status: params.status as any,
+        status: params.status as 'Started' | 'Queued' | 'Success' | 'Failed' | 'all' | undefined,
         agents: params.agents ? params.agents.split(',').filter(Boolean) : undefined,
         filters: [["is_child","=","0"]]
       });
@@ -167,7 +174,7 @@ export default function Executions() {
             <Button
               variant="ghost"
               onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="h-8 px-2"
+              className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
             >
               Agent
               <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -175,7 +182,7 @@ export default function Executions() {
           );
         },
         cell: ({ row }) => (
-          <div className="font-medium">{row.getValue('agent') || 'Unknown Agent'}</div>
+          <div className="font-body text-[13px] font-medium text-ink">{row.getValue('agent') || 'Unknown Agent'}</div>
         ),
       },
       {
@@ -185,7 +192,7 @@ export default function Executions() {
             <Button
               variant="ghost"
               onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="h-8 px-2"
+              className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
             >
               Run ID
               <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -193,7 +200,7 @@ export default function Executions() {
           );
         },
         cell: ({ row }) => (
-          <div className="font-mono text-sm text-muted-foreground">{row.getValue('name')}</div>
+          <div className="font-mono text-[12px] text-steel">{row.getValue('name')}</div>
         ),
       },
       {
@@ -201,10 +208,12 @@ export default function Executions() {
         header: 'Status',
         cell: ({ row }) => {
           const status = row.getValue('status') as string;
+          const { variant, label } = getRunStatusDot(status);
           return (
-            <Badge variant={getAgentRunStatusVariant(status)}>
-              {status || 'Unknown'}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <StatusDot variant={variant} />
+              <span className="font-body text-[13px] text-steel">{label}</span>
+            </div>
           );
         },
       },
@@ -213,7 +222,7 @@ export default function Executions() {
         header: 'Duration',
         cell: ({ row }) => {
           const duration = calculateDuration(row.original.start_time ?? null, row.original.end_time ?? null);
-          return <div className="text-sm">{duration}</div>;
+          return <div className="font-mono text-[12px] text-steel">{duration}</div>;
         },
       },
       {
@@ -223,7 +232,7 @@ export default function Executions() {
             <Button
               variant="ghost"
               onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="h-8 px-2"
+              className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
             >
               Started
               <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -232,7 +241,7 @@ export default function Executions() {
         },
         cell: ({ row }) => {
           const timeAgo = formatTimeAgo(row.original.start_time ?? null);
-          return <div className="text-sm text-muted-foreground">{timeAgo}</div>;
+          return <div className="font-mono text-[12px] text-steel">{timeAgo}</div>;
         },
         sortingFn: (rowA, rowB) => {
           const timeA = rowA.original.start_time ? new Date(rowA.original.start_time).getTime() : 0;
@@ -259,7 +268,8 @@ export default function Executions() {
 
   return (
     <PageLayout
-      subtitle="View all executions of your Agents"
+      title="Executions"
+      subtitle="Inspect agent runs and their results."
       filters={
         <FilterBar
           searchPlaceholder="Search executions using Agent Name"
@@ -280,7 +290,7 @@ export default function Executions() {
             },
           ]}
           actions={
-            <div className="w-48">
+            <div className="w-full sm:w-48">
               <Combobox
                 options={agentOptions}
                 value={selectedAgentValue}
@@ -305,10 +315,10 @@ export default function Executions() {
       <div className="w-full">
         {initialLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : (
-          <div className="overflow-hidden rounded-md border">
+          <div className="border border-line bg-panel">
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -330,7 +340,7 @@ export default function Executions() {
                   table.getRowModel().rows.map((row) => (
                     <TableRow
                       key={row.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-paper-deep"
                       onClick={() => navigate(`/executions/${row.original.name}`)}
                     >
                       {row.getVisibleCells().map((cell) => (
@@ -343,7 +353,7 @@ export default function Executions() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="text-muted-foreground">No executions found.</div>
+                      <div className="text-steel">No executions found.</div>
                     </TableCell>
                   </TableRow>
                 )}
@@ -361,7 +371,7 @@ export default function Executions() {
       />
 
       {!hasMore && runs.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm text-steel">
           {total !== undefined ? `Showing all ${total} executions` : 'No more executions to load'}
         </div>
       )}

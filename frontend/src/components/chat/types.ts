@@ -9,6 +9,20 @@ export type MessageType = {
   }[];
   kind?: string;
   generatedImage?: string;
+  generatedAudio?: string;
+  generatedVideo?: string;
+  voiceMessage?: string;
+  runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed';
+  /** Links a user bubble to the Agent Run that created it (for merge/hydration). */
+  agentRunId?: string;
+  error?: string;
+  sttModel?: string;
+  status?: string;
+  attachment?: {
+    name: string;
+    label: string;
+    previewUrl?: string;
+  };
   tools?: {
     tool_call_id: string;
     name: string;

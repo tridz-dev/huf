@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { FormField, FormItem, FormLabel, FormControl, FormDescription } from '@/components/ui/form';
+import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { UseFormReturn } from 'react-hook-form';
 import type { MCPFormValues, MCPTool } from './types';
@@ -36,6 +37,7 @@ export function ToolsTab({
   syncing,
 }: ToolsTabProps) {
   const [selectedTool, setSelectedTool] = useState<MCPTool | null>(null);
+  const enableAutoSync = form.watch('enable_auto_sync');
 
   const handleToolClick = (tool: MCPTool) => {
     setSelectedTool(tool);
@@ -58,11 +60,11 @@ export function ToolsTab({
             control={form.control}
             name="enable_auto_sync"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Enable Auto Sync</FormLabel>
                   <FormDescription>
-                    Automatically sync tools from the MCP server on a schedule
+                    Automatically sync tools periodically
                   </FormDescription>
                 </div>
                 <FormControl>
@@ -75,10 +77,33 @@ export function ToolsTab({
             )}
           />
 
-          <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+          {enableAutoSync && (
+            <FormField
+              control={form.control}
+              name="auto_sync_interval"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sync Interval (Hours)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      placeholder="1"
+                      {...field}
+                      onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormDescription>Interval in hours to auto-sync tools</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          <div className="flex items-center justify-between p-4 rounded-none border bg-paper-deep/30">
             <div>
               <p className="text-sm font-medium">Last Sync</p>
-              <p className="text-sm text-muted-foreground">{formatTimeAgo(lastSync)}</p>
+              <p className="text-sm text-steel">{formatTimeAgo(lastSync)}</p>
             </div>
             <Button
               variant="outline"
@@ -104,7 +129,7 @@ export function ToolsTab({
         </CardHeader>
         <CardContent>
           {tools.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-12 font-body text-steel">
               <p>No tools available.</p>
               <Button
                 variant="outline"
@@ -118,7 +143,7 @@ export function ToolsTab({
               </Button>
             </div>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-none border">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -131,11 +156,11 @@ export function ToolsTab({
                   {tools.map((tool) => (
                     <TableRow
                       key={tool.name}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-paper-deep"
                       onClick={() => handleToolClick(tool)}
                     >
                       <TableCell className="font-medium">{tool.tool_name}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-steel">
                         <div className="max-w-md truncate" title={tool.description || 'No description'}>
                           {tool.description || 'No description'}
                         </div>

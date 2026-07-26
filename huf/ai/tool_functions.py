@@ -1,14 +1,16 @@
-import frappe
-from frappe import _, client
-from frappe.utils.file_manager import save_file
 import os
 from urllib.parse import urlparse
-import requests
 
+import frappe
+import requests
+from frappe import _, client
+from frappe.utils.file_manager import save_file
+
+from huf.ai.transaction import commit_if_background
 
 
 def get_document(doctype: str, document_id: str):
-	
+
 	"""
 	Get a document from the database
 	"""
@@ -17,7 +19,7 @@ def get_document(doctype: str, document_id: str):
 
 
 def get_documents(doctype: str, document_ids: list):
-	
+
 	"""
 	Get documents from the database
 	"""
@@ -97,10 +99,10 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
     try:
         if not doctype or not document_id:
             return {"success": False, "error": "Doctype and document_id are required"}
-            
+
         if not frappe.db.exists(doctype, document_id):
             return {"success": False, "error": f"{doctype} {document_id} not found"}
-            
+
         if not frappe.has_permission(doctype, "write", doc=document_id):
             return {
                 "success": False,
@@ -108,25 +110,29 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
                 "permission_denied": True
             }
 
-            
+
         doc = frappe.get_doc(doctype, document_id)
-        
+
         # Apply default values from tool if available
         if tool:
             for param in tool.parameters:
                 if param.default_value and not data.get(param.fieldname):
                     data[param.fieldname] = param.default_value
-        
+
         doc.update(data)
         doc.save()
-        
+
+        result_dict = {"name": doc.name, "modified": str(doc.modified)}
+        for field in data.keys():
+            result_dict[field] = getattr(doc, field, data.get(field))
+
         return {
             "success": True,
             "message": f"{doctype} {document_id} updated successfully",
-            "document": doc.as_dict()
+            "document": result_dict
         }
     except Exception as e:
-        frappe.log_error(f"Error updating {doctype} {document_id}: {str(e)}")
+        frappe.log_error(f"Error updating {doctype} {document_id}: {e!s}")
         return {"success": False, "error": str(e)}
 
 def update_documents(doctype: str, data: list, function=None):
@@ -172,10 +178,10 @@ def delete_document(doctype: str, document_id: str):
     try:
         if not doctype or not document_id:
             return {"success": False, "error": "Doctype and document_id are required"}
-            
+
         if not frappe.db.exists(doctype, document_id):
             return {"success": False, "error": f"{doctype} {document_id} not found"}
-            
+
         #Pre-check delete permission
         if not frappe.has_permission(doctype, "delete", doc=document_id):
             return {
@@ -187,16 +193,46 @@ def delete_document(doctype: str, document_id: str):
         frappe.delete_doc(doctype, document_id)
         return {"success": True, "message": f"{doctype} {document_id} deleted successfully"}
     except Exception as e:
-        frappe.log_error(f"Error deleting {doctype} {document_id}: {str(e)}")
+        frappe.log_error(f"Error deleting {doctype} {document_id}: {e!s}")
         return {"success": False, "error": str(e)}
 
 def delete_documents(doctype: str, document_ids: list):
 	"""
-	Delete documents from the database
+	Delete documents from the database.
+
+	Each document is checked individually for delete permission. Unauthorized
+	or failed deletions are reported without stopping the batch.
 	"""
+	deleted = []
+	failed = []
+
 	for document_id in document_ids:
-		frappe.delete_doc(doctype, document_id)
-	return {"document_ids": document_ids, "message": "Documents deleted", "doctype": doctype}
+		if not frappe.has_permission(doctype, "delete", doc=document_id):
+			failed.append({
+				"name": document_id,
+				"error": f"You do not have delete permission on {doctype} {document_id}",
+				"permission_denied": True,
+			})
+			continue
+
+		try:
+			frappe.delete_doc(doctype, document_id)
+			deleted.append(document_id)
+		except frappe.PermissionError as e:
+			failed.append({
+				"name": document_id,
+				"error": str(e),
+				"permission_denied": True,
+			})
+		except Exception as e:
+			failed.append({"name": document_id, "error": str(e)})
+
+	return {
+		"doctype": doctype,
+		"deleted": deleted,
+		"failed": failed,
+		"message": f"Deleted {len(deleted)} of {len(document_ids)} documents.",
+	}
 
 
 def submit_document(doctype: str, document_id: str):
@@ -204,10 +240,10 @@ def submit_document(doctype: str, document_id: str):
 	Submit a document in the database
 	"""
 	doc = frappe.get_doc(doctype, document_id)
-	
+
 	if not frappe.has_permission(doctype, "submit", doc=document_id):
 		return {
-			"success": False, 
+			"success": False,
 			"error": f"You do not have submit permission on {doctype} {document_id}",
 			"permission_denied": True
 		}
@@ -228,7 +264,7 @@ def cancel_document(doctype: str, document_id: str):
 
 	if not frappe.has_permission(doctype, "cancel", doc=document_id):
 		return {
-			"success": False, 
+			"success": False,
 			"error": f"You do not have cancel permission on {doctype} {document_id}",
 			"permission_denied": True
 		}
@@ -389,6 +425,11 @@ def attach_file_to_document(doctype: str, document_id: str, file_path: str):
 
 def _download_content(url: str, timeout: int = 30) -> bytes:
     """Download bytes from an http/https url."""
+    from huf.ai.http_handler import validate_url
+
+    is_valid, error_msg = validate_url(url)
+    if not is_valid:
+        raise ValueError(f"URL blocked: {error_msg}")
 
     resp = requests.get(url, timeout=timeout)
     resp.raise_for_status()
@@ -433,11 +474,11 @@ def _process_single_attachment(doctype, document_id, file_path):
             else:
                 filename = os.path.basename(file_path)
                 file_doc = _create_file_doc_for_local_path(file_path, filename)
-        
+
         clean_url = getattr(file_doc, "file_url", None)
         if not clean_url:
             clean_url = getattr(file_doc, "file_name", file_path)
-            
+
         attached_name = frappe.db.get_value("File", {
             "attached_to_doctype": doctype,
             "attached_to_name": document_id,
@@ -454,7 +495,7 @@ def _process_single_attachment(doctype, document_id, file_path):
         return clean_url
 
     except Exception as e:
-        frappe.log_error(f"Attachment failed for {file_path}: {str(e)}")
+        frappe.log_error(f"Attachment failed for {file_path}: {e!s}")
         return None
 
 
@@ -476,7 +517,7 @@ def attach_file_to_document(doctype: str, document_id: str, **kwargs):
     updates = {}
     attached_files = []
     meta = frappe.get_meta(doctype)
-    
+
     generic_file = kwargs.pop('file_path', None) or kwargs.pop('file_url', None)
     if generic_file:
          url = _process_single_attachment(doctype, document_id, generic_file)
@@ -496,11 +537,11 @@ def attach_file_to_document(doctype: str, document_id: str, **kwargs):
     if updates:
         try:
             frappe.db.set_value(doctype, document_id, updates)
-            frappe.db.commit()
+            commit_if_background()
         except Exception as e:
             return {
-                "success": True, 
-                "message": "Files attached but field update failed", 
+                "success": True,
+                "message": "Files attached but field update failed",
                 "error": str(e),
                 "attached": attached_files
             }

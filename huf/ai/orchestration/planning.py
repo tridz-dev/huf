@@ -48,7 +48,8 @@ def run_planning(agent_name, user_prompt, provider, model, conversation_id=None)
             provider=provider,
             model=model,
             channel_id="orchestration_planning",
-            conversation_id=conversation_id
+            conversation_id=conversation_id,
+            now=True
         )
 
         if result.get("success"):

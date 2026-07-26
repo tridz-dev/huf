@@ -27,7 +27,7 @@ export function HttpHeaderCard({
   };
 
   return (
-    <Card className="border-gray-200">
+    <Card>
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-medium text-sm">Header {index + 1}</h4>
@@ -36,7 +36,7 @@ export function HttpHeaderCard({
             variant="ghost"
             size="sm"
             onClick={() => onDelete(index)}
-            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
           >
             <Trash2 className="w-4 h-4" />
           </Button>

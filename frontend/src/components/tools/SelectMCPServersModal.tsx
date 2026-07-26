@@ -2,12 +2,15 @@ import { useState, useEffect, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
+import {
+  DialogScrollBody,
+  DialogScrollContent,
+  DialogScrollFooter,
+  DialogScrollHeader,
+} from '../ui/dialog-scroll';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { MCPServerCard } from './MCPServerCard';
@@ -117,19 +120,20 @@ export function SelectMCPServersModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] h-[80vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 pb-4">
+      <DialogScrollContent className="sm:max-w-[700px]">
+        <DialogScrollHeader>
           <DialogTitle>Select MCP Servers</DialogTitle>
           <DialogDescription>
             Choose MCP servers to connect to this agent. Select multiple servers at once.
           </DialogDescription>
-        </DialogHeader>
+        </DialogScrollHeader>
 
+        <DialogScrollBody className="space-y-4 pb-2">
         {/* Filters */}
-        <div className="flex flex-col gap-3 px-6 pb-4">
+        <div className="flex flex-col gap-3">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-soft" />
             <Input
               placeholder="Search MCP servers by name..."
               value={searchQuery}
@@ -140,14 +144,14 @@ export function SelectMCPServersModal({
         </div>
 
         {/* Server List */}
-        <div className="flex-1 overflow-y-auto min-h-0 px-6 space-y-2 pb-2">
+        <div className="space-y-2">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="text-muted-foreground">Loading MCP servers...</div>
+              <div className="font-body text-steel-soft">Loading MCP servers...</div>
             </div>
           ) : filteredServers.length === 0 ? (
             <div className="flex items-center justify-center py-12">
-              <div className="text-muted-foreground">
+              <div className="text-steel">
                 {searchQuery
                   ? 'No MCP servers match your search'
                   : 'No MCP servers available'}
@@ -165,10 +169,10 @@ export function SelectMCPServersModal({
             ))
           )}
         </div>
+        </DialogScrollBody>
 
-        {/* Footer */}
-        <DialogFooter className="flex items-center justify-between border-t px-6 py-4">
-          <div className="text-sm text-muted-foreground">
+        <DialogScrollFooter className="items-center justify-between sm:justify-between">
+          <div className="text-sm text-steel">
             {selectedCount > 0 ? (
               <>
                 {selectedCount} server{selectedCount > 1 ? 's' : ''} selected
@@ -188,8 +192,8 @@ export function SelectMCPServersModal({
               Add {selectedCount > 0 && `(${selectedCount})`}
             </Button>
           </div>
-        </DialogFooter>
-      </DialogContent>
+        </DialogScrollFooter>
+      </DialogScrollContent>
     </Dialog>
   );
 }

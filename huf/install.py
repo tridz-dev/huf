@@ -5,8 +5,12 @@
 Installation hooks for Huf app
 """
 
+import json
+
 import frappe
 from huf.utils import is_frappe_16
+
+logger = frappe.logger("huf")
 
 def setup_desktop_icon_as_workspace(app_name):
 	"""
@@ -59,13 +63,19 @@ def setup_desktop_icon_as_workspace(app_name):
 
 
 def after_install():
+    create_huf_roles()
     create_demo_ai_providers()
     create_demo_ai_models()
     create_image_generation_tool()
     create_transcribe_audio_tool()
     create_generate_audio_tool()
+    remove_deprecated_gemini_audio_tools()
     create_ocr_document_tool()
     create_flow_tools()
+    register_integration_services()
+    sync_tool_types()
+    from huf.ai.tool_registry import sync_discovered_tools
+    sync_discovered_tools(use_cache=False)
     frappe.db.commit()
     """
 	Called after app installation.
@@ -73,7 +83,20 @@ def after_install():
 	"""
     try:
         import litellm
-        frappe.msgprint("✅ LiteLLM is installed and ready to use.")
+        from importlib.metadata import version as get_installed_version
+
+        litellm_version = get_installed_version("litellm")
+        compromised_versions = {"1.82.7", "1.82.8"}
+
+        if litellm_version in compromised_versions:
+            frappe.msgprint(
+                "🚨 Compromised LiteLLM version detected "
+                f"({litellm_version}). Rotate credentials and reinstall a safe version immediately.",
+                indicator="red",
+                title="Critical Security Alert",
+            )
+        else:
+            frappe.msgprint(f"✅ LiteLLM is installed and ready to use (v{litellm_version}).")
     except ImportError:
     	frappe.msgprint(
 			"⚠️ LiteLLM package not found. "
@@ -89,46 +112,71 @@ def after_migrate():
 	Called after app migration.
 	Syncs all discovered tools from all installed apps.
 	"""
+	create_huf_roles()
 	setup_desktop_icon_as_workspace("huf")
 	try:
 		create_image_generation_tool()
 		create_transcribe_audio_tool()
 		create_generate_audio_tool()
+		remove_deprecated_gemini_audio_tools()
 		create_ocr_document_tool()
 		create_flow_tools()
+		register_integration_services()
+		sync_tool_types()
 		from huf.ai.tool_registry import sync_discovered_tools
-		result = sync_discovered_tools()  # Full scan (apps_to_scan=None)
-		frappe.log_error(
-			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps",
-			"Tool Sync"
+		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
+		logger.info(
+			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps"
 		)
 	except Exception as e:
-		frappe.log_error(
-			f"Failed to sync tools after migrate: {str(e)}",
-			"Tool Sync Error"
-		)
+		logger.warning(f"Failed to sync tools after migrate: {e!s}")
+		
+	try:
+		from huf.ai.app_seeding.seeder import seed_all
+		results = list(seed_all())
+		seed_logger = frappe.logger("app_seeding")
+		_log_seed_results(results, seed_logger)
+	except Exception as e:
+		logger.warning(f"App seeding failed: {e!s}")
+
+
+def _log_seed_results(results, logger):
+	"""Emit WARNING-level structured logs for skipped seed records and per-app summaries."""
+	for r in results:
+		for rec in r.skipped_records:
+			logger.warning(json.dumps({
+				"app": rec["app"],
+				"file": rec["file"],
+				"record": rec["record"],
+				"missing_refs": rec.get("missing_refs", [])
+			}))
+		logger.warning(json.dumps({
+			"app": r.app,
+			"skipped_count": r.skipped,
+			"seeded_count": r.seeded
+		}))
 
 def create_demo_ai_providers():
     providers = [
-        # {"doctype": "AI Provider", "provider_name": "xAI", "slug": "xai", "chef": "xAI", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Mistral", "slug": "mistral", "chef": "Mistral", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Alibaba", "slug": "alibaba", "chef": "Alibaba", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "DashScope", "slug": "dashscope", "chef": "Alibaba", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Meta", "slug": "meta", "chef": "Meta", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "TogetherAI", "slug": "togetherai", "chef": "TogetherAI", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Azure OpenAI", "slug": "azure", "chef": "Microsoft", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "AWS Bedrock", "slug": "bedrock", "chef": "Amazon", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Ollama", "slug": "ollama", "chef": "Ollama", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "ElevenLabs", "slug": "elevenlabs", "chef": "ElevenLabs", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Groq", "slug": "groq", "chef": "xAI", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "DeepSeek", "slug": "deepseek", "chef": "DeepSeek", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Huggingface", "slug": "huggingface", "chef": "HuggingFace", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Cohere", "slug": "cohere", "chef": "Cohere", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Perplexity", "slug": "perplexity", "chef": "Perplexity", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Google", "slug": "google", "chef": "Google", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "Anthropic", "slug": "anthropic", "chef": "Anthropic", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "OpenRouter", "slug": "openrouter", "chef": "OpenRouter", "api_key": ""},
-        {"doctype": "AI Provider", "provider_name": "OpenAI", "slug": "openai", "chef": "OpenAI", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "xAI", "provider_brand": "xai", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Mistral", "provider_brand": "mistral", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Alibaba", "provider_brand": "alibaba", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "DashScope", "provider_brand": "alibaba", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Meta", "provider_brand": "meta", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "TogetherAI", "provider_brand": "togetherai", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Azure OpenAI", "provider_brand": "azure", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "AWS Bedrock", "provider_brand": "amazon-bedrock", "api_key": ""},
+        # {"doctype": "AI Provider", "provider_name": "Ollama", "provider_brand": "ollama", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "ElevenLabs", "provider_brand": "elevenlabs", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Groq", "provider_brand": "groq", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "DeepSeek", "provider_brand": "deepseek", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Huggingface", "provider_brand": "huggingface", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Cohere", "provider_brand": "cohere", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Perplexity", "provider_brand": "perplexity", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Google", "provider_brand": "google", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Anthropic", "provider_brand": "anthropic", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "OpenRouter", "provider_brand": "openrouter", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "OpenAI", "provider_brand": "openai", "api_key": ""},
         
         
     ]
@@ -290,7 +338,7 @@ def create_image_generation_tool():
     try:
         tool_doc.insert()
     except Exception as e:
-        frappe.log_error(f"Error creating image generation tool: {str(e)}", "Image Generation Tool Creation")
+        logger.warning(f"Error creating image generation tool: {e!s}")
 
 
 def create_ocr_document_tool():
@@ -309,13 +357,13 @@ def create_ocr_document_tool():
     if tool_exists:
         # Update existing tool
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
-        tool_doc.description = "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents."
+        tool_doc.description = "Extract text from documents and images using OCR. Supports PDFs, images, scanned documents, Word/Excel/PowerPoint documents (DOCX/XLSX/PPTX), text files (TXT/MD/CSV/JSON/XML/LOG), and HTML. Uses local extractors when possible, vision models for images, and OCR endpoints or vision models for PDFs."
         tool_doc.function_path = "huf.ai.sdk_tools.handle_ocr_document"
         tool_doc.tool_type = "OCR"
         try:
             tool_doc.save()
         except Exception as e:
-            frappe.log_error(f"Error updating ocr_document tool: {str(e)}", "OCR Document Tool Update")
+            logger.warning(f"Error updating ocr_document tool: {e!s}")
     else:
         # Create new tool
         parameters = [
@@ -359,7 +407,7 @@ def create_ocr_document_tool():
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
-            "description": "Extract text from documents and images using OCR. Supports PDFs, images, and scanned documents. Uses vision models for images and OCR for multi-page documents.",
+            "description": "Extract text from documents and images using OCR. Supports PDFs, images, scanned documents, Word/Excel/PowerPoint documents (DOCX/XLSX/PPTX), text files (TXT/MD/CSV/JSON/XML/LOG), and HTML. Uses local extractors when possible, vision models for images, and OCR endpoints or vision models for PDFs.",
             "types": "Custom Function",
             "function_path": "huf.ai.sdk_tools.handle_ocr_document",
             "pass_parameters_as_json": 1,
@@ -370,73 +418,82 @@ def create_ocr_document_tool():
         try:
             tool_doc.insert()
         except Exception as e:
-            frappe.log_error(f"Error creating ocr_document tool: {str(e)}", "OCR Document Tool Creation")
+            logger.warning(f"Error creating ocr_document tool: {e!s}")
 
 def create_generate_audio_tool():
     """Create or update the generate_audio tool in Agent Tool Function DocType."""
     tool_name = "generate_audio"
-    
+
+    parameters = [
+        {
+            "label": "Input Text",
+            "fieldname": "input",
+            "type": "string",
+            "required": 1,
+            "description": "The text to convert to speech. Maximum length varies by provider."
+        },
+        {
+            "label": "Voice",
+            "fieldname": "voice",
+            "type": "string",
+            "required": 0,
+            "description": (
+                "Voice identifier for the TTS provider. "
+                "IMPORTANT: Leave this blank - the voice is automatically determined by the agent's TTS configuration (tts_voice field). Only set this if the user has explicitly asked for a specific voice AND provided the exact voice ID for the active TTS provider."
+            )
+        },
+        {
+            "label": "Model",
+            "fieldname": "model",
+            "type": "string",
+            "required": 0,
+            "description": (
+                "TTS model override."
+                "IMPORTANT: Leave this blank — the model is automatically determined by the agent's TTS configuration (tts_model field). Only set this if the user has explicitly asked to use a specific TTS model."
+            )
+        },
+        {
+            "label": "Speed",
+            "fieldname": "speed",
+            "type": "number",
+            "required": 0,
+            "description": "Speech speed from 0.25 to 4.0. Default: 1.0."
+        },
+        {
+            "label": "Response Format",
+            "fieldname": "response_format",
+            "type": "string",
+            "required": 0,
+            "description": "Audio format. Default: 'mp3'. Options: mp3, opus, aac, flac, wav, pcm.",
+            "options": "mp3\nopus\naac\nflac\nwav\npcm"
+        }
+    ]
+
     # Ensure Audio Generation tool type exists
     if not frappe.db.exists("Agent Tool Type", "Audio Generation"):
         tool_type_doc = frappe.new_doc("Agent Tool Type")
         tool_type_doc.name1 = "Audio Generation"
         tool_type_doc.insert()
-    
+
     # Check if tool already exists
     tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
-    
+
+
     if tool_exists:
         # Update existing tool - add missing parameters if needed
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
         tool_doc.description = "Generate audio (speech) from text using AI text-to-speech. Use this when the user asks to convert text to speech, create voice narration, or generate audio. Supports multiple providers via LiteLLM (OpenAI, Gemini, ElevenLabs, etc.)."
         tool_doc.function_path = "huf.ai.sdk_tools.handle_generate_audio"
         tool_doc.tool_type = "Audio Generation"
+        tool_doc.set("parameters", [])
+        for p in parameters:
+            tool_doc.append("parameters", p)
         try:
             tool_doc.save()
         except Exception as e:
-            frappe.log_error(f"Error updating generate_audio tool: {str(e)}", "Generate Audio Tool Update")
+            logger.warning(f"Error updating generate_audio tool: {e!s}")
     else:
         # Create new tool
-        parameters = [
-            {
-                "label": "Input Text",
-                "fieldname": "input",
-                "type": "string",
-                "required": 1,
-                "description": "The text to convert to speech. Maximum length varies by provider."
-            },
-            {
-                "label": "Voice",
-                "fieldname": "voice",
-                "type": "string",
-                "required": 0,
-                "description": "Voice to use for speech generation. Options vary by provider. OpenAI: alloy, echo, fable, onyx, nova, shimmer. Default: 'alloy'.",
-                "options": "alloy\necho\nfable\nonyx\nnova\nshimmer"
-            },
-            {
-                "label": "Model",
-                "fieldname": "model",
-                "type": "string",
-                "required": 0,
-                "description": "Optional TTS model override. Defaults based on provider: OpenAI (tts-1), Gemini (gemini-2.5-flash-preview-tts), ElevenLabs (eleven_multilingual_v2)."
-            },
-            {
-                "label": "Speed",
-                "fieldname": "speed",
-                "type": "number",
-                "required": 0,
-                "description": "Speech speed from 0.25 to 4.0. Default: 1.0. Supported by OpenAI and some other providers."
-            },
-            {
-                "label": "Response Format",
-                "fieldname": "response_format",
-                "type": "string",
-                "required": 0,
-                "description": "Audio format. Default: 'mp3'. Options: mp3, opus, aac, flac, wav, pcm.",
-                "options": "mp3\nopus\naac\nflac\nwav\npcm"
-            }
-        ]
-        
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
@@ -451,12 +508,50 @@ def create_generate_audio_tool():
         try:
             tool_doc.insert()
         except Exception as e:
-            frappe.log_error(f"Error creating generate_audio tool: {str(e)}", "Generate Audio Tool Creation")
+            logger.warning(f"Error creating generate_audio tool: {e!s}")
 
 def create_transcribe_audio_tool():
     """Create or update the transcribe_audio tool in Agent Tool Function DocType."""
     tool_name = "transcribe_audio"
     
+    parameters = [
+        {
+            "label": "File ID",
+            "fieldname": "file_id",
+            "type": "string",
+            "required": 0,
+            "description": "File document ID from Frappe (preferred). File must exist in the system."
+        },
+        {
+            "label": "File URL",
+            "fieldname": "file_url",
+            "type": "string",
+            "required": 0,
+            "description": "File URL/path (alternative to file_id). Example: /files/audio.mp3"
+        },
+        {
+            "label": "File Path",
+            "fieldname": "file_path",
+            "type": "string",
+            "required": 0,
+            "description": "Absolute server path inside an allowed audio import directory"
+        },
+        {
+            "label": "Language",
+            "fieldname": "language",
+            "type": "string",
+            "required": 0,
+            "description": "Optional language code in ISO 639-1 format (e.g., 'en', 'es', 'fr', 'de'). If omitted, language is auto-detected."
+        },
+        {
+            "label": "Model",
+            "fieldname": "model",
+            "type": "string",
+            "required": 0,
+            "description": "Optional transcription model. Defaults based on provider: OpenAI/Groq use 'whisper-1', Groq can use 'groq/whisper-large-v3', Deepgram uses 'deepgram/nova-2'."
+        }
+    ]
+
     # Ensure Transcription tool type exists
     if not frappe.db.exists("Agent Tool Type", "Transcription"):
         tool_type_doc = frappe.new_doc("Agent Tool Type")
@@ -467,49 +562,21 @@ def create_transcribe_audio_tool():
     tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
     
     if tool_exists:
-        # Update existing tool
+        # Update existing tool - add missing parameters if needed
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
         # Update description and function path if needed
         tool_doc.description = "Transcribe audio files to text using AI. Use this when the user uploads an audio file or asks to transcribe audio. Supports multiple providers via LiteLLM (OpenAI, Groq, Deepgram, etc.)."
         tool_doc.function_path = "huf.ai.sdk_tools.handle_transcribe_audio"
         tool_doc.tool_type = "Transcription"
+        tool_doc.set("parameters", [])
+        for p in parameters:
+            tool_doc.append("parameters", p)
         try:
             tool_doc.save()
         except Exception as e:
-            frappe.log_error(f"Error updating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Update")
+            logger.warning(f"Error updating transcribe_audio tool: {e!s}")
     else:
         # Create new tool
-        parameters = [
-            {
-                "label": "File ID",
-                "fieldname": "file_id",
-                "type": "string",
-                "required": 0,
-                "description": "File document ID from Frappe (preferred). File must exist in the system."
-            },
-            {
-                "label": "File URL",
-                "fieldname": "file_url",
-                "type": "string",
-                "required": 0,
-                "description": "File URL/path (alternative to file_id). Example: /files/audio.mp3"
-            },
-            {
-                "label": "Language",
-                "fieldname": "language",
-                "type": "string",
-                "required": 0,
-                "description": "Optional language code in ISO 639-1 format (e.g., 'en', 'es', 'fr', 'de'). If omitted, language is auto-detected."
-            },
-            {
-                "label": "Model",
-                "fieldname": "model",
-                "type": "string",
-                "required": 0,
-                "description": "Optional transcription model. Defaults based on provider: OpenAI/Groq use 'whisper-1', Groq can use 'groq/whisper-large-v3', Deepgram uses 'deepgram/nova-2'."
-            }
-        ]
-        
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
@@ -524,7 +591,118 @@ def create_transcribe_audio_tool():
         try:
             tool_doc.insert()
         except Exception as e:
-            frappe.log_error(f"Error creating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Creation")
+            logger.warning(f"Error creating transcribe_audio tool: {e!s}")
+
+def create_huf_roles():
+	"""
+	Idempotent: create the four default Huf Roles and their backing Frappe
+	Roles, then ensure Administrator has the Huf Admin role.
+
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.permissions import DEFAULT_ROLE_CAPABILITIES, HUF_ROLE_FRAPPE_ROLE_MAP
+
+	# 1. Ensure Frappe Role records exist for Huf-managed roles.
+	for frappe_role_name in ["Huf Manager", "Huf User", "Huf Viewer"]:
+		if not frappe.db.exists("Role", frappe_role_name):
+			frappe.get_doc({
+				"doctype": "Role",
+				"role_name": frappe_role_name,
+				"desk_access": 1,
+			}).insert(ignore_permissions=True)
+
+
+	# 2. Create (or update) the four Huf Role documents.
+	role_meta = [
+		{
+			"role_name": "Huf Admin",
+			"description": "Full system control. Can manage providers, users, roles, agents, tools, flows, and knowledge.",
+			"is_system_role": 1,
+			"frappe_role": "System Manager",
+		},
+		{
+			"role_name": "Huf Manager",
+			"description": "Operational control. Can create and manage agents, flows, and knowledge. Cannot manage users or system settings.",
+			"is_system_role": 1,
+			"frappe_role": "Huf Manager",
+		},
+		{
+			"role_name": "Huf User",
+			"description": "End user. Can use agents, chat, and flows. Cannot create or configure them.",
+			"is_system_role": 1,
+			"frappe_role": "Huf User",
+		},
+		{
+			"role_name": "Huf Viewer",
+			"description": "Read-only access. Can view agents and own conversations only.",
+			"is_system_role": 1,
+			"frappe_role": "Huf Viewer",
+		},
+	]
+
+	for meta in role_meta:
+		caps = DEFAULT_ROLE_CAPABILITIES.get(meta["role_name"], [])
+		if not frappe.db.exists("Huf Role", meta["role_name"]):
+			doc = frappe.get_doc({"doctype": "Huf Role", **meta})
+			for cap in caps:
+				doc.append("permissions", {"capability": cap})
+			doc.insert(ignore_permissions=True)
+		else:
+			# Ensure capability rows are present (idempotent update).
+			doc = frappe.get_doc("Huf Role", meta["role_name"])
+			existing_caps = {row.capability for row in doc.permissions}
+			changed = False
+			for cap in caps:
+				if cap not in existing_caps:
+					doc.append("permissions", {"capability": cap})
+					changed = True
+			if changed:
+				doc.save(ignore_permissions=True)
+
+	# 4. Ensure Administrator has the Huf Admin role.
+	if not frappe.db.exists("Huf User Role", {"user": "Administrator"}):
+		frappe.get_doc({
+			"doctype": "Huf User Role",
+			"user": "Administrator",
+			"huf_role": "Huf Admin",
+			"enabled": 1,
+		}).insert(ignore_permissions=True)
+
+	# 5. Migration path: assign existing System Managers to Huf Admin if they
+	#    don't already have a Huf User Role record.
+	_migrate_existing_system_managers()
+
+	frappe.db.commit()
+
+
+def _migrate_existing_system_managers():
+	"""
+	One-time migration: give existing System Manager users the Huf Admin
+	role so they keep access after the new check_app_permission goes live.
+	"""
+	system_managers = frappe.get_all(
+		"Has Role",
+		filters={"role": "System Manager", "parenttype": "User"},
+		fields=["parent"],
+		ignore_permissions=True,
+	)
+	for row in system_managers:
+		user = row.parent
+		if user in ("Administrator", "Guest"):
+			continue
+		if not frappe.db.exists("Huf User Role", {"user": user}):
+			try:
+				frappe.get_doc({
+					"doctype": "Huf User Role",
+					"user": user,
+					"huf_role": "Huf Admin",
+					"enabled": 1,
+				}).insert(ignore_permissions=True)
+			except Exception:
+				pass  # Non-fatal; user can be assigned manually
+
+
+
 
 def create_flow_tools():
     """Create the flow management tools in Agent Tool Function DocType."""
@@ -571,7 +749,7 @@ def create_flow_tools():
             try:
                 tool_doc.save(ignore_permissions=True)
             except Exception as e:
-                frappe.log_error(f"Error updating {tool_name} tool: {str(e)}", "Flow Tool Update")
+                logger.warning(f"Error updating {tool_name} tool: {e!s}")
         else:
             # Create new tool
             tool_doc = frappe.get_doc({
@@ -588,4 +766,184 @@ def create_flow_tools():
             try:
                 tool_doc.insert(ignore_permissions=True)
             except Exception as e:
-                frappe.log_error(f"Error creating {tool_name} tool: {str(e)}", "Flow Tool Creation")
+                logger.warning(f"Error creating {tool_name} tool: {e!s}")
+
+def remove_deprecated_gemini_audio_tools():
+    """Remove deprecated Gemini-native audio tools replaced by unified generate/transcribe tools."""
+    deprecated_tools = ["gemini_generate_audio", "gemini_transcribe_audio"]
+
+    for tool_name in deprecated_tools:
+        tool_docname = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "name")
+        if tool_docname:
+            try:
+                frappe.delete_doc("Agent Tool Function", tool_docname, ignore_permissions=True, force=True)
+            except Exception as e:
+                logger.warning(f"Error removing deprecated tool {tool_name}: {e!s}")
+
+def register_integration_services():
+	"""
+	Register built-in integration services in the Integration Service DocType.
+	These services represent external APIs that agents can interact with.
+	"""
+	import json
+	
+	# Define all built-in services with their required credentials
+	services = [
+		# Communication Tools
+		{
+			"service_name": "slack",
+			"category": "Communication",
+			"description": "Slack messaging and channel management",
+			"required_credentials": [{"key": "token", "label": "Slack Bot Token", "required": True}]
+		},
+		{
+			"service_name": "discord",
+			"category": "Communication",
+			"description": "Discord bot for messaging and channel management",
+			"required_credentials": [{"key": "bot_token", "label": "Discord Bot Token", "required": True}]
+		},
+		{
+			"service_name": "telegram",
+			"category": "Communication",
+			"description": "Telegram bot for messaging",
+			"required_credentials": [{"key": "token", "label": "Telegram Bot Token", "required": True}]
+		},
+		
+		# Developer Tools
+		{
+			"service_name": "github",
+			"category": "Developer",
+			"description": "GitHub API for repository and issue management",
+			"required_credentials": [{"key": "access_token", "label": "GitHub Access Token", "required": True}]
+		},
+		
+		# Project Management Tools
+		{
+			"service_name": "jira",
+			"category": "Project Management",
+			"description": "Jira issue tracking and project management",
+			"required_credentials": [
+				{"key": "server_url", "label": "Jira Server URL", "required": True},
+				{"key": "username", "label": "Username", "required": True},
+				{"key": "token", "label": "API Token", "required": True}
+			]
+		},
+		
+		# Google Workspace Tools
+		{
+			"service_name": "gmail",
+			"category": "Google",
+			"description": "Gmail email management",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
+		{
+			"service_name": "google_calendar",
+			"category": "Google",
+			"description": "Google Calendar event management",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
+		{
+			"service_name": "google_drive",
+			"category": "Google",
+			"description": "Google Drive file management",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
+		{
+			"service_name": "google_sheets",
+			"category": "Google",
+			"description": "Google Sheets management",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
+		{
+			"service_name": "google_maps",
+			"category": "Google",
+			"description": "Google Maps directions and geocoding",
+			"required_credentials": [
+				{"key": "api_key", "label": "Google Maps API Key", "required": True}
+			]
+		},
+		{
+			"service_name": "google_meet",
+			"category": "Google",
+			"description": "Google Meet meeting space creation",
+			"required_credentials": [
+				{"key": "client_id", "label": "Google Client ID", "required": True},
+				{"key": "client_secret", "label": "Google Client Secret", "required": True},
+				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
+			]
+		},
+	]
+	
+	# Create or update each service
+	for service_data in services:
+		try:
+			# Check if service already exists
+			if frappe.db.exists("Integration Service", service_data["service_name"]):
+				# Update existing service
+				doc = frappe.get_doc("Integration Service", service_data["service_name"])
+				doc.category = service_data["category"]
+				doc.description = service_data["description"]
+				doc.required_credentials = json.dumps(service_data["required_credentials"])
+				doc.is_builtin = 1
+				doc.save()
+			else:
+				# Create new service
+				doc = frappe.get_doc({
+					"doctype": "Integration Service",
+					"service_name": service_data["service_name"],
+					"category": service_data["category"],
+					"description": service_data["description"],
+					"required_credentials": json.dumps(service_data["required_credentials"]),
+					"is_builtin": 1
+				})
+				doc.insert()
+				
+		except Exception as e:
+			logger.warning(f"Failed to register integration service {service_data['service_name']}: {e!s}")
+			continue
+	
+	frappe.db.commit()
+
+
+def sync_tool_types():
+	"""
+	Ensure that all tool type categories from the registry exist as Agent Tool Type documents.
+	"""
+	from huf.ai.tools._registry import ALL_INTEGRATION_TOOLS
+	
+	# Extract unique categories
+	categories = set()
+	for tool in ALL_INTEGRATION_TOOLS:
+		category = tool.get("category", "Other")
+		categories.add(category)
+	
+	# Create or verify each category exists as Agent Tool Type
+	for category in categories:
+		try:
+			if not frappe.db.exists("Agent Tool Type", category):
+				doc = frappe.get_doc({
+					"doctype": "Agent Tool Type",
+					"name1": category
+				})
+				doc.insert()
+		except Exception as e:
+			logger.warning(f"Failed to create tool type {category}: {e!s}")
+			continue
+	
+	frappe.db.commit()

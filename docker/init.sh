@@ -5,8 +5,8 @@ echo "Setting up HUF environment..."
 echo "This is a one-time setup and may take 5–8 minutes. Please do not interrupt."
 
 SITE_NAME=${SITE_NAME:-huf.localhost}
-DB_ROOT_PW=${DB_ROOT_PW:-123}
-ADMIN_PW=${ADMIN_PW:-admin}
+DB_ROOT_PW=${DB_ROOT_PW:-huf_dev_mysql_root}
+ADMIN_PW=${ADMIN_PW:-huf_dev_admin}
 HUF_REPO=${HUF_REPO:-https://github.com/tridz-dev/huf.git}
 HUF_BRANCH=${HUF_BRANCH:-develop}
 

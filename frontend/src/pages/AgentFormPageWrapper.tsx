@@ -4,7 +4,10 @@ import { UnifiedLayout } from '../layouts/UnifiedLayout';
 import { AgentFormPage } from './AgentFormPage';
 import { getAgent } from '../services/agentApi';
 
-export function AgentFormPageWrapper() {
+export { AgentFormPageWrapper };
+export default AgentFormPageWrapper;
+
+function AgentFormPageWrapper() {
   const { id } = useParams<{ id: string }>();
   const [agentName, setAgentName] = useState<string>('New Agent');
   const isNew = id === 'new';

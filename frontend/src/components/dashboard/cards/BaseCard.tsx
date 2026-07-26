@@ -18,10 +18,10 @@ export function BaseCard({
   return (
     <Card
       className={cn(
-        'relative bg-card text-card-foreground rounded-md border shadow-sm h-full',
-        hover && 'transition-shadow',
+        'relative h-full',
+        hover && 'transition-colors',
         onClick && 'cursor-pointer',
-        hover && onClick && 'hover:shadow-lg',
+        hover && onClick && 'hover:border-ink',
         className
       )}
       onClick={onClick}

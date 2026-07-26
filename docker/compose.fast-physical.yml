@@ -1,0 +1,291 @@
+# FasterDocker fast warm-boot compose — physical MariaDB snapshot mode
+#
+# Usage:
+#   export HUF_IMAGE_TAG=$(git rev-parse --short HEAD)
+#   docker compose -p fasterdocker -f docker/compose.fast-physical.yml up --wait
+#
+# This is a standalone compose file for physical snapshot mode. It differs from
+# compose.fast.yml in that the seed-init container copies the sites folder BEFORE
+# MariaDB starts, and the MariaDB container image is the seed image itself, which
+# includes the prebuilt /var/lib/mysql snapshot and a custom entrypoint that
+# copies the snapshot into the empty volume before starting mysqld.
+
+name: fasterdocker
+
+x-frappe-env: &frappe_env
+  SITE_NAME: ${SITE_NAME:-huf.localhost}
+  FRAPPE_SITE_NAME_HEADER: ${SITE_NAME:-huf.localhost}
+  DB_HOST: mariadb
+  DB_PORT: "3306"
+  REDIS_CACHE: redis://redis-cache:6379
+  REDIS_QUEUE: redis://redis-queue:6379
+  REDIS_SOCKETIO: redis://redis-socketio:6379
+  FRAPPE_REDIS_CACHE: redis://redis-cache:6379
+  FRAPPE_REDIS_QUEUE: redis://redis-queue:6379
+
+services:
+  mariadb:
+    container_name: fasterdocker-run-mariadb
+    # Physical seed image is based on the exact MariaDB image used at bake time.
+    image: ${SEED_IMAGE:-huf-site-seed-physical}:${HUF_IMAGE_TAG:-latest}
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
+    entrypoint: ["/seed/physical-mariadb-entrypoint.sh"]
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-fasterdocker-mysql-root}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    depends_on:
+      seed-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - fasterdocker
+
+  redis-cache:
+    container_name: fasterdocker-run-redis-cache
+    image: redis:6.2-alpine
+    volumes:
+      - redis-cache-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 2s
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fasterdocker
+
+  redis-queue:
+    container_name: fasterdocker-run-redis-queue
+    image: redis:6.2-alpine
+    volumes:
+      - redis-queue-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 2s
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fasterdocker
+
+  redis-socketio:
+    container_name: fasterdocker-run-redis-socketio
+    image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 2s
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fasterdocker
+
+  seed-init:
+    container_name: fasterdocker-seed-init
+    image: ${SEED_IMAGE:-huf-site-seed-physical}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      SEED_STRATEGY: physical
+      SITE_NAME: ${SITE_NAME:-huf.localhost}
+      DB_HOST: mariadb
+      SEED_SOURCE_DIR: /seed
+      SEED_TARGET_DIR: /seed-target
+      PHYSICAL_COPY_MYSQL_DATA: "false"
+    volumes:
+      - sites:/seed-target/sites
+    command: ["/seed/init-seed.sh"]
+    restart: "no"
+    networks:
+      - fasterdocker
+
+  web:
+    container_name: fasterdocker-run-web
+    image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      <<: *frappe_env
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-4}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    depends_on:
+      seed-init:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+      redis-socketio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: ${SITE_NAME:-huf.localhost}", "http://localhost:8000/api/method/ping"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - fasterdocker
+
+  worker-short:
+    container_name: fasterdocker-run-worker-short
+    image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      <<: *frappe_env
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    command: ["bench", "worker", "--queue", "short,default"]
+    depends_on:
+      seed-init:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      start_period: 5s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - fasterdocker
+
+  worker-long:
+    container_name: fasterdocker-run-worker-long
+    image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      <<: *frappe_env
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    command: ["bench", "worker", "--queue", "long,default,short"]
+    depends_on:
+      seed-init:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      start_period: 5s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - fasterdocker
+
+  scheduler:
+    container_name: fasterdocker-run-scheduler
+    image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      <<: *frappe_env
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    command: ["bench", "schedule"]
+    depends_on:
+      seed-init:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      start_period: 5s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - fasterdocker
+
+  socketio:
+    container_name: fasterdocker-run-socketio
+    image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      FRAPPE_REDIS_CACHE: redis://redis-cache:6379
+      FRAPPE_REDIS_QUEUE: redis://redis-queue:6379
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    command: ["node", "/home/frappe/frappe-bench/apps/frappe/socketio.js"]
+    depends_on:
+      seed-init:
+        condition: service_completed_successfully
+      redis-cache:
+        condition: service_healthy
+      redis-socketio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      start_period: 5s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - fasterdocker
+
+  frontend:
+    container_name: fasterdocker-run-frontend
+    image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      BACKEND: web:8000
+      SOCKETIO: socketio:9000
+      FRAPPE_SITE_NAME_HEADER: ${SITE_NAME:-huf.localhost}
+      UPSTREAM_REAL_IP_ADDRESS: ${UPSTREAM_REAL_IP_ADDRESS:-127.0.0.1}
+      UPSTREAM_REAL_IP_HEADER: ${UPSTREAM_REAL_IP_HEADER:-X-Forwarded-For}
+      UPSTREAM_REAL_IP_RECURSIVE: ${UPSTREAM_REAL_IP_RECURSIVE:-off}
+      PROXY_READ_TIMEOUT: ${PROXY_READ_TIMEOUT:-120}
+      CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-50m}
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    ports:
+      - "${FRONTEND_PUBLISH_PORT:-8080}:8080"
+    depends_on:
+      web:
+        condition: service_healthy
+      socketio:
+        condition: service_healthy
+    command: ["/usr/local/bin/nginx-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: ${SITE_NAME:-huf.localhost}", "http://localhost:8080/api/method/ping"]
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 6
+    networks:
+      - fasterdocker
+
+volumes:
+  mariadb-data:
+  sites:
+  logs:
+  redis-cache-data:
+  redis-queue-data:
+
+networks:
+  fasterdocker:
+    driver: bridge

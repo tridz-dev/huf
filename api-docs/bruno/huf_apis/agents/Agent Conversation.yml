@@ -1,0 +1,25 @@
+info:
+  name: Agent Conversation
+  type: http
+  seq: 8
+
+http:
+  method: GET
+  url: '{{BASE_URL}}/api/resource/Agent%20Conversation?fields=["name","title","agent","model","total_tokens","total_cost"]&limit_page_length=0&as_dict=true'
+  params:
+    - name: fields
+      value: '["name","title","agent","model","total_tokens","total_cost"]'
+      type: query
+    - name: limit_page_length
+      value: "0"
+      type: query
+    - name: as_dict
+      value: "true"
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -46,6 +46,18 @@ class TextExtractor(ABC):
 			"docx": "huf.ai.knowledge.extractors.docx.DocxExtractor",
 			".docx": "huf.ai.knowledge.extractors.docx.DocxExtractor",
 			
+			# Excel
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+				"huf.ai.knowledge.extractors.xlsx.XlsxExtractor",
+			"xlsx": "huf.ai.knowledge.extractors.xlsx.XlsxExtractor",
+			".xlsx": "huf.ai.knowledge.extractors.xlsx.XlsxExtractor",
+			
+			# PowerPoint
+			"application/vnd.openxmlformats-officedocument.presentationml.presentation":
+				"huf.ai.knowledge.extractors.pptx.PptxExtractor",
+			"pptx": "huf.ai.knowledge.extractors.pptx.PptxExtractor",
+			".pptx": "huf.ai.knowledge.extractors.pptx.PptxExtractor",
+			
 			# Text
 			"text/plain": "huf.ai.knowledge.extractors.text.TextExtractor",
 			"txt": "huf.ai.knowledge.extractors.text.TextExtractor",

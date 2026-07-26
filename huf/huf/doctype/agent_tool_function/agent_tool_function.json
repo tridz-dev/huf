@@ -167,6 +167,26 @@
   {
    "fieldname": "section_break_ajuk",
    "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "seeding_metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Seeding Metadata",
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "label": "Source App",
+   "read_only": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "label": "Source File",
+   "read_only": 1,
+   "hidden": 1
   }
  ],
  "grid_page_length": 50,
@@ -190,6 +210,30 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 0
   }
  ],
  "row_format": "Dynamic",

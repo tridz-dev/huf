@@ -50,7 +50,7 @@ export function FilterBar({
   };
 
   return (
-    <div className="flex gap-4 items-center">
+    <div className="flex flex-wrap gap-4 items-center">
       {onSearchChange && (
         <>
           {collapsibleSearch ? (
@@ -58,7 +58,7 @@ export function FilterBar({
               {isSearchExpanded ? (
                 <div className="relative flex items-center gap-2">
                   <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-soft" />
                     <Input
                       placeholder={searchPlaceholder}
                       className="pl-9 pr-9"
@@ -89,7 +89,7 @@ export function FilterBar({
             </div>
           ) : (
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-soft" />
               <Input
                 placeholder={searchPlaceholder}
                 className="pl-9"

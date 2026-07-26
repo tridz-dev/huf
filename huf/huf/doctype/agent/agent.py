@@ -1,6 +1,8 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -9,10 +11,7 @@ from frappe.utils import now_datetime
 from huf.ai.agent_integration import run_agent_sync 
 import random
 
-try:
-    from litellm.utils import supports_prompt_caching
-except ImportError:
-    supports_prompt_caching = None
+from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.orchestration.orchestrator import parse_plan_steps, create_orchestration
@@ -56,51 +55,171 @@ def get_permission_query_conditions(user):
     """
     return conditions
 
+
+def _check_model_supports_caching(model_name: str, provider_name: str) -> bool:
+    """Thin wrapper — delegates to the shared capabilities module."""
+    return model_supports_prompt_caching(model_name, provider_name)
+
+def _get_cacheable_models_for_provider(
+    provider_doc_name: str, provider_name: str, exclude_model: str = None
+) -> list:
+    try:
+        all_models = frappe.get_all(
+            "AI Model",
+            filters={"provider": provider_doc_name},
+            fields=["name", "model_name"],
+        )
+    except Exception:
+        return []
+
+    cacheable = []
+    for m in all_models:
+        mn = m.get("model_name") or m.get("name")
+        if exclude_model and mn == exclude_model:
+            continue
+        if _check_model_supports_caching(mn, provider_name):
+            cacheable.append(mn)
+
+    return cacheable
+
+
+@frappe.whitelist()
+def get_cacheable_models(provider: str, model: str = None) -> dict:
+    if not provider:
+        return {"supported": False, "alternatives": []}
+
+    model_name = None
+    if model:
+        model_name = frappe.db.get_value("AI Model", model, "model_name") or model
+
+    provider_name = frappe.db.get_value("AI Provider", provider, "provider_name") or provider
+
+    supported = False
+    if model_name:
+        supported = _check_model_supports_caching(model_name, provider_name)
+
+    alternatives = _get_cacheable_models_for_provider(
+        provider_doc_name=provider,
+        provider_name=provider_name,
+        exclude_model=model_name,
+    )
+
+    return {"supported": supported, "alternatives": alternatives}
+
 class Agent(Document):
     def validate(self):
         self._validate_prompt()
+        self._validate_summary_prompt()
 
         if self.allow_chat == 1 and self.persist_conversation == 0:
             frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
-        
+
         # Validate prompt caching configuration
         if self.enable_prompt_caching:
-            if not self.model:
-                frappe.throw(_("Model must be selected to enable prompt caching."))
-            
-            # Check if model supports prompt caching
-            if supports_prompt_caching:
-                try:
-                    model_doc = frappe.get_doc("AI Model", self.model)
-                    model_name = model_doc.model_name
-                    provider_doc = frappe.get_doc("AI Provider", self.provider)
-                    provider_name = provider_doc.provider_name or provider_doc.name
-                    
-                    # Normalize model name (add provider prefix if needed)
-                    normalized_model = model_name
-                    if "/" not in model_name:
-                        provider_prefix_map = {
-                            "openai": "openai",
-                            "anthropic": "anthropic",
-                            "google": "gemini",
-                            "gemini": "gemini",
-                            "deepseek": "deepseek",
-                        }
-                        prefix = provider_prefix_map.get(provider_name.lower(), provider_name.lower())
-                        normalized_model = f"{prefix}/{model_name}"
-                    
-                    if not supports_prompt_caching(model=normalized_model):
-                        frappe.msgprint(
-                            _("Warning: The selected model may not support prompt caching. "
-                              "Caching will be disabled for this model."),
-                            indicator="orange"
-                        )
-                except Exception as e:
-                    frappe.log_error(
-                        f"Error validating prompt caching support: {str(e)}",
-                        "Agent Prompt Caching Validation"
-                    )
+            self._validate_prompt_caching()
 
+        self._validate_advanced_models()
+        self._update_mcp_tool_counts()
+
+    def _update_mcp_tool_counts(self):
+        """Populate each agent_mcp_server row's tool_count from its linked MCP Server.
+
+        Done here rather than in AgentMCPServer.before_save()/before_insert():
+        child-table controller hooks don't fire on parent document save in
+        Frappe v16.
+        """
+        for row in self.agent_mcp_server:
+            if not row.mcp_server:
+                continue
+            try:
+                mcp_doc = frappe.get_doc("MCP Server", row.mcp_server)
+                if mcp_doc.available_tools:
+                    tools = json.loads(mcp_doc.available_tools)
+                    row.tool_count = len(tools) if isinstance(tools, list) else 0
+                else:
+                    row.tool_count = 0
+            except Exception:
+                row.tool_count = 0
+
+    def _validate_advanced_models(self):
+        def _has_modality(model_docname: str, required: str) -> bool:
+            if not model_docname:
+                return True
+            modalities = frappe.db.get_value("AI Model", model_docname, "modalities") or ""
+            # MultiSelect is stored as CSV
+            items = {m.strip() for m in modalities.split(",") if m and m.strip()}
+            return required in items
+
+        # Image generation model
+        if getattr(self, "image_generation_model", None):
+            if not _has_modality(self.image_generation_model, "Image"):
+                frappe.throw(
+                    _("Selected Image Generation Model does not support modality: Image"),
+                    title=_("Invalid Model Capability"),
+                )
+
+        # TTS model
+        if getattr(self, "tts_model", None):
+            if not _has_modality(self.tts_model, "Text-to-Speech"):
+                frappe.throw(
+                    _("Selected TTS Model does not support modality: Text-to-Speech"),
+                    title=_("Invalid Model Capability"),
+                )
+
+        # STT model (audio transcription)
+        if getattr(self, "stt_model", None):
+            if not _has_modality(self.stt_model, "Transcription"):
+                frappe.throw(
+                    _("Selected STT Model does not support modality: Transcription"),
+                    title=_("Invalid Model Capability"),
+                )
+
+    def _validate_prompt_caching(self):
+        if not self.model:
+            frappe.throw(_("A model must be selected before enabling prompt caching."))
+        try:
+            model_doc = frappe.get_doc("AI Model", self.model)
+            model_name = model_doc.model_name or model_doc.name
+            provider_name = (
+                frappe.db.get_value("AI Provider", self.provider, "provider_name")
+                or self.provider
+            )
+        except Exception as e:
+            frappe.log_error(
+                f"Error loading model/provider for caching validation: {e}",
+                "Agent Prompt Caching Validation",
+            )
+            return
+        if _check_model_supports_caching(model_name, provider_name):
+            return  
+        alternatives = _get_cacheable_models_for_provider(
+            provider_doc_name=self.provider,
+            provider_name=provider_name,
+            exclude_model=model_name,
+        )
+
+        msg = _(
+            "The selected model <b>{model}</b> does not support prompt caching."
+        ).format(model=model_name)
+
+        if alternatives:
+            shown = alternatives[:5]
+            alt_html = ", ".join(f"<b>{a}</b>" for a in shown)
+            msg += "<br><br>"
+            msg += _("Supported models from <b>{provider}</b>: {models}.").format(
+                provider=provider_name,
+                models=alt_html,
+            )
+            if len(alternatives) > 5:
+                msg += " " + _("(and {n} more)").format(n=len(alternatives) - 5)
+        else:
+            msg += "<br><br>"
+            msg += _(
+                "No other models from <b>{provider}</b> currently support prompt caching. "
+                "Please disable prompt caching or switch to a different provider."
+            ).format(provider=provider_name)
+
+        frappe.throw(msg, title=_("Prompt Caching Not Supported"))
 
 
     def _validate_prompt(self):
@@ -123,6 +242,24 @@ class Agent(Document):
         if self.agent_prompt:
             version = frappe.db.get_value("Agent Prompt", self.agent_prompt, "version")
             self.template_version_at_attach = version or 1
+
+    def _validate_summary_prompt(self):
+        """Validate summary prompt configuration based on summary_prompt_mode."""
+        mode = self.summary_prompt_mode or "Local"
+
+        if mode == "Template":
+            if not self.summary_prompt_template:
+                frappe.throw(_("Please select an Agent Summary Prompt when using Template mode for Summary Prompt."))
+            if self.has_value_changed("summary_prompt_template") or not self.summary_template_version_at_attach:
+                self._record_summary_template_version()
+
+    def _record_summary_template_version(self):
+        """Snapshot the current version of the linked Agent Summary Prompt."""
+        if self.summary_prompt_template:
+            version = frappe.db.get_value(
+                "Agent Summary Prompt", self.summary_prompt_template, "version"
+            )
+            self.summary_template_version_at_attach = version or 1
 
     def get_indicator(doc):
         if doc.disabled:
@@ -181,7 +318,8 @@ class Agent(Document):
                 prompt=planning_prompt,
                 provider=self.provider,
                 model=self.model,
-                channel_id="orchestration_planning"
+                channel_id="orchestration_planning",
+                now=True
             )
             
             planning_run_id = result.get("agent_run_id")
@@ -251,17 +389,32 @@ class Agent(Document):
 
     
     def has_permission(self, permission_type=None, verbose=False):
+        from huf.permissions import has_capability
         user = frappe.session.user
 
-        # System Manager and Owner always have access
-        if "System Manager" in frappe.get_roles(user) or self.owner == user:
+        # System Manager always has full access
+        if "System Manager" in frappe.get_roles(user):
+            return True
+
+        # Strict Capability Checks for Mutating Actions
+        if permission_type == "create":
+            return has_capability(user, "agent.create")
+        
+        if permission_type in ("write", "save"):
+            return has_capability(user, "agent.edit")
+
+        if permission_type == "delete":
+            return has_capability(user, "agent.delete")
+
+        # Access/Read Permissions
+        if self.owner == user:
             return True
 
         # Fetch the restrictions from the child tables
         allowed_users = [d.user for d in self.allowed_users]
         allowed_roles = [d.role for d in self.allowed_roles]
 
-        # If both lists are empty, anyone can access.
+        # If both lists are empty, anyone can access (standard Huf behavior)
         if not allowed_users and not allowed_roles:
             return True
 

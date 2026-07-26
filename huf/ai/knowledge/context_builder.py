@@ -45,6 +45,7 @@ def build_knowledge_context(
 				query=user_query,
 				knowledge_source=source_name,
 				top_k=max_chunks,
+				ignore_permissions=True,  # Agent has explicit knowledge linkage
 			)
 			
 			if results:

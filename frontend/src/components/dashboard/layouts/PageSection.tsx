@@ -22,10 +22,12 @@ export function PageSection({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             {title && (
-              <h2 className="text-lg font-semibold">{title}</h2>
+              <h2 className="font-display font-bold text-[18px] uppercase tracking-[.02em] text-ink">
+                {title}
+              </h2>
             )}
             {description && (
-              <p className="text-sm text-muted-foreground">{description}</p>
+              <p className="text-steel text-[13px]">{description}</p>
             )}
           </div>
           {actions && <div className="flex items-center gap-2">{actions}</div>}
