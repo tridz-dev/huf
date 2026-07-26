@@ -51,7 +51,11 @@ class PermissionAwareToolRegistry:
             try:
                 tool_doc = frappe.get_doc("Agent Tool Function", tool_link.tool)
                 
-                if cls._can_use_tool(tool_doc, user):
+                if (
+                    cls._can_use_tool(tool_doc, user)
+                    and cls._allows_code_execution(tool_doc, agent_doc, user)
+                    and cls._allows_ssh_execution(tool_doc, agent_doc, user)
+                ):
                     all_tools.append(tool_doc)
 
             except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError) as e:
@@ -97,6 +101,73 @@ class PermissionAwareToolRegistry:
                     return False
                      
         return True
+
+    @classmethod
+    def _allows_code_execution(cls, tool_doc, agent_doc, user: str) -> bool:
+        """Additional gate for tools of type 'Code Execution'.
+
+        A Code Execution tool is only returned when ALL of:
+          (a) the acting user holds the ``code_execution.run`` capability;
+          (b) the agent has ``allow_code_execution`` enabled;
+          (c) the agent references an Execution Profile that is not disabled.
+        Tools of any other type pass straight through this gate.
+        """
+        if tool_doc.types != "Code Execution":
+            return True
+
+        from huf.permissions import has_capability
+
+        # (a) acting user must be allowed to run code at all.
+        if not has_capability(user, "code_execution.run"):
+            return False
+
+        # (b) the agent must have code execution enabled.
+        if not getattr(agent_doc, "allow_code_execution", None):
+            return False
+
+        # (c) the agent must reference an enabled Execution Profile.
+        profile_name = getattr(agent_doc, "execution_profile", None)
+        if not profile_name:
+            return False
+
+        disabled = frappe.db.get_value("Execution Profile", profile_name, "disabled")
+        if disabled is None or disabled:
+            return False
+
+        return True
+
+    @classmethod
+    def _allows_ssh_execution(cls, tool_doc, agent_doc, user: str) -> bool:
+        """Additional gate for the app-provided SSH execution tool."""
+        function_path = (getattr(tool_doc, "function_path", None) or "").strip()
+        tool_name = (getattr(tool_doc, "tool_name", None) or "").strip()
+        is_ssh_tool = (
+            function_path == "huf.ai.tools.ssh_execution.run_ssh_command"
+            or tool_name == "run_ssh_command"
+        )
+        if not is_ssh_tool:
+            return True
+
+        from huf.permissions import has_capability
+
+        if not has_capability(user, "ssh.run"):
+            return False
+
+        if not getattr(agent_doc, "allow_ssh", None):
+            return False
+
+        connections = getattr(agent_doc, "ssh_connections", None) or []
+        if not connections:
+            return False
+
+        for row in connections:
+            connection_name = getattr(row, "ssh_connection", None)
+            if not connection_name:
+                continue
+            enabled = frappe.db.get_value("SSH Connection", connection_name, "enabled")
+            if enabled:
+                return True
+        return False
 
 def _get_app_modified_time(app_name):
     """

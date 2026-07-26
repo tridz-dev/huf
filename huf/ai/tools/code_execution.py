@@ -1,0 +1,1419 @@
+"""Python code execution tool — dispatcher, RQ enqueue, and worker (Phase 3).
+
+This module is the ``function_path`` target for an ``Agent Tool Function`` of
+type ``Code Execution`` (mirroring the other ``App Provided`` tools in
+``huf/ai/tools/_registry.py``). The LLM-facing entrypoint is :func:`run_python`.
+
+Flow:
+  1. :func:`run_python` validates the site/agent/profile gates, snapshots the
+     Execution Profile, creates an ``Agent Tool Call`` audit record, and either
+     enqueues execution (Auto Approve), parks it behind an
+     ``Agent Execution Approval`` record (Ask Every Time), or rejects it
+     (Never Allow).
+  2. :func:`enqueue_execution` submits :func:`execute_job` to the dedicated
+     ``code-execution`` RQ queue.
+  3. :func:`execute_job` (the RQ worker) subprocess-launches the isolated
+     interpreter via :func:`huf.ai.tools.execution_sandbox.run_sandboxed` and
+     writes the measured outcome back onto the ``Agent Tool Call``.
+
+The actual isolation boundary lives in ``execution_sandbox.py`` (which is
+frappe-free). This module is the only place that touches Frappe state.
+
+Running a worker for the queue (operator note)::
+
+    bench --site <site> worker --queue code-execution
+
+``huf/hooks.py`` does not need to declare the queue — ``frappe.enqueue(...,
+queue="code-execution")`` is sufficient as long as a worker listens on it.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import ipaddress
+import json
+import os
+import shutil
+import tempfile
+from typing import Any
+from urllib.parse import urlparse
+
+import frappe
+from frappe.utils import add_to_date, get_files_path, now_datetime
+from frappe.utils.file_manager import save_file
+
+from huf.ai.http_handler import handle_http_request
+from huf.ai.tool_functions import get_report_result
+from huf.ai.tools.execution_sandbox import (
+	DEFAULT_MAX_OUTPUT_BYTES,
+	DEFAULT_WALL_TIME_S,
+	MAX_SHARED_DIR_FILES,
+	RQ_WALL_GRACE_S,
+	DirCapExceeded,
+	ExecutionResult,
+	check_dir_caps,
+	diff_dir_snapshots,
+	measure_dir,
+	run_sandboxed,
+	snapshot_dir,
+)
+from huf.permissions import has_capability
+
+#: Tool name recorded on the audit record when the caller does not supply one.
+_TOOL_NAME = "run_python"
+
+#: How long an ``Ask Every Time`` approval stays valid before expiring.
+_APPROVAL_TTL_HOURS = 24
+
+#: Effective default for the per-conversation shared directory size cap (MB).
+#: The Execution Profile doctype carries no shared-dir field (see the Phase 4b
+#: report), so this constant is the profile-level default the plan refers to;
+#: ``Agent.execution_shared_dir_limit_mb`` may only override it DOWNWARD.
+DEFAULT_SHARED_DIR_LIMIT_MB = 100
+
+#: Files at or under this size that decode as UTF-8 text are written back with
+#: ``context_policy="include_summary"`` (text inlined into ``summary``);
+#: larger or binary files get ``include_reference``. Mirrors the Agent
+#: ``max_context_chars`` default (2000) — the codebase's existing threshold for
+#: inlining tool output into context vs. referencing it.
+ARTIFACT_TEXT_INLINE_BYTES = 2000
+
+#: Subdirectory of the site's private files area holding per-conversation
+#: shared directories (alongside the knowledge system's artifacts).
+_SHARED_DIR_SUBDIR = "code_execution"
+
+
+# ---------------------------------------------------------------------------
+# Small helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_site_enabled() -> bool:
+	"""Read the site kill switch ``huf_python_execution_enabled`` (default off)."""
+	val = frappe.conf.get("huf_python_execution_enabled")
+	if isinstance(val, bool):
+		return val
+	if val is None:
+		return False
+	if isinstance(val, (int, float)):
+		return bool(val)
+	return str(val).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _name_of(obj: Any) -> str | None:
+	"""Return the Frappe document name for a doc-or-name argument (or None)."""
+	if obj is None:
+		return None
+	return getattr(obj, "name", None) or str(obj)
+
+
+def _as_agent_doc(agent_doc: Any) -> Any:
+	"""Resolve ``agent_doc`` (Document or name) to an ``Agent`` document."""
+	if hasattr(agent_doc, "doctype"):
+		return agent_doc
+	return frappe.get_doc("Agent", agent_doc)
+
+
+def _sha256(code: str) -> str:
+	return hashlib.sha256((code or "").encode("utf-8")).hexdigest()
+
+
+def _parse_json_field(value: Any, default):
+	"""Normalize a Frappe JSON field that may arrive as dict/list or string."""
+	if value is None or value == "":
+		return default
+	if isinstance(value, (dict, list)):
+		return value
+	try:
+		return json.loads(value)
+	except (TypeError, ValueError):
+		return default
+
+
+def _build_profile_snapshot(profile) -> dict:
+	"""Build an immutable, JSON-serializable snapshot of an Execution Profile.
+
+	Stored verbatim on the ``Agent Tool Call`` so later edits to the profile do
+	not retroactively change the audit meaning of a past call.
+	"""
+	permissions = []
+	for row in profile.permissions or []:
+		permissions.append(
+			{
+				"capability": row.capability,
+				"reference_doctype": row.reference_doctype or None,
+				"is_read_only": bool(row.is_read_only),
+			}
+		)
+
+	return {
+		"profile_name": profile.profile_name,
+		"is_builtin": bool(profile.is_builtin),
+		"approval_mode": profile.approval_mode,
+		"filesystem_policy": profile.filesystem_policy,
+		"network_policy": profile.network_policy or None,
+		"allowed_modules": _parse_json_field(profile.allowed_modules, []),
+		"permissions": permissions,
+		"limits": {
+			"max_wall_time_s": int(profile.max_wall_time_s or 0),
+			"max_cpu_seconds": int(profile.max_cpu_seconds or 0),
+			"max_memory_mb": int(profile.max_memory_mb or 0),
+			"max_output_bytes": int(profile.max_output_bytes or 0),
+		},
+	}
+
+
+def _capability_summary(profile) -> str:
+	"""Comma-joined broker capabilities granted by the profile (for approvals)."""
+	caps = [r.capability for r in (profile.permissions or []) if r.capability]
+	return ", ".join(caps) if caps else "code_execution.run"
+
+
+def _truncate(text: str | None, limit: int) -> str | None:
+	if text is None:
+		return None
+	if len(text) <= limit:
+		return text
+	return text[:limit] + f"\n... [truncated; {len(text) - limit} chars omitted]"
+
+
+# ---------------------------------------------------------------------------
+# Shared directory — per-conversation workspace + artifact write-back (Phase 4b)
+#
+# When the profile's ``filesystem_policy`` is "Shared Directory", sandboxed
+# code works inside a real per-conversation directory under the site's private
+# files area. The directory is stable across executions of the same
+# conversation (a later message sees an earlier message's output files), is
+# seeded with the conversation's File artifacts before each run, is capped in
+# size and file count before AND after each run, and new/changed files are
+# written back as ``Agent Context Artifact`` records after each run. Every
+# failure here fails CLOSED: the call is rejected (audit row marked Failed)
+# rather than allowed to proceed with a degraded workspace.
+# ---------------------------------------------------------------------------
+
+
+def _conversation_dir_key(conversation_name: str) -> str:
+	"""Filesystem-safe, collision-proof directory key for a conversation name."""
+	name = str(conversation_name or "")
+	safe = "".join(ch if (ch.isalnum() or ch in "-_.") else "_" for ch in name)[:64].strip("._")
+	digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:12]
+	return f"{safe or 'conv'}-{digest}"
+
+
+def _shared_dir_for_conversation(conversation_name: str) -> str:
+	"""Resolve (creating on first use) the per-conversation shared directory.
+
+	Lives under the site's private files area (via ``get_files_path``, the same
+	helper the knowledge system uses) so it sits alongside uploaded attachments
+	and inherits the site's private-file storage/backup conventions. Keyed by
+	conversation id, so it is stable across executions of the same
+	conversation; never deleted between calls (nor by this module at all).
+	"""
+	base = get_files_path(is_private=True)
+	path = os.path.join(base, _SHARED_DIR_SUBDIR, _conversation_dir_key(conversation_name))
+	os.makedirs(path, exist_ok=True)
+	return path
+
+
+def _resolve_shared_dir_limit_mb(agent: Any) -> int:
+	"""Effective per-conversation shared-dir cap (MB) for an agent.
+
+	Falls back to :data:`DEFAULT_SHARED_DIR_LIMIT_MB` (the effective profile
+	default) when the agent sets no override. An agent-level override may only
+	LOWER the cap (plan: "overridable down only") — a higher override is an
+	invalid configuration and is REJECTED with a ValidationError rather than
+	silently clamped.
+	"""
+	agent = _as_agent_doc(agent)
+	override = getattr(agent, "execution_shared_dir_limit_mb", None)
+	if not override:
+		return DEFAULT_SHARED_DIR_LIMIT_MB
+	override = int(override)
+	if override > DEFAULT_SHARED_DIR_LIMIT_MB:
+		frappe.throw(
+			f"Shared Dir Limit (MB) on Agent '{agent.name}' is {override} MB, above the "
+			f"{DEFAULT_SHARED_DIR_LIMIT_MB} MB default. Agent-level limits may only override "
+			"the default downward; lower the agent value to proceed.",
+			frappe.ValidationError,
+		)
+	return override
+
+
+def _fail_call(call, message: str, *, limits_hit: bool) -> None:
+	"""Mark the audit row Failed around a rejected call (fail closed)."""
+	call.status = "Failed"
+	call.exit_status = "Error"
+	call.limits_hit = 1 if limits_hit else 0
+	call.error_message = _truncate(message, 60000)
+	call.save(ignore_permissions=True)
+
+
+def _seed_shared_dir(conversation_name: str, shared_dir: str) -> int:
+	"""Materialize the conversation's File artifacts into ``shared_dir``.
+
+	Copy, never symlink: the sandbox blocks symlink escapes by design (a
+	symlinked seed would be unreadable from inside the sandbox anyway), and a
+	plain copy is storage-agnostic (local or object-storage-backed File
+	records). Artifacts are applied oldest-first so the newest version of a
+	name wins; content already present in the persistent directory is never
+	overwritten — the live workspace is authoritative over historical
+	artifacts. Returns the number of files materialized this pass. An
+	unresolvable File record or an unsafe file name raises (fail closed: the
+	caller rejects the call).
+	"""
+	artifacts = frappe.get_all(
+		"Agent Context Artifact",
+		filters={"conversation": conversation_name, "artifact_type": "File"},
+		fields=["name", "payload_file", "creation"],
+		order_by="creation asc",
+	)
+	seeded_this_pass: set = set()
+	count = 0
+	for artifact in artifacts:
+		payload_file = artifact.get("payload_file")
+		if not payload_file:
+			continue
+		file_id = frappe.db.get_value("File", {"file_url": payload_file}, "name")
+		if not file_id:
+			raise FileNotFoundError(
+				f"seed artifact {artifact['name']}: no File record for {payload_file!r}"
+			)
+		file_doc = frappe.get_doc("File", file_id)
+		raw_name = file_doc.file_name or ""
+		base_name = os.path.basename(raw_name)
+		if not base_name or base_name != raw_name or base_name in (".", ".."):
+			raise ValueError(f"seed artifact {artifact['name']}: unsafe file name {raw_name!r}")
+		target = os.path.join(shared_dir, base_name)
+		if base_name not in seeded_this_pass and os.path.lexists(target):
+			# Pre-existing live workspace content wins over historical artifacts.
+			continue
+		with open(file_doc.get_full_path(), "rb") as fh:
+			content = fh.read()
+		with open(target, "wb") as fh:
+			fh.write(content)
+		seeded_this_pass.add(base_name)
+		count += 1
+	return count
+
+
+def _classify_artifact(name: str, content: bytes) -> tuple:
+	"""Pick ``(context_policy, summary, token_estimate)`` for a written-back file.
+
+	Small UTF-8 text (≤ ``ARTIFACT_TEXT_INLINE_BYTES``) is inlined into
+	``summary`` with ``include_summary``; anything larger or binary gets
+	``include_reference`` with a size note, so the model sees a handle rather
+	than a blob.
+	"""
+	if len(content) <= ARTIFACT_TEXT_INLINE_BYTES:
+		try:
+			text = content.decode("utf-8")
+		except UnicodeDecodeError:
+			text = None
+		if text is not None and "\x00" not in text:
+			return "include_summary", text, max(1, len(text) // 4)
+	summary = (
+		f"{name} ({len(content)} bytes) — binary or above the "
+		f"{ARTIFACT_TEXT_INLINE_BYTES}-byte inline threshold"
+	)
+	return "include_reference", summary, max(1, len(summary) // 4)
+
+
+def _write_back_artifacts(call, shared_dir: str, names: list) -> tuple:
+	"""Create one ``Agent Context Artifact`` per name; return ``(written, error)``.
+
+	Each file is attached through Frappe's normal private-file path
+	(``save_file(..., is_private=True)``, the same helper chat uploads use) and
+	linked on ``payload_file``. Stops at the first storage error and reports it
+	— fail closed: the caller marks the call Failed rather than silently
+	accepting a partial write-back. Files unchanged since the pre-execution
+	snapshot never reach this function (the diff happens in the caller), so
+	pre-existing seed files are not re-artifacted.
+	"""
+	written = 0
+	for name in names:
+		path = os.path.join(shared_dir, name)
+		try:
+			with open(path, "rb") as fh:
+				content = fh.read()
+			context_policy, summary, token_estimate = _classify_artifact(name, content)
+			artifact = frappe.get_doc(
+				{
+					"doctype": "Agent Context Artifact",
+					"conversation": call.conversation,
+					"agent_run": call.agent_run,
+					"artifact_type": "File",
+					"visibility": "user_visible",
+					"context_policy": context_policy,
+					"summary": summary,
+					"token_estimate": token_estimate,
+				}
+			)
+			artifact.insert(ignore_permissions=True)
+			saved = save_file(name, content, "Agent Context Artifact", artifact.name, is_private=True)
+			file_url = getattr(saved, "file_url", None) or (
+				saved.get("file_url") if isinstance(saved, dict) else None
+			)
+			if not file_url:
+				raise ValueError(f"save_file returned no file_url for {name!r}")
+			artifact.payload_file = file_url
+			artifact.save(ignore_permissions=True)
+			written += 1
+		except Exception as exc:  # noqa: BLE001 - report and stop (fail closed)
+			frappe.log_error(
+				f"artifact write-back failed for {name!r} in {shared_dir}: {exc}",
+				"Huf Code Execution",
+			)
+			return written, f"{type(exc).__name__}: {exc}"
+	return written, None
+
+
+def _prepare_shared_dir(call) -> dict | None:
+	"""Resolve, cap-check, seed and snapshot the per-conversation shared dir.
+
+	Returns a context dict for :func:`_finalize_shared_dir` when execution may
+	proceed, else ``None`` after marking the audit row Failed. Fails closed on:
+	missing conversation/agent context, an over-ceiling agent limit override,
+	a pre-existing cap violation, or any seed/storage error.
+	"""
+	conversation = call.conversation
+	if not conversation:
+		_fail_call(
+			call,
+			"Shared Directory filesystem policy requires a conversation context; "
+			"this tool call has none.",
+			limits_hit=False,
+		)
+		return None
+
+	agent_name = frappe.db.get_value("Agent Conversation", conversation, "agent")
+	if not agent_name:
+		_fail_call(
+			call,
+			f"Shared Directory filesystem policy cannot resolve the agent for "
+			f"conversation {conversation!r}.",
+			limits_hit=False,
+		)
+		return None
+
+	try:
+		limit_mb = _resolve_shared_dir_limit_mb(agent_name)
+	except frappe.ValidationError as exc:
+		_fail_call(call, str(exc), limits_hit=False)
+		return None
+
+	limit_bytes = limit_mb * 1024 * 1024
+	try:
+		shared_dir = _shared_dir_for_conversation(conversation)
+		# Pre-dispatch cap check: the persistent dir may already be over cap
+		# from earlier runs or uploads.
+		check_dir_caps(shared_dir, limit_bytes, MAX_SHARED_DIR_FILES)
+		_seed_shared_dir(conversation, shared_dir)
+		# Seed materialization is bounded by the same caps.
+		check_dir_caps(shared_dir, limit_bytes, MAX_SHARED_DIR_FILES)
+		before = snapshot_dir(shared_dir)
+	except DirCapExceeded as exc:
+		_fail_call(
+			call,
+			f"Shared directory cap exceeded before execution: {exc}. No files were deleted; "
+			"reduce the directory contents or raise the limit.",
+			limits_hit=True,
+		)
+		return None
+	except Exception as exc:  # noqa: BLE001 - storage/seed errors fail closed
+		frappe.log_error(
+			f"shared dir preparation failed for {call.name}: {exc}", "Huf Code Execution"
+		)
+		_fail_call(
+			call,
+			f"Shared directory could not be prepared: {type(exc).__name__}: {exc}",
+			limits_hit=False,
+		)
+		return None
+
+	return {"dir": shared_dir, "before": before, "limit_bytes": limit_bytes}
+
+
+def _finalize_shared_dir(call, ctx: dict) -> None:
+	"""Post-execution shared-dir handling; runs for every outcome (``finally``).
+
+	1. Measure + re-check the caps: an execution that leaves the directory over
+	   its size/file-count cap fails the call with ``limits_hit=1``. Nothing is
+	   deleted and no artifacts are written back in that case.
+	2. Otherwise diff against the pre-execution snapshot (content-hash based)
+	   and write each new/changed file back as an ``Agent Context Artifact``.
+	3. Fold ``shared_dir_bytes`` / ``artifacts_written`` into the existing
+	   ``resource_usage`` JSON (no new DocType fields).
+
+	Never raises: a finalizer bug must not mask the run's own outcome — it
+	marks the call Failed with the error and logs instead.
+	"""
+	try:
+		total_bytes, _count = measure_dir(ctx["dir"])
+		artifacts_written = 0
+		failure = None
+		try:
+			check_dir_caps(ctx["dir"], ctx["limit_bytes"], MAX_SHARED_DIR_FILES)
+		except DirCapExceeded as exc:
+			failure = (
+				f"Shared directory cap exceeded by execution output: {exc}. "
+				"No artifacts were written back and no files were deleted."
+			)
+			call.limits_hit = 1
+		if failure is None:
+			after = snapshot_dir(ctx["dir"])
+			new_names, changed_names = diff_dir_snapshots(ctx["before"], after)
+			artifacts_written, artifact_error = _write_back_artifacts(
+				call, ctx["dir"], new_names + changed_names
+			)
+			if artifact_error:
+				failure = (
+					f"Artifact write-back failed after {artifacts_written} file(s): "
+					f"{artifact_error}"
+				)
+		if failure is not None:
+			call.status = "Failed"
+			call.error_message = _truncate(
+				((call.error_message or "") + "\n" + failure).strip(), 60000
+			)
+		usage = call.resource_usage
+		if isinstance(usage, str):
+			usage = _parse_json_field(usage, {})
+		if not isinstance(usage, dict):
+			usage = {}
+		usage["shared_dir_bytes"] = int(total_bytes)
+		usage["artifacts_written"] = int(artifacts_written)
+		call.resource_usage = usage
+		call.save(ignore_permissions=True)
+	except Exception as exc:  # noqa: BLE001 - finalizer must never mask the run outcome
+		frappe.log_error(
+			f"shared dir finalization failed for {call.name}: {exc}", "Huf Code Execution"
+		)
+
+
+# ---------------------------------------------------------------------------
+# E1 — Dispatcher (LLM-facing tool entrypoint)
+# ---------------------------------------------------------------------------
+
+
+def run_python(
+	code: str,
+	agent_doc: Any,
+	conversation: Any = None,
+	agent_run: Any = None,
+	**kwargs: Any,
+) -> dict:
+	"""Dispatch a Python code execution request from an agent.
+
+	Args:
+		code: The Python source to execute. Never persisted on the audit
+			record; only its SHA-256 (``code_ref``) is stored.
+		agent_doc: The ``Agent`` document (or its name) invoking the tool.
+		conversation: The ``Agent Conversation`` doc/name (for audit linkage).
+		agent_run: The ``Agent Run`` doc/name (for audit linkage).
+		**kwargs: May carry ``call_id``/``tool_call_id``/``tool_name`` from the
+			tool framework.
+
+	Returns:
+		A JSON-serializable dict describing the dispatched/parked call.
+
+	Raises:
+		frappe.ValidationError: kill switch off / agent not enabled / profile
+			disabled.
+		frappe.PermissionError: user lacks ``code_execution.run`` or the
+			profile policy is ``Never Allow``.
+	"""
+	# 1. Site kill switch (checked before any DB lookup, mirroring
+	#    Frappe's ``server_script_enabled`` gate).
+	if not _is_site_enabled():
+		frappe.throw(
+			"Python code execution is disabled on this site.",
+			frappe.ValidationError,
+		)
+
+	# The user driving this request. Captured NOW and threaded to the RQ
+	# worker, because the worker runs as a privileged/system user and every
+	# broker call must impersonate the original requester instead.
+	acting_user = frappe.session.user
+
+	# 2. Per-user capability (defense-in-depth; also enforced at tool-offer
+	#    time in ``tool_registry.PermissionAwareToolRegistry``).
+	if not has_capability(acting_user, "code_execution.run"):
+		frappe.throw(
+			"You do not have permission to run Python code.",
+			frappe.PermissionError,
+		)
+
+	# 3. Per-agent enable + profile.
+	agent = _as_agent_doc(agent_doc)
+	if not getattr(agent, "allow_code_execution", None) or not getattr(
+		agent, "execution_profile", None
+	):
+		frappe.throw(
+			"Code execution is not enabled for this agent.",
+			frappe.ValidationError,
+		)
+
+	# 4. Profile must be enabled.
+	profile = frappe.get_doc("Execution Profile", agent.execution_profile)
+	if profile.disabled:
+		frappe.throw(
+			"The selected Execution Profile is disabled.",
+			frappe.ValidationError,
+		)
+
+	# 4b. Shared Directory policy (Phase 4b): an agent-level shared-dir limit
+	#     may only override the default downward. Reject an over-ceiling config
+	#     at dispatch so no audit row is created for an invalid configuration.
+	if profile.filesystem_policy == "Shared Directory":
+		_resolve_shared_dir_limit_mb(agent)
+
+	# 5/6. Snapshot + code hash (raw code is never stored on the audit row).
+	snapshot = _build_profile_snapshot(profile)
+	code_ref = _sha256(code)
+
+	# 7. Create the audit record (Started). ``tool_args`` references the hash,
+	#    never the raw code. ``ignore_permissions`` is used because the audit
+	#    row is created by the trusted dispatcher on behalf of the acting user,
+	#    who is not expected to hold write perm on ``Agent Tool Call``.
+	call = frappe.get_doc(
+		{
+			"doctype": "Agent Tool Call",
+			"agent_run": _name_of(agent_run),
+			"conversation": _name_of(conversation),
+			"tool": kwargs.get("tool_name") or _TOOL_NAME,
+			"is_mcp_tool": 0,
+			"tool_args": json.dumps({"code_ref": code_ref}),
+			"status": "Started",
+			"call_id": kwargs.get("call_id") or kwargs.get("tool_call_id"),
+			"execution_profile": profile.name,
+			"execution_profile_snapshot": snapshot,
+			"code_ref": code_ref,
+		}
+	)
+	call.insert(ignore_permissions=True)
+
+	approval_mode = profile.approval_mode
+
+	# 8a. Never Allow — hard deny, no enqueue.
+	if approval_mode == "Never Allow":
+		call.status = "Failed"
+		call.error_message = "Execution not permitted by profile policy."
+		call.save(ignore_permissions=True)
+		frappe.throw(
+			"Execution not permitted by profile policy.",
+			frappe.PermissionError,
+		)
+
+	# 8b. Ask Every Time — park behind an approval record, do NOT enqueue.
+	if approval_mode == "Ask Every Time":
+		# ``ignore_permissions=True`` is intentional and security-relevant: the
+		# dispatcher is a trusted internal path that has already enforced the
+		# kill switch + ``code_execution.run`` capability + agent/profile gates,
+		# and the requesting user is not expected to hold the
+		# ``execution.approve`` capability that
+		# ``Agent Execution Approval.has_permission`` requires for manual create.
+		# Recording a decision on that record still requires
+		# ``execution.approve`` / a designated approver (see ``_can_decide``), so
+		# the user who triggered execution cannot self-approve.
+		approval = frappe.get_doc(
+			{
+				"doctype": "Agent Execution Approval",
+				"agent_tool_call": call.name,
+				"requested_capability": _capability_summary(profile),
+				"code_ref": code_ref,
+				"status": "Pending",
+				"expires_on": add_to_date(now_datetime(), hours=_APPROVAL_TTL_HOURS),
+			}
+		)
+		original_user = frappe.session.user
+		try:
+			frappe.set_user("Administrator")
+			approval.insert(ignore_permissions=True)
+		finally:
+			frappe.set_user(original_user)
+
+		# Hold the resumable dispatch payload (raw code + snapshot + the
+		# original ``acting_user``) in Redis for as long as the approval is
+		# actionable — neither the approval row nor the audit row stores raw
+		# code, only ``code_ref``. Resolution (Phase 5): ``approve_execution()``
+		# (huf.huf.doctype.agent_execution_approval) validates this hold and
+		# calls ``enqueue_approved_execution()``, which finally dispatches
+		# ``enqueue_execution(call.name, code, snapshot, acting_user=...)``
+		# impersonating the ORIGINAL requester captured above — never the
+		# approver. A lapsed hold fails closed (the approval lapses to
+		# Expired); rejection/expiry finalize the audit row without enqueueing.
+		stash_pending_execution(
+			approval.name, code=code, profile_snapshot=snapshot, acting_user=acting_user
+		)
+
+		# ``Agent Tool Call.status`` has no dedicated "waiting" option; "Queued"
+		# is the closest available value, and the linked
+		# ``Agent Execution Approval.status == "Pending"`` is the real
+		# waiting-state signal. (Open question for review: add an explicit
+		# "Waiting Approval" status in a later phase.)
+		call.status = "Queued"
+		call.save(ignore_permissions=True)
+
+		return {
+			"success": True,
+			"status": "Pending Approval",
+			"agent_tool_call": call.name,
+			"approval": approval.name,
+			"code_ref": code_ref,
+			"message": "Execution paused pending approval.",
+		}
+
+	# 8c. Auto Approve (default) — enqueue immediately.
+	enqueue_execution(call.name, code, snapshot, acting_user=acting_user)
+
+	call.status = "Queued"
+	call.save(ignore_permissions=True)
+
+	return {
+		"success": True,
+		"status": "Queued",
+		"agent_tool_call": call.name,
+		"code_ref": code_ref,
+	}
+
+
+# ---------------------------------------------------------------------------
+# E2 — RQ enqueue
+# ---------------------------------------------------------------------------
+
+
+def enqueue_execution(
+	agent_tool_call_name: str,
+	code: str,
+	profile_snapshot: dict,
+	acting_user: str | None = None,
+) -> None:
+	"""Enqueue :func:`execute_job` on the ``code-execution`` RQ queue.
+
+	The job ``timeout`` is the profile's wall limit plus a fixed grace buffer so
+	the RQ hard-timeout does not fire before the sandbox's own wall-clock kill.
+
+	``acting_user`` is the session user captured at dispatch time. The worker
+	impersonates it for every broker call — the worker itself runs as a
+	privileged/system user and must never leak that identity into the broker.
+	When it is missing the broker denies every call (fail closed).
+	"""
+	limits = (profile_snapshot or {}).get("limits") or {}
+	wall = int(limits.get("max_wall_time_s") or DEFAULT_WALL_TIME_S)
+
+	frappe.enqueue(
+		"huf.ai.tools.code_execution.execute_job",
+		queue="code-execution",
+		timeout=wall + RQ_WALL_GRACE_S,
+		agent_tool_call_name=agent_tool_call_name,
+		code=code,
+		profile_snapshot=profile_snapshot,
+		acting_user=acting_user,
+		now=bool(getattr(frappe.flags, "in_test", False)),
+	)
+
+
+# ---------------------------------------------------------------------------
+# E2b — Pending-approval hold (Phase 5)
+#
+# An ``Ask Every Time`` dispatch parks the call behind an
+# ``Agent Execution Approval`` record instead of enqueueing. The raw ``code``
+# and the ``acting_user`` are deliberately NOT persisted on any DocType (the
+# audit rows carry only ``code_ref``), so the resumable dispatch payload is
+# held in Redis for exactly as long as the approval stays actionable
+# (``expires_on`` == now + ``_APPROVAL_TTL_HOURS``; the hold TTL matches).
+# ``approve_execution()`` resolves the hold and enqueues; a missing hold at
+# approval time means the window lapsed (Redis TTL / eviction / restart) and
+# the approval is treated as Expired. The hold is the ONLY source of the raw
+# code and the original requester — a lost hold can never be substituted with
+# the approver's identity or a re-supplied payload (fail closed).
+# ---------------------------------------------------------------------------
+
+#: Redis key prefix for parked (pending-approval) execution payloads.
+_PENDING_EXECUTION_PREFIX = "huf_pending_execution"
+
+
+class PendingExecutionExpired(Exception):
+	"""The Redis hold for a parked execution lapsed before it was approved."""
+
+
+def _pending_execution_key(approval_name: str) -> str:
+	return f"{_PENDING_EXECUTION_PREFIX}:{approval_name}"
+
+
+def stash_pending_execution(
+	approval_name: str, *, code: str, profile_snapshot: dict, acting_user: str | None
+) -> None:
+	"""Hold the resumable dispatch payload for a parked execution in Redis.
+
+	Called by :func:`run_python` right after the ``Agent Execution Approval``
+	row is inserted. The TTL mirrors the approval's ``expires_on`` so the hold
+	never outlives the window in which the approval is actionable. The payload
+	is the only place the raw code survives between park and approval; nothing
+	is written to the database.
+	"""
+	payload = {
+		"code": code,
+		"code_ref": _sha256(code),
+		"profile_snapshot": profile_snapshot or {},
+		"acting_user": acting_user,
+	}
+	frappe.cache().set_value(
+		_pending_execution_key(approval_name),
+		json.dumps(payload),
+		expires_in_sec=_APPROVAL_TTL_HOURS * 3600,
+	)
+
+
+def load_pending_execution(approval_doc) -> dict:
+	"""Load and validate the parked payload for an ``Agent Execution Approval``.
+
+	Returns ``{"code", "profile_snapshot", "acting_user"}`` ready for
+	:func:`enqueue_execution`. Fails closed at every step:
+	  - missing/corrupt hold → :class:`PendingExecutionExpired` (the caller
+	    lapses the approval to Expired);
+	  - held code that no longer hashes to the approval's ``code_ref`` →
+	    ``frappe.ValidationError`` (nothing is enqueued);
+	  - missing/unresolvable ``acting_user`` → ``frappe.ValidationError``
+	    (the approver's identity is NEVER substituted).
+	"""
+	raw = frappe.cache().get_value(_pending_execution_key(approval_doc.name))
+	payload = None
+	if raw:
+		try:
+			payload = json.loads(raw)
+		except (TypeError, ValueError):
+			payload = None
+	if not isinstance(payload, dict):
+		frappe.log_error(
+			f"pending execution hold for approval {approval_doc.name} is missing or corrupt",
+			"Huf Code Execution Approval",
+		)
+		raise PendingExecutionExpired(approval_doc.name)
+
+	code = payload.get("code")
+	if not isinstance(code, str) or not code or _sha256(code) != (approval_doc.code_ref or ""):
+		frappe.log_error(
+			f"pending execution hold for approval {approval_doc.name} failed integrity check",
+			"Huf Code Execution Approval",
+		)
+		frappe.throw(
+			"The parked execution payload failed its integrity check; refusing to enqueue.",
+			frappe.ValidationError,
+		)
+
+	acting_user = payload.get("acting_user")
+	if not isinstance(acting_user, str) or not acting_user:
+		frappe.log_error(
+			f"pending execution hold for approval {approval_doc.name} has no acting user",
+			"Huf Code Execution Approval",
+		)
+		frappe.throw(
+			"The original requesting user for this execution is no longer resolvable; "
+			"refusing to enqueue (the approver's identity is never substituted).",
+			frappe.ValidationError,
+		)
+
+	snapshot = payload.get("profile_snapshot")
+	return {
+		"code": code,
+		"profile_snapshot": snapshot if isinstance(snapshot, dict) else {},
+		"acting_user": acting_user,
+	}
+
+
+def clear_pending_execution(approval_name: str) -> None:
+	"""Drop the Redis hold for a parked execution (consumed, rejected, lapsed)."""
+	frappe.cache().delete_key(_pending_execution_key(approval_name))
+
+
+def enqueue_approved_execution(approval_doc, payload: dict) -> None:
+	"""Enqueue the execution parked behind a just-approved ``approval_doc``.
+
+	Called by ``approve_execution()`` only AFTER the approval row is saved as
+	``Approved`` (the worker-side ``_approval_blocks`` safety net refuses to
+	run otherwise). ``payload`` must come from :func:`load_pending_execution`
+	(already validated); the hold is cleared once the job is enqueued.
+	"""
+	enqueue_execution(
+		approval_doc.agent_tool_call,
+		payload["code"],
+		payload["profile_snapshot"],
+		acting_user=payload["acting_user"],
+	)
+	clear_pending_execution(approval_doc.name)
+
+
+# ---------------------------------------------------------------------------
+# E4 — Broker RPC (Phase 4a)
+#
+# Sandboxed code holds no ambient Frappe access. Every side effect round-trips
+# over the control socket into the ``broker_handler`` closure built by
+# :func:`_make_broker_handler`, which (1) authorizes the call against the
+# IMMUTABLE profile snapshot (never the live profile) and the acting user's
+# own Frappe permissions, then (2) executes it impersonating ``acting_user``
+# captured at dispatch time — never the RQ worker's default user.
+#
+# Authorization order for every call (fail closed at every step):
+#   a. The capability must be known to the broker AND present in the snapshot's
+#      ``permissions`` rows.
+#   b. For ``doc.*``/``report.run`` the requested doctype (for reports: the
+#      report's ``ref_doctype``) must be covered by a granting row — an
+#      unscoped row (``reference_doctype`` empty) covers everything; a scoped
+#      row covers only its doctype.
+#   c. Write capabilities (``doc.create``, ``doc.update``, ``email.send``) are
+#      rejected when every applicable row is flagged ``is_read_only``.
+#      (Steps b/c are applied to the rows applicable to THIS request, so a
+#      read-only-scoped row can never be satisfied by an unrelated writable
+#      row on the same capability.)
+#   d. For ``doc.*``/``report.run`` the acting user must pass
+#      ``frappe.has_permission(doctype, ptype, user=acting_user)``
+#      (``read`` for read/get_list/report, ``create`` for create, ``write``
+#      for update) — the same two-layer check as
+#      ``PermissionAwareToolRegistry._can_use_tool``.
+#   e. For ``http.request`` the target host/port/scheme must match a rule of
+#      the ``Network Access Policy`` named in the snapshot; no policy ⇒ deny.
+#      The request itself goes through
+#      ``huf.ai.http_handler.handle_http_request``, which applies the SSRF
+#      guard and re-validates every redirect hop.
+# ---------------------------------------------------------------------------
+
+#: Document capabilities the broker understands.
+_DOC_CAPABILITIES = frozenset({"doc.read", "doc.get_list", "doc.create", "doc.update"})
+
+#: Capabilities rejected when the granting permission row is ``is_read_only``.
+_WRITE_CAPABILITIES = frozenset({"doc.create", "doc.update", "email.send"})
+
+#: ``frappe.has_permission`` ptype enforced per document/report capability.
+_CAPABILITY_PTYPE = {
+	"doc.read": "read",
+	"doc.get_list": "read",
+	"doc.create": "create",
+	"doc.update": "write",
+	"report.run": "read",
+}
+
+#: Hard cap on rows returned by ``doc.get_list`` regardless of the requested
+#: limit, so one call cannot flood the control socket / child memory.
+MAX_BROKER_LIST_LIMIT = 500
+
+
+def _make_broker_handler(profile_snapshot: dict, acting_user: str | None):
+	"""Build the ``broker_handler`` closure injected into ``run_sandboxed``.
+
+	The closure authorizes every sandbox broker call against the immutable
+	``profile_snapshot`` (never the live profile) and dispatches it
+	impersonating ``acting_user``. It NEVER raises: any failure becomes
+	``(False, "<ExceptionType>: <msg>")`` so a broker bug cannot crash the
+	worker or leak a traceback into sandbox output beyond a summary.
+
+	Authorized calls (denials excluded) are counted per capability on the
+	returned closure's ``call_counts`` attribute, which the worker folds into
+	the audit record (arguments and results are never counted or stored).
+	"""
+	permissions = list((profile_snapshot or {}).get("permissions") or [])
+	network_policy = (profile_snapshot or {}).get("network_policy") or None
+	call_counts: dict[str, int] = {}
+	site = frappe.local.site
+
+	def _authorize(capability: Any, params: dict) -> str | None:
+		"""Return None when the call may proceed, else a denial reason."""
+		if not acting_user:
+			return "broker is unavailable (no acting user recorded for this execution)"
+		if not isinstance(capability, str) or not capability:
+			return "malformed broker request: missing capability"
+		if capability not in _DISPATCHERS:
+			return f"unknown capability '{capability}'"
+
+		rows = [r for r in permissions if r.get("capability") == capability]
+		if not rows:
+			return f"capability '{capability}' not granted by profile"
+
+		# (b) Doctype scoping + (d) has_permission for document/report caps.
+		# ``email.send``/``http.request`` carry no doctype target; a
+		# ``reference_doctype`` set on their rows is ignored by design.
+		if capability in _DOC_CAPABILITIES:
+			target = params.get("doctype")
+			if not isinstance(target, str) or not target:
+				return f"{capability} requires a 'doctype' string"
+			rows = _scoped_rows(rows, target)
+			if not rows:
+				return f"capability '{capability}' not granted for doctype '{target}'"
+			ptype = _CAPABILITY_PTYPE[capability]
+			if not frappe.has_permission(target, ptype, user=acting_user):
+				return f"user '{acting_user}' lacks {ptype} permission on '{target}'"
+		elif capability == "report.run":
+			report_name = params.get("report_name")
+			if not isinstance(report_name, str) or not report_name:
+				return "report.run requires a 'report_name' string"
+			# A missing report raises DoesNotExistError → denial via the wrapper.
+			report = frappe.get_doc("Report", report_name)
+			ref_doctype = getattr(report, "ref_doctype", None)
+			rows = _scoped_rows(rows, ref_doctype)
+			if not rows:
+				return f"capability 'report.run' not granted for doctype '{ref_doctype}'"
+			if not frappe.has_permission("Report", "read", doc=report_name, user=acting_user):
+				return f"user '{acting_user}' lacks read permission on Report '{report_name}'"
+
+		# (c) Read-only rows cannot drive writes.
+		if capability in _WRITE_CAPABILITIES and all(bool(r.get("is_read_only")) for r in rows):
+			return f"capability '{capability}' is granted read-only by this profile"
+
+		# (e) Network policy gate for HTTP egress (runs before the SSRF guard).
+		if capability == "http.request":
+			return _authorize_egress(params, network_policy)
+
+		return None
+
+	def broker_handler(capability, params):
+		"""Wire entrypoint: authorize → count → impersonate → dispatch."""
+		try:
+			denial = _authorize(capability, params)
+			if denial:
+				return False, denial
+			call_counts[capability] = call_counts.get(capability, 0) + 1
+			previous_user = frappe.session.user
+			frappe.set_user(acting_user)
+			try:
+				result = _DISPATCHERS[capability](params)
+			finally:
+				frappe.set_user(previous_user)
+			return True, _json_safe(result)
+		except Exception as exc:  # noqa: BLE001 - broker must never crash the worker
+			frappe.log_error(
+				f"broker call {capability!r} failed: {exc}", "Huf Code Execution Broker"
+			)
+			return False, f"{type(exc).__name__}: {exc}"
+
+	def _thread_start():
+		"""Establish frappe context for the broker's own OS thread.
+
+		``broker_handler`` runs on the daemon thread spawned by
+		``run_sandboxed`` for the lifetime of one execution, not on the RQ
+		job's main thread. ``frappe.local`` is a ``werkzeug.local.Local``
+		keyed by OS thread identity, so that thread starts with no
+		site/db/session context of its own — every frappe.* call inside
+		``broker_handler`` (has_permission, get_doc, set_user, log_error)
+		would otherwise fail. Called once by the thread before it services
+		any request.
+		"""
+		frappe.init(site=site)
+		frappe.connect()
+
+	def _thread_end():
+		"""Tear down the broker thread's frappe context (closes its DB connection)."""
+		frappe.destroy()
+
+	broker_handler.call_counts = call_counts
+	broker_handler.thread_start = _thread_start
+	broker_handler.thread_end = _thread_end
+	return broker_handler
+
+
+def _scoped_rows(rows: list, target_doctype: str | None) -> list:
+	"""Keep permission rows whose scope covers ``target_doctype``.
+
+	An unscoped row (no ``reference_doctype``) covers every doctype; a scoped
+	row covers only its exact doctype.
+	"""
+	return [
+		row
+		for row in rows
+		if not row.get("reference_doctype") or row.get("reference_doctype") == target_doctype
+	]
+
+
+def _authorize_egress(params: dict, network_policy: str | None) -> str | None:
+	"""Network-policy gate for ``http.request`` (runs before the SSRF guard).
+
+	Returns None when the target is permitted by the policy named in the
+	snapshot, else a denial reason. Fails closed: no policy on the profile, an
+	unparseable URL, a missing policy document, or no matching rule all deny.
+	"""
+	if not network_policy:
+		return "http.request denied: the profile names no network policy (egress disabled)"
+
+	url = params.get("url")
+	if not isinstance(url, str) or not url:
+		return "http.request requires a 'url' string"
+
+	parsed = urlparse(url)
+	scheme = (parsed.scheme or "").lower()
+	if scheme not in ("http", "https"):
+		return f"http.request denied: scheme '{parsed.scheme or '(none)'}' is not allowed"
+	if not parsed.hostname:
+		return "http.request denied: URL has no hostname"
+	try:
+		port = parsed.port or (443 if scheme == "https" else 80)
+	except ValueError:
+		return "http.request denied: invalid port in URL"
+
+	try:
+		policy = frappe.get_doc("Network Access Policy", network_policy)
+	except Exception:
+		return f"http.request denied: network policy '{network_policy}' not found"
+
+	for rule in policy.rules or []:
+		if not _rule_host_matches(rule.host_or_cidr, parsed.hostname):
+			continue
+		if not _rule_port_matches(rule.port_range, port):
+			continue
+		protocol = (rule.protocol or "").strip().lower()
+		if protocol and protocol != scheme:
+			continue
+		return None
+
+	return (
+		f"http.request denied: {scheme}://{parsed.hostname}:{port} "
+		f"is not allowed by network policy '{network_policy}'"
+	)
+
+
+def _rule_host_matches(host_or_cidr: str | None, host: str) -> bool:
+	"""Match a rule's ``host_or_cidr`` against the request host.
+
+	Exact case-insensitive hostname match, or — when the rule parses as an IP
+	network — containment of a request host that is itself an IP literal. No
+	DNS resolution happens here (the SSRF guard resolves separately), so a
+	CIDR rule never matches a hostname, and a hostname rule never matches an
+	IP. No wildcard/subdomain matching in v1.
+	"""
+	spec = (host_or_cidr or "").strip()
+	if not spec or not host:
+		return False
+	try:
+		network = ipaddress.ip_network(spec, strict=False)
+	except ValueError:
+		network = None
+	if network is not None:
+		try:
+			address = ipaddress.ip_address(host)
+		except ValueError:
+			return False
+		return address in network
+	return host.lower() == spec.lower()
+
+
+def _rule_port_matches(port_range: str | None, port: int) -> bool:
+	"""Match a rule's ``port_range`` (``"80"``, ``"8000-9000"``, comma lists).
+
+	An empty spec imposes no port constraint. An unparseable spec matches
+	nothing (fail closed).
+	"""
+	spec = (port_range or "").strip()
+	if not spec:
+		return True
+	for part in spec.split(","):
+		part = part.strip()
+		if not part:
+			continue
+		lo, sep, hi = part.partition("-")
+		try:
+			if sep:
+				if int(lo) <= port <= int(hi):
+					return True
+			elif int(part) == port:
+				return True
+		except ValueError:
+			continue
+	return False
+
+
+def _require_str(params: dict, key: str, capability: str) -> str:
+	"""Fetch a non-empty string param or raise a clear ``ValueError``."""
+	value = params.get(key)
+	if not isinstance(value, str) or not value:
+		raise ValueError(f"{capability} requires a '{key}' string")
+	return value
+
+
+def _validate_str_list(value: Any, key: str, capability: str) -> list | None:
+	"""Validate an optional list-of-strings param (``fields``)."""
+	if value is None:
+		return None
+	if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+		raise ValueError(f"{capability} '{key}' must be a list of strings")
+	return value
+
+
+def _validate_limit(value: Any, capability: str) -> int | None:
+	"""Validate an optional integer ``limit`` param."""
+	if value is None:
+		return None
+	if isinstance(value, bool) or not isinstance(value, int | float | str):
+		raise ValueError(f"{capability} 'limit' must be an integer")
+	try:
+		return int(value)
+	except (TypeError, ValueError):
+		raise ValueError(f"{capability} 'limit' must be an integer") from None
+
+
+def _op_doc_read(params: dict) -> dict:
+	doctype = _require_str(params, "doctype", "doc.read")
+	name = _require_str(params, "name", "doc.read")
+	fields = _validate_str_list(params.get("fields"), "fields", "doc.read")
+	doc = frappe.get_doc(doctype, name)
+	data = doc.as_dict()
+	if fields:
+		keep = set(fields)
+		data = {key: value for key, value in data.items() if key in keep}
+	return data
+
+
+def _op_doc_get_list(params: dict) -> list:
+	doctype = _require_str(params, "doctype", "doc.get_list")
+	filters = params.get("filters")
+	if filters is not None and not isinstance(filters, dict | list):
+		raise ValueError("doc.get_list 'filters' must be a dict or list")
+	fields = _validate_str_list(params.get("fields"), "fields", "doc.get_list")
+	limit = _validate_limit(params.get("limit"), "doc.get_list")
+	# ``frappe.get_list`` (not ``get_all``) is deliberate: running under the
+	# impersonated acting user, it applies that user's record-level
+	# permissions (permission query conditions) on top of the doctype check.
+	return frappe.get_list(
+		doctype,
+		filters=filters or None,
+		fields=fields or None,
+		limit_page_length=min(limit or 20, MAX_BROKER_LIST_LIMIT),
+	)
+
+
+def _op_doc_create(params: dict) -> dict:
+	doctype = _require_str(params, "doctype", "doc.create")
+	values = params.get("values")
+	if not isinstance(values, dict):
+		raise ValueError("doc.create 'values' must be a dict of field values")
+	# The authorized target is ``doctype`` from ``params`` (checked by
+	# ``_authorize`` against the profile snapshot). ``values`` is fully
+	# sandbox-controlled, so a smuggled "doctype" key inside it must never
+	# override the authorized target — doctype is applied last, deliberately.
+	doc = frappe.get_doc({**values, "doctype": doctype})
+	doc.insert()
+	return {"doctype": doctype, "name": doc.name}
+
+
+def _op_doc_update(params: dict) -> dict:
+	doctype = _require_str(params, "doctype", "doc.update")
+	name = _require_str(params, "name", "doc.update")
+	values = params.get("values")
+	if not isinstance(values, dict):
+		raise ValueError("doc.update 'values' must be a dict of field values")
+	# Strip any attacker-supplied doctype/name from values so the update
+	# can never retarget a different, unauthorized document.
+	safe_values = {k: v for k, v in values.items() if k not in ("doctype", "name")}
+	doc = frappe.get_doc(doctype, name)
+	doc.update(safe_values)
+	doc.save()
+	return {"doctype": doctype, "name": doc.name}
+
+
+def _op_email_send(params: dict) -> dict:
+	recipients = params.get("recipients")
+	if isinstance(recipients, str):
+		recipients = [recipients]
+	if (
+		not isinstance(recipients, list)
+		or not recipients
+		or not all(isinstance(r, str) and r for r in recipients)
+	):
+		raise ValueError("email.send 'recipients' must be a non-empty list of addresses")
+	subject = _require_str(params, "subject", "email.send")
+	message = _require_str(params, "message", "email.send")
+	frappe.sendmail(recipients=recipients, subject=subject, message=message)
+	return {"queued": True, "recipients": recipients}
+
+
+def _op_http_request(params: dict) -> dict:
+	method = _require_str(params, "method", "http.request").upper()
+	url = _require_str(params, "url", "http.request")
+	# The network-policy gate already ran in authorization; ``handle_http_request``
+	# applies the SSRF guard to the URL and re-validates every redirect hop.
+	# NOTE (known v1 limitation): redirect hops are SSRF-checked but NOT
+	# re-checked against the Network Access Policy — a redirect can egress to a
+	# host outside the policy. Flagged for Phase 4b/5 hardening rather than
+	# hand-rolling a redirect loop here (the SSRF helper must stay the single
+	# owner of HTTP egress).
+	return handle_http_request(
+		method,
+		url,
+		headers=params.get("headers"),
+		params=params.get("params"),
+		data=params.get("data"),
+		json_data=params.get("json_data"),
+	)
+
+
+def _op_report_run(params: dict) -> dict:
+	report_name = _require_str(params, "report_name", "report.run")
+	filters = params.get("filters")
+	if filters is not None and not isinstance(filters, dict):
+		raise ValueError("report.run 'filters' must be a dict")
+	limit = _validate_limit(params.get("limit"), "report.run")
+	# Dispatch runs under ``frappe.set_user(acting_user)``, so
+	# ``frappe.session.user`` IS the acting user here; the codebase's report
+	# runner forwards it so user-level permissions apply to the report data.
+	return get_report_result(
+		report_name, filters=filters, limit=limit, user=frappe.session.user
+	)
+
+
+_DISPATCHERS = {
+	"doc.read": _op_doc_read,
+	"doc.get_list": _op_doc_get_list,
+	"doc.create": _op_doc_create,
+	"doc.update": _op_doc_update,
+	"email.send": _op_email_send,
+	"http.request": _op_http_request,
+	"report.run": _op_report_run,
+}
+
+
+def _json_safe(value: Any) -> Any:
+	"""Round-trip a broker result through JSON so it is always wire-serializable.
+
+	Frappe values such as ``datetime`` are stringified (``default=str``),
+	matching how Frappe's own JSON responses serialize them.
+	"""
+	return json.loads(json.dumps(value, default=str))
+
+
+# ---------------------------------------------------------------------------
+# E3 — RQ worker entrypoint
+# ---------------------------------------------------------------------------
+
+
+def _approval_blocks(call_name: str) -> str | None:
+	"""Return a blocking reason if an approval exists and is not Approved.
+
+	Safety net for the Phase 5 approval→enqueue path: an execution that was
+	parked must not run unless its ``Agent Execution Approval`` is "Approved".
+	Auto-approve executions have no approval row, so they pass straight through.
+	"""
+	rows = frappe.get_all(
+		"Agent Execution Approval",
+		filters={"agent_tool_call": call_name},
+		fields=["status"],
+		limit=1,
+	)
+	if not rows:
+		return None
+	status = rows[0].status
+	if status == "Approved":
+		return None
+	return f"Approval not granted (status: {status})."
+
+
+def execute_job(
+	agent_tool_call_name: str,
+	code: str,
+	profile_snapshot: dict,
+	acting_user: str | None = None,
+) -> None:
+	"""RQ worker: run the sandboxed interpreter and record the outcome.
+
+	Runs inside a Frappe background worker process; the actual isolation happens
+	in a fresh child interpreter spawned by :func:`run_sandboxed`. Broker RPCs
+	from sandboxed code are authorized against ``profile_snapshot`` and executed
+	impersonating ``acting_user`` (see :func:`_make_broker_handler`); when
+	``acting_user`` is missing the broker denies every call (fail closed).
+
+	The profile's ``filesystem_policy`` decides what (if anything) is mounted
+	into the sandbox (Phase 4b):
+	  * "Shared Directory" — the per-conversation shared directory is resolved,
+	    cap-checked, seeded with the conversation's File artifacts, and
+	    snapshotted before the run; after the run (always, via ``finally``) it
+	    is cap-checked again and new/changed files are written back as
+	    ``Agent Context Artifact`` records.
+	  * "Scratch Only" — the Phase-3 throwaway temp directory, discarded after.
+	  * "None" — no filesystem access; ``run_sandboxed`` gets ``scratch_dir=None``.
+	"""
+	call = frappe.get_doc("Agent Tool Call", agent_tool_call_name)
+	limits = (profile_snapshot or {}).get("limits") or {}
+	max_output = int(limits.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
+	filesystem_policy = (profile_snapshot or {}).get("filesystem_policy") or "None"
+
+	# Do not run if a (Phase 5) approval exists and was not granted.
+	blocked = _approval_blocks(call.name)
+	if blocked:
+		call.status = "Failed"
+		call.error_message = blocked
+		call.exit_status = "Error"
+		call.save(ignore_permissions=True)
+		return
+
+	call.status = "Started"
+	call.save(ignore_permissions=True)
+
+	broker_handler = _make_broker_handler(profile_snapshot, acting_user)
+
+	scratch_dir = None
+	shared_ctx = None
+	if filesystem_policy == "Shared Directory":
+		shared_ctx = _prepare_shared_dir(call)
+		if shared_ctx is None:
+			# Audit row already marked Failed (fail closed) — do not run.
+			return
+		mount_dir = shared_ctx["dir"]
+	elif filesystem_policy == "Scratch Only":
+		scratch_dir = tempfile.mkdtemp(prefix="huf-exec-")
+		mount_dir = scratch_dir
+	else:  # "None": no filesystem mounted; the child exposes no file I/O
+		mount_dir = None
+
+	try:
+		result: ExecutionResult = run_sandboxed(
+			code,
+			limits=limits,
+			scratch_dir=mount_dir,
+			broker_handler=broker_handler,
+			broker_thread_start=broker_handler.thread_start,
+			broker_thread_end=broker_handler.thread_end,
+		)
+		_apply_result(call, result, max_output, broker_calls=broker_handler.call_counts)
+	except Exception as exc:  # noqa: BLE001 - never leave the row stuck at Started
+		call.status = "Failed"
+		call.exit_status = "Error"
+		call.error_message = _truncate(
+			f"{type(exc).__name__}: {exc}\n{frappe.get_traceback()}", 60000
+		)
+		call.limits_hit = 0
+		call.save(ignore_permissions=True)
+		frappe.log_error(
+			f"execute_job failed for {agent_tool_call_name}: {exc}",
+			"Huf Code Execution",
+		)
+	finally:
+		if shared_ctx is not None:
+			_finalize_shared_dir(call, shared_ctx)
+		if scratch_dir is not None:
+			shutil.rmtree(scratch_dir, ignore_errors=True)
+
+
+def _apply_result(
+	call, result: ExecutionResult, max_output: int, broker_calls: dict | None = None
+) -> None:
+	"""Map an :class:`ExecutionResult` onto the ``Agent Tool Call`` audit row."""
+	ok = result.exit_status == "Ok"
+
+	call.status = "Completed" if ok else "Failed"
+	call.exit_status = result.exit_status  # already Title Case (Ok/Timeout/...)
+	call.limits_hit = 1 if result.limits_hit else 0
+	call.resource_usage = {
+		"cpu_s": round(result.cpu_s, 4),
+		"wall_s": round(result.wall_s, 4),
+		"mem_mb_peak": None if result.mem_mb_peak is None else round(result.mem_mb_peak, 2),
+		"output_bytes": int(result.output_bytes),
+		# Per-capability count of authorized broker calls (Phase 4a). Call
+		# arguments and results are deliberately NOT recorded on the audit row.
+		"broker_calls": {key: int(value) for key, value in sorted((broker_calls or {}).items())},
+	}
+	# Match the codebase convention of wrapping scalar tool output as
+	# {"output": "..."} (see ``agent_integration.process_tool_call``).
+	call.tool_result = {"output": _truncate(result.stdout, max_output) or ""}
+
+	if not ok:
+		call.error_message = _truncate(result.stderr, 60000)
+	else:
+		call.error_message = None
+
+	call.save(ignore_permissions=True)

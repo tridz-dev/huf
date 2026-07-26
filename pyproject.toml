@@ -39,6 +39,7 @@ dependencies = [
     "pypdfium2>=4.26.0",
     "serpapi",
     "youtube-transcript-api",
+    "paramiko>=3.4.0",
 ]
 
 [build-system]

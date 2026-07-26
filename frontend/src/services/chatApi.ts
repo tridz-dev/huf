@@ -73,6 +73,7 @@ export interface ChatMessage {
   toolName?: string;
   toolStatus?: string;
   toolArgs?: string | Record<string, unknown>;
+  injectedMemories?: string[];
   createdAt?: string;
   updatedAt?: string;
 }

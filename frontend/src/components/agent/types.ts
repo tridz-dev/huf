@@ -72,6 +72,12 @@ export const agentFormSchema = z.object({
   allow_file_upload: z.boolean().optional(),
   enable_ocr: z.boolean().optional(),
   max_upload_size_mb: z.number().int().positive().optional(),
+
+  allow_code_execution: z.boolean().optional(),
+  execution_profile: z.string().optional(),
+  execution_shared_dir_limit_mb: z.number().int().positive().optional(),
+  allow_ssh: z.boolean().optional(),
+  ssh_connections: z.array(z.string()).default([]),
 }).superRefine((values, ctx) => {
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({

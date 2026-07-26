@@ -16,6 +16,7 @@ export const doctype = {
   "Agent Summary Prompt Category": "Agent Summary Prompt Category",
   "Agent Settings": "Agent Settings",
   "MCP Server": "MCP Server",
+  "SSH Connection": "SSH Connection",
   "Integration Settings": "Integration Settings",
   Gateway: "Gateway",
   "Gateway Binding": "Gateway Binding",
