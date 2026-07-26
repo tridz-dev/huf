@@ -334,8 +334,8 @@ export function DataTableBuilderPage() {
 		<div className="h-full flex flex-col">
 			<div className="flex-1 flex overflow-hidden relative">
 				{/* Left: Builder Canvas */}
-				<div className="flex-1 overflow-y-auto p-6">
-					<div className="max-w-2xl mx-auto">
+				<div className="flex-1 overflow-y-auto p-6 bg-paper">
+					<div className="max-w-2xl mx-auto rounded-none border border-line bg-panel p-6">
 						<TableBuilderCanvas
 							fields={state.fields}
 							selectedFieldIndex={state.selectedFieldIndex}
@@ -385,14 +385,14 @@ export function DataTableBuilderPage() {
 						</Sheet>
 					</>
 				) : (
-					<div className="w-80 border-l bg-paper-deep/30 overflow-y-auto p-4">
+					<div className="w-80 border-l border-line bg-panel overflow-y-auto p-4">
 						{sidebarContent}
 					</div>
 				)}
 			</div>
 
 			{/* Bottom action bar */}
-			<div className="border-t px-6 py-3 flex items-center justify-between bg-paper">
+			<div className="border-t border-line px-6 py-4 flex items-center justify-between bg-panel">
 				<Button
 					variant="outline"
 					onClick={() => navigate(isEdit ? `/data/${tableId}` : '/data')}

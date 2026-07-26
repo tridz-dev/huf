@@ -39,7 +39,7 @@ export function FieldCard({
 					'group flex items-center gap-2 px-3 py-2 rounded-none border border-dashed cursor-pointer transition-colors',
 					isSelected
 						? 'border-line-dark bg-paper-deep'
-						: 'border-muted-foreground/30 hover:border-muted-foreground/50'
+						: 'border-steel/30 hover:border-steel/50'
 				)}
 			>
 				<GripVertical className="w-4 h-4 text-steel cursor-grab shrink-0" />
@@ -87,7 +87,7 @@ export function FieldCard({
 				'group flex items-center gap-3 px-3 py-2.5 rounded-none border cursor-pointer transition-colors',
 				isSelected
 					? 'border-line-dark bg-paper-deep text-ink font-medium '
-					: 'border-border hover:border-muted-foreground/50'
+					: 'border-line hover:border-steel/50'
 			)}
 		>
 			<GripVertical className="w-4 h-4 text-steel cursor-grab shrink-0" />
