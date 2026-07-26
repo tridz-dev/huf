@@ -1,4 +1,5 @@
-export type KnowledgeType = 'sqlite_fts' | 'sqlite_vec' | 'chroma' | 'pgvector';
+export type KnowledgeType = 'sqlite_fts' | 'sqlite_vec' | 'chroma' | 'pgvector' | 'redis' | 'zvec';
+
 export type ChromaMode = 'File' | 'Server';
 export type KnowledgeScope = 'Site' | 'Workspace' | 'Agent' | 'Global';
 export type KnowledgeSourceStatus = 'Pending' | 'Indexing' | 'Ready' | 'Error' | 'Rebuilding';
@@ -28,7 +29,8 @@ export interface KnowledgeSourceDoc {
 	knowledge_type: KnowledgeType;
 	scope: KnowledgeScope;
 
-	// Vector settings (sqlite_vec, chroma, and pgvector)
+	// Vector settings (sqlite_vec, chroma, pgvector, redis, and zvec)
+
 	embedding_model?: string | null;
 	vector_dimension?: number | null;
 	embedding_provider?: string | null;
