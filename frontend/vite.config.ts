@@ -10,6 +10,10 @@ export default defineConfig({
     react(),
     VitePWA({
       injectRegister: false,
+      // Frappe's www renderer only serves known text extensions raw
+      // (frappe.utils.jinja.guess_is_path); .webmanifest is not one of them,
+      // so the manifest is emitted as manifest.json instead.
+      manifestFilename: 'manifest.json',
       manifest: {
         name: 'Huf',
         short_name: 'Huf',
@@ -39,6 +43,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Inline the workbox runtime into sw.js: Frappe route rules return
+        // to_route verbatim (no placeholder interpolation), so an external
+        // /huf/workbox-<hash>.js file cannot be routed and 404s.
+        inlineWorkboxRuntime: true,
         navigateFallback: null,
         globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2,ttf}'],
         modifyURLPrefix: {
