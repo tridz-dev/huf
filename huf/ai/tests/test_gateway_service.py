@@ -82,6 +82,11 @@ class TestGatewayRouting:
 
 
 class TestGatewayIngress:
+    def test_payload_redaction_removes_provider_secrets(self):
+        assert gateway_service._redact_payload(
+            {"token": "top-secret", "body": {"signature": "sig", "message": "hello"}}
+        ) == {"token": "[redacted]", "body": {"signature": "[redacted]", "message": "hello"}}
+
     @patch("huf.ai.gateway_service.frappe")
     def test_duplicate_provider_event_is_a_noop(self, mock_frappe):
         mock_frappe.db.get_value.return_value = "GATEWAY-EVENT-0001"

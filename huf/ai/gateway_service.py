@@ -22,11 +22,24 @@ MATCH_CONTEXT_KEY = {
     "Thread": "thread_id",
     "Sender": "sender_id",
 }
+SENSITIVE_PAYLOAD_KEYS = {"authorization", "token", "secret", "signature", "api_key", "password"}
 
 
 def _idempotency_key(gateway_name: str, provider_event_id: str) -> str:
     value = f"{gateway_name}:{provider_event_id}".encode()
     return hashlib.sha256(value).hexdigest()
+
+
+def _redact_payload(value: Any) -> Any:
+    """Retain support evidence without persisting provider credentials."""
+    if isinstance(value, dict):
+        return {
+            key: "[redacted]" if key.lower() in SENSITIVE_PAYLOAD_KEYS else _redact_payload(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_payload(item) for item in value]
+    return value
 
 
 def _binding_matches(binding: dict, context: dict[str, Any]) -> bool:
@@ -123,7 +136,7 @@ def ingest_gateway_event(
             "conversation_id": str(context.get("conversation_id") or ""),
             "thread_id": str(context.get("thread_id") or ""),
             "message_text": context.get("message_text") or "",
-            "raw_payload": raw_payload or {},
+            "raw_payload": _redact_payload(raw_payload or {}),
         }
     )
     try:
