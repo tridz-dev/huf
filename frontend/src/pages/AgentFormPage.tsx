@@ -33,7 +33,7 @@ import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
-import type { AgentKnowledgeRow } from '../types/agent.types';
+import type { AgentKnowledgeRow, AgentPermissionUserRow, AgentPermissionRoleRow } from '../types/agent.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { writeToolDetailsSetting } from '../components/chat/useChatAgentIdentity';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
@@ -485,7 +485,7 @@ export function AgentFormPage() {
       db.getDocList('Role', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
     ]).then(([providersData, modelsData, toolTypesData, usersData, rolesData]) => {
       setProviders(providersData as AIProvider[]);
-      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as any).items;
+      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as { items: AIModel[] }).items;
       setAllModels(modelsArray);
       setToolTypes(toolTypesData);
       setUsers(usersData as Array<{ name: string }>);
@@ -690,7 +690,7 @@ export function AgentFormPage() {
         }
 
         // Attach/select the created prompt in the form.
-        form.setValue(fieldName as any, pendingSelectedPrompt as any, { shouldDirty: true });
+        form.setValue(fieldName as 'agent_prompt' | 'summary_prompt_template', pendingSelectedPrompt, { shouldDirty: true });
 
         setPendingSelectedPrompt(null);
         setPendingSelectedPromptField(null);
@@ -731,7 +731,7 @@ export function AgentFormPage() {
   useEffect(() => {
     if (watchProvider) {
       getModels(watchProvider).then((modelsData) => {
-        const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as any).items;
+        const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as { items: AIModel[] }).items;
         setModels(modelsArray);
         // Clear model selection if current model doesn't belong to selected provider
         const currentModel = form.getValues('model');
@@ -1047,8 +1047,8 @@ export function AgentFormPage() {
         prompt_version_locked: values.prompt_version_locked ? 1 : 0,
         template_version_at_attach: values.template_version_at_attach !== undefined ? values.template_version_at_attach : undefined,
         allow_guest: values.allow_guest ? 1 : 0,
-        allowed_users: (values.allowed_users || []).map((user) => ({ user })) as any,
-        allowed_roles: (values.allowed_roles || []).map((role) => ({ role })) as any,
+        allowed_users: (values.allowed_users || []).map((user) => ({ user })) as AgentPermissionUserRow[],
+        allowed_roles: (values.allowed_roles || []).map((role) => ({ role })) as AgentPermissionRoleRow[],
         enable_prompt_caching: values.enable_prompt_caching ? 1 : 0,
         cache_control_type: values.cache_control_type || '',
         cache_system_message: values.cache_system_message ? 1 : 0,
@@ -1097,7 +1097,7 @@ export function AgentFormPage() {
           token_budget: ks.token_budget,
           description: ks.description || '',
         })),
-      } as any;
+      } as AgentUpdatePayload;
 
       if (isNew) {
         // Create new agent

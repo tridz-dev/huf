@@ -101,7 +101,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
 
   useEffect(() => {
     getModels().then((modelsData) => {
-      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as any).items;
+      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as { items: AIModel[] }).items;
       setModels(modelsArray);
     }).catch((error) => {
       console.error('Error fetching models:', error);
@@ -132,7 +132,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     if (addProviderKey && addProviderKey > 0) {
       handleAddProvider();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [addProviderKey]);
 
   const handleConfigure = async (provider: AIProvider) => {

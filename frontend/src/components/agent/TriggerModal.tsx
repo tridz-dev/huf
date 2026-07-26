@@ -43,8 +43,8 @@ import type { TriggerType } from '@/types/agent.types';
  * Dynamically validate trigger fields based on triggerFieldsConfig
  * This ensures validation rules stay in sync with the field configuration
  */
-function validateTriggerFields(data: any): { valid: boolean; missingFields: string[] } {
-  const triggerType = data.trigger_type;
+function validateTriggerFields(data: Record<string, unknown>): { valid: boolean; missingFields: string[] } {
+  const triggerType = typeof data.trigger_type === 'string' ? data.trigger_type : undefined;
   if (!triggerType || !triggerFieldsConfig[triggerType]) {
     return { valid: true, missingFields: [] }; // Unknown trigger type, skip validation
   }
@@ -198,7 +198,7 @@ export function TriggerModal({
     await onSave(values);
   };
 
-  const handleFormError = (_errors: unknown) => {
+  const handleFormError = () => {
     toast.error('Please fix the highlighted fields');
   };
 
@@ -221,7 +221,7 @@ export function TriggerModal({
             {/* Trigger Name Field - Only editable when adding */}
             {!editingTrigger && (
               <FormField
-                control={triggerForm.control as unknown as Control<any>}
+                control={triggerForm.control}
                 name="trigger_name"
                 render={({ field }) => (
                   <FormItem>
@@ -292,7 +292,6 @@ export function TriggerModal({
             {watchTriggerType && (
               <TriggerFieldsRenderer
                 triggerType={watchTriggerType}
-                // @ts-ignore - Control type incompatibility between strict form type and generic component
                 control={triggerForm.control}
                 docTypes={docTypes}
                 loadingDocTypes={loadingDocTypes}

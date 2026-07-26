@@ -35,7 +35,7 @@ export function FieldConfigPanel({
 	);
 
 	const properties = FIELD_PROPERTIES[field.fieldtype] || [];
-	const isLayout = LAYOUT_FIELD_TYPES.includes(field.fieldtype as any);
+	const isLayout = LAYOUT_FIELD_TYPES.includes(field.fieldtype);
 
 	useEffect(() => {
 		if (field.fieldtype === 'Link') {

@@ -63,9 +63,9 @@ export function DataRecordForm({
 			}
 			onSaved();
 			onOpenChange(false);
-		} catch (err: any) {
+		} catch (err) {
 			toast.error(isEdit ? 'Failed to update record' : 'Failed to create record', {
-				description: err.message,
+				description: err instanceof Error ? err.message : undefined,
 			});
 		} finally {
 			setSaving(false);

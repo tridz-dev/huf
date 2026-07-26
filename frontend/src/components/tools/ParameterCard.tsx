@@ -40,7 +40,7 @@ export function ParameterCard({
   onChange,
   onDelete,
 }: ParameterCardProps) {
-  const handleChange = (field: keyof ParameterData, value: any) => {
+  const handleChange = (field: keyof ParameterData, value: ParameterData[keyof ParameterData]) => {
     onChange(index, { [field]: value });
   };
 

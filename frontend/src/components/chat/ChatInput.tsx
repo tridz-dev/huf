@@ -599,7 +599,7 @@ export function ChatInput({
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            handleSubmit(e as any);
+            handleSubmit(e);
         }
     }, [handleSubmit]);
 

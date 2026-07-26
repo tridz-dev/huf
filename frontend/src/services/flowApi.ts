@@ -175,10 +175,10 @@ export async function updateFlowDefinitionFields(
 }
 
 /** Get node schemas from backend for dynamic UI construction */
-export async function getNodeSchemas(): Promise<Record<string, any>> {
+export async function getNodeSchemas(): Promise<Record<string, unknown>> {
     try {
         const result = await call.get('huf.ai.flow_api.get_node_schemas');
-        return result.message as Record<string, any>;
+        return result.message as Record<string, unknown>;
     } catch (error) {
         handleFrappeError(error, 'Error fetching node schemas');
     }

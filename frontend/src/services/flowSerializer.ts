@@ -80,7 +80,8 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNode['type'] {
 
 /** Strip the `type` discriminator from a config object — backend infers type from node.type */
 function omitType<T extends { type?: string }>(obj: T): Omit<T, 'type'> {
-    const { type: _type, ...rest } = obj;
+    const rest = { ...obj };
+    delete rest.type;
     return rest;
 }
 

@@ -26,7 +26,7 @@ export function TableBuilderCanvas({
 		e.dataTransfer.effectAllowed = 'move';
 	};
 
-	const handleDragOver = (e: React.DragEvent, _index: number) => {
+	const handleDragOver = (e: React.DragEvent) => {
 		e.preventDefault();
 		e.dataTransfer.dropEffect = 'move';
 	};

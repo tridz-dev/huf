@@ -38,8 +38,8 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 		try {
 			const s = await getTableSchema(tableId);
 			setSchema(s);
-		} catch (err: any) {
-			toast.error('Failed to load table', { description: err.message });
+		} catch (err) {
+			toast.error('Failed to load table', { description: err instanceof Error ? err.message : 'An error occurred.' });
 			navigate('/data');
 		} finally {
 			setLoading(false);
@@ -64,8 +64,8 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 					setPage((p) => p + 1);
 				}
 				setHasMore(result.hasMore);
-			} catch (err: any) {
-				toast.error('Failed to load records', { description: err.message });
+			} catch (err) {
+				toast.error('Failed to load records', { description: err instanceof Error ? err.message : 'An error occurred.' });
 			} finally {
 				setRecordsLoading(false);
 			}
@@ -142,8 +142,8 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				`Table deleted (${result.deleted_records} record${result.deleted_records !== 1 ? 's' : ''} removed)`
 			);
 			navigate('/data');
-		} catch (err: any) {
-			toast.error('Failed to delete table', { description: err.message });
+		} catch (err) {
+			toast.error('Failed to delete table', { description: err instanceof Error ? err.message : 'An error occurred.' });
 		} finally {
 			setDeleting(false);
 			setDeleteDialogOpen(false);

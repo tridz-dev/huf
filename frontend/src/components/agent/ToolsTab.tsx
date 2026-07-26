@@ -28,7 +28,6 @@ interface ToolsTabProps {
 
 export function ToolsTab({
   selectedTools,
-  toolTypes: _toolTypes,
   onAddTools,
   onRemoveTool,
   onEditTool,

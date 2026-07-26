@@ -115,7 +115,7 @@ export function ChatMessage({
                         <Tool key={`${message.key}-tool-${toolIndex}`}>
                             <ToolHeader
                                 title={tool.name}
-                                type={`tool-${tool.name}` as any}
+                                type={`tool-${tool.name}`}
                                 state={tool.status}
                             />
                             <ToolContent>

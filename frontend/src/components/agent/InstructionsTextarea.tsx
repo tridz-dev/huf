@@ -4,13 +4,13 @@ import { FormControl } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { UseFormReturn, ControllerRenderProps } from 'react-hook-form';
+import { UseFormReturn, ControllerRenderProps, FieldValues } from 'react-hook-form';
 import { cn } from '@/lib/utils';
 
-interface InstructionsTextareaProps {
+interface InstructionsTextareaProps<TFieldValues extends FieldValues = FieldValues> {
   // Form mode props
-  form?: UseFormReturn<any>;
-  field?: ControllerRenderProps<any, any>;
+  form?: UseFormReturn<TFieldValues>;
+  field?: ControllerRenderProps<TFieldValues>;
   
   // Standalone mode props
   value?: string;
@@ -32,7 +32,7 @@ interface InstructionsTextareaProps {
   _isInModal?: boolean;
 }
 
-export function InstructionsTextarea({
+export function InstructionsTextarea<TFieldValues extends FieldValues = FieldValues>({
   form,
   field,
   value: controlledValue,
@@ -48,7 +48,7 @@ export function InstructionsTextarea({
   modalOpen: externalModalOpen,
   onModalOpenChange: externalOnModalOpenChange,
   _isInModal = false,
-}: InstructionsTextareaProps) {
+}: InstructionsTextareaProps<TFieldValues>) {
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [modalValue, setModalValue] = useState('');
 
@@ -66,7 +66,7 @@ export function InstructionsTextarea({
 
   // Get current value
   const currentValue = isFormMode 
-    ? field?.value || '' 
+    ? (field?.value as string | undefined) || '' 
     : isControlled 
     ? controlledValue 
     : '';

@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -63,7 +64,7 @@ export async function getDataTables(
 
 		const tables = await db.getDocList(doctype['Huf Data Table'], {
 			fields: DATA_TABLE_LIST_FIELDS,
-			filters: filters.length > 0 ? (filters as any) : undefined,
+			filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
 			limit: limit + 1,
 			...(start > 0 && { limit_start: start }),
 			orderBy: { field: 'modified', order: 'desc' },
@@ -216,7 +217,7 @@ export async function getTableRecords(
 		const limit = params?.limit || 20;
 		const records = await db.getDocList(doctypeName, {
 			fields: params?.fields || ['*'],
-			filters: params?.filters as any,
+			filters: params?.filters as Filter<Record<string, unknown>>[] | undefined,
 			limit: limit + 1,
 			...(params?.start && { limit_start: params.start }),
 			orderBy: params?.orderBy || { field: 'modified', order: 'desc' },

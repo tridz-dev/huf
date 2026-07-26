@@ -222,6 +222,11 @@ export const MessageBranchSelector = ({
 }: MessageBranchSelectorProps) => {
   const { totalBranches } = useMessageBranch();
 
+  // className and from are accepted for API parity but intentionally not
+  // forwarded to the ButtonGroup.
+  void className;
+  void from;
+
   // Don't render if there's only one branch
   if (totalBranches <= 1) {
     return null;
@@ -267,6 +272,9 @@ export const MessageBranchNext = ({
   ...props
 }: MessageBranchNextProps) => {
   const { goToNext, totalBranches } = useMessageBranch();
+
+  // className is accepted for API parity but intentionally not forwarded.
+  void className;
 
   return (
     <Button

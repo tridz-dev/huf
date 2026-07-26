@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AgentDoc, AgentKnowledgeRow } from '@/types/agent.types';
@@ -168,7 +169,7 @@ export async function getAgents(
     // Fetch data
     const agents = await db.getDocList(doctype.Agent, {
       fields: AGENT_LIST_FIELDS,
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }), // Only include if start > 0
       orderBy: { field: 'modified', order: 'desc' },
@@ -316,11 +317,27 @@ export async function getRoles(): Promise<Array<{ name: string }>> {
 }
 
 /**
+ * DocType metadata field shape (subset of Frappe DocField used by consumers)
+ */
+export interface DocTypeMetaField {
+  fieldname: string;
+  label?: string;
+  fieldtype?: string;
+  reqd?: 0 | 1 | boolean;
+  options?: string;
+  hidden?: 0 | 1 | boolean;
+}
+
+export interface DocTypeMetaResponse {
+  fields?: DocTypeMetaField[];
+}
+
+/**
  * Fetch DocType metadata with fields (used for tool parameter auto-fill)
  */
-export async function getDocTypeMeta(doctypeName: string): Promise<any> {
+export async function getDocTypeMeta(doctypeName: string): Promise<DocTypeMetaResponse> {
   try {
-    return await db.getDoc('DocType', doctypeName);
+    return (await db.getDoc('DocType', doctypeName)) as DocTypeMetaResponse;
   } catch (error) {
     handleFrappeError(error, `Error fetching DocType meta for ${doctypeName}`);
   }
@@ -577,7 +594,7 @@ export interface RunAgentTestResponse {
  */
 export async function runAgentTest(params: RunAgentTestParams): Promise<RunAgentTestResponse> {
   try {
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       agent_name: params.agent_name,
       prompt: params.prompt,
       provider: params.provider,
@@ -625,14 +642,14 @@ export async function getAgentModels(
     // Fetch data
     const agents = await db.getDocList(doctype.Agent, {
       fields: AGENT_MODEL_FIELDS,
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }), // Only include if start > 0
       orderBy: { field: 'modified', order: 'desc' },
     });
 
     // Map agents to model format
-    const mappedModels: AgentModelItem[] = (agents as any[]).map((agent) => ({
+    const mappedModels: AgentModelItem[] = (agents as Array<Record<string, string>>).map((agent) => ({
       id: agent.name,
       name: agent.agent_name || agent.name,
       providerBrand: agent.provider_brand || 'other',

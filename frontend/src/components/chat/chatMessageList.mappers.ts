@@ -1,5 +1,6 @@
 import type { ToolCallEvent, NewAgentMessageEvent, AgentRunStatusEvent } from '@/hooks/useChatSocket';
 import type { AgentRunStatusResponse, ChatMessage, PendingConversationRun } from '@/services/chatApi';
+import type { ToolUIPart } from 'ai';
 import { mapToolStatusToState } from './utils';
 import type { MessageType } from './types';
 
@@ -70,7 +71,7 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
     tool_call_id: event.tool_call_id,
     name: displayName,
     description: displayName,
-    status: mapToolStatusToState(event.tool_status) as any,
+    status: mapToolStatusToState(event.tool_status) as ToolUIPart['state'],
     parameters: parsedArgs,
     result: event.tool_status === 'Completed' ? parsedResult : undefined,
     error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
@@ -519,7 +520,7 @@ export function mergeConversationItemsIntoMessages(
         tool_call_id,
         name: item.toolName,
         description: item.toolName,
-        status: mapToolStatusToState(item.toolStatus) as any,
+        status: mapToolStatusToState(item.toolStatus) as ToolUIPart['state'],
         parameters: parsedArgs,
         result: item.toolStatus === 'Completed' ? item.content : undefined,
         error: item.toolStatus === 'Failed' ? item.content : undefined,
@@ -527,7 +528,7 @@ export function mergeConversationItemsIntoMessages(
 
       const toolMap = new Map<string, typeof apiTool>();
       tempTools.forEach((tool) => {
-        toolMap.set(tool.tool_call_id, tool as any);
+        toolMap.set(tool.tool_call_id, tool);
       });
 
       if (!toolMap.has(tool_call_id)) toolMap.set(tool_call_id, apiTool);

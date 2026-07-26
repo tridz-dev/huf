@@ -11,7 +11,9 @@ import ReactFlow, {
   applyNodeChanges,
   applyEdgeChanges,
   Node,
-  Panel
+  NodeProps,
+  Panel,
+  BackgroundVariant
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus } from 'lucide-react';
@@ -329,8 +331,8 @@ export function FlowCanvas({
 
   const nodeTypesWithAddButton = useMemo(
     () => ({
-      trigger: (props: any) => <TriggerNode {...props} onAddNode={handleAddNode} />,
-      action: (props: any) => <ActionNode {...props} onAddNode={handleAddNode} />,
+      trigger: (props: NodeProps<FlowNodeData>) => <TriggerNode {...props} onAddNode={handleAddNode} />,
+      action: (props: NodeProps<FlowNodeData>) => <ActionNode {...props} onAddNode={handleAddNode} />,
       end: EndNode
     }),
     [handleAddNode]
@@ -366,7 +368,7 @@ export function FlowCanvas({
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         className="bg-background w-full h-full"
       >
-        <Background variant={'dots' as any} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
+        <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
         <Controls className="!bottom-6" />
         <MiniMap
           nodeColor={(node) => {
