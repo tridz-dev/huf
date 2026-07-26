@@ -6,11 +6,23 @@ import frappe
 
 from huf.ai.tools import serp_common, serp_hotels
 from huf.ai.tools.credentials import update_last_error
-from huf.ai.tools.serp_common import SerpValidationError, _as_bool, _as_int, _safe_float
+from huf.ai.tools.serp_common import SerpValidationError, _as_bool, _as_int, _cfg, _safe_float
 
 logger = frappe.logger("huf")
 
 SERVICE_NAME = serp_common.SERVICE_NAME
+
+
+def _default_currency():
+	return _cfg("default_currency", "INR")
+
+
+def _default_gl():
+	return _cfg("default_gl", "in")
+
+
+def _default_hl():
+	return _cfg("default_hl", "en")
 
 # SerpApi Google Maps Reviews sort options
 MAPS_REVIEW_SORT_BY = ("qualityScore", "newestFirst", "ratingHigh", "ratingLow")
@@ -56,11 +68,13 @@ def _normalize_maps_review(review: dict) -> dict:
 	}
 
 
-def _search_google_maps(q: str, hl: str = "en", gl: str = "in") -> dict:
+def _search_google_maps(q: str, hl: str | None = None, gl: str | None = None) -> dict:
 	"""Search Google Maps for a place to obtain its data_id (needed for reviews)."""
 	if not q or not str(q).strip():
 		raise SerpValidationError("q is required.")
 
+	hl = hl or _default_hl()
+	gl = gl or _default_gl()
 	results = serp_common._search(
 		{"engine": "google_maps", "q": str(q).strip(), "hl": hl, "gl": gl, "type": "search"}
 	)
@@ -95,13 +109,16 @@ def _google_maps_reviews(
 	data_id: str | None = None,
 	place_id: str | None = None,
 	sort_by: str | None = None,
-	hl: str = "en",
-	gl: str = "in",
+	hl: str | None = None,
+	gl: str | None = None,
 	next_page_token: str | None = None,
 ) -> dict:
 	"""Fetch reviews for a place from the SerpApi Google Maps Reviews engine."""
 	if not (data_id and str(data_id).strip()) and not (place_id and str(place_id).strip()):
 		raise SerpValidationError("Either data_id or place_id is required.")
+
+	hl = hl or _default_hl()
+	gl = gl or _default_gl()
 
 	if sort_by and sort_by not in MAPS_REVIEW_SORT_BY:
 		raise SerpValidationError(f"Invalid sort_by '{sort_by}'. Allowed: {', '.join(MAPS_REVIEW_SORT_BY)}.")
@@ -144,8 +161,8 @@ def handle_serp_google_maps_reviews(**kwargs) -> str:
 		place_query = kwargs.get("place_query")
 		data_id = kwargs.get("data_id")
 		place_id = kwargs.get("place_id")
-		hl = kwargs.get("hl", "en")
-		gl = kwargs.get("gl", "in")
+		hl = kwargs.get("hl") or _default_hl()
+		gl = kwargs.get("gl") or _default_gl()
 
 		matched = ""
 		has_id = (data_id and str(data_id).strip()) or (place_id and str(place_id).strip())
@@ -203,7 +220,7 @@ def _google_hotel_reviews(
 	check_out_date: str,
 	q: str | None = None,
 	adults=2,
-	currency: str = "INR",
+	currency: str | None = None,
 ) -> dict:
 	"""Fetch the review data for a single hotel from SerpApi Google Hotels."""
 	if not property_token or not str(property_token).strip():
@@ -211,12 +228,14 @@ def _google_hotel_reviews(
 	if not check_in_date or not check_out_date:
 		raise SerpValidationError("Both check_in_date and check_out_date are required.")
 
+	currency = currency or _default_currency()
+
 	result = serp_common._search(
 		{
 			"engine": "google_hotels",
 			"q": str(q).strip() if q and str(q).strip() else "Hotels",
-			"hl": "en",
-			"gl": "in",
+			"hl": _default_hl(),
+			"gl": _default_gl(),
 			"property_token": str(property_token).strip(),
 			"check_in_date": check_in_date,
 			"check_out_date": check_out_date,
@@ -247,7 +266,7 @@ def handle_serp_google_hotel_reviews(**kwargs) -> str:
 		check_in_date = kwargs.get("check_in_date")
 		check_out_date = kwargs.get("check_out_date")
 		adults = kwargs.get("adults", 2)
-		currency = kwargs.get("currency", "INR")
+		currency = kwargs.get("currency") or _default_currency()
 
 		if not check_in_date or not check_out_date:
 			raise SerpValidationError("Both check_in_date and check_out_date are required.")
@@ -529,7 +548,7 @@ def _normalize_yelp_review(review: dict) -> dict:
 	}
 
 
-def _search_yelp(find_desc: str, find_loc: str, hl: str = "en", start=None) -> dict:
+def _search_yelp(find_desc: str, find_loc: str, hl: str | None = None, start=None) -> dict:
 	"""Find Yelp businesses (to obtain a place_id for reviews)."""
 	if not find_desc or not str(find_desc).strip():
 		raise SerpValidationError("find_desc is required.")
@@ -540,7 +559,7 @@ def _search_yelp(find_desc: str, find_loc: str, hl: str = "en", start=None) -> d
 		"engine": "yelp",
 		"find_desc": str(find_desc).strip(),
 		"find_loc": str(find_loc).strip(),
-		"hl": hl,
+		"hl": hl or _default_hl(),
 	}
 	start_int = _as_int(start, "start")
 	if start_int is not None:
@@ -557,7 +576,7 @@ def handle_serp_yelp_search(**kwargs) -> str:
 		result = _search_yelp(
 			find_desc=kwargs.get("find_desc"),
 			find_loc=kwargs.get("find_loc"),
-			hl=kwargs.get("hl", "en"),
+			hl=kwargs.get("hl") or _default_hl(),
 			start=kwargs.get("start"),
 		)
 		return json.dumps({"success": True, **result})
@@ -574,7 +593,7 @@ def _yelp_reviews(
 	sort_by: str | None = None,
 	start=None,
 	num=None,
-	hl: str = "en",
+	hl: str | None = None,
 ) -> dict:
 	"""Fetch reviews for a Yelp business via the SerpApi Yelp Reviews engine."""
 	if not place_id or not str(place_id).strip():
@@ -582,7 +601,7 @@ def _yelp_reviews(
 	if sort_by and sort_by not in YELP_SORT_BY:
 		raise SerpValidationError(f"Invalid sort_by '{sort_by}'. Allowed: {', '.join(YELP_SORT_BY)}.")
 
-	params = {"engine": "yelp_reviews", "place_id": str(place_id).strip(), "hl": hl}
+	params = {"engine": "yelp_reviews", "place_id": str(place_id).strip(), "hl": hl or _default_hl()}
 	if sort_by:
 		# SerpApi quirk: the Yelp Reviews engine takes the sort param as `sortby`
 		params["sortby"] = sort_by
@@ -611,7 +630,7 @@ def handle_serp_yelp_reviews(**kwargs) -> str:
 		business_name = kwargs.get("business_name")
 		location = kwargs.get("location")
 		place_id = kwargs.get("place_id")
-		hl = kwargs.get("hl", "en")
+		hl = kwargs.get("hl") or _default_hl()
 
 		matched = ""
 		if not place_id or not str(place_id).strip():

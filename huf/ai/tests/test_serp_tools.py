@@ -28,6 +28,21 @@ class SerpToolTestCase(unittest.TestCase):
 		self.mock_client_fn = patcher.start()
 		self.addCleanup(patcher.stop)
 
+		# _cfg reads optional service defaults; tests use the built-in defaults.
+		cfg_patcher = patch(
+			"huf.ai.tools.serp_common.get_credential",
+			side_effect=lambda service, key, default=None: default,
+		)
+		cfg_patcher.start()
+		self.addCleanup(cfg_patcher.stop)
+
+		# The batch handler resolves the API key once on the calling thread.
+		key_patcher = patch(
+			"huf.ai.tools.serp_common.require_credential", return_value="test-key"
+		)
+		key_patcher.start()
+		self.addCleanup(key_patcher.stop)
+
 	def _record(self, params):
 		params = dict(params)
 		self.captured.append(params)
@@ -969,6 +984,71 @@ class TestRegistryWiring(unittest.TestCase):
 
 	def test_serpapi_env_fallback(self):
 		self.assertIn("SERPAPI_API_KEY", _get_alt_env_names("serpapi", "api_key"))
+
+
+class TestConfig(unittest.TestCase):
+	"""Operational defaults are configurable via the serpapi Integration Service."""
+
+	@patch("huf.ai.tools.serp_common.get_credential")
+	@patch("huf.ai.tools.serp_common._client")
+	def test_default_currency_gl_hl_override(self, mock_client, mock_cfg):
+		mock_cfg.side_effect = lambda service, key, default=None: {
+			"default_currency": "USD",
+			"default_gl": "us",
+			"default_hl": "es",
+		}.get(key, default)
+		captured = []
+		client = MagicMock()
+		client.search.side_effect = lambda params: (captured.append(dict(params)) or {"properties": []})
+		mock_client.return_value = client
+
+		out = json.loads(serp_hotels.handle_serp_hotel_search(q="x", check_in_date="2026-01-10", check_out_date="2026-01-12"))
+		self.assertTrue(out["success"])
+		params = captured[0]
+		self.assertEqual(params["currency"], "USD")
+		self.assertEqual(params["gl"], "us")
+		self.assertEqual(params["hl"], "es")
+
+	@patch("huf.ai.tools.serp_common.require_credential", return_value="test-key")
+	@patch("huf.ai.tools.serp_common.get_credential")
+	@patch("huf.ai.tools.serp_common._client")
+	def test_batch_max_workers_override(self, mock_client, mock_cfg, _key):
+		mock_cfg.side_effect = lambda service, key, default=None: (
+			"2" if key == "batch_max_workers" else default
+		)
+		captured = []
+		client = MagicMock()
+		client.search.side_effect = lambda params: (captured.append(dict(params)) or {})
+		mock_client.return_value = client
+
+		out = json.loads(
+			serp_hotels.handle_serp_hotel_details_batch(
+				property_tokens="a,b,c",
+				check_in_date="2026-01-10",
+				check_out_date="2026-01-12",
+			)
+		)
+		self.assertTrue(out["success"])
+		self.assertEqual(out["requested"], 3)
+		self.assertEqual(out["succeeded"], 3)
+
+	@patch("huf.ai.tools.serp_common.get_credential")
+	@patch("huf.ai.tools.serp_common._client")
+	def test_youtube_default_gl_hl_override(self, mock_client, mock_cfg):
+		mock_cfg.side_effect = lambda service, key, default=None: {
+			"default_gl": "gb",
+			"default_hl": "fr",
+		}.get(key, default)
+		captured = []
+		client = MagicMock()
+		client.search.side_effect = lambda params: (captured.append(dict(params)) or {"video_results": []})
+		mock_client.return_value = client
+
+		out = json.loads(serp_youtube.handle_serp_youtube_search(search_query="paris"))
+		self.assertTrue(out["success"])
+		params = captured[0]
+		self.assertEqual(params["gl"], "gb")
+		self.assertEqual(params["hl"], "fr")
 
 
 if __name__ == "__main__":

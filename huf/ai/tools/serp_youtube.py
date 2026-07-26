@@ -6,11 +6,19 @@ import frappe
 
 from huf.ai.tools import serp_common
 from huf.ai.tools.credentials import update_last_error
-from huf.ai.tools.serp_common import SerpValidationError, _safe_float
+from huf.ai.tools.serp_common import SerpValidationError, _cfg, _safe_float
 
 logger = frappe.logger("huf")
 
 SERVICE_NAME = serp_common.SERVICE_NAME
+
+
+def _default_gl():
+	return _cfg("default_gl", "in")
+
+
+def _default_hl():
+	return _cfg("default_hl", "en")
 
 
 def _video_id_from_link(link: str) -> str:
@@ -52,8 +60,8 @@ def handle_serp_youtube_search(**kwargs) -> str:
 		params = {
 			"engine": "youtube",
 			"search_query": str(search_query).strip(),
-			"gl": kwargs.get("gl", "in"),
-			"hl": kwargs.get("hl", "en"),
+			"gl": kwargs.get("gl") or _default_gl(),
+			"hl": kwargs.get("hl") or _default_hl(),
 		}
 		if kwargs.get("sp"):
 			params["sp"] = kwargs.get("sp")

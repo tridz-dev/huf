@@ -7,7 +7,30 @@ import frappe
 
 from huf.ai.tools import serp_common
 from huf.ai.tools.credentials import update_last_error
-from huf.ai.tools.serp_common import SerpValidationError, _as_bool, _as_csv, _as_int, _safe_float
+from huf.ai.tools.serp_common import (
+	SerpValidationError,
+	_as_bool,
+	_as_csv,
+	_as_int,
+	_safe_float,
+)
+
+
+def _cfg(key, default=None, cast=None):
+	return serp_common._cfg(key, default=default, cast=cast)
+
+
+def _default_currency():
+	return _cfg("default_currency", "INR")
+
+
+def _default_gl():
+	return _cfg("default_gl", "in")
+
+
+def _default_hl():
+	return _cfg("default_hl", "en")
+
 
 logger = frappe.logger("huf")
 
@@ -105,9 +128,9 @@ def _search_hotels(
 	adults=2,
 	children=None,
 	children_ages=None,
-	currency: str = "INR",
-	gl: str = "in",
-	hl: str = "en",
+	currency: str | None = None,
+	gl: str | None = None,
+	hl: str | None = None,
 	sort_by=None,
 	min_price=None,
 	max_price=None,
@@ -177,6 +200,10 @@ def _search_hotels(
 	property_types_csv = _as_csv(property_types)
 	amenities_csv = _as_csv(amenities)
 	brands_csv = _as_csv(brands)
+
+	currency = currency or _default_currency()
+	gl = gl or _default_gl()
+	hl = hl or _default_hl()
 
 	is_vacation = _as_bool(vacation_rentals)
 
@@ -260,9 +287,9 @@ def handle_serp_hotel_search(**kwargs) -> str:
 			adults=kwargs.get("adults", 2),
 			children=kwargs.get("children"),
 			children_ages=kwargs.get("children_ages"),
-			currency=kwargs.get("currency", "INR"),
-			gl=kwargs.get("gl", "in"),
-			hl=kwargs.get("hl", "en"),
+			currency=kwargs.get("currency"),
+			gl=kwargs.get("gl"),
+			hl=kwargs.get("hl"),
 			sort_by=kwargs.get("sort_by"),
 			min_price=kwargs.get("min_price"),
 			max_price=kwargs.get("max_price"),
@@ -353,9 +380,9 @@ def _hotel_details(
 	check_out_date: str,
 	q: str | None = None,
 	adults=2,
-	currency: str = "INR",
-	gl: str = "in",
-	hl: str = "en",
+	currency: str | None = None,
+	gl: str | None = None,
+	hl: str | None = None,
 	api_key: str | None = None,
 ) -> dict:
 	"""Fetch full details for a single hotel from the SerpApi Google Hotels engine."""
@@ -363,6 +390,10 @@ def _hotel_details(
 		raise SerpValidationError("property_token is required.")
 	if not check_in_date or not check_out_date:
 		raise SerpValidationError("Both check_in_date and check_out_date are required.")
+
+	currency = currency or _default_currency()
+	gl = gl or _default_gl()
+	hl = hl or _default_hl()
 
 	result = serp_common._search(
 		{
@@ -436,9 +467,9 @@ def handle_serp_hotel_details(**kwargs) -> str:
 			check_out_date=kwargs.get("check_out_date"),
 			q=kwargs.get("q"),
 			adults=kwargs.get("adults", 2),
-			currency=kwargs.get("currency", "INR"),
-			gl=kwargs.get("gl", "in"),
-			hl=kwargs.get("hl", "en"),
+			currency=kwargs.get("currency"),
+			gl=kwargs.get("gl"),
+			hl=kwargs.get("hl"),
 		)
 		return json.dumps({"success": True, **result})
 	except SerpValidationError as e:
@@ -491,7 +522,7 @@ def handle_serp_hotel_details_batch(**kwargs) -> str:
 
 		max_workers = _as_int(kwargs.get("max_workers"), "max_workers")
 		if max_workers is None or max_workers < 1:
-			max_workers = 8
+			max_workers = _cfg("batch_max_workers", 8, int)
 
 		api_key = serp_common.require_credential(SERVICE_NAME, "api_key")
 
@@ -502,9 +533,9 @@ def handle_serp_hotel_details_batch(**kwargs) -> str:
 				check_out_date=check_out_date,
 				q=kwargs.get("q"),
 				adults=kwargs.get("adults", 2),
-				currency=kwargs.get("currency", "INR"),
-				gl=kwargs.get("gl", "in"),
-				hl=kwargs.get("hl", "en"),
+				currency=kwargs.get("currency"),
+				gl=kwargs.get("gl"),
+				hl=kwargs.get("hl"),
 				api_key=api_key,
 			)
 

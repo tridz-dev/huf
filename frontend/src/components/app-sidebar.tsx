@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, Shield, LayoutGrid, Brain } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, Shield, LayoutGrid, Brain, Sparkles } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -93,6 +93,12 @@ const knowNavItems = [
     title: "Memory",
     url: "/memory",
     icon: Brain,
+    capability: "agent.use",
+  },
+  {
+    title: "Skills",
+    url: "/skills",
+    icon: Sparkles,
     capability: "agent.use",
   },
 ]

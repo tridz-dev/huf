@@ -5,13 +5,28 @@ everything importing it) loads cleanly even when the package is not installed,
 which keeps tests and registry scans working without the optional dependency.
 """
 
-from huf.ai.tools.credentials import require_credential
+from huf.ai.tools.credentials import get_credential, require_credential
 
 SERVICE_NAME = "serpapi"
 
 
 class SerpValidationError(ValueError):
 	"""Invalid tool input. Surfaced as an error envelope without touching last_error."""
+
+
+def _cfg(key, default=None, cast=None):
+	"""Read optional per-service configuration from Integration Settings."""
+	raw = get_credential(SERVICE_NAME, key, None)
+	if raw is None or raw == "":
+		return default
+	if cast is bool:
+		return str(raw).strip().lower() in ("1", "true", "yes", "on")
+	if cast is int:
+		try:
+			return int(float(raw))
+		except (TypeError, ValueError):
+			return default
+	return raw
 
 
 def _client(api_key: str | None = None):
