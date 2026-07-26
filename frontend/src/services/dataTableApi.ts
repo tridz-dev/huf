@@ -208,25 +208,24 @@ export async function getTableRecords(
 	params?: {
 		fields?: string[];
 		filters?: Array<[string, string, unknown]>;
+		search?: string;
 		limit?: number;
 		start?: number;
 		orderBy?: { field: string; order: 'asc' | 'desc' };
 	}
 ): Promise<{ items: Record<string, unknown>[]; hasMore: boolean }> {
 	try {
-		const limit = params?.limit || 20;
-		const records = await db.getDocList(doctypeName, {
-			fields: params?.fields || ['*'],
-			filters: params?.filters as Filter<Record<string, unknown>>[] | undefined,
-			limit: limit + 1,
-			...(params?.start && { limit_start: params.start }),
-			orderBy: params?.orderBy || { field: 'modified', order: 'desc' },
+		const result = await call.get('huf.huf.doctype.huf_data_table.api.get_table_records', {
+			doctype_name: doctypeName,
+			fields: params?.fields ? JSON.stringify(params.fields) : undefined,
+			filters: params?.filters ? JSON.stringify(params.filters) : undefined,
+			search: params?.search,
+			limit: params?.limit || 20,
+			start: params?.start || 0,
+			order_by: params?.orderBy ? `${params.orderBy.field} ${params.orderBy.order}` : 'modified desc',
 		});
-
-		const hasMore = records.length > limit;
-		const items = hasMore ? records.slice(0, limit) : records;
-
-		return { items: items as Record<string, unknown>[], hasMore };
+		
+		return result.message as { items: Record<string, unknown>[]; hasMore: boolean };
 	} catch (error) {
 		handleFrappeError(error, 'Error fetching records');
 	}

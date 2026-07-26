@@ -251,3 +251,58 @@ def get_table_schema(name: str) -> dict:
 		"title_field_name": registry.title_field_name,
 		"fields": fields,
 	}
+
+
+@frappe.whitelist()
+def get_table_records(
+	doctype_name: str,
+	fields: str | list[str] = "*",
+	filters: str | list | None = None,
+	search: str | None = None,
+	limit: int = 20,
+	start: int = 0,
+	order_by: str = "modified desc",
+) -> dict:
+	"""Get records for a table, supporting a unified search text across search_fields.
+
+	Requires: flows.use
+	"""
+	_require_read()
+
+	if isinstance(fields, str):
+		try:
+			fields = json.loads(fields)
+		except ValueError:
+			fields = [fields]
+	if isinstance(filters, str) and filters:
+		filters = json.loads(filters)
+
+	or_filters = []
+	if search and search.strip():
+		search_text = search.strip()
+		meta = frappe.get_meta(doctype_name)
+		if meta.search_fields:
+			s_fields = [sf.strip() for sf in meta.search_fields.split(",")]
+			for sf in s_fields:
+				or_filters.append([sf, "like", f"%{search_text}%"])
+		
+		name_field = meta.title_field or "name"
+		if name_field not in (meta.search_fields or ""):
+			or_filters.append([name_field, "like", f"%{search_text}%"])
+
+	records = frappe.get_list(
+		doctype_name,
+		fields=fields,
+		filters=filters,
+		or_filters=or_filters,
+		limit_page_length=limit + 1,
+		limit_start=start,
+		order_by=order_by,
+	)
+
+	has_more = len(records) > limit
+	if has_more:
+		records = records[:limit]
+
+	return {"items": records, "hasMore": has_more}
+
