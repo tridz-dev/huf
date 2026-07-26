@@ -9,6 +9,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
+import { LinkFieldInput } from './LinkFieldInput';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
 export interface LayoutSection {
@@ -177,15 +178,13 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 										))}
 								</SelectContent>
 							</Select>
-						) : field.fieldtype === 'Link' ? (
-							<Input
-								type="text"
-								value={(value as string) || ''}
-								onChange={(event) => onChange(event.target.value)}
-								disabled={isReadOnly}
-								placeholder={`Link to ${field.options || 'table'}...`}
-								className="h-8 text-sm rounded-none border-line"
-							/>
+		) : field.fieldtype === 'Link' ? (
+			<LinkFieldInput
+				targetDoctype={field.options}
+				value={(value as string) || ''}
+				onChange={onChange}
+				disabled={isReadOnly}
+			/>
 						) : field.fieldtype === 'Rating' ? (
 							<Input
 								type="number"
