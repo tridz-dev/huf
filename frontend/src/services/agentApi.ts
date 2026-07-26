@@ -62,13 +62,14 @@ const AGENT_MODEL_FIELDS = [
   'description',
 ];
 
+// Only fields that exist on the Agent doctype may be listed here: Frappe
+// validates get_list fields for non-System-Manager users and rejects unknown
+// ones with HTTP 417 ("Field not permitted in query").
 const CHAT_AGENT_FIELDS = [
   'name',
   'agent_name',
   'description',
   'model',
-  'chef',
-  'slug',
   'agent_color',
 ];
 
@@ -136,8 +137,6 @@ export interface ChatAgentItem {
   agent_name: string;
   description?: string | null;
   model?: string | null;
-  chef?: string | null;
-  slug?: string | null;
   agent_color?: string | null;
 }
 
