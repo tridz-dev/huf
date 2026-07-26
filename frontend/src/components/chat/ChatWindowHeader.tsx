@@ -20,7 +20,6 @@ interface ChatWindowHeaderProps {
 
 export function ChatWindowHeader({
     chatId: chatIdProp,
-    sidebarOpen: _sidebarOpen,
     onToggleSidebar,
 }: ChatWindowHeaderProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();

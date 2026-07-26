@@ -45,6 +45,8 @@ export type ToolType =
   | "Get Conversation Data"
   | "Set Conversation Data"
   | "Load Conversation Data"
+  | "Perplexity Search"
+  | "Code Execution"
   | "Transcription"
   /**
    * @deprecated Legacy value kept for backward compatibility with saved docs.
@@ -116,6 +118,7 @@ export type Agent = {
   top_p?: number;
   disabled?: boolean;
   allow_chat?: boolean;
+  is_system?: boolean;
   persist_conversation?: boolean;
   triggers: AgentTrigger[];
   tags?: string[];
@@ -188,6 +191,16 @@ export interface AgentKnowledgeRow {
   description?: string;
 }
 
+export interface AgentSkillRow {
+  name?: string;
+  skill: string;
+  skill_name?: string;
+  mode: 'Mandatory' | 'Optional';
+  auto_load?: 0 | 1 | boolean;
+  priority?: number;
+  description?: string;
+}
+
 export interface AgentOrchestrationPlanRow {
   name?: string;
   step_index: number;
@@ -236,6 +249,7 @@ export interface AgentDoc {
   instructions: string;
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
   agent_knowledge?: AgentKnowledgeRow[];
+  agent_skill?: AgentSkillRow[];
   agent_mcp_server?: Array<{
     mcp_server: string;
     enabled: 0 | 1;
@@ -245,6 +259,7 @@ export interface AgentDoc {
   agent_color?: string | null; // Hex color code for agent background
   show_tool_execution_details?: 0 | 1; // 0 or 1
   allow_guest?: number; // 0 or 1
+  is_system?: number; // 0 or 1 — system agents are locked and hidden from non-admins
   allowed_users?: AgentPermissionUserRow[];
   allowed_roles?: AgentPermissionRoleRow[];
   default_plan: AgentOrchestrationPlanRow[];
@@ -282,7 +297,18 @@ export interface AgentDoc {
   allow_file_upload?: 0 | 1;
   enable_ocr?: 0 | 1;
   max_upload_size_mb?: number | null;
+  allow_code_execution?: 0 | 1;
+  execution_profile?: string | null; // Link to Execution Profile
+  execution_shared_dir_limit_mb?: number | null;
 
   // Execution policy (advanced): run turns directly instead of queue-first
   run_immediately?: 0 | 1;
+  allow_ssh?: 0 | 1;
+  ssh_connections?: Array<{
+    name?: string;
+    ssh_connection: string;
+    host?: string;
+    username?: string;
+    enabled?: 0 | 1 | boolean;
+  }>;
 }

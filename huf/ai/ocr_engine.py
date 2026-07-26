@@ -67,8 +67,8 @@ class ExtractionResult:
 def _log_error(message: str, title: str = "OCR Engine"):
     try:
         frappe.log_error(message, title)
-    except Exception:
-        pass
+    except Exception as exc:  # fallback logging protection
+        frappe.logger("huf").warning(f"Error logging failed: {exc!s}")
 
 
 def _file_hash(file_path: str, algorithm: str = "sha256") -> str:
@@ -98,7 +98,7 @@ def _resolve_file_doc(file_id: str | None = None, file_url: str | None = None):
             return frappe.get_doc("File", file_id)
         except frappe.DoesNotExistError:
             raise ValueError(f"File document '{file_id}' not found")
-        except Exception as e:
+        except (frappe.DoesNotExistError, frappe.DataError) as e:
             raise ValueError(f"Error loading File '{file_id}': {e}")
 
     if file_url:
@@ -322,7 +322,7 @@ async def _process_with_ocr_endpoint(
                 page_list = [int(p.strip()) for p in str(pages).split(",") if p.strip()]
                 if page_list:
                     ocr_params["pages"] = page_list
-            except Exception:
+            except (ValueError, AttributeError, TypeError):  # optional page list parsing fallback
                 pass
 
         if include_images:
@@ -547,7 +547,7 @@ async def extract_document(
                 file_id=file_doc.name,
                 file_name=file_doc.file_name,
             )
-    except Exception:
+    except (OSError, frappe.DoesNotExistError, frappe.ValidationError, AttributeError):  # path resolution fallback
         pass
 
     if not os.path.exists(file_path):
@@ -700,7 +700,15 @@ async def extract_document(
                     "user": "Agent",
                 }
             )
-            message_doc.insert(ignore_permissions=True)
+            # OCR messages are created during agent execution. Authenticated
+            # users must have Agent Message create permission; Guest agents
+            # (allow_guest) create the internal message on behalf of the system.
+            if frappe.session.user == "Guest":
+                message_doc.insert(ignore_permissions=True)
+            else:
+                if not frappe.has_permission("Agent Message", "create", doc=message_doc):
+                    frappe.throw(_("Not permitted to create Agent Message"), frappe.PermissionError)
+                message_doc.insert()
 
             frappe.db.sql(
                 """

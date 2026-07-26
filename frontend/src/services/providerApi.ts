@@ -1,9 +1,9 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { fetchPaginatedCount } from './utilsApi';
-import type { Filter } from 'frappe-js-sdk/lib/db/types';
 
 /**
  * Fields needed for model listing pages
@@ -378,10 +378,11 @@ export async function updateModel(name: string, data: Partial<AIModelDoc>): Prom
 export async function getModalityOptions(): Promise<string[]> {
   try {
     const docType = await db.getDoc('DocType', doctype['AI Model']);
-    const fields = (docType as Record<string, unknown>).fields as Array<Record<string, unknown>> | undefined;
-    const modalitiesField = fields?.find((f) => f.fieldname === 'modalities');
-    if (modalitiesField && typeof modalitiesField.options === 'string') {
-      return modalitiesField.options.split('\n').filter((opt) => opt.trim().length > 0);
+    const modalitiesField = (docType as { fields?: Array<{ fieldname?: string; options?: string }> }).fields?.find(
+      (f) => f.fieldname === 'modalities'
+    );
+    if (modalitiesField && modalitiesField.options) {
+      return modalitiesField.options.split('\n').filter((opt: string) => opt.trim().length > 0);
     }
     return [];
   } catch (error) {

@@ -60,6 +60,9 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNode['type'] {
     if (nodeType === 'end') return 'end';
 
     if (nodeType === 'trigger') {
+        const triggerType = node.data?.triggerConfig?.type;
+        if (triggerType === 'schedule') return 'trigger.schedule';
+        if (triggerType === 'doc-event') return 'trigger.doc-event';
         return 'trigger.webhook';
     }
 
@@ -80,7 +83,8 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNode['type'] {
 
 /** Strip the `type` discriminator from a config object — backend infers type from node.type */
 function omitType<T extends { type?: string }>(obj: T): Omit<T, 'type'> {
-    const { type: _type, ...rest } = obj;
+    const rest = { ...obj };
+    delete rest.type;
     return rest;
 }
 
@@ -178,10 +182,16 @@ function buildNodeData(node: BackendNode): FlowNodeData {
     };
 
     if (frontendType === 'trigger') {
+        const triggerType =
+            node.type === 'trigger.schedule'
+                ? ('schedule' as const)
+                : node.type === 'trigger.doc-event'
+                    ? ('doc-event' as const)
+                    : ('webhook' as const);
         base.triggerConfig = {
-            type: 'webhook' as const,
+            type: triggerType,
             ...node.config,
-        };
+        } as FlowNodeData['triggerConfig'];
     } else if (frontendType === 'action') {
         base.actionConfig = {
             type: mapBackendActionType(node.type),
@@ -195,6 +205,8 @@ function buildNodeData(node: BackendNode): FlowNodeData {
 function getDefaultLabel(backendType: string): string {
     const labels: Record<string, string> = {
         'trigger.webhook': 'Webhook Trigger',
+        'trigger.schedule': 'Schedule Trigger',
+        'trigger.doc-event': 'Document Event Trigger',
         'agent.run': 'Run Agent',
         'tool.call': 'Call Tool',
         'router.llm': 'LLM Router',
@@ -211,6 +223,8 @@ function getDefaultLabel(backendType: string): string {
 function getDefaultIcon(backendType: string): string {
     const icons: Record<string, string> = {
         'trigger.webhook': 'Webhook',
+        'trigger.schedule': 'Clock',
+        'trigger.doc-event': 'Database',
         'agent.run': 'Bot',
         'tool.call': 'Play',
         'router.llm': 'GitBranch',

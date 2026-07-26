@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { knowledgeTypes, knowledgeScopes, knowledgeStorageModes, chromaModes, isVectorKnowledgeType } from '@/data/knowledge';
 import { linkRoutes } from '@/lib/link-routes';
 import type { KnowledgeSourceFormValues } from './types';
+import { AdvancedConfigFields } from './AdvancedConfigFields';
 
 interface ProviderOption {
   name: string;
@@ -25,6 +26,7 @@ interface GeneralTabProps {
 export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
   const watchKnowledgeType = form.watch('knowledge_type');
   const watchChromaMode = form.watch('chroma_mode');
+  const watchPGVectorConnectionMode = form.watch('pgvector_connection_mode');
 
   const providerOptions = useMemo(
     () => providers.map((p) => ({ value: p.name, label: p.provider_name || p.name })),
@@ -323,6 +325,242 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                 />
               </>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {watchKnowledgeType === 'pgvector' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>PGVector Connection Settings</CardTitle>
+            <CardDescription>Connect HUF Knowledge to PostgreSQL with the pgvector extension</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="pgvector_connection_mode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Connection Mode</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? 'External PostgreSQL'}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select mode" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="External PostgreSQL">External PostgreSQL</SelectItem>
+                      <SelectItem value="Site PostgreSQL">Site PostgreSQL</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Use external PostgreSQL for MariaDB-backed Frappe sites</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pgvector_table_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Table Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="huf_knowledge_vectors" {...field} value={field.value ?? ''} />
+                  </FormControl>
+                  <FormDescription>PostgreSQL table used for vector chunks</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pgvector_distance_metric"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Distance Metric</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? 'cosine'}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select metric" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="cosine">Cosine</SelectItem>
+                      <SelectItem value="l2">L2</SelectItem>
+                      <SelectItem value="inner_product">Inner Product</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pgvector_index_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Index Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? 'hnsw'}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select index" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="hnsw">HNSW</SelectItem>
+                      <SelectItem value="ivfflat">IVFFlat</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {watchPGVectorConnectionMode === 'External PostgreSQL' && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="pgvector_host"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Host</FormLabel>
+                      <FormControl>
+                        <Input placeholder="localhost" {...field} value={field.value ?? ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="pgvector_port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Port</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="5432"
+                          {...field}
+                          value={field.value ?? 5432}
+                          onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="pgvector_database"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Database</FormLabel>
+                      <FormControl>
+                        <Input placeholder="huf_vectors" {...field} value={field.value ?? ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="pgvector_user"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>User</FormLabel>
+                      <FormControl>
+                        <Input placeholder="postgres" {...field} value={field.value ?? ''} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="pgvector_password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} value={field.value ?? ''} />
+                      </FormControl>
+                      <FormDescription>Stored in Frappe as a Password field</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="pgvector_sslmode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>SSL Mode</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? 'prefer'}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select SSL mode" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="prefer">Prefer</SelectItem>
+                          <SelectItem value="require">Require</SelectItem>
+                          <SelectItem value="disable">Disable</SelectItem>
+                          <SelectItem value="allow">Allow</SelectItem>
+                          <SelectItem value="verify-ca">Verify CA</SelectItem>
+                          <SelectItem value="verify-full">Verify Full</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
+            <div className="sm:col-span-2 pt-2">
+              <h4 className="text-sm font-medium mb-2">Advanced Configuration</h4>
+              <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {watchKnowledgeType === 'zvec' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>zvec Settings</CardTitle>
+            <CardDescription>
+              Embedded vector database — runs in-process, stores to a portable file, no server needed
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <h4 className="text-sm font-medium mb-2">Advanced Configuration</h4>
+            <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+          </CardContent>
+        </Card>
+      )}
+
+      {watchKnowledgeType === 'redis' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Redis Connection Settings</CardTitle>
+            <CardDescription>
+              Connect HUF Knowledge to Redis with RediSearch vector search
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+
+            <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
           </CardContent>
         </Card>
       )}

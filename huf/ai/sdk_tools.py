@@ -57,6 +57,20 @@ def _frappe_run_context_dict(ctx) -> dict:
     return inner if isinstance(inner, dict) else {}
 
 
+def _merge_run_context(args_dict: dict, ctx) -> dict:
+    """Inject run-context values into tool args without clobbering the LLM's.
+
+    conversation_id / agent_run_id / agent_name from the huf run context are
+    only injected when the key is NOT already present in args_dict — the
+    LLM's explicit arguments always win (setdefault semantics).
+    """
+    huf_ctx = _frappe_run_context_dict(ctx)
+    for key in ("conversation_id", "agent_run_id", "agent_name"):
+        if key in huf_ctx:
+            args_dict.setdefault(key, huf_ctx[key])
+    return args_dict
+
+
 def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_guest: bool = False):
     """Guard function to block dangerous tools for Guest users"""
     user = frappe.session.user
@@ -90,7 +104,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             from huf.ai.mcp_client import create_mcp_tools
             mcp_tools = create_mcp_tools(agent)
             tools.extend(mcp_tools)
-        except Exception as e:
+        except (ImportError, frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError) as e:
             frappe.logger("huf").warning(
                 f"Error loading MCP tools for agent: {e!s}"
             )
@@ -156,6 +170,18 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_set_conversation_data"
                     elif function_doc.types == "Load Conversation Data":
                         function_path = "huf.ai.sdk_tools.handle_load_conversation_data"
+                    elif function_doc.types == "Perplexity Search":
+                        function_path = "huf.ai.sdk_tools.handle_perplexity_search"
+                    elif function_doc.types == "Save Memory Record":
+                        function_path = "huf.ai.memory_tools.handle_save_memory_record"
+                    elif function_doc.types == "Search Memory Records":
+                        function_path = "huf.ai.memory_tools.handle_search_memory_records"
+                    elif function_doc.types == "Get Memory Record":
+                        function_path = "huf.ai.memory_tools.handle_get_memory_record"
+                    elif function_doc.types == "Archive Memory Record":
+                        function_path = "huf.ai.memory_tools.handle_archive_memory_record"
+                    elif function_doc.types == "Promote Memory to Knowledge":
+                        function_path = "huf.ai.memory_tools.handle_promote_memory_to_knowledge"
 
                     else:
                         continue
@@ -211,11 +237,22 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     if tool:
                         tools.append(tool)
 
-            except Exception as e:
+            except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, AttributeError) as e:
                 frappe.logger("huf").debug(
                     f"Error processing function {function_doc.name}: {e!s}"
                 )
 
+    # Load tools from attached skills (mandatory and optional)
+    try:
+        from huf.ai.skills.loader import load_all_skill_tools
+        skill_tools = load_all_skill_tools(agent, frappe.session.user)
+        if skill_tools:
+            tools.extend(skill_tools)
+    except Exception as e:
+        frappe.log_error(
+            f"Error loading skill tools for agent: {e!s}",
+            "Skill Tool Loading Error"
+        )
 
     if hasattr(agent, "enable_conversation_data") and agent.enable_conversation_data:
         existing_types = [t.name for t in tools]
@@ -271,6 +308,38 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                 }
             )
             if tool: tools.append(tool)
+
+    if getattr(agent, "enable_memory", False):
+        existing_tool_names = {getattr(t, "name", "") for t in tools}
+        memory_tool_specs = []
+        if getattr(agent, "enable_memory_search_tool", True):
+            memory_tool_specs.append(("search_memory_records", "Search Memory Records"))
+        if getattr(agent, "enable_memory_write_tool", True):
+            memory_tool_specs.append(("save_memory_record", "Save Memory Record"))
+
+        for tool_name, tool_type in memory_tool_specs:
+            if tool_name in existing_tool_names:
+                continue
+            function_name = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "name")
+            if not function_name:
+                continue
+            try:
+                function_doc = frappe.get_doc("Agent Tool Function", function_name)
+                params = {}
+                if function_doc.params:
+                    params = json.loads(function_doc.params)
+                tool = create_function_tool(
+                    function_doc.tool_name,
+                    function_doc.description,
+                    function_doc.function_path,
+                    params,
+                    tool_type=tool_type,
+                )
+                if tool:
+                    tools.append(tool)
+                    existing_tool_names.add(tool_name)
+            except Exception as e:
+                frappe.logger("huf").debug(f"Error wiring memory tool {tool_name}: {e!s}")
 
     existing_types = [t.name for t in tools] if tools else []
     if "get_result_context" not in existing_types:
@@ -344,13 +413,7 @@ def create_function_tool(
 
                 args_dict = json.loads(args_json or "{}")
 
-                huf_ctx = _frappe_run_context_dict(ctx)
-                if "conversation_id" in huf_ctx:
-                    args_dict["conversation_id"] = huf_ctx["conversation_id"]
-                if "agent_run_id" in huf_ctx:
-                    args_dict["agent_run_id"] = huf_ctx["agent_run_id"]
-                if "agent_name" in huf_ctx:
-                    args_dict["agent_name"] = huf_ctx["agent_name"]
+                _merge_run_context(args_dict, ctx)
 
                 if _extra_args:
                     args_dict.update(_extra_args)
@@ -400,7 +463,7 @@ def create_function_tool(
 
             except Exception as e:
                 frappe.logger("huf").debug(
-                    f"Error in on_invoke_tool for tool '{name}': {e!s}"
+                    f"Error in on_invoke_tool for tool '{name}': {e!s}\n{frappe.get_traceback()}"
                 )
                 return json.dumps({"error": str(e)})
 
@@ -421,9 +484,9 @@ def create_function_tool(
 
         return tool
 
-    except Exception as e:
+    except (TypeError, ValueError, AttributeError) as e:
         frappe.logger("huf").debug(
-            f"Error creating FunctionTool for {name}: {e!s}"
+            f"Error creating FunctionTool for {name}: {e!s}\n{frappe.get_traceback()}"
         )
         return None
 
@@ -470,9 +533,9 @@ def get_function_from_name(tool_name: str) -> Callable:
 
 		return function
 
-	except Exception as e:
+	except (ImportError, AttributeError, TypeError, ValueError) as e:
 		frappe.logger("huf").debug(
-			f"Unexpected error getting function {tool_name}: {e!s}"
+			f"Unexpected error getting function {tool_name}: {e!s}\n{frappe.get_traceback()}"
 		)
 		return None
 
@@ -502,7 +565,7 @@ def wrap_frappe_function(func: Callable) -> Callable:
 
 			return {"success": True, "result": result}
 		except Exception as e:
-			logger.warning(f"Wrapped function {func.__name__} failed: {e}")
+			logger.warning(f"Wrapped function {func.__name__} failed: {e!s}\n{frappe.get_traceback()}")
 			return {"success": False, "error": str(e)}
 
 
@@ -536,7 +599,7 @@ def _sanitize_for_doctype(doctype: str, data: dict) -> dict:
                 cleaned[key] = value
 
         return cleaned
-    except Exception:
+    except (frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError, ValueError, KeyError, TypeError):
         # Defensive fallback: if meta lookup fails, return original data unchanged.
         return data or {}
 
@@ -751,8 +814,11 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
         result_dict = {"name": doc.name, "creation": str(doc.creation)}
 
         return {"success": True, "result": result_dict, "message": f"{reference_doctype} created"}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_create_document failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_create_document failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 
@@ -789,8 +855,11 @@ def handle_delete_document(document_id=None, reference_doctype=None, ignore_perm
         frappe.delete_doc(reference_doctype, document_id, ignore_permissions=ignore_permissions)
 
         return {"success": True, "message": f"{reference_doctype} {document_id} deleted"}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_delete_document failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_delete_document failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 
@@ -910,7 +979,7 @@ def handle_get_list(
 
 		return response
 	except Exception as e:
-		logger.warning(f"handle_get_list failed: {e!s}")
+		logger.warning(f"handle_get_list failed: {e!s}\n{frappe.get_traceback()}")
 		return {"success": False, "error": str(e)}
 
 
@@ -960,8 +1029,11 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
             "result": result_dict,
             "message": f"{reference_doctype} {document_id} updated successfully.",
         }
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_update_document failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_update_document failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 
@@ -1011,8 +1083,11 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
             "message": f"{reference_doctype} '{doc_name}' fetched successfully",
         }
 
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_get_document failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_get_document failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 def handle_create_documents(reference_doctype: str, documents: list = None, data: list = None, **kwargs):
@@ -1101,6 +1176,7 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
             "value": value,
         }
     except Exception as e:
+        logger.warning(f"handle_get_value failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 
@@ -1143,8 +1219,11 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
             "new_value": doc.get(fieldname)
         }
 
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_set_value failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_set_value failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 
@@ -1198,8 +1277,11 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
             "message": "The task is currently being processed in the background. IMPORTANT: DO NOT tell the user that the task is completed or successful yet. Inform the user that you are working on it and will provide an update shortly. Do not mention the terms 'sub-agent' or 'background queue' explicitly, keep it natural (e.g., 'I am processing this for you now...').",
             "job_id": job.id
         }
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_run_agent failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_run_agent failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
@@ -1228,8 +1310,11 @@ def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
             **normalized_kwargs,
         )
         return {"success": True, "result": result}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_attach_file_to_document failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_attach_file_to_document failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 
@@ -1277,8 +1362,11 @@ def handle_get_conversation_data(name: str, default: Any = None, conversation_id
                 break
 
         return {"success": True, "value": value}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_get_conversation_data failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_get_conversation_data failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 def handle_set_conversation_data(
@@ -1360,8 +1448,11 @@ def handle_set_conversation_data(
 
         return {"success": True, "message": f"Set '{name}' match successfully"}
 
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_set_conversation_data failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_set_conversation_data failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 def handle_load_conversation_data(conversation_id: str = None, **kwargs):
@@ -1373,6 +1464,7 @@ def handle_load_conversation_data(conversation_id: str = None, **kwargs):
         state = _load_state(data_json)
         return {"success": True, "data": state}
     except Exception as e:
+        logger.warning(f"handle_load_conversation_data failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 
@@ -1433,8 +1525,11 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
 
         # Unreachable because of the allow-list, but kept as defense-in-depth.
         return {"success": False, "error": "Unexpected DocType."}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.warning(f"handle_get_result_context failed: {e!s}")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_get_result_context failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 def _get_default_image_model(provider_name: str) -> str:
@@ -1553,7 +1648,7 @@ async def handle_generate_image(
                 """, (conversation_id,), as_dict=1)
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-            except Exception:
+            except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError):
                 # Hard failure: message ordering is required; abort and alert admin.
                 frappe.log_error(
                     frappe.get_traceback(),
@@ -1616,30 +1711,35 @@ async def handle_generate_image(
                 # Create Agent Message first (we'll attach the file to it)
                 message_doc = None
                 if conversation_id and conversation_index is not None:
-                    try:
-                        # Get provider and model from agent
-                        provider = agent_doc.provider
-                        model = agent_doc.model
+                    if frappe.has_permission("Agent Message", "create"):
+                        try:
+                            # Get provider and model from agent
+                            provider = agent_doc.provider
+                            model = agent_doc.model
 
-                        # Create Agent Message with kind "Image" first (without image)
-                        message_doc = frappe.get_doc({
-                            "doctype": "Agent Message",
-                            "conversation": conversation_id,
-                            "role": "agent",
-                            "content": f"Generated image: {prompt}",
-                            "kind": "Image",
-                            "agent": agent_name,
-                            "provider": provider,
-                            "model": model,  # Link to AI Model
-                            "agent_run": kwargs.get("agent_run_id"),
-                            "conversation_index": conversation_index + idx,  # Increment for each image
-                            "is_agent_message": 1,
-                            "user": "Agent"
-                        })
-                        message_doc.insert(ignore_permissions=True)
-                    except Exception as e:
-                        logger.warning(f"Create image message failed: {e!s}")
-                        # Continue even if message creation fails
+                            # Create Agent Message with kind "Image" first (without image)
+                            message_doc = frappe.get_doc({
+                                "doctype": "Agent Message",
+                                "conversation": conversation_id,
+                                "role": "agent",
+                                "content": f"Generated image: {prompt}",
+                                "kind": "Image",
+                                "agent": agent_name,
+                                "provider": provider,
+                                "model": model,  # Link to AI Model
+                                "agent_run": kwargs.get("agent_run_id"),
+                                "conversation_index": conversation_index + idx,  # Increment for each image
+                                "is_agent_message": 1,
+                                "user": "Agent"
+                            })
+                            message_doc.insert()
+                        except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
+                            logger.warning(f"Create image message failed: {e!s}")
+                            # Continue even if message creation fails
+                    else:
+                        frappe.logger("huf").warning(
+                            f"User {frappe.session.user} does not have permission to create Agent Message; attaching image to conversation instead."
+                        )
 
                 # Save file attached to the Agent Message (or conversation if message creation failed)
                 if message_doc:
@@ -1692,7 +1792,7 @@ async def handle_generate_image(
                             user=frappe.session.user,
                             after_commit=False
                         )
-                    except Exception as e:
+                    except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
                         frappe.logger("huf").debug(
                             f"Error emitting new_agent_message socket event: {e!s}"
                         )
@@ -1711,7 +1811,7 @@ async def handle_generate_image(
                     SET total_messages = %s, last_activity = NOW()
                     WHERE name = %s
                 """, (final_index, conversation_id))
-            except Exception as e:
+            except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
                 frappe.logger("huf").debug(
                     f"Error updating conversation total_messages: {e!s}"
                 )
@@ -1728,7 +1828,7 @@ async def handle_generate_image(
             "message": f"Generated {len(images)} image(s) successfully"
         }
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard provider/tool failure: retain Error Log for admin attention.
         frappe.log_error(f"Image generation error: {e!s}", "Image Generation Tool")
         return {"success": False, "error": str(e)}
@@ -1799,7 +1899,7 @@ async def handle_ocr_document(
 
         return result.as_dict()
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard OCR failure: retain Error Log for admin attention.
         frappe.log_error(f"OCR error: {e!s}", "OCR Tool")
         return {"success": False, "error": str(e)}
@@ -2101,7 +2201,7 @@ async def handle_generate_audio(
                 """, (conversation_id,), as_dict=1)
 
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-            except Exception:
+            except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError):
                 # Hard failure: message ordering is required; abort and alert admin.
                 frappe.log_error(
                     frappe.get_traceback(),
@@ -2118,40 +2218,45 @@ async def handle_generate_audio(
         # Create Agent Message first (we'll attach the file to it)
         message_doc = None
         if conversation_id and conversation_index is not None:
-            try:
-                # Get provider and model from agent
-                provider = agent_doc.provider
-                model_name = agent_doc.model
+            if frappe.has_permission("Agent Message", "create"):
+                try:
+                    # Get provider and model from agent
+                    provider = agent_doc.provider
+                    model_name = agent_doc.model
 
-                # Create Agent Message with kind "Audio"
-                message_doc = frappe.get_doc({
-                    "doctype": "Agent Message",
-                    "conversation": conversation_id,
-                    "role": "agent",
-                    "content": f"Generated audio: {input[:100]}{'...' if len(input) > 100 else ''}",
-                    "kind": "Audio",
-                    "agent": agent_name,
-                    "provider": provider,
-                    "model": model_name,
-                    "agent_run": kwargs.get("agent_run_id"),
-                    "conversation_index": conversation_index,
-                    "is_agent_message": 1,
-                    "user": "Agent",
-                    "tts_voice": voice
-                })
-                message_doc.insert(ignore_permissions=True)
+                    # Create Agent Message with kind "Audio"
+                    message_doc = frappe.get_doc({
+                        "doctype": "Agent Message",
+                        "conversation": conversation_id,
+                        "role": "agent",
+                        "content": f"Generated audio: {input[:100]}{'...' if len(input) > 100 else ''}",
+                        "kind": "Audio",
+                        "agent": agent_name,
+                        "provider": provider,
+                        "model": model_name,
+                        "agent_run": kwargs.get("agent_run_id"),
+                        "conversation_index": conversation_index,
+                        "is_agent_message": 1,
+                        "user": "Agent",
+                        "tts_voice": voice
+                    })
+                    message_doc.insert()
 
-                if tts_source == "agent_config" and getattr(agent_doc, "tts_model", None):
-                    frappe.db.set_value(
-                        "Agent Message", message_doc.name,
-                        "tts_model", agent_doc.tts_model,
-                        update_modified=False
-                    )
-                    message_doc.tts_model = agent_doc.tts_model
+                    if tts_source == "agent_config" and getattr(agent_doc, "tts_model", None):
+                        frappe.db.set_value(
+                            "Agent Message", message_doc.name,
+                            "tts_model", agent_doc.tts_model,
+                            update_modified=False
+                        )
+                        message_doc.tts_model = agent_doc.tts_model
 
-            except Exception as e:
-                logger.warning(f"Create audio message failed: {e!s}")
-                message_doc = None
+                except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
+                    logger.warning(f"Create audio message failed: {e!s}")
+                    message_doc = None
+            else:
+                frappe.logger("huf").warning(
+                    f"User {frappe.session.user} does not have permission to create Agent Message; attaching audio to conversation instead."
+                )
 
         # Save file attached to the Agent Message
         if message_doc:
@@ -2202,7 +2307,7 @@ async def handle_generate_audio(
                     user=frappe.session.user,
                     after_commit=False
                 )
-            except Exception as e:
+            except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
                 frappe.logger("huf").debug(
                     f"Error emitting new_agent_message socket event: {e!s}"
                 )
@@ -2215,7 +2320,7 @@ async def handle_generate_audio(
                     SET total_messages = %s, last_activity = NOW()
                     WHERE name = %s
                 """, (conversation_index, conversation_id))
-            except Exception as e:
+            except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
                 frappe.logger("huf").debug(
                     f"Error updating conversation total_messages: {e!s}"
                 )
@@ -2238,7 +2343,7 @@ async def handle_generate_audio(
             "conversation_id": conversation_id
         }
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard provider/tool failure: retain Error Log for admin attention.
         frappe.log_error(title="Audio Generation Tool", message=f"Audio generation error: {e!s}")
         return {"success": False, "error": str(e)}
@@ -2322,7 +2427,69 @@ async def handle_transcribe_audio(
             "provider": result.get("provider"),
         }
 
-    except Exception as e:
+    except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard transcription failure: retain Error Log for admin attention.
         frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
+        return {"success": False, "error": str(e)}
+
+def handle_perplexity_search(query: str, **kwargs):
+    """
+    Perform a web search using a Perplexity sonar model via LiteLLM.
+
+    Reads the API key from the ``perplexity_api_key`` site_config value,
+    falling back to the ``PERPLEXITY_API_KEY`` environment variable.
+
+    Args:
+        query: The search query string
+
+    Returns:
+        dict: {
+            "success": bool,
+            "query": str,
+            "answer": str,          # Grounded answer text from the sonar model
+            "citations": list,      # Source URLs cited by the model
+            "model": str,
+            "error": str
+        }
+    """
+    import os
+
+    site_config = frappe.get_site_config()
+    api_key = site_config.get("perplexity_api_key") or os.environ.get("PERPLEXITY_API_KEY")
+
+    if not api_key:
+        frappe.throw(
+            _(
+                "Perplexity Search is not configured. Please set 'perplexity_api_key' "
+                "in site config or the PERPLEXITY_API_KEY environment variable."
+            )
+        )
+
+    try:
+        from litellm import completion
+
+        # LiteLLM routes Perplexity credentials via environment variable
+        os.environ["PERPLEXITY_API_KEY"] = api_key
+
+        response = completion(
+            model="perplexity/sonar",
+            messages=[{"role": "user", "content": query}],
+        )
+
+        message = response.choices[0].message
+        citations = (
+            getattr(response, "citations", None)
+            or getattr(message, "citations", None)
+            or []
+        )
+
+        return {
+            "success": True,
+            "query": query,
+            "answer": message.content,
+            "citations": citations,
+            "model": "perplexity/sonar",
+        }
+    except Exception as e:
+        logger.warning(f"handle_perplexity_search failed: {e!s}")
         return {"success": False, "error": str(e)}

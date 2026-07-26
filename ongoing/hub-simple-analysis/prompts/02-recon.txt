@@ -1,0 +1,19 @@
+GROUND FACTS (already verified — do not re-derive):
+- Repo: /Users/safwan/Code/HUF/huf, on branch feat/design-simplified-hub-homepage-interface, already merged with develop.
+- Hub Simple = chat-first home at `/` (PR #243). Key files: frontend/src/pages/HubSimplePage.tsx, frontend/src/components/hub/SlashCommandMenu.tsx, frontend/src/components/hub/HubConversationView.tsx, frontend/src/services/commandParser.ts, App.tsx routing changes.
+- PR claims: SSE streaming via existing sendMessage API, provider check on mount, graceful fallback if "Hub Orchestrator" agent missing, role-aware greetings/starter prompts, slash command palette, dashboard moved to /dashboard.
+- This is READ-ONLY recon. DO NOT modify any files. DO NOT push.
+
+TASKS — write findings with these IDs into the output file:
+R1. FILE-BY-FILE READ: read every hub file fully + the App.tsx diff vs develop. Summarize what each does, data flow, state management, and how chat streaming is wired (which API, fallback path).
+R2. ROLE MODEL: how are roles (admin/builder/operator/viewer) detected? Are these real Frappe roles that exist in the app, or invented? Check backend for matching roles/permissions.
+R3. HUB ORCHESTRATOR AGENT: how is the "Hub Orchestrator" agent referenced (hardcoded name? lookup?). What happens when it doesn't exist? Search backend (huf/install.py, hooks.py, fixtures, patches) for any seeding of system/reserved agents. Does the codebase have ANY concept of system/reserved/default agents today? Report exactly what exists.
+R4. COMMAND PARSER: read commandParser.ts — what commands, how parsed, any injection/robustness issues, dead commands pointing at routes that don't exist post-merge.
+R5. CONVENTION COMPLIANCE: check against CLAUDE.md frontend rules — services layer usage, doctype constants from @/data/doctypes, handleFrappeError, shadcn/ui reuse, cn(), sonner toasts, useInfiniteScroll patterns. List violations with file:line.
+R6. UX/STATE GAPS (code-observable): loading/error/empty states, conversation persistence (does hub chat create an Agent Conversation? can user resume it? does it appear in /chat list?), mobile behavior, accessibility basics (keyboard nav claims), what happens mid-stream on navigation.
+R7. OVERLAP: compare HubConversationView vs existing ChatWindowV2/ChatInput/ai-elements — how much is duplicated vs reused? Quantify.
+R8. TECH DEBT/RISKS: hardcoded strings, TODO markers, unused code, anything from the merge log (ongoing/hub-simple-analysis/01-merge.md — read first) flagged as uncertain.
+
+OUTPUT: write detailed findings to ongoing/hub-simple-analysis/02-recon.md, organized by task ID, with file:line references. Be concrete, quote small snippets where they matter.
+
+REPLY ONLY with: <finding counts per ID, e.g. R1:ok R2:2-issues ...>, <top 3 most significant findings in one line each>, <verdict: SOLID|MIXED|WEAK>.

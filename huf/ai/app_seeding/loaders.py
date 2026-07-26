@@ -128,6 +128,8 @@ def _upsert_doc(doctype: str, key_field: str, data: dict, source_app: str, sourc
 
 def upsert_agent(data: dict, source_app: str, source_file: str) -> tuple:
     data = data.copy()
+    # `is_system` is intentionally a pass-through field so seed files can
+    # mark reserved agents; _upsert_doc will preserve it via doc.update().
     if "tools" in data and isinstance(data["tools"], list):
         data["agent_tool"] = [{"tool": t} for t in data["tools"]]
         del data["tools"]
@@ -143,7 +145,7 @@ VALID_TYPES = [
     "Cancel Document", "Get Amended Document", "Custom Function", "App Provided",
     "Attach File to Document", "Get Report Result", "Get Value", "Set Value",
     "GET", "POST", "Run Agent", "Client Side Tool", "Get Conversation Data",
-    "Set Conversation Data", "Load Conversation Data"
+    "Set Conversation Data", "Load Conversation Data", "Perplexity Search"
 ]
 
 def upsert_tool(data: dict, source_app: str, source_file: str) -> tuple:

@@ -12,7 +12,7 @@ export type TriggerFieldConfig = {
   options?: string[];
   description?: string;
   required?: boolean;
-  render?: (control: any, field: any, formState: any, agentId?: string) => React.ReactNode;
+  render?: (control: unknown, field: unknown, formState: unknown, agentId?: string) => React.ReactNode;
 };
 
 export type TriggerTypeConfig = {

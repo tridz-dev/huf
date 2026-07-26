@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { doctype } from '@/data/doctypes';
@@ -51,7 +52,7 @@ export async function getCategories(
         'parent_category',
         'modified',
       ],
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: 1000,
       orderBy: { field: 'modified', order: 'desc' },
     });
@@ -112,7 +113,7 @@ export async function updateCategory(
           data.category_name
         );
         targetName = data.category_name;
-      } catch (error: any) {
+      } catch (error) {
         console.warn('rename_doc failed, falling back to updateDoc', error);
         // Some doctype configs may still not allow rename; continue with current name
         targetName = name;

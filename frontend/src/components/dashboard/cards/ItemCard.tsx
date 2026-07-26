@@ -32,7 +32,7 @@ interface ItemCardProps {
     variant?: BadgeVariant;
   };
   metadata?: MetadataItem[];
-  badges?: Array<{ label: string; variant?: BadgeVariant }>;
+  badges?: Array<{ label: ReactNode; variant?: BadgeVariant }>;
   actions?: ActionButton[];
   menuActions?: ActionButton[];
   menuIcon?: LucideIcon;
@@ -111,8 +111,8 @@ export function ItemCard({
 
             {badges.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
-                {badges.map((badge) => (
-                  <Badge key={badge.label} variant={badge.variant || 'secondary'} className="text-xs">
+                {badges.map((badge, index) => (
+                  <Badge key={index} variant={badge.variant || 'secondary'} className="text-xs">
                     {badge.label}
                   </Badge>
                 ))}

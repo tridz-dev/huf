@@ -78,7 +78,7 @@ export interface AppTriggerConfig {
   type: 'app-trigger';
   integration?: AppTriggerIntegration;
   event?: string;
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
 }
 
 export type TriggerConfig =

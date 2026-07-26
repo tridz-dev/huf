@@ -95,6 +95,11 @@ import { cn } from '@/lib/utils';
 import { extractJsxAndBindings } from '@/utils/jsxPreambleParser';
 import { fixCommonJsxMistakes } from '@/utils/jsxPostProcessor';
 
+// Loose component type for the AI-generated JSX registry: props are supplied
+// dynamically at runtime, so precise prop typing is not feasible here.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyComponent = ComponentType<any>;
+
 // Common colors for charts
 const CHART_COLORS = [
 	'#8884d8',
@@ -164,163 +169,162 @@ function autoCompleteJsx(jsx: string): string {
 }
 
 // Available components for JSX parsing - cast through unknown to avoid strict type checking
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const availableComponents: Record<string, ComponentType<any>> = {
+const availableComponents: Record<string, AnyComponent> = {
 	// Recharts - cast through unknown to avoid type issues with required props
-	LineChart: LineChart as unknown as ComponentType<any>,
-	Line: Line as unknown as ComponentType<any>,
-	BarChart: BarChart as unknown as ComponentType<any>,
-	Bar: Bar as unknown as ComponentType<any>,
-	PieChart: PieChart as unknown as ComponentType<any>,
-	Pie: Pie as unknown as ComponentType<any>,
-	Cell: Cell as unknown as ComponentType<any>,
-	AreaChart: AreaChart as unknown as ComponentType<any>,
-	Area: Area as unknown as ComponentType<any>,
-	XAxis: XAxis as unknown as ComponentType<any>,
-	YAxis: YAxis as unknown as ComponentType<any>,
-	CartesianGrid: CartesianGrid as unknown as ComponentType<any>,
-	Tooltip: Tooltip as unknown as ComponentType<any>,
-	Legend: Legend as unknown as ComponentType<any>,
-	ResponsiveContainer: ResponsiveContainer as unknown as ComponentType<any>,
-	ScatterChart: ScatterChart as unknown as ComponentType<any>,
-	Scatter: Scatter as unknown as ComponentType<any>,
-	RadarChart: RadarChart as unknown as ComponentType<any>,
-	Radar: Radar as unknown as ComponentType<any>,
-	PolarGrid: PolarGrid as unknown as ComponentType<any>,
-	PolarAngleAxis: PolarAngleAxis as unknown as ComponentType<any>,
-	PolarRadiusAxis: PolarRadiusAxis as unknown as ComponentType<any>,
-	ComposedChart: ComposedChart as unknown as ComponentType<any>,
-	Treemap: Treemap as unknown as ComponentType<any>,
-	Funnel: Funnel as unknown as ComponentType<any>,
-	FunnelChart: FunnelChart as unknown as ComponentType<any>,
+	LineChart: LineChart as unknown as AnyComponent,
+	Line: Line as unknown as AnyComponent,
+	BarChart: BarChart as unknown as AnyComponent,
+	Bar: Bar as unknown as AnyComponent,
+	PieChart: PieChart as unknown as AnyComponent,
+	Pie: Pie as unknown as AnyComponent,
+	Cell: Cell as unknown as AnyComponent,
+	AreaChart: AreaChart as unknown as AnyComponent,
+	Area: Area as unknown as AnyComponent,
+	XAxis: XAxis as unknown as AnyComponent,
+	YAxis: YAxis as unknown as AnyComponent,
+	CartesianGrid: CartesianGrid as unknown as AnyComponent,
+	Tooltip: Tooltip as unknown as AnyComponent,
+	Legend: Legend as unknown as AnyComponent,
+	ResponsiveContainer: ResponsiveContainer as unknown as AnyComponent,
+	ScatterChart: ScatterChart as unknown as AnyComponent,
+	Scatter: Scatter as unknown as AnyComponent,
+	RadarChart: RadarChart as unknown as AnyComponent,
+	Radar: Radar as unknown as AnyComponent,
+	PolarGrid: PolarGrid as unknown as AnyComponent,
+	PolarAngleAxis: PolarAngleAxis as unknown as AnyComponent,
+	PolarRadiusAxis: PolarRadiusAxis as unknown as AnyComponent,
+	ComposedChart: ComposedChart as unknown as AnyComponent,
+	Treemap: Treemap as unknown as AnyComponent,
+	Funnel: Funnel as unknown as AnyComponent,
+	FunnelChart: FunnelChart as unknown as AnyComponent,
 	
 	// shadcn/ui Components - Phase 1 & 2
-	Button: Button as unknown as ComponentType<any>,
-	Card: Card as unknown as ComponentType<any>,
-	CardHeader: CardHeader as unknown as ComponentType<any>,
-	CardTitle: CardTitle as unknown as ComponentType<any>,
-	CardDescription: CardDescription as unknown as ComponentType<any>,
-	CardContent: CardContent as unknown as ComponentType<any>,
-	CardFooter: CardFooter as unknown as ComponentType<any>,
-	Badge: Badge as unknown as ComponentType<any>,
-	Alert: Alert as unknown as ComponentType<any>,
-	AlertTitle: AlertTitle as unknown as ComponentType<any>,
-	AlertDescription: AlertDescription as unknown as ComponentType<any>,
-	Separator: Separator as unknown as ComponentType<any>,
-	Progress: Progress as unknown as ComponentType<any>,
-	Tabs: Tabs as unknown as ComponentType<any>,
-	TabsList: TabsList as unknown as ComponentType<any>,
-	TabsTrigger: TabsTrigger as unknown as ComponentType<any>,
-	TabsContent: TabsContent as unknown as ComponentType<any>,
-	Accordion: Accordion as unknown as ComponentType<any>,
-	AccordionItem: AccordionItem as unknown as ComponentType<any>,
-	AccordionTrigger: AccordionTrigger as unknown as ComponentType<any>,
-	AccordionContent: AccordionContent as unknown as ComponentType<any>,
-	Table: Table as unknown as ComponentType<any>,
-	TableHeader: TableHeader as unknown as ComponentType<any>,
-	TableBody: TableBody as unknown as ComponentType<any>,
-	TableRow: TableRow as unknown as ComponentType<any>,
-	TableHead: TableHead as unknown as ComponentType<any>,
-	TableCell: TableCell as unknown as ComponentType<any>,
-	TableCaption: TableCaption as unknown as ComponentType<any>,
-	Avatar: Avatar as unknown as ComponentType<any>,
-	AvatarImage: AvatarImage as unknown as ComponentType<any>,
-	AvatarFallback: AvatarFallback as unknown as ComponentType<any>,
-	Skeleton: Skeleton as unknown as ComponentType<any>,
+	Button: Button as unknown as AnyComponent,
+	Card: Card as unknown as AnyComponent,
+	CardHeader: CardHeader as unknown as AnyComponent,
+	CardTitle: CardTitle as unknown as AnyComponent,
+	CardDescription: CardDescription as unknown as AnyComponent,
+	CardContent: CardContent as unknown as AnyComponent,
+	CardFooter: CardFooter as unknown as AnyComponent,
+	Badge: Badge as unknown as AnyComponent,
+	Alert: Alert as unknown as AnyComponent,
+	AlertTitle: AlertTitle as unknown as AnyComponent,
+	AlertDescription: AlertDescription as unknown as AnyComponent,
+	Separator: Separator as unknown as AnyComponent,
+	Progress: Progress as unknown as AnyComponent,
+	Tabs: Tabs as unknown as AnyComponent,
+	TabsList: TabsList as unknown as AnyComponent,
+	TabsTrigger: TabsTrigger as unknown as AnyComponent,
+	TabsContent: TabsContent as unknown as AnyComponent,
+	Accordion: Accordion as unknown as AnyComponent,
+	AccordionItem: AccordionItem as unknown as AnyComponent,
+	AccordionTrigger: AccordionTrigger as unknown as AnyComponent,
+	AccordionContent: AccordionContent as unknown as AnyComponent,
+	Table: Table as unknown as AnyComponent,
+	TableHeader: TableHeader as unknown as AnyComponent,
+	TableBody: TableBody as unknown as AnyComponent,
+	TableRow: TableRow as unknown as AnyComponent,
+	TableHead: TableHead as unknown as AnyComponent,
+	TableCell: TableCell as unknown as AnyComponent,
+	TableCaption: TableCaption as unknown as AnyComponent,
+	Avatar: Avatar as unknown as AnyComponent,
+	AvatarImage: AvatarImage as unknown as AnyComponent,
+	AvatarFallback: AvatarFallback as unknown as AnyComponent,
+	Skeleton: Skeleton as unknown as AnyComponent,
 	
 	// Lucide Icons - Comprehensive Set
 	// Status & Feedback
-	CheckCircle: CheckCircle as unknown as ComponentType<any>,
-	XCircle: XCircle as unknown as ComponentType<any>,
-	AlertTriangle: AlertTriangle as unknown as ComponentType<any>,
-	AlertCircle: AlertCircle as unknown as ComponentType<any>,
-	Info: Info as unknown as ComponentType<any>,
-	HelpCircle: HelpCircle as unknown as ComponentType<any>,
-	Loader2: Loader2 as unknown as ComponentType<any>,
+	CheckCircle: CheckCircle as unknown as AnyComponent,
+	XCircle: XCircle as unknown as AnyComponent,
+	AlertTriangle: AlertTriangle as unknown as AnyComponent,
+	AlertCircle: AlertCircle as unknown as AnyComponent,
+	Info: Info as unknown as AnyComponent,
+	HelpCircle: HelpCircle as unknown as AnyComponent,
+	Loader2: Loader2 as unknown as AnyComponent,
 	// Trends & Analytics
-	TrendingUp: TrendingUp as unknown as ComponentType<any>,
-	TrendingDown: TrendingDown as unknown as ComponentType<any>,
-	ArrowUp: ArrowUp as unknown as ComponentType<any>,
-	ArrowDown: ArrowDown as unknown as ComponentType<any>,
-	Activity: Activity as unknown as ComponentType<any>,
-	BarChart3: BarChart3 as unknown as ComponentType<any>,
+	TrendingUp: TrendingUp as unknown as AnyComponent,
+	TrendingDown: TrendingDown as unknown as AnyComponent,
+	ArrowUp: ArrowUp as unknown as AnyComponent,
+	ArrowDown: ArrowDown as unknown as AnyComponent,
+	Activity: Activity as unknown as AnyComponent,
+	BarChart3: BarChart3 as unknown as AnyComponent,
 	// Business & Finance
-	DollarSign: DollarSign as unknown as ComponentType<any>,
-	ShoppingCart: ShoppingCart as unknown as ComponentType<any>,
-	CreditCard: CreditCard as unknown as ComponentType<any>,
-	Receipt: Receipt as unknown as ComponentType<any>,
-	PieChartIcon: PieChartIcon as unknown as ComponentType<any>,
+	DollarSign: DollarSign as unknown as AnyComponent,
+	ShoppingCart: ShoppingCart as unknown as AnyComponent,
+	CreditCard: CreditCard as unknown as AnyComponent,
+	Receipt: Receipt as unknown as AnyComponent,
+	PieChartIcon: PieChartIcon as unknown as AnyComponent,
 	// Actions
-	Copy: Copy as unknown as ComponentType<any>,
-	Download: Download as unknown as ComponentType<any>,
-	ExternalLink: ExternalLink as unknown as ComponentType<any>,
-	Share2: Share2 as unknown as ComponentType<any>,
-	Save: Save as unknown as ComponentType<any>,
-	Trash2: Trash2 as unknown as ComponentType<any>,
-	Edit: Edit as unknown as ComponentType<any>,
-	Plus: Plus as unknown as ComponentType<any>,
-	Minus: Minus as unknown as ComponentType<any>,
-	X: X as unknown as ComponentType<any>,
+	Copy: Copy as unknown as AnyComponent,
+	Download: Download as unknown as AnyComponent,
+	ExternalLink: ExternalLink as unknown as AnyComponent,
+	Share2: Share2 as unknown as AnyComponent,
+	Save: Save as unknown as AnyComponent,
+	Trash2: Trash2 as unknown as AnyComponent,
+	Edit: Edit as unknown as AnyComponent,
+	Plus: Plus as unknown as AnyComponent,
+	Minus: Minus as unknown as AnyComponent,
+	X: X as unknown as AnyComponent,
 	// Navigation
-	ChevronRight: ChevronRight as unknown as ComponentType<any>,
-	ChevronDown: ChevronDown as unknown as ComponentType<any>,
-	ChevronLeft: ChevronLeft as unknown as ComponentType<any>,
-	ChevronUp: ChevronUp as unknown as ComponentType<any>,
-	ArrowRight: ArrowRight as unknown as ComponentType<any>,
-	ArrowLeft: ArrowLeft as unknown as ComponentType<any>,
+	ChevronRight: ChevronRight as unknown as AnyComponent,
+	ChevronDown: ChevronDown as unknown as AnyComponent,
+	ChevronLeft: ChevronLeft as unknown as AnyComponent,
+	ChevronUp: ChevronUp as unknown as AnyComponent,
+	ArrowRight: ArrowRight as unknown as AnyComponent,
+	ArrowLeft: ArrowLeft as unknown as AnyComponent,
 	// Media
-	ImageIcon: ImageIcon as unknown as ComponentType<any>,
-	Video: Video as unknown as ComponentType<any>,
-	Music: Music as unknown as ComponentType<any>,
-	FileText: FileText as unknown as ComponentType<any>,
-	File: File as unknown as ComponentType<any>,
-	FileIcon: FileIcon as unknown as ComponentType<any>,
+	ImageIcon: ImageIcon as unknown as AnyComponent,
+	Video: Video as unknown as AnyComponent,
+	Music: Music as unknown as AnyComponent,
+	FileText: FileText as unknown as AnyComponent,
+	File: File as unknown as AnyComponent,
+	FileIcon: FileIcon as unknown as AnyComponent,
 	// Communication
-	Mail: Mail as unknown as ComponentType<any>,
-	MessageCircle: MessageCircle as unknown as ComponentType<any>,
-	Phone: Phone as unknown as ComponentType<any>,
-	Calendar: Calendar as unknown as ComponentType<any>,
-	Clock: Clock as unknown as ComponentType<any>,
-	Bell: Bell as unknown as ComponentType<any>,
+	Mail: Mail as unknown as AnyComponent,
+	MessageCircle: MessageCircle as unknown as AnyComponent,
+	Phone: Phone as unknown as AnyComponent,
+	Calendar: Calendar as unknown as AnyComponent,
+	Clock: Clock as unknown as AnyComponent,
+	Bell: Bell as unknown as AnyComponent,
 	// Users & Social
-	User: User as unknown as ComponentType<any>,
-	Users: Users as unknown as ComponentType<any>,
-	UserPlus: UserPlus as unknown as ComponentType<any>,
-	Heart: Heart as unknown as ComponentType<any>,
-	Star: Star as unknown as ComponentType<any>,
-	ThumbsUp: ThumbsUp as unknown as ComponentType<any>,
-	ThumbsDown: ThumbsDown as unknown as ComponentType<any>,
+	User: User as unknown as AnyComponent,
+	Users: Users as unknown as AnyComponent,
+	UserPlus: UserPlus as unknown as AnyComponent,
+	Heart: Heart as unknown as AnyComponent,
+	Star: Star as unknown as AnyComponent,
+	ThumbsUp: ThumbsUp as unknown as AnyComponent,
+	ThumbsDown: ThumbsDown as unknown as AnyComponent,
 	// Tech
-	Code: Code as unknown as ComponentType<any>,
-	Terminal: Terminal as unknown as ComponentType<any>,
-	Database: Database as unknown as ComponentType<any>,
-	Cloud: Cloud as unknown as ComponentType<any>,
-	Server: Server as unknown as ComponentType<any>,
-	Wifi: Wifi as unknown as ComponentType<any>,
-	Lock: Lock as unknown as ComponentType<any>,
-	Unlock: Unlock as unknown as ComponentType<any>,
-	Key: Key as unknown as ComponentType<any>,
+	Code: Code as unknown as AnyComponent,
+	Terminal: Terminal as unknown as AnyComponent,
+	Database: Database as unknown as AnyComponent,
+	Cloud: Cloud as unknown as AnyComponent,
+	Server: Server as unknown as AnyComponent,
+	Wifi: Wifi as unknown as AnyComponent,
+	Lock: Lock as unknown as AnyComponent,
+	Unlock: Unlock as unknown as AnyComponent,
+	Key: Key as unknown as AnyComponent,
 	// General
-	Home: Home as unknown as ComponentType<any>,
-	Settings: Settings as unknown as ComponentType<any>,
-	Search: Search as unknown as ComponentType<any>,
-	Filter: Filter as unknown as ComponentType<any>,
-	Menu: Menu as unknown as ComponentType<any>,
-	MoreVertical: MoreVertical as unknown as ComponentType<any>,
-	MoreHorizontal: MoreHorizontal as unknown as ComponentType<any>,
-	Eye: Eye as unknown as ComponentType<any>,
-	EyeOff: EyeOff as unknown as ComponentType<any>,
-	Zap: Zap as unknown as ComponentType<any>,
-	Target: Target as unknown as ComponentType<any>,
-	Flag: Flag as unknown as ComponentType<any>,
-	Bookmark: Bookmark as unknown as ComponentType<any>,
-	Tag: Tag as unknown as ComponentType<any>,
+	Home: Home as unknown as AnyComponent,
+	Settings: Settings as unknown as AnyComponent,
+	Search: Search as unknown as AnyComponent,
+	Filter: Filter as unknown as AnyComponent,
+	Menu: Menu as unknown as AnyComponent,
+	MoreVertical: MoreVertical as unknown as AnyComponent,
+	MoreHorizontal: MoreHorizontal as unknown as AnyComponent,
+	Eye: Eye as unknown as AnyComponent,
+	EyeOff: EyeOff as unknown as AnyComponent,
+	Zap: Zap as unknown as AnyComponent,
+	Target: Target as unknown as AnyComponent,
+	Flag: Flag as unknown as AnyComponent,
+	Bookmark: Bookmark as unknown as AnyComponent,
+	Tag: Tag as unknown as AnyComponent,
 	
 	// Basic HTML-like components
 	Fragment: ({ children }: { children: ReactNode }) => <>{children}</>,
-	div: (({ children, ...props }) => <div {...props}>{children}</div>) as ComponentType<any>,
-	span: (({ children, ...props }) => <span {...props}>{children}</span>) as ComponentType<any>,
-	p: (({ children, ...props }) => <p {...props}>{children}</p>) as ComponentType<any>,
+	div: (({ children, ...props }) => <div {...props}>{children}</div>) as AnyComponent,
+	span: (({ children, ...props }) => <span {...props}>{children}</span>) as AnyComponent,
+	p: (({ children, ...props }) => <p {...props}>{children}</p>) as AnyComponent,
 };
 
 // Default bindings available in JSX
@@ -370,21 +374,21 @@ const defaultBindings = {
 	min: (arr: number[]) => Math.min(...arr),
 	
 	// Data Transformation
-	groupBy: (arr: any[], key: string) => 
-		arr.reduce((acc, item) => {
-			const group = item[key];
+	groupBy: (arr: Record<string, unknown>[], key: string) =>
+		arr.reduce((acc: Record<string, unknown[]>, item) => {
+			const group = String(item[key]);
 			acc[group] = acc[group] || [];
 			acc[group].push(item);
 			return acc;
-		}, {}),
-	sortBy: (arr: any[], key: string) => 
-		[...arr].sort((a, b) => a[key] > b[key] ? 1 : -1),
+		}, {} as Record<string, unknown[]>),
+	sortBy: (arr: Record<string, unknown>[], key: string) =>
+		[...arr].sort((a, b) => (a[key] as string | number) > (b[key] as string | number) ? 1 : -1),
 };
 
 export interface JSXPreviewProps {
 	jsx: string;
 	isStreaming?: boolean;
-	components?: Record<string, ComponentType<any>>;
+	components?: Record<string, AnyComponent>;
 	bindings?: Record<string, unknown>;
 	className?: string;
 	children?: ReactNode;
@@ -446,7 +450,7 @@ export function JSXPreview({
 }
 
 export interface JSXPreviewContentProps {
-	components?: Record<string, ComponentType<any>>;
+	components?: Record<string, AnyComponent>;
 	bindings?: Record<string, unknown>;
 	className?: string;
 	renderError?: (error: Error) => ReactNode;

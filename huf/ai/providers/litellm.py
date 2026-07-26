@@ -31,7 +31,14 @@ from huf.ai.transaction import transaction_checkpoint
 from huf.ai.cost_calculator import calculate_cost
 from huf.ai.conversation_manager import repair_message_sequence
 
-logger = frappe.logger("huf")
+class _LazyLogger:
+	"""Defer frappe.logger() until first use so test discovery can import this module."""
+
+	def __getattr__(self, name):
+		return getattr(frappe.logger("huf"), name)
+
+
+logger = _LazyLogger()
 
 # Default request timeout for LiteLLM completion calls (seconds)
 _DEFAULT_LITELLM_TIMEOUT = 180
@@ -112,6 +119,42 @@ def _build_text_content(text: str, provider_name: str, cache_enabled: bool, cach
     return [{"type": "text", "text": text}]
 
 
+def _format_conversation_history(
+    conversation_history: list,
+    provider_name: str,
+    cache_enabled: bool,
+    cache_control_type: str,
+) -> list:
+    """Format conversation history messages, applying cache_control to the history prefix breakpoint if enabled."""
+    if not conversation_history:
+        return []
+
+    formatted = [dict(msg) for msg in conversation_history]
+    if not cache_enabled:
+        return formatted
+
+    last_msg = dict(formatted[-1])
+    content = last_msg.get("content")
+
+    if isinstance(content, str):
+        last_msg["content"] = _build_text_content(content, provider_name, True, cache_control_type)
+    elif isinstance(content, list) and len(content) > 0:
+        content_copy = [dict(b) if isinstance(b, dict) else b for b in content]
+        last_block = content_copy[-1]
+        if isinstance(last_block, dict):
+            last_block_copy = dict(last_block)
+            if provider_name == "anthropic":
+                last_block_copy["cache_control"] = {"type": cache_control_type}
+            content_copy[-1] = last_block_copy
+        last_msg["content"] = content_copy
+    elif content is None or content == "":
+        if provider_name == "anthropic":
+            last_msg["content"] = [{"type": "text", "text": "", "cache_control": {"type": cache_control_type}}]
+
+    formatted[-1] = last_msg
+    return formatted
+
+
 def _file_dict_to_data_image_url(file_dict: dict) -> dict | None:
     """Embed a local Frappe file as a base64 data URI for multimodal LLM calls.
 
@@ -138,8 +181,10 @@ def _file_dict_to_data_image_url(file_dict: dict) -> dict | None:
         with open(file_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode("utf-8")
         return {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}}
-    except Exception as e:
-        logger.warning(f"Failed to embed image for LLM: {e}")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Failed to embed image for LLM: {e}\n{frappe.get_traceback()}")
         return None
 
 
@@ -442,12 +487,16 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         
         # Check if model supports prompt caching
         model_supports_caching = False
+        cache_skipped_unsupported_model = False
         if enable_prompt_caching:
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
-            except Exception:
+                if not model_supports_caching:
+                    cache_skipped_unsupported_model = True
+            except (ImportError, AttributeError, ValueError, TypeError, RuntimeError):
                 # Prompt-caching check failed; disable caching and log for investigation.
                 model_supports_caching = False
+                cache_skipped_unsupported_model = True
                 frappe.log_error(
                     f"Failed to check prompt caching support for model {normalized_model}",
                     "LiteLLM Prompt Caching"
@@ -484,7 +533,17 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         
         # Insert Conversation History if available
         if context and context.get("conversation_history"):
-            messages.extend(context["conversation_history"])
+            history_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_conversation_history
+            )
+            messages.extend(
+                _format_conversation_history(
+                    context["conversation_history"],
+                    provider_name,
+                    history_cache_enabled,
+                    cache_control_type,
+                )
+            )
         
         # Add user message with cache_control if conversation history caching is enabled
         cache_dynamic_content = cache_conversation_history
@@ -518,7 +577,14 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             except Exception as e:
                 logger.warning(f"Failed to build local overrides for '{provider}': {e!s}")
 
-        total_usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0}
+        total_usage = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cached_tokens": 0,
+            "cache_creation_tokens": 0,
+            "cache_miss_tokens": 0,
+            "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+        }
         total_cost = 0.0
         all_new_items = []
 
@@ -568,7 +634,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 try:
                     messages = trim_messages(messages=messages, model=normalized_model)
                 except Exception as e:
-                    logger.warning(f"Failed to trim messages: {e!s}; continuing with untrimmed messages")
+                    logger.warning(
+                        f"Failed to trim messages: {e!s}; continuing with untrimmed messages\n{frappe.get_traceback()}"
+                    )
                     # Continue with untrimmed messages if trimming fails
                     pass
 
@@ -679,7 +747,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         litellm_response=response,
                     )
                     total_cost += round_cost
-                except Exception:
+                except (ValueError, TypeError, AttributeError, KeyError):
                     # Cost calculation is best-effort; ignore rounding failures.
                     pass
 
@@ -696,7 +764,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
                 try:
                     full_trace = frappe.get_traceback()
-                except Exception:
+                except (AttributeError, TypeError, RuntimeError):
                     full_trace = str(e)
 
                 frappe.log_error(message=full_trace, title=title)
@@ -713,8 +781,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
             except Exception as e:
                 msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                frappe.log_error(message=msg, title="LiteLLM Provider")
-
+                frappe.log_error(
+                    message=f"{msg}\n\n{frappe.get_traceback()}",
+                    title="LiteLLM Provider"
+                )
                 if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
                     raise e
 
@@ -747,14 +817,52 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             total_usage["input_tokens"] += (getattr(usage, "prompt_tokens", 0) or 0)
             total_usage["output_tokens"] += (getattr(usage, "completion_tokens", 0) or 0)
 
-            # Track cached tokens if available
-            if enable_prompt_caching and hasattr(usage, "prompt_tokens_details"):
+            # Track cached tokens and cache creation/write tokens if available
+            round_cached = 0
+            round_creation = 0
+
+            if hasattr(usage, "prompt_tokens_details") and usage.prompt_tokens_details:
                 details = usage.prompt_tokens_details
-                if details:
-                    if isinstance(details, dict):
-                        total_usage["cached_tokens"] += (details.get("cached_tokens") or details.get("cache_hit_tokens") or 0)
-                    else:
-                        total_usage["cached_tokens"] += (getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0)
+                if isinstance(details, dict):
+                    round_cached = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
+                    round_creation = (
+                        details.get("cache_creation_input_tokens")
+                        or details.get("cache_write_tokens")
+                        or details.get("cache_creation_tokens")
+                        or 0
+                    )
+                else:
+                    round_cached = (
+                        getattr(details, "cached_tokens", None)
+                        or getattr(details, "cache_hit_tokens", None)
+                        or 0
+                    )
+                    round_creation = (
+                        getattr(details, "cache_creation_input_tokens", None)
+                        or getattr(details, "cache_write_tokens", None)
+                        or getattr(details, "cache_creation_tokens", None)
+                        or 0
+                    )
+            elif isinstance(usage, dict):
+                round_cached = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
+                round_creation = (
+                    usage.get("cache_creation_input_tokens")
+                    or usage.get("cache_write_input_tokens")
+                    or usage.get("cache_creation_tokens")
+                    or usage.get("cache_miss_tokens")
+                    or 0
+                )
+
+            if not round_creation:
+                round_creation = (
+                    getattr(usage, "cache_creation_input_tokens", None)
+                    or getattr(usage, "cache_write_input_tokens", None)
+                    or 0
+                )
+
+            total_usage["cached_tokens"] += (round_cached or 0)
+            total_usage["cache_creation_tokens"] += (round_creation or 0)
+            total_usage["cache_miss_tokens"] += (round_creation or 0)
 
             assistant_message = {
                 "role": "assistant",
@@ -844,6 +952,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                             tool_to_run, tool_args, context, tool_call.id
                         )
                     except Exception as e:
+                        frappe.log_error(
+                            message=f"Error executing tool {tool_name}: {str(e)}\n\n{frappe.get_traceback()}",
+                            title="LiteLLM Tool Execution Error"
+                        )
                         result_content = f"Error executing tool {tool_name}: {str(e)}"
                 else:
                     result_content = f"Tool '{tool_name}' not found."
@@ -875,9 +987,14 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
     except ProviderUnavailableError:
         raise
-    except Exception as e:
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError) as e:
+        frappe.logger("huf").warning(f"Expected failure: {e!s}")
+    except Exception as e:  # boundary exception handler: unexpected system error boundary
         msg = f"LiteLLM Provider Error: {str(e)}"
-        frappe.log_error(message=msg, title="LiteLLM Provider")
+        frappe.log_error(
+            message=f"{msg}\n\n{frappe.get_traceback()}",
+            title="LiteLLM Provider"
+        )
 
         if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
             raise e
@@ -923,8 +1040,10 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         
         return response.choices[0].message.content
         
-    except Exception as e:
-        logger.warning(f"LiteLLM simple completion failed: {e!s}")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"LiteLLM simple completion failed: {e!s}\n{frappe.get_traceback()}")
         return ""
 
 
@@ -1001,12 +1120,16 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
         # Check if model supports prompt caching
         model_supports_caching = False
+        cache_skipped_unsupported_model = False
         if enable_prompt_caching:
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
-            except Exception:
+                if not model_supports_caching:
+                    cache_skipped_unsupported_model = True
+            except (ImportError, AttributeError, ValueError, TypeError, RuntimeError):
                 # Prompt-caching check failed; disable caching and log for investigation.
                 model_supports_caching = False
+                cache_skipped_unsupported_model = True
                 frappe.log_error(
                     message=f"Failed to check prompt caching support for model {normalized_model}",
                     title="LiteLLM Prompt Caching"
@@ -1043,7 +1166,17 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         
         # Insert Conversation History if available
         if context and context.get("conversation_history"):
-            messages.extend(context["conversation_history"])
+            history_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_conversation_history
+            )
+            messages.extend(
+                _format_conversation_history(
+                    context["conversation_history"],
+                    provider_name,
+                    history_cache_enabled,
+                    cache_control_type,
+                )
+            )
         
         cache_dynamic_content = cache_conversation_history
         if isinstance(cache_dynamic_content_override, bool):
@@ -1105,7 +1238,6 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "stream_options": {"include_usage": True}, # Request usage stats in stream
             "timeout": _DEFAULT_LITELLM_TIMEOUT,
         }
-
         if api_base:
             completion_kwargs["api_base"] = api_base
 
@@ -1116,7 +1248,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             try:
                 messages = trim_messages(messages=messages, model=normalized_model)
             except Exception as e:
-                logger.warning(f"Failed to trim messages: {e!s}; continuing with untrimmed messages")
+                logger.warning(
+                    f"Failed to trim messages: {e!s}; continuing with untrimmed messages\n{frappe.get_traceback()}"
+                )
                 pass
 
         messages = repair_message_sequence(
@@ -1312,6 +1446,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                             tool_to_run, tool_args, context, tool_call.get("id")
                                         )
                                     except Exception as e:
+                                        frappe.log_error(
+                                            message=f"Error executing tool {tool_name}: {str(e)}\n\n{frappe.get_traceback()}",
+                                            title="LiteLLM Streaming Tool Execution Error"
+                                        )
                                         result_content = f"Error executing tool {tool_name}: {str(e)}"
 
                                     # Update Agent Tool Call with result (runs even if tool raised)
@@ -1333,7 +1471,15 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     tc_doc.tool_result = result_content
                                                 else:
                                                     tc_doc.tool_result = {"output": str(result_content)[:140000]}
-                                                tc_doc.save(ignore_permissions=True)
+                                                # Tool-call audit records are updated by the provider
+                                                # during execution. Authenticated users use standard
+                                                # permissions; Guest/system paths bypass permissions.
+                                                if frappe.session.user == "Guest":
+                                                    tc_doc.save(ignore_permissions=True)
+                                                else:
+                                                    if not frappe.has_permission("Agent Tool Call", "write", doc=tc_doc):
+                                                        frappe.throw(_("Not permitted to update Agent Tool Call"), frappe.PermissionError)
+                                                    tc_doc.save()
 
                                                 # Find the Agent Message to update. Prefer the in-memory
                                                 # map passed via context, then fall back to DB lookups.
@@ -1411,8 +1557,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                 transaction_checkpoint(reason="agent_streaming_progress")
                                         except Exception as e:
                                             frappe.log_error(
-                                                f"Error updating tool call result for call_id={call_id}: {e}",
-                                                "Tool Call Message Update"
+                                                message=f"Error updating tool call result for call_id={call_id}: {e}\n\n{frappe.get_traceback()}",
+                                                title="Tool Call Message Update"
                                             )
                                 else:
                                     result_content = f"Tool '{tool_name}' not found."
@@ -1460,6 +1606,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 yield {"type": "error", "error": f"API error: {str(e)}"}
                 return
             except Exception as e:
+                frappe.log_error(
+                    message=f"LiteLLM streaming round error: {str(e)}\n\n{frappe.get_traceback()}",
+                    title="LiteLLM Streaming"
+                )
                 yield {"type": "error", "error": f"LiteLLM error: {str(e)}"}
                 return
 
@@ -1469,23 +1619,49 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         elif stream_usage and hasattr(stream_usage, "model_dump"):
              stream_usage = stream_usage.model_dump()
 
+        if not stream_usage or not isinstance(stream_usage, dict):
+            stream_usage = {}
+
+        # Extract cache creation tokens and cache skipped flag for stream_usage
+        s_cached = 0
+        s_creation = 0
+        s_details = stream_usage.get("prompt_tokens_details") or {}
+        if isinstance(s_details, dict):
+            s_cached = int(s_details.get("cached_tokens", 0) or s_details.get("cache_hit_tokens", 0) or 0)
+            s_creation = int(
+                s_details.get("cache_creation_input_tokens", 0)
+                or s_details.get("cache_write_tokens", 0)
+                or s_details.get("cache_creation_tokens", 0)
+                or 0
+            )
+
+        if not s_creation:
+            s_creation = int(
+                stream_usage.get("cache_creation_input_tokens", 0)
+                or stream_usage.get("cache_write_input_tokens", 0)
+                or stream_usage.get("cache_creation_tokens", 0)
+                or stream_usage.get("cache_miss_tokens", 0)
+                or 0
+            )
+
+        stream_usage["cached_tokens"] = s_cached
+        stream_usage["cache_creation_tokens"] = s_creation
+        stream_usage["cache_miss_tokens"] = s_creation
+        stream_usage["cache_skipped_unsupported_model"] = cache_skipped_unsupported_model
+
         # Calculate cost from streaming usage
         stream_cost = 0.0
         if stream_usage and isinstance(stream_usage, dict):
             try:
                 s_input   = int(stream_usage.get("prompt_tokens", 0) or 0)
                 s_output  = int(stream_usage.get("completion_tokens", 0) or 0)
-                s_cached  = 0
-                s_details = stream_usage.get("prompt_tokens_details") or {}
-                if isinstance(s_details, dict):
-                    s_cached = int(s_details.get("cached_tokens", 0) or s_details.get("cache_hit_tokens", 0) or 0)
                 stream_cost, _src = calculate_cost(
                     model_name=model,
                     input_tokens=s_input,
                     output_tokens=s_output,
                     cached_tokens=s_cached,
                 )
-            except Exception:
+            except (ValueError, TypeError, AttributeError, KeyError):
                 # Stream cost calculation is best-effort; ignore failures.
                 pass
 
@@ -1517,6 +1693,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         }
 
 
-    except Exception as e:
-        frappe.log_error(message=f"LiteLLM Streaming Error: {str(e)}", title="LiteLLM Streaming")
-        yield {"type": "error", "error": f"LiteLLM Streaming Error: {str(e)}"}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError) as e:
+        frappe.logger("huf").warning(f"Expected failure: {e!s}")
+    except Exception as e:  # boundary exception handler: unexpected system error boundary
+        frappe.log_error(
+            message=f"LiteLLM Streaming Error: {str(e)}\n\n{frappe.get_traceback()}",
+            title="LiteLLM Streaming"
+        )
+        yield {"type": "error", "error": f"LiteLLM Streaming Error: {str(e)}",}

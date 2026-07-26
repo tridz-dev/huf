@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -62,7 +63,7 @@ export async function getArtifacts(
   try {
     const artifacts = await db.getDocList(doctype['Agent Context Artifact'], {
       fields: LIST_FIELDS,
-      filters: (filters.length ? filters : undefined) as any,
+      filters: (filters.length ? filters : undefined) as Filter<Record<string, unknown>>[] | undefined,
       orderBy: { field: 'creation', order: 'desc' },
       limit: limit + 1,
       limit_start: start,

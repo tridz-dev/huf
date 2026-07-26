@@ -5,7 +5,7 @@ import type { ProxyOptions } from 'vite';
 interface CommonSiteConfig {
   webserver_port?: number;
   default_site?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 function getCommonSiteConfig(): CommonSiteConfig | null {

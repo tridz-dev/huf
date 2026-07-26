@@ -66,14 +66,19 @@ def after_install():
     create_huf_roles()
     create_demo_ai_providers()
     create_demo_ai_models()
+    create_hub_orchestrator_agent()
     create_image_generation_tool()
     create_transcribe_audio_tool()
     create_generate_audio_tool()
     remove_deprecated_gemini_audio_tools()
     create_ocr_document_tool()
     create_flow_tools()
+    create_memory_tools()
+    create_default_memory_policies()
     register_integration_services()
     sync_tool_types()
+    sync_default_tool_categories()
+    seed_skill_categories()
     from huf.ai.tool_registry import sync_discovered_tools
     sync_discovered_tools(use_cache=False)
     frappe.db.commit()
@@ -121,8 +126,12 @@ def after_migrate():
 		remove_deprecated_gemini_audio_tools()
 		create_ocr_document_tool()
 		create_flow_tools()
+		create_memory_tools()
+		create_default_memory_policies()
 		register_integration_services()
 		sync_tool_types()
+		sync_default_tool_categories()
+		seed_skill_categories()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
 		logger.info(
@@ -138,6 +147,21 @@ def after_migrate():
 		_log_seed_results(results, seed_logger)
 	except Exception as e:
 		logger.warning(f"App seeding failed: {e!s}")
+
+	try:
+		create_hub_orchestrator_agent()
+	except Exception as e:
+		logger.warning(f"Failed to seed Hub Orchestrator agent after migrate: {e!s}")
+
+	try:
+		from huf.ai.app_seeding.apps_loader import sync_huf_apps
+		summary = sync_huf_apps()
+		logger.info(
+			f"Synced HUF Apps after migrate: {summary.get('synced', 0)} synced, "
+			f"{summary.get('invalid', 0)} invalid, {summary.get('deleted', 0)} deleted"
+		)
+	except Exception as e:
+		logger.warning(f"HUF Apps sync failed: {e!s}")
 
 
 def _log_seed_results(results, logger):
@@ -271,6 +295,19 @@ def create_demo_ai_models():
             doc.flags.ignore_mandatory = True
             doc.flags.ignore_validate = True
             doc.insert(ignore_permissions=True)
+
+def create_hub_orchestrator_agent():
+	"""
+	Idempotent: seed the "Hub Orchestrator" system agent that powers hub chat.
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.ai.app_seeding.hub_orchestrator import create_hub_orchestrator_agent as _create
+
+	try:
+		_create()
+	except Exception as e:
+		logger.warning(f"Failed to seed Hub Orchestrator agent: {e!s}")
+
 
 def create_image_generation_tool():
     """Create the image generation tool in Agent Tool Function DocType."""
@@ -888,6 +925,14 @@ def register_integration_services():
 				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
 			]
 		},
+		{
+			"service_name": "serpapi",
+			"category": "Google",
+			"description": "SerpApi search data: hotels, reviews (Google Maps, TripAdvisor, Yelp), and YouTube",
+			"required_credentials": [
+				{"key": "api_key", "label": "SerpApi API Key", "required": True}
+			]
+		},
 	]
 	
 	# Create or update each service
@@ -946,4 +991,183 @@ def sync_tool_types():
 			logger.warning(f"Failed to create tool type {category}: {e!s}")
 			continue
 	
+	frappe.db.commit()
+
+
+# General-purpose categories for user-authored tools. Seeded alongside the
+# app-integration categories from sync_tool_types(); purely additive — existing
+# Agent Tool Type records are never renamed or touched.
+DEFAULT_TOOL_CATEGORIES = [
+	"Data Operations",
+	"Integrations",
+	"Automation & Workflow",
+	"Communication",
+	"AI & Generation",
+	"Miscellaneous",
+]
+
+
+def sync_default_tool_categories():
+	"""
+	Ensure the curated general-purpose tool categories exist as Agent Tool Type
+	documents. Idempotent: creates missing records only, never duplicates or
+	modifies existing ones. Safe to run on every migrate.
+	"""
+	for category in DEFAULT_TOOL_CATEGORIES:
+		try:
+			if not frappe.db.exists("Agent Tool Type", category):
+				doc = frappe.get_doc({
+					"doctype": "Agent Tool Type",
+					"name1": category
+				})
+				doc.insert()
+		except Exception as e:
+			logger.warning(f"Failed to create default tool category {category}: {e!s}")
+			continue
+
+	frappe.db.commit()
+
+
+def seed_skill_categories():
+	"""
+	Ensure default Skill Category records exist.
+	Called during after_install and after_migrate.
+	"""
+	categories = ["General", "CRM", "Support"]
+	for category in categories:
+		try:
+			if not frappe.db.exists("Skill Category", category):
+				doc = frappe.get_doc({
+					"doctype": "Skill Category",
+					"category_name": category,
+				})
+				doc.insert(ignore_permissions=True)
+		except Exception as e:
+			logger.warning(f"Failed to create skill category {category}: {e!s}")
+			continue
+
+	frappe.db.commit()
+
+
+def create_memory_tools():
+	"""Create or update scoped-memory Agent Tool Function records."""
+	if not frappe.db.exists("Agent Tool Type", "Memory"):
+		tool_type_doc = frappe.new_doc("Agent Tool Type")
+		tool_type_doc.name1 = "Memory"
+		tool_type_doc.insert(ignore_permissions=True)
+
+	memory_tools = [
+		(
+			"save_memory_record",
+			"Save a scoped memory record for future recall.",
+			"huf.ai.memory_tools.handle_save_memory_record",
+			"Save Memory Record",
+			[
+				("Title", "title", "Data", 1, "Short descriptive title for this memory."),
+				("Summary Text", "summary_text", "Long Text", 1, "Detailed content of this memory."),
+				("Record Type", "record_type", "Data", 0, "Fact, Preference, Research Note, Decision, Extracted Data, State, Summary, Policy Hint, Observation, Insight, or Custom."),
+				("Scope Type", "scope_type", "Data", 0, "Conversation, User, Agent, Site, or Global."),
+				("Scope Key", "scope_key", "Data", 0, "Scope identifier. Auto-resolved if empty."),
+				("Data JSON", "data_json", "JSON", 0, "Optional structured data payload."),
+				("Status", "status", "Data", 0, "Draft or Active."),
+				("Visibility", "visibility", "Data", 0, "Private, Shared with Agent, Site, or Global."),
+				("Tags", "tags", "Data", 0, "Comma-separated tags."),
+				("Confidence", "confidence", "Float", 0, "Confidence score from 0 to 1."),
+				("Importance Score", "importance_score", "Float", 0, "Importance score from 0 to 1."),
+			],
+		),
+		(
+			"search_memory_records",
+			"Search saved memory records by text, type, scope, and status.",
+			"huf.ai.memory_tools.handle_search_memory_records",
+			"Search Memory Records",
+			[
+				("Query", "query", "Data", 0, "Search query."),
+				("Record Type", "record_type", "Data", 0, "Optional record type filter."),
+				("Scope Type", "scope_type", "Data", 0, "Optional scope type filter."),
+				("Status", "status", "Data", 0, "Optional status filter. Defaults to Active."),
+				("Limit", "limit", "Int", 0, "Max results, 1-50."),
+			],
+		),
+		(
+			"get_memory_record",
+			"Get a specific memory record by ID.",
+			"huf.ai.memory_tools.handle_get_memory_record",
+			"Get Memory Record",
+			[("Memory Record", "memory_record", "Data", 1, "Memory record name.")],
+		),
+		(
+			"archive_memory_record",
+			"Archive a memory record that is no longer active.",
+			"huf.ai.memory_tools.handle_archive_memory_record",
+			"Archive Memory Record",
+			[("Memory Record", "memory_record", "Data", 1, "Memory record name.")],
+		),
+		(
+			"promote_memory_to_knowledge",
+			"Promote a memory record into a Knowledge Source for indexed retrieval.",
+			"huf.ai.memory_tools.handle_promote_memory_to_knowledge",
+			"Promote Memory to Knowledge",
+			[
+				("Memory Record", "memory_record", "Data", 1, "Memory record name."),
+				("Knowledge Source", "knowledge_source", "Data", 0, "Optional Knowledge Source."),
+			],
+		),
+	]
+
+	for _, _, _, tool_type, _ in memory_tools:
+		if not frappe.db.exists("Agent Tool Type", tool_type):
+			doc = frappe.new_doc("Agent Tool Type")
+			doc.name1 = tool_type
+			doc.insert(ignore_permissions=True)
+
+	for tool_name, description, function_path, tool_type, parameters in memory_tools:
+		parameter_rows = [
+			{
+				"label": label,
+				"fieldname": fieldname,
+				"param_type": param_type,
+				"required": required,
+				"description": description,
+			}
+			for label, fieldname, param_type, required, description in parameters
+		]
+		docname = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+		tool_doc = frappe.get_doc("Agent Tool Function", docname) if docname else frappe.new_doc("Agent Tool Function")
+		tool_doc.tool_name = tool_name
+		tool_doc.description = description
+		tool_doc.function_path = function_path
+		tool_doc.types = tool_type
+		tool_doc.tool_type = "Memory"
+		tool_doc.pass_parameters_as_json = 1
+		tool_doc.set("parameters", parameter_rows)
+		if docname:
+			tool_doc.save(ignore_permissions=True)
+		else:
+			tool_doc.insert(ignore_permissions=True)
+
+	frappe.db.commit()
+
+
+def create_default_memory_policies():
+	"""Create default Memory Policy presets."""
+	presets = [
+		{"policy_name": "Conservative", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 1, "default_status": "Draft", "inject_mode": "Relevant Only", "max_records": 5, "token_budget": 1500, "auto_promote_to_knowledge": 0, "allow_agent_write": 0},
+		{"policy_name": "Conversational", "scope_type": "Agent", "capture_mode": "Automatic", "approval_required": 0, "default_status": "Draft", "inject_mode": "Always", "max_records": 10, "token_budget": 2000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
+		{"policy_name": "Research", "scope_type": "Agent", "capture_mode": "Agent Suggested", "approval_required": 0, "default_status": "Active", "inject_mode": "Relevant Only", "max_records": 20, "token_budget": 4000, "auto_promote_to_knowledge": 0, "promotion_min_confidence": 0.5, "promotion_min_importance": 0.5, "allow_agent_write": 1},
+		{"policy_name": "Operational", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 0, "default_status": "Active", "inject_mode": "Tool Only", "max_records": 10, "token_budget": 1000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
+	]
+	for preset in presets:
+		if frappe.db.exists("Memory Policy", preset["policy_name"]):
+			continue
+		try:
+			doc = frappe.new_doc("Memory Policy")
+			doc.update(preset)
+			doc.insert(ignore_permissions=True)
+		except Exception as e:
+			frappe.log_error(
+				f"Error creating memory policy {preset['policy_name']}: {str(e)}",
+				"Memory Policy Creation",
+			)
+
 	frappe.db.commit()

@@ -1,17 +1,22 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ArrowUpDown, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, Loader2, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import type { AgentRunDoc } from '@/services/agentRunApi';
 import { getAgentRuns } from '@/services/agentRunApi';
+import { checkCacheableModels } from '@/services/agentApi';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { getAgentRunStatusVariant } from '@/utils/status';
 import { getArtifacts, type AgentContextArtifactDoc } from '@/services/agentContextArtifactApi';
+import { getRunContextMetrics } from '@/services/runContextMetricsApi';
+import type { RunContextMetricsResponse } from '@/types/runContextMetrics.types';
+import { ContextBar } from '@/components/ui/context-bar';
 import {
   ColumnDef,
   flexRender,
@@ -36,7 +41,9 @@ interface AgentRunDetail extends AgentRunDoc {
   model?: string;
   input_tokens?: number | null;
   output_tokens?: number | null;
+  cached_tokens?: number | null;
   cost?: number | null;
+  cost_source?: string | null;
 }
 
 async function fetchAgentRunDetail(name: string): Promise<AgentRunDetail | null> {
@@ -108,6 +115,8 @@ function AgentRunDetailPage() {
   const [childRuns, setChildRuns] = useState<AgentRunDoc[]>([]);
   const [loadingChildRuns, setLoadingChildRuns] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [isSilentDegradation, setIsSilentDegradation] = useState(false);
+  const [contextMetrics, setContextMetrics] = useState<RunContextMetricsResponse | null>(null);
 
   useEffect(() => {
     if (!runId) {
@@ -121,7 +130,45 @@ function AgentRunDetailPage() {
       setRun(data);
       setLoading(false);
     })();
+
+    (async () => {
+      const metrics = await getRunContextMetrics(runId);
+      setContextMetrics(metrics);
+    })();
   }, [runId]);
+
+  // Check for silent degradation (caching enabled on agent but unsupported by model)
+  useEffect(() => {
+    if (!run || !run.agent || !run.provider || !run.model) {
+      setIsSilentDegradation(false);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const agentDoc = await db.getDoc(doctype.Agent, run.agent);
+        if (agentDoc && agentDoc.enable_prompt_caching) {
+          const cacheCheck = await checkCacheableModels(run.provider, run.model);
+          if (!cancelled && !cacheCheck.supported) {
+            setIsSilentDegradation(true);
+            return;
+          }
+        }
+        if (!cancelled) {
+          setIsSilentDegradation(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsSilentDegradation(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [run]);
 
   // Fetch child runs when run is loaded
   useEffect(() => {
@@ -202,6 +249,29 @@ function AgentRunDetailPage() {
             <Badge variant={getAgentRunStatusVariant(status)}>
               {status || 'Unknown'}
             </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: 'cached_tokens',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2"
+            >
+              Cached Tokens
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          );
+        },
+        cell: ({ row }) => {
+          const cached = row.original.cached_tokens;
+          return (
+            <div className="font-mono text-sm text-steel">
+              {typeof cached === 'number' ? cached.toLocaleString() : '0'}
+            </div>
           );
         },
       },
@@ -305,6 +375,16 @@ function AgentRunDetailPage() {
           </div>
         </div>
 
+        {isSilentDegradation && (
+          <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <AlertTitle className="font-semibold text-sm">Silent Degradation Warning: Prompt Caching Skipped</AlertTitle>
+            <AlertDescription className="text-xs mt-1">
+              Prompt caching was enabled for agent <strong>{run.agent}</strong>, but model <strong>{run.model || 'unknown'}</strong> from provider <strong>{run.provider || 'unknown'}</strong> does not support prompt caching. Caching was silently skipped during execution.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Card>
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div>
@@ -373,16 +453,93 @@ function AgentRunDetailPage() {
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
+                    <span className="text-steel">Cached Tokens</span>
+                    <span className="font-medium">
+                      {typeof run.cached_tokens === 'number' ? run.cached_tokens : 'Not available'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-4">
                     <span className="text-steel">Cost</span>
                     <span className="font-medium">
                       {typeof run.cost === 'number' ? `$${run.cost.toFixed(6)}` : 'Not available'}
                     </span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-steel">Cost Source</span>
+                    <span className="font-medium">{run.cost_source || 'Not available'}</span>
                   </div>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
+
+        {contextMetrics?.segment_tokens && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Context</CardTitle>
+              <CardDescription>
+                What filled the context window this turn, and whether caching paid off.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ContextBar
+                segments={contextMetrics.segment_tokens}
+                total={contextMetrics.context_window}
+                cacheState={
+                  typeof contextMetrics.metrics.cache_read_share === 'number'
+                    ? {
+                        cacheRead: run.cached_tokens || 0,
+                        cacheWrite: 0,
+                        uncached: Math.max(
+                          (contextMetrics.total_tokens || run.input_tokens || 0) - (run.cached_tokens || 0),
+                          0
+                        ),
+                      }
+                    : undefined
+                }
+              />
+              <div className="grid grid-cols-2 gap-y-1 gap-x-4 text-sm sm:grid-cols-3">
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Cache read share</span>
+                  <span className="font-medium">
+                    {typeof contextMetrics.metrics.cache_read_share === 'number'
+                      ? `${(contextMetrics.metrics.cache_read_share * 100).toFixed(0)}%`
+                      : 'Unavailable'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Effective multiplier</span>
+                  <span className="font-medium">
+                    {typeof contextMetrics.metrics.effective_input_multiplier === 'number'
+                      ? `${contextMetrics.metrics.effective_input_multiplier.toFixed(2)}x`
+                      : 'Unavailable'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Wasted writes</span>
+                  <span className="font-medium">
+                    {typeof contextMetrics.metrics.wasted_writes_tokens === 'number'
+                      ? contextMetrics.metrics.wasted_writes_tokens
+                      : 'Not yet tracked'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Prefix stability</span>
+                  <span className="font-medium capitalize">{contextMetrics.metrics.prefix_stability}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Counterfactual savings</span>
+                  <span className="font-medium">
+                    {typeof contextMetrics.metrics.counterfactual_savings === 'number'
+                      ? `$${contextMetrics.metrics.counterfactual_savings.toFixed(6)}`
+                      : 'Unavailable'}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-4 md:grid-cols-2">
           <Card>

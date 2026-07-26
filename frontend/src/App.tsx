@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { UserProvider } from './contexts/UserContext';
-import { PermissionsProvider } from './contexts/PermissionsContext';
+import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
@@ -12,6 +13,7 @@ import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
 import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
 import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
+import { SkillsHeaderActions } from './components/skills/SkillsHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
@@ -22,6 +24,7 @@ import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
+const AppsPage = lazy(() => import('./pages/AppsPage'));
 const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
 const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
@@ -33,6 +36,7 @@ const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper')
 const DataPage = lazy(() => import('./pages/DataPage'));
 const AiProvidersPageWrapper = lazy(() => import('./pages/AiProvidersPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
+const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
 const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
@@ -41,6 +45,9 @@ const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper')
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
 const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourceFormPageWrapper'));
+const MemoryPage = lazy(() => import('./pages/MemoryPage'));
+const SkillsPage = lazy(() => import('./pages/SkillsPage'));
+const SkillFormPageWrapper = lazy(() => import('./pages/SkillFormPageWrapper'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
@@ -58,8 +65,14 @@ const IntegrationServicesListingPageWrapper = lazy(
 const IntegrationServiceFormPageWrapper = lazy(
   () => import('./pages/IntegrationServiceFormPageWrapper'),
 );
+const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
+// TODO(#473-followup): Gateways page is kept in source but unlinked from routes
+// while the feature is incomplete. See docs/gateway-todo.md.
+// const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
+const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 
 import { useEffect } from 'react';
+import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
 import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
@@ -68,20 +81,76 @@ import {
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
 
+function ChatOnlyRedirectGuard() {
+  const location = useLocation();
+  const { capabilities, isLoading } = usePermissions();
+  // Chat-only users get `chat.use` plus nothing outside the chat.* namespace
+  // (e.g. `chat.view_own` is fine, but `agent.use` means they are a full user).
+  const isChatOnlyUser =
+    capabilities.includes('chat.use') &&
+    capabilities.every((capability) => capability.startsWith('chat.'));
+  const isAllowedChatOnlyPath =
+    location.pathname.startsWith('/ui/chat') || location.pathname.startsWith('/view/');
+
+  if (isLoading || !isChatOnlyUser || isAllowedChatOnlyPath) {
+    return null;
+  }
+
+  return <Navigate to="/ui/chat" replace />;
+}
+
 function AppShell() {
+  const location = useLocation();
+
+  useEffect(() => {
+    clearChunkReloadFlag();
+  }, []);
+
   return (
     <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
+          <ChatOnlyRedirectGuard />
           <Suspense fallback={<AuthenticatingPage />}>
-            <Routes>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="h-full"
+              >
+                <Routes location={location}>
           <Route
             path="/"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <HubSimplePage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <HomePage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/apps"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AppsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -284,6 +353,26 @@ function AppShell() {
             }
           />
           <Route
+            path="/ui/chat"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChatOnlyPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ui/chat/:chatId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChatOnlyPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/executions"
             element={
               <ProtectedRoute>
@@ -335,7 +424,7 @@ function AppShell() {
               <ProtectedRoute>
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
-                    <NotFoundPage />
+                    <AgentSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -354,11 +443,45 @@ function AppShell() {
             }
           />
           <Route
+            path="/memory"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <MemoryPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/knowledge/:id"
             element={
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <KnowledgeSourceFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/skills"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<SkillsHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <SkillsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/skills/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <SkillFormPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
@@ -383,6 +506,20 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
+          {/* TODO(#473-followup): Gateways route is disabled while the feature is
+              incomplete. Restore once docs/gateway-todo.md items are resolved. */}
+          {/* <Route
+            path="/gateways"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <GatewaysPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          /> */}
           <Route
             path="/integration-services"
             element={
@@ -467,7 +604,9 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-            </Routes>
+                </Routes>
+              </motion.div>
+            </AnimatePresence>
           </Suspense>
           <Toaster />
         </PermissionsProvider>
@@ -477,7 +616,7 @@ function AppShell() {
 }
 
 const router = createBrowserRouter(
-  [{ path: '*', element: <AppShell /> }],
+  [{ path: '*', element: <AppShell />, errorElement: <RouteErrorBoundary /> }],
   { basename: '/huf' },
 );
 

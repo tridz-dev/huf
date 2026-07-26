@@ -88,6 +88,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
         'flow_node_end',
         'flow_paused',
         'flow_completed',
+        'flow_failed',
         'flow_error',
       ];
 

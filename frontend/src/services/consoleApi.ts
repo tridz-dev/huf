@@ -23,7 +23,7 @@ export interface RunAgentSyncResult {
 
 export async function runAgentSync(params: RunAgentSyncParams): Promise<RunAgentSyncResult> {
   try {
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       agent_name: params.agent_name,
       prompt: params.prompt,
       provider: params.provider || undefined,

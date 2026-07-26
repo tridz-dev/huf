@@ -49,7 +49,7 @@ def run_scheduled_agents():
                 years=interval if si == "yearly" else 0,
             )
 
-            doc.save(ignore_permissions=True)
+            doc.save()
             frappe.db.commit()
 
         except Exception:

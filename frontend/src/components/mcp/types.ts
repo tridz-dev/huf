@@ -20,7 +20,6 @@ export const mcpFormSchema = z.object({
   oauth_registration_endpoint: z.string().optional(),
   oauth_client_id: z.string().optional(),
   oauth_client_secret: z.string().optional(),
-  oauth_token_response_path: z.string().optional(),
   oauth_discovery_status: z.string().optional(),
   oauth_resource_metadata_url: z.string().optional(),
   oauth_authorization_server: z.string().optional(),

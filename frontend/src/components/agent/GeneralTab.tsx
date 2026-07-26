@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
 import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
@@ -13,6 +16,7 @@ import { InstructionsTextarea } from './InstructionsTextarea';
 import { PromptTemplateSection, type AgentPromptOption } from './PromptTemplateSection';
 import { LinkFieldControl } from '@/components/ui/link-field-control';
 import { linkRoutes } from '@/lib/link-routes';
+import { checkCacheableModels, type CacheableModelsResponse } from '@/services/agentApi';
 
 interface GeneralTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -24,6 +28,8 @@ interface GeneralTabProps {
   promptOptions: AgentPromptOption[];
   loadingPrompts: boolean;
   showAddNewPrompt?: boolean;
+  /** True when protected fields must be read-only (system agent + non-admin). */
+  locked?: boolean;
 }
 
 export function GeneralTab({
@@ -36,9 +42,29 @@ export function GeneralTab({
   promptOptions,
   loadingPrompts,
   showAddNewPrompt = true,
+  locked = false,
 }: GeneralTabProps) {
   const watchEnablePromptCaching = form.watch('enable_prompt_caching');
+  const watchModel = form.watch('model');
   const promptMode = form.watch('prompt_mode');
+
+  const [cacheStatus, setCacheStatus] = useState<CacheableModelsResponse | null>(null);
+
+  useEffect(() => {
+    if (!watchEnablePromptCaching || !watchProvider || !watchModel) {
+      setCacheStatus(null);
+      return;
+    }
+    let cancelled = false;
+    checkCacheableModels(watchProvider, watchModel).then((res) => {
+      if (!cancelled) {
+        setCacheStatus(res);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [watchEnablePromptCaching, watchProvider, watchModel]);
 
   return (
     <div className="space-y-6">
@@ -105,6 +131,7 @@ export function GeneralTab({
                         form.setValue('model', '');
                       }}
                       value={field.value || undefined}
+                      disabled={locked}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select provider" />
@@ -133,7 +160,7 @@ export function GeneralTab({
                 <FormLabel>Model</FormLabel>
                 <FormControl>
                   <LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel} disabled={!watchProvider}>
-                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!watchProvider}>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!watchProvider || locked}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select model" />
                       </SelectTrigger>
@@ -223,7 +250,7 @@ We generally recommend altering this or temperature but not both.`}
             render={({ field }) => (
               <FormItem className="sm:col-span-2">
                 <FormLabel>Prompt Mode</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={locked}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select prompt mode" />
@@ -265,6 +292,7 @@ We generally recommend altering this or temperature but not both.`}
                     onOptimizePrompt={onOptimizePrompt}
                     showOptimize={true}
                     showExpand={true}
+                    disabled={locked}
                   />
                   <FormDescription>
                     The system prompt or instructions that define the agent&apos;s personality, goals, and constraints. This is the core logic of the agent.
@@ -281,6 +309,7 @@ We generally recommend altering this or temperature but not both.`}
           promptOptions={promptOptions}
           loadingPrompts={loadingPrompts}
           showAddNew={showAddNewPrompt}
+          locked={locked}
         />
       )}
 
@@ -309,6 +338,23 @@ We generally recommend altering this or temperature but not both.`}
               </FormItem>
             )}
           />
+
+          {watchEnablePromptCaching && watchProvider && watchModel && cacheStatus && !cacheStatus.supported && (
+            <Alert className="sm:col-span-2 border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertTitle className="font-semibold text-sm">Silent Degradation Warning: Prompt Caching Not Supported</AlertTitle>
+              <AlertDescription className="text-xs mt-1 space-y-1">
+                <p>
+                  The selected model <strong>{watchModel}</strong> does not support prompt caching for provider <strong>{watchProvider}</strong>. Prompt caching will be silently skipped during execution.
+                </p>
+                {cacheStatus.alternatives.length > 0 && (
+                  <p className="text-steel-soft">
+                    Supported alternative models for {watchProvider}: {cacheStatus.alternatives.slice(0, 5).join(', ')}
+                  </p>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {watchEnablePromptCaching && (
             <FormField

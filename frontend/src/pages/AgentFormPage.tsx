@@ -2,11 +2,16 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useBlocker, type Location } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Lock } from 'lucide-react';
 import { Form } from '../components/ui/form';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
+import type { AgentSkillRow } from '../types/skill.types';
+import { getSkillOptions } from '../services/skillApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest, deleteAgent, duplicateAgent } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
@@ -20,20 +25,22 @@ import { TriggerModal } from '../components/agent/TriggerModal';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { db } from '../lib/frappe-sdk';
 import { AgentHeader } from '../components/agent/AgentHeader';
+import { DeleteAgentDialog } from '../components/agent/DeleteAgentDialog';
 import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
-import { AdvancedTab } from '../components/agent/AdvancedTab';
+import { AdvancedTab, type ExecutionProfileOption, type SSHConnectionOption } from '../components/agent/AdvancedTab';
 import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
+import { SkillsTab } from '../components/agent/SkillsTab';
 import { AgentKnowledgeModal } from '../components/agent/AgentKnowledgeModal';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
-import type { AgentKnowledgeRow } from '../types/agent.types';
+import type { AgentKnowledgeRow, AgentPermissionUserRow, AgentPermissionRoleRow } from '../types/agent.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { writeToolDetailsSetting } from '../components/chat/useChatAgentIdentity';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
@@ -44,6 +51,19 @@ type PromptListRow = {
   version?: number | null;
   is_latest?: 0 | 1;
   description?: string | null;
+};
+
+type ExecutionProfileListRow = {
+  name: string;
+  profile_name?: string | null;
+  approval_mode?: string | null;
+};
+
+type SSHConnectionListRow = {
+  name: string;
+  display_name?: string | null;
+  host?: string | null;
+  username?: string | null;
 };
 
 type AgentToolRow = {
@@ -63,6 +83,10 @@ type AgentMcpServerRow = {
 type AgentUpdatePayload = Omit<Partial<AgentDoc>, "agent_tool"> & {
   agent_tool: Array<{ tool: string }>;
 };
+
+function normalizeFlag(value: boolean | number | undefined): 0 | 1 {
+  return value === true || value === 1 ? 1 : 0;
+}
 
 function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
   return {
@@ -113,6 +137,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     autonaming_of_conversation_title: agent.autonaming_of_conversation_title === 1,
     agent_color: agent.agent_color?.trim() || '',
     show_tool_execution_details: agent.show_tool_execution_details === 1,
+    agent_skill: (agent.agent_skill ?? []) as any,
     image_generation_model: agent.image_generation_model || undefined,
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
@@ -123,6 +148,14 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
       agent.max_upload_size_mb !== undefined && agent.max_upload_size_mb !== null
         ? agent.max_upload_size_mb
         : undefined,
+    allow_code_execution: agent.allow_code_execution === 1,
+    execution_profile: agent.execution_profile || undefined,
+    execution_shared_dir_limit_mb:
+      agent.execution_shared_dir_limit_mb !== undefined && agent.execution_shared_dir_limit_mb !== null
+        ? agent.execution_shared_dir_limit_mb
+        : undefined,
+    allow_ssh: agent.allow_ssh === 1,
+    ssh_connections: (agent.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
   };
 }
 
@@ -131,6 +164,12 @@ export function AgentFormPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const isNew = id === 'new';
+  const { hufRole } = usePermissions();
+  // Backend maps Administrator / System Manager to the "Huf Admin" Huf role.
+  const isAdmin = hufRole === 'Huf Admin';
+  const [isSystemAgent, setIsSystemAgent] = useState(false);
+  // System agents are locked: protected fields are read-only for non-admins.
+  const systemLocked = isSystemAgent && !isAdmin;
   const [pendingSelectedPrompt, setPendingSelectedPrompt] = useState<string | null>(null);
   const [pendingSelectedPromptField, setPendingSelectedPromptField] = useState<string | null>(null);
   const [pendingScrollToPromptField, setPendingScrollToPromptField] = useState(false);
@@ -169,6 +208,12 @@ export function AgentFormPage() {
       default: false,
       disabled: false,
     },
+    skills: {
+      label: 'Skills',
+      fields: [],
+      default: false,
+      disabled: false,
+    },
     permissions: {
       label: 'Permissions',
       fields: ['allow_guest', 'allowed_users', 'allowed_roles'],
@@ -203,6 +248,11 @@ export function AgentFormPage() {
         'allow_file_upload',
         'enable_ocr',
         'max_upload_size_mb',
+        'allow_code_execution',
+        'execution_profile',
+        'execution_shared_dir_limit_mb',
+        'allow_ssh',
+        'ssh_connections',
       ],
       default: false,
       disabled: false,
@@ -252,6 +302,9 @@ export function AgentFormPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [deletingTrigger, setDeletingTrigger] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [allModels, setAllModels] = useState<AIModel[]>([]);
@@ -259,6 +312,10 @@ export function AgentFormPage() {
   const [loadingPrompts, setLoadingPrompts] = useState(false);
   const [summaryPromptOptions, setSummaryPromptOptions] = useState<AgentPromptOption[]>([]);
   const [loadingSummaryPrompts, setLoadingSummaryPrompts] = useState(false);
+  const [executionProfileOptions, setExecutionProfileOptions] = useState<ExecutionProfileOption[]>([]);
+  const [loadingExecutionProfiles, setLoadingExecutionProfiles] = useState(false);
+  const [sshConnectionOptions, setSSHConnectionOptions] = useState<SSHConnectionOption[]>([]);
+  const [loadingSSHConnections, setLoadingSSHConnections] = useState(false);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
@@ -282,6 +339,9 @@ export function AgentFormPage() {
   const [mcpLoading, setMcpLoading] = useState(false);
   const [knowledgeSources, setKnowledgeSources] = useState<AgentKnowledgeRow[]>([]);
   const [initialKnowledgeSources, setInitialKnowledgeSources] = useState<AgentKnowledgeRow[]>([]);
+  const [agentSkills, setAgentSkills] = useState<AgentSkillRow[]>([]);
+  const [initialAgentSkills, setInitialAgentSkills] = useState<AgentSkillRow[]>([]);
+  const [skillOptions, setSkillOptions] = useState<{ value: string; label: string; subtitle?: string }[]>([]);
   const [agentStats, setAgentStats] = useState<{ last_run?: string | null; total_run?: number | null }>({});
   const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
   const [editingKnowledgeIndex, setEditingKnowledgeIndex] = useState<number | null>(null);
@@ -341,6 +401,12 @@ export function AgentFormPage() {
         allow_file_upload: false,
         enable_ocr: false,
         max_upload_size_mb: 25,
+        allow_code_execution: false,
+        execution_profile: undefined,
+        execution_shared_dir_limit_mb: undefined,
+        allow_ssh: false,
+        ssh_connections: [],
+        agent_skill: [],
       },
   });
 
@@ -411,11 +477,26 @@ export function AgentFormPage() {
     });
   }, [knowledgeSources, initialKnowledgeSources, isNew]);
 
-  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
+  const skillsChanged = useMemo(() => {
+    if (isNew) return agentSkills.length > 0;
+    if (agentSkills.length !== initialAgentSkills.length) return true;
+    return agentSkills.some((skill, i) => {
+      const init = initialAgentSkills[i];
+      return (
+        skill.skill !== init.skill ||
+        skill.mode !== init.mode ||
+        normalizeFlag(skill.auto_load) !== normalizeFlag(init.auto_load) ||
+        (skill.priority ?? 0) !== (init.priority ?? 0) ||
+        (skill.description || '') !== (init.description || '')
+      );
+    });
+  }, [agentSkills, initialAgentSkills, isNew]);
+
+  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged;
 
   // Deliberately excludes `isNew` (unlike showSaveButton) - a blank new-agent form
   // has nothing to lose, so it shouldn't block navigation until the user actually changes something.
-  const hasUnsavedChanges = isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
+  const hasUnsavedChanges = isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged;
 
   const shouldBlock = useCallback(
     ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
@@ -481,13 +562,15 @@ export function AgentFormPage() {
       getProviders(),
       getModels(),
       getToolTypes(),
+      getSkillOptions(),
       db.getDocList('User', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
       db.getDocList('Role', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
-    ]).then(([providersData, modelsData, toolTypesData, usersData, rolesData]) => {
+    ]).then(([providersData, modelsData, toolTypesData, skillOptionsData, usersData, rolesData]) => {
       setProviders(providersData as AIProvider[]);
-      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as any).items;
+      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as { items: AIModel[] }).items;
       setAllModels(modelsArray);
       setToolTypes(toolTypesData);
+      setSkillOptions((skillOptionsData || []) as { value: string; label: string; subtitle?: string }[]);
       setUsers(usersData as Array<{ name: string }>);
       setRoles((rolesData as Array<{ name: string }>).filter((role) => role.name !== 'Guest'));
     }).catch((error) => {
@@ -545,6 +628,50 @@ export function AgentFormPage() {
   useEffect(() => {
     let cancelled = false;
 
+    const loadSSHConnectionOptions = async () => {
+      setLoadingSSHConnections(true);
+      try {
+        const rows = await db.getDocList('SSH Connection', {
+          fields: ['name', 'display_name', 'host', 'username'],
+          filters: [['enabled', '=', 1]],
+          limit: 500,
+          orderBy: { field: 'modified', order: 'desc' },
+        }) as SSHConnectionListRow[];
+
+        if (cancelled) {
+          return;
+        }
+
+        setSSHConnectionOptions(
+          rows.map((row) => ({
+            value: row.name,
+            label: row.display_name || row.name,
+            description: [row.username, row.host].filter(Boolean).join('@') || undefined,
+          }))
+        );
+      } catch (error) {
+        console.error('Error loading SSH connections:', error);
+        if (!cancelled) {
+          setSSHConnectionOptions([]);
+          toast.error('Failed to load SSH Connections');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSSHConnections(false);
+        }
+      }
+    };
+
+    loadSSHConnectionOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
     const loadSummaryPromptOptions = async () => {
       setLoadingSummaryPrompts(true);
       try {
@@ -582,6 +709,50 @@ export function AgentFormPage() {
     };
 
     loadSummaryPromptOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadExecutionProfileOptions = async () => {
+      setLoadingExecutionProfiles(true);
+      try {
+        const profiles = await db.getDocList('Execution Profile', {
+          fields: ['name', 'profile_name', 'approval_mode'],
+          filters: [['disabled', '=', 0]],
+          limit: 500,
+          orderBy: { field: 'modified', order: 'desc' },
+        }) as ExecutionProfileListRow[];
+
+        if (cancelled) {
+          return;
+        }
+
+        setExecutionProfileOptions(
+          profiles.map((profile) => ({
+            value: profile.name,
+            label: profile.profile_name || profile.name,
+            approvalMode: profile.approval_mode || undefined,
+          }))
+        );
+      } catch (error) {
+        console.error('Error loading execution profiles:', error);
+        if (!cancelled) {
+          setExecutionProfileOptions([]);
+          toast.error('Failed to load Execution Profiles');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingExecutionProfiles(false);
+        }
+      }
+    };
+
+    loadExecutionProfileOptions();
 
     return () => {
       cancelled = true;
@@ -690,7 +861,7 @@ export function AgentFormPage() {
         }
 
         // Attach/select the created prompt in the form.
-        form.setValue(fieldName as any, pendingSelectedPrompt as any, { shouldDirty: true });
+        form.setValue(fieldName as 'agent_prompt' | 'summary_prompt_template', pendingSelectedPrompt, { shouldDirty: true });
 
         setPendingSelectedPrompt(null);
         setPendingSelectedPromptField(null);
@@ -731,7 +902,7 @@ export function AgentFormPage() {
   useEffect(() => {
     if (watchProvider) {
       getModels(watchProvider).then((modelsData) => {
-        const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as any).items;
+        const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as { items: AIModel[] }).items;
         setModels(modelsArray);
         // Clear model selection if current model doesn't belong to selected provider
         const currentModel = form.getValues('model');
@@ -905,11 +1076,21 @@ export function AgentFormPage() {
               data.max_upload_size_mb !== undefined && data.max_upload_size_mb !== null
                 ? data.max_upload_size_mb
                 : undefined,
+            allow_code_execution: data.allow_code_execution === 1,
+            execution_profile: data.execution_profile || undefined,
+            execution_shared_dir_limit_mb:
+              data.execution_shared_dir_limit_mb !== undefined && data.execution_shared_dir_limit_mb !== null
+                ? data.execution_shared_dir_limit_mb
+                : undefined,
+            allow_ssh: data.allow_ssh === 1,
+            ssh_connections: (data.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
+            agent_skill: [],
           });
         }
         // Track initial disabled state and persisted allow_chat
         setInitialDisabled(data.disabled === 1);
         setAllowChat(data.allow_chat === 1);
+        setIsSystemAgent(data.is_system === 1);
         setAgentStats({ last_run: data.last_run ?? null, total_run: data.total_run ?? null });
         // Load tools from agent_tool field
         // agent_tool is a child table with format: [{ tool: "tool-name" }, ...]
@@ -934,6 +1115,21 @@ export function AgentFormPage() {
         } else {
           setSelectedTools([]);
           setInitialTools([]);
+        }
+        if (data.agent_skill && Array.isArray(data.agent_skill) && data.agent_skill.length > 0) {
+          const skillRows: AgentSkillRow[] = data.agent_skill.map((item) => ({
+            name: item.name,
+            skill: item.skill,
+            mode: item.mode || 'Optional',
+            auto_load: item.auto_load === 1 || item.auto_load === true ? 1 : 0,
+            priority: item.priority ?? 0,
+            description: item.description || undefined,
+          }));
+          setAgentSkills(skillRows);
+          setInitialAgentSkills(skillRows);
+        } else {
+          setAgentSkills([]);
+          setInitialAgentSkills([]);
         }
         // Load triggers from Agent Trigger doctype
         getAgentTriggers(id).then((triggersData) => {
@@ -1047,8 +1243,8 @@ export function AgentFormPage() {
         prompt_version_locked: values.prompt_version_locked ? 1 : 0,
         template_version_at_attach: values.template_version_at_attach !== undefined ? values.template_version_at_attach : undefined,
         allow_guest: values.allow_guest ? 1 : 0,
-        allowed_users: (values.allowed_users || []).map((user) => ({ user })) as any,
-        allowed_roles: (values.allowed_roles || []).map((role) => ({ role })) as any,
+        allowed_users: (values.allowed_users || []).map((user) => ({ user })) as AgentPermissionUserRow[],
+        allowed_roles: (values.allowed_roles || []).map((role) => ({ role })) as AgentPermissionRoleRow[],
         enable_prompt_caching: values.enable_prompt_caching ? 1 : 0,
         cache_control_type: values.cache_control_type || '',
         cache_system_message: values.cache_system_message ? 1 : 0,
@@ -1079,6 +1275,13 @@ export function AgentFormPage() {
         allow_file_upload: values.allow_file_upload ? 1 : 0,
         enable_ocr: values.enable_ocr ? 1 : 0,
         max_upload_size_mb: values.max_upload_size_mb !== undefined ? values.max_upload_size_mb : undefined,
+        allow_code_execution: values.allow_code_execution ? 1 : 0,
+        execution_profile: values.execution_profile || undefined,
+        execution_shared_dir_limit_mb: values.execution_shared_dir_limit_mb !== undefined ? values.execution_shared_dir_limit_mb : undefined,
+        allow_ssh: values.allow_ssh ? 1 : 0,
+        ssh_connections: (values.ssh_connections || []).map((connectionName) => ({
+          ssh_connection: connectionName,
+        })),
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -1097,7 +1300,15 @@ export function AgentFormPage() {
           token_budget: ks.token_budget,
           description: ks.description || '',
         })),
-      } as any;
+        agent_skill: agentSkills.map((skill) => ({
+          ...(skill.name ? { name: skill.name } : {}),
+          skill: skill.skill,
+          mode: skill.mode,
+          auto_load: normalizeFlag(skill.auto_load),
+          priority: skill.priority ?? 0,
+          description: skill.description || '',
+        })),
+      } as AgentUpdatePayload;
 
       if (isNew) {
         // Create new agent
@@ -1160,12 +1371,22 @@ export function AgentFormPage() {
             newAgent.max_upload_size_mb !== undefined && newAgent.max_upload_size_mb !== null
               ? newAgent.max_upload_size_mb
               : undefined,
+          allow_code_execution: newAgent.allow_code_execution === 1,
+          execution_profile: newAgent.execution_profile || undefined,
+          execution_shared_dir_limit_mb:
+            newAgent.execution_shared_dir_limit_mb !== undefined && newAgent.execution_shared_dir_limit_mb !== null
+              ? newAgent.execution_shared_dir_limit_mb
+              : undefined,
+          allow_ssh: newAgent.allow_ssh === 1,
+          ssh_connections: (newAgent.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
+          agent_skill: [],
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
         setInitialTools([...selectedTools]);
         setInitialMcpServers([...mcpServers]);
         setInitialKnowledgeSources([...knowledgeSources]);
+        setInitialAgentSkills([...agentSkills]);
         setAgentStats({ last_run: newAgent.last_run ?? null, total_run: newAgent.total_run ?? null });
         // Sync tool-details setting to other tabs via localStorage
         writeToolDetailsSetting(newAgent.name, newAgent.show_tool_execution_details === 1);
@@ -1231,6 +1452,7 @@ export function AgentFormPage() {
           allow_file_upload: values.allow_file_upload,
           enable_ocr: values.enable_ocr,
           max_upload_size_mb: values.max_upload_size_mb,
+          agent_skill: agentSkills as any,
         });
         // Reset tools, disabled state, and persisted allow_chat after successful update
         setInitialTools([...selectedTools]);
@@ -1254,6 +1476,21 @@ export function AgentFormPage() {
             setInitialTools([...selectedTools]);
             setInitialDisabled(updatedData.disabled === 1);
             setAllowChat(updatedData.allow_chat === 1);
+            if (updatedData.agent_skill && Array.isArray(updatedData.agent_skill) && updatedData.agent_skill.length > 0) {
+              const skillRows: AgentSkillRow[] = updatedData.agent_skill.map((item) => ({
+                name: item.name,
+                skill: item.skill,
+                mode: item.mode || 'Optional',
+                auto_load: item.auto_load === 1 || item.auto_load === true ? 1 : 0,
+                priority: item.priority ?? 0,
+                description: item.description || undefined,
+              }));
+              setAgentSkills(skillRows);
+              setInitialAgentSkills(skillRows);
+            } else {
+              setAgentSkills([]);
+              setInitialAgentSkills([]);
+            }
             // Reload MCP servers from updated agent document
             if (updatedData.agent_mcp_server && Array.isArray(updatedData.agent_mcp_server) && updatedData.agent_mcp_server.length > 0) {
               const childTableServers: MCPServerRef[] = (updatedData.agent_mcp_server as AgentMcpServerRow[]).map((item) => ({
@@ -1323,7 +1560,7 @@ export function AgentFormPage() {
     } finally {
       setSaving(false);
     }
-  }, [form, id, isNew, mcpServers, navigate, selectedTools, knowledgeSources]);
+  }, [form, id, isNew, mcpServers, navigate, selectedTools, knowledgeSources, agentSkills]);
 
   // Memoize the form submit handler to avoid recreating it on every render
   const handleFormSubmit = useMemo(
@@ -1391,13 +1628,39 @@ export function AgentFormPage() {
     }
   };
 
-  const handleDuplicate = () => {
-    toast.info('Coming Soon!');
+  const handleDuplicate = async () => {
+    if (!id || isNew) return;
+    setDuplicating(true);
+    try {
+      const copy = await duplicateAgent(id);
+      toast.success('Agent duplicated');
+      navigate(`/agents/${copy.name}`);
+    } catch (error) {
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to duplicate agent');
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const handleDelete = () => {
-    toast.info('Deleting agent...');
-    navigate('/agents');
+    setShowDeleteDialog(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!id || isNew) return;
+    setDeleting(true);
+    try {
+      await deleteAgent(id);
+      toast.success('Agent deleted');
+      navigate('/agents');
+    } catch (error) {
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to delete agent');
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
+    }
   };
 
   const handleViewLogs = () => {
@@ -1727,6 +1990,17 @@ export function AgentFormPage() {
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
+        {isSystemAgent && (
+          <Alert>
+            <Lock className="h-4 w-4" />
+            <AlertTitle>System agent — locked</AlertTitle>
+            <AlertDescription>
+              {systemLocked
+                ? 'This is a protected system agent. Instructions, prompt, provider, model, tools, disabled and chat settings are read-only for your role. Contact a Huf Admin to change them.'
+                : 'This is a protected system agent. As a Huf Admin you have full edit access; non-admin users see these fields as read-only.'}
+            </AlertDescription>
+          </Alert>
+        )}
         <AgentHeader
           form={form}
           watchDisabled={watchDisabled}
@@ -1734,18 +2008,29 @@ export function AgentFormPage() {
           models={models}
           activeTriggerCount={activeTriggerCount}
           isNew={isNew}
+          isSystem={isSystemAgent}
+          locked={systemLocked}
           showSaveButton={showSaveButton}
           saving={saving}
           runningTest={runningTest}
           onSave={handleFormSubmit}
           onRunTest={handleRunTest}
           onDuplicate={handleDuplicate}
+          duplicating={duplicating}
           onViewLogs={handleViewLogs}
           onDelete={handleDelete}
           agentId={!isNew && id ? id : undefined}
           allowChat={allowChat}
           lastRun={agentStats.last_run}
           totalRun={agentStats.total_run}
+        />
+
+        <DeleteAgentDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          agentName={form.watch('agent_name') || id || ''}
+          onConfirm={handleConfirmDelete}
+          loading={deleting}
         />
 
         <Form {...form}>
@@ -1775,11 +2060,12 @@ export function AgentFormPage() {
                   promptOptions={promptOptions}
                   loadingPrompts={loadingPrompts}
                   showAddNewPrompt
+                  locked={systemLocked}
                 />
               </TabsContent>
 
               <TabsContent value="behavior" className="space-y-4">
-                <BehaviorTab form={form} />
+                <BehaviorTab form={form} locked={systemLocked} />
               </TabsContent>
 
               <TabsContent value="triggers" className="space-y-4">
@@ -1804,9 +2090,9 @@ export function AgentFormPage() {
                   onAddTools={() => setShowToolsModal(true)}
                   onRemoveTool={handleRemoveTool}
                   onEditTool={handleEditTool}
+                  locked={systemLocked}
                   mcpServers={mcpServers}
                   onAddMCP={() => setShowMCPServersModal(true)}
-                  onCreateMCP={handleCreateMCP}
                   onRemoveMCP={handleRemoveMCPServer}
                   onToggleMCP={handleToggleMCPServer}
                   onSyncMCP={handleSyncMCPServer}
@@ -1824,6 +2110,14 @@ export function AgentFormPage() {
                 />
               </TabsContent>
 
+              <TabsContent value="skills" className="space-y-4">
+                <SkillsTab
+                  skills={agentSkills as any}
+                  skillOptions={skillOptions}
+                  onChange={setAgentSkills}
+                />
+              </TabsContent>
+
               <TabsContent value="permissions" className="space-y-4">
                 <PermissionsTab form={form} users={users} roles={roles} />
               </TabsContent>
@@ -1834,6 +2128,10 @@ export function AgentFormPage() {
                   allModels={allModels}
                   summaryPromptOptions={summaryPromptOptions}
                   loadingSummaryPrompts={loadingSummaryPrompts}
+                  executionProfileOptions={executionProfileOptions}
+                  loadingExecutionProfiles={loadingExecutionProfiles}
+                  sshConnectionOptions={sshConnectionOptions}
+                  loadingSSHConnections={loadingSSHConnections}
                 />
               </TabsContent>
             </Tabs>
@@ -1874,6 +2172,7 @@ export function AgentFormPage() {
           transport_type: 'http' as const,
         })) as MCPServerDoc[]}
         onAddServers={handleAddMCPServers}
+        onCreateNew={handleCreateMCP}
       />
 
       {/* Agent Knowledge Modal */}

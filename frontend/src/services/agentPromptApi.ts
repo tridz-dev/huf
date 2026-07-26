@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { call, db } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { doctype } from '@/data/doctypes';
@@ -101,7 +102,7 @@ export async function getAgentPrompts(
         'prompt_group',
         'modified',
       ],
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1,
       ...(start > 0 && { limit_start: start }),
       orderBy: { field: 'modified', order: 'desc' },

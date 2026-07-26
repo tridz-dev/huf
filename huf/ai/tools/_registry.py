@@ -597,6 +597,111 @@ GOOGLE_MAPS_TOOLS = [
 	},
 ]
 
+GOOGLE_PLACES_TOOLS = [
+	{
+		"tool_name": "gplaces_text_search",
+		"description": (
+			"Search for places with a free-text query using the Google Places API (New). "
+			"Supports filters (type, rating, price, open now), location bias/restriction, and pagination. "
+			"Requires a Google Maps/Places API key in Integration Settings or env (GOOGLE_MAPS_API_KEY, PLACE_API_KEY, GOOGLE_PLACES_API_KEY)."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_text_search",
+		"category": "Google Places",
+		"parameters": [
+			_p("query", required=True, description="Free-text search query, e.g. 'vegan restaurants in Lisbon'"),
+			_p("language_code", description="Response language, e.g. 'en', 'fr'"),
+			_p("region_code", description="Region bias as CLDR country code, e.g. 'us', 'in'"),
+			_p("included_type", description="Restrict to a single place type, e.g. 'restaurant', 'museum'"),
+			_p("min_rating", type="number", description="Minimum average user rating (0.0-5.0)"),
+			_p("price_levels", description="CSV of PRICE_LEVEL_FREE, PRICE_LEVEL_INEXPENSIVE, PRICE_LEVEL_MODERATE, PRICE_LEVEL_EXPENSIVE, PRICE_LEVEL_VERY_EXPENSIVE"),
+			_p("open_now", type="boolean", description="Only return places open at query time"),
+			_p("rank_preference", description="RELEVANCE (default) or DISTANCE (requires location)"),
+			_p("latitude", type="number", description="Center latitude for location bias/restriction"),
+			_p("longitude", type="number", description="Center longitude for location bias/restriction"),
+			_p("radius", type="number", description="Search radius in metres (default 50000, min 1)"),
+			_p("strict_location", type="boolean", description="With latitude/longitude: hard-restrict to the circle instead of biasing"),
+			_p("page_size", type="integer", description="Results per page, 1-20 (default 10)"),
+			_p("page_token", description="next_page_token from a previous response to fetch the next page"),
+		],
+	},
+	{
+		"tool_name": "gplaces_place_details",
+		"description": (
+			"Get full details for a single place by place_id: contact info, opening hours, "
+			"photos (resource names for gplaces_place_photo), up to 5 reviews, review summary, "
+			"accessibility/payment/parking options. Requires a Google Places API key."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_place_details",
+		"category": "Google Places",
+		"parameters": [
+			_p("place_id", required=True, description="Google place ID, e.g. 'ChIJN1t_tDeuEmsRUsoyG83frY4'"),
+			_p("language_code", description="Response language, e.g. 'en', 'fr'"),
+			_p("region_code", description="Region code as CLDR country code, e.g. 'us'"),
+		],
+	},
+	{
+		"tool_name": "gplaces_place_photo",
+		"description": (
+			"Resolve a photo resource name (from gplaces_place_details photos[].name) to a usable image URL. "
+			"Requires a Google Places API key."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_place_photo",
+		"category": "Google Places",
+		"parameters": [
+			_p("photo_name", required=True, description="Photo resource name, e.g. 'places/PLACE_ID/photos/PHOTO_ID'"),
+			_p("max_height_px", type="integer", description="Max image height in pixels (default 800)"),
+			_p("max_width_px", type="integer", description="Max image width in pixels (default 800)"),
+			_p("skip_http_redirect", type="boolean", description="Default true: return JSON photoUri. False: follow the media redirect manually"),
+		],
+	},
+	{
+		"tool_name": "gplaces_autocomplete",
+		"description": (
+			"Place autocomplete suggestions for a partial input (cities, districts, neighborhoods by default; "
+			"country-level results are filtered out). Results are cached for 24h. "
+			"Supports location bias/restriction and origin-based distance sorting. Requires a Google Places API key."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_autocomplete",
+		"category": "Google Places",
+		"parameters": [
+			_p("input", required=True, description="Partial place name typed by the user (max 200 chars)"),
+			_p("included_primary_types", description="CSV of primary types (default: locality,sublocality,administrative_area_level_1,administrative_area_level_2,neighborhood)"),
+			_p("language_code", description="Response language, e.g. 'en', 'fr'"),
+			_p("region_code", description="Region bias as CLDR country code, e.g. 'us'"),
+			_p("session_token", description="Session token for billing/session grouping"),
+			_p("include_query_predictions", type="boolean", description="Also return query (non-place) predictions"),
+			_p("latitude", type="number", description="Center latitude for location bias/restriction"),
+			_p("longitude", type="number", description="Center longitude for location bias/restriction"),
+			_p("radius", type="number", description="Radius in metres (default 50000, min 1)"),
+			_p("strict_location", type="boolean", description="With latitude/longitude: hard-restrict to the circle instead of biasing"),
+			_p("origin_latitude", type="number", description="Origin latitude; adds straight-line distance_meters to suggestions"),
+			_p("origin_longitude", type="number", description="Origin longitude; adds straight-line distance_meters to suggestions"),
+		],
+	},
+	{
+		"tool_name": "gplaces_nearby_search",
+		"description": (
+			"Search for places near a latitude/longitude using the Google Places API (New). "
+			"Filter by included/excluded types and rank by popularity or distance. Requires a Google Places API key."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_nearby_search",
+		"category": "Google Places",
+		"parameters": [
+			_p("latitude", type="number", required=True, description="Center latitude"),
+			_p("longitude", type="number", required=True, description="Center longitude"),
+			_p("radius", type="number", description="Search radius in metres (default 50000, min 1)"),
+			_p("included_types", description="CSV of place types to include, e.g. 'restaurant,cafe'"),
+			_p("excluded_types", description="CSV of place types to exclude"),
+			_p("included_primary_types", description="CSV of primary types to include"),
+			_p("excluded_primary_types", description="CSV of primary types to exclude"),
+			_p("max_result_count", type="integer", description="Max results, 1-20 (default 10)"),
+			_p("language_code", description="Response language, e.g. 'en', 'fr'"),
+			_p("region_code", description="Region code as CLDR country code, e.g. 'us'"),
+			_p("rank_preference", description="POPULARITY (default) or DISTANCE"),
+		],
+	},
+]
+
 GOOGLE_DRIVE_TOOLS = [
 	{
 		"tool_name": "gdrive_list_files",
@@ -651,6 +756,480 @@ GOOGLE_MEET_TOOLS = [
 ]
 
 
+SSH_TOOLS = [
+	{
+		"tool_name": "run_ssh_command",
+		"description": (
+			"Run one remote SSH command against an admin-managed SSH Connection that the agent "
+			"is explicitly allowlisted to use. Supports only non-interactive one-shot command "
+			"execution in this version; interactive PTY sessions and managed background jobs are "
+			"not available."
+		),
+		"function_path": "huf.ai.tools.ssh_execution.run_ssh_command",
+		"category": "Developer Tools",
+		"parameters": [
+			_p("connection", required=True, description="Allowlisted SSH Connection name"),
+			_p("command", required=True, description="One remote shell command to execute without PTY"),
+			_p("timeout_seconds", type="integer", description="Optional execution timeout override in seconds"),
+		],
+	},
+]
+
+
+# ---------------------------------------------------------------------------
+# SERP Tools (SerpApi) — hotels, reviews, YouTube
+# ---------------------------------------------------------------------------
+
+SERP_HOTEL_TOOLS = [
+	{
+		"tool_name": "serp_hotel_search",
+		"description": (
+			"Search hotels (or vacation rentals) via SerpApi Google Hotels with the full filter set: "
+			"guests, price budget, rating, star class, property types, amenities, brands, and boolean toggles. "
+			"Requires SERPAPI_API_KEY env var or serpapi Integration Settings. "
+			"Use property_token from each result with serp_hotel_details for full details."
+		),
+		"function_path": "huf.ai.tools.serp_hotels.handle_serp_hotel_search",
+		"category": "SERP",
+		"parameters": [
+			_p("q", required=True, description="Search query, e.g. 'Hotels in Bandra Mumbai'"),
+			_p("check_in_date", required=True, description="Check-in date (YYYY-MM-DD)"),
+			_p("check_out_date", required=True, description="Check-out date (YYYY-MM-DD)"),
+			_p("adults", type="integer", description="Number of adult guests (default 2, min 1)"),
+			_p("children", type="integer", description="Number of children"),
+			_p("children_ages", description="Ages of children, comma-separated, e.g. '5,8'"),
+			_p("currency", description="ISO currency code for prices (default INR)"),
+			_p("gl", description="Country code for the search, e.g. 'in', 'us' (default in)"),
+			_p("hl", description="Language code, e.g. 'en' (default en)"),
+			_p("sort_by", type="integer", description="Sort order: 3 (lowest price), 8 (highest rating), 13 (most reviewed). Omit for relevance."),
+			_p("min_price", type="integer", description="Minimum price per night"),
+			_p("max_price", type="integer", description="Maximum price per night"),
+			_p("rating", type="integer", description="Minimum guest rating bucket: 7 (3.5+), 8 (4.0+), 9 (4.5+)"),
+			_p("hotel_class", description="Star rating(s) 2-5, comma-separated, e.g. '4,5'"),
+			_p("property_types", description="SerpApi property-type ID(s), comma-separated"),
+			_p("amenities", description="SerpApi amenity ID(s), comma-separated"),
+			_p("brands", description="SerpApi hotel-brand ID(s), comma-separated (ignored when vacation_rentals is true)"),
+			_p("free_cancellation", type="boolean", description="Only results offering free cancellation"),
+			_p("special_offers", type="boolean", description="Only results with special offers"),
+			_p("eco_certified", type="boolean", description="Only eco-certified results"),
+			_p("vacation_rentals", type="boolean", description="Search vacation rentals instead of hotels"),
+			_p("bedrooms", type="integer", description="Minimum bedrooms (vacation rentals only)"),
+			_p("bathrooms", type="integer", description="Minimum bathrooms (vacation rentals only)"),
+			_p("next_page_token", description="Pagination token from a previous response"),
+		],
+	},
+	{
+		"tool_name": "serp_hotel_details",
+		"description": (
+			"Fetch full details for one hotel by property_token (from serp_hotel_search): per-OTA prices "
+			"for the stay, rating and review sentiment breakdown, amenities, images, location. "
+			"Requires SERPAPI_API_KEY env var or serpapi Integration Settings."
+		),
+		"function_path": "huf.ai.tools.serp_hotels.handle_serp_hotel_details",
+		"category": "SERP",
+		"parameters": [
+			_p("property_token", required=True, description="Hotel token from a serp_hotel_search result"),
+			_p("check_in_date", required=True, description="Check-in date (YYYY-MM-DD); prices are quoted for this stay"),
+			_p("check_out_date", required=True, description="Check-out date (YYYY-MM-DD)"),
+			_p("q", description="Search query the token came from (improves accuracy; default 'Hotels')"),
+			_p("adults", type="integer", description="Number of adult guests (default 2)"),
+			_p("currency", description="ISO currency code for all prices (default INR)"),
+			_p("gl", description="Country code (default in)"),
+			_p("hl", description="Language code (default en)"),
+		],
+	},
+	{
+		"tool_name": "serp_hotel_details_batch",
+		"description": (
+			"Fetch details for several hotels in one call, concurrently. Pass the property_tokens returned "
+			"by serp_hotel_search. Returns {hotels, errors, requested, succeeded}. "
+			"Requires SERPAPI_API_KEY env var or serpapi Integration Settings."
+		),
+		"function_path": "huf.ai.tools.serp_hotels.handle_serp_hotel_details_batch",
+		"category": "SERP",
+		"parameters": [
+			_p("property_tokens", required=True, description="Hotel tokens: JSON array, comma-separated string, or list"),
+			_p("check_in_date", required=True, description="Check-in date (YYYY-MM-DD)"),
+			_p("check_out_date", required=True, description="Check-out date (YYYY-MM-DD)"),
+			_p("q", description="Search query the tokens came from (improves accuracy)"),
+			_p("adults", type="integer", description="Number of adult guests (default 2)"),
+			_p("currency", description="ISO currency code for all prices (default INR)"),
+			_p("max_workers", type="integer", description="Thread pool size for parallel lookups (default 8)"),
+		],
+	},
+]
+
+SERP_REVIEW_TOOLS = [
+	{
+		"tool_name": "serp_google_maps_reviews",
+		"description": (
+			"Fetch reviews for a place on Google Maps. Pass a human-friendly place_query (e.g. 'Leopold Cafe "
+			"Mumbai') and the data_id is resolved internally, or pass data_id/place_id directly to skip search. "
+			"Requires SERPAPI_API_KEY env var or serpapi Integration Settings."
+		),
+		"function_path": "huf.ai.tools.serp_reviews.handle_serp_google_maps_reviews",
+		"category": "SERP",
+		"parameters": [
+			_p("place_query", description="Place search query, e.g. 'Leopold Cafe Mumbai' (alternative to data_id/place_id)"),
+			_p("data_id", description="The place's data id, e.g. '0x...:0x...' (preferred if known)"),
+			_p("place_id", description="The place id (alternative to data_id)"),
+			_p("sort_by", description="Sort order: qualityScore (default), newestFirst, ratingHigh, ratingLow"),
+			_p("hl", description="Language code (default en)"),
+			_p("gl", description="Country code (default in)"),
+			_p("next_page_token", description="Pagination token from a previous response"),
+		],
+	},
+	{
+		"tool_name": "serp_google_hotel_reviews",
+		"description": (
+			"Fetch review data for a hotel: overall rating, star distribution, and per-topic sentiment "
+			"breakdown. Pass hotel_query plus stay dates (property_token resolved internally) or a "
+			"property_token directly. Requires SERPAPI_API_KEY env var or serpapi Integration Settings."
+		),
+		"function_path": "huf.ai.tools.serp_reviews.handle_serp_google_hotel_reviews",
+		"category": "SERP",
+		"parameters": [
+			_p("hotel_query", description="Hotel search query, e.g. 'Taj Mahal Palace Mumbai' (alternative to property_token)"),
+			_p("property_token", description="Hotel token from a serp_hotel_search result (skips search)"),
+			_p("check_in_date", required=True, description="Check-in date (YYYY-MM-DD)"),
+			_p("check_out_date", required=True, description="Check-out date (YYYY-MM-DD)"),
+			_p("q", description="Search query the token came from (improves accuracy)"),
+			_p("adults", type="integer", description="Number of adult guests (default 2)"),
+			_p("currency", description="ISO currency code (default INR)"),
+		],
+	},
+	{
+		"tool_name": "serp_tripadvisor_search",
+		"description": (
+			"Search TripAdvisor to find a place and its place_id (for serp_tripadvisor_reviews). "
+			"Requires SERPAPI_API_KEY env var or serpapi Integration Settings."
+		),
+		"function_path": "huf.ai.tools.serp_reviews.handle_serp_tripadvisor_search",
+		"category": "SERP",
+		"parameters": [
+			_p("q", required=True, description="Search terms, e.g. 'Taj Mahal Palace Mumbai'"),
+			_p("ssrc", description="Category filter: a (all), r (restaurants), A (things to do), h (hotels), g (destinations), v (rentals), f (forums)"),
+			_p("tripadvisor_domain", description="TripAdvisor domain, e.g. 'www.tripadvisor.in' (default .com)"),
+			_p("offset", type="integer", description="Pagination offset (increments of 30)"),
+			_p("limit", type="integer", description="Max results (default 30)"),
+		],
+	},
+	{
+		"tool_name": "serp_tripadvisor_reviews",
+		"description": (
+			"Fetch reviews for a TripAdvisor place. Pass a human-friendly place_query (place_id resolved "
+			"internally) or a place_id directly. Requires SERPAPI_API_KEY env var or serpapi Integration Settings."
+		),
+		"function_path": "huf.ai.tools.serp_reviews.handle_serp_tripadvisor_reviews",
+		"category": "SERP",
+		"parameters": [
+			_p("place_query", description="Place search query (alternative to place_id)"),
+			_p("place_id", description="TripAdvisor place id from serp_tripadvisor_search (skips search)"),
+			_p("sort_by", description="Sort order: most_recent (default) or detailed_review"),
+			_p("rating", description="Filter by rating(s), comma-separated, e.g. '5' or '5,4'"),
+			_p("language", description="Language for reviews, e.g. 'en'"),
+			_p("tripadvisor_domain", description="TripAdvisor domain, e.g. 'www.tripadvisor.in'"),
+			_p("translate", type="boolean", description="Translate reviews to the selected language"),
+			_p("offset", type="integer", description="Reviews to skip (default 0)"),
+			_p("limit", type="integer", description="Max reviews per request (1-20, default 10)"),
+		],
+	},
+	{
+		"tool_name": "serp_yelp_search",
+		"description": (
+			"Find Yelp businesses and their place_id (for serp_yelp_reviews). "
+			"Requires SERPAPI_API_KEY env var or serpapi Integration Settings."
+		),
+		"function_path": "huf.ai.tools.serp_reviews.handle_serp_yelp_search",
+		"category": "SERP",
+		"parameters": [
+			_p("find_desc", required=True, description="What to search for, e.g. 'pizza' or a business name"),
+			_p("find_loc", required=True, description="Location, e.g. 'New York, NY'"),
+			_p("hl", description="Language code (default en)"),
+			_p("start", type="integer", description="Result offset for pagination (0, 10, 20, ...)"),
+		],
+	},
+	{
+		"tool_name": "serp_yelp_reviews",
+		"description": (
+			"Fetch reviews for a Yelp business. Pass business_name + location (place_id resolved internally) "
+			"or a place_id directly. Requires SERPAPI_API_KEY env var or serpapi Integration Settings."
+		),
+		"function_path": "huf.ai.tools.serp_reviews.handle_serp_yelp_reviews",
+		"category": "SERP",
+		"parameters": [
+			_p("business_name", description="Business name, e.g. \"Joe's Pizza\" (with location, alternative to place_id)"),
+			_p("location", description="Business location, e.g. 'New York, NY' (with business_name)"),
+			_p("place_id", description="Yelp place id from serp_yelp_search (skips search)"),
+			_p("sort_by", description="Sort order: relevance_desc (default), date_desc, date_asc, rating_desc, rating_asc, elites_desc"),
+			_p("start", type="integer", description="Result offset for pagination"),
+			_p("num", type="integer", description="Number of reviews to return"),
+			_p("hl", description="Language code (default en)"),
+		],
+	},
+]
+
+SERP_YOUTUBE_TOOLS = [
+	{
+		"tool_name": "serp_youtube_search",
+		"description": (
+			"Search YouTube videos via SerpApi. Returns videos with parsed video_id (usable with "
+			"youtube_transcript). Requires SERPAPI_API_KEY env var or serpapi Integration Settings."
+		),
+		"function_path": "huf.ai.tools.serp_youtube.handle_serp_youtube_search",
+		"category": "SERP",
+		"parameters": [
+			_p("search_query", required=True, description="YouTube search terms"),
+			_p("gl", description="Country code (default in)"),
+			_p("hl", description="Language code (default en)"),
+			_p("sp", description="SerpApi filter/sort token (advanced)"),
+		],
+	},
+	{
+		"tool_name": "youtube_transcript",
+		"description": (
+			"Fetch the transcript/captions for a YouTube video (no SerpApi key required). Accepts a video id "
+			"or any YouTube URL (watch, youtu.be, shorts, embed)."
+		),
+		"function_path": "huf.ai.tools.serp_youtube.handle_youtube_transcript",
+		"category": "SERP",
+		"parameters": [
+			_p("video", required=True, description="YouTube video id or URL (watch, youtu.be, shorts, embed)"),
+			_p("languages", description="Preferred language(s), comma-separated, e.g. 'en,hi' (default en); first available match is returned"),
+		],
+	},
+]
+
+
+# ---------------------------------------------------------------------------
+# Builder Tools  (hub-as-builder: typed, capability-gated, diff-before-mutate)
+# ---------------------------------------------------------------------------
+
+_CONFIRM_NOTE = (
+	"Two-phase contract: call with confirm=false first to preview a diff of the "
+	"proposed changes; nothing is mutated until you call again with confirm=true."
+)
+
+BUILDER_TOOLS = [
+	{
+		"tool_name": "create_huf_table",
+		"description": (
+			"Create a new huf data table (a custom DocType plus registry entry) that agents "
+			"and flows can then read/write. 'fields' is a JSON list of field definitions, e.g. "
+			"[{\"fieldname\": \"title\", \"fieldtype\": \"Data\", \"label\": \"Title\", \"reqd\": 1}]. "
+			+ _CONFIRM_NOTE
+			+ " Returns the new DocType name and its live schema. Fails with a clear error if a "
+			"table with the same name already exists."
+		),
+		"function_path": "huf.ai.tools.builder.create_huf_table",
+		"category": "Builder",
+		"parameters": [
+			_p("table_name", required=True, description="Human table name, e.g. 'Customer Feedback'. The DocType becomes 'HF <table_name>'."),
+			_p("fields", required=True, description="JSON list of field definitions [{fieldname, fieldtype, label, reqd, options, ...}]"),
+			_p("description", description="What the table is for"),
+			_p("icon", description="Optional icon name for the table"),
+			_p("autoname_method", description="Naming method (default 'Autoincrement')"),
+			_p("title_field", description="Field to use as document title"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = create the table"),
+		],
+	},
+	{
+		"tool_name": "list_table_rows",
+		"description": (
+			"Read rows from an existing huf data table (created with create_huf_table). "
+			"Read-only. Returns the rows plus the total count for pagination."
+		),
+		"function_path": "huf.ai.tools.builder.list_table_rows",
+		"category": "Builder",
+		"parameters": [
+			_p("table_name", required=True, description="Human table name or Huf Data Table registry name"),
+			_p("filters", description="JSON filter object or list, e.g. {\"status\": \"Open\"}"),
+			_p("fields", description="JSON list of fieldnames to return (default: all)"),
+			_p("limit", type="integer", description="Max rows (default 20)"),
+			_p("start", type="integer", description="Offset for pagination (default 0)"),
+		],
+	},
+	{
+		"tool_name": "add_table_row",
+		"description": (
+			"Add a row to an existing huf data table. 'data' is a JSON object of "
+			"fieldname/value pairs matching the table's schema (unknown fields are dropped). "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.add_table_row",
+		"category": "Builder",
+		"parameters": [
+			_p("table_name", required=True, description="Human table name or Huf Data Table registry name"),
+			_p("data", required=True, description="JSON object of fieldname/value pairs, e.g. {\"title\": \"Hello\", \"status\": \"Open\"}"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = insert the row"),
+		],
+	},
+	{
+		"tool_name": "update_table_row",
+		"description": (
+			"Update fields of an existing row in a huf data table. 'data' is a JSON object "
+			"of fieldname/value pairs; only changed fields are applied. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.update_table_row",
+		"category": "Builder",
+		"parameters": [
+			_p("table_name", required=True, description="Human table name or Huf Data Table registry name"),
+			_p("row_name", required=True, description="Name (ID) of the row to update"),
+			_p("data", required=True, description="JSON object of fieldname/value pairs to change"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = apply and save"),
+		],
+	},
+	{
+		"tool_name": "delete_table_row",
+		"description": (
+			"Delete a row from a huf data table. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.delete_table_row",
+		"category": "Builder",
+		"parameters": [
+			_p("table_name", required=True, description="Human table name or Huf Data Table registry name"),
+			_p("row_name", required=True, description="Name (ID) of the row to delete"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = delete the row"),
+		],
+	},
+	{
+		"tool_name": "draft_agent",
+		"description": (
+			"Create a new AI Agent in DRAFT state (disabled=1 - it cannot run yet) with a "
+			"local prompt from 'instructions'. The provider must already exist; if it has no "
+			"API key configured the draft is still created but the result includes a warning. "
+			"The agent is chat-enabled by default (allow_chat=true) so it appears in chat "
+			"pickers once published. "
+			+ _CONFIRM_NOTE
+			+ " Use update_agent_prompt to refine the prompt, attach_agent_tools to give it tools, "
+			"and publish_agent to enable it. Fails with a clear error if the agent already exists."
+		),
+		"function_path": "huf.ai.tools.builder.draft_agent",
+		"category": "Builder",
+		"parameters": [
+			_p("agent_name", required=True, description="Unique agent name (also the document ID)"),
+			_p("provider", required=True, description="Existing AI Provider name"),
+			_p("model", required=True, description="Existing AI Model name"),
+			_p("instructions", required=True, description="System prompt / instructions for the agent"),
+			_p("description", description="Short human description of the agent"),
+			_p("allow_chat", type="boolean", description="true (default) = chat-enabled so it appears in chat UIs; false = headless/automation-only agent"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = create the draft agent"),
+		],
+	},
+	{
+		"tool_name": "update_agent_prompt",
+		"description": (
+			"Update an agent's prompt - either its local instructions or its linked Agent Prompt "
+			"template (setting agent_prompt switches the agent to Template prompt mode). "
+			+ _CONFIRM_NOTE
+			+ " System agents (is_system) can only be modified by System Managers."
+		),
+		"function_path": "huf.ai.tools.builder.update_agent_prompt",
+		"category": "Builder",
+		"parameters": [
+			_p("agent_name", required=True, description="Name of the agent to update"),
+			_p("instructions", description="New local instructions text"),
+			_p("agent_prompt", description="Name of an existing Agent Prompt template to link"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = apply and save"),
+		],
+	},
+	{
+		"tool_name": "attach_agent_tools",
+		"description": (
+			"Set the full list of tools attached to an agent. 'tool_names' is the complete "
+			"proposed set of Agent Tool Function names (it replaces the current list - include "
+			"existing tools you want to keep). Every tool must already exist. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.attach_agent_tools",
+		"category": "Builder",
+		"parameters": [
+			_p("agent_name", required=True, description="Name of the agent"),
+			_p("tool_names", required=True, description="JSON list of Agent Tool Function names, e.g. [\"get_list\", \"run_flow\"]"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = apply and save"),
+		],
+	},
+	{
+		"tool_name": "publish_agent",
+		"description": (
+			"Publish a draft agent (flip disabled from 1 to 0) so it can run. Refuses with a "
+			"remediation message if the agent's provider has no API key configured. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.publish_agent",
+		"category": "Builder",
+		"parameters": [
+			_p("agent_name", required=True, description="Name of the draft agent to publish"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = apply and save"),
+		],
+	},
+	{
+		"tool_name": "create_agent_tool",
+		"description": (
+			"Create a WORKING declarative document tool (Agent Tool Function) bound to a "
+			"DocType. The tool executes immediately — attach it to an agent with "
+			"attach_agent_tools and it is callable right away. Use this to give agents "
+			"data tools, e.g. an 'add_row'-style named tool for a huf data table's "
+			"dynamic doctype like 'HF Social Media Campaign' (types='Create Document'). "
+			"Parameters are validated against the DocType: Select fields get options "
+			"auto-filled, unknown fields are dropped (see dropped_params in the result). "
+			"Custom Function/code/HTTP tools CANNOT be created by this tool. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.create_agent_tool",
+		"category": "Builder",
+		"parameters": [
+			_p("tool_name", required=True, description="Unique tool name (also the document ID)"),
+			_p("description", required=True, description="What the tool does — this is what LLMs will see"),
+			_p("types", required=True, description="Document tool type, one of: Create Document, Create Multiple Documents, Get Document, Get Multiple Documents, Get List, Update Document, Update Multiple Documents, Delete Document, Delete Multiple Documents, Get Value, Set Value"),
+			_p("reference_doctype", required=True, description="DocType the tool operates on, e.g. 'HF Social Media Campaign' for a huf data table"),
+			_p("parameters", description="JSON list of parameter definitions [{fieldname, type, label, required, description}]. fieldnames must exist on the reference_doctype (unknown ones are dropped); Select fields get options auto-filled. type one of: string, integer, number, float, boolean, object, array"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = create the tool record"),
+		],
+	},
+	{
+		"tool_name": "list_provider_options",
+		"description": (
+			"List every AI Provider with whether it has an API key configured and which "
+			"AI Models exist for it, plus a 'suggested' provider+model pair (the first "
+			"configured provider and its default chat model). Read-only — call this before "
+			"draft_agent to pick a valid provider/model instead of guessing. API key values "
+			"are never returned, only a configured true/false flag."
+		),
+		"function_path": "huf.ai.tools.builder.list_provider_options",
+		"category": "Builder",
+		"parameters": [],
+	},
+	{
+		"tool_name": "ask_user",
+		"description": (
+			"Ask the user a structured question in the chat. Returns a fenced 'ask-user' "
+			"block — include the returned 'block' value VERBATIM in your reply, then STOP "
+			"and wait for the user's answer. kind is one of yes_no|single_choice|multi_choice|"
+			"input|textarea; the choice kinds require options as "
+			"[{id, label, icon?, description?}] (icon must be a supported lucide name; "
+			"unsupported icons are dropped with a warning). Use this ONLY when structured UI "
+			"is clearly better than a typed reply: confirming right before executing a "
+			"mutating plan, choosing from a defined set of options, or collecting a "
+			"required value. Do NOT use it for greetings, small talk, open-ended "
+			"questions, or normal conversation — answer those in plain prose."
+		),
+		"function_path": "huf.ai.tools.ask_user.ask_user",
+		"category": "Builder",
+		"parameters": [
+			_p("question", required=True, description="The question to show the user"),
+			_p("kind", required=True, description="One of: yes_no, single_choice, multi_choice, input, textarea"),
+			_p("options", description="JSON list of options [{id, label, icon?, description?}] — required for single_choice/multi_choice"),
+			_p("allow_free_text", type="boolean", description="Allow a free-text answer in addition to options (default true)"),
+			_p("suggested_answers", description="JSON list of suggested free-text answers"),
+			_p("note", description="Optional extra context shown with the question"),
+		],
+	},
+]
+
+
 # ---------------------------------------------------------------------------
 # Master list
 # ---------------------------------------------------------------------------
@@ -672,6 +1251,12 @@ ALL_INTEGRATION_TOOLS = (
 	+ GOOGLE_SHEETS_TOOLS
 	+ GOOGLE_CALENDAR_TOOLS
 	+ GOOGLE_MAPS_TOOLS
+	+ GOOGLE_PLACES_TOOLS
 	+ GOOGLE_DRIVE_TOOLS
 	+ GOOGLE_MEET_TOOLS
+	+ SERP_HOTEL_TOOLS
+	+ SERP_REVIEW_TOOLS
+	+ SERP_YOUTUBE_TOOLS
+	+ BUILDER_TOOLS
+	+ SSH_TOOLS
 )

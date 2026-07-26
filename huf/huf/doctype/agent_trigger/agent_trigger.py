@@ -30,7 +30,7 @@ class AgentTrigger(Document):
 		temp_doc = frappe.new_doc(self.reference_doctype)
 		try:
 			frappe.safe_eval(self.condition, None, get_context(temp_doc.as_dict()))
-		except Exception:
+		except (SyntaxError, NameError, TypeError, ValueError):
 			frappe.throw(_("The Condition '{0}' is invalid").format(self.condition))
 		
 	

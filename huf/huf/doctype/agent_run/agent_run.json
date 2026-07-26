@@ -20,7 +20,10 @@
   "provider",
   "start_time",
   "input_tokens",
+  "usage_snapshot",
   "cost",
+  "cost_source",
+  "cost_calculation_status",
   "call_recording",
   "prompt_template",
   "column_break_qy3x",
@@ -153,6 +156,13 @@
    "read_only": 1
   },
   {
+   "description": "Normalized telemetry snapshot. Null values mean the provider did not report that metric.",
+   "fieldname": "usage_snapshot",
+   "fieldtype": "JSON",
+   "label": "Usage Snapshot",
+   "read_only": 1
+  },
+  {
    "description": "Number of tokens in the model response.\n\n",
    "fieldname": "output_tokens",
    "fieldtype": "Int",
@@ -171,6 +181,20 @@
    "fieldname": "cost",
    "fieldtype": "Float",
    "label": "Cost",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cost_source",
+   "fieldtype": "Select",
+   "label": "Cost Source",
+   "options": "unknown\nprovider_reported\ncustom\nlitellm",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cost_calculation_status",
+   "fieldtype": "Select",
+   "label": "Cost Calculation Status",
+   "options": "calculated\nunavailable\nfailed",
    "read_only": 1
   },
   {
@@ -317,7 +341,7 @@
    "write": 1
   },
   {
-   "create": 0,
+   "create": 1,
    "delete": 0,
    "email": 1,
    "export": 1,
@@ -326,10 +350,10 @@
    "report": 1,
    "role": "Huf Manager",
    "share": 1,
-   "write": 0
+   "write": 1
   },
   {
-   "create": 0,
+   "create": 1,
    "delete": 0,
    "email": 1,
    "export": 1,
@@ -338,7 +362,7 @@
    "report": 1,
    "role": "Huf User",
    "share": 1,
-   "write": 0
+   "write": 1
   },
   {
    "create": 0,

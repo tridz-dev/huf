@@ -34,7 +34,7 @@ from huf.ai.transaction import commit_if_background
 MCP_TOOL_PREFIX = "__mcp__"
 
 
-def create_mcp_tools(agent_doc) -> list[FunctionTool]:
+def create_mcp_tools(agent_doc, mcp_server_names: list[str] = None) -> list[FunctionTool]:
     """
     Create FunctionTool objects for all MCP tools available to an agent.
     
@@ -42,17 +42,27 @@ def create_mcp_tools(agent_doc) -> list[FunctionTool]:
     
     Args:
         agent_doc: The Agent document with agent_mcp_server child table
+        mcp_server_names: Optional list of MCP Server names to load. If provided,
+            these servers are used instead of agent_doc.agent_mcp_server.
     
     Returns:
         list[FunctionTool]: List of FunctionTool objects for MCP tools
     """
     tools = []
     
-    if not hasattr(agent_doc, "agent_mcp_server") or not agent_doc.agent_mcp_server:
+    if mcp_server_names is not None:
+        # Use the explicitly provided server names.
+        server_links = [
+            type("_MCPLink", (), {"mcp_server": name, "enabled": True})()
+            for name in mcp_server_names
+        ]
+    elif hasattr(agent_doc, "agent_mcp_server") and agent_doc.agent_mcp_server:
+        server_links = agent_doc.agent_mcp_server
+    else:
         return tools
     
-    for mcp_link in agent_doc.agent_mcp_server:
-        if not mcp_link.enabled:
+    for mcp_link in server_links:
+        if not getattr(mcp_link, "enabled", True):
             continue
         
         try:
@@ -69,7 +79,7 @@ def create_mcp_tools(agent_doc) -> list[FunctionTool]:
                 # Reconstruct tool definition from child table
                 try:
                     parameters = json.loads(tool_row.parameters) if tool_row.parameters else {}
-                except Exception:
+                except json.JSONDecodeError:
                     parameters = {}
                     
                 tool_def = {
@@ -84,8 +94,8 @@ def create_mcp_tools(agent_doc) -> list[FunctionTool]:
                     
         except Exception as e:
             frappe.log_error(
-                f"Error loading MCP tools from {mcp_link.mcp_server}: {str(e)}",
-                "MCP Client Error"
+                message=f"Error loading MCP tools from {mcp_link.mcp_server}: {str(e)}\n\n{frappe.get_traceback()}",
+                title="MCP Client Error"
             )
     
     return tools
@@ -169,8 +179,8 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict) -> FunctionTool:
                 
             except Exception as e:
                 frappe.log_error(
-                    f"Error executing MCP tool '{display_name}': {str(e)}",
-                    "MCP Tool Execution Error"
+                    message=f"Error executing MCP tool '{display_name}': {str(e)}\n\n{frappe.get_traceback()}",
+                    title="MCP Tool Execution Error"
                 )
                 return json.dumps({"error": str(e)})
         
@@ -192,8 +202,8 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict) -> FunctionTool:
         
     except Exception as e:
         frappe.log_error(
-            f"Error creating MCP tool from {tool_def}: {str(e)}",
-            "MCP Client Error"
+            message=f"Error creating MCP tool from {tool_def}: {str(e)}\n\n{frappe.get_traceback()}",
+            title="MCP Client Error"
         )
         return None
 
@@ -228,8 +238,8 @@ async def execute_mcp_tool(
             
     except Exception as e:
         frappe.log_error(
-            f"Error executing MCP tool {tool_name} on {server_name}: {str(e)}",
-            "MCP Tool Execution Error"
+            message=f"Error executing MCP tool {tool_name} on {server_name}: {str(e)}\n\n{frappe.get_traceback()}",
+            title="MCP Tool Execution Error"
         )
         return {"error": str(e), "success": False}
 
@@ -254,7 +264,7 @@ def _format_mcp_error(exc) -> str:
         try:
             if hasattr(exc.response, "text") and exc.response.text:
                 msg += f" (Response: {exc.response.text})"
-        except Exception:
+        except (AttributeError, ValueError, RuntimeError):
             pass # Ignore if streaming response not read
         return msg
     return str(exc)
@@ -278,8 +288,15 @@ async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
                 headers = _build_mcp_headers(mcp_server)
                 return await _do_execute_mcp_session(mcp_server, headers, operation)
             except Exception as refresh_exc:
-                frappe.log_error(f"OAuth retry failed: {refresh_exc}", "MCP OAuth Retry")
+                frappe.log_error(
+                    message=f"OAuth retry failed: {refresh_exc}\n\n{frappe.get_traceback()}",
+                    title="MCP OAuth Retry"
+                )
                 raise Exception("OAuth token invalid or expired. Reconnect via the MCP Server form.")
+        frappe.log_error(
+            message=f"MCP session error: {str(e)}\n\n{frappe.get_traceback()}",
+            title="MCP Session Error"
+        )
         raise Exception(_format_mcp_error(e))
 
 async def _do_execute_mcp_session(mcp_server, headers, operation):
@@ -322,6 +339,10 @@ async def _execute_mcp_tool_via_sdk(mcp_server, tool_name: str, arguments: dict)
             return result.model_dump()
         return {"content": [{"type": "text", "text": str(result)}], "isError": getattr(result, "isError", False)}
     except Exception as e:
+        frappe.log_error(
+            message=f"Error executing MCP tool via SDK: {str(e)}\n\n{frappe.get_traceback()}",
+            title="MCP Tool Execution Error"
+        )
         return {"error": str(e), "success": False}
 
 
@@ -349,7 +370,10 @@ def _build_mcp_headers(mcp_server) -> dict:
                 token = get_valid_access_token(mcp_server.name)
                 headers["Authorization"] = f"Bearer {token}"
             except Exception as exc:
-                frappe.log_error(str(exc), "MCP OAuth Header Error")
+                frappe.log_error(
+                    message=f"{str(exc)}\n\n{frappe.get_traceback()}",
+                    title="MCP OAuth Header Error"
+                )
                 # Proceed without auth header; server will return 401
         else:
             auth_value = mcp_server.get_password("auth_header_value")
@@ -426,6 +450,7 @@ def sync_mcp_server_tools(server_name: str) -> dict:
                     "enabled": 1
                 })
         
+        # Whitelisted sync endpoint updates server metadata after permission check; bypass is required because non-admin users may trigger sync.
         mcp_server.save(ignore_permissions=True)
         commit_if_background()
         
@@ -437,8 +462,8 @@ def sync_mcp_server_tools(server_name: str) -> dict:
         
     except Exception as e:
         frappe.log_error(
-            f"Error syncing MCP tools from {server_name}: {str(e)}",
-            "MCP Sync Error"
+            message=f"Error syncing MCP tools from {server_name}: {str(e)}\n\n{frappe.get_traceback()}",
+            title="MCP Sync Error"
         )
         return {
             "success": False,
@@ -527,6 +552,10 @@ def test_mcp_connection(server_name: str) -> dict:
     except requests.exceptions.ConnectionError as e:
         return {"success": False, "error": f"Connection failed: {str(e)}"}
     except Exception as e:
+        frappe.log_error(
+            message=f"MCP connection test failed: {str(e)}\n\n{frappe.get_traceback()}",
+            title="MCP Connection Test Error"
+        )
         return {"success": False, "error": str(e)}
 
 
@@ -555,7 +584,7 @@ def get_agent_mcp_servers(agent_name: str) -> list:
                     try:
                         tools = json.loads(mcp_server.available_tools)
                         tool_count = len(tools) if isinstance(tools, list) else 0
-                    except Exception:
+                    except json.JSONDecodeError:
                         pass
                 
                 result.append({
@@ -569,13 +598,20 @@ def get_agent_mcp_servers(agent_name: str) -> list:
                     "tool_count": tool_count,
                     "last_sync": mcp_server.last_sync
                 })
-            except Exception:
+            except Exception as e:
+                frappe.log_error(
+                    message=f"Error loading MCP server {mcp_link.mcp_server}: {str(e)}\n\n{frappe.get_traceback()}",
+                    title="MCP Agent Server Load Error"
+                )
                 continue
         
         return result
         
     except Exception as e:
-        frappe.log_error(f"Error getting agent MCP servers: {str(e)}", "MCP API Error")
+        frappe.log_error(
+            message=f"Error getting agent MCP servers: {str(e)}\n\n{frappe.get_traceback()}",
+            title="MCP API Error"
+        )
         return []
 
 
@@ -604,7 +640,7 @@ def get_available_mcp_servers() -> list:
                 if available_tools:
                     tools = json.loads(available_tools)
                     tool_count = len(tools) if isinstance(tools, list) else 0
-            except Exception:
+            except json.JSONDecodeError:
                 pass
             
             result.append({
@@ -615,7 +651,10 @@ def get_available_mcp_servers() -> list:
         return result
         
     except Exception as e:
-        frappe.log_error(f"Error getting available MCP servers: {str(e)}", "MCP API Error")
+        frappe.log_error(
+            message=f"Error getting available MCP servers: {str(e)}\n\n{frappe.get_traceback()}",
+            title="MCP API Error"
+        )
         return []
 
 @frappe.whitelist()
@@ -639,4 +678,7 @@ def auto_sync_mcp_server_tools():
                 frappe.log_error(f"Auto-syncing MCP Tools: {server.name}", "MCP Tools Auto Synced")
                 sync_mcp_server_tools(server.name)
         except Exception as e:
-            frappe.log_error(f"Error auto-syncing {server.name}: {str(e)}", "MCP Tools Auto Sync Error")
+            frappe.log_error(
+                message=f"Error auto-syncing {server.name}: {str(e)}\n\n{frappe.get_traceback()}",
+                title="MCP Tools Auto Sync Error"
+            )

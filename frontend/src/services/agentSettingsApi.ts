@@ -1,25 +1,32 @@
 import { db } from '@/lib/frappe-sdk';
-import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 
+const SETTING_DOCTYPE = 'Agent Settings';
+const SETTING_NAME = 'Agent Settings';
+
 export interface AgentSettingsDoc {
-  default_provider?: string;
-  default_model?: string;
+  name: string;
+  default_provider?: string | null;
+  default_model?: string | null;
+  skill_destinations?: string | null;
+  last_skill_scans?: string | null;
 }
 
 export async function getAgentSettings(): Promise<AgentSettingsDoc | undefined> {
   try {
-    return await db.getDoc(doctype['Agent Settings'], doctype['Agent Settings']);
+    const doc = await db.getDoc(SETTING_DOCTYPE, SETTING_NAME);
+    return doc as AgentSettingsDoc;
   } catch (error) {
     handleFrappeError(error, 'Error fetching Agent Settings');
   }
 }
 
-export async function updateAgentSettings(data: AgentSettingsDoc): Promise<void> {
+export async function updateAgentSettings(data: Partial<AgentSettingsDoc>): Promise<AgentSettingsDoc | undefined> {
   try {
-    await db.updateDoc(doctype['Agent Settings'], doctype['Agent Settings'], data);
+    await db.updateDoc(SETTING_DOCTYPE, SETTING_NAME, data);
+    const updated = await db.getDoc(SETTING_DOCTYPE, SETTING_NAME);
+    return updated as AgentSettingsDoc;
   } catch (error) {
-    handleFrappeError(error, 'Error updating Agent Settings');
-    throw error;
+    handleFrappeError(error, 'Error saving Agent Settings');
   }
 }

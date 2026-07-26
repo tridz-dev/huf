@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -76,7 +77,7 @@ export async function getAgentRunsForMetrics(): Promise<AgentRunMetricsDoc[]> {
     // Fetch all runs (use a very high limit or fetch in batches)
     const runs = await db.getDocList(doctype['Agent Run'], {
       fields: ['status', 'start_time', 'end_time', 'cost'],
-      filters: filters as any,
+      filters: filters as Filter<Record<string, unknown>>[],
       limit: 10000, // High limit to get all runs
       orderBy: { field: 'creation', order: 'desc' },
     });
