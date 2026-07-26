@@ -387,7 +387,7 @@ class TestWeaviateBackend(unittest.TestCase):
 		# Count ran against the scoped collection with total_count aggregation.
 		count_kwargs = self.mock_collection.aggregate.over_all.call_args.kwargs
 		self.assertTrue(count_kwargs["total_count"])
-		self.assertIn("where", count_kwargs)
+		self.assertIn("filters", count_kwargs)
 
 		# The real delete path: adapter delete_nodes with site+source+input filters.
 		self.mock_vector_store.delete_nodes.assert_called_once()
