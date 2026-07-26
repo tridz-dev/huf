@@ -13,7 +13,6 @@ import { fetchPaginatedCount } from './utilsApi';
 export interface TriggerTypeOption {
   name: string;
 }
-
 /**
  * Fetch trigger types from API
  */
@@ -99,8 +98,6 @@ function mapAgentTriggerListItem(doc: {
     status: doc.disabled === 1 ? 'disabled' : 'active',
   };
 }
-
-
 /**
  * Pagination parameters for fetching agents
  */
@@ -708,5 +705,3 @@ export async function checkCacheableModels(
     return { supported: false, alternatives: [] };
   }
 }
-
-
