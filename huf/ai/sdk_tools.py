@@ -156,8 +156,9 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_set_conversation_data"
                     elif function_doc.types == "Load Conversation Data":
                         function_path = "huf.ai.sdk_tools.handle_load_conversation_data"
-                    elif function_doc.types == "Google Search":
-                        function_path = "huf.ai.sdk_tools.handle_google_search"
+                    elif function_doc.types == "Perplexity Search":
+                        function_path = "huf.ai.sdk_tools.handle_perplexity_search"
+
                     else:
                         continue
 
@@ -2328,66 +2329,64 @@ async def handle_transcribe_audio(
         frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
         return {"success": False, "error": str(e)}
 
-def handle_google_search(query: str, max_results: int = 5, **kwargs):
+def handle_perplexity_search(query: str, **kwargs):
     """
-    Perform a web search using Google Programmable Search Engine.
+    Perform a web search using a Perplexity sonar model via LiteLLM.
 
-    Reads the API key and search engine ID from site_config
-    (``google_pse_api_key`` and ``google_pse_engine_id``).
+    Reads the API key from the ``perplexity_api_key`` site_config value,
+    falling back to the ``PERPLEXITY_API_KEY`` environment variable.
 
     Args:
         query: The search query string
-        max_results: Maximum number of results to return (default: 5, max: 10)
 
     Returns:
         dict: {
             "success": bool,
             "query": str,
-            "results": list,        # [{"title", "link", "snippet"}, ...]
-            "total_results": int,
+            "answer": str,          # Grounded answer text from the sonar model
+            "citations": list,      # Source URLs cited by the model
+            "model": str,
             "error": str
         }
     """
+    import os
+
     site_config = frappe.get_site_config()
-    api_key = site_config.get("google_pse_api_key")
-    engine_id = site_config.get("google_pse_engine_id")
+    api_key = site_config.get("perplexity_api_key") or os.environ.get("PERPLEXITY_API_KEY")
 
     if not api_key:
         frappe.throw(
-            _("Google Search is not configured. Please set 'google_pse_api_key' in site config.")
-        )
-    if not engine_id:
-        frappe.throw(
-            _("Google Search is not configured. Please set 'google_pse_engine_id' in site config.")
+            _(
+                "Perplexity Search is not configured. Please set 'perplexity_api_key' "
+                "in site config or the PERPLEXITY_API_KEY environment variable."
+            )
         )
 
     try:
-        num = max(1, min(int(max_results or 5), 10))
+        from litellm import completion
 
-        response = requests.get(
-            "https://www.googleapis.com/customsearch/v1",
-            params={"key": api_key, "cx": engine_id, "q": query, "num": num},
-            timeout=30,
+        # LiteLLM routes Perplexity credentials via environment variable
+        os.environ["PERPLEXITY_API_KEY"] = api_key
+
+        response = completion(
+            model="perplexity/sonar",
+            messages=[{"role": "user", "content": query}],
         )
-        response.raise_for_status()
 
-        items = response.json().get("items", [])
-        results = [
-            {
-                "title": item.get("title"),
-                "link": item.get("link"),
-                "snippet": item.get("snippet"),
-            }
-            for item in items
-        ]
+        message = response.choices[0].message
+        citations = (
+            getattr(response, "citations", None)
+            or getattr(message, "citations", None)
+            or []
+        )
 
         return {
             "success": True,
             "query": query,
-            "results": results,
-            "total_results": len(results),
+            "answer": message.content,
+            "citations": citations,
+            "model": "perplexity/sonar",
         }
     except Exception as e:
-        logger.warning(f"handle_google_search failed: {e!s}")
+        logger.warning(f"handle_perplexity_search failed: {e!s}")
         return {"success": False, "error": str(e)}
-
