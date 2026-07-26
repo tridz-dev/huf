@@ -62,6 +62,7 @@ export interface HufDataTable {
 	is_active: 0 | 1;
 	autoname_method: 'Autoincrement' | 'Hash' | 'By Field';
 	title_field_name: string;
+	table_group?: string;
 	creation: string;
 	modified: string;
 }
@@ -77,6 +78,7 @@ export interface DataTableSchema {
 	icon: string;
 	autoname_method: string;
 	title_field_name: string;
+	table_group?: string;
 	fields: DataTableFieldDef[];
 }
 

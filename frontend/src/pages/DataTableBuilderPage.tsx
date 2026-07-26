@@ -16,6 +16,7 @@ import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 interface BuilderState {
 	tableName: string;
 	description: string;
+	tableGroup: string;
 	icon: string;
 	autonameMethod: string;
 	titleField: string;
@@ -28,6 +29,7 @@ interface BuilderState {
 type BuilderAction =
 	| { type: 'SET_TABLE_NAME'; payload: string }
 	| { type: 'SET_DESCRIPTION'; payload: string }
+	| { type: 'SET_TABLE_GROUP'; payload: string }
 	| { type: 'SET_ICON'; payload: string }
 	| { type: 'SET_AUTONAME_METHOD'; payload: string }
 	| { type: 'SET_TITLE_FIELD'; payload: string }
@@ -42,6 +44,7 @@ type BuilderAction =
 const initialState: BuilderState = {
 	tableName: '',
 	description: '',
+	tableGroup: '',
 	icon: '',
 	autonameMethod: 'Autoincrement',
 	titleField: '',
@@ -57,6 +60,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			return { ...state, tableName: action.payload, isDirty: true };
 		case 'SET_DESCRIPTION':
 			return { ...state, description: action.payload, isDirty: true };
+		case 'SET_TABLE_GROUP':
+			return { ...state, tableGroup: action.payload, isDirty: true };
 		case 'SET_ICON':
 			return { ...state, icon: action.payload, isDirty: true };
 		case 'SET_AUTONAME_METHOD':
@@ -114,6 +119,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				...state,
 				tableName: action.payload.table_name,
 				description: action.payload.description || '',
+				tableGroup: action.payload.table_group || '',
 				icon: action.payload.icon || '',
 				autonameMethod: action.payload.autoname_method || 'Autoincrement',
 				titleField: action.payload.title_field_name || '',
@@ -233,6 +239,7 @@ export function DataTableBuilderPage() {
 				await updateDataTable(state.registryName || tableId, {
 					fields: state.fields,
 					description: state.description,
+					table_group: state.tableGroup,
 					icon: state.icon,
 				});
 				toast.success('Table updated successfully');
@@ -244,6 +251,7 @@ export function DataTableBuilderPage() {
 					table_name: state.tableName.trim(),
 					fields: state.fields,
 					description: state.description,
+					table_group: state.tableGroup,
 					icon: state.icon,
 					autoname_method: state.autonameMethod,
 					title_field: state.titleField,
@@ -306,6 +314,7 @@ export function DataTableBuilderPage() {
 			<TableSettingsPanel
 				tableName={state.tableName}
 				description={state.description}
+				tableGroup={state.tableGroup}
 				icon={state.icon}
 				autonameMethod={state.autonameMethod}
 				titleField={state.titleField}
@@ -316,6 +325,9 @@ export function DataTableBuilderPage() {
 				}
 				onDescriptionChange={(v) =>
 					dispatch({ type: 'SET_DESCRIPTION', payload: v })
+				}
+				onTableGroupChange={(v) =>
+					dispatch({ type: 'SET_TABLE_GROUP', payload: v })
 				}
 				onIconChange={(v) =>
 					dispatch({ type: 'SET_ICON', payload: v })
