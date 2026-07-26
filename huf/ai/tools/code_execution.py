@@ -39,7 +39,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 import frappe
-from frappe.utils import add_to_date, get_files_path, now_datetime
+from frappe.utils import get_files_path
+from frappe.utils.data import add_to_date, now_datetime
 from frappe.utils.file_manager import save_file
 
 from huf.ai.http_handler import handle_http_request

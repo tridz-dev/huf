@@ -88,6 +88,9 @@ def _run_async_safely(coro):
 _get_or_create_stub(
     "huf.ai.agent_integration",
     _run_async_safely=_run_async_safely,
+    _is_truthy=lambda value: (
+        value.strip().lower() in ("1", "true", "yes") if isinstance(value, str) else bool(value)
+    ),
     run_agent_sync=MagicMock(),
 )
 conversation_manager_stub = _get_or_create_stub(
