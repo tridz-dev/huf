@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ExecutionAnalyticsDashboard } from '@/components/executions/ExecutionAnalyticsDashboard';
 
 function getRunStatusDot(status?: string): { variant: StatusDotVariant; label: string } {
   const normalized = status?.toLowerCase() || '';
@@ -312,6 +313,7 @@ export default function Executions() {
         />
       }
     >
+      <ExecutionAnalyticsDashboard />
       <div className="w-full">
         {initialLoading ? (
           <div className="flex items-center justify-center py-12">

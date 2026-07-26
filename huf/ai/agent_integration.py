@@ -1472,7 +1472,17 @@ def _execute_agent_run(
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "cached_tokens": cached_tokens,
-                "cost": cost
+                "cost": cost,
+                "usage_snapshot": json.dumps({
+                    "schema_version": 1,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cache_read_tokens": cached_tokens if usage else None,
+                    "total_tokens": total_tokens,
+                    "completeness": "provider_reported" if usage else "estimated",
+                }),
+                "cost_source": "provider_reported" if getattr(result, "cost", None) is not None else "unknown",
+                "cost_calculation_status": "calculated" if cost is not None else "unavailable",
             })
 
         agent_message = conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
@@ -2400,6 +2410,16 @@ async def run_agent_stream(
                         "output_tokens": output_tokens,
                         "cached_tokens": cached_tokens,
                         "cost": cost,
+                        "usage_snapshot": json.dumps({
+                            "schema_version": 1,
+                            "input_tokens": input_tokens,
+                            "output_tokens": output_tokens,
+                            "cache_read_tokens": cached_tokens if usage else None,
+                            "total_tokens": total_tokens,
+                            "completeness": "provider_reported" if usage else "estimated",
+                        }),
+                        "cost_source": "provider_reported" if chunk.get("cost") is not None else "unknown",
+                        "cost_calculation_status": "calculated" if cost is not None else "unavailable",
                         "end_time": now_datetime()
                     }, update_modified=True)
                     safe_commit()
