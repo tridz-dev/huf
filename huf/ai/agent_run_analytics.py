@@ -41,7 +41,7 @@ def _affected_dimensions(since):
     for row in rows:
         if not row.start_time:
             continue
-        row = row.as_dict()
+        row = dict(row)
         for granularity in ("hour", "day"):
             affected.add((granularity, _bucket_start(row["start_time"], granularity), _dimension_key(row)))
     return affected

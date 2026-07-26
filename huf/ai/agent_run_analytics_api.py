@@ -39,7 +39,7 @@ def get_execution_analytics(from_date: str | None = None, to_date: str | None = 
     series_by_bucket, provider_by_name = {}, {}
     freshness = None
     for row in rows:
-        row = row.as_dict()
+        row = dict(row)
         for key in summary:
             summary[key] += row.get(key) or 0
         bucket = series_by_bucket.setdefault(row["bucket_start"], {"bucket_start": row["bucket_start"], **{key: 0 for key in summary}})
