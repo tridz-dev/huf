@@ -541,9 +541,14 @@ Test files are located in:
 18. **Real-time**: Socket.io for live agent feedback (tool calls, new messages), SSE via fetch ReadableStream for streaming responses
 19. **Routing**: All routes are under `/huf` basename — use React Router `Link` and `useNavigate` for navigation
 20. **TypeScript Strictness**: The project enforces strict TypeScript settings. Always clean up and remove unused imports, variables, and functions to prevent build failures (e.g., TS6133).
+21. **User-facing copy**: Labels, placeholders, empty states, and error messages must read
+    as plain product copy, not implementation detail. Never expose internal mechanics in
+    UI text (e.g. "Search API records...", "Filter columns locally...", "Fetching via SSE").
+    Prefer "Search records...", "Filter...". If you're unsure whether a string is end-user
+    facing, write it as if the user has never heard of Frappe, doctypes, or REST/SSE.
 
 ### General
-21. **Docker Dev**: Use `docker/` for quick evaluation; use Frappe bench for full development
+22. **Docker Dev**: Use `docker/` for quick evaluation; use Frappe bench for full development
 
 ## Related Documentation
 

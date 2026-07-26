@@ -2195,3 +2195,6 @@ HUF integrates prompt caching to save token costs on supported models:
 
 ### Frontend TypeScript Strictness
 The frontend project enforces strict TypeScript rules. Unused variables, unresolved imports, and unused functions will cause build failures (e.g., `error TS6133`). Always proactively remove unused variables, functions, and imports, especially after code refactorings, to ensure the frontend build succeeds without errors.
+
+### User-Facing Copy
+All labels, placeholders, empty states, and error messages shown to end users must read as plain product copy, not implementation detail. Never leak internal mechanics into UI text — e.g. write "Search records..." not "Search API records...", "Filter..." not "Filter columns locally...". If unsure whether a string is user-facing, write it assuming the reader has never heard of Frappe, DocTypes, REST, or SSE.
