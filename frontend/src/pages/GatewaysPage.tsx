@@ -1,24 +1,39 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link2, Mail, MessageCircle, Send, Settings, ShieldCheck, Slack } from 'lucide-react';
+import {
+  Link2,
+  Mail,
+  MessageCircle,
+  Send,
+  Settings,
+  ShieldCheck,
+  Slack,
+} from 'lucide-react';
 import { PageLayout, GridView, ItemCard } from '@/components/dashboard';
-import { getGateways, type GatewayDoc } from '@/services/gatewayApi';
+import { getGateways, type GatewayDoc, type GatewayProvider } from '@/services/gatewayApi';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { Button } from '@/components/ui/button';
 
-const providerIcons = {
+// TODO(#473-followup): Add real icons/names for Discord, VK, WeCom, Microsoft Teams
+// once the provider adapters are wired up. For now we fall back to a generic icon.
+const providerIcons: Partial<Record<GatewayProvider, React.ComponentType<{ className?: string }>>> = {
   Telegram: Send,
   Slack,
   Email: Mail,
   WhatsApp: MessageCircle,
-} as const;
+};
 
-const providerNames = {
+const providerNames: Partial<Record<GatewayProvider, string>> = {
   Telegram: 'Telegram bot',
   Slack: 'Slack workspace',
   Email: 'Shared inbox',
   WhatsApp: 'WhatsApp business number',
-} as const;
+};
+
+// TODO(#473-followup): The UI only exposes the four originally-supported providers
+// while the backend schema already accepts Discord, VK, WeCom, and Microsoft Teams.
+// Expand this list when adapters and connection forms are ready.
+const uiProviders: GatewayProvider[] = ['Telegram', 'Slack', 'Email', 'WhatsApp'];
 
 export default function GatewaysPage() {
   const [gateways, setGateways] = useState<GatewayDoc[]>([]);
@@ -75,11 +90,13 @@ export default function GatewaysPage() {
             setCreating(true);
             setError('');
             try {
+              // TODO(#473-followup): The create form is intentionally minimal. A full
+              // admission + routing form should replace this once the UI is ready.
               const created = await db.createDoc(doctype.Gateway, {
                 gateway_name: gatewayName.trim(),
                 provider,
                 is_enabled: 0,
-                access_policy: 'Deny by default',
+                direct_policy: 'Disabled',
               }) as GatewayDoc;
               setGateways((current) => [created, ...current]);
               setGatewayName('');
@@ -108,10 +125,9 @@ export default function GatewaysPage() {
               value={provider}
               onChange={(event) => setProvider(event.target.value as GatewayDoc['provider'])}
             >
-              <option value="Telegram">Telegram</option>
-              <option value="Slack">Slack</option>
-              <option value="Email">Email</option>
-              <option value="WhatsApp">WhatsApp</option>
+              {uiProviders.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
             </select>
           </label>
           <Button type="submit" disabled={creating}>{creating ? 'Creating…' : 'Create safe draft'}</Button>
@@ -134,21 +150,21 @@ export default function GatewaysPage() {
           </div>
         }
         renderItem={(gateway) => {
-          const Icon = providerIcons[gateway.provider];
+          const Icon = providerIcons[gateway.provider] ?? MessageCircle;
           const target = gateway.default_target_type === 'Agent'
             ? gateway.default_agent
             : gateway.default_target_type === 'Flow' ? gateway.default_flow : 'No default route';
           return (
             <ItemCard
               title={gateway.gateway_name}
-              description={gateway.description || providerNames[gateway.provider]}
+              description={gateway.description || providerNames[gateway.provider] || `${gateway.provider} channel`}
               status={{
                 label: gateway.is_enabled ? 'ready' : 'not receiving messages',
                 variant: gateway.is_enabled ? 'default' : 'secondary',
               }}
               metadata={[
                 { label: 'Channel', value: gateway.provider, icon: Icon },
-                { label: 'Access', value: gateway.access_policy },
+                { label: 'Access', value: gateway.direct_policy },
                 { label: 'Default route', value: target || 'No default route' },
               ]}
               actions={[

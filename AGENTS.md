@@ -2196,6 +2196,18 @@ HUF integrates prompt caching to save token costs on supported models:
 - **Model Check**: Checks model support by checking the LiteLLM pricing metadata for the field `cache_read_input_token_cost`.
 - **Toggle**: Users can toggle `enable_prompt_caching` in `Agent` settings to automatically apply prompt caching block headers on supported providers (Anthropic, Deepseek, OpenAI, Bedrock).
 
+## Known Incomplete Features / TODO
+
+The Gateways feature (channel inbound adapters) is merged into `develop` but is not yet
+user-ready. The UI navigation and Flow Run trigger are temporarily disabled while the
+provider adapters and connection forms are finished. See:
+
+- `docs/gateway-todo.md` — detailed shame list and restoration checklist.
+- `#473-followup` comments in `frontend/src/services/gatewayApi.ts`,
+  `frontend/src/pages/GatewaysPage.tsx`, `frontend/src/components/app-sidebar.tsx`,
+  `frontend/src/App.tsx`, `huf/huf/doctype/flow_run/flow_run.json`, and
+  `huf/ai/gateway_service.py`.
+
 ## Development and Coding Guidelines
 
 ### Frontend TypeScript Strictness
