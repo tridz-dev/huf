@@ -42,6 +42,7 @@ const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper')
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
 const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourceFormPageWrapper'));
+const MemoryPage = lazy(() => import('./pages/MemoryPage'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
@@ -372,6 +373,18 @@ function AppShell() {
                 <UnifiedLayout headerActions={<KnowledgeHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <KnowledgeSourcesPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/memory"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <MemoryPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

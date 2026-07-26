@@ -85,7 +85,7 @@
 			"fieldname": "knowledge_type",
 			"fieldtype": "Select",
 			"label": "Knowledge Type",
-			"options": "sqlite_fts\nsqlite_vec\nchroma\npgvector\nredis\nzvec\nweaviate\nfaiss\npinecone",
+			"options": "sqlite_fts\nsqlite_vec\nsqlite_hybrid\nchroma\npgvector\nredis\nzvec\nweaviate\nfaiss\npinecone",
 
 			"reqd": 1
 		},
@@ -101,7 +101,7 @@
 			"fieldname": "vector_settings_section",
 			"fieldtype": "Section Break",
 			"label": "Vector Settings",
-			"depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)"
+			"depends_on": "eval:['sqlite_vec', 'sqlite_hybrid', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)"
 
 		},
 		{
@@ -109,7 +109,7 @@
 			"fieldtype": "Data",
 			"label": "Embedding Model",
 			"description": "LiteLLM model identifier, e.g. openai/text-embedding-3-small",
-			"depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)",
+			"depends_on": "eval:['sqlite_vec', 'sqlite_hybrid', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)",
 			"mandatory_depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)"
 
 		},
@@ -120,7 +120,7 @@
 			"default": 1536,
 			"non_negative": 1,
 			"description": "Must match the embedding model output dimensionality",
-			"depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)",
+			"depends_on": "eval:['sqlite_vec', 'sqlite_hybrid', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)",
 			"mandatory_depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)"
 
 		},
@@ -134,7 +134,7 @@
 			"label": "Embedding Provider",
 			"options": "AI Provider",
 			"description": "AI Provider for API key resolution",
-			"depends_on": "eval:['sqlite_vec', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)"
+			"depends_on": "eval:['sqlite_vec', 'sqlite_hybrid', 'chroma', 'pgvector', 'redis', 'zvec', 'weaviate', 'faiss', 'pinecone'].includes(doc.knowledge_type)"
 
 		},
 		{

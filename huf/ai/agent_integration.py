@@ -40,19 +40,19 @@ class AgentManager:
         self._setup_client()
         self._setup_tools()
 
-    
+
     def _setup_tools(self):
         """Create SDK Tools from existing functions"""
         self.tools=[]
 
         try:
-            from huf.ai.sdk_tools import create_agent_tools  
+            from huf.ai.sdk_tools import create_agent_tools
             agent_tools = create_agent_tools(self.agent_doc)
             if agent_tools:
                 self.tools.extend(agent_tools)
         except Exception as e:
             logger.warning(f"Failed to load agent tools: {e!s}")
-        
+
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
         try:
             from huf.ai.knowledge.tool import (
@@ -109,7 +109,7 @@ class AgentManager:
 
 
     def create_tools(self) -> list[Tool]:
-        
+
         tools = []
 
         # Tool for get_document
@@ -209,7 +209,7 @@ class AgentManager:
 
         return tools or []
 
-    
+
     def _get_agent_tool(self, doctype: str):
         for tool in self.agent_doc.agent_tool:
             tool_doc = frappe.get_doc("Agent Tool Function", tool.tool)
@@ -254,18 +254,39 @@ class AgentManager:
 
         if self.agent_doc.enable_conversation_data:
              instructions += """
-    
+
                 SYSTEM INSTRUCTION - MEMORY MANAGEMENT:
-                You are equipped with a persistent memory system ('Conversation Data'). 
+                You are equipped with a persistent memory system ('Conversation Data').
                 1. AUTOMATIC SAVING: Whenever the user provides important information, YOU MUST immediately use the 'set_conversation_data' tool.
                 2. DYNAMIC KEYS: You determine the key names (snake_case). E.g., 'student_profile', 'project_requirements'.
-                3. DATA STRUCTURE: 
+                3. DATA STRUCTURE:
                 - If the user gives a simple value (e.g. name), save as a string.
                 - If the user gives a list  save as an ARRAY.
                 - If the user gives grouped info or a complex entity, save as an OBJECT.
                     Example: set_conversation_data(name="course_preferences", value={"primary": "CS", "alternatives": ["Math", "Physics"]})
                 4. MEMORY CHECK: Check 'load_conversation_data' before asking redundant questions.
             """
+
+        if getattr(self.agent_doc, "enable_memory", False):
+            instructions += """
+
+                SYSTEM INSTRUCTION - LONG-TERM MEMORY:
+                You have access to a persistent memory system across sessions.
+                1. AUTOMATIC RECALL: Use the 'search_memory_records' tool whenever the user refers to past interactions, preferences, or context.
+                2. PROACTIVE SAVING: Use the 'save_memory_record' tool when the user shares new facts, preferences, or important details about themselves or a project.
+                3. ACCURACY: When saving, provide a clear 'title' and detailed 'summary_text'. Set 'record_type' and 'scope_type' appropriately.
+            """
+
+            if getattr(self.agent_doc, "memory_policy", None):
+                try:
+                    policy = frappe.get_doc("Memory Policy", self.agent_doc.memory_policy)
+                    from huf.ai.memory_tools import get_injected_memory_text
+
+                    injected_memory = get_injected_memory_text(self.agent_doc.name, policy)
+                    if injected_memory:
+                        instructions += f"\n\n{injected_memory}\n"
+                except Exception as e:
+                    frappe.log_error(title="Memory Injection Failed", message=str(e))
 
         if self.agent_doc.allow_chat:
             from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
@@ -286,7 +307,7 @@ class AgentManager:
             tools=self.tools or [],
             model_settings=model_settings,
         )
-        
+
         # Set max_turns from agent configuration
         agent.max_turns = self.agent_doc.max_turns or 20
 
@@ -297,28 +318,28 @@ class AgentManager:
 
 def _is_user_allowed(agent_doc, user: str) -> bool:
     """Check if user is allowed to run this agent"""
-    
+
     # Guest check
     if user == "Guest":
         return agent_doc.allow_guest
-    
+
     # Check allowed_users if specified
     if agent_doc.allowed_users:
         allowed_user_names = [u.user for u in agent_doc.allowed_users]
         if user in allowed_user_names:
             return True
-    
-    # Check allowed_roles if specified  
+
+    # Check allowed_roles if specified
     if agent_doc.allowed_roles:
         allowed_role_names = [r.role for r in agent_doc.allowed_roles]
         user_roles = frappe.get_roles(user)
         if any(role in user_roles for role in allowed_role_names):
             return True
-    
+
     # If no restrictions specified, allow all logged-in users
     if not agent_doc.allowed_users and not agent_doc.allowed_roles:
         return True
-    
+
     return False
 
 # Canonical lifecycle status values. These must match the Agent Run doctype
@@ -514,7 +535,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "tool_result": result_val,
                 "error_message": error,
                 "status": "Queued",
-                "call_id": tool_call_id 
+                "call_id": tool_call_id
             })
             doc.insert(ignore_permissions=True)
             return doc.name
@@ -542,7 +563,7 @@ def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None,
 def _run_async_safely(coro):
     """
     Safely execute an asyncio coroutine in a synchronous Frappe context.
-    If an event loop is already running (e.g. nested inside a tool call), 
+    If an event loop is already running (e.g. nested inside a tool call),
     run the coroutine in a new thread, preserving Frappe's database context.
     """
     import asyncio
@@ -557,7 +578,7 @@ def _run_async_safely(coro):
     if current_loop and current_loop.is_running():
         site = frappe.local.site
         user = getattr(frappe.session, "user", None)
-        
+
         def _thread_worker():
             frappe.init(site)
             frappe.connect()
@@ -567,7 +588,7 @@ def _run_async_safely(coro):
                 return asyncio.run(coro)
             finally:
                 frappe.destroy()
-                
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             return executor.submit(_thread_worker).result()
     else:
@@ -584,24 +605,24 @@ def run_background_summarization(conversation_name, agent_name):
 
         agent_doc = frappe.get_doc("Agent", agent_name)
         conv_manager = ConversationManager(agent_name=agent_name)
-        
+
         history_limit = agent_doc.history_limit or 20
         # Fetch slightly more than limit to check for overflow
         history = conv_manager.get_conversation_history(conversation_name, limit=history_limit + 20)
-        
+
         if len(history) <= history_limit:
             return
 
         stored_summary = conv_manager.get_stored_summary(conversation_name)
-        
+
         # Calculate overflow, ensuring we don't split tool-call pairs
         overflow_count = len(history) - history_limit
         to_summarize, _remaining = safe_history_split(history, overflow_count)
-        
+
         from huf.ai.providers.litellm import get_simple_completion
         summary_model = agent_doc.summary_model or agent_doc.model
         summary_provider = agent_doc.provider
-        
+
         if agent_doc.summary_model:
             summary_provider = frappe.db.get_value("AI Model", agent_doc.summary_model, "provider")
 
@@ -617,7 +638,7 @@ def run_background_summarization(conversation_name, agent_name):
         )
 
         messages = [{"role": "user", "content": summary_prompt}]
-        
+
         # Run completion (sync in this background job context or safely in thread if nested)
         new_summary_text = _run_async_safely(
             get_simple_completion(summary_model, messages, summary_provider)
@@ -625,7 +646,7 @@ def run_background_summarization(conversation_name, agent_name):
         if new_summary_text:
             conv_manager.update_stored_summary(conversation_name, new_summary_text)
             frappe.db.commit()  # nosemgrep: justified background-job commit
-            
+
     except Exception as e:
         logger.warning(f"Background summarization failed: {e!s}")
 
@@ -642,7 +663,7 @@ def generate_conversation_title(conversation_name, agent_name):
 
         conv_manager = ConversationManager(agent_name=agent_name)
         history = conv_manager.get_conversation_history(conversation_name, limit=5)
-        
+
         if not history:
             return
 
@@ -653,15 +674,15 @@ def generate_conversation_title(conversation_name, agent_name):
         Conversation:
         {json.dumps(history)}
         """
-        
+
         agent_doc = frappe.get_doc("Agent", agent_name)
         provider = agent_doc.provider
         model = agent_doc.model
-        
+
         from huf.ai.providers.litellm import get_simple_completion
-        
+
         messages = [{"role": "user", "content": prompt}]
-        
+
         title = _run_async_safely(
             get_simple_completion(model, messages, provider)
         )
@@ -782,7 +803,7 @@ def run_agent_sync(
     #              frappe.ValidationError
     #          )
     # else:
-    
+
     frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
 
@@ -792,7 +813,7 @@ def run_agent_sync(
             resolved_prompt_template = None
         else:
             resolved_prompt_template = getattr(agent_doc, "agent_prompt", None)
-            
+
     if resolved_prompt_template and prompt_version:
         prompt_data = frappe.db.get_value("Agent Prompt", resolved_prompt_template, ["prompt_group", "version"], as_dict=True)
         if prompt_data and prompt_data.prompt_group and prompt_data.version != int(prompt_version):
@@ -1085,12 +1106,12 @@ def _execute_agent_run(
     if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
         from huf.ai.orchestration.orchestrator import create_orchestration
         orch_name = create_orchestration(
-            agent_name, 
-            prompt, 
+            agent_name,
+            prompt,
             parent_run_id=run_doc.name,
             conversation_id=run_doc.conversation
-        )        
-        
+        )
+
         run_doc.db_set({
             "agent_orchestration": orch_name,
             "status": "Started", # Mark as started, but not "Success" yet
@@ -1105,7 +1126,7 @@ def _execute_agent_run(
             "agent_run_id": run_doc.name
         }
 
-    
+
     try:
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
         _emit_run_lifecycle_event(run_doc, conversation, "started")
@@ -1122,19 +1143,19 @@ def _execute_agent_run(
         transaction_checkpoint(reason="agent_streaming_progress")
 
         manager = AgentManager(agent_name)
-        
+
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.prompt_mode = "Template"
             manager.agent_doc.agent_prompt = resolved_prompt_template
             manager.agent_doc.prompt_version_locked = 0
-                
+
         agent = manager.create_agent()
 
         # Build knowledge context for mandatory sources
         knowledge_context = None
         try:
             from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
-            
+
             knowledge_context = build_knowledge_context(
                 agent_name=agent_name,
                 user_query=prompt,
@@ -1183,7 +1204,7 @@ def _execute_agent_run(
         context_strategy = agent_doc.context_strategy or "Summarize"
         history_limit = agent_doc.history_limit or 20
         stored_summary = conv_manager.get_stored_summary(conversation.name)
-        
+
         if context_strategy == "Summarize":
             # Just inject the stored summary. Actual summarization happens in background.
             if stored_summary:
@@ -1191,7 +1212,7 @@ def _execute_agent_run(
         elif context_strategy == "FIFO":
             if len(history) > history_limit:
                 history = safe_history_slice(history, history_limit)
-        
+
         # Inject Conversation Data Snapshot if enabled and auto-injection is not disabled (defaults to 1 if not specified)
         if agent_doc.enable_conversation_data and getattr(agent_doc, "inject_conversation_data", 1) and conversation.conversation_data:
              try:
@@ -1202,7 +1223,7 @@ def _execute_agent_run(
                     if item.get("auto_inject") is False or item.get("inject_mode") == "hidden":
                         continue
                     simplified_items[item["name"]] = item["value"]
-                
+
                 if simplified_items:
                     data_msg = f"CURRENT MEMORY STATE (Conversation Data): {json.dumps(simplified_items, ensure_ascii=False)}"
                     # Insert right after summary but before user messages
@@ -1213,16 +1234,16 @@ def _execute_agent_run(
                      f"Skipped conversation_data memory snapshot for conversation "
                      f"{conversation.name}: {e}"
                  )
-        
+
         base_prompt = f"""
             Current user message:
             {prompt}
         """
-        
+
         # Inject knowledge context if available
         if knowledge_context and knowledge_context.get("context_text"):
             enhanced_prompt = inject_knowledge_context(base_prompt, knowledge_context)
-            
+
             # Store knowledge usage in run document
             if knowledge_context.get("sources_used"):
                 run_doc.db_set({
@@ -1261,33 +1282,33 @@ def _execute_agent_run(
 
         for item in new_items:
             if item.type == "tool_call_item":
-                raw = item.raw_item  
+                raw = item.raw_item
                 tool_call_id = log_tool_call(run_doc, conversation, raw, is_output=False)
 
                 tool_name = getattr(raw, "name", "Unknown Tool")
                 tool_args = getattr(raw, "arguments", "{}")
                 call_id = getattr(raw, "id", None)
-                
+
                 tool_type = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "types")
                 if tool_type == "Client Side Tool":
                     client_side_tool_calls.append({
                          "id": call_id,
-                         "type": "function", 
+                         "type": "function",
                          "function": {
                              "name": tool_name,
-                             "arguments": tool_args 
+                             "arguments": tool_args
                         }
                     })
 
                 msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
-                
+
                 message_doc = conv_manager.add_message(
-                    conversation, 
-                    role="agent", 
-                    content=msg_content, 
-                    provider=resolved_provider, 
-                    model=resolved_model, 
-                    agent=agent_name, 
+                    conversation,
+                    role="agent",
+                    content=msg_content,
+                    provider=resolved_provider,
+                    model=resolved_model,
+                    agent=agent_name,
                     run_name=run_doc.name,
                     kind="Tool Call",
                     tool_call=tool_call_id,
@@ -1388,7 +1409,7 @@ def _execute_agent_run(
                         )
                         if image_message:
                             message_name = image_message
-                    
+
                     event_type = "tool_call_completed" if tool_status == "Completed" else "tool_call_failed"
                     frappe.publish_realtime(
                         event=f'conversation:{conversation.name}',
@@ -1405,10 +1426,10 @@ def _execute_agent_run(
                         },
                         user=frappe.session.user,
                     )
-        
+
         final_output = getattr(result, "final_output", str(result))
         usage = getattr(result, "usage", None)
-        cost = getattr(result, "cost", 0)  
+        cost = getattr(result, "cost", 0)
         input_tokens = 0
         output_tokens = 0
         cached_tokens = 0
@@ -1416,11 +1437,11 @@ def _execute_agent_run(
         cache_skipped_unsupported_model = False
 
         if usage:
-            
+
             if isinstance(usage, dict):
                 input_tokens = (getattr(usage, "prompt_tokens", usage.get("input_tokens", 0)) if isinstance(usage, dict) else 0) or 0
                 output_tokens = (getattr(usage, "completion_tokens", usage.get("output_tokens", 0)) if isinstance(usage, dict) else 0) or 0
-                
+
                 details = getattr(usage, "prompt_tokens_details", None)
                 if not details and isinstance(usage, dict):
                     details = usage.get("prompt_tokens_details")
@@ -1464,7 +1485,7 @@ def _execute_agent_run(
                 if isinstance(usage, dict):
                     cache_skipped_unsupported_model = bool(usage.get("cache_skipped_unsupported_model", False))
 
-            else: 
+            else:
                 input_tokens = (getattr(usage, "input_tokens", getattr(usage, "prompt_tokens", 0))) or 0
                 output_tokens = (getattr(usage, "output_tokens", getattr(usage, "completion_tokens", 0))) or 0
                 cached_tokens = getattr(usage, "cached_tokens", None) or 0
@@ -1476,10 +1497,10 @@ def _execute_agent_run(
                     or 0
                 )
                 cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
-            
+
             cached_tokens = cached_tokens or 0
             cache_creation_tokens = cache_creation_tokens or 0
-            
+
             try:
                 # Prefer cost directly from the result
                 cost = getattr(result, "cost", 0)
@@ -1517,10 +1538,10 @@ def _execute_agent_run(
 
             try:
                 total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
-                
+
                 frappe.db.sql("""
                     UPDATE `tabAgent Conversation`
-                    SET 
+                    SET
                         total_input_tokens = total_input_tokens + %s,
                         total_output_tokens = total_output_tokens + %s,
                         total_tokens = total_tokens + %s,
@@ -1531,7 +1552,7 @@ def _execute_agent_run(
                 frappe.logger("huf").warning(
                     f"Failed to update conversation metrics: {str(e)}"
                 )
-            
+
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
@@ -1634,7 +1655,7 @@ def _execute_agent_run(
             if current_history_len >= history_limit:
                  frappe.enqueue(
                     "huf.ai.agent_integration.run_background_summarization",
-                    queue="default", 
+                    queue="default",
                     conversation_name=conversation.name,
                     agent_name=agent_name
                 )
@@ -1658,21 +1679,21 @@ def _execute_agent_run(
 
     except Exception as e:
         error_msg = str(e)
-        
+
         if "ContextWindowExceededError" in error_msg:
             try:
                 frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
                 transaction_checkpoint(reason="agent_streaming_progress")
-                
+
                 error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
-                
+
                 conv_manager.add_message(
-                    conversation=conversation, 
-                    role="agent", 
-                    content=error_msg, 
-                    provider=resolved_provider, 
-                    model=resolved_model, 
-                    agent=agent_name, 
+                    conversation=conversation,
+                    role="agent",
+                    content=error_msg,
+                    provider=resolved_provider,
+                    model=resolved_model,
+                    agent=agent_name,
                     run_name=run_doc.name,
                     kind="Error"
                 )
@@ -1681,18 +1702,18 @@ def _execute_agent_run(
                 frappe.logger("huf").warning(
                     f"Failed to handle context window error in sync: {str(inner_e)}"
                 )
-                
+
         elif "RateLimitError" in error_msg:
             try:
                 error_msg = _("You have reached the API rate limit (requests/tokens per minute). Please wait a moment and try again.")
-                
+
                 conv_manager.add_message(
-                    conversation=conversation, 
-                    role="agent", 
-                    content=error_msg, 
-                    provider=resolved_provider, 
-                    model=resolved_model, 
-                    agent=agent_name, 
+                    conversation=conversation,
+                    role="agent",
+                    content=error_msg,
+                    provider=resolved_provider,
+                    model=resolved_model,
+                    agent=agent_name,
                     run_name=run_doc.name,
                     kind="Error"
                 )
@@ -2060,10 +2081,10 @@ async def run_agent_stream(
 ):
     """
     Streaming version of run_agent_sync.
-    
+
     Yields chunks of the agent's response as they arrive from the LLM.
     Uses the same conversation management and run tracking as run_agent_sync.
-    
+
     Args:
         agent_name: Name of the agent to run
         prompt: User prompt
@@ -2072,7 +2093,7 @@ async def run_agent_stream(
         channel_id: Channel identifier (default: "api")
         external_id: External identifier for conversation tracking
         conversation_id: Optional conversation ID to continue
-        
+
     Yields:
         dict: Streaming chunks with structure:
             - type: "delta" | "complete" | "tool_call" | "error"
@@ -2087,10 +2108,10 @@ async def run_agent_stream(
             "error": "Both agent_name and prompt are required"
         }
         return
-    
+
     if not channel_id:
         channel_id = "sse_stream"
-    
+
     try:
         agent_doc = frappe.get_doc("Agent", agent_name)
 
@@ -2117,7 +2138,7 @@ async def run_agent_stream(
                 "error": "You are not authorized to use this agent."
             }
             return
-        
+
         # Validate agent allows chat (for streaming UI)
         if not agent_doc.allow_chat:
             yield {
@@ -2125,13 +2146,13 @@ async def run_agent_stream(
                 "error": f"Agent '{agent_name}' does not allow chat/streaming. Enable 'Allow Chat' in agent settings."
             }
             return
-        
+
         conv_manager = ConversationManager(
             agent_name=agent_name,
             channel=channel_id,
             external_id=external_id
         )
-        
+
         if create_new or not agent_doc.persist_conversation:
             conversation = conv_manager.create_new_conversation(
                 title=f"Streaming chat with {agent_name}"
@@ -2141,7 +2162,7 @@ async def run_agent_stream(
                 title=f"Streaming chat with {agent_name}",
                 conversation_id=conversation_id
             )
-        
+
         # Model Validation
         # if conversation.model:
         #     if conversation.model != model:
@@ -2158,7 +2179,7 @@ async def run_agent_stream(
                 resolved_prompt_template = None
             else:
                 resolved_prompt_template = getattr(agent_doc, "agent_prompt", None)
-                
+
         if resolved_prompt_template and prompt_version:
             prompt_data = frappe.db.get_value("Agent Prompt", resolved_prompt_template, ["prompt_group", "version"], as_dict=True)
             if prompt_data and prompt_data.prompt_group and prompt_data.version != int(prompt_version):
@@ -2171,14 +2192,14 @@ async def run_agent_stream(
 
         # Legacy: Lock to current model
         frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
-        
+
         context_strategy = agent_doc.context_strategy or "Summarize"
         history_limit = agent_doc.history_limit or 20
         fetch_limit = history_limit + 10
-        
+
         history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
         history = _history_without_pending_user_turn(history, skip_user_message)
-        
+
         # Create Agent Run document
         run_doc = frappe.get_doc({
             "doctype": "Agent Run",
@@ -2197,28 +2218,28 @@ async def run_agent_stream(
             _link_preexisting_user_message(conversation.name, run_doc.name)
         run_doc.db_set("start_time", now_datetime())
         safe_commit()
-        
+
         # Update agent stats
         total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
         last_run_time = frappe.db.get_value("Agent Run", {"agent": agent_name}, "start_time", order_by="start_time DESC")
-        
+
         frappe.db.set_value("Agent", agent_name, {
             "total_run": total_runs,
             "last_run": last_run_time
         },update_modified=False)
         safe_commit()
-        
+
         manager = AgentManager(agent_name)
-        
+
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.update({
                 "prompt_mode": "Template",
                 "agent_prompt": resolved_prompt_template,
                 "prompt_version_locked": 0
             })
-            
+
         agent = manager.create_agent()
-        
+
         resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
 
         tool_call_message_map = {}  # call_id -> Agent Message name (used by streaming provider)
@@ -2234,9 +2255,9 @@ async def run_agent_stream(
             "_tool_call_message_map": tool_call_message_map,
             "files": files,
         }
-        
+
         stored_summary = conv_manager.get_stored_summary(conversation.name)
-        
+
         if context_strategy == "Summarize":
             if stored_summary:
                 history = [{"role": "system", "content": f"Context Summary: {stored_summary}"}] + history
@@ -2254,7 +2275,7 @@ async def run_agent_stream(
                     if item.get("auto_inject") is False or item.get("inject_mode") == "hidden":
                         continue
                     simplified_items[item["name"]] = item["value"]
-                
+
                 if simplified_items:
                     data_msg = f"CURRENT MEMORY STATE (Conversation Data): {json.dumps(simplified_items, ensure_ascii=False)}"
                     insert_idx = 0
@@ -2264,7 +2285,7 @@ async def run_agent_stream(
                             break
                     if insert_idx == 0 and history and history[0].get("role") == "system":
                          insert_idx = 1
-                    
+
                     history.insert(insert_idx, {"role": "system", "content": data_msg})
              except (json.JSONDecodeError, TypeError, KeyError) as e:
                  frappe.logger("huf").warning(
@@ -2274,7 +2295,7 @@ async def run_agent_stream(
 
         knowledge_context = None
         try:
-            
+
             knowledge_context = build_knowledge_context(
                 agent_name=agent_name,
                 user_query=prompt,
@@ -2305,10 +2326,10 @@ async def run_agent_stream(
             Current user message:
             {prompt}
         """
-        
+
         if knowledge_context and knowledge_context.get("context_text"):
             enhanced_prompt = inject_knowledge_context(base_prompt, knowledge_context)
-            
+
             if knowledge_context.get("sources_used"):
                 run_doc.db_set({
                     "knowledge_sources_used": json.dumps(knowledge_context["sources_used"]),
@@ -2331,14 +2352,14 @@ async def run_agent_stream(
         full_response = ""
         try:
             stream = RunProvider.run_stream(agent, enhanced_prompt, resolved_provider, resolved_model, context)
-            
+
             async for chunk in stream:
                 chunk_type = chunk.get("type")
-                
+
                 if chunk_type == "delta":
                     full_response = chunk.get("full_response", full_response)
                     yield chunk
-                
+
                 elif chunk_type == "tool_call":
                     # Log tool call
                     tool_call = chunk.get("tool_call", {})
@@ -2353,13 +2374,13 @@ async def run_agent_stream(
                         tool_name = getattr(raw_item, "name", "Unknown Tool")
                         tool_args = getattr(raw_item, "arguments", "{}")
                         call_id = tool_call.get("id")
-                        
+
                         msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
-                        
+
                         message_doc = conv_manager.add_message(
-                            conversation, 
-                            role="agent", 
-                            content=msg_content, 
+                            conversation,
+                            role="agent",
+                            content=msg_content,
                             provider=resolved_provider,
                             model=resolved_model,
                             agent=agent_name,
@@ -2376,13 +2397,13 @@ async def run_agent_stream(
                         if call_id:
                             tool_call_message_map[call_id] = message_doc.name
                         safe_commit()
-                        
+
                     yield chunk
-                
+
                 elif chunk_type == "complete":
                     full_response = chunk.get("full_response", full_response)
                     usage = chunk.get("usage", {})
-                    
+
                     # Calculate metrics
                     cost = 0.0
                     input_tokens = 0
@@ -2391,13 +2412,13 @@ async def run_agent_stream(
                     cache_creation_tokens = 0
                     cache_skipped_unsupported_model = False
                     total_tokens = 0
-                    
+
                     if usage:
-                        
+
                         if isinstance(usage, dict):
                             input_tokens = (getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0)) if isinstance(usage, dict) else 0) or 0
                             output_tokens = (getattr(usage, "completion_tokens", usage.get("completion_tokens", 0)) if isinstance(usage, dict) else 0) or 0
-                            
+
                             details = getattr(usage, "prompt_tokens_details", None)
                             if not details and isinstance(usage, dict):
                                 details = usage.get("prompt_tokens_details")
@@ -2455,7 +2476,7 @@ async def run_agent_stream(
                             )
                             cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) or (input_tokens + output_tokens)
-                    
+
                     cached_tokens = cached_tokens or 0
                     cache_creation_tokens = cache_creation_tokens or 0
 
@@ -2471,7 +2492,7 @@ async def run_agent_stream(
                             frappe.logger("huf").warning(
                                 f"Fallback token counting failed: {e}"
                             )
-                            
+
                     try:
                         # Prefer cost directly from the chunk (calculated by provider)
                         cost = chunk.get("cost")
@@ -2479,7 +2500,7 @@ async def run_agent_stream(
                             from huf.ai.cost_calculator import calculate_cost
 
                             pricing_model = _normalize_model_name(resolved_model, resolved_provider)
-                            
+
                             mock_response = {
                                 "usage": {
                                     "prompt_tokens": input_tokens,
@@ -2488,10 +2509,10 @@ async def run_agent_stream(
                                 },
                                 "model": pricing_model
                             }
-                            
+
                             if cached_tokens > 0:
                                 mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
-                                
+
                             cost, _source = calculate_cost(
                                 model_name=resolved_model,
                                 input_tokens=input_tokens,
@@ -2510,7 +2531,7 @@ async def run_agent_stream(
                     try:
                         frappe.db.sql("""
                             UPDATE `tabAgent Conversation`
-                            SET 
+                            SET
                                 total_input_tokens = total_input_tokens + %s,
                                 total_output_tokens = total_output_tokens + %s,
                                 total_tokens = total_tokens + %s,
@@ -2526,7 +2547,7 @@ async def run_agent_stream(
                     final_message = conv_manager.add_message(
                         conversation, "agent", full_response, resolved_provider, resolved_model, agent_name, run_doc.name
                     )
-                    
+
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Success",
                         "response": full_response,
@@ -2601,20 +2622,20 @@ async def run_agent_stream(
                     except Exception:
                         # Best-effort auto-naming enqueue; ignore failures.
                         pass
-                        
+
                     if context_strategy == "Summarize":
                         if len(history) >= history_limit:
                             frappe.enqueue(
                                 "huf.ai.agent_integration.run_background_summarization",
-                                queue="default", 
+                                queue="default",
                                 conversation_name=conversation.name,
                                 agent_name=agent_name
                             )
-                            
+
                     # Force commit to ensure messages, Agent Run, and background jobs are persisted to MariaDB
                     # This is necessary because streaming generators bypass the standard Frappe auto-commit lifecycle.
                     safe_commit()
-                    
+
                     # Normalize complete event to match REST run_agent_sync response shape
                     chunk["conversation_id"] = conversation.name
                     chunk["response"] = full_response
@@ -2625,24 +2646,24 @@ async def run_agent_stream(
                     chunk["provider"] = resolved_provider
                     yield chunk
                     return
-                
+
                 elif chunk_type == "error":
                     error_msg = chunk.get("error", "Unknown error")
-                    
+
                     if "ContextWindowExceededError" in error_msg:
                         try:
                             frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
                             transaction_checkpoint(reason="agent_streaming_progress")
-                            
+
                             user_error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
-                            
+
                             conv_manager.add_message(
-                                conversation=conversation, 
-                                role="agent", 
-                                content=user_error_msg, 
-                                provider=resolved_provider, 
-                                model=resolved_model, 
-                                agent=agent_name, 
+                                conversation=conversation,
+                                role="agent",
+                                content=user_error_msg,
+                                provider=resolved_provider,
+                                model=resolved_model,
+                                agent=agent_name,
                                 run_name=run_doc.name,
                                 kind="Error"
                             )
@@ -2657,14 +2678,14 @@ async def run_agent_stream(
                     elif "RateLimitError" in error_msg:
                         try:
                             user_error_msg = _("You have reached the API rate limit (requests/tokens per minute). Please wait a moment and try again.")
-                            
+
                             conv_manager.add_message(
-                                conversation=conversation, 
-                                role="agent", 
-                                content=user_error_msg, 
-                                provider=resolved_provider, 
-                                model=resolved_model, 
-                                agent=agent_name, 
+                                conversation=conversation,
+                                role="agent",
+                                content=user_error_msg,
+                                provider=resolved_provider,
+                                model=resolved_model,
+                                agent=agent_name,
                                 run_name=run_doc.name,
                                 kind="Error"
                             )
@@ -2675,14 +2696,14 @@ async def run_agent_stream(
                             frappe.logger("huf").warning(
                                 f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
                             )
-                    
+
                     frappe.db.set_value("Agent Run", run_doc.name, {
                         "status": "Failed",
                         "error_message": error_msg,
                         "end_time": now_datetime()
                     }, update_modified=True)
                     transaction_checkpoint(reason="agent_streaming_progress")
-                    
+
                     # Handle Sub-Agent Failure Lifecycle Hook
                     if parent_conversation_id and invoked_by_agent:
                         # Silent Auto-Awaken Trigger
@@ -2716,25 +2737,25 @@ async def run_agent_stream(
 
                     yield chunk
                     return
-        
+
         except Exception as e:
             error_msg = str(e)
             frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
-            
+
             if "ContextWindowExceededError" in error_msg:
                 try:
                     frappe.db.set_value("Agent Conversation", conversation.name, "is_active", 0)
                     transaction_checkpoint(reason="agent_streaming_progress")
-                    
+
                     error_msg = _("This conversation has exceeded the maximum token limit. Please start a new conversation to continue.")
-                    
+
                     conv_manager.add_message(
-                        conversation=conversation, 
-                        role="agent", 
-                        content=error_msg, 
-                        provider=resolved_provider, 
-                        model=resolved_model, 
-                        agent=agent_name, 
+                        conversation=conversation,
+                        role="agent",
+                        content=error_msg,
+                        provider=resolved_provider,
+                        model=resolved_model,
+                        agent=agent_name,
                         run_name=run_doc.name,
                         kind="Error"
                     )
@@ -2747,14 +2768,14 @@ async def run_agent_stream(
             elif "RateLimitError" in error_msg:
                 try:
                     error_msg = _("You have reached the API rate limit (requests/tokens per minute). Please wait a moment and try again.")
-                    
+
                     conv_manager.add_message(
-                        conversation=conversation, 
-                        role="agent", 
-                        content=error_msg, 
-                        provider=resolved_provider, 
-                        model=resolved_model, 
-                        agent=agent_name, 
+                        conversation=conversation,
+                        role="agent",
+                        content=error_msg,
+                        provider=resolved_provider,
+                        model=resolved_model,
+                        agent=agent_name,
                         run_name=run_doc.name,
                         kind="Error"
                     )
@@ -2764,14 +2785,14 @@ async def run_agent_stream(
                         f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
                     )
 
-            
+
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "status": "Failed",
                 "error_message": error_msg,
                 "end_time": now_datetime()
             }, update_modified=True)
             transaction_checkpoint(reason="agent_streaming_progress")
-            
+
             # Handle Sub-Agent Failure Lifecycle Hook
             if parent_conversation_id and invoked_by_agent:
                 # Silent Auto-Awaken Trigger
@@ -2807,7 +2828,7 @@ async def run_agent_stream(
                 "type": "error",
                 "error": error_msg
             }
-    
+
     except Exception as e:
         error_msg = str(e)
         frappe.log_error(f"Agent Stream Setup Error: {frappe.get_traceback()}", "Huf Streaming")
