@@ -78,6 +78,7 @@ def after_install():
     register_integration_services()
     sync_tool_types()
     sync_default_tool_categories()
+    seed_skill_categories()
     from huf.ai.tool_registry import sync_discovered_tools
     sync_discovered_tools(use_cache=False)
     frappe.db.commit()
@@ -130,6 +131,7 @@ def after_migrate():
 		register_integration_services()
 		sync_tool_types()
 		sync_default_tool_categories()
+		seed_skill_categories()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
 		logger.info(
@@ -1021,6 +1023,27 @@ def sync_default_tool_categories():
 				doc.insert()
 		except Exception as e:
 			logger.warning(f"Failed to create default tool category {category}: {e!s}")
+			continue
+
+	frappe.db.commit()
+
+
+def seed_skill_categories():
+	"""
+	Ensure default Skill Category records exist.
+	Called during after_install and after_migrate.
+	"""
+	categories = ["General", "CRM", "Support"]
+	for category in categories:
+		try:
+			if not frappe.db.exists("Skill Category", category):
+				doc = frappe.get_doc({
+					"doctype": "Skill Category",
+					"category_name": category,
+				})
+				doc.insert(ignore_permissions=True)
+		except Exception as e:
+			logger.warning(f"Failed to create skill category {category}: {e!s}")
 			continue
 
 	frappe.db.commit()

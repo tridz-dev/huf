@@ -120,7 +120,16 @@ class Agent(Document):
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._validate_skills()
         self._update_mcp_tool_counts()
+
+    def _validate_skills(self):
+        """Prevent duplicate skills from being attached to an agent."""
+        seen = set()
+        for row in self.get("agent_skill", []):
+            if row.skill in seen:
+                frappe.throw(_("Skill {0} is attached more than once.").format(row.skill))
+            seen.add(row.skill)
 
     def _validate_system_field_tamper(self):
         """Prevent non-admins from flipping is_system via API/UI."""

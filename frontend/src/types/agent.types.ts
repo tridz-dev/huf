@@ -187,6 +187,16 @@ export interface AgentKnowledgeRow {
   description?: string;
 }
 
+export interface AgentSkillRow {
+  name?: string;
+  skill: string;
+  skill_name?: string;
+  mode: 'Mandatory' | 'Optional';
+  auto_load?: 0 | 1 | boolean;
+  priority?: number;
+  description?: string;
+}
+
 export interface AgentOrchestrationPlanRow {
   name?: string;
   step_index: number;
@@ -235,6 +245,7 @@ export interface AgentDoc {
   instructions: string;
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
   agent_knowledge?: AgentKnowledgeRow[];
+  agent_skill?: AgentSkillRow[];
   agent_mcp_server?: Array<{
     mcp_server: string;
     enabled: 0 | 1;
