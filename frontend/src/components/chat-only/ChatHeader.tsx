@@ -50,12 +50,17 @@ export function ChatHeader({ agents = [], currentAgentName }: ChatHeaderProps) {
               {showAgentSwitcher ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
+                    {/* Outer button is the 44px tap target (-my-2 keeps it from
+                        stretching the header row); the visible pill stays h-7 so
+                        the HufAI/Chat stack fits the h-14 strip. */}
                     <button
                       type="button"
-                      className="flex min-h-11 min-w-0 max-w-[140px] items-center gap-1 truncate rounded-full border border-zinc-200 px-3 text-xs text-zinc-600 transition-colors hover:bg-zinc-100 sm:max-w-[200px]"
+                      className="group -my-2 flex min-h-11 min-w-0 max-w-[160px] items-center rounded-full px-1 sm:max-w-[220px]"
                     >
-                      <span className="truncate">{agentLabel}</span>
-                      <ChevronDown className="size-3.5 shrink-0 text-zinc-400" />
+                      <span className="flex h-7 min-w-0 items-center gap-1 truncate rounded-full border border-zinc-200 px-2.5 text-xs text-zinc-600 transition-colors group-hover:bg-zinc-100">
+                        <span className="truncate">{agentLabel}</span>
+                        <ChevronDown className="size-3.5 shrink-0 text-zinc-400" />
+                      </span>
                       <span className="sr-only">Switch assistant</span>
                     </button>
                   </DropdownMenuTrigger>
