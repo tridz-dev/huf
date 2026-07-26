@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -72,6 +73,7 @@ export interface ChatMessage {
   toolName?: string;
   toolStatus?: string;
   toolArgs?: string | Record<string, unknown>;
+  injectedMemories?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -141,9 +143,9 @@ export async function getConversations(
   const { limit = 20, start = 0, search, filters } = params;
 
   try {
-    const effectiveFilters =
-      (filters as any[] | undefined) ??
-      (search ? ([['title', 'like', `%${search}%`]] as any[]) : undefined);
+    const effectiveFilters: Filter<Record<string, unknown>>[] | undefined =
+      (filters as Filter<Record<string, unknown>>[] | undefined) ??
+      (search ? [['title', 'like', `%${search}%`]] : undefined);
 
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
       fields: ['name', 'title', 'agent', 'last_activity', 'modified'],

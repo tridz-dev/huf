@@ -65,14 +65,11 @@ def _check_model_supports_caching(model_name: str, provider_name: str) -> bool:
 def _get_cacheable_models_for_provider(
     provider_doc_name: str, provider_name: str, exclude_model: str = None
 ) -> list:
-    try:
-        all_models = frappe.get_all(
-            "AI Model",
-            filters={"provider": provider_doc_name},
-            fields=["name", "model_name"],
-        )
-    except Exception:
-        return []
+    all_models = frappe.get_all(
+        "AI Model",
+        filters={"provider": provider_doc_name},
+        fields=["name", "model_name"],
+    )
 
     cacheable = []
     for m in all_models:
@@ -123,7 +120,16 @@ class Agent(Document):
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._validate_skills()
         self._update_mcp_tool_counts()
+
+    def _validate_skills(self):
+        """Prevent duplicate skills from being attached to an agent."""
+        seen = set()
+        for row in self.get("agent_skill", []):
+            if row.skill in seen:
+                frappe.throw(_("Skill {0} is attached more than once.").format(row.skill))
+            seen.add(row.skill)
 
     def _validate_system_field_tamper(self):
         """Prevent non-admins from flipping is_system via API/UI."""
@@ -201,14 +207,14 @@ class Agent(Document):
         for row in self.agent_mcp_server:
             if not row.mcp_server:
                 continue
-            try:
-                mcp_doc = frappe.get_doc("MCP Server", row.mcp_server)
-                if mcp_doc.available_tools:
+            mcp_doc = frappe.get_doc("MCP Server", row.mcp_server)
+            if mcp_doc.available_tools:
+                try:
                     tools = json.loads(mcp_doc.available_tools)
-                    row.tool_count = len(tools) if isinstance(tools, list) else 0
-                else:
-                    row.tool_count = 0
-            except Exception:
+                except json.JSONDecodeError:
+                    tools = None
+                row.tool_count = len(tools) if isinstance(tools, list) else 0
+            else:
                 row.tool_count = 0
 
     def _validate_advanced_models(self):
@@ -247,19 +253,12 @@ class Agent(Document):
     def _validate_prompt_caching(self):
         if not self.model:
             frappe.throw(_("A model must be selected before enabling prompt caching."))
-        try:
-            model_doc = frappe.get_doc("AI Model", self.model)
-            model_name = model_doc.model_name or model_doc.name
-            provider_name = (
-                frappe.db.get_value("AI Provider", self.provider, "provider_name")
-                or self.provider
-            )
-        except Exception as e:
-            frappe.log_error(
-                f"Error loading model/provider for caching validation: {e}",
-                "Agent Prompt Caching Validation",
-            )
-            return
+        model_doc = frappe.get_doc("AI Model", self.model)
+        model_name = model_doc.model_name or model_doc.name
+        provider_name = (
+            frappe.db.get_value("AI Provider", self.provider, "provider_name")
+            or self.provider
+        )
         if _check_model_supports_caching(model_name, provider_name):
             return  
         alternatives = _get_cacheable_models_for_provider(
@@ -423,8 +422,8 @@ class Agent(Document):
                 self.flags.ignore_recursion = False
             
             return planning_run_id, steps
-                
-        except Exception as e:
+
+        except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
             frappe.log_error(f"Plan Generation Failed: {str(e)}", "Agent Plan Error")
             return None
 
@@ -464,8 +463,8 @@ class Agent(Document):
                         parent_run_id=planning_run_id,
                         override_plan=steps
                     )
-                
-            except Exception as e:
+
+            except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
                 frappe.log_error(f"Multi-Run Setup Failed: {str(e)}", "Agent Creation Error")
 
     

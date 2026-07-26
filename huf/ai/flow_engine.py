@@ -108,7 +108,15 @@ def create_flow_run(
 			"started_at": now_datetime(),
 		}
 	)
-	flow_run.insert(ignore_permissions=True)
+	# Authenticated callers are already verified by the public API.
+	# Webhook triggers run as Guest after HMAC validation, so the internal
+	# Flow Run record must be created on behalf of the system.
+	if frappe.session.user == "Guest":
+		flow_run.insert(ignore_permissions=True)
+	else:
+		if not frappe.has_permission("Flow Run", "create", doc=flow_run):
+			frappe.throw(_("Not permitted to create Flow Run"), frappe.PermissionError)
+		flow_run.insert()
 	commit_if_background()
 
 	return flow_run
@@ -219,10 +227,19 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 			next_node = edge.get("to")
 			break
 
-	if not next_node:
+	if not next_node and decision == "approved":
 		next_node = _evaluate_edges(flow_run, current_node, {"status": "success"}, edges_list)
 
 	if not next_node:
+		if decision == "rejected":
+			# Rejection without an explicit 'rejected' edge must not route like approval
+			flow_run.db_set("waiting", None)
+			_fail_flow_run(
+				flow_run,
+				f"Approval rejected by {frappe.session.user}" + (f": {comment}" if comment else ""),
+			)
+			_clear_flow_notifications(flow_run)
+			return
 		# No outgoing edges — approval was the final step, complete the flow gracefully
 		outgoing = [e for e in edges_list if e.get("from") == current_node]
 		if not outgoing:
@@ -327,6 +344,15 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
 			if not next_node_id:
 				_fail_flow_run(flow_run, "Condition node did not resolve a branch")
+				return
+
+		elif node.get("type") == "loop":
+			# Loop executor returns next_node_id (body node or done node)
+			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
+			if not next_node_id:
+				# No done_node configured — loop finished, complete gracefully
+				_complete_flow_run(flow_run)
+				_publish_flow_event(flow_run, "flow_completed", {"status": "Success"})
 				return
 
 		elif node.get("type") == "human.approval":
@@ -760,7 +786,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 					},
 					pluck="name"
 				)
-	elif approval_type == "users":
+	elif approval_type in ("user", "users"):
 		approver_users = waiting_data.get("approver_users", [])
 		if isinstance(approver_users, str):
 			# Handle comma-separated string
@@ -1286,7 +1312,15 @@ def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = ""
 			"start_time": now_datetime(),
 		}
 	)
-	run_doc.insert(ignore_permissions=True)
+	# Agent Run records are internal execution logs. Authenticated users
+	# create them through normal permission checks; Guest/webhook paths are
+	# allowed because the engine is acting on behalf of the system.
+	if frappe.session.user == "Guest":
+		run_doc.insert(ignore_permissions=True)
+	else:
+		if not frappe.has_permission("Agent Run", "create", doc=run_doc):
+			frappe.throw(_("Not permitted to create Agent Run"), frappe.PermissionError)
+		run_doc.insert()
 	commit_if_background()
 	return run_doc
 
@@ -1303,7 +1337,14 @@ def _create_flow_conversation(flow_id: str, entry_node_id: str) -> "frappe.Docum
 			"is_active": 1,
 		}
 	)
-	conv.insert(ignore_permissions=True)
+	# Flow conversations are created by the engine. Authenticated callers
+	# use standard permissions; Guest/webhook triggers rely on the system.
+	if frappe.session.user == "Guest":
+		conv.insert(ignore_permissions=True)
+	else:
+		if not frappe.has_permission("Agent Conversation", "create", doc=conv):
+			frappe.throw(_("Not permitted to create Agent Conversation"), frappe.PermissionError)
+		conv.insert()
 	commit_if_background()
 	return conv
 
@@ -1313,7 +1354,7 @@ def _verify_approval_permission(waiting: dict):
 	approval_type = waiting.get("approval_type", "role")
 	user = frappe.session.user
 
-	if approval_type == "user":
+	if approval_type in ("user", "users"):
 		approver_users = waiting.get("approver_users", [])
 		if approver_users and user not in approver_users:
 			frappe.throw(

@@ -236,13 +236,13 @@ export const mockApi = {
     },
   },
   conversations: {
-    list: async (_agentId?: string): Promise<AgentConversation[]> => {
+    list: async (): Promise<AgentConversation[]> => {
       await delay(100);
       return mockConversations;
     },
   },
   runs: {
-    list: async (_agentId?: string): Promise<AgentRun[]> => {
+    list: async (): Promise<AgentRun[]> => {
       await delay(100);
       return mockRuns;
     },

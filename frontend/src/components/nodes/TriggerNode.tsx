@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { AlertCircle, Zap, Webhook, Clock, Database, Mail, Plus, Trash2, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertCircle, Zap, Webhook, Clock, Database, Mail, Plus, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -8,7 +8,7 @@ import { useFlowContext } from '../../contexts/FlowContext';
 import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses } from './nodeStyles';
 import { cn } from '@/lib/utils';
 
-const iconMap: Record<string, any> = {
+const iconMap: Record<string, LucideIcon> = {
   Webhook,
   Clock,
   Database,

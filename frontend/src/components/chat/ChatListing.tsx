@@ -498,8 +498,8 @@ function AgentConversationItem({
                       const target = e.target as HTMLElement;
                       const isFromMenu = target.closest('[data-radix-portal]') || 
                                         target.closest('[role="menuitem"]') ||
-                                        (e.nativeEvent as any).composedPath?.().some((el: any) => 
-                                          el?.getAttribute?.('role') === 'menuitem'
+                                        e.nativeEvent.composedPath?.().some((el) =>
+                                          (el as HTMLElement | null)?.getAttribute?.('role') === 'menuitem'
                                         );
                       if (isFromMenu) {
                         e.preventDefault();
@@ -690,8 +690,8 @@ function RecentsConversationList({
                               const target = e.target as HTMLElement;
                               const isFromMenu = target.closest('[data-radix-portal]') || 
                                                 target.closest('[role="menuitem"]') ||
-                                                (e.nativeEvent as any).composedPath?.().some((el: any) => 
-                                                  el?.getAttribute?.('role') === 'menuitem'
+                                                e.nativeEvent.composedPath?.().some((el) =>
+                                                  (el as HTMLElement | null)?.getAttribute?.('role') === 'menuitem'
                                                 );
                               if (isFromMenu) {
                                 e.preventDefault();

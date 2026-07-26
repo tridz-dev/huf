@@ -281,7 +281,7 @@ def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	Returns:
 	    dict with status and current_node_id
 	"""
-	if not frappe.has_permission("Flow Run", "write"):
+	if not frappe.has_permission("Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	from huf.ai.flow_engine import approve_flow_run as engine_approve
@@ -384,6 +384,9 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 	if not _webhook_key_is_valid(defn, webhook_key):
 		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
 
+	# Switch execution identity to the flow owner so the run does not execute as Guest
+	frappe.set_user(defn_doc.owner or "Administrator")
+
 	# Get payload from request
 	payload = {}
 	if frappe.request:
@@ -391,8 +394,9 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 			raw = frappe.request.get_data(as_text=True)
 			if raw:
 				payload = frappe.parse_json(raw)
-		except Exception:
-			pass
+		except (json.JSONDecodeError, TypeError):
+			frappe.log_error(frappe.get_traceback(), "Flow Webhook Payload Parse Error")
+			payload = {}
 
 		if not payload:
 			if frappe.request.form:
@@ -603,7 +607,10 @@ def execute_scheduled_flow(flow_id: str) -> dict:
 		}
 	except Exception as e:
 		error_msg = str(e)
-		frappe.log_error(f"Error executing scheduled flow '{flow_id}': {error_msg}", "Flow Scheduler")
+		frappe.log_error(
+			frappe.get_traceback(),
+			f"Scheduled Flow Execution Error: {flow_id}",
+		)
 		return {"status": "error", "error": error_msg, "flow_id": flow_id}
 
 
@@ -802,13 +809,16 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str |
 	Returns:
 	    dict with flow_run_id, status, message
 	"""
+	if not frappe.has_permission("Flow Run", "create"):
+		return {"error": "Insufficient permissions to start flows"}
+
 	try:
 		if isinstance(payload, str):
 			try:
 				payload = json.loads(payload)
-			except Exception:
+			except (json.JSONDecodeError, TypeError):
 				payload = {}
-				
+
 		from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
 
 		flow_run = create_flow_run(flow_id=flow_id, payload=payload or {}, mode=mode)
@@ -825,6 +835,7 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str |
 			"current_node_id": flow_run.current_node_id,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Run Flow Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -839,6 +850,9 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 	Returns:
 	    dict with status, context summary, waiting state
 	"""
+	if not frappe.has_permission("Flow Run", "read"):
+		return {"error": "Insufficient permissions to view flow runs"}
+
 	try:
 		doc = frappe.get_doc("Flow Run", flow_run_id)
 		ctx = {}
@@ -861,6 +875,7 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 			"waiting": waiting,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Get Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -876,6 +891,9 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 	Returns:
 	    dict with updated status
 	"""
+	if not frappe.has_permission("Flow Run", "write"):
+		return {"error": "Insufficient permissions to resume flow runs"}
+
 	try:
 		from huf.ai.flow_engine import resume_flow_run as engine_resume
 
@@ -888,6 +906,7 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 			"current_node_id": doc.current_node_id,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Resume Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -904,11 +923,18 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 	Returns:
 	    dict with updated status
 	"""
+	if not frappe.has_permission("Flow Run", "read"):
+		return {"error": "Insufficient permissions to approve flow runs"}
+
 	try:
-		from huf.ai.flow_engine import approve_flow_run as engine_approve
+		from huf.ai.flow_engine import approve_flow_run as engine_approve, _verify_approval_permission
+
+		doc = frappe.get_doc("Flow Run", flow_run_id)
+		waiting = json.loads(doc.waiting) if doc.waiting else {}
+		_verify_approval_permission(waiting)
 
 		engine_approve(flow_run_id, decision=decision, comment=comment)
-		doc = frappe.get_doc("Flow Run", flow_run_id)
+		doc.reload()
 
 		return {
 			"success": True,
@@ -916,6 +942,7 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 			"current_node_id": doc.current_node_id,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Approve Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -978,7 +1005,7 @@ def get_pending_approvals(limit: int = 50) -> list:
 			approver_role = waiting.get("approver_role")
 			if approver_role and approver_role in user_roles:
 				can_approve = True
-		elif approval_type == "users":
+		elif approval_type in ("user", "users"):
 			approver_users = waiting.get("approver_users", [])
 			if isinstance(approver_users, str):
 				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]

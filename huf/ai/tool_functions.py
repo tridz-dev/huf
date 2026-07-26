@@ -1,3 +1,4 @@
+import json
 import os
 from urllib.parse import urlparse
 
@@ -71,9 +72,9 @@ def create_documents(doctype: str, data: list, function=None):
         try:
             res = create_document(doctype, item, function)
             if not res or not res.get("document_id"):
-                raise Exception("Create returned no document_id")
+                raise ValueError("Create returned no document_id")
             created_ids.append(res["document_id"])
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
             errors.append({"index": idx, "error": str(e)})
 
     return {
@@ -131,7 +132,7 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
             "message": f"{doctype} {document_id} updated successfully",
             "document": result_dict
         }
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
         frappe.log_error(f"Error updating {doctype} {document_id}: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -148,13 +149,13 @@ def update_documents(doctype: str, data: list, function=None):
             payload = dict(doc or {})
             document_id = payload.pop("document_id", None) or payload.pop("name", None)
             if not document_id:
-                raise Exception("Missing 'document_id' (or 'name') in item")
+                raise ValueError("Missing 'document_id' (or 'name') in item")
 
             res = update_document(doctype, document_id, payload, function)
             if not res or not res.get("success"):
-                raise Exception((res or {}).get("error") or "Unknown error")
+                raise ValueError((res or {}).get("error") or "Unknown error")
             updated_ids.append(res["document"]["name"])
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
             errors.append({"index": idx, "error": str(e)})
 
     return {
@@ -192,7 +193,7 @@ def delete_document(doctype: str, document_id: str):
 
         frappe.delete_doc(doctype, document_id)
         return {"success": True, "message": f"{doctype} {document_id} deleted successfully"}
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
         frappe.log_error(f"Error deleting {doctype} {document_id}: {e!s}")
         return {"success": False, "error": str(e)}
 
@@ -224,7 +225,7 @@ def delete_documents(doctype: str, document_ids: list):
 				"error": str(e),
 				"permission_denied": True,
 			})
-		except Exception as e:
+		except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
 			failed.append({"name": document_id, "error": str(e)})
 
 	return {
@@ -494,7 +495,7 @@ def _process_single_attachment(doctype, document_id, file_path):
              return f"/files/{file_doc.file_name}"
         return clean_url
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
         frappe.log_error(f"Attachment failed for {file_path}: {e!s}")
         return None
 
@@ -507,12 +508,9 @@ def attach_file_to_document(doctype: str, document_id: str, **kwargs):
     if not frappe.db.exists(doctype, document_id):
         return {"success": False, "error": f"{doctype} {document_id} not found", "document_id": document_id}
 
-    try:
-        doc = frappe.get_doc(doctype, document_id)
-        if not frappe.has_permission(doctype, ptype="write", doc=doc):
-            return {"success": False, "error": "No write permission on target document"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    doc = frappe.get_doc(doctype, document_id)
+    if not frappe.has_permission(doctype, ptype="write", doc=doc):
+        return {"success": False, "error": "No write permission on target document"}
 
     updates = {}
     attached_files = []
@@ -538,7 +536,7 @@ def attach_file_to_document(doctype: str, document_id: str, **kwargs):
         try:
             frappe.db.set_value(doctype, document_id, updates)
             commit_if_background()
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
             return {
                 "success": True,
                 "message": "Files attached but field update failed",

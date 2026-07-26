@@ -12,6 +12,7 @@
 		"title_field_name",
 		"details_section",
 		"description",
+		"table_group",
 		"icon",
 		"column_break_details",
 		"field_count",
@@ -60,6 +61,11 @@
 			"fieldname": "description",
 			"fieldtype": "Small Text",
 			"label": "Description"
+		},
+		{
+			"fieldname": "table_group",
+			"fieldtype": "Data",
+			"label": "Table Group"
 		},
 		{
 			"fieldname": "icon",

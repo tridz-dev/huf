@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AIProvider, AIModel } from '@/types/agent.types';
@@ -96,7 +97,7 @@ export async function getProviders(
         fields: ['name', 'provider_name', 'provider_brand'],
         limit: 1000,
       });
-      return providers.map((p: any) => ({
+      return providers.map((p: { name: string; provider_name?: string; provider_brand?: string }) => ({
         name: p.name,
         provider_name: p.provider_name || p.name,
         provider_brand: p.provider_brand,
@@ -121,13 +122,13 @@ export async function getProviders(
     // Fetch data
     const providers = await db.getDocList(doctype['AI Provider'], {
       fields: ['name', 'provider_name', 'provider_brand'],
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }), // Only include if start > 0
       orderBy: { field: 'modified', order: 'desc' },
     });
 
-    const mappedProviders = providers.map((p: any) => ({
+    const mappedProviders = providers.map((p: { name: string; provider_name?: string; provider_brand?: string }) => ({
       name: p.name,
       provider_name: p.provider_name || p.name,
       provider_brand: p.provider_brand,
@@ -249,7 +250,7 @@ export async function getModels(
     // Fetch data
     const models = await db.getDocList(doctype['AI Model'], {
       fields: MODEL_LIST_FIELDS,
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1,
       ...(start > 0 && { limit_start: start }),
       orderBy: { field: 'modified', order: 'desc' },
@@ -339,7 +340,9 @@ export async function updateModel(name: string, data: Partial<AIModelDoc>): Prom
 export async function getModalityOptions(): Promise<string[]> {
   try {
     const docType = await db.getDoc('DocType', doctype['AI Model']);
-    const modalitiesField = (docType as any).fields.find((f: any) => f.fieldname === 'modalities');
+    const modalitiesField = (docType as { fields?: Array<{ fieldname?: string; options?: string }> }).fields?.find(
+      (f) => f.fieldname === 'modalities'
+    );
     if (modalitiesField && modalitiesField.options) {
       return modalitiesField.options.split('\n').filter((opt: string) => opt.trim().length > 0);
     }

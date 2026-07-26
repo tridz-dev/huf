@@ -46,6 +46,15 @@
       ]
     },
     {
+      "id": "web_search",
+      "name": "Web Search",
+      "description": "Search the web for live information via Perplexity AI.",
+      "icon": "search",
+      "toolTypes": [
+        "Perplexity Search"
+      ]
+    },
+    {
       "id": "run_agent",
       "name": "Run AI Agent",
       "description": "Delegate a task to another specialized AI Agent in your system.",

@@ -49,8 +49,10 @@ export const CheckpointTrigger = ({
   size = "sm",
   tooltip,
   ...props
-}: CheckpointTriggerProps) =>
-  tooltip ? (
+}: CheckpointTriggerProps) => {
+  // className is accepted for API parity but intentionally not forwarded.
+  void className;
+  return tooltip ? (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button size={size} type="button" variant={variant} {...props}>
@@ -66,3 +68,4 @@ export const CheckpointTrigger = ({
       {children}
     </Button>
   );
+};

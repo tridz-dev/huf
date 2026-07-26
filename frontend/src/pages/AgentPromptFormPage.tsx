@@ -32,7 +32,7 @@ import {
 } from '@/services/agentPromptApi';
 import { CategoryTab } from '@/components/category/CategoryTab';
 import { CategoryModal } from '@/components/category/CategoryModal';
-import { getCategories } from '@/services/categoryApi';
+import { getCategories, type CategoryDoc } from '@/services/categoryApi';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 import { InlineEditName } from '@/components/common/InlineEditName';
 
@@ -94,9 +94,9 @@ export function AgentPromptFormPage() {
     'name' | 'version' | 'is_latest' | 'previous_version' | 'category' | 'forked_from'
   > | null>(null);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<any | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<any | null>(null);
-  const [allCategories, setAllCategories] = useState<any[]>([]);
+  const [editingCategory, setEditingCategory] = useState<CategoryDoc | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryDoc | null>(null);
+  const [allCategories, setAllCategories] = useState<CategoryDoc[]>([]);
   const [newVersionDialogOpen, setNewVersionDialogOpen] = useState(false);
   const [newVersionTitle, setNewVersionTitle] = useState('');
   const [newVersionDescription, setNewVersionDescription] = useState('');
@@ -122,7 +122,7 @@ export function AgentPromptFormPage() {
         previous_version?: string;
         forked_from?: string;
         current_version?: number;
-        category?: any;
+        category?: CategoryDoc;
       } | null;
       
       if (state?.prefill) {

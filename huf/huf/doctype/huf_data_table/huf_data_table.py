@@ -10,4 +10,5 @@ class HufDataTable(Document):
 	def on_trash(self):
 		"""Clean up the associated DocType when registry entry is deleted."""
 		if self.doctype_name and frappe.db.exists("DocType", self.doctype_name):
+			# System-level cleanup during DocType deletion; permissions were already verified by Frappe controller lifecycle.
 			frappe.delete_doc("DocType", self.doctype_name, force=True, ignore_permissions=True)

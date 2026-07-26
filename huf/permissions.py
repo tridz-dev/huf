@@ -56,10 +56,26 @@ CAPABILITIES: dict[str, str] = {
 	"system.mcp.manage": "Manage MCP Servers",
 	"system.integrations.manage": "Manage Integrations",
 	"system.settings.manage": "Manage Settings",
+	# --- Data ---
+	"data.tables.manage": "Manage Data Tables",
+	"data.records.create": "Create Data Records",
+	"data.records.view_own": "View Own Data Records",
+	"data.records.view_all": "View All Data Records",
+	"data.records.edit_own": "Edit/Delete Own Data Records",
+	"data.records.edit_all": "Edit/Delete Any Data Record",
 	# --- Users & Roles ---
 	"users.invite": "Invite Users",
 	"users.manage": "Manage Users",
 	"roles.manage": "Manage Roles",
+	# --- Code Execution ---
+	"execution_profile.manage": "Manage Execution Profiles",
+	"network_access_policy.manage": "Manage Network Access Policies",
+	"execution.approve": "Approve Code Executions",
+	"code_execution.run": "Run Code Execution Tool",
+	# --- SSH Execution ---
+	"ssh_connection.manage": "Manage SSH Connections",
+	"ssh.run": "Run SSH Tool",
+	"ssh.approve": "Approve SSH Executions",
 }
 
 # Capabilities granted to each default Huf Role.
@@ -84,6 +100,17 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"flows.use",
 		"flows.create",
 		"flows.manage",
+		"data.tables.manage",
+		"data.records.create",
+		"data.records.view_all",
+		"data.records.edit_all",
+		"execution_profile.manage",
+		"network_access_policy.manage",
+		"execution.approve",
+		"code_execution.run",
+		"ssh_connection.manage",
+		"ssh.run",
+		"ssh.approve",
 	],
 	"Huf User": [
 		"agent.use",
@@ -92,10 +119,16 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"knowledge.use",
 		"tools.use",
 		"flows.use",
+		"data.records.create",
+		"data.records.view_all",
+		"data.records.edit_own",
+		"code_execution.run",
+		"ssh.run",
 	],
 	"Huf Viewer": [
 		"agent.use",
 		"chat.view_own",
+		"data.records.view_own",
 	],
 }
 
@@ -195,6 +228,7 @@ def get_user_capabilities(user: str | None = None) -> list[str]:
 		"Huf Role Permission",
 		filters={"parent": huf_role},
 		fields=["capability"],
+		# Capability lookup must read its own permission table without requiring the caller to hold role-permission read rights.
 		ignore_permissions=True,
 	)
 	result = [r.capability for r in rows if r.capability in CAPABILITIES]

@@ -58,8 +58,8 @@ def get_model_pricing(model_name: str) -> dict | None:
         if cached is not None:
             # Sentinel: empty dict means "we checked, no custom pricing"
             return cached if cached else None
-    except Exception:
-        pass
+    except Exception as exc:  # best-effort pricing cache operation
+        frappe.logger("huf").debug(f"Model pricing cache operation failed: {exc!s}")
 
     try:
         model_doc = frappe.db.get_value(
@@ -111,8 +111,8 @@ def get_model_pricing(model_name: str) -> dict | None:
 
     try:
         frappe.cache().set_value(cache_key, pricing, expires_in_sec=_PRICING_CACHE_TTL)
-    except Exception:
-        pass
+    except Exception as exc:  # best-effort pricing cache operation
+        frappe.logger("huf").debug(f"Model pricing cache operation failed: {exc!s}")
 
     return pricing
 
@@ -223,5 +223,5 @@ def invalidate_model_pricing_cache(model_name: str):
         return
     try:
         frappe.cache().delete_key(f"huf_model_pricing:{model_name}")
-    except Exception:
-        pass
+    except Exception as exc:  # best-effort pricing cache operation
+        frappe.logger("huf").debug(f"Model pricing cache operation failed: {exc!s}")

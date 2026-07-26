@@ -35,7 +35,7 @@ export interface StreamChunk {
 }
 
 function getCsrfToken(): string {
-  return (window as any).csrf_token || '';
+  return (window as unknown as { csrf_token?: string }).csrf_token || '';
 }
 
 /**

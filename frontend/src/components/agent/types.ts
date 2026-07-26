@@ -63,6 +63,17 @@ export const agentFormSchema = z.object({
     ),
   show_tool_execution_details: z.boolean().optional(),
 
+  agent_skill: z.array(
+    z.object({
+      name: z.string().optional(),
+      skill: z.string().min(1, 'Skill is required'),
+      mode: z.enum(['Mandatory', 'Optional']).default('Mandatory'),
+      auto_load: z.boolean().default(true),
+      priority: z.number().default(0),
+      description: z.string().optional(),
+    })
+  ).default([]),
+
   // Advanced model overrides
   image_generation_model: z.string().optional(),
   tts_model: z.string().optional(),
@@ -72,6 +83,12 @@ export const agentFormSchema = z.object({
   allow_file_upload: z.boolean().optional(),
   enable_ocr: z.boolean().optional(),
   max_upload_size_mb: z.number().int().positive().optional(),
+
+  allow_code_execution: z.boolean().optional(),
+  execution_profile: z.string().optional(),
+  execution_shared_dir_limit_mb: z.number().int().positive().optional(),
+  allow_ssh: z.boolean().optional(),
+  ssh_connections: z.array(z.string()).default([]),
 }).superRefine((values, ctx) => {
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({

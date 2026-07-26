@@ -148,7 +148,7 @@ export function KnowledgeInputsModal({
           if (total) setUploadProgress(Math.round((completed / total) * 100));
         },
       );
-      const res = response as any;
+      const res = response as { data?: { message?: { file_url?: string } } };
       const fileUrl = res?.data?.message?.file_url;
       if (fileUrl) {
         setUploadedFileUrl(fileUrl);

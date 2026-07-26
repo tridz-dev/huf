@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { KnowledgeSourceDoc, KnowledgeInputDoc } from '@/types/knowledge.types';
@@ -64,7 +65,7 @@ export async function getKnowledgeSources(
 
     const sources = await db.getDocList(doctype['Knowledge Source'], {
       fields: KNOWLEDGE_SOURCE_LIST_FIELDS,
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1,
       ...(start > 0 && { limit_start: start }),
       orderBy: { field: 'modified', order: 'desc' },
@@ -150,7 +151,11 @@ export async function rebuildIndex(
       'huf.huf.doctype.knowledge_source.knowledge_source.rebuild_index',
       { knowledge_source: knowledgeSource },
     );
-    return (result as any).message ?? result;
+    const response = result as { message?: { status: string; message: string } } & {
+      status: string;
+      message: string;
+    };
+    return response.message ?? response;
   } catch (error) {
     handleFrappeError(error, 'Error rebuilding index');
   }
@@ -160,15 +165,44 @@ export async function testSearch(
   knowledgeSource: string,
   query: string,
   topK: number = 5,
-): Promise<any> {
+): Promise<unknown> {
   try {
     const result = await call.post(
       'huf.huf.doctype.knowledge_source.knowledge_source.test_search',
       { knowledge_source: knowledgeSource, query, top_k: topK },
     );
-    return (result as any).message ?? result;
+    const response = result as { message?: unknown };
+    return response.message ?? result;
   } catch (error) {
     handleFrappeError(error, 'Error running test search');
+  }
+}
+
+export interface AdvancedConfigSchemaEntry {
+  key: string;
+  label: string;
+  type: 'number' | 'text' | 'boolean' | 'select';
+  default?: unknown;
+  help_text?: string;
+  options?: string[];
+  min?: number;
+  max?: number;
+  visible_when?: Record<string, unknown>;
+}
+
+export async function getAdvancedConfigSchema(
+  knowledgeType: string,
+): Promise<AdvancedConfigSchemaEntry[]> {
+  try {
+    const result = await call.get(
+      'huf.ai.knowledge.backends.get_advanced_config_schema',
+      { knowledge_type: knowledgeType },
+    );
+    const response = result as { message?: unknown } | undefined;
+    const payload = response?.message ?? response;
+    return Array.isArray(payload) ? (payload as AdvancedConfigSchemaEntry[]) : [];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching advanced config schema');
   }
 }
 

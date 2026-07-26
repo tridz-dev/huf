@@ -26,7 +26,7 @@ export function TableBuilderCanvas({
 		e.dataTransfer.effectAllowed = 'move';
 	};
 
-	const handleDragOver = (e: React.DragEvent, _index: number) => {
+	const handleDragOver = (e: React.DragEvent) => {
 		e.preventDefault();
 		e.dataTransfer.dropEffect = 'move';
 	};
@@ -42,8 +42,8 @@ export function TableBuilderCanvas({
 	return (
 		<div className="space-y-2">
 			{fields.length === 0 ? (
-				<div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-lg">
-					<p className="text-sm text-muted-foreground mb-4">
+				<div className="flex flex-col items-center justify-center p-8 border border-dashed border-line bg-panel rounded-none">
+					<p className="text-sm text-steel mb-4">
 						No fields yet. Add your first field to get started.
 					</p>
 					<FieldTypeSelector
@@ -58,21 +58,23 @@ export function TableBuilderCanvas({
 				</div>
 			) : (
 				<>
-					{fields.map((field, index) => (
-						<FieldCard
-							key={`${field.fieldname}-${index}`}
-							field={field}
-							index={index}
-							isSelected={selectedFieldIndex === index}
-							onSelect={() =>
-								onSelectField(selectedFieldIndex === index ? null : index)
-							}
-							onRemove={() => onRemoveField(index)}
-							onDragStart={handleDragStart}
-							onDragOver={handleDragOver}
-							onDrop={handleDrop}
-						/>
-					))}
+					<div className="rounded-none border border-line bg-panel overflow-hidden mb-4">
+						{fields.map((field, index) => (
+							<FieldCard
+								key={`${field.fieldname}-${index}`}
+								field={field}
+								index={index}
+								isSelected={selectedFieldIndex === index}
+								onSelect={() =>
+									onSelectField(selectedFieldIndex === index ? null : index)
+								}
+								onRemove={() => onRemoveField(index)}
+								onDragStart={handleDragStart}
+								onDragOver={handleDragOver}
+								onDrop={handleDrop}
+							/>
+						))}
+					</div>
 					<FieldTypeSelector
 						onSelect={onAddField}
 						trigger={

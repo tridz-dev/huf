@@ -31,7 +31,6 @@
   "oauth_token_endpoint",
   "oauth_client_id",
   "oauth_client_secret",
-  "oauth_token_response_path",
   "oauth_tokens_section",
   "oauth_access_token",
   "oauth_refresh_token",
@@ -122,7 +121,7 @@
    "label": "Authentication"
   },
   {
-   "default": "none",
+   "default": "oauth",
    "fieldname": "auth_type",
    "fieldtype": "Select",
    "label": "Auth Type",
@@ -228,13 +227,6 @@
    "fieldname": "oauth_client_secret",
    "fieldtype": "Password",
    "label": "Client Secret"
-  },
-  {
-   "depends_on": "eval:doc.auth_type === 'oauth'",
-   "description": "JSON path to access token if nested (e.g. authed_user.access_token). Defaults to access_token.",
-   "fieldname": "oauth_token_response_path",
-   "fieldtype": "Data",
-   "label": "Token Response Path"
   },
   {
    "collapsible": 1,
@@ -388,7 +380,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-14 14:50:12.785545",
+ "modified": "2026-07-25 05:14:29.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "MCP Server",

@@ -192,7 +192,7 @@ export function ArtifactRenderer({
 					<div className="flex flex-col gap-2">
 						<iframe
 							srcDoc={artifact.content}
-							sandbox="allow-scripts"
+							sandbox=""
 							className="w-full h-96 border rounded bg-white"
 							title={artifact.title || 'HTML Preview'}
 						/>
