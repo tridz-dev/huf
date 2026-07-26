@@ -1,22 +1,8 @@
-import { useMemo, useState } from 'react';
-import {
-	type ColumnDef,
-	flexRender,
-	getCoreRowModel,
-	getSortedRowModel,
-	type SortingState,
-	useReactTable,
-} from '@tanstack/react-table';
+import { useMemo } from 'react';
+import { type ColumnDef } from '@tanstack/react-table';
+import { DataListView } from '@/components/dashboard/DataListView';
 import { ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { formatTimeAgo } from '@/utils/time';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
@@ -30,7 +16,7 @@ interface DataRecordListProps {
 
 function formatCellValue(value: unknown, fieldtype: string): React.ReactNode {
 	if (value === null || value === undefined || value === '') {
-		return <span className="text-muted-foreground">-</span>;
+		return <span className="text-steel">-</span>;
 	}
 
 	switch (fieldtype) {
@@ -70,8 +56,7 @@ export function DataRecordList({
 	loading,
 	onRowClick,
 }: DataRecordListProps) {
-	const [sorting, setSorting] = useState<SortingState>([]);
-
+	
 	const listFields = useMemo(() => {
 		const visible = fields.filter(
 			(f) =>
@@ -93,14 +78,14 @@ export function DataRecordList({
 					<Button
 						variant="ghost"
 						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-						className="h-8 px-2 text-xs"
+						className="h-8 px-2 text-xs rounded-none text-steel hover:text-ink hover:bg-paper-deep"
 					>
 						ID
 						<ArrowUpDown className="ml-1 h-3 w-3" />
 					</Button>
 				),
 				cell: ({ row }) => (
-					<span className="text-xs font-mono text-muted-foreground">
+					<span className="text-xs font-mono text-steel">
 						{String(row.getValue('name')).slice(0, 10)}
 					</span>
 				),
@@ -114,14 +99,14 @@ export function DataRecordList({
 					<Button
 						variant="ghost"
 						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-						className="h-8 px-2 text-xs"
+						className="h-8 px-2 text-xs rounded-none text-steel hover:text-ink hover:bg-paper-deep"
 					>
 						{field.label}
 						<ArrowUpDown className="ml-1 h-3 w-3" />
 					</Button>
 				),
 				cell: ({ row }) =>
-					<div className="text-sm max-w-48 truncate">
+					<div className="text-sm max-w-48 truncate text-ink">
 						{formatCellValue(row.getValue(field.fieldname), field.fieldtype)}
 					</div>,
 			});
@@ -133,14 +118,14 @@ export function DataRecordList({
 				<Button
 					variant="ghost"
 					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-					className="h-8 px-2 text-xs"
+					className="h-8 px-2 text-xs rounded-none text-steel hover:text-ink hover:bg-paper-deep"
 				>
 					Modified
 					<ArrowUpDown className="ml-1 h-3 w-3" />
 				</Button>
 			),
 			cell: ({ row }) => (
-				<span className="text-xs text-muted-foreground">
+				<span className="text-xs text-steel">
 					{formatTimeAgo(row.getValue('modified') as string)}
 				</span>
 			),
@@ -149,68 +134,13 @@ export function DataRecordList({
 		return cols;
 	}, [listFields]);
 
-	const table = useReactTable({
-		data: records,
-		columns,
-		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
-		onSortingChange: setSorting,
-		state: { sorting },
-	});
-
-	if (loading) {
-		return (
-			<div className="space-y-2">
-				{[...Array(5)].map((_, i) => (
-					<div key={i} className="h-12 bg-muted/50 rounded animate-pulse" />
-				))}
-			</div>
-		);
-	}
-
 	return (
-		<div className="overflow-hidden rounded-md border">
-			<Table>
-				<TableHeader>
-					{table.getHeaderGroups().map((headerGroup) => (
-						<TableRow key={headerGroup.id}>
-							{headerGroup.headers.map((header) => (
-								<TableHead key={header.id}>
-									{header.isPlaceholder
-										? null
-										: flexRender(
-												header.column.columnDef.header,
-												header.getContext()
-											)}
-								</TableHead>
-							))}
-						</TableRow>
-					))}
-				</TableHeader>
-				<TableBody>
-					{table.getRowModel().rows?.length ? (
-						table.getRowModel().rows.map((row) => (
-							<TableRow
-								key={row.id}
-								className="cursor-pointer hover:bg-muted/50"
-								onClick={() => onRowClick?.(row.original)}
-							>
-								{row.getVisibleCells().map((cell) => (
-									<TableCell key={cell.id} className="py-2">
-										{flexRender(cell.column.columnDef.cell, cell.getContext())}
-									</TableCell>
-								))}
-							</TableRow>
-						))
-					) : (
-						<TableRow>
-							<TableCell colSpan={columns.length} className="h-24 text-center">
-								<p className="text-muted-foreground">No records found</p>
-							</TableCell>
-						</TableRow>
-					)}
-				</TableBody>
-			</Table>
-		</div>
+		<DataListView
+			columns={columns}
+			data={records}
+			loading={loading}
+			onRowClick={onRowClick}
+			emptyState={<p className="text-steel">No records found</p>}
+		/>
 	);
 }
