@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,6 +10,7 @@ import {
 	SelectValue,
 } from '@/components/ui/select';
 import { TABLE_ICONS, TABLE_ICON_MAP } from '@/data/tableIcons';
+import { getTableGroups } from '@/services/dataTableApi';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
 interface TableSettingsPanelProps {
@@ -48,6 +50,11 @@ export function TableSettingsPanel({
 		(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
 	);
 
+	const [existingGroups, setExistingGroups] = useState<string[]>([]);
+	useEffect(() => {
+		getTableGroups().then(setExistingGroups);
+	}, []);
+
 	return (
 		<div className="space-y-4">
 			<div>
@@ -81,7 +88,19 @@ export function TableSettingsPanel({
 					onChange={(e) => onTableGroupChange(e.target.value)}
 					placeholder="e.g. Customers"
 					className="h-8 text-sm"
+					list="existing-table-groups"
+					autoComplete="off"
 				/>
+				<datalist id="existing-table-groups">
+					{existingGroups.map((g) => (
+						<option key={g} value={g} />
+					))}
+				</datalist>
+				{existingGroups.length > 0 && (
+					<p className="text-[10px] text-steel">
+						Existing groups: {existingGroups.join(', ')}
+					</p>
+				)}
 			</div>
 
 			<div className="space-y-1.5">

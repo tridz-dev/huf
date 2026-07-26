@@ -102,6 +102,26 @@ export async function getDataTables(
 }
 
 /**
+ * Get the distinct set of group names already in use across data tables, so the
+ * table settings form can suggest reusing an existing group instead of retyping it.
+ */
+export async function getTableGroups(): Promise<string[]> {
+	try {
+		const tables = await db.getDocList(doctype['Huf Data Table'], {
+			fields: ['table_group'],
+			limit: 200,
+		});
+		const names = new Set<string>();
+		for (const t of tables as Array<{ table_group?: string }>) {
+			if (t.table_group && t.table_group.trim()) names.add(t.table_group.trim());
+		}
+		return Array.from(names).sort((a, b) => a.localeCompare(b));
+	} catch {
+		return [];
+	}
+}
+
+/**
  * Get live record counts for a batch of tables (backend API, since
  * counting records across dynamic DocTypes can't be done via standard REST).
  */
