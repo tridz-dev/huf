@@ -119,13 +119,15 @@ def handle_knowledge_search(
 	if not knowledge_source:
 		return "Error: No knowledge sources available for this agent."
 
-	# Perform search (ignore_permissions=True: agent has explicit knowledge linkage)
+	# Perform search respecting the current user's permissions on the
+	# Knowledge Source; the agent linkage alone is not sufficient to bypass
+	# permission checks.
 	try:
 		if isinstance(filters, str):
 			import json
 			try:
 				filters = json.loads(filters)
-			except Exception:
+			except json.JSONDecodeError:
 				filters = None
 
 		results = knowledge_search(
@@ -133,7 +135,6 @@ def handle_knowledge_search(
 			knowledge_source=knowledge_source,
 			top_k=top_k,
 			filters=filters,
-			ignore_permissions=True,
 		)
 
 		if not results:

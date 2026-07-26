@@ -64,6 +64,7 @@ class HufUserRole(Document):
 		# Grant the target Frappe role if not already present.
 		if self.enabled and target_frappe_role not in current_roles:
 			user_doc.append("roles", {"role": target_frappe_role})
+			# Synchronizing Frappe role membership on behalf of the system; the controller validates the operation.
 			user_doc.save(ignore_permissions=True)
 		elif not self.enabled:
 			# Disabled Huf User Role → remove the Frappe role too.

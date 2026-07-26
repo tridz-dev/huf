@@ -10,8 +10,15 @@ CACHE_KEY = "huf:doc_event_agents"
 
 
 def get_doc_event_agents(event: str):
-    """Fetch & cache Doc Event triggers (Agent Trigger doctype)."""
+    """Fetch & cache Doc Event triggers (Agent Trigger doctype).
+
+    Permission checks are enforced so agents only fire for triggers the current
+    user is allowed to read.
+    """
     if not frappe.db.exists("DocType", "Agent Trigger"):
+        return []
+
+    if not frappe.has_permission("Agent Trigger", "read"):
         return []
 
     cached = frappe.cache().hget(CACHE_KEY, f"doc_event:{event}")
@@ -25,45 +32,38 @@ def get_doc_event_agents(event: str):
             "disabled": 0,
             "doc_event": event
         },
-        fields=["name", "agent", "reference_doctype", "doc_event", "condition", "prompt_field"],
-        ignore_permissions=True
+        fields=["name", "agent", "reference_doctype", "doc_event", "condition", "prompt_field"]
     )
 
     result = []
-    
-    original_ignore_permissions = frappe.flags.ignore_permissions
-    frappe.flags.ignore_permissions = True
-    
-    try:
-        for t in triggers:
-            try:
-                trigger_doc = frappe.get_doc("Agent Trigger", t["name"])
-                agent_doc = frappe.get_doc("Agent", t["agent"])
-                from huf.ai.prompt_resolver import resolve_prompt
-                prompt = resolve_prompt(agent_doc)
-                
-                result.append({
-                    "name": t["name"],
-                    "agent": t["agent"],
-                    "reference_doctype": t.get("reference_doctype"),
-                    "doc_event": t.get("doc_event"),
-                    "condition": t.get("condition"),
-                    "prompt_field": t.get("prompt_field"), 
-                    "file_attachments": [
-                        {
-                            "source_type": a.source_type,
-                            "child_table": a.child_table,
-                            "field_name": a.field_name
-                        } for a in (trigger_doc.get("file_attachments") or [])
-                    ],
-                    "instructions": prompt,
-                    "provider": getattr(agent_doc, "provider", None),
-                    "model": getattr(agent_doc, "model", None),
-                })
-            except Exception as e:
-                frappe.logger("huf").error(f"Agent Trigger load failed: {t.get('name')} - {str(e)}")
-    finally:
-        frappe.flags.ignore_permissions = original_ignore_permissions
+
+    for t in triggers:
+        try:
+            trigger_doc = frappe.get_doc("Agent Trigger", t["name"])
+            agent_doc = frappe.get_doc("Agent", t["agent"])
+            from huf.ai.prompt_resolver import resolve_prompt
+            prompt = resolve_prompt(agent_doc)
+
+            result.append({
+                "name": t["name"],
+                "agent": t["agent"],
+                "reference_doctype": t.get("reference_doctype"),
+                "doc_event": t.get("doc_event"),
+                "condition": t.get("condition"),
+                "prompt_field": t.get("prompt_field"),
+                "file_attachments": [
+                    {
+                        "source_type": a.source_type,
+                        "child_table": a.child_table,
+                        "field_name": a.field_name
+                    } for a in (trigger_doc.get("file_attachments") or [])
+                ],
+                "instructions": prompt,
+                "provider": getattr(agent_doc, "provider", None),
+                "model": getattr(agent_doc, "model", None),
+            })
+        except Exception as e:
+            frappe.logger("huf").error(f"Agent Trigger load failed: {t.get('name')} - {str(e)}")
 
     frappe.cache().hset(CACHE_KEY, f"doc_event:{event}", frappe.as_json(result))
     return result
@@ -148,7 +148,8 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
         if initiating_user and frappe.session.user != initiating_user:
             try:
                 frappe.set_user(initiating_user)
-            except Exception:
+            except frappe.DoesNotExistError:
+                # Initiating user no longer exists; continue as current session user
                 pass
 
         custom_instruction = None
@@ -202,8 +203,8 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                 {json_string}
                 ```
                 """
-            except Exception:
-                pass
+            except (TypeError, ValueError, json.JSONDecodeError) as e:
+                frappe.log_error(f"Agent hook document JSON serialization failed: {e}")
 
             external_id = None
             channel = channel_id or "doc_event"
@@ -214,7 +215,7 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                     external_id = initiating_user or doc.get("owner") or doc.get("modified_by") or "unknown_user"
                 else:
                     external_id = f"shared:{agent_name}"
-            except Exception:
+            except frappe.DoesNotExistError:
                 external_id = initiating_user or f"shared:{agent_name}"
 
             # File attachments logic
