@@ -1,0 +1,1 @@
+export const DEFAULT_AGENT_COLOR = "#6366F1";

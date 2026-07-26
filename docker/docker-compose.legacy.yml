@@ -1,0 +1,43 @@
+# Superseded — this is the legacy single-container docker setup. The current setup
+# is the fasterdocker multi-service compose (see docker/README.md /
+# docker/compose.fast.yml). This legacy setup will be moved to a
+# `backup/docker-single-container-legacy` branch and may be removed from main in the
+# future.
+
+name: huf
+
+services:
+  mariadb:
+    image: docker.io/mariadb:10.11
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-huf_dev_mysql_root}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+
+  redis:
+    image: redis:alpine
+
+  frappe:
+    image: frappe/bench:latest
+    command: bash /workspace/init.sh
+    environment:
+      - SHELL=/bin/bash
+      - HUF_BRANCH=develop
+      - UV_HTTP_TIMEOUT=300
+    working_dir: /home/frappe
+    volumes:
+      - .:/workspace
+    ports:
+      - "8000:8000"
+      - "9000:9000"
+    depends_on:
+      - mariadb
+      - redis
+
+volumes:
+  mariadb-data:

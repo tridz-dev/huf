@@ -1,0 +1,2197 @@
+# AGENTS.md
+
+This file provides context and instructions for AI coding agents to effectively work on the Huf Frappe application.
+
+## Project Overview
+Huf is a comprehensive Frappe application for creating and managing conversational AI agents with advanced workflow automation capabilities. It allows developers to define agents, equip them with tools to interact with the Frappe framework (e.g., CRUD operations on DocTypes), manage conversation histories, and build complex visual workflows.
+
+The application is built on the Frappe Framework (Python) and uses the standard Frappe directory structure. The core logic for agent integration is located in `huf/ai/`, with a modern React-based frontend providing visual flow building and real-time streaming capabilities.
+
+## Repo Layout
+-   `huf/`: The root of the Frappe app.
+-   `doc/` branches: Used for planning, documenting features, and R&D. (e.g., `doc/KnowledgePlan`)
+-   `huf/huf/`: The main Python module.
+-   `huf/huf/doctype/`: Contains all DocType definitions, each in its own folder.
+    -   `<doctype_name>/<doctype_name>.json`: Schema definition.
+    -   `<doctype_name>/<doctype_name>.py`: Server-side controller class.
+    -   `<doctype_name>/<doctype_name>.js`: Client-side script.
+-   `huf/ai/`: Core Python modules for AI agent integration.
+-   `frontend/`: Modern React-based frontend application.
+    -   `frontend/src/components/`: React components for UI, flow builder, and agent interactions.
+    -   `frontend/src/contexts/`: React context providers for state management.
+    -   `frontend/src/services/`: Frontend services for API communication and flow management.
+    -   `frontend/src/types/`: TypeScript type definitions.
+    -   `frontend/src/pages/`: Page components for different application views.
+-   `.github/workflows/`: CI definitions for tests and linting.
+
+## Security Considerations
+-   Do not commit secrets or API keys. The `AI Provider` DocType stores API keys in the database using the `Password` field type, which encrypts the value.
+-   Custom functions exposed to agents via `Agent Tool Function` must be carefully designed. They are executed with the permissions of the user running the agent. Always validate inputs and perform permission checks inside custom tool functions.
+-   **LiteLLM Dependency**: The `litellm` package (>=1.0.0) is required and listed in `pyproject.toml`. It will be automatically installed when running `bench setup requirements`. The post-install hook (`huf/install.py`) checks for LiteLLM and provides guidance if it's missing.
+
+## Detailed Architecture
+
+This section provides a deep dive into the application's structure, including DocTypes and core Python classes, to give the agent maximum context.
+
+### Core Concepts
+
+1.  **Provider & Model**: You start by defining an `AI Provider` (e.g., OpenAI, Anthropic, Google) and the `AI Model` you want to use (e.g., `gpt-4-turbo`, `claude-3-opus`). Huf uses LiteLLM to provide unified access to 100+ LLM providers through a single interface.
+2.  **Unified Provider Architecture**: All LLM providers are accessed via LiteLLM, which provides automatic model name normalization, built-in retry logic, cost tracking, and error handling. Model names can be specified in user-friendly format (e.g., `gpt-4-turbo`) and are automatically normalized to LiteLLM format (e.g., `openai/gpt-4-turbo`).
+3.  **Tools**: Agents need tools to be useful. An `Agent Tool Function` defines a specific action the agent can perform, such as fetching a document, creating a new one, or calling a custom Python function.
+4.  **Agent**: An `Agent` is the central entity. You give it a name, instructions (prompt), temperature, top_p, and assign it a set of tools. Each agent has its own individual settings that are read directly from the Agent DocType. Agents can be configured for scheduling, doc events, or chat.
+5.  **Conversation**: When a user interacts with an agent, a `Agent Conversation` is created to track the entire interaction. Each message back-and-forth is stored as an `Agent Message`.
+6.  **Execution**: A specific request to the agent and its subsequent actions are logged in an `Agent Run` with token usage and cost tracking.
+7.  **Chat Interface**: `Agent Chat` provides a real-time chat UI for conversational agents with markdown rendering.
+
+### Doctypes
+
+Here is a detailed breakdown of the DocTypes used in Huf.
+
+#### 1. AI Provider
+
+Stores credentials for different AI service providers. Huf uses LiteLLM to provide unified access to 100+ LLM providers, including OpenAI, Anthropic, Google, OpenRouter, xAI (Grok), Mistral, and many more.
+
+-   **Python Class**: `AIProvider(Document)`
+-   **File**: `huf/huf/doctype/ai_provider/ai_provider.py`
+
+**Fields:**
+
+| Label          | Fieldname      | Type       | Description                               |
+| :------------- | :------------- | :--------- | :---------------------------------------- |
+| **Provide Name** | `provider_name` | Data       | The unique name of the provider (e.g., OpenAI, Anthropic, Google, OpenRouter). Provider names are case-insensitive and automatically routed to LiteLLM. **Note**: The field name uses "provider_name" (with "provide" instead of "provider") due to existing database schema; this is intentional for backward compatibility. |
+| **API Key**    | `api_key`      | Password   | The API key for the provider. Stored securely using Frappe's Password field type.             |
+
+**Supported Providers via LiteLLM:**
+- OpenAI (OpenAI, OpenRouter with OpenAI models)
+- Anthropic (Claude models)
+- Google (Gemini models)
+- OpenRouter (access to 500+ models)
+- xAI (Grok models)
+- Mistral
+- And 100+ other providers supported by LiteLLM
+
+For providers not in the standard list, you can use LiteLLM format in the model name (e.g., `xai/grok-4` for Grok, `mistral/mistral-large` for Mistral).
+
+#### 2. AI Model
+
+Defines a specific AI model available from a provider. Model names are automatically normalized to LiteLLM format, so you can use user-friendly names (e.g., `gpt-4-turbo`) or LiteLLM format (e.g., `openai/gpt-4-turbo`).
+
+-   **Python Class**: `AIModel(Document)`
+-   **File**: `huf/huf/doctype/ai_model/ai_model.py`
+
+**Fields:**
+
+| Label        | Fieldname    | Type | Description                               |
+| :----------- | :----------- | :--- | :---------------------------------------- |
+| **Model Name** | `model_name` | Data | The name of the model (e.g., `gpt-4-turbo`, `claude-3-opus`, `gpt-5-mini`). Can be specified in user-friendly format - the system automatically adds provider prefix. Alternatively, use LiteLLM format (e.g., `openai/gpt-4-turbo`) for explicit provider specification. |
+| **Provider**   | `provider`   | Link | A link to the `AI Provider` DocType. The provider name is used to determine the provider prefix for model normalization.      |
+| **Input Cost per 1M Tokens (USD)** | `input_cost_per_1m_tokens` | Float | *Optional.* Custom input/prompt token price in USD per million tokens. E.g. `2.5` for $2.50/1M. Leave blank to use LiteLLM's automatic pricing. Set to `0` for free/self-hosted models. |
+| **Output Cost per 1M Tokens (USD)** | `output_cost_per_1m_tokens` | Float | *Optional.* Custom output/completion token price in USD per million tokens. Must be set together with `input_cost_per_1m_tokens`. |
+| **Cached Input Cost per 1M Tokens (USD)** | `cached_input_cost_per_1m_tokens` | Float | *Optional.* Price for prompt cache reads (cache hits) in USD per million tokens. E.g. Anthropic charges $0.30/1M for cache reads vs $3.00/1M for regular input. Leave blank if the model/provider does not charge separately for cache reads. |
+
+**Model Name Normalization:**
+- User-friendly names: `gpt-4-turbo` → automatically normalized to `openai/gpt-4-turbo`
+- Provider prefix mapping: `gemini` → `google`, `grok` → `xai`
+- LiteLLM format: `openai/gpt-4-turbo` → used as-is (no normalization needed)
+
+**Custom Pricing System:**
+
+Huf includes a production-ready, 3-tier cost calculation priority system (see `huf/ai/cost_calculator.py`):
+
+| Priority | Source | When active |
+| :------- | :----- | :---------- |
+| **1 — Custom** | `input_cost_per_1m_tokens` + `output_cost_per_1m_tokens` fields on AI Model | Both fields are set (including `0` for free models) |
+| **2 — LiteLLM Auto** | `litellm.completion_cost()` built-in price table | No custom price set, model is known to LiteLLM |
+| **3 — Unknown** | `0.0` (no silent errors) | Model is unknown to both HUF and LiteLLM |
+
+**Formula (industry standard):**
+```
+cost = (input_tokens  / 1_000_000) × input_cost_per_1m_tokens
+     + (output_tokens / 1_000_000) × output_cost_per_1m_tokens
+     + (cached_tokens / 1_000_000) × cached_input_cost_per_1m_tokens  # if set
+```
+
+**Cache behaviour:** Custom pricing is cached in Redis (10-minute TTL). The cache is auto-invalidated whenever an AI Model document is saved.
+
+#### 3. Agent Tool Function
+
+Defines a function or "tool" that an agent can use. This is the core of the agent's capabilities.
+
+-   **Python Class**: `AgentToolFunction(Document)`
+-   **File**: `huf/huf/doctype/agent_tool_function/agent_tool_function.py`
+
+**Fields:**
+
+| Label                   | Fieldname                 | Type    | Description                                                                                             |
+| :---------------------- | :------------------------ | :------ | :------------------------------------------------------------------------------------------------------ |
+| **Tool Name**           | `tool_name`               | Data    | A unique name for the tool.                                                                             |
+| **Description**         | `description`             | Small Text | A clear description of what the tool does. This is crucial as the AI uses it to decide when to use the tool. |
+| **Types**               | `types`                   | Select  | The type of function. This determines the underlying logic. Available types: `Get Document`, `Get Multiple Documents`, `Get List`, `Create Document`, `Create Multiple Documents`, `Update Document`, `Update Multiple Documents`, `Delete Document`, `Delete Multiple Documents`, `Submit Document`, `Cancel Document`, `Get Amended Document`, `Custom Function`, `App Provided`, `Attach File to Document`, `Get Report Result`, `Get Value`, `Set Value`, `GET`, `POST`, `Run Agent`, `Speech to Text`. |
+| **Reference DocType**   | `reference_doctype`       | Link    | For DocType-related functions, this specifies the target DocType (e.g., `Sales Order`).                 |
+| **Function Path**       | `function_path`           | Data    | The dotted path to the Python function for `Custom Function` types (e.g., `my_app.api.my_function`).    |
+| **Parameters**          | `parameters`              | Table   | A table of parameters (`Agent Function Params`) the function accepts.                                   |
+| **Function Definition** | `function_definition`     | JSON    | (Read Only) The final JSON schema of the function, which is passed to the AI.                           |
+| **Base URL**           | `base_url`               | Data    | Optional base URL that will be prefixed to URL provided by agent (for GET/POST types).              |
+| **HTTP Headers**       | `http_headers`            | Table   | Custom HTTP headers for API requests (child table of `Agent Tool HTTP Header`).                        |
+| **Agent**             | `agent`                  | Link    | Target agent to run (for `Run Agent` type).                                                         |
+| **Provider App**       | `provider_app`             | Data    | App that provides this tool (for `App Provided` type).                                                |
+| **Pass Parameters as JSON** | `pass_parameters_as_json` | Check | Whether to pass parameters as JSON string (for `Custom Function` type).                              |
+| **Tool Type**         | `tool_type`              | Link    | Link to `Agent Tool Type` for categorization. **Required field.**                                   |
+
+#### 4. Agent
+
+The main DocType for creating an AI agent.
+
+-   **Python Class**: `Agent(Document)`
+-   **File**: `huf/huf/doctype/agent/agent.py`
+
+**Fields:**
+
+| Label          | Fieldname      | Type      | Description                                                                                             |
+| :------------- | :------------- | :-------- | :------------------------------------------------------------------------------------------------------ |
+| **Agent Name**   | `agent_name`   | Data      | A unique name for the agent.                                                                            |
+| **Provider**     | `provider`     | Link      | Link to the `AI Provider`.                                                                              |
+| **Model**        | `model`        | Link      | Link to the `AI Model`.                                                                                 |
+| **Instructions** | `instructions` | Code      | The system prompt or instructions that define the agent's personality, goals, and constraints.          |
+| **Agent Tool**   | `agent_tool`   | Table     | A child table (`Agent Tool`) linking to the `Agent Tool Function`s that this agent is allowed to use. |
+| **Agent Knowledge** | `agent_knowledge` | Table | A child table (`Agent Knowledge`) linking to `Knowledge Source`s. Allows "Mandatory" (auto-injected) or "Optional" (tool-based) access. |
+| **Temperature**  | `temperature`  | Float     | Controls the randomness of the AI's output.                                                             |
+| **Top P**        | `top_p`        | Float     | An alternative to temperature for controlling randomness.                                               |
+| **Allow Chat**    | `allow_chat`   | Check     | Enables the Agent Chat interface for real-time conversations.                                           |
+| **Persist Conversation** | `persist_conversation` | Check | Whether to maintain conversation history across runs. |
+| **Persist per User (Doc/Schedule)** | `persist_user_history` | Check | When checked, Doc Event and Scheduled runs create/maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used. Default: 1 (checked). |
+| **Description**   | `description`  | Small Text | A brief description of the agent's purpose. |
+| **Last Run**      | `last_run`     | Datetime  | Timestamp of the last agent execution (read-only, auto-updated). |
+| **Total Run**     | `total_run`    | Int       | Total number of times this agent has been executed (read-only, auto-incremented). |
+| **Async**        | `async`        | Check     | Hidden field for async execution (internal use).                                                        |
+| **Disabled**      | `disabled`      | Check     | If checked, this agent will be disabled and will not run.                                               |
+| **Chef**          | `chef`         | Data      | Provider standard name (fetched from provider, hidden).                                                   |
+| **Slug**          | `slug`         | Data      | Provider slug (fetched from provider, hidden).                                                          |
+| **TTS Model**    | `tts_model`    | Link (AI Model) | Dedicated model for the `generate_audio` tool. When set, the API key is sourced from the *TTS model's own provider* (`AI Model → AI Provider`), enabling cross-provider TTS (e.g. main agent on OpenAI, TTS on ElevenLabs). Falls back to the main provider's default TTS model when unset. |
+| **TTS Voice**    | `tts_voice`    | Data      | Default voice identifier for the configured TTS model (e.g. `alloy`, `nova`, `21m00Tcm4TlvDq8ikWAM`). Overridden by a `voice` argument passed directly to the `generate_audio` tool call. |
+| **Context Strategy** | `context_strategy` | Select | How to handle conversation history when it exceeds the limit. `Summarize` compresses old messages, `FIFO` drops them, `None` keeps all. |
+| **History Limit** | `history_limit` | Int | Maximum number of messages to keep in active context before applying strategy. |
+| **Summary Ratio** | `summary_ratio` | Float | Ratio of history to summarize effectively. 0.7 means 70% of oldest messages. |
+| **Summary Model** | `summary_model` | Link | Optional lightweight `AI Model` used only when compressing older messages (Summarize strategy). |
+| **Summary Prompt Mode** | `summary_prompt_mode` | Select | `Local` uses the `summary_prompt` field. `Template` links to a reusable `Agent Summary Prompt` for conversation summarization. |
+| **Summary Prompt Template** | `summary_prompt_template` | Link | Reusable `Agent Summary Prompt` used for summarization when `summary_prompt_mode` is `Template`. |
+| **Lock Summary Prompt Version** | `summary_prompt_version_locked` | Check | Pins the agent to the attached summary prompt revision. |
+| **Summary Attached at Version** | `summary_template_version_at_attach` | Int | Read-only snapshot of the summary prompt version when attached. |
+| **Summary Prompt** | `summary_prompt` | Code | Local custom summary prompt. Supports `{summary_data}` placeholder. Falls back to a system default. |
+| **Max Knowledge Tokens** | `max_knowledge_tokens` | Int | Maximum tokens to use for injected knowledge context. |
+| **Max Context Characters** | `max_context_chars` | Int | Maximum characters allowed for tool results before truncating and applying `include_reference` context policy. |
+| **Max Turns** | `max_turns` | Int | Maximum consecutive turns/steps the agent can take in a single run. |
+| **Allow Conversation Data Management** | `enable_conversation_data` | Check | Enables key-value memory storage in the conversation context. |
+| **Inject Conversation Data into Prompt** | `inject_conversation_data` | Check | Auto-injects active memory items into the LLM system prompt on every turn. |
+| **Autonaming of Conversation Title** | `autonaming_of_conversation_title` | Check | Automatically updates the conversation title based on initial context. |
+
+**Note**: The `condition` field has been removed from Agent DocType. Conditional triggering is now handled via the `Agent Trigger` DocType.
+
+#### 5. Agent Conversation
+
+Tracks a continuous conversation with an agent.
+
+-   **Python Class**: `AgentConversation(Document)`
+-   **File**: `huf/huf/doctype/agent_conversation/agent_conversation.py`
+
+**Fields:**
+
+| Label            | Fieldname        | Type     | Description                                                              |
+| :--------------- | :--------------- | :------- | :----------------------------------------------------------------------- |
+| **Title**        | `title`          | Data     | The title of the conversation.                                           |
+| **Agent**        | `agent`          | Link     | Link to the `Agent` used in this conversation.                           |
+| **Session ID**   | `session_id`     | Data     | A unique ID for the session, typically combining channel and user ID.    |
+| **Is Active**    | `is_active`      | Check    | Indicates if the conversation is ongoing.                                |
+| **Total Messages** | `total_messages` | Int      | The total number of messages exchanged.                                  |
+
+#### 6. Agent Message
+
+Represents a single message within a conversation.
+
+-   **Python Class**: `AgentMessage(Document)`
+-   **File**: `huf/huf/doctype/agent_message/agent_message.py`
+
+**Fields:**
+
+| Label          | Fieldname      | Type      | Description                                                              |
+| :------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
+| **Conversation** | `conversation` | Link      | Link to the parent `Agent Conversation`.                                 |
+| **Role**         | `role`         | Select    | The role of the message sender (`user`, `agent`, `tool`, or `system`).   |
+| **Content**      | `content`      | Long Text | The text content of the message.                                         |
+| **Kind**         | `kind`         | Select    | The type of message (`Message`, `Tool Call`, `Tool Result`, `Image`, `Audio`, `Status`, `Error`). |
+| **Run**          | `agent_run`    | Link      | Link to the `Agent Run` that generated this message.                     |
+| **Tool Call**    | `tool_call`    | Link      | Link to the `Agent Tool Call` record.                                    |
+| **Tool Call ID** | `tool_call_id` | Data      | LLM-generated `tool_call.id` (e.g. `call_123`). Used to pair assistant tool_calls with role=`tool` results. |
+| **Tool Calls**   | `tool_calls`   | JSON      | Full assistant `tool_calls` payload persisted as JSON.                   |
+| **Tool Name**    | `tool_name`    | Data      | Fetched from `tool_call.tool`.                                           |
+| **Tool Args**    | `tool_args`    | JSON      | Fetched from `tool_call.tool_args`.                                      |
+| **Tool Status**  | `tool_status`  | Data      | Fetched from `tool_call.status`.                                         |
+| **Record Kind**  | `record_kind`  | Select    | Classification: `message`, `tool_call`, `tool_result`, `retrieval_context`, etc. |
+| **Context Policy** | `context_policy` | Select | How the message is included in future context (`include_full`, `include_summary`, `include_reference`, `exclude`, etc.). |
+| **Raw Payload**  | `raw_payload`  | JSON      | Optional raw provider payload for debugging/auditing.                    |
+
+**Tool-Call Protocol:**
+- Assistant messages that request tools are stored with `role=agent`, `kind=Tool Call`, `tool_call_id`, and `tool_calls`.
+- Tool result messages are stored with `role=tool`, `kind=Tool Result`, and the matching `tool_call_id`.
+- When history is loaded, `ConversationManager._message_to_context()` rebuilds the OpenAI/LiteLLM message sequence so every `role=tool` message is paired with a preceding assistant `tool_calls` entry.
+- `repair_message_sequence()` is run just before each LiteLLM call to repair or drop orphaned tool messages caused by trimming, FIFO slicing, summarisation, or legacy data.
+
+#### 7. Agent Run
+
+Logs a single, complete execution cycle of an agent in response to a user prompt.
+
+-   **Python Class**: `AgentRun(Document)`
+-   **File**: `huf/huf/doctype/agent_run/agent_run.py`
+
+**Fields:**
+
+| Label          | Fieldname       | Type       | Description                                                              |
+| :------------- | :-------------- | :--------- | :----------------------------------------------------------------------- |
+| **Conversation** | `conversation`  | Link       | Link to the `Agent Conversation`.                                        |
+| **Agent**        | `agent`         | Link       | Link to the `Agent` that was run.                                        |
+| **Prompt**       | `prompt`        | Small Text | The user prompt that initiated the run.                                  |
+| **Response**     | `response`      | Small Text | The final response from the agent.                                       |
+| **Status**       | `status`        | Select     | The status of the run (`Started`, `Queued`, `Success`, `Failed`).        |
+| **Error Message**| `error_message` | Small Text | Any error message if the run failed.                                     |
+| **Input Tokens** | `input_tokens`  | Int        | Number of tokens in the input (prompt + context).                        |
+| **Output Tokens**| `output_tokens` | Int        | Number of tokens in the output (response).                               |
+| **Total Tokens** | `total_tokens`  | Int        | Total tokens used (input + output).                                      |
+| **Total Cost**   | `total_cost`    | Currency   | Total cost of the agent run based on token usage.                        |
+
+#### 8. Agent Chat
+
+A single DocType providing a real-time chat interface for conversational agents.
+
+-   **Python Class**: `AgentChat(Document)`
+-   **File**: `huf/huf/doctype/agent_chat/agent_chat.py`
+
+**Features:**
+-   Real-time chat UI with markdown rendering
+-   Message history display
+-   Only available for agents with `allow_chat` enabled
+-   Server Actions: `huf.ai.agent_chat.get_agent_chat_messages`, `huf.ai.agent_chat.send_agent_chat_message`
+
+#### 9. Agent Console
+
+A singleton DocType providing a simple interface for testing and debugging agents without requiring the full chat interface.
+
+-   **Python Class**: `AgentConsole(Document)`
+-   **File**: `huf/huf/doctype/agent_console/agent_console.py`
+
+**Fields:**
+
+| Label          | Fieldname      | Type      | Description                                                              |
+| :------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
+| **Agent**      | `agent_name`   | Link      | Link to the `Agent` to test.                                             |
+| **Prompt**     | `prompt`       | Code      | The prompt/input to send to the agent for testing.                       |
+| **Response**   | `response`     | Code      | The agent's response (read-only, auto-populated).                        |
+| **Provider**   | `provider`     | Data      | Provider name (read-only, fetched from agent).                           |
+| **Model**      | `model`        | Data      | Model name (read-only, fetched from agent).                              |
+
+**Features:**
+-   Simple form-based interface for quick agent testing
+-   Direct execution of agent prompts
+-   Display of agent responses in code format
+-   Server Action: `huf.ai.agent_integration.run_agent_sync` (whitelisted)
+
+**Note**: This is a singleton DocType (`issingle: 1`), meaning there is only one instance in the system used as a testing console.
+
+#### 10. Agent Trigger
+
+Defines how and when agents are triggered for execution. This DocType replaces the old `condition` field in the Agent DocType with a comprehensive trigger management system.
+
+-   **Python Class**: `AgentTrigger(Document)`
+-   **File**: `huf/huf/doctype/agent_trigger/agent_trigger.py`
+
+**Fields:**
+
+| Label                | Fieldname            | Type      | Description                                                                                             |
+| :------------------- | :------------------- | :-------- | :------------------------------------------------------------------------------------------------------ |
+| **Trigger Name**     | `trigger_name`       | Data      | Unique name for the trigger (auto-generated).                                                           |
+| **Agent**            | `agent`              | Link      | Link to the `Agent` to be executed.                                                                    |
+| **Trigger Type**     | `trigger_type`       | Select    | Type of trigger: `Schedule`, `Doc Event`, `Webhook`, `App Event`, `Manual`.                             |
+| **Disabled**         | `disabled`           | Check     | Whether the trigger is disabled.                                                                       |
+| **Reference Doctype**| `reference_doctype`  | Link      | For Doc Event triggers, the target DocType.                                                            |
+| **Doc Event**        | `doc_event`          | Select    | Document lifecycle event (e.g., `after_insert`, `on_submit`, `on_cancel`).                             |
+| **Condition**        | `condition`          | Code      | Conditional expression evaluated before triggering (Doc Event only).                                  |
+| **Scheduled Interval**| `scheduled_interval` | Select    | For Schedule triggers: `Hourly`, `Daily`, `Weekly`, `Monthly`, `Yearly`.                              |
+| **Interval Count**   | `interval_count`     | Int       | Number of intervals between executions (Schedule only).                                               |
+| **Last Execution**   | `last_execution`     | Datetime  | Timestamp of last execution (read-only, Schedule only).                                                |
+| **Next Execution**   | `next_execution`     | Datetime  | Timestamp of next scheduled execution (read-only, Schedule only).                                       |
+| **Webhook Key**      | `webhook_key`        | Data      | Authentication key for webhook triggers.                                                              |
+| **Webhook Slug**     | `webhook_slug`       | Data      | URL slug for webhook endpoints.                                                                        |
+| **App Name**         | `app_name`           | Data      | For App Event triggers, the name of the app.                                                           |
+| **Event Name**       | `event_name`         | Data      | Name of the event to trigger on.                                                                       |
+| **Metadata**         | `metadata`           | JSON      | Additional metadata for the trigger.                                                                   |
+| **Disabled Reason**  | `disabled_reason`    | Small Text| Reason why the trigger was disabled.                                                                   |
+| **Is Virtual**       | `is_virtual`         | Check     | Whether this is a virtual trigger (system-generated).                                                  |
+| **Source System**    | `source_system`      | Data      | Source system that created this trigger.                                                               |
+
+**Trigger Types:**
+- **Schedule**: Time-based execution with configurable intervals
+- **Doc Event**: Triggered by document lifecycle events with optional conditions
+- **Webhook**: HTTP endpoint triggers with authentication
+- **App Event**: Application-level event triggers
+- **Manual**: Manually executed triggers
+
+#### 11. Agent Run Feedback
+
+Captures user feedback on agent responses for quality control and improvement.
+
+-   **Python Class**: `AgentRunFeedback(Document)`
+-   **File**: `huf/huf/doctype/agent_run_feedback/agent_run_feedback.py`
+
+**Fields:**
+
+| Label          | Fieldname      | Type      | Description                                                              |
+| :------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
+| **Feedback**   | `feedback`     | Select    | User feedback: `Thumbs Up` or `Thumbs Down`.                             |
+| **Comments**   | `comments`     | Small Text| Optional comments explaining the feedback.                              |
+| **Agent Message**| `agent_message`| Link     | Link to the `Agent Message` being rated.                                |
+| **Agent**      | `agent`        | Link      | Link to the `Agent` (fetched from agent message).                      |
+| **Provider**   | `provider`     | Link      | Link to the `AI Provider` (fetched from agent).                        |
+| **Model**      | `model`        | Link      | Link to the `AI Model` (fetched from agent).                            |
+
+
+#### 12. Agent Settings
+
+Global application settings for the Huf system (singleton DocType).
+
+-   **Python Class**: `AgentSettings(Document)`
+-   **File**: `huf/huf/doctype/agent_settings/agent_settings.py`
+
+**Fields:**
+
+| Label               | Fieldname          | Type | Description                               |
+| :------------------ | :----------------- | :--- | :---------------------------------------- |
+| **Default Provider**| `default_provider`  | Link | Default `AI Provider` for new agents.    |
+| **Default Model**   | `default_model`     | Link | Default `AI Model` for new agents.       |
+
+
+#### 13. Agent Tool HTTP Header
+
+Child table for defining custom HTTP headers for tool requests (table DocType).
+
+-   **Python Class**: `AgentToolHttpHeader(Document)`
+-   **File**: `huf/huf/doctype/agent_tool_http_header/agent_tool_http_header.py`
+
+**Fields:**
+
+| Label    | Fieldname | Type | Description                               |
+| :------- | :-------- | :--- | :---------------------------------------- |
+| **Key**  | `key`     | Data | HTTP header name.                         |
+| **Value**| `value`   | Data | HTTP header value.                        |
+
+**Usage**: Used as a child table in `Agent Tool Function` to provide custom HTTP authentication headers for API-based tools.
+
+#### 14. Agent Tool Type
+
+Categorization DocType for organizing and grouping agent tools by type or purpose.
+
+-   **Python Class**: `AgentToolType(Document)`
+-   **File**: `huf/huf/doctype/agent_tool_type/agent_tool_type.py`
+
+**Fields:**
+
+| Label    | Fieldname | Type | Description                               |
+| :------- | :-------- | :--- | :---------------------------------------- |
+| **Name** | `name1`   | Data | Unique name for the tool type category (e.g., "Database", "HTTP", "Custom", "Built-in"). Required field. |
+
+**Usage**: Used by `Agent Tool Function` DocType via the `tool_type` link field for categorization and organization. This allows users to group tools by functionality, making it easier to manage large tool libraries.
+
+**Examples**: Tool types might include categories like "Document Operations", "HTTP Requests", "Custom Functions", "App Provided", "Built-in Tools", etc.
+
+#### 15. Knowledge Source
+
+A portable, indexed container for knowledge that agents can access. It supports keyword search via SQLite FTS5, and vector-based semantic search via SQLite Vec or ChromaDB.
+
+-   **Python Class**: `KnowledgeSource(Document)`
+-   **File**: `huf/huf/doctype/knowledge_source/knowledge_source.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Source Name** | `source_name` | Data | Unique identifier for the knowledge source. |
+| **Description** | `description` | Small Text | Human-readable description. |
+| **Knowledge Type** | `knowledge_type` | Select | Backend type: `sqlite_fts` (keyword), `sqlite_vec` (local vector), or `chroma` (vector store). |
+| **Embedding Model** | `embedding_model` | Data | LiteLLM model identifier for generating embeddings (e.g. `openai/text-embedding-3-small`). Required for vector backends. |
+| **Vector Dimension** | `vector_dimension` | Int | Output dimensions matching the embedding model (default: 1536). Required for vector backends. |
+| **Embedding Provider** | `embedding_provider` | Link | AI Provider used for API key resolution during embedding calls. |
+| **Chroma Mode** | `chroma_mode` | Select | Storage mode for ChromaDB: `File` (local database file) or `Server` (HttpClient). |
+| **Chroma Host** | `chroma_host` | Data | Host name/IP of remote Chroma server (default: localhost). |
+| **Chroma Port** | `chroma_port` | Int | Port of remote Chroma server (default: 8000). |
+| **Use SSL (HTTPS)** | `chroma_ssl` | Check | Active flag for SSL/HTTPS connection. |
+| **Chunk Size** | `chunk_size` | Int | Number of characters per chunk for indexing (default: 512). |
+| **Chunk Overlap** | `chunk_overlap` | Int | Character overlap between chunks (default: 50). |
+| **Status** | `status` | Select | Current state (`Pending`, `Indexing`, `Ready`, `Error`, `Rebuilding`). |
+| **Storage Mode** | `storage_mode` | Select | How source files are stored (default: `Frappe File`). |
+
+**Features:**
+-   **Rebuild Index**: Clears and rebuilds the knowledge index from raw inputs.
+-   **Test Search**: Allows testing search queries directly from the Desk UI.
+-   **Modes**:
+     -   **Mandatory**: Context is automatically injected into the agent's system prompt (best for rules, guidelines).
+     -   **Optional**: Agents use the `knowledge_search` tool to query the source on demand (best for large reference/docs).
+
+#### 16. Knowledge Input
+
+Tracks individual content items (files, text, URLs) ingested into a Knowledge Source.
+
+-   **Python Class**: `KnowledgeInput(Document)`
+-   **File**: `huf/huf/doctype/knowledge_input/knowledge_input.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Knowledge Source** | `knowledge_source` | Link | Parent knowledge source. |
+| **Input Type** | `input_type` | Select | Type of input (`File`, `Text`, `URL`). |
+| **File** | `file` | Attach | Uploaded file reference (for `File` type). |
+| **Text** | `text` | Long Text | Pasted text content (for `Text` type). |
+| **URL** | `url` | Data | URL to fetch content from (for `URL` type). |
+| **Status** | `status` | Select | Processing status (`Pending`, `Indexed`, `Error`). |
+| **Source Hash** | `source_hash` | Data | Hash of content for deduplication. |
+
+#### 17. Agent Knowledge
+
+Child table used in the `Agent` DocType to bind Knowledge Sources.
+
+-   **Python Class**: `AgentKnowledge(Document)`
+-   **File**: `huf/huf/doctype/agent_knowledge/agent_knowledge.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Knowledge Source** | `knowledge_source` | Link | Link to the `Knowledge Source`. |
+| **Mode** | `mode` | Select | `Mandatory` (auto-injected into prompt) or `Optional` (accessible via `knowledge_search` tool). |
+| **Priority** | `priority` | Int | Retrieval priority (higher = first). |
+| **Token Budget** | `token_budget` | Int | Max tokens to inject from this source (for `Mandatory` mode). |
+
+#### 18. Agent Prompt
+
+Reusable prompt templates with version control, allowing agents to use centralized instruction templates instead of local instructions.
+
+-   **Python Class**: `AgentPrompt(Document)`
+-   **File**: `huf/huf/doctype/agent_prompt/agent_prompt.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Title** | `title` | Data | Descriptive title of the prompt template. |
+| **Slug** | `slug` | Data | URL-friendly identifier, unique. |
+| **Category** | `category` | Link | Grouping category (`Agent Prompt Category`). |
+| **Description** | `description` | Small Text | Internal description. |
+| **Is Active** | `is_active` | Check | Whether template is available. |
+| **Is System** | `is_system` | Check | System-shipped vs user-created. |
+| **Visibility** | `visibility` | Select | Public, App, or Private. |
+| **Prompt Body** | `prompt_body` | Code | The actual system prompt or instructions template. |
+| **Version** | `version` | Int | Version number, auto-incremented. |
+| **Is Latest** | `is_latest` | Check | Marks the active latest version in prompt lineage. |
+
+#### 19. Agent Prompt Category
+
+Category classification for grouping and organizing prompt templates.
+
+-   **Python Class**: `AgentPromptCategory(Document)`
+-   **File**: `huf/huf/doctype/agent_prompt_category/agent_prompt_category.py`
+
+#### 20. Agent Summary Prompt
+
+Reusable summary prompt templates with version control, independent from `Agent Prompt`. Used by agents when the context strategy is `Summarize`.
+
+-   **Python Class**: `AgentSummaryPrompt(Document)`
+-   **File**: `huf/huf/doctype/agent_summary_prompt/agent_summary_prompt.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Title** | `title` | Data | Descriptive title of the summary prompt template. |
+| **Slug** | `slug` | Data | URL-friendly identifier, unique. |
+| **Category** | `category` | Link | Grouping category (`Agent Summary Prompt Category`). |
+| **Description** | `description` | Small Text | Internal description. |
+| **Is Active** | `is_active` | Check | Whether template is available. |
+| **Is System** | `is_system` | Check | System-shipped vs user-created. |
+| **Visibility** | `visibility` | Select | Public, App, or Private. |
+| **Prompt Body** | `prompt_body` | Code | The summary prompt template. Supports `{summary_data}` placeholder. |
+| **Version** | `version` | Int | Version number, auto-incremented. |
+| **Is Latest** | `is_latest` | Check | Marks the active latest version in prompt lineage. |
+
+#### 21. Agent Summary Prompt Category
+
+Category classification for grouping and organizing summary prompt templates.
+
+-   **Python Class**: `AgentSummaryPromptCategory(Document)`
+-   **File**: `huf/huf/doctype/agent_summary_prompt_category/agent_summary_prompt_category.py`
+
+#### 22. Huf Data Table
+
+Registry entry for custom, user-defined data tables. HUF allows dynamically creating database DocTypes (prefixed with `HF `) with custom schemas.
+
+-   **Python Class**: `HufDataTable(Document)`
+-   **File**: `huf/huf/doctype/huf_data_table/huf_data_table.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Table Name** | `table_name` | Data | Name of the table. |
+| **DocType Name** | `doctype_name` | Data | Auto-generated name of the Frappe DocType (`HF {table_name}`). |
+| **Description** | `description` | Small Text | Description of the table's purpose. |
+| **Icon** | `icon` | Data | Icon class used in the sidebar and UI lists. |
+| **Field Count** | `field_count` | Int | Number of data fields. |
+| **Autoname Method** | `autoname_method` | Select | E.g., Prompt-derived, Autoincrement, Field. |
+| **Title Field Name** | `title_field_name` | Data | The field used as the row title. |
+
+#### 23. Integration Service
+
+Catalog of external integrations (Slack, Gmail, GitHub, ERPNext, etc.) that HUF agents can authenticate with.
+
+-   **Python Class**: `IntegrationService(Document)`
+-   **File**: `huf/huf/doctype/integration_service/integration_service.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Service Name** | `service_name` | Data | Unique key (e.g., "slack", "github"). |
+| **Category** | `category` | Select | Communication, Project Management, Finance, Developer, etc. |
+| **Description** | `description` | Small Text | Short explanation. |
+| **Documentation URL** | `documentation_url` | Data | Setup guidelines URL. |
+| **Required Credentials** | `required_credentials` | JSON | Schema array specifying credential keys and types. |
+| **Is Built-in** | `is_builtin` | Check | System-level integration service. |
+
+#### 24. Integration Settings
+
+Specific configuration instances storing connection settings and credentials for a given integration service.
+
+-   **Python Class**: `IntegrationSettings(Document)`
+-   **File**: `huf/huf/doctype/integration_settings/integration_settings.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Integration Service** | `service` | Link | Link to `Integration Service`. |
+| **Is Active** | `is_active` | Check | Active flag. |
+| **Is Default** | `is_default` | Check | Use as the fallback credential set. |
+| **Credentials** | `credentials` | Table | Table of keys and password values (`Integration Credential`). |
+| **Recipients** | `recipients` | Table | Pre-resolved ID map (`Integration Recipient`). |
+
+#### 25. Integration Credential
+
+Child table containing credential key-value pairs. Values are stored securely using encrypted password fields.
+
+-   **Python Class**: `IntegrationCredential(Document)`
+-   **File**: `huf/huf/doctype/integration_credential/integration_credential.py`
+
+#### 26. Integration Recipient
+
+Child table containing mappings of human names to channel/user IDs (e.g., resolving "General Channel" to Slack ID `C12345`).
+
+-   **Python Class**: `IntegrationRecipient(Document)`
+-   **File**: `huf/huf/doctype/integration_recipient/integration_recipient.py`
+
+#### 27. Huf Role
+
+Custom capability-based Huf role used to configure permissions on the HUF dashboard.
+
+-   **Python Class**: `HufRole(Document)`
+-   **File**: `huf/huf/doctype/huf_role/huf_role.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Role Name** | `role_name` | Data | Role identifier. |
+| **Role Description** | `role_description` | Small Text | Explanation. |
+| **Permissions** | `permissions` | Table | Child table linking capabilities (`Huf Role Permission`). |
+
+#### 28. Huf Role Permission
+
+Child table mapping allowed capability strings (e.g., `agent.create`, `flows.use`) to Huf Roles.
+
+-   **Python Class**: `HufRolePermission(Document)`
+-   **File**: `huf/huf/doctype/huf_role_permission/huf_role_permission.py`
+
+#### 29. Huf User Role
+
+Assigns custom capability-based Huf Roles to Users.
+
+-   **Python Class**: `HufUserRole(Document)`
+-   **File**: `huf/huf/doctype/huf_user_role/huf_user_role.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **User** | `user` | Link | User link. |
+| **Huf Role** | `huf_role` | Link | Huf Role link. |
+| **Enabled** | `enabled` | Check | Active flag. |
+
+
+#### 30. Agent Context Artifact
+
+-   **Python Class**: `AgentContextArtifact(Document)`
+-   **File**: `huf/huf/doctype/agent_context_artifact/agent_context_artifact.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Conversation** | `conversation` | Link | Link to Agent Conversation. |
+| **Agent Run** | `agent_run` | Link | Link to Agent Run. |
+| **Artifact Type** | `artifact_type` | Select |  |
+| **Summary** | `summary` | Small Text |  |
+| **Payload JSON** | `payload_json` | Code |  |
+| **Payload File** | `payload_file` | Attach |  |
+| **Reference DocType** | `reference_doctype` | Link | Link to DocType. |
+| **Reference Name** | `reference_name` | Dynamic Link |  |
+| **Visibility** | `visibility` | Select |  |
+| **Context Policy** | `context_policy` | Select |  |
+| **Token Estimate** | `token_estimate` | Int |  |
+| **Expires On** | `expires_on` | Datetime |  |
+
+
+#### 31. Agent Function Params
+
+-   **Python Class**: `AgentFunctionParams(Document)`
+-   **File**: `huf/huf/doctype/agent_function_params/agent_function_params.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Label** | `label` | Data |  |
+| **Fieldname** | `fieldname` | Data |  |
+| **Type** | `type` | Select |  |
+| **Required** | `required` | Check |  |
+| **Description** | `description` | Small Text |  |
+| **Options** | `options` | Small Text |  |
+| **Child Table Name** | `child_table_name` | Data |  |
+
+
+#### 32. Agent MCP Server
+
+-   **Python Class**: `AgentMCPServer(Document)`
+-   **File**: `huf/huf/doctype/agent_mcp_server/agent_mcp_server.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **MCP Server** | `mcp_server` | Link | Link to MCP Server. |
+| **Enabled** | `enabled` | Check |  |
+| **Server URL** | `server_url` | Data |  |
+| **Tools** | `tool_count` | Int | Number of tools available from this MCP server |
+
+
+#### 33. Agent Orchestration
+
+-   **Python Class**: `AgentOrchestration(Document)`
+-   **File**: `huf/huf/doctype/agent_orchestration/agent_orchestration.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Agent** | `agent` | Link | Link to Agent. |
+| **Status** | `status` | Select |  |
+| **Current Step** | `current_step` | Int |  |
+| **Last Run** | `last_run_at` | Datetime |  |
+| **Error Log** | `error_log` | Small Text |  |
+| **Plan** | `agent_orchestration_plan` | Table | Child table `Agent Orchestration Plan`. |
+| **Scratchpad** | `scratchpad` | Code |  |
+| **Parent Run** | `parent_run` | Link | Link to Agent Run. |
+| **conversation** | `conversation` | Link | Link to Agent Conversation. |
+
+
+#### 34. Agent Orchestration Plan
+
+-   **Python Class**: `AgentOrchestrationPlan(Document)`
+-   **File**: `huf/huf/doctype/agent_orchestration_plan/agent_orchestration_plan.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Step Index** | `step_index` | Int |  |
+| **Status** | `status` | Select |  |
+| **Instruction** | `instruction` | Long Text |  |
+| **Output** | `output_ref` | Long Text |  |
+
+
+#### 35. Agent Role
+
+-   **Python Class**: `AgentRole(Document)`
+-   **File**: `huf/huf/doctype/agent_role/agent_role.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Role** | `role` | Link | Link to Role. |
+
+
+#### 36. Agent Tool
+
+-   **Python Class**: `AgentTool(Document)`
+-   **File**: `huf/huf/doctype/agent_tool/agent_tool.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Tool** | `tool` | Link | Link to Agent Tool Function. |
+| **Type** | `type` | Data |  |
+| **Description** | `description` | Small Text |  |
+
+
+#### 37. Agent Tool Call
+
+-   **Python Class**: `AgentToolCall(Document)`
+-   **File**: `huf/huf/doctype/agent_tool_call/agent_tool_call.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Agent Run** | `agent_run` | Link | Link to Agent Run. |
+| **Conversation** | `conversation` | Link | Link to Agent Conversation. |
+| **Tool Args** | `tool_args` | JSON |  |
+| **Tool Result** | `tool_result` | JSON |  |
+| **Call ID** | `call_id` | Long Text |  |
+| **Error Message** | `error_message` | Small Text |  |
+| **Status** | `status` | Select |  |
+| **Tool Name** | `tool` | Data |  |
+| **Is MCP Tool** | `is_mcp_tool` | Check |  |
+| **MCP Server** | `mcp_server` | Link | Link to MCP Server. |
+
+
+#### 38. Agent Trigger Attachment
+
+-   **Python Class**: `AgentTriggerAttachment(Document)`
+-   **File**: `huf/huf/doctype/agent_trigger_attachment/agent_trigger_attachment.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Source Type** | `source_type` | Select |  |
+| **Child Table** | `child_table` | Select |  |
+| **Attach Field Name** | `field_name` | Data |  |
+
+
+#### 39. Agent User
+
+-   **Python Class**: `AgentUser(Document)`
+-   **File**: `huf/huf/doctype/agent_user/agent_user.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **User** | `user` | Link | Link to User. |
+
+
+#### 40. Elevenlabs Settings
+
+-   **Python Class**: `ElevenlabsSettings(Document)`
+-   **File**: `huf/huf/doctype/elevenlabs_settings/elevenlabs_settings.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Agent ID** | `agent_id` | Data |  |
+| **Provider** | `provider` | Link | Link to AI Provider. |
+| **webhook_secret** | `webhook_secret` | Password |  |
+
+
+#### 41. Flow Definition
+
+-   **Python Class**: `FlowDefinition(Document)`
+-   **File**: `huf/huf/doctype/flow_definition/flow_definition.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Flow ID** | `flow_id` | Data |  |
+| **Flow Name** | `flow_name` | Data |  |
+| **Status** | `status` | Select |  |
+| **Version** | `version` | Int |  |
+| **Schema Version** | `schema_version` | Int |  |
+| **Definition JSON** | `definition_json` | JSON |  |
+| **Is System** | `is_system` | Check |  |
+| **Updated By** | `updated_by` | Link | Link to User. |
+| **Updated At** | `updated_at` | Datetime |  |
+
+
+#### 42. Flow Run
+
+-   **Python Class**: `FlowRun(Document)`
+-   **File**: `huf/huf/doctype/flow_run/flow_run.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Flow Definition** | `flow_definition` | Link | Link to Flow Definition. |
+| **Flow ID** | `flow_id` | Data |  |
+| **Flow Version** | `flow_version` | Int |  |
+| **Mode** | `mode` | Select |  |
+| **Status** | `status` | Select |  |
+| **Trigger Type** | `trigger_type` | Select |  |
+| **Current Node ID** | `current_node_id` | Data |  |
+| **Hop Count** | `hop_count` | Int |  |
+| **Max Hops** | `max_hops` | Int |  |
+| **Last Agent Run** | `last_agent_run` | Link | Link to Agent Run. |
+| **Conversation** | `conversation` | Link | Link to Agent Conversation. |
+| **Context JSON** | `context_json` | JSON |  |
+| **Trigger Payload** | `trigger_payload` | JSON |  |
+| **Waiting** | `waiting` | JSON |  |
+| **Last Error** | `last_error` | Small Text |  |
+| **Started At** | `started_at` | Datetime |  |
+| **Completed At** | `completed_at` | Datetime |  |
+
+
+#### 43. Groq Settings
+
+-   **Python Class**: `GroqSettings(Document)`
+-   **File**: `huf/huf/doctype/groq_settings/groq_settings.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Provider** | `provider` | Link | Link to AI Provider. |
+| **API URL** | `api_url` | Data |  |
+| **Method** | `method` | Select |  |
+| **Auth Type** | `auth_type` | Select |  |
+| **File Param** | `file_param` | Data |  |
+| **Model** | `model` | Data |  |
+| **Enabled** | `enabled` | Check |  |
+| **API Key** | `api_key` | Password |  |
+| **Response Path** | `response_path` | Data |  |
+
+
+#### 44. MCP Server
+
+-   **Python Class**: `MCPServer(Document)`
+-   **File**: `huf/huf/doctype/mcp_server/mcp_server.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Server Name** | `server_name` | Data | Unique identifier for this MCP server (e.g., 'gmail', 'github', 'frappe-erp') |
+| **Description** | `description` | Small Text | What capabilities this MCP server provides |
+| **Enabled** | `enabled` | Check |  |
+| **Tool Namespace** | `tool_namespace` | Data | Optional prefix for tool names (e.g., 'gmail' results in 'gmail.send_email') |
+| **Timeout (seconds)** | `timeout_seconds` | Int | Request timeout for MCP server calls |
+| **Transport Type** | `transport_type` | Select |  |
+| **Server URL** | `server_url` | Data | MCP server endpoint URL (e.g., 'https://mcp.example.com/mcp') |
+| **Auth Type** | `auth_type` | Select |  |
+| **Auth Header Name** | `auth_header_name` | Data | Header name for authentication (e.g., 'Authorization', 'X-API-Key') |
+| **Auth Header Value** | `auth_header_value` | Password | The API key, bearer token, or header value (stored encrypted) |
+| **OAuth Status** | `oauth_status` | Select |  |
+| **Connect** | `oauth_connect_button` | Button |  |
+| **Disconnect** | `oauth_disconnect_button` | Button |  |
+| **OAuth Scope** | `oauth_scope` | Small Text | Space-separated OAuth scopes (e.g. 'read write'). Leave blank for provider default. |
+| **Extra Authorize Params (JSON)** | `oauth_extra_authorize_params` | Small Text | Additional URL parameters for the authorization endpoint (e.g. {"user_scope": "...", "access_type": "offline"}) |
+| **Custom Redirect URI** | `oauth_redirect_uri` | Data | Optional: Override the callback URL for strict providers or local testing. Leave blank to use HUF's default: {site_url}/mcp-oauth-callback. |
+| **Authorization Endpoint** | `oauth_authorization_endpoint` | Data | e.g. https://higgsfield.ai/oauth/authorize |
+| **Token Endpoint** | `oauth_token_endpoint` | Data | e.g. https://higgsfield.ai/oauth/token |
+| **Client ID** | `oauth_client_id` | Small Text |  |
+| **Client Secret** | `oauth_client_secret` | Password | Stored encrypted. Leave blank if using PKCE-only public client. |
+| **Token Response Path** | `oauth_token_response_path` | Data | JSON path to access token if nested (e.g. authed_user.access_token). Defaults to access_token. |
+| **Access Token** | `oauth_access_token` | Password | Set automatically after OAuth flow. Stored encrypted. |
+| **Refresh Token** | `oauth_refresh_token` | Password | Set automatically after OAuth flow. Stored encrypted. |
+| **Token Expires At** | `oauth_token_expires_at` | Datetime |  |
+| **Discovery Status** | `oauth_discovery_status` | Select |  |
+| **Resource Metadata URL** | `oauth_resource_metadata_url` | Data |  |
+| **Authorization Server** | `oauth_authorization_server` | Data |  |
+| **Registration Endpoint** | `oauth_registration_endpoint` | Data | Discovered DCR endpoint. |
+| **Client Registration Method** | `oauth_client_registration_method` | Data |  |
+| **Discovered Metadata JSON** | `oauth_metadata_json` | Code |  |
+| **Last Discovered At** | `oauth_last_discovered_at` | Datetime |  |
+| **Discovery Error** | `oauth_discovery_error` | Small Text |  |
+| **Custom Headers** | `custom_headers` | Table | Additional HTTP headers to send with MCP requests |
+| **Sync Tools** | `sync_tools_button` | Button | Fetch available tools from the MCP server |
+| **Tools** | `tools` | Table | Manage enabled tools from this server |
+| **Last Synced** | `last_sync` | Datetime |  |
+| **Available Tools** | `available_tools` | Code | Cached list of tools available from this MCP server |
+| **Enable Auto Sync** | `enable_auto_sync` | Check | Automatically sync tools periodically |
+| **Sync Interval (Hours)** | `auto_sync_interval` | Int | Interval in hours to auto-sync tools |
+
+
+#### 45. MCP Server Header
+
+-   **Python Class**: `MCPServerHeader(Document)`
+-   **File**: `huf/huf/doctype/mcp_server_header/mcp_server_header.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Header Name** | `header_name` | Data |  |
+| **Header Value** | `header_value` | Data |  |
+
+
+#### 46. MCP Server Tool
+
+-   **Python Class**: `MCPServerTool(Document)`
+-   **File**: `huf/huf/doctype/mcp_server_tool/mcp_server_tool.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Tool Name** | `tool_name` | Data |  |
+| **Enabled** | `enabled` | Check |  |
+| **Description** | `description` | Small Text |  |
+| **Parameters** | `parameters` | Code |  |
+
+
+#### 47. OpenAI Settings
+
+-   **Python Class**: `OpenAISettings(Document)`
+-   **File**: `huf/huf/doctype/openai_settings/openai_settings.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Provider** | `provider` | Link | Link to AI Provider. |
+| **API URL** | `api_url` | Data |  |
+| **Method** | `method` | Select |  |
+| **Auth Type** | `auth_type` | Select |  |
+| **File Param** | `file_param` | Data |  |
+| **Model** | `model` | Data |  |
+| **Enabled** | `enabled` | Check |  |
+| **API Key** | `api_key` | Password |  |
+| **Response Path** | `response_path` | Data |  |
+
+
+### Standard Tools (System Available)
+
+Huf comes with several built-in tools that are automatically registered during installation and available to agents.
+
+#### 1. ocr_document
+
+Extract text from documents and images using OCR / document parsing. Supports PDFs, images, scanned documents, Word/Excel/PowerPoint documents (DOCX/XLSX/PPTX), plain text files (TXT/MD/CSV/JSON/XML/LOG), and HTML. The tool automatically picks the best extraction strategy:
+
+-   **LiteLLM OCR endpoint** for PDFs on providers that expose one (Mistral, Azure, Google/Gemini/Vertex). This is the standard, preferred path.
+-   **Local PDF extraction** via `pypdf`/`PyPDF2` for providers without a LiteLLM OCR endpoint (e.g. OpenAI, Anthropic) or when the OCR endpoint fails.
+-   **Local extractors** for text-based documents (DOCX, XLSX, PPTX, TXT, MD, HTML, CSV, JSON, XML, LOG) — fast and no API cost.
+-   **Vision models** for images only.
+
+To avoid processing a stale file, always pass `file_id` (the Frappe File document name) when possible. `file_url` is supported as a fallback and resolves both `/files/` and `/private/files/` paths, choosing the newest file record when multiple files share the same name. The result includes a `file_hash` (SHA-256) so callers can verify the processed file.
+
+-   **Function**: `huf.ai.sdk_tools.handle_ocr_document`
+-   **Core engine**: `huf.ai.ocr_engine.extract_document`
+-   **Parameters**:
+    -   `file_id` (string): File document ID from Frappe (preferred).
+    -   `file_url` (string): File URL/path (alternative). Example: `/files/invoice.pdf` or `/private/files/invoice.pdf`.
+    -   `pages` (string): Comma-separated page numbers to process (e.g., '0,1,2'). Leave empty for all pages. Only for PDFs.
+    -   `include_images` (boolean): Extract embedded images as base64. Only for PDFs with OCR endpoint.
+    -   `model` (string): Optional OCR/vision model override.
+-   **Returns**:
+    -   `success` (boolean)
+    -   `text` (string): Extracted text in markdown.
+    -   `pages` (list): Page-by-page breakdown.
+    -   `strategy` (string): One of `local`, `local_pdf`, `ocr`, `vision`.
+    -   `file_id`, `file_name`, `file_hash` (string): Processed file metadata.
+    -   `model` (string): Model actually used.
+    -   `error` (string): Error message if `success` is false.
+
+#### 2. generate_image
+
+Generate an image from a text description using AI.
+
+-   **Function**: `huf.ai.sdk_tools.handle_generate_image`
+-   **Parameters**:
+    -   `prompt` (string): A detailed text description of the image to generate.
+    -   `size` (string): Image dimensions (default '1024x1024').
+    -   `quality` (string): Image quality (default 'standard').
+    -   `n` (integer): Number of images to generate (default 1).
+
+#### 3. generate_audio
+
+Generate audio (speech) from text using LiteLLM's `speech()` function. Supports OpenAI, Gemini, ElevenLabs, Minimax, AWS Polly, and any LiteLLM-supported TTS provider.
+
+-   **Function**: `huf.ai.sdk_tools.handle_generate_audio`
+-   **Helper**: `huf.ai.sdk_tools._resolve_tts_config` (three-tier resolution, see below)
+-   **Parameters**:
+    -   `input` (string, required): Text to convert to speech.
+    -   `voice` (string): Voice identifier. Provider-specific (e.g. `alloy`, `nova` for OpenAI; `21m00Tcm4TlvDq8ikWAM` for ElevenLabs; `Puck` for Gemini).
+    -   `model` (string): Optional TTS model override (e.g. `tts-1-hd`, `elevenlabs/eleven_multilingual_v2`).
+    -   `speed` (number): Speech speed 0.25–4.0 (default 1.0).
+    -   `response_format` (string): Audio format — `mp3` (default), `opus`, `aac`, `flac`, `wav`, `pcm`.
+
+**TTS Model / Voice Resolution (three-tier priority):**
+
+| Priority | Condition | Model source | API key source |
+| :------- | :-------- | :----------- | :------------- |
+| 1 | `model` param passed to tool call | `model` param directly | Agent's **main** provider |
+| 2 | `agent.tts_model` field is set | `AI Model.model_name` via link | `AI Model → AI Provider → api_key` (may be a **different** provider) |
+| 3 | Fallback | `_get_default_tts_model(main_provider)` | Agent's **main** provider |
+
+This enables fully cross-provider TTS: an agent using `OpenAI / gpt-4o` for conversation can use `ElevenLabs / eleven_multilingual_v2` for audio generation by simply setting `tts_model` and `tts_voice` on the Agent document (Advanced Settings → Audio Generation tab).
+
+### Core Classes and Methods
+
+The primary logic is located in the `huf/ai` directory.
+
+#### `agent_integration.py`
+
+This file contains the main logic for creating and running agents.
+
+-   **Class: `AgentManager`**
+    -   This class is responsible for preparing an agent for execution.
+    -   `__init__(self, agent_name, ...)`: Initializes the manager by loading the `Agent` DocType, the `AI Provider` settings, and setting up the tools.
+    -   `_setup_tools(self)`: Dynamically creates and loads the toolset for the agent. It combines built-in CRUD tools with custom tools defined in `Agent Tool Function`.
+    -   `create_agent(self)`: Constructs an `Agent` object from the `agents` SDK, passing the instructions, model, tools, and model_settings (temperature, top_p) from the Agent DocType.
+-   **Method: `run_agent_sync(...)`**
+    -   This is the main whitelisted Frappe API endpoint for running an agent.
+    -   **Queue-first by default** (see `docs/queue-first-agent-runs.md`): it persists an `Agent Run` (status `Queued`, per-conversation `sequence`), returns a queued acknowledgement, and a single-flight per-conversation drainer executes runs in FIFO order, publishing `agent_run_status` lifecycle events (`Queued`/`Started`/`Success`/`Failed`). Clients can poll `get_agent_run_status`. Direct inline execution requires `now=true` or the Agent's advanced `run_immediately` policy, participates in the same conversation lock (re-check under lock, heartbeat, drain wake on release), and must never be invoked from code that may hold the lock (e.g. sub-agent completion hooks).
+    -   When executing (worker or direct), it orchestrates the entire process:
+        1.  Initializes `ConversationManager` to handle the conversation history.
+        2.  Creates or retrieves the `Agent Conversation` document.
+        3.  Adds the user's new message to the conversation.
+        4.  Creates an `Agent Run` document to log the execution.
+        5.  Initializes `AgentManager` to prepare the agent.
+        6.  Creates context dictionary with `agent_name` (required for LiteLLM provider to access Agent DocType settings).
+        7.  Calls `RunProvider.run()` which routes to the appropriate provider (LiteLLM for most providers).
+        8.  Adds the agent's final response to the conversation.
+        9.  Updates the `Agent Run` status to `Success` or `Failed`.
+
+#### `conversation_manager.py`
+
+This file handles the persistence of conversation history.
+
+-   **Class: `ConversationManager`**
+    -   `get_or_create_conversation(self, ...)`: Finds the active `Agent Conversation` for a given session or creates a new one.
+    -   `add_message(self, ...)`: Creates a new `Agent Message` document and links it to the current conversation. Accepts `tool_call` (link to `Agent Tool Call`), `tool_call_id` (LLM call id), `tool_calls` (assistant payload), and `raw_payload`.
+    -   `get_conversation_history(self, ...)`: Fetches the last N messages from the conversation, applies context policies, and rebuilds OpenAI-compatible assistant/tool-call pairs.
+    -   `safe_history_slice(history, limit)` / `safe_history_split(history, split_index)`: Truncate history at tool-call group boundaries so assistant/tool-call pairs are never split.
+    -   `repair_message_sequence(messages, conversation_name)`: Validates and repairs the OpenAI message sequence before every LiteLLM call. Drops unfulfilled assistant tool_calls, repairs orphaned tool results from `Agent Tool Call` records when possible, and logs every repair/drop action.
+    -   `summarize_conversation(self, ...)`: Summarises older history while preserving tool-call group boundaries.
+
+#### `sdk_tools.py`
+
+This file acts as a bridge between Huf's `Agent Tool Function` DocType and the `agents` SDK's `FunctionTool` class.
+
+-   **Method: `create_agent_tools(agent)`**
+    -   Iterates through the tools linked to an `Agent` and uses `create_function_tool` to build them.
+-   **Method: `create_function_tool(...)`**
+    -   The factory that constructs an SDK-compatible `FunctionTool`.
+    -   It dynamically creates an `on_invoke_tool` async handler that calls the appropriate Python function when the AI decides to use a tool.
+-   **Method: `handle_get_list`, `handle_create_document`, etc.**
+    -   These are the actual functions that get executed when a standard DocType tool is called. They contain the logic to interact with the Frappe database (e.g., `frappe.get_list`, `frappe.get_doc`) and format the response in a way the AI can understand.
+
+#### `tool_functions.py`
+
+This file contains the low-level functions that directly perform Frappe database operations.
+
+-   **Methods**: `get_document`, `create_document`, `update_document`, `delete_document`, `submit_document`, `get_list`, etc.
+-   These functions are the final step in the tool-use chain, wrapping `frappe.client` or `frappe.get_doc` calls to ensure data is fetched, created, or modified correctly and with proper permissions checks.
+
+#### `run.py`
+
+This file provides the central routing layer for AI providers.
+
+-   **Class: `RunProvider`**
+    -   Central routing layer that directs provider requests to the appropriate implementation.
+    -   `run(agent, enhanced_prompt, provider, model, context=None)`: Routes provider requests to LiteLLM for supported providers (OpenAI, Anthropic, Google, Gemini, OpenRouter).
+    -   **Provider Routing**: Automatically routes standard providers to LiteLLM unified provider.
+    -   **Fallback Mechanism**: For unsupported providers, attempts to load custom provider modules.
+    -   **Error Handling**: Provides helpful error messages if LiteLLM is not installed or if provider is not found.
+
+#### `providers/openrouter.py`
+
+This file implements the OpenRouter provider with custom retry logic and enhanced error handling.
+
+-   **Function: `run(agent, enhanced_prompt, provider, model, context=None)`**
+    -   Main async function that handles OpenRouter API interactions.
+    -   **API Key Management**: Retrieves API key from `AI Provider` DocType using secure password field.
+    -   **Multi-turn Tool Calling**: Supports multiple rounds of tool calling in a single agent run (up to 10 rounds).
+    -   **Retry Logic**: Implements exponential backoff for rate limit (429) errors with up to 5 retries.
+    -   **Tool Serialization**: Uses `tool_serializer.serialize_tools()` for provider-agnostic tool format.
+    -   **Usage Tracking**: Accumulates token usage across multiple rounds of tool calling.
+-   **Function: `_post_with_retry(url, headers, payload, max_retries=5)`**
+    -   Handles HTTP POST requests with automatic retry for rate limiting.
+    -   Implements exponential backoff with random jitter to avoid thundering herd problems.
+    -   Retry logic: Starts with 1 second delay, doubles on each retry, adds random jitter (0-0.5s).
+    -   Retries up to 5 times on HTTP 429 (rate limit) errors.
+    -   Provides clear error messages when all retries are exhausted.
+-   **Function: `_execute_tool_call(tool, args_json)`**
+    -   Executes a tool call asynchronously by calling `tool.on_invoke_tool(None, args_json)`.
+    -   Returns the result from tool execution.
+-   **Function: `_find_tool(agent, tool_name)`**
+    -   Finds a tool by name in the agent's tools list using generator expression with `next()`.
+    -   Returns the first matching tool or `None` if not found.
+-   **Error Handling**: Comprehensive error handling for API errors, tool execution failures, and malformed responses.
+-   **Response Format**: Returns `SimpleResult` object with final output, usage statistics, and new items.
+
+#### `providers/litellm.py`
+
+This file implements the unified LiteLLM provider that handles all LLM interactions.
+
+-   **Function: `run(agent, enhanced_prompt, provider, model, context=None)`**
+    -   Main async function that handles LLM interactions via LiteLLM.
+    -   **Agent Settings Access**: Reads temperature and top_p directly from Agent DocType (priority 1), falls back to `agent.model_settings` (priority 2), or uses defaults.
+    -   **Model Normalization**: Automatically normalizes model names to LiteLLM format (e.g., `gpt-4-turbo` → `openai/gpt-4-turbo`).
+    -   **Multi-turn Tool Calling**: Supports multiple rounds of tool calling in a single agent run.
+    -   **Error Handling**: Specific handling for `InternalServerError`, `RateLimitError`, and general `APIError`.
+    -   **Parameter Handling**: Automatically drops unsupported parameters for models with restrictions (e.g., gpt-5 models only support temperature=1).
+    -   **API Key Management**: Handles API key setup for different providers, including special handling for OpenRouter (requires environment variable).
+    -   **Tool-Call Sequence Repair**: After `litellm.utils.trim_messages()` and before every completion call, it runs `repair_message_sequence()` from `conversation_manager.py` to guarantee OpenAI-compatible assistant/tool-call pairing.
+-   **Function: `_normalize_model_name(model, provider)`**
+    -   Normalizes model names to LiteLLM format by adding provider prefix.
+    -   Handles provider aliases (e.g., `gemini` → `google`, `grok` → `xai`).
+    -   Supports both user-friendly names and LiteLLM format names.
+    -   If model already includes provider prefix (e.g., `openai/gpt-4-turbo`), uses as-is.
+    -   Provider prefix mapping includes: `openai`, `anthropic`, `google`, `gemini` (alias), `openrouter`, `xai`, `grok` (alias), `mistral`, `alibaba`/`dashscope`, `cohere`, `perplexity`, `meta`/`meta-llama`.
+-   **Function: `_setup_api_key(provider_name, api_key, completion_kwargs)`**
+    -   Sets up API key for LiteLLM completion call.
+    -   Handles special cases where providers require environment variables: OpenRouter (`OPENROUTER_API_KEY`), xAI/Grok (`XAI_API_KEY`), Mistral (`MISTRAL_API_KEY`), Dashscope/Alibaba (`DASHSCOPE_API_KEY`), Google (`GEMINI_API_KEY`), Cohere (`COHERE_API_KEY`), Perplexity (`PERPLEXITY_API_KEY`).
+    -   For other providers, sets `api_key` parameter directly in completion kwargs.
+-   **Function: `_execute_tool_call(tool, args_json)`**
+    -   Executes a tool call asynchronously by calling `tool.on_invoke_tool(None, args_json)`.
+    -   Returns the result from tool execution.
+-   **Function: `_find_tool(agent, tool_name)`**
+    -   Finds a tool by name in the agent's tools list using generator expression.
+    -   Returns the first matching tool or `None` if not found.
+
+#### `agent_chat.py`
+
+This file provides the backend API for the Agent Chat interface.
+
+-   **Method: `get_agent_chat_messages(...)` (Whitelisted)**
+    -   Retrieves message history for the chat UI.
+    -   Returns formatted messages with role, content, and timestamps.
+-   **Method: `send_agent_chat_message(...)` (Whitelisted)**
+    -   Processes user input from the chat interface.
+    -   Calls the agent and returns the response.
+    -   Manages chat-specific conversation persistence and message formatting.
+
+#### `agent_hooks.py`
+
+This file handles document event-based agent triggering.
+
+-   **Function: `get_doc_event_agents(event: str)`**
+    -   Fetches and caches Doc Event triggers from the `Agent Trigger` DocType.
+    -   Returns a list of agent configurations that should be triggered for a given document event.
+    -   Uses caching (`huf:doc_event_agents`) for performance.
+    -   Loads agent settings (instructions, provider, model) from the Agent DocType.
+-   **Function: `clear_doc_event_agents_cache(...)`**
+    -   Clears the cache when Agent or Agent Trigger documents are modified.
+-   **Function: `run_hooked_agents(doc, method)`**
+    -   Called by Frappe document hooks (e.g., `after_insert`, `on_submit`).
+    -   Matches agents based on doctype and event type.
+    -   **Duplicate Prevention**: Uses cache-based locking to prevent duplicate agent runs for the same document event. Lock expires after 30 seconds.
+    -   Evaluates trigger conditions via `safe_eval` before triggering.
+    -   Enqueues agent execution as background jobs with unique job IDs (includes UUID to prevent conflicts).
+    -   Passes `initiating_user` and `channel_id` to track the source of the trigger.
+-   **Function: `run_agent_for_doc(...)`**
+    -   Background worker that executes agents triggered by document events.
+    -   **Per-User Conversation Support**: Checks the agent's `persist_user_history` field:
+        -   If `True`: Creates/maintains conversation history per initiating user (or document owner/modified_by).
+        -   If `False`: Uses a shared conversation history (`shared:{agent_name}`).
+    -   Constructs a prompt that includes the event name and document identifiers.
+    -   Calls `run_agent_sync()` with appropriate `channel_id` and `external_id` parameters for conversation management.
+
+#### `agent_scheduler.py`
+
+This file handles scheduled agent execution based on `Agent Trigger` configurations.
+
+-   **Function: `run_scheduled_agents()` (Whitelisted)**
+    -   Main scheduler function that finds and executes scheduled agents.
+    -   Queries `Agent Trigger` DocType for active schedule triggers with `next_execution` <= current time.
+    -   For each trigger:
+        -   Loads the associated Agent and executes it with instructions as prompt.
+        -   Updates `last_execution` and calculates `next_execution` based on interval.
+        -   Supports `Hourly`, `Daily`, `Weekly`, `Monthly`, `Yearly` intervals with configurable `interval_count`.
+    -   Error handling with logging for failed executions.
+    -   Commits database changes after each successful execution.
+
+#### `agent_stream_renderer.py`
+
+This file provides Server-Sent Events (SSE) streaming for real-time agent responses.
+
+-   **Class: `AgentStreamRenderer(BaseRenderer)`**
+    -   Custom page renderer for SSE streaming endpoints.
+    -   **Routes**:
+        -   `/huf/stream/<agent_name>` - SSE endpoint for streaming agent responses
+        -   `/huf/stream` - HTML demo page with EventSource client for testing
+-   **Method: `render()`**
+    -   Routes requests to appropriate handler based on path.
+    -   Handles both HTML demo page and SSE stream generation.
+-   **Method: `_render_agent_stream(agent_name: str)`**
+    -   Generates SSE stream for agent responses.
+    -   Extracts prompt from query parameters or POST body.
+    -   Loads agent configuration (provider, model) from Agent DocType.
+    -   Creates async generator wrapper for Werkzeug Response compatibility.
+    -   Streams real-time deltas, tool calls, and completion events.
+    -   Error handling with proper SSE error messages.
+-   **Method: `_render_html_page()`**
+    -   Renders comprehensive HTML demo page for testing SSE streaming.
+    -   Includes EventSource client, real-time status updates, and UI controls.
+    -   Professional styling with responsive design.
+
+#### `speech_to_text.py`
+
+This file provides OpenAI Whisper integration for audio transcription.
+
+-   **Function: `transcribe_audio(audio_file_url: str, language: str = "en")` (Whitelisted)**
+    -   Transcribes audio files using OpenAI's Whisper model.
+    -   Supports both local Frappe files (`/files/...`) and remote URLs.
+    -   Downloads remote audio files to temporary storage for processing.
+    -   **Parameters**:
+        -   `audio_file_url`: Path or URL to audio file
+        -   `language`: Language code (default: "en")
+    -   **Returns**: Dictionary with `success`, `text`, `language`, and `audio_file_url` fields.
+    -   **Error Handling**: Returns structured error messages for API key issues, download failures, or transcription errors.
+    -   **Security**: Validates OpenAI API key configuration before processing.
+    -   **Cleanup**: Automatically removes temporary files after transcription.
+
+#### `tool_registry.py`
+
+This file provides automatic tool discovery and synchronization from app hooks.
+
+-   **Function: `_iter_declared_tools()`**
+    -   Iterates through tools registered via `huf_tools` hook in apps.
+    -   Supports both single tool and list of tools per hook entry.
+-   **Function: `validate_tool_def(d)`**
+    -   Validates tool definition structure and function availability.
+    -   Checks required fields: `tool_name`, `description`, `function_path`, `parameters`.
+    -   Dynamically imports and validates function callability.
+-   **Function: `upsert_tool_doc(d)`**
+    -   Creates or updates `Agent Tool Function` documents from hook definitions.
+    -   Sets tool type to "App Provided" for auto-discovered tools.
+    -   Converts parameter definitions to Frappe table format.
+-   **Function: `_get_app_modified_time(app_name)`**
+    -   Gets modification time of app's `hooks.py` file as proxy for app changes.
+    -   Used for cache invalidation decisions.
+-   **Caching System**: Uses `Agent Settings` singleton to store last sync timestamps.
+-   **Sync Logic**: Only syncs when apps have been modified since last sync.
+
+#### `tool_serializer.py`
+
+This file provides provider-agnostic tool serialization for multi-provider AI agents.
+
+-   **Function: `serialize_tools(tools: list)`**
+    -   Converts custom `FunctionTool` objects into standard JSON schema format.
+    -   **Purpose**: Ensures compatibility with OpenAI, OpenRouter, Anthropic, and other providers.
+    -   **Input**: List of `FunctionTool` objects created by `sdk_tools.create_agent_tools`.
+    -   **Output**: List of dictionaries in OpenAI/OpenRouter-compatible schema.
+    -   **Schema Structure**:
+        ```json
+        {
+            "type": "function",
+            "function": {
+                "name": "tool_name",
+                "description": "Tool description",
+                "parameters": {...}
+            }
+        }
+        ```
+    -   **Error Handling**: Gracefully handles missing attributes with empty defaults.
+    -   **Provider Compatibility**: Standardizes tool format across all LLM providers.
+
+#### `http_handler.py`
+
+This file provides secure HTTP request handling with SSRF protection for agent tools.
+
+-   **Function: `validate_url(url, tool_name=None)`**
+    -   Validates URLs to prevent SSRF (Server-Side Request Forgery) attacks.
+    -   **Security Features**:
+        -   Blocks private IP ranges (127.*, 10.*, 172.16-31.*, 192.168.*)
+        -   Blocks localhost and IPv6 localhost
+        -   Only allows HTTP/HTTPS protocols
+        -   Validates against tool's base URL if specified
+-   **Function: `handle_http_request(method, url, ...)` (Whitelisted)**
+    -   Generic HTTP request handler with tool-defined header support.
+    -   **Features**:
+        -   Merges tool-defined headers with request headers
+        -   Supports base URL configuration from `Agent Tool Function`
+        -   Handles both form data and JSON payloads
+        -   30-second timeout for all requests
+    -   **Response Format**: Standardized response with `success`, `status_code`, `headers`, `data`, and `final_url`.
+    -   **Error Handling**: Provides AI-friendly suggestions for common errors.
+-   **Function: `handle_get_request(...)` and `handle_post_request(...)` (Whitelisted)**
+    -   Convenience wrappers for GET and POST requests.
+    -   POST handler includes JSON parsing and validation logic.
+    -   Automatic conversion between form data and JSON based on content type.
+
+### Knowledge System Architecture
+
+The Knowledge System (`huf.ai.knowledge`) provides a portable, low-ops RAG (Retrieval-Augmented Generation) implementation using SQLite FTS5.
+
+#### Directory Structure (`huf/ai/knowledge/`)
+
+-   `backends/`: Storage implementations (Abstract Base Class + SQLite FTS5).
+-   `extractors/`: Text extraction logic for various file types (PDF, DOCX, HTML, URL).
+-   `chunkers/`: Text chunking strategies (SentenceSplitter via LlamaIndex).
+-   `indexer.py`: Ingestion pipeline and index management.
+-   `retriever.py`: Search and retrieval logic.
+-   `context_builder.py`: Context assembly for agent prompts.
+-   `tool.py`: Definitions for `knowledge_search` and other tools.
+
+#### 1. Ingestion Pipeline (`indexer.py`)
+
+Ingestion is a background process that converts raw inputs into indexed SQLite chunks.
+
+-   **Process**:
+    1.  **Locking**: Uses Redis locks (`knowledge_index_{source_name}`) to ensure single-writer access per source.
+    2.  **Extraction**: `_extract_text` determines extractor based on `input_type` (Text, File, URL).
+        -   **Files**: Uses specialized extractors (`TextExtractor.get_extractor`).
+        -   **URLs**: Uses `URLExtractor` to fetch and parse web content.
+    3.  **Chunking**: Uses `chunk_text` (wrapping LlamaIndex `SentenceSplitter`) with configurable `chunk_size` (default 512) and `overlap` (default 50).
+    4.  **Storage**: Transactions are committed to the SQLite FTS artifact via `SQLiteFTSBackend.add_chunks`.
+-   **Rebuilding**: `rebuild_knowledge_index` atomically rebuilds the entire index by clearing the backend and reprocessing all inputs.
+
+#### 2. Storage Backend (`backends/sqlite_fts.py`)
+
+-   **Technology**: SQLite using FTS5 virtual table extension.
+-   **Schema**:
+    -   `chunks`: Master table storing text, metadata, and chunk indices.
+    -   `chunks_fts`: FTS5 virtual table for full-text search.
+    -   **Triggers**: Automatically keep `chunks` and `chunks_fts` in sync during INSERT/UPDATE/DELETE.
+-   **File Location**: Stored as private Frappe Files in `/private/files/knowledge/{source_name}.sqlite3`.
+-   **Performance**: Configured with WAL mode, memory-mapped I/O (`mmap_size`), and optimized page grouping.
+
+#### 3. Retrieval & Ranking (`retriever.py`)
+
+-   **Search Algorithm**: BM25 (Best Matching 25) via FTS5's built-in ranking function.
+-   **Query Processing**: Sanitizes input queries to prevent SQL injection and FTS syntax errors.
+-   **Multi-Source Search**: Aggregates results from multiple Knowledge Sources, sorting globally by score.
+
+#### 4. Agent Integration (`agent_integration.py` & `context_builder.py`)
+
+Knowledge is injected into the agent execution loop in `run_agent_sync`:
+
+1.  **Mandatory Knowledge**:
+    -   Calls `build_knowledge_context` before provider execution.
+    -   Retrieves top-k chunks from all `Mandatory` sources defined in `agent.agent_knowledge`.
+    -   Injects context into the system prompt formatted as:
+        ```markdown
+        ## Relevant Knowledge
+        ### Source Title
+        [Chunk Text]
+        ...
+        ---
+        [User Prompt]
+        ```
+    -   Logs usage in `Agent Run` (`knowledge_sources_used`, `chunks_injected`).
+
+2.  **Optional Knowledge**:
+    -   Agents with `Optional` sources automatically get the `knowledge_search` tool.
+    -   Allows the agent to actively query for information when needed.
+
+#### 5. Tools (`tool.py`)
+
+-   `knowledge_search`: Performs semantic/keyword search across allowed sources.
+-   `get_knowledge_sources`: Lists available sources and their descriptions to help the agent choose.
+
+## Frontend Flow Builder System
+
+The Huf frontend includes a visual flow builder that allows users to create, manage, and execute complex workflows using a drag-and-drop interface. This system provides a professional UI for designing automated workflows with various node types and configurations.
+
+**Note**: The flow builder is currently in active development. Core infrastructure (FlowCanvas, FlowContext, flowService) is implemented, but some advanced features may be in progress or planned.
+
+### Architecture Overview
+
+The flow builder is built on React Flow and provides:
+- **Visual Canvas**: Drag-and-drop interface for creating workflows
+- **Node System**: Extensible node types for different workflow components
+- **Real-time Updates**: Live flow editing and validation
+- **Flow Management**: Organization and versioning of workflows (in-memory storage via FlowService)
+- **Context-based State**: Centralized state management for flow operations via FlowContext
+
+### Core Components
+
+#### Flow Service (`frontend/src/services/flowService.ts`)
+
+In-memory flow management service that handles all flow operations.
+
+-   **Class: `FlowService`**
+    -   Manages flow storage in memory with Map-based structure (`private flows: Map<string, Flow>`)
+    -   Provides subscription-based updates for reactive UI via listener pattern
+    -   Handles flow CRUD operations (Create, Read, Update, Delete)
+    -   Maintains flow metadata and full flow objects
+    -   Initializes with default example flows (webform, untitled, email automation)
+-   **Key Methods**:
+    -   `getAllFlows()`: Returns list of flow metadata as array
+    -   `getFlow(id)`: Retrieves complete flow by ID from Map
+    -   `createFlow(name, category)`: Creates new flow with default structure and unique ID
+    -   `updateFlow(id, updates)`: Updates flow properties and notifies subscribers
+    -   `updateFlowName(id, name)`: Updates flow name specifically
+    -   `deleteFlow(id)`: Removes flow from storage
+    -   `subscribe(callback)`: Subscription system for state changes, returns unsubscribe function
+    -   `notify()`: Internal method to notify all subscribers of changes
+
+#### Flow Context (`frontend/src/contexts/FlowContext.tsx`)
+
+React context provider for centralized flow state management.
+
+-   **Interface: `FlowContextType`**
+    -   Provides access to flows, active flow, and selected node
+    -   Offers methods for flow manipulation (create, update, delete)
+    -   Handles node and edge operations (add, update, delete)
+    -   Manages flow selection and navigation
+-   **State Management**:
+    -   `flows`: Array of flow metadata
+    -   `activeFlowId`: Currently selected flow ID
+    -   `activeFlow`: Complete flow object for active flow
+    -   `selectedNodeId`: Currently selected node for configuration
+
+#### Flow Canvas (`frontend/src/components/FlowCanvas.tsx`)
+
+Main visual editor component built on React Flow.
+
+-   **Features**:
+    -   Drag-and-drop node placement
+    -   Visual connection creation between nodes
+    -   Real-time canvas updates
+    -   Mini-map and controls for navigation
+    -   Responsive design with collapsible sidebars
+-   **Node Types Supported**:
+    -   **Trigger Nodes**: Workflow entry points (webhook, schedule, doc-event, app-trigger)
+    -   **Action Nodes**: Processing steps (transform, router, human-in-loop, loop, code)
+    -   **Utility Nodes**: Helper functions (email, file, date, webhook, http)
+    -   **End Nodes**: Workflow termination points
+
+### Node Types and Configurations
+
+#### Trigger Nodes
+
+-   **Webhook Trigger**: HTTP endpoint triggers with configurable URLs and authentication
+-   **Schedule Trigger**: Time-based triggers with cron expressions and intervals
+-   **Document Event Trigger**: Frappe document lifecycle events (save, update, delete)
+-   **App Trigger**: Integration with external applications (Gmail, Calendar, Slack, Notion, HubSpot, Sheets)
+
+#### Action Nodes
+
+-   **Transform Action**: Data transformation operations (copy, map, concat, split)
+-   **Router Action**: Conditional branching with multiple paths
+-   **Human-in-Loop Action**: Approval workflows with timeout and approver lists
+-   **Loop Action**: Iterative processing with configurable iteration limits
+-   **Code Action**: Custom JavaScript/Python/TypeScript code execution
+
+#### Utility Nodes
+
+-   **Email Utility**: Send emails with templates and dynamic content
+-   **File Utility**: File operations (read, write, delete)
+-   **Date Utility**: Date formatting and arithmetic operations
+-   **Webhook Utility**: HTTP requests to external services
+-   **HTTP Utility**: Advanced HTTP operations with custom headers
+
+### Flow Data Structure
+
+#### Flow Object
+
+```typescript
+interface Flow {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'draft' | 'active' | 'paused' | 'error';
+  category?: string;
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  createdAt: Date;
+  updatedAt: Date;
+  version: number;
+}
+```
+
+#### Node Configuration
+
+Each node supports type-specific configuration:
+
+-   **Trigger Config**: Webhook URLs, schedule intervals, document events
+-   **Action Config**: Transformation rules, routing conditions, code snippets
+-   **Utility Config**: Email templates, file paths, HTTP endpoints
+
+### UI Components
+
+#### Flow Management
+
+-   **Flows Sidebar**: List of all flows with search and filtering
+-   **Flow Header Actions**: Create, duplicate, delete, export operations
+-   **Flow Categories**: Organization by custom categories
+
+#### Canvas Controls
+
+-   **Mini-map**: Overview of large flows for navigation
+-   **Zoom Controls**: Zoom in/out and fit-to-screen
+-   **Grid Layout**: Aligned node placement with snap-to-grid
+-   **Background Patterns**: Visual distinction between different areas
+
+#### Node Configuration
+
+-   **Node Selection Modal**: Add new nodes with type selection
+-   **Configuration Panels**: Side panels for node-specific settings
+-   **Validation**: Real-time validation of node configurations
+-   **Connection Rules**: Enforced connection rules between node types
+
+### Integration with Backend
+
+The flow builder integrates with the Huf backend through:
+
+-   **Flow Execution**: Flows can be executed and monitored
+-   **Agent Integration**: Flow nodes can trigger and interact with Huf agents
+-   **Document Events**: Flows respond to Frappe document changes
+-   **API Endpoints**: RESTful API for flow management
+
+### Usage Patterns
+
+1. **Create Flow**: Start with a trigger node to define entry point
+2. **Add Actions**: Connect action nodes to process data
+3. **Configure Nodes**: Set up parameters and conditions for each node
+4. **Test Flow**: Validate flow logic and connections
+5. **Deploy Flow**: Activate flow for production execution
+6. **Monitor**: Track flow execution and performance
+
+### File Structure
+
+```
+frontend/src/
+├── components/
+│   ├── FlowCanvas.tsx          # Main canvas component
+│   ├── nodes/                 # Node type components
+│   │   ├── TriggerNode.tsx
+│   │   ├── ActionNode.tsx
+│   │   └── EndNode.tsx
+│   └── modals/               # Configuration modals
+├── contexts/
+│   └── FlowContext.tsx         # State management
+├── services/
+│   └── flowService.ts         # Flow operations
+└── types/
+    └── flow.types.ts           # TypeScript definitions
+```
+
+## Streaming Architecture
+
+The Huf system includes Server-Sent Events (SSE) streaming capabilities for real-time agent responses, enabling live interaction with AI agents without traditional request-response cycles.
+
+### SSE Implementation
+
+#### Agent Stream Renderer (`huf/ai/agent_stream_renderer.py`)
+
+-   **Class: `AgentStreamRenderer(BaseRenderer)`**
+    -   Custom page renderer that handles SSE streaming for agents
+    -   Integrates with Frappe's website routing system
+    -   Provides both streaming endpoints and demo interface
+
+#### Streaming Endpoints
+
+-   **`/huf/stream/<agent_name>`** - SSE endpoint for streaming agent responses
+    -   Accepts `prompt` parameter via query string or POST body
+    -   Supports optional parameters: `channel_id`, `external_id`, `conversation_id`
+    -   Returns real-time deltas, tool calls, and completion events
+    -   Handles error conditions with proper SSE error messages
+
+-   **`/huf/stream`** - HTML demo page with EventSource client for testing
+    -   Professional UI for testing streaming capabilities
+    -   Real-time status updates and response display
+    -   Supports both GET and POST request methods
+    -   Includes error handling and connection management
+
+#### Streaming Data Format
+
+The SSE stream emits JSON events with the following structure:
+
+```json
+{
+  "type": "delta",
+  "content": "Partial response text",
+  "full_response": "Accumulated response so far"
+}
+```
+
+**Event Types**:
+-   `delta`: Partial response content during generation
+-   `tool_call`: Information about tool being executed
+-   `complete`: Final response when generation is finished
+-   `error`: Error information if streaming fails
+
+#### Client Integration
+
+**JavaScript EventSource Example**:
+```javascript
+const eventSource = new EventSource('/huf/stream/my-agent?prompt=Hello');
+
+eventSource.onmessage = function(event) {
+  const data = JSON.parse(event.data);
+  if (data.type === 'delta') {
+    // Update UI with partial response
+    updateResponse(data.full_response);
+  }
+};
+
+eventSource.addEventListener('complete', function(event) {
+  const data = JSON.parse(event.data);
+  // Handle final response
+  finalizeResponse(data.full_response);
+});
+```
+
+#### Features
+
+-   **Real-time Streaming**: Live response updates as they're generated
+-   **Tool Call Visibility**: Shows when agents are using tools
+-   **Error Handling**: Graceful error reporting and recovery
+-   **Connection Management**: Automatic cleanup and timeout handling
+-   **Cross-browser Compatibility**: Works with modern browsers supporting EventSource
+-   **Security**: Inherits agent permissions and authentication
+
+#### Usage Patterns
+
+1. **Direct Integration**: Use EventSource directly in web applications
+2. **React Components**: Build custom React components for streaming UI
+3. **Testing**: Use demo page at `/huf/stream` for development
+4. **Monitoring**: Track streaming performance and error rates
+
+#### Technical Details
+
+-   **Async Generator**: Uses Python async generators for efficient streaming
+-   **Werkzeug Integration**: Compatible with Frappe's web framework
+-   **Memory Management**: Automatic cleanup of temporary resources
+-   **Error Recovery**: Handles network interruptions and timeouts
+-   **Response Accumulation**: Maintains full response context throughout stream
+
+## Security Enhancements
+
+The Huf system includes several security enhancements to protect against common vulnerabilities and ensure safe agent operations.
+
+### SSRF Protection
+
+#### URL Validation (`http_handler.py`)
+
+-   **Function: `validate_url(url, tool_name=None)`**
+    -   Validates URLs to prevent SSRF (Server-Side Request Forgery) attacks
+    -   **Security Features**:
+        -   Blocks private IP ranges (127.*, 10.*, 172.16-31.*, 192.168.*)
+        -   Blocks localhost and IPv6 localhost
+        -   Only allows HTTP/HTTPS protocols
+        -   Validates against tool's base URL if specified
+    -   **Private IP Pattern**: Uses regex to match and block private network ranges
+    -   **Protocol Validation**: Ensures only allowed protocols are used
+
+#### HTTP Request Security
+
+-   **Base URL Validation**: Tools can specify allowed base URLs for additional security
+-   **Header Management**: Secure handling of custom HTTP headers
+-   **Timeout Protection**: 30-second timeout prevents hanging requests
+-   **Error Sanitization**: Clean error messages that don't expose system information
+
+### API Key Management
+
+-   **Password Field Type**: API keys stored using Frappe's encrypted Password field
+-   **Environment Variables**: Sensitive keys (like OpenRouter) use environment variables
+-   **Provider Isolation**: Each provider's keys are stored separately
+-   **Access Control**: Proper permissions for accessing API key configurations
+
+## Tool Discovery System
+
+The Huf system provides automatic tool discovery and synchronization from app hooks, enabling apps to register tools that become available to agents automatically.
+
+### Hook-Based Registration
+
+#### Tool Registration Hook
+
+-   **Hook Name**: `huf_tools`
+-   **Registration Format**: Apps can register single tools or lists of tools
+-   **Hook Definition**: In app's `hooks.py` file:
+    ```python
+    huf_tools = [
+        "my_app.tools.custom_tool",
+        ["my_app.tools.tool1", "my_app.tools.tool2"]
+    ]
+    ```
+
+#### Tool Definition Structure
+
+Each registered tool must include:
+
+-   **tool_name**: Unique identifier for the tool
+-   **description**: Clear description of what the tool does
+-   **function_path**: Dotted path to the Python function
+-   **parameters**: Array of parameter definitions with types and requirements
+
+#### Validation and Import
+
+-   **Function Validation**: Dynamically imports and validates function callability
+-   **Structure Validation**: Ensures all required fields are present
+-   **Type Checking**: Validates parameter types and requirements
+-   **Error Handling**: Clear error messages for invalid tool definitions
+
+### Synchronization Process
+
+#### Automatic Sync (`tool_registry.py`)
+
+-   **Trigger**: Sync occurs when apps are modified or on system startup
+-   **Cache Management**: Uses `Agent Settings` singleton to track last sync times
+-   **App Modification Detection**: Checks `hooks.py` file modification times
+-   **Incremental Updates**: Only processes apps that have changed since last sync
+
+#### Tool Document Creation
+
+-   **Upsert Logic**: Creates new or updates existing `Agent Tool Function` documents
+-   **Tool Type**: Automatically set to "App Provided" for discovered tools
+-   **Parameter Conversion**: Converts hook parameter definitions to Frappe table format
+-   **Metadata Preservation**: Maintains tool metadata and relationships
+
+### Caching System
+
+#### Performance Optimization
+
+-   **Tool Discovery Cache**: Caches discovered tools to avoid repeated processing
+-   **App Modification Cache**: Tracks modification times of app hook files
+-   **Cache Invalidation**: Automatically clears cache when apps are updated
+-   **Memory Efficiency**: Uses efficient data structures for caching
+
+#### Cache Keys
+
+-   **huf:discovered_tools**: Cache for discovered tool definitions
+-   **huf:app_modification_times**: Cache for app file modification times
+-   **Agent Settings**: Singleton document used for persistent cache storage
+
+### Integration with Agent System
+
+#### Tool Availability
+
+-   **Automatic Inclusion**: Discovered tools automatically available in agent tool selection
+-   **Type Classification**: Properly categorized as "App Provided" tools
+-   **Parameter Handling**: Full parameter support with type validation
+-   **Execution**: Uses same execution pipeline as manually defined tools
+
+#### Multi-App Support
+
+-   **App Isolation**: Tools from different apps are properly namespaced
+-   **Conflict Resolution**: Handles tool name conflicts across apps
+-   **Dependency Management**: Ensures app dependencies are properly loaded
+-   **Version Compatibility**: Supports tool versioning and compatibility checks
+
+## MCP Client Integration
+
+HUF supports the Model Context Protocol (MCP) for connecting to external tool providers. This allows agents to use tools from external MCP servers like Gmail, GitHub, Slack, databases, and more.
+
+### Overview
+
+HUF acts as an **MCP client only** - it connects to external MCP servers to consume their tools, but does not expose itself as an MCP server or gateway.
+
+```
+HUF Agent
+  └── Tool Registry
+        ├── Native Tools (Frappe CRUD, Custom Functions, App Provided)
+        └── MCP Tools (External)
+              ├── Gmail MCP
+              ├── GitHub MCP
+              ├── Frappe MCP
+              └── Any MCP-compatible server
+```
+
+### MCP DocTypes
+
+#### MCP Server
+
+Stores connection configuration for external MCP servers.
+
+-   **Python Class**: `MCPServer(Document)`
+-   **File**: `huf/huf/doctype/mcp_server/mcp_server.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Server Name** | `server_name` | Data | Unique identifier (e.g., "gmail", "github") |
+| **Description** | `description` | Small Text | What this MCP server provides |
+| **Enabled** | `enabled` | Check | Whether this server is active |
+| **Transport Type** | `transport_type` | Select | `http` or `sse` |
+| **Server URL** | `server_url` | Data | MCP server endpoint URL |
+| **Auth Type** | `auth_type` | Select | `none`, `api_key`, `bearer_token`, `custom_header` |
+| **Auth Header Name** | `auth_header_name` | Data | Header name for authentication |
+| **Auth Header Value** | `auth_header_value` | Password | Encrypted auth token/key |
+| **Tool Namespace** | `tool_namespace` | Data | Optional prefix for tool names |
+| **Timeout** | `timeout_seconds` | Int | Request timeout (default: 30s) |
+| **Custom Headers** | `custom_headers` | Table | Additional HTTP headers |
+| **Available Tools** | `available_tools` | JSON | Cached tools from server (read-only) |
+| **Last Sync** | `last_sync` | Datetime | Last tool sync timestamp |
+
+**Server Actions:**
+- `sync_tools()`: Fetch and cache available tools from the MCP server
+
+#### Agent MCP Server
+
+Child table linking agents to MCP servers.
+
+-   **File**: `huf/huf/doctype/agent_mcp_server/agent_mcp_server.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **MCP Server** | `mcp_server` | Link | Link to `MCP Server` DocType |
+| **Enabled** | `enabled` | Check | Whether enabled for this agent |
+| **Tool Count** | `tool_count` | Int | Number of tools available (read-only) |
+
+### MCP Client Module
+
+#### `mcp_client.py`
+
+Core MCP client adapter located at `huf/ai/mcp_client.py`.
+
+**Key Functions:**
+
+-   **`create_mcp_tools(agent_doc)`**
+    -   Creates FunctionTool objects for all MCP tools available to an agent
+    -   Called from `sdk_tools.create_agent_tools()`
+    -   Returns list of `FunctionTool` objects
+
+-   **`execute_mcp_tool(server_name, tool_name, arguments)`**
+    -   Executes a tool call on an MCP server
+    -   Uses LiteLLM's experimental MCP client when available
+    -   Falls back to direct HTTP/JSON-RPC if needed
+
+-   **`sync_mcp_server_tools(server_name)` (Whitelisted)**
+    -   Fetches and caches available tools from an MCP server
+    -   Uses LiteLLM `load_mcp_tools()` with OpenAI format conversion
+
+-   **`test_mcp_connection(server_name)` (Whitelisted)**
+    -   Tests connectivity to an MCP server
+
+-   **`get_agent_mcp_servers(agent_name)` (Whitelisted)**
+    -   Gets MCP servers linked to an agent with full details
+
+-   **`get_available_mcp_servers()` (Whitelisted)**
+    -   Gets all enabled MCP servers
+
+### Tool Loading Flow
+
+When an agent runs, tools are loaded in this order:
+
+1. **MCP Tools**: From linked MCP servers via `agent_mcp_server` child table
+2. **Native Tools**: From `Agent Tool Function` documents via `agent_tool` child table
+
+```python
+# In sdk_tools.py
+def create_agent_tools(agent) -> list[FunctionTool]:
+    tools = []
+    
+    # 1. Load MCP tools from linked MCP servers
+    if hasattr(agent, "agent_mcp_server") and agent.agent_mcp_server:
+        from huf.ai.mcp_client import create_mcp_tools
+        mcp_tools = create_mcp_tools(agent)
+        tools.extend(mcp_tools)
+    
+    # 2. Load native tools from Agent Tool Function documents
+    if hasattr(agent, "agent_tool") and agent.agent_tool:
+        # ... existing native tool loading ...
+    
+    return tools
+```
+
+### MCP Tool Execution Flow
+
+When the LLM calls an MCP tool during agent execution:
+
+1. LLM returns tool call with tool name and arguments
+2. `litellm.py` finds the tool by name in the agent's tools list
+3. Tool's `on_invoke_tool()` is called (same as native tools)
+4. For MCP tools, this triggers `execute_mcp_tool()` which:
+   - Builds authentication headers from MCP Server config
+   - Calls the MCP server via HTTP/JSON-RPC or LiteLLM MCP client
+   - Returns the result in HUF tool-result format
+5. Result is fed back to LLM for next iteration
+
+### Authentication
+
+MCP servers support multiple authentication methods:
+
+-   **None**: No authentication required
+-   **API Key**: Custom header with API key value
+-   **Bearer Token**: Standard `Authorization: Bearer <token>` header
+-   **Custom Header**: Any custom header name/value pair
+
+Auth credentials are stored encrypted using Frappe's Password field type.
+
+### Tool Namespacing
+
+MCP tools can be namespaced to avoid conflicts:
+
+-   If `tool_namespace` is set on MCP Server (e.g., "gmail")
+-   Tool names are prefixed: `send_email` → `gmail.send_email`
+-   Tool descriptions include source: `[MCP:gmail] Send an email...`
+
+### Dependencies
+
+The MCP client uses:
+
+-   **LiteLLM's experimental MCP client** (`litellm.experimental_mcp_client`)
+    -   `load_mcp_tools()`: Fetch tools in OpenAI format
+    -   `call_openai_tool()`: Execute tool calls
+-   **Direct HTTP fallback**: If LiteLLM MCP client unavailable
+    -   Uses JSON-RPC 2.0 format for MCP protocol
+
+### Frontend Integration
+
+The React frontend supports MCP server management:
+
+-   **ToolsTab Component** (`frontend/src/components/agent/ToolsTab.tsx`)
+    -   Displays linked MCP servers with status badges
+    -   Supports add/remove/toggle/sync actions
+    -   Shows tool count and last sync time
+
+-   **MCP API Service** (`frontend/src/services/mcpApi.ts`)
+    -   `getMCPServers()`: List all MCP servers
+    -   `getAgentMCPServers()`: Get MCP servers for an agent
+    -   `testMCPConnection()`: Test server connectivity
+    -   `syncMCPTools()`: Sync tools from server
+
+### Example Usage
+
+1. **Create MCP Server** in Frappe:
+   - Name: "github"
+   - URL: "https://mcp.github.example.com/mcp"
+   - Auth: Bearer Token with GitHub PAT
+
+2. **Sync Tools** to discover available tools
+
+3. **Link to Agent** via the "Tools and MCP" tab
+
+4. **Agent can now use** GitHub tools like `list_prs`, `create_issue`, etc.
+
+### What HUF Is NOT
+
+-   ❌ An MCP Server (does not expose tools via MCP)
+-   ❌ An MCP Gateway/Proxy
+-   ❌ An OAuth broker (simple header-based auth only)
+
+## Flow Engine (v0.2)
+
+The Flow Engine provides graph-based workflow orchestration that reuses existing Huf primitives (Agent Run, Conversation, Messages, Tools) and adds only what's necessary to coordinate multi-step flows.
+
+### Core Concepts
+
+1. **Flow Definition**: Stores the entire graph as a single JSON blob (React Flow compatible). No separate Node/Edge doctypes.
+2. **Flow Run**: Persists runtime state (status, context, current node, hop count).
+3. **Agent Run as Node Run**: Each node execution is logged as an existing Agent Run extended with flow linkage fields.
+
+### DocTypes
+
+#### Flow Definition
+
+Stores the complete workflow graph definition as JSON.
+
+-   **Python Class**: `FlowDefinition(Document)`
+-   **File**: `huf/huf/doctype/flow_definition/flow_definition.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Flow ID** | `flow_id` | Data | Stable unique ID used by APIs |
+| **Flow Name** | `flow_name` | Data | Human-readable name |
+| **Status** | `status` | Select | `Draft`, `Active`, `Archived` |
+| **Version** | `version` | Int | Auto-increments on save |
+| **Schema Version** | `schema_version` | Int | From JSON definition |
+| **Definition JSON** | `definition_json` | JSON | Full graph JSON |
+| **Is System** | `is_system` | Check | System-shipped vs user-created |
+| **Updated By** | `updated_by` | Link(User) | Last editor |
+| **Updated At** | `updated_at` | Datetime | Last update time |
+
+**Validation:**
+- `definition_json.id` must equal `flow_id`
+- Node IDs must be unique
+- Edges must reference valid node IDs
+- Entry node must exist
+- Only allowed node types (v0.2): `trigger.webhook`, `trigger.schedule`, `trigger.doc-event`, `agent.run`, `tool.call`, `router.llm`, `human.approval`, `http_request`, `condition`, `transform`, `loop`, `end`
+- Expression edges must have a condition string
+
+#### Flow Run
+
+Single execution instance of a flow.
+
+-   **Python Class**: `FlowRun(Document)`
+-   **File**: `huf/huf/doctype/flow_run/flow_run.py`
+
+**Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Flow Definition** | `flow_definition` | Link | Link to Flow Definition |
+| **Flow ID** | `flow_id` | Data | Denormalized flow ID |
+| **Flow Version** | `flow_version` | Int | Pinned at start |
+| **Mode** | `mode` | Select | `Normal`, `Agentic` |
+| **Status** | `status` | Select | `Queued`, `Running`, `Waiting Approval`, `Waiting User`, `Success`, `Failed` |
+| **Current Node ID** | `current_node_id` | Data | Current position in graph |
+| **Hop Count** | `hop_count` | Int | Steps executed |
+| **Max Hops** | `max_hops` | Int | Safety limit |
+| **Context JSON** | `context_json` | JSON | Shared flow state |
+| **Trigger Type** | `trigger_type` | Select | `Manual`, `Webhook`, `Schedule`, `Doc Event` |
+| **Trigger Payload** | `trigger_payload` | JSON | Initial input |
+| **Waiting** | `waiting` | JSON | Details when paused |
+| **Last Error** | `last_error` | Small Text | Error info |
+| **Last Agent Run** | `last_agent_run` | Link(Agent Run) | Last executed run |
+| **Conversation** | `conversation` | Link(Agent Conversation) | Shared conversation |
+
+#### Agent Run (Extended)
+
+Existing Agent Run with additional flow linkage fields.
+
+**New Fields:**
+
+| Label | Fieldname | Type | Description |
+|:------|:----------|:-----|:------------|
+| **Flow Run** | `flow_run` | Link(Flow Run) | Optional link to flow |
+| **Flow Node ID** | `flow_node_id` | Data | Node ID from JSON |
+| **Flow ID** | `flow_id` | Data | Convenience field |
+| **Run Kind** | `run_kind` | Select | `agent`, `tool`, `orchestrator` |
+
+### Node Types (v0.2)
+
+| Type | Description |
+|:-----|:------------|
+| `trigger.webhook` | Creates FlowRun from webhook payload |
+| `trigger.schedule` | Scheduled time-based triggers |
+| `trigger.doc-event` | Triggers based on Frappe lifecycle hooks |
+| `agent.run` | Runs a Huf agent via run_agent_sync |
+| `tool.call` | Deterministic tool execution (no LLM) with variable interpolation |
+| `router.llm` | LLM-based routing among candidate edges |
+| `human.approval` | Pause for human approve/reject |
+| `http_request` | Executes custom HTTP request |
+| `condition` | Evaluating boolean expressions |
+| `transform` | Transforms context data using copy/map/template |
+| `loop` | Iterates over an array in context |
+| `end` | Marks flow success |
+
+### Edge Types
+
+| Type | Description |
+|:-----|:------------|
+| `always` | Always follow this edge |
+| `on_success` | Follow if previous node succeeded |
+| `on_failure` | Follow if previous node failed |
+| `expression` | Evaluate expression against flow context |
+
+Edges are sorted by priority (descending); first match wins.
+
+### Execution Modes
+
+**Normal Mode**: Engine follows edges deterministically. Agents run only when `agent.run` nodes are hit.
+
+**Agentic Mode**: An orchestrator agent is invoked after each node to decide the next step. The orchestrator sees completed results, context, and candidate edges, returning a strict JSON decision.
+
+### Core Modules
+
+| Module | Purpose |
+|:-------|:--------|
+| `huf/ai/flow_engine.py` | Core engine: load, validate, execute, edge evaluation |
+| `huf/ai/flow_api.py` | Whitelisted API endpoints for UI and triggers |
+| `huf/ai/flow_eval.py` | Safe AST-based expression evaluator |
+| `huf/ai/flow_tool_executor.py` | Deterministic tool execution |
+| `huf/ai/flow_orchestrator.py` | Prompt construction and JSON parsing for router/orchestrator |
+| `huf/ai/flow_tools.py` | Tool definitions for the huf_tools hook |
+
+### Whitelisted APIs
+
+| Method | Purpose |
+|:-------|:--------|
+| `huf.ai.flow_api.get_flow_definition` | Get flow definition |
+| `huf.ai.flow_api.save_flow_definition` | Save/update flow definition |
+| `huf.ai.flow_api.run_flow` | Start a flow run |
+| `huf.ai.flow_api.get_flow_run` | Get flow run status |
+| `huf.ai.flow_api.list_flow_runs` | List flow runs |
+| `huf.ai.flow_api.resume_flow_run` | Resume waiting flow |
+| `huf.ai.flow_api.approve_flow_run` | Approve a flow |
+| `huf.ai.flow_api.reject_flow_run` | Reject a flow |
+| `huf.ai.flow_api.flow_webhook` | Webhook trigger (allow_guest) |
+
+### Agent Tools
+
+Registered via `huf_tools` hook so agents can interact with flows:
+- `run_flow`: Start a flow execution
+- `get_flow_run`: Check flow run status
+- `resume_flow_run`: Resume a waiting flow
+- `approve_flow_run`: Approve/reject a flow
+
+### Security
+
+- **Expression edges**: AST-based restricted evaluator; no imports, no function calls, no attribute access
+- **Human approval**: User/role verification before approve/reject
+- **Hop limit**: Safety guard against infinite loops (default 100)
+
+## Subsystems and Advanced Architectures
+
+### 1. Capability-Based Permissions (RBAC)
+
+HUF implements a capability-based Role-Based Access Control (RBAC) layer on top of standard Frappe permissions. This permits modular security checks inside the HUF dashboard and API endpoints without directly exposing dynamic database mutations.
+
+#### Mental Model and Role Mapping
+- **Huf Role**: Grouping of capabilities. Seeding defines:
+  - `Huf Admin`: All capabilities.
+  - `Huf Manager`: Full edit access to agents, tools, knowledge, and flows.
+  - `Huf User`: Access to use agents, chat, knowledge, tools, and flows.
+  - `Huf Viewer`: Read-only access to agents and own chats.
+- **Frappe Role Mapping**: Under the hood, Huf Roles map 1-to-1 with Frappe Roles (`System Manager`, `Huf Manager`, `Huf User`, `Huf Viewer`).
+- **Enforcement**:
+  - Verification is done by checking capabilities using `huf.permissions.has_capability(user, capability)`.
+  - Frontend checks permissions on load by querying `/api/method/huf.permissions.get_me`.
+
+### 2. Dynamic Custom Data Tables
+
+The `Huf Data Table` subsystem allows users to build and manage custom database schemas (dynamic DocTypes) directly from the HUF dashboard.
+- **Table Registry**: Creates a record in the `Huf Data Table` DocType.
+- **Dynamic DocTypes**: Dynamically constructs and inserts a custom Frappe DocType prefixed with `HF {table_name}` containing custom fields, search fields, and naming options (e.g., Autoincrement).
+- **APIs (`api.py`)**: Methods for creating (`create_data_table`), updating schemas (`update_data_table`), deleting dynamic tables (`delete_data_table`), and counting rows.
+
+### 3. App Seeding Framework
+
+The seeding framework automatically discovers and seeds HUF resources (prompts, tools, knowledge sources, agents, and triggers) from installed Frappe apps:
+- **Scanner**: Scans each app's package or root path for a `huf/` folder.
+- **Seed Folders**: Organizes resources into `prompts/`, `tools/`, `knowledge/`, `agents/`, and `triggers/` containing `.json` seed files (or JSON lists).
+- **Triggers**: Seeding runs automatically during migration hooks (`after_migrate`), app installation (`after_app_install`), or manually from the UI via the `seed_all_apps` API.
+
+### 4. Persistent Conversation Data (Memory State)
+
+Agents are equipped with key-value variable memory stored inside the `conversation_data` JSON field of `Agent Conversation` records.
+- **Toggle**: `inject_conversation_data` on `Agent` determines if memory variables are automatically appended to the LLM system prompt.
+- **Memory Tools**: Agents can retrieve, set, and load memory states using:
+  - `get_conversation_data`: Returns the value of a specific variable.
+  - `set_conversation_data`: Stores a value in conversation data, with metadata and injection flags.
+  - `load_conversation_data`: Loads the entire state.
+
+### 5. File Attachments Trigger and OCR
+
+The Document Event trigger system in HUF supports file ingestion and automatic text extraction:
+- **Trigger Attachments**: Defined in `file_attachments` on `Agent Trigger`, linking fields or child table fields containing files.
+- **OCR Processing**: At execution time, the hooks resolve each attached file to its Frappe `File` record (to avoid stale lookups) and route non-image files through `handle_ocr_document`. The extracted text is appended to the agent's prompt under `Attached File Content (OCR Extracted)` and includes a content hash for verification. Images are passed directly for multimodal vision models. Supported document types include PDF, DOCX, XLSX, PPTX, TXT, MD, HTML, CSV, JSON, XML, LOG, and common image formats.
+
+### 6. Audio, STT, and Dedicated Models
+
+HUF supports dedicated audio capabilities with separate provider/model routing:
+- **Speech-to-Text (STT) Resolution**: The three-tier model resolution follows:
+  1. `model` argument passed to the transcription tool.
+  2. `agent.stt_model` configuration on the Agent document.
+  3. Main provider default STT model or whisper-1.
+- **TTS Model**: Configured via `agent.tts_model`, allowing cross-provider Audio Generation (e.g. ElevenLabs voice with OpenAI agent).
+
+### 7. Prompt Caching
+
+HUF integrates prompt caching to save token costs on supported models:
+- **Model Check**: Checks model support by checking the LiteLLM pricing metadata for the field `cache_read_input_token_cost`.
+- **Toggle**: Users can toggle `enable_prompt_caching` in `Agent` settings to automatically apply prompt caching block headers on supported providers (Anthropic, Deepseek, OpenAI, Bedrock).
+
+## Development and Coding Guidelines
+
+### Frontend TypeScript Strictness
+The frontend project enforces strict TypeScript rules. Unused variables, unresolved imports, and unused functions will cause build failures (e.g., `error TS6133`). Always proactively remove unused variables, functions, and imports, especially after code refactorings, to ensure the frontend build succeeds without errors.

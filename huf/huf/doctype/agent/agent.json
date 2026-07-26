@@ -1,0 +1,812 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:agent_name",
+ "creation": "2025-08-11 18:33:44.565632",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_tab",
+  "llm_configuration_section",
+  "agent_name",
+  "provider",
+  "provider_brand",
+  "temperature",
+  "description",
+  "column_break_df8m",
+  "model",
+  "async",
+  "run_immediately",
+  "top_p",
+  "disabled",
+  "prompt_caching_section",
+  "enable_prompt_caching",
+  "cache_control_type",
+  "cache_system_message",
+  "column_break_cache",
+  "cache_conversation_history",
+  "behaviour_tab",
+  "conversation_settings_section",
+  "persist_user_history",
+  "allow_chat",
+  "enable_multi_run",
+  "column_break_vfhq",
+  "persist_conversation",
+  "multi_run_setting_section",
+  "default_plan",
+  "section_break_yyoa",
+  "prompt_mode",
+  "agent_prompt",
+  "column_break_prompt",
+  "prompt_version_locked",
+  "template_version_at_attach",
+  "copied_from_prompt",
+  "copied_from_summary_prompt",
+  "instruction_section",
+  "instructions",
+  "tools_and_mcp_tab",
+  "agent_tool",
+  "mcp_servers_section",
+  "agent_mcp_server",
+  "knowledge_tab",
+  "knowledge_section",
+  "agent_knowledge",
+  "advance_settings_tab",
+  "context_settings_section",
+  "context_strategy",
+  "history_limit",
+  "column_break_jrdw",
+  "max_turns",
+  "summarization_engine_section",
+  "summary_ratio",
+  "summary_prompt_mode",
+  "summary_prompt",
+  "summary_prompt_template",
+  "summary_template_version_at_attach",
+  "column_break_summary_prompt",
+  "summary_model",
+  "summary_prompt_version_locked",
+  "knowledge_and_tools_section",
+  "max_knowledge_tokens",
+  "column_break_mwgf",
+  "max_context_chars",
+  "agent_behaviors_section",
+  "autonaming_of_conversation_title",
+  "enable_conversation_data",
+  "column_break_fl05",
+  "inject_conversation_data",
+  "conversation_data_api_permission",
+  "image_generation_section",
+  "image_generation_model",
+  "audio_generation_section",
+  "tts_model",
+  "column_break_dq1z",
+  "tts_voice",
+  "audio_transcription_section",
+  "stt_model",
+  "document_upload_section",
+  "allow_file_upload",
+  "enable_ocr",
+  "column_break_doc_upload",
+  "max_upload_size_mb",
+  "huf_ui_section",
+  "agent_color",
+  "column_break_g3a9",
+  "show_tool_execution_details",
+  "permissions_tab",
+  "allow_guest",
+  "allowed_users",
+  "column_break_3mhl",
+  "allowed_roles",
+  "metadata_tab",
+  "last_run",
+  "total_run",
+  "seeding_metadata_section",
+  "source_app",
+  "source_file"
+ ],
+ "fields": [
+  {
+   "description": "A unique name for this agent.",
+   "documentation_url": "https://docs.huf.ai/docs/concepts/agents/",
+   "fieldname": "agent_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Agent Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "description": "The AI provider that will power this agent (e.g., OpenAI, OpenRouter).",
+   "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
+   "fieldname": "provider",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Provider",
+   "options": "AI Provider",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_df8m",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "The specific AI model to use from the selected provider (e.g., gpt-4-turbo).",
+   "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
+   "fieldname": "model",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Model",
+   "options": "AI Model",
+   "reqd": 1
+  },
+  {
+   "description": "Specific model for Text-to-Speech (Audio Generation). If unset, defaults to the provider's default TTS model.",
+   "fieldname": "tts_model",
+   "fieldtype": "Link",
+   "label": "TTS Model",
+   "options": "AI Model"
+  },
+  {
+   "description": "Voice to use for TTS (e.g. alloy, echo, onyx).",
+   "fieldname": "tts_voice",
+   "fieldtype": "Data",
+   "label": "TTS Voice"
+  },
+  {
+   "default": "Local",
+   "description": "How this agent's prompt is managed. 'Local' uses the instructions field below. 'Template' links to a reusable Agent Prompt.",
+   "fieldname": "prompt_mode",
+   "fieldtype": "Select",
+   "label": "Prompt Mode",
+   "options": "Local\nTemplate"
+  },
+  {
+   "depends_on": "eval:doc.prompt_mode=='Template'",
+   "description": "Link to a reusable prompt template from the Agent Prompt library.",
+   "fieldname": "agent_prompt",
+   "fieldtype": "Link",
+   "label": "Agent Prompt",
+   "options": "Agent Prompt"
+  },
+  {
+   "fieldname": "column_break_prompt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.prompt_mode=='Template'",
+   "description": "If checked, this agent will stay on the prompt version it was attached to, ignoring newer versions.",
+   "fieldname": "prompt_version_locked",
+   "fieldtype": "Check",
+   "label": "Lock Prompt Version"
+  },
+  {
+   "depends_on": "eval:doc.prompt_mode=='Template'",
+   "description": "The version number of the prompt template when it was attached to this agent.",
+   "fieldname": "template_version_at_attach",
+   "fieldtype": "Int",
+   "label": "Attached at Version",
+   "read_only": 1
+  },
+  {
+   "description": "If this agent was detached from a template, this tracks the original prompt for traceability.",
+   "fieldname": "copied_from_prompt",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Copied From Prompt",
+   "options": "Agent Prompt",
+   "read_only": 1
+  },
+  {
+   "description": "If this agent was detached from a summary prompt template, this tracks the original summary prompt for traceability.",
+   "fieldname": "copied_from_summary_prompt",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Copied From Summary Prompt",
+   "options": "Agent Summary Prompt",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.prompt_mode=='Local'",
+   "description": "The system prompt or instructions that define the agent's personality, goals, and constraints. This is the core logic of the agent.",
+   "fieldname": "instructions",
+   "fieldtype": "Code",
+   "label": "Instructions"
+  },
+  {
+   "default": "1",
+   "description": "What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.",
+   "fieldname": "temperature",
+   "fieldtype": "Float",
+   "label": "Temperature",
+   "non_negative": 1
+  },
+  {
+   "description": "The set of tools this agent is allowed to use to interact with the system.",
+   "documentation_url": "https://docs.huf.ai/docs/concepts/tools/",
+   "fieldname": "agent_tool",
+   "fieldtype": "Table",
+   "label": "Agent Tool",
+   "options": "Agent Tool"
+  },
+  {
+   "description": "Connect to external MCP servers for additional tool capabilities",
+   "fieldname": "mcp_servers_section",
+   "fieldtype": "Section Break",
+   "label": "MCP Servers"
+  },
+  {
+   "description": "External MCP servers this agent can use for additional tools",
+   "fieldname": "agent_mcp_server",
+   "fieldtype": "Table",
+   "label": "MCP Servers",
+   "options": "Agent MCP Server"
+  },
+  {
+   "default": "1",
+   "description": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered.\n\nWe generally recommend altering this or temperature but not both.",
+   "fieldname": "top_p",
+   "fieldtype": "Float",
+   "label": "Top P"
+  },
+  {
+   "default": "0",
+   "fieldname": "async",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Async"
+  },
+  {
+   "default": "1",
+   "description": "When disabled, runs are queued to avoid holding web workers during long LLM and tool calls. Enable only for trusted calls that require a direct response.",
+   "fieldname": "run_immediately",
+   "fieldtype": "Check",
+   "label": "Run immediately (advanced)"
+  },
+  {
+   "default": "0",
+   "description": "If checked, this agent will be disabled and will not run.",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "description": "Define system prompt, goal, and constraints. Use 'Local' for inline prompts or 'Template' to link a reusable prompt from the library.",
+   "fieldname": "section_break_yyoa",
+   "fieldtype": "Section Break",
+   "label": "Prompt"
+  },
+  {
+   "default": "0",
+   "description": "If checked, this agent can be interacted with in the Agent Chat window.",
+   "fieldname": "allow_chat",
+   "fieldtype": "Check",
+   "label": "Allow Chat"
+  },
+  {
+   "default": "1",
+   "description": "If checked, the conversation history with this agent will be saved and loaded for future sessions.",
+   "fieldname": "persist_conversation",
+   "fieldtype": "Check",
+   "label": "Persist Conversation"
+  },
+  {
+   "fieldname": "column_break_vfhq",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
+  {
+   "fieldname": "behaviour_tab",
+   "fieldtype": "Tab Break",
+   "label": "Behaviour"
+  },
+  {
+   "fieldname": "tools_and_mcp_tab",
+   "fieldtype": "Tab Break",
+   "label": "Tools and MCP"
+  },
+  {
+   "fieldname": "knowledge_tab",
+   "fieldtype": "Tab Break",
+   "label": "Knowledge"
+  },
+  {
+   "description": "Knowledge sources this agent can access",
+   "fieldname": "knowledge_section",
+   "fieldtype": "Section Break",
+   "label": "Knowledge Sources"
+  },
+  {
+   "fieldname": "agent_knowledge",
+   "fieldtype": "Table",
+   "label": "Knowledge Sources",
+   "options": "Agent Knowledge"
+  },
+  {
+   "fieldname": "advance_settings_tab",
+   "fieldtype": "Tab Break",
+   "label": "Advanced Settings"
+  },
+  {
+   "description": "Define the rules for how the agent manages its memory window when a conversation grows long and approaches token limits.",
+   "fieldname": "context_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Conversation Strategy"
+  },
+  {
+   "default": "Summarize",
+   "description": "Choose 'Summarize' to compress old messages via an LLM, or 'FIFO' to simply drop the oldest messages.",
+   "fieldname": "context_strategy",
+   "fieldtype": "Select",
+   "label": "Context Strategy",
+   "options": "Summarize\nFIFO\nNone"
+  },
+  {
+   "default": "20",
+   "description": "Max messages before strategy triggers.",
+   "fieldname": "history_limit",
+   "fieldtype": "Int",
+   "label": "History Limit",
+   "non_negative": 1
+  },
+  {
+   "default": "0.7",
+   "description": "Fraction of history to compress (e.g., 0.7 = 70%).",
+   "fieldname": "summary_ratio",
+   "fieldtype": "Float",
+   "label": "Summary Ratio",
+   "non_negative": 1,
+   "precision": "2"
+  },
+  {
+   "description": "Dedicated lightweight model for this task.",
+   "fieldname": "summary_model",
+   "fieldtype": "Link",
+   "label": "Summary Model",
+   "options": "AI Model"
+  },
+  {
+   "default": "Local",
+   "description": "How this agent's conversation summary prompt is managed. 'Local' uses the summary prompt field below. 'Template' links to a reusable Agent Summary Prompt.",
+   "fieldname": "summary_prompt_mode",
+   "fieldtype": "Select",
+   "label": "Summary Prompt Mode",
+   "options": "Local\nTemplate"
+  },
+  {
+   "depends_on": "eval:doc.summary_prompt_mode=='Template'",
+   "description": "Link to a reusable summary prompt template from the Agent Summary Prompt library for conversation summarization.",
+   "fieldname": "summary_prompt_template",
+   "fieldtype": "Link",
+   "label": "Summary Prompt Template",
+   "options": "Agent Summary Prompt"
+  },
+  {
+   "fieldname": "column_break_summary_prompt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.summary_prompt_mode=='Template'",
+   "description": "If checked, this agent will stay on the summary prompt version it was attached to, ignoring newer versions.",
+   "fieldname": "summary_prompt_version_locked",
+   "fieldtype": "Check",
+   "label": "Lock Summary Prompt Version"
+  },
+  {
+   "depends_on": "eval:doc.summary_prompt_mode=='Template'",
+   "description": "The version number of the summary prompt template when it was attached to this agent.",
+   "fieldname": "summary_template_version_at_attach",
+   "fieldtype": "Int",
+   "label": "Summary Attached at Version",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.summary_prompt_mode=='Local'",
+   "description": "The prompt used to summarize conversation history when the context strategy is 'Summarize'. Leave blank to use the system default.",
+   "fieldname": "summary_prompt",
+   "fieldtype": "Code",
+   "label": "Summary Prompt"
+  },
+  {
+   "default": "4000",
+   "description": "Maximum tokens to use for injected knowledge context.",
+   "fieldname": "max_knowledge_tokens",
+   "fieldtype": "Int",
+   "label": "Max Knowledge Tokens",
+   "non_negative": 1
+  },
+  {
+   "default": "20",
+   "description": "Consecutive actions in a single run.",
+   "fieldname": "max_turns",
+   "fieldtype": "Int",
+   "label": "Max Turns",
+   "non_negative": 1
+  },
+  {
+   "description": "Configure language model settings ",
+   "fieldname": "llm_configuration_section",
+   "fieldtype": "Section Break",
+   "label": "LLM Configuration"
+  },
+  {
+   "description": "Configure conversation behaviour",
+   "fieldname": "conversation_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Conversation Settings"
+  },
+  {
+   "description": "A short summary describing what this agent does or is designed for.",
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "last_run",
+   "fieldtype": "Datetime",
+   "label": "Last Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_run",
+   "fieldtype": "Int",
+   "label": "Total Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "metadata_tab",
+   "fieldtype": "Tab Break",
+   "label": "Metadata"
+  },
+  {
+   "default": "1",
+   "description": "When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.",
+   "fieldname": "persist_user_history",
+   "fieldtype": "Check",
+   "label": "Persist per User (Doc/Schedule)"
+  },
+  {
+   "fetch_from": "provider.provider_brand",
+   "fieldname": "provider_brand",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Provider Brand"
+  },
+  {
+   "default": "0",
+   "description": "Enables multi-step planning and execution. If enabled, the agent will analyze the request to create a step-by-step plan (or use a Default Plan) and execute them sequentially.",
+   "fieldname": "enable_multi_run",
+   "fieldtype": "Check",
+   "label": "Enable Multi Run"
+  },
+  {
+   "depends_on": "eval:!doc.disabled",
+   "description": "Configure prompt caching to reduce costs by caching repeated prompt content",
+   "fieldname": "prompt_caching_section",
+   "fieldtype": "Section Break",
+   "label": "Prompt Caching"
+  },
+  {
+   "default": "0",
+   "description": "Enable prompt caching to cache repeated prompt content and reduce token costs. Only works with supported providers (OpenAI, Anthropic, Bedrock, Deepseek).",
+   "fieldname": "enable_prompt_caching",
+   "fieldtype": "Check",
+   "label": "Enable Prompt Caching"
+  },
+  {
+   "default": "ephemeral",
+   "depends_on": "eval:doc.enable_prompt_caching==1",
+   "description": "Cache control type: 'ephemeral' for Anthropic (charges for cache writes), 'auto' for OpenAI/Deepseek (automatic caching).",
+   "fieldname": "cache_control_type",
+   "fieldtype": "Select",
+   "label": "Cache Control Type",
+   "options": "ephemeral\nauto"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_prompt_caching==1",
+   "description": "Cache the system message/instructions to avoid re-sending them on every request.",
+   "fieldname": "cache_system_message",
+   "fieldtype": "Check",
+   "label": "Cache System Message"
+  },
+  {
+   "depends_on": "eval:doc.enable_prompt_caching==1",
+   "fieldname": "column_break_cache",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_prompt_caching==1",
+   "description": "Cache conversation history messages to reduce token usage in multi-turn conversations.",
+   "fieldname": "cache_conversation_history",
+   "fieldtype": "Check",
+   "label": "Cache Conversation History"
+  },
+  {
+   "depends_on": "eval:doc.enable_multi_run == 1",
+   "fieldname": "multi_run_setting_section",
+   "fieldtype": "Section Break",
+   "label": "Multi Run Setting"
+  },
+  {
+   "depends_on": "eval:doc.enable_multi_run ==1",
+   "fieldname": "default_plan",
+   "fieldtype": "Table",
+   "label": "Default Plan",
+   "options": "Agent Orchestration Plan"
+  },
+  {
+   "fieldname": "permissions_tab",
+   "fieldtype": "Tab Break",
+   "label": "Permissions"
+  },
+  {
+   "default": "0",
+   "description": "If checked, this agent can be run by Guest users (via API).",
+   "fieldname": "allow_guest",
+   "fieldtype": "Check",
+   "label": "Allow Guest"
+  },
+  {
+   "fieldname": "allowed_users",
+   "fieldtype": "Table MultiSelect",
+   "label": "Allowed Users",
+   "options": "Agent User"
+  },
+  {
+   "fieldname": "column_break_dq1z",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "allowed_roles",
+   "fieldtype": "Table MultiSelect",
+   "label": "Allowed Roles",
+   "options": "Agent Role"
+  },
+  {
+   "default": "0",
+   "description": "If enabled, the agent can store key-value pairs in the conversation context.",
+   "fieldname": "enable_conversation_data",
+   "fieldtype": "Check",
+   "label": "Allow Conversation Data Management"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_conversation_data==1",
+   "description": "Auto-injects all active memory items into the LLM system prompt on every turn. Disabling this avoids 'Context Bloat' (saving tokens/cost and improving speed) and allows on-demand access strictly through the 'get_conversation_data' tool.",
+   "fieldname": "inject_conversation_data",
+   "fieldtype": "Check",
+   "label": "Inject Conversation Data into Prompt"
+  },
+  {
+   "depends_on": "eval:doc.enable_conversation_data==1",
+   "description": "Select API access level. 'Read' allows reading only. 'Write' allows reading and writing.",
+   "fieldname": "conversation_data_api_permission",
+   "fieldtype": "Select",
+   "label": "Conversation Data API Permission",
+   "options": "\nRead\nWrite"
+  },
+  {
+   "fieldname": "image_generation_section",
+   "fieldtype": "Section Break",
+   "label": "Image Generation"
+  },
+  {
+   "description": "Optional: Link specific Model for Image generation tool otherwise default model of the Agent's provider will be used",
+   "fieldname": "image_generation_model",
+   "fieldtype": "Link",
+   "label": "Image Generation Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "huf_ui_section",
+   "fieldtype": "Section Break",
+   "label": "Huf UI"
+  },
+  {
+   "description": "This color will be used to display as the background color of Agent Avatar in Agent Chat. Enter color code including #, ex: #6366F1 ",
+   "fieldname": "agent_color",
+   "fieldtype": "Data",
+   "label": "Agent Color"
+  },
+  {
+   "default": "1",
+   "description": "If enabled, the conversation title will be automatically updated based on the initial context.",
+   "fieldname": "autonaming_of_conversation_title",
+   "fieldtype": "Check",
+   "label": "Autonaming of conversation title"
+  },
+  {
+   "fieldname": "instruction_section",
+   "fieldtype": "Section Break",
+   "label": "Instruction"
+  },
+  {
+   "fieldname": "audio_generation_section",
+   "fieldtype": "Section Break",
+   "label": "Audio Generation"
+  },
+  {
+   "description": "Specific model for Speech-to-Text (Audio Transcription). If unset, defaults to the provider's default STT model.",
+   "fieldname": "stt_model",
+   "fieldtype": "Link",
+   "label": "STT Model",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "audio_transcription_section",
+   "fieldtype": "Section Break",
+   "label": "Audio Transcription"
+  },
+  {
+   "fieldname": "document_upload_section",
+   "fieldtype": "Section Break",
+   "label": "Document Upload"
+  },
+  {
+   "default": "0",
+   "description": "Allow users to attach files (documents, images) in chat for this agent.",
+   "fieldname": "allow_file_upload",
+   "fieldtype": "Check",
+   "label": "Allow File Upload"
+  },
+  {
+   "default": "0",
+   "description": "Route uploaded documents through the OCR extraction pipeline instead of vision/local extraction only.",
+   "fieldname": "enable_ocr",
+   "fieldtype": "Check",
+   "label": "Enable OCR"
+  },
+  {
+   "fieldname": "column_break_doc_upload",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "25",
+   "description": "Maximum size (in MB) for a single uploaded file. Capped by the global 25 MB limit.",
+   "fieldname": "max_upload_size_mb",
+   "fieldtype": "Int",
+   "label": "Max Upload Size (MB)"
+  },
+  {
+   "default": "2000",
+   "description": "Maximum characters allowed for tool results before truncating and applying include_reference context policy.",
+   "fieldname": "max_context_chars",
+   "fieldtype": "Int",
+   "label": "Max Context Characters"
+  },
+  {
+   "default": "1",
+   "description": "Enable to display tool execution status and responses in the agent output.\nThis includes whether each tool call is completed and its corresponding result.",
+   "fieldname": "show_tool_execution_details",
+   "fieldtype": "Check",
+   "label": "Show Tool Execution Details"
+  },
+  {
+   "fieldname": "seeding_metadata_section",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Seeding Metadata"
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source App",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source File",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_jrdw",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Configure the model and prompts used to compress conversation history. These settings are only active when using the Summarize strategy.",
+   "fieldname": "summarization_engine_section",
+   "fieldtype": "Section Break",
+   "label": "Summarization Engine"
+  },
+  {
+   "description": "Set strict boundaries on how much external data the agent can pull into its context window at once.",
+   "fieldname": "knowledge_and_tools_section",
+   "fieldtype": "Section Break",
+   "label": "Knowledge And Tools"
+  },
+  {
+   "description": "Enable or disable background tasks and auxiliary capabilities related to context management.",
+   "fieldname": "agent_behaviors_section",
+   "fieldtype": "Section Break",
+   "label": "Agent Behaviors"
+  },
+  {
+   "fieldname": "column_break_3mhl",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_g3a9",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_mwgf",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "column_break_fl05",
+   "fieldtype": "Column Break"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-15 13:26:56.858724",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "select": 1,
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Viewer",
+   "select": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

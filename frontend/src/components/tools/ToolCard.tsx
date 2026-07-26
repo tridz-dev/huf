@@ -1,0 +1,89 @@
+import { Badge } from '../ui/badge';
+import { Checkbox } from '../ui/checkbox';
+import { cn } from '@/lib/utils';
+import { getToolTypeDisplayLabel } from '@/data/ai';
+import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
+import { Users } from 'lucide-react';
+
+interface ToolCardProps {
+  tool: AgentToolFunctionRef;
+  selected?: boolean;
+  onSelect?: (tool: AgentToolFunctionRef) => void;
+  compact?: boolean;
+  className?: string;
+  toolTypesMap?: Map<string, AgentToolType>; // Map of tool_type name -> AgentToolType for lookup
+  usedByAgents?: string[]; // List of agent names using this tool
+}
+
+export function ToolCard({
+  tool,
+  selected = false,
+  onSelect,
+  compact = false,
+  className,
+  toolTypesMap,
+  usedByAgents = [],
+}: ToolCardProps) {
+  const isShared = usedByAgents.length > 0;
+  const handleClick = () => {
+    if (onSelect) {
+      onSelect(tool);
+    }
+  };
+
+  // Get tool type display name from tool_type link field
+  const toolTypeDisplayName = tool.tool_type && toolTypesMap?.get(tool.tool_type)?.name1;
+
+  return (
+    <div
+      onClick={handleClick}
+      className={cn(
+        'flex items-start gap-3 rounded-lg border p-3 transition-colors',
+        'hover:bg-paper-deep cursor-pointer',
+        selected && 'border-primary bg-primary/5',
+        className
+      )}
+    >
+      {onSelect && (
+        <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onSelect(tool)}
+          />
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
+              {tool.types && (
+                <Badge variant="secondary" className="text-[10px] uppercase shrink-0">
+                  {getToolTypeDisplayLabel(tool.types)}
+                </Badge>
+              )}
+              {toolTypeDisplayName && (
+                <Badge variant="outline" className="text-xs shrink-0">
+                  {getToolTypeDisplayLabel(toolTypeDisplayName)}
+                </Badge>
+              )}
+              {isShared && (
+                <Badge variant="secondary" className="text-[10px] flex items-center gap-1 shrink-0">
+                  <Users className="w-3 h-3" />
+                  Used by {usedByAgents.length} agent{usedByAgents.length > 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+            {tool.description && (
+              <p className={cn(
+                'text-muted-foreground',
+                compact ? 'text-xs line-clamp-1' : 'text-xs line-clamp-2'
+              )}>
+                {tool.description}
+              </p>
+            )}
+          </div>
+      </div>
+    </div>
+  );
+}
+

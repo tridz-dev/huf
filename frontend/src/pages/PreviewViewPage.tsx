@@ -1,0 +1,356 @@
+/**
+ * Full-screen preview page for message content.
+ *
+ * Route: /huf/view/:messageId
+ * Default: JSX only (previews + jsx/chart artifacts).
+ * Query: ?preview=full — show full message (text, JSX, web, artifacts).
+ *
+ * Toolbar toggles "JSX only" (default) / "Full message".
+ */
+
+import { lazy, Suspense, useEffect, useState, useRef } from 'react';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { ArrowLeft, Loader2, ExternalLink, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { db } from '@/lib/frappe-sdk';
+import { doctype } from '@/data/doctypes';
+import { handleFrappeError } from '@/lib/frappe-error';
+import {
+	parseMessagePreviewContent,
+	hasJsxOrChartContent,
+} from '@/utils/messageContentParser';
+import { readPreviewCache } from '@/utils/previewCache';
+import { JSXPreviewRenderer } from '@/components/chat/JSXPreviewRenderer';
+
+/** Lazy load MessageResponse (Streamdown) - ~1.2MB, only needed for full message view */
+const MessageResponse = lazy(() =>
+	import('@/components/ai-elements/message').then((m) => ({ default: m.MessageResponse })),
+);
+import { WebPreviewRenderer } from '@/components/chat/WebPreviewRenderer';
+import { ArtifactRenderer } from '@/components/chat/ArtifactRenderer';
+import type { ParsedJSXPreview, ParsedArtifact, ParsedWebPreview } from '@/types/artifact.types';
+
+interface AgentMessageDoc {
+	name: string;
+	content: string;
+	conversation: string;
+	kind?: string;
+	role?: string;
+	agent?: string;
+}
+
+function applyParsedContent(
+	setTextContent: (v: string) => void,
+	setJsxPreviews: (v: ParsedJSXPreview[]) => void,
+	setWebPreviews: (v: ParsedWebPreview[]) => void,
+	setArtifacts: (v: ParsedArtifact[]) => void,
+	content: string
+): boolean {
+	const parsed = parseMessagePreviewContent(content);
+	setTextContent(parsed.textContent);
+	setJsxPreviews(parsed.jsxPreviews);
+	setWebPreviews(parsed.webPreviews);
+	setArtifacts(parsed.artifacts);
+	return hasJsxOrChartContent(parsed);
+}
+
+async function fetchMessageContentById(messageId: string): Promise<AgentMessageDoc | null> {
+	try {
+		const doc = await db.getDoc(doctype['Agent Message'], messageId);
+		return doc as unknown as AgentMessageDoc;
+	} catch {
+		return null;
+	}
+}
+
+async function fetchMessageByAgentRun(messageId: string): Promise<AgentMessageDoc | null> {
+	try {
+		const messages = await db.getDocList(doctype['Agent Message'], {
+			fields: ['name', 'content', 'conversation', 'kind', 'role', 'agent'],
+			filters: [['agent_run', '=', messageId]],
+			orderBy: { field: 'creation', order: 'desc' },
+			limit: 5,
+		});
+
+		for (const doc of messages as AgentMessageDoc[]) {
+			if (hasJsxOrChartContent(parseMessagePreviewContent(doc.content || ''))) {
+				return doc;
+			}
+		}
+
+		return messages.length > 0 ? (messages[0] as AgentMessageDoc) : null;
+	} catch {
+		return null;
+	}
+}
+
+export function PreviewViewPage() {
+	const { messageId } = useParams<{ messageId: string }>();
+	const [searchParams] = useSearchParams();
+	const jsxOnly = searchParams.get('preview') !== 'full';
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+	const [message, setMessage] = useState<AgentMessageDoc | null>(null);
+	const [textContent, setTextContent] = useState('');
+	const [jsxPreviews, setJsxPreviews] = useState<ParsedJSXPreview[]>([]);
+	const [webPreviews, setWebPreviews] = useState<ParsedWebPreview[]>([]);
+	const [artifacts, setArtifacts] = useState<ParsedArtifact[]>([]);
+	const containerRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		if (!messageId) {
+			setError('No message ID provided');
+			setLoading(false);
+			return;
+		}
+
+		async function loadPreview() {
+			const cached = readPreviewCache(messageId!);
+			if (cached) {
+				setTextContent(cached.textContent);
+				setJsxPreviews(cached.jsxPreviews);
+				setWebPreviews(cached.webPreviews);
+				setArtifacts(cached.artifacts);
+				setLoading(false);
+				return;
+			}
+
+			try {
+				let agentMessage = await fetchMessageContentById(messageId!);
+
+				if (agentMessage) {
+					const hasJsx = applyParsedContent(
+						setTextContent,
+						setJsxPreviews,
+						setWebPreviews,
+						setArtifacts,
+						agentMessage.content || ''
+					);
+
+					if (!hasJsx) {
+						const fallback = await fetchMessageByAgentRun(messageId!);
+						if (fallback) {
+							agentMessage = fallback;
+							applyParsedContent(
+								setTextContent,
+								setJsxPreviews,
+								setWebPreviews,
+								setArtifacts,
+								fallback.content || ''
+							);
+						}
+					}
+				} else {
+					agentMessage = await fetchMessageByAgentRun(messageId!);
+					if (agentMessage) {
+						applyParsedContent(
+							setTextContent,
+							setJsxPreviews,
+							setWebPreviews,
+							setArtifacts,
+							agentMessage.content || ''
+						);
+					}
+				}
+
+				if (agentMessage) {
+					setMessage(agentMessage);
+				} else {
+					setError('Failed to load message. It may not exist or you may not have access.');
+				}
+			} catch (err) {
+				handleFrappeError(err, 'Error fetching message');
+				setError('Failed to load message. It may not exist or you may not have access.');
+			} finally {
+				setLoading(false);
+			}
+		}
+
+		loadPreview();
+	}, [messageId]);
+
+	// Loading state
+	if (loading) {
+		return (
+			<div className="flex h-screen items-center justify-center bg-paper">
+				<div className="flex flex-col items-center gap-3 text-steel">
+					<Loader2 className="size-8 animate-spin" />
+					<p className="text-sm">Loading preview...</p>
+				</div>
+			</div>
+		);
+	}
+
+	// Error state
+	if (error) {
+		return (
+			<div className="flex h-screen items-center justify-center bg-paper">
+				<div className="flex max-w-md flex-col items-center gap-4 text-center">
+					<AlertCircle className="size-10 text-steel-soft" />
+					<div>
+						<p className="font-medium text-foreground">{error}</p>
+						<p className="mt-1 text-sm text-steel">
+							Message ID: {messageId}
+						</p>
+					</div>
+					{message?.conversation && (
+						<Link to={`/chat/${message.conversation}`}>
+							<Button variant="outline" size="sm">
+								<ArrowLeft className="mr-2 size-4" />
+								Back to chat
+							</Button>
+						</Link>
+					)}
+				</div>
+			</div>
+		);
+	}
+
+	const hasContent =
+		(textContent && textContent.trim()) ||
+		jsxPreviews.length > 0 ||
+		webPreviews.length > 0 ||
+		artifacts.length > 0;
+
+	const jsxOnlyArtifacts = artifacts.filter(
+		(a) => a.type === 'jsx' || a.type === 'chart'
+	);
+	const hasJsxContent = jsxPreviews.length > 0 || jsxOnlyArtifacts.length > 0;
+	const showJsxOnlyContent = jsxOnly && hasJsxContent;
+
+	const viewJsxOnlyUrl = messageId ? `/view/${messageId}` : '';
+	const viewFullUrl = messageId ? `/view/${messageId}?preview=full` : '';
+
+	return (
+		<div className="flex h-screen flex-col bg-paper">
+			{/* Toolbar */}
+			<header className="flex shrink-0 items-center justify-between border-b px-4 py-2">
+				<div className="flex items-center gap-3">
+					{message?.conversation ? (
+						<Link to={`/chat/${message.conversation}`}>
+							<Button variant="ghost" size="sm">
+								<ArrowLeft className="mr-2 size-4" />
+								Back to chat
+							</Button>
+						</Link>
+					) : (
+						<Link to="/chat">
+							<Button variant="ghost" size="sm">
+								<ArrowLeft className="mr-2 size-4" />
+								Back
+							</Button>
+						</Link>
+					)}
+				</div>
+				<div className="flex items-center gap-2">
+					{jsxOnly ? (
+						<Link to={viewFullUrl}>
+							<Button variant="outline" size="sm">
+								Full message
+							</Button>
+						</Link>
+					) : (
+						<Link to={viewJsxOnlyUrl}>
+							<Button variant="outline" size="sm">
+								JSX only
+							</Button>
+						</Link>
+					)}
+					<JSXPreviewExportStandalone containerRef={containerRef} />
+				</div>
+			</header>
+
+			{/* Content */}
+			<main ref={containerRef} className="min-h-0 flex-1 overflow-auto p-6">
+				<div className="mx-auto max-w-4xl space-y-4">
+					{jsxOnly ? (
+						!showJsxOnlyContent ? (
+							<p className="text-sm text-steel">
+								No JSX or chart content in this message. Switch to Full message to see
+								everything.
+							</p>
+						) : (
+							<>
+								{jsxPreviews.map((preview, idx) => (
+									<JSXPreviewRenderer key={`preview-${idx}`} preview={preview} />
+								))}
+								{jsxOnlyArtifacts.map((artifact) => (
+									<ArtifactRenderer key={artifact.id} artifact={artifact} />
+								))}
+							</>
+						)
+					) : !hasContent ? (
+						<p className="text-sm font-body text-steel-soft">No content in this message.</p>
+					) : (
+						<>
+							{textContent && textContent.trim() && (
+								<div className="prose prose-sm dark:prose-invert max-w-none">
+									<Suspense
+										fallback={
+											<div className="animate-pulse rounded bg-paper-deep/50 p-4 text-sm text-steel">
+												Loading…
+											</div>
+										}
+									>
+										<MessageResponse>{textContent}</MessageResponse>
+									</Suspense>
+								</div>
+							)}
+							{jsxPreviews.map((preview, idx) => (
+								<JSXPreviewRenderer key={`preview-${idx}`} preview={preview} />
+							))}
+							{webPreviews.map((preview, idx) => (
+								<WebPreviewRenderer key={`web-${idx}`} preview={preview} />
+							))}
+							{artifacts.map((artifact) => (
+								<ArtifactRenderer key={artifact.id} artifact={artifact} />
+							))}
+						</>
+					)}
+				</div>
+			</main>
+		</div>
+	);
+}
+
+/**
+ * Standalone export buttons for the toolbar.
+ * Wraps JSXPreviewExport but takes containerRef as a prop
+ * since we're outside the JSXPreview context.
+ */
+function JSXPreviewExportStandalone({
+	containerRef,
+}: {
+	containerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+	const [isExporting, setIsExporting] = useState(false);
+
+	const handleExportPng = async () => {
+		if (!containerRef.current) return;
+		setIsExporting(true);
+		try {
+			const { toPng } = await import('html-to-image');
+			const dataUrl = await toPng(containerRef.current, {
+				backgroundColor: '#ffffff',
+				pixelRatio: 2,
+			});
+			const link = document.createElement('a');
+			link.download = 'preview.png';
+			link.href = dataUrl;
+			link.click();
+		} catch (err) {
+			console.error('Failed to export PNG:', err);
+		} finally {
+			setIsExporting(false);
+		}
+	};
+
+	return (
+		<Button variant="outline" size="sm" onClick={handleExportPng} disabled={isExporting}>
+			<ExternalLink className="mr-2 size-4" />
+			{isExporting ? 'Exporting...' : 'Export PNG'}
+		</Button>
+	);
+}
+
+export default PreviewViewPage;

@@ -1,0 +1,111 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:provider_name",
+ "creation": "2025-08-11 18:12:10.742145",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "is_local_llm",
+  "url",
+  "port",
+  "provider_name",
+  "api_key",
+  "provider_brand"
+ ],
+ "fields": [
+  {
+   "fieldname": "provider_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Provider Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "API Key",
+   "length": 200,
+   "reqd": 1
+  },
+  {
+   "fieldname": "provider_brand",
+   "fieldtype": "Select",
+   "label": "Provider Brand",
+   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nother",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_local_llm",
+   "fieldtype": "Check",
+   "label": "Is Local LLM"
+  },
+  {
+   "depends_on": "eval:doc.is_local_llm == 1;",
+   "fieldname": "url",
+   "fieldtype": "Data",
+   "label": "URL",
+   "mandatory_depends_on": "eval:doc.is_local_llm == 1;"
+  },
+  {
+   "depends_on": "eval:doc.is_local_llm == 1",
+   "fieldname": "port",
+   "fieldtype": "Int",
+   "label": "PORT"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-03-11 12:23:24.111361",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "AI Provider",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 0,
+   "select": 1
+  },
+  {
+    "create": 0,
+    "delete": 0,
+    "email": 1,
+    "export": 1,
+    "print": 1,
+    "read": 1,
+    "report": 1,
+    "role": "Huf User",
+    "share": 1,
+    "write": 0
+}
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

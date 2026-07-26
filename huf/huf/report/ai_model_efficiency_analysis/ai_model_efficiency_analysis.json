@@ -1,0 +1,44 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2025-12-05 11:03:32.361559",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date",
+   "mandatory": 1,
+   "wildcard_filter": 0
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date",
+   "mandatory": 1,
+   "wildcard_filter": 0
+  }
+ ],
+ "idx": 0,
+ "is_standard": "Yes",
+ "letterhead": null,
+ "modified": "2025-12-05 11:15:04.174889",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "AI Model Efficiency Analysis",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "SELECT\n    main.name AS \"Model:Link/AI Model:200\",\n    main.provider AS \"Provider:Link/AI Provider:150\",\n    \n    /* Volume Metrics */\n    COUNT(feed.name) AS \"Total Feedback:Int:120\",\n    SUM(CASE WHEN feed.feedback = 'Thumbs Up' THEN 1 ELSE 0 END) AS \"Thumbs Up:Int:100\",\n    SUM(CASE WHEN feed.feedback = 'Thumbs Down' THEN 1 ELSE 0 END) AS \"Thumbs Down:Int:100\",\n    \n    /* Efficiency Calculation */\n    CONCAT(\n        ROUND(\n            IFNULL(\n                (SUM(CASE WHEN feed.feedback = 'Thumbs Up' THEN 1 ELSE 0 END) / NULLIF(COUNT(feed.name), 0)) * 100, \n                0\n            ), \n        1), \n        '%%' /* Escaped percent sign */\n    ) AS \"Efficiency Score:Data:150\"\n\nFROM\n    `tabAI Model` main\nLEFT JOIN\n    `tabAgent Run Feedback` feed \n    ON feed.model = main.name \n    AND feed.creation >= %(from_date)s \n    AND feed.creation <= CONCAT(%(to_date)s, ' 23:59:59')\n\nWHERE\n    1=1\n\nGROUP BY\n    main.name, main.provider\n\nORDER BY\n    /* 1. Sort by Highest Efficiency First */\n    (SUM(CASE WHEN feed.feedback = 'Thumbs Up' THEN 1 ELSE 0 END) / NULLIF(COUNT(feed.name), 0)) DESC,\n    /* 2. If tied, sort by Total Volume (Reliability) */\n    COUNT(feed.name) DESC",
+ "ref_doctype": "Agent Run Feedback",
+ "report_name": "AI Model Efficiency Analysis",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  }
+ ],
+ "timeout": 0
+}

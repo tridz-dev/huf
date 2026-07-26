@@ -1,0 +1,29 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2025-12-05 15:56:01.000740",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 1,
+ "is_standard": "Yes",
+ "letterhead": null,
+ "modified": "2025-12-05 19:05:14.202069",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Average Time Duration",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "SELECT\n    ROUND(\n        AVG(\n            TIME_TO_SEC(TIMEDIFF(end_time, start_time))\n        ) / 60,\n        2\n    ) AS average_minutes_last_7_days\nFROM `tabAgent Run`\nWHERE start_time IS NOT NULL\n  AND end_time IS NOT NULL\n  AND start_time >= DATE_SUB(NOW(), INTERVAL 7 DAY);\n",
+ "ref_doctype": "Agent Run",
+ "report_name": "Average Time Duration",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  }
+ ],
+ "timeout": 0
+}

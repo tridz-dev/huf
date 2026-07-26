@@ -1,0 +1,209 @@
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer base {
+  :root {
+    /* HUF Design System v1.0 — Instrument / Control-Room */
+
+    /* Surfaces */
+    --paper:      #F2F3EF;
+    --paper-deep: #E9EBE4;
+    --panel:      #FBFCFA;
+
+    /* Text & lines */
+    --ink:        #15181C;
+    --ink-soft:   #2A2F36;
+    --steel:      #5A636F;
+    --steel-soft: #8A929C;
+    --line:       #D7DACF;
+    --line-marketing: #C7CCC0;
+    --line-dark:  #343A42;
+
+    /* Signal */
+    --signal:     #E8531F;
+    --signal-ink: #BC3E0F;
+    --good:       #3F7A4E;
+
+    /* Shape */
+    --r: 2px;
+
+    /* Typography */
+    --display: 'Big Shoulders Display', sans-serif;
+    --body:    'IBM Plex Sans', sans-serif;
+    --mono:    'IBM Plex Mono', monospace;
+
+    /* shadcn compatibility — mapped to HUF tokens */
+    --radius: 2px;
+    --background: #F2F3EF;
+    --foreground: #15181C;
+    --card: #FBFCFA;
+    --card-foreground: #15181C;
+    --popover: #FBFCFA;
+    --popover-foreground: #15181C;
+    --primary: #15181C;
+    --primary-foreground: #F2F3EF;
+    --secondary: #E9EBE4;
+    --secondary-foreground: #15181C;
+    --muted: #E9EBE4;
+    --muted-foreground: #5A636F;
+    --accent: #E9EBE4;
+    --accent-foreground: #15181C;
+    --destructive: #C0392B;
+    --destructive-foreground: #F2F3EF;
+    --border: #D7DACF;
+    --input: #D7DACF;
+    --ring: #E8531F;
+
+    /* Sidebar */
+    --sidebar-background: #E9EBE4;
+    --sidebar-foreground: #15181C;
+    --sidebar-primary: #15181C;
+    --sidebar-primary-foreground: #F2F3EF;
+    --sidebar-accent: #FBFCFA;
+    --sidebar-accent-foreground: #15181C;
+    --sidebar-border: #D7DACF;
+    --sidebar-ring: #E8531F;
+
+    /* Audio player resolved colors */
+    --color-background: #F2F3EF;
+    --color-foreground: #15181C;
+    --color-primary: #15181C;
+    --color-secondary: #E9EBE4;
+    --color-accent: #E9EBE4;
+    --color-border: #D7DACF;
+    --color-muted-foreground: #5A636F;
+  }
+
+  @keyframes blink { 50% { opacity: .2; } }
+  @keyframes drop  { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+  * {
+    border-color: var(--line);
+    box-sizing: border-box;
+  }
+
+  html, body {
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+  }
+
+  #root {
+    height: 100%;
+    width: 100%;
+  }
+}
+
+@layer components {
+  /* Sonner Toast — HUF design system vars */
+
+  [data-sonner-toaster],
+  [data-sonner-toaster][data-sonner-theme="dark"] {
+    --width: 356px;
+    --border-radius: var(--radius);
+    --normal-bg: var(--card);
+    --normal-border: var(--border);
+    --normal-text: var(--card-foreground);
+  }
+
+  [data-sonner-toaster][dir="ltr"] {
+    --toast-close-button-start: unset;
+    --toast-close-button-end: 0.5rem;
+    --toast-close-button-transform: translate(35%, -35%);
+  }
+
+  [data-sonner-toast][data-styled="true"] {
+    box-shadow: none;
+    border: 1px solid var(--border);
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-description],
+  [data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast] [data-description] {
+    color: var(--muted-foreground);
+  }
+
+  [data-sonner-toast][data-type="success"] {
+    border-left: 3px solid var(--good);
+  }
+  [data-sonner-toast][data-type="success"] [data-icon] {
+    color: var(--good);
+  }
+
+  [data-sonner-toast][data-type="error"] {
+    border-left: 3px solid var(--destructive);
+  }
+  [data-sonner-toast][data-type="error"] [data-icon] {
+    color: var(--destructive);
+  }
+
+  [data-sonner-toast][data-type="warning"] {
+    border-left: 3px solid var(--signal);
+  }
+  [data-sonner-toast][data-type="warning"] [data-icon] {
+    color: var(--signal);
+  }
+
+  [data-sonner-toast][data-type="info"] {
+    border-left: 3px solid var(--steel);
+  }
+  [data-sonner-toast][data-type="info"] [data-icon] {
+    color: var(--steel);
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-button] {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-radius: calc(var(--radius) - 2px);
+  }
+  [data-sonner-toast][data-styled="true"] [data-button]:hover {
+    background: color-mix(in srgb, var(--primary) 90%, transparent);
+  }
+
+  [data-sonner-toast][data-styled="true"] [data-cancel] {
+    background: var(--muted);
+    color: var(--muted-foreground);
+    border-radius: calc(var(--radius) - 2px);
+  }
+  [data-sonner-toast][data-styled="true"] [data-cancel]:hover {
+    background: color-mix(in srgb, var(--muted) 80%, transparent);
+  }
+
+  [data-sonner-toast][data-styled="true"] {
+    padding-right: 2.5rem;
+  }
+  [data-sonner-toast] [data-close-button] {
+    width: 1.75rem;
+    height: 1.75rem;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    color: var(--muted-foreground);
+    background: var(--card);
+    border-color: var(--border);
+  }
+  [data-sonner-toast] [data-close-button]:hover,
+  [data-sonner-toaster][data-sonner-theme="dark"] [data-sonner-toast] [data-close-button]:hover {
+    background: var(--muted);
+    border-color: var(--border);
+  }
+  [data-sonner-toast] [data-close-button] svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+}

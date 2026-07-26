@@ -1,0 +1,22 @@
+# FasterDocker build context exclusions
+.git
+.github
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+node_modules
+frontend/node_modules
+.vscode
+.idea
+# Keep README.md and LICENSE because pyproject.toml references them.
+# *.md
+.env
+.env.example
+.DS_Store
+# Bake output is small (~500 KB) and is bundled into the huf-app image so the
+# container can self-seed on first boot. Keep it in the Docker context; git
+# ignores it via .gitignore.
+# docker/fast/.bake-output/*
+# !docker/fast/.bake-output/.gitkeep

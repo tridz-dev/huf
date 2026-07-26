@@ -1,0 +1,119 @@
+{
+	"actions": [],
+	"autoname": "hash",
+	"creation": "2026-03-07 00:00:00.000000",
+	"doctype": "DocType",
+	"engine": "InnoDB",
+	"field_order": [
+		"table_name",
+		"doctype_name",
+		"column_break_main",
+		"autoname_method",
+		"title_field_name",
+		"details_section",
+		"description",
+		"icon",
+		"column_break_details",
+		"field_count",
+		"record_count",
+		"is_active"
+	],
+	"fields": [
+		{
+			"fieldname": "table_name",
+			"fieldtype": "Data",
+			"label": "Table Name",
+			"reqd": 1,
+			"unique": 1
+		},
+		{
+			"fieldname": "doctype_name",
+			"fieldtype": "Data",
+			"label": "DocType Name",
+			"read_only": 1,
+			"reqd": 1,
+			"unique": 1
+		},
+		{
+			"fieldname": "column_break_main",
+			"fieldtype": "Column Break"
+		},
+		{
+			"default": "Autoincrement",
+			"fieldname": "autoname_method",
+			"fieldtype": "Select",
+			"label": "Naming Method",
+			"options": "Autoincrement\nHash\nBy Field"
+		},
+		{
+			"depends_on": "eval:doc.autoname_method=='By Field'",
+			"fieldname": "title_field_name",
+			"fieldtype": "Data",
+			"label": "Title Field"
+		},
+		{
+			"fieldname": "details_section",
+			"fieldtype": "Section Break",
+			"label": "Details"
+		},
+		{
+			"fieldname": "description",
+			"fieldtype": "Small Text",
+			"label": "Description"
+		},
+		{
+			"fieldname": "icon",
+			"fieldtype": "Data",
+			"label": "Icon"
+		},
+		{
+			"fieldname": "column_break_details",
+			"fieldtype": "Column Break"
+		},
+		{
+			"default": "0",
+			"fieldname": "field_count",
+			"fieldtype": "Int",
+			"label": "Field Count",
+			"read_only": 1
+		},
+		{
+			"default": "0",
+			"fieldname": "record_count",
+			"fieldtype": "Int",
+			"label": "Record Count",
+			"read_only": 1
+		},
+		{
+			"default": "1",
+			"fieldname": "is_active",
+			"fieldtype": "Check",
+			"label": "Is Active"
+		}
+	],
+	"index_web_pages_for_search": 1,
+	"links": [],
+	"modified": "2026-03-07 00:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Huf",
+	"name": "Huf Data Table",
+	"naming_rule": "Random",
+	"owner": "Administrator",
+	"permissions": [
+		{
+			"create": 1,
+			"delete": 1,
+			"email": 1,
+			"print": 1,
+			"read": 1,
+			"role": "System Manager",
+			"share": 1,
+			"write": 1
+		}
+	],
+	"row_format": "Dynamic",
+	"sort_field": "modified",
+	"sort_order": "DESC",
+	"states": [],
+	"track_changes": 1
+}
