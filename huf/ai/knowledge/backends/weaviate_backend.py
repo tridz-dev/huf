@@ -220,7 +220,7 @@ class WeaviateBackend(LlamaIndexBackend, KnowledgeBackend):
 			return 0
 		try:
 			collection = self.client.collections.get(self.index_name)
-			result = collection.aggregate.over_all(where=self._scope_filter(input_id), total_count=True)
+			result = collection.aggregate.over_all(filters=self._scope_filter(input_id), total_count=True)
 			return int(getattr(result, "total_count", 0) or 0)
 		except Exception as exc:
 			frappe.logger().warning(f"Weaviate count failed for {self.knowledge_source}: {exc!s}")
