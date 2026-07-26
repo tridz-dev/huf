@@ -58,6 +58,7 @@ const IntegrationServicesListingPageWrapper = lazy(
 const IntegrationServiceFormPageWrapper = lazy(
   () => import('./pages/IntegrationServiceFormPageWrapper'),
 );
+const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 
 import { useEffect } from 'react';
 import { SocketProvider } from './contexts/SocketContext';
@@ -380,6 +381,18 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationSettingsDetailsPageWrapper />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/gateways"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <GatewaysPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
