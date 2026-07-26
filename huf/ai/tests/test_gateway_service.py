@@ -1,6 +1,7 @@
 """Focused unit tests for the provider-neutral Gateway foundation."""
 
 from types import SimpleNamespace
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
 from datetime import datetime
@@ -186,3 +187,36 @@ class TestGatewayIngress(unittest.TestCase):
         admitted, reason = gateway_service._admission(gateway(), {"sender_id": "42", "conversation_id": "room:1", "is_room": True, "mentioned": False})
         assert admitted is False
         assert reason == "Room messages must mention the gateway"
+
+
+class TestGatewayReplyDelivery(unittest.TestCase):
+    @patch("huf.ai.gateway_service.frappe")
+    @patch("huf.ai.gateway_webhook.send_gateway_reply")
+    def test_agent_result_is_delivered_through_the_gateway(self, mock_send, mock_frappe):
+        event = MagicMock(
+            name="GATEWAY-EVENT-0004",
+            status="Queued",
+            gateway="Support VK",
+            target_type="Agent",
+            target_agent="Support Agent",
+            message_text="hello",
+            thread_id="123",
+            conversation_id="2000000001",
+            sender_id="42",
+        )
+        configured_gateway = gateway(name="Support VK", execution_user="gateway-bot")
+        mock_frappe.get_doc.side_effect = [event, configured_gateway]
+        mock_run = MagicMock(return_value={"agent_run_id": "AR-001", "response": "Hello back"})
+        mock_send.return_value = SimpleNamespace(provider_message_id="vk-message-1")
+
+        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}):
+            result = gateway_service.process_gateway_event(event.name)
+
+        assert result == {
+            "event_name": event.name,
+            "status": "Succeeded",
+            "agent_run_id": "AR-001",
+            "provider_message_id": "vk-message-1",
+        }
+        assert mock_run.call_args.kwargs["now"] is True
+        mock_send.assert_called_once_with(configured_gateway, event, "Hello back")
