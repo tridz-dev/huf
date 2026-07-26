@@ -238,15 +238,26 @@ def process_gateway_event(event_name: str) -> dict:
         event.db_set("status", "Running")
         if event.target_type == "Agent":
             from huf.ai.agent_integration import run_agent_sync
+            from huf.ai.gateway_webhook import send_gateway_reply
 
             result = run_agent_sync(
                 agent_name=event.target_agent,
                 prompt=event.message_text,
                 channel_id=f"gateway:{gateway.name}",
                 external_id=event.thread_id or event.conversation_id or event.sender_id,
+                now=True,
             )
-            event.db_set({"agent_run": result.get("agent_run_id"), "status": "Queued"})
-            return {"event_name": event.name, "status": "Queued", "agent_run_id": result.get("agent_run_id")}
+            response = result.get("response") if isinstance(result, dict) else None
+            if not response or not str(response).strip():
+                raise frappe.ValidationError(_("Gateway agent run completed without a text response."))
+            delivery = send_gateway_reply(gateway, event, str(response))
+            event.db_set({"agent_run": result.get("agent_run_id"), "status": "Succeeded"})
+            return {
+                "event_name": event.name,
+                "status": "Succeeded",
+                "agent_run_id": result.get("agent_run_id"),
+                "provider_message_id": delivery.provider_message_id,
+            }
 
         if event.target_type == "Flow":
             from huf.ai.flow_engine import create_flow_run
