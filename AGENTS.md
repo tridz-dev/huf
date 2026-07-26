@@ -2195,3 +2195,11 @@ HUF integrates prompt caching to save token costs on supported models:
 
 ### Frontend TypeScript Strictness
 The frontend project enforces strict TypeScript rules. Unused variables, unresolved imports, and unused functions will cause build failures (e.g., `error TS6133`). Always proactively remove unused variables, functions, and imports, especially after code refactorings, to ensure the frontend build succeeds without errors.
+
+### Frontend Component Discipline
+To prevent god-component sprawl and maintain a clean frontend architecture:
+1. **Scale Limits**: Components (pages, views, modals, shared UI primitives) must not exceed 400 lines or 10 `useState` hooks. You must split the component or extract custom domain hooks *before* adding features to any component that exceeds these limits.
+2. **Schema-Driven Forms**: Form fields for agents belong in per-tab schema configurations once the schema-driven refactor (PR #156 plan) lands. Do not add new hand-wired fields to `frontend/src/pages/AgentFormPage.tsx`.
+3. **PR Review Checklist**: Reject any Pull Request diffs that grow a component beyond 400 lines without a documented extraction plan.
+4. **Inventory & splits**: Refer to `docs/architecture/god-component-inventory.md` for the verified list of over-limit components and recommended remediation splits.
+
