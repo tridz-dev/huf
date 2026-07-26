@@ -1,4 +1,4 @@
-import { Settings, Loader2 } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink, KeyRound, Loader2, Settings, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -14,8 +14,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getProviders, getProvider, updateProvider, createProvider } from '../services/providerApi';
-import { getModels } from '../services/providerApi';
+import { createModel, getModels, getProvider, getProviders, updateProvider, createProvider } from '../services/providerApi';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -29,6 +28,43 @@ interface AiProvidersPageProps {
   addProviderKey?: number;
 }
 
+type StarterPath = 'openrouter' | 'google';
+
+const STARTER_PATHS: Record<StarterPath, {
+  providerName: string;
+  providerBrand: string;
+  modelName: string;
+  title: string;
+  description: string;
+  caution: string;
+  signupUrl: string;
+  signupLabel: string;
+  freePricing: boolean;
+}> = {
+  openrouter: {
+    providerName: 'OpenRouter',
+    providerBrand: 'openrouter',
+    modelName: 'openrouter/free',
+    title: 'Try OpenRouter Free',
+    description: 'Start with a zero-cost router that selects an available free model for each request.',
+    caution: 'Best for learning and demos. Free models can change, have lower limits, and are not a production reliability tier.',
+    signupUrl: 'https://openrouter.ai/keys',
+    signupLabel: 'Get an OpenRouter key',
+    freePricing: true,
+  },
+  google: {
+    providerName: 'Google',
+    providerBrand: 'google',
+    modelName: 'gemini-2.5-flash',
+    title: 'Try Gemini with Google AI Studio',
+    description: 'Use Gemini 2.5 Flash with the Google Gemini API free tier to explore Huf.',
+    caution: 'Free-tier limits apply. Google states that free-tier content may be used to improve its products; avoid sensitive production data.',
+    signupUrl: 'https://aistudio.google.com/app/apikey',
+    signupLabel: 'Get a Google AI Studio key',
+    freePricing: false,
+  },
+};
+
 export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const configureHandledRef = useRef(false);
@@ -38,6 +74,9 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [loadingProvider, setLoadingProvider] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [starterPath, setStarterPath] = useState<StarterPath | null>(null);
+  const [starterApiKey, setStarterApiKey] = useState('');
+  const [starterSaving, setStarterSaving] = useState(false);
   const [formData, setFormData] = useState({
     provider_name: '',
     api_key: '',
@@ -239,6 +278,64 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     }
   };
 
+  const handleStarterSetup = async () => {
+    if (!starterPath || !starterApiKey.trim()) {
+      toast.error('Enter an API key to continue');
+      return;
+    }
+
+    const starter = STARTER_PATHS[starterPath];
+    setStarterSaving(true);
+    try {
+      const providersResponse = await getProviders({ limit: 100 });
+      const allProviders = Array.isArray(providersResponse) ? providersResponse : providersResponse.items;
+      const existingProvider = allProviders.find(
+        (provider) => provider.provider_name.toLowerCase() === starter.providerName.toLowerCase(),
+      );
+      const provider = existingProvider
+        ? await updateProvider(existingProvider.name, {
+            api_key: starterApiKey.trim(),
+            provider_brand: starter.providerBrand,
+          })
+        : await createProvider({
+            provider_name: starter.providerName,
+            api_key: starterApiKey.trim(),
+            provider_brand: starter.providerBrand,
+          });
+
+      const currentModels = await getModels();
+      const modelExists = currentModels.some(
+        (model) => model.model_name === starter.modelName && model.provider === provider.name,
+      );
+      if (!modelExists) {
+        await createModel({
+          model_name: starter.modelName,
+          provider: provider.name,
+          modalities: 'Text',
+          use_custom_pricing: starter.freePricing ? 1 : 0,
+          input_cost_per_1m_tokens: starter.freePricing ? 0 : null,
+          output_cost_per_1m_tokens: starter.freePricing ? 0 : null,
+        });
+      }
+
+      toast.success(`${starter.providerName} is ready`, {
+        description: `You can now create an agent with ${starter.modelName}. The key has not been tested yet.`,
+      });
+      setStarterPath(null);
+      setStarterApiKey('');
+      reset();
+      const refreshedModels = await getModels();
+      setModels(refreshedModels);
+    } catch (setupError) {
+      toast.error('Could not finish starter setup', {
+        description: 'Huf could not save this starter setup. Check the details and try again.',
+      });
+      console.error(setupError);
+    } finally {
+      setStarterSaving(false);
+    }
+  };
+
   useSaveShortcut({
     onSave: handleSave,
     enabled: configureModalOpen && !loadingProvider,
@@ -257,6 +354,28 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         />
       }
     >
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2 text-primary">
+            <Sparkles className="h-4 w-4" />
+            <CardTitle className="text-base">Get started with AI</CardTitle>
+          </div>
+          <CardDescription>
+            Pick a free-friendly starter path, add its key, and Huf will prepare a model for your first agent.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row">
+          {(Object.entries(STARTER_PATHS) as [StarterPath, typeof STARTER_PATHS[StarterPath]][]).map(([path, starter]) => (
+            <Button key={path} variant="outline" className="h-auto flex-1 justify-between whitespace-normal text-left" onClick={() => setStarterPath(path)}>
+              <span>
+                <span className="block font-medium">{starter.title}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{starter.modelName}</span>
+              </span>
+              <ArrowRight className="ml-3 h-4 w-4 shrink-0" />
+            </Button>
+          ))}
+        </CardContent>
+      </Card>
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load providers</p>
@@ -411,6 +530,43 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={starterPath !== null} onOpenChange={(open) => !open && setStarterPath(null)}>
+        <DialogContent className="sm:max-w-[520px]">
+          {starterPath && (() => {
+            const starter = STARTER_PATHS[starterPath];
+            return <>
+              <DialogHeader>
+                <DialogTitle>{starter.title}</DialogTitle>
+                <DialogDescription>{starter.description}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  <strong className="text-foreground">Good to know: </strong>{starter.caution}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="starter-api-key">API key</Label>
+                  <Input id="starter-api-key" type="password" autoComplete="off" placeholder="Paste your API key" value={starterApiKey} onChange={(event) => setStarterApiKey(event.target.value)} />
+                  <a className="inline-flex items-center gap-1 text-sm text-primary hover:underline" href={starter.signupUrl} target="_blank" rel="noreferrer">
+                    {starter.signupLabel}<ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+                <div className="rounded-md border p-3 text-sm">
+                  <p className="font-medium">Huf will configure</p>
+                  <p className="mt-1 text-muted-foreground">Provider: {starter.providerName} · Model: <code>{starter.modelName}</code></p>
+                  <p className="mt-2 flex items-center gap-1 text-muted-foreground"><Check className="h-4 w-4 text-primary" /> Your key is stored in Huf's encrypted password field.</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setStarterPath(null)} disabled={starterSaving}>Cancel</Button>
+                <Button onClick={handleStarterSetup} disabled={starterSaving || !starterApiKey.trim()}>
+                  {starterSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Setting up…</> : <><KeyRound className="mr-2 h-4 w-4" />Set up starter</>}
+                </Button>
+              </DialogFooter>
+            </>;
+          })()}
         </DialogContent>
       </Dialog>
     </PageLayout>
