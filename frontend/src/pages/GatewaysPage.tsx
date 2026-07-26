@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
   Link2,
+  LucideIcon,
   Mail,
   MessageCircle,
   Send,
@@ -16,7 +17,7 @@ import { Button } from '@/components/ui/button';
 
 // TODO(#473-followup): Add real icons/names for Discord, VK, WeCom, Microsoft Teams
 // once the provider adapters are wired up. For now we fall back to a generic icon.
-const providerIcons: Partial<Record<GatewayProvider, React.ComponentType<{ className?: string }>>> = {
+const providerIcons: Partial<Record<GatewayProvider, LucideIcon>> = {
   Telegram: Send,
   Slack,
   Email: Mail,

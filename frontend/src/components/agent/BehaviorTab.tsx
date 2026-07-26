@@ -89,6 +89,11 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 									<FormDescription>
 										If checked, this agent can be interacted with in the Agent Chat window.
 									</FormDescription>
+									{!field.value && (
+										<p className="text-xs font-medium text-amber-600">
+											Chat and streaming are disabled for this agent.
+										</p>
+									)}
 								</div>
 								<FormControl>
 									<Switch

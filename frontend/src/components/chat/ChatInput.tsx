@@ -20,6 +20,13 @@ import type { MessageType } from './types';
 
 export type LoadingType = 'default' | 'transcribing';
 
+/**
+ * Hang guard: if no terminal frame (complete/error) arrives within this
+ * window of the last activity (send or streaming delta), the pending bubble
+ * becomes an error card instead of loading forever.
+ */
+const RUN_RESPONSE_TIMEOUT_MS = 180_000;
+
 interface ChatInputProps {
     chatId: string | null;
     agentName: string;
@@ -64,6 +71,11 @@ export function ChatInput({
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const isAudioRecordingFlowRef = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    // Hang guard refs (see RUN_RESPONSE_TIMEOUT_MS): the pending bubble
+    // becomes an error card if no terminal frame arrives in time.
+    const runTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastRunActivityRef = useRef(0);
+    const runTimedOutRef = useRef(false);
     const [pendingFile, setPendingFile] = useState<{
         file: File;
         name: string;
@@ -72,6 +84,54 @@ export function ChatInput({
         status: 'uploading' | 'ready' | 'error';
         error?: string;
     } | null>(null);
+
+    const clearRunTimeout = useCallback(() => {
+        if (runTimeoutRef.current) {
+            clearTimeout(runTimeoutRef.current);
+            runTimeoutRef.current = null;
+        }
+    }, []);
+
+    useEffect(() => clearRunTimeout, [clearRunTimeout]);
+
+    const armRunTimeout = useCallback((assistantKey: string) => {
+        clearRunTimeout();
+        runTimedOutRef.current = false;
+        lastRunActivityRef.current = Date.now();
+        const check = () => {
+            const remaining = RUN_RESPONSE_TIMEOUT_MS - (Date.now() - lastRunActivityRef.current);
+            if (remaining > 0) {
+                // Activity seen recently (streaming deltas) — check again later.
+                runTimeoutRef.current = setTimeout(check, remaining);
+                return;
+            }
+            runTimedOutRef.current = true;
+            onStatusChange('error');
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === assistantKey && !msg.runStatus
+                        ? { ...msg, runStatus: 'Failed' as const, error: 'No response from agent (timeout)' }
+                        : msg
+                )
+            );
+        };
+        runTimeoutRef.current = setTimeout(check, RUN_RESPONSE_TIMEOUT_MS);
+    }, [clearRunTimeout, onStatusChange, setMessages]);
+
+    const markAssistantError = useCallback((assistantKey: string, errorText: string) => {
+        setMessages((prev) =>
+            prev.map((msg) =>
+                msg.key === assistantKey
+                    ? {
+                        ...msg,
+                        runStatus: 'Failed' as const,
+                        error: errorText,
+                        versions: [{ id: msg.versions[0]?.id ?? assistantKey, content: '' }],
+                    }
+                    : msg
+            )
+        );
+    }, [setMessages]);
     
     const MIN_HEIGHT = 60;
     const MAX_HEIGHT = 200;
@@ -103,51 +163,71 @@ export function ChatInput({
             // advanced `run_immediately` policy when the stream endpoint is
             // reachable.
             const useStreaming = streamingAvailable && runImmediately;
-            const response = await sendMessage(
-                {
-                    agent: agentName,
-                    message: params.message,
-                    conversationId: params.conversationId,
-                    skipUserMessage: params.skipUserMessage,
-                    files: params.files,
-                },
-                {
-                    useStreaming,
-                    onDelta: useStreaming ? params.updateAssistantContent : undefined,
-                    skipUserMessage: params.skipUserMessage,
-                    files: params.files,
+            armRunTimeout(params.assistantMessageId);
+            const trackActivity = (content: string) => {
+                lastRunActivityRef.current = Date.now();
+                params.updateAssistantContent(content);
+            };
+            try {
+                const response = await sendMessage(
+                    {
+                        agent: agentName,
+                        message: params.message,
+                        conversationId: params.conversationId,
+                        skipUserMessage: params.skipUserMessage,
+                        files: params.files,
+                    },
+                    {
+                        useStreaming,
+                        onDelta: useStreaming ? trackActivity : undefined,
+                        skipUserMessage: params.skipUserMessage,
+                        files: params.files,
+                    }
+                );
+                const msg = response.message as Record<string, unknown>;
+                // A failed run must surface as an error card, not an assistant
+                // bubble or an endless loading state. `new_conversation` nests the
+                // run ack under `msg.run`; `send_message_to_conversation` flattens it.
+                const runAck = msg?.run as Record<string, unknown> | undefined;
+                const runSuccess = (msg?.success as boolean | undefined) ?? (runAck?.success as boolean | undefined);
+                if (runSuccess === false) {
+                    const errorText =
+                        (msg?.error as string) ||
+                        (runAck?.error as string) ||
+                        'The agent run failed.';
+                    throw new Error(errorText);
                 }
-            );
-            const msg = response.message as Record<string, unknown>;
-            const conversationId =
-                (msg?.conversation_id as string) ??
-                ((msg?.run as Record<string, unknown>)?.conversation_id as string);
-            const responseTextRaw =
-                (msg?.run as Record<string, unknown>)?.response ?? msg?.response;
-            const responseText = typeof responseTextRaw === 'string' ? responseTextRaw : '';
-            // `new_conversation` nests the run ack under `msg.run`; `send_message_to_conversation`
-            // returns it flattened at the top level. Check both, like the other run fields below —
-            // otherwise the very first message in a brand-new conversation is never marked queued,
-            // so the pending bubble never gets `runStatus` and the polling fallback never engages.
-            const queued =
-                msg?.queued === true || (msg?.run as Record<string, unknown>)?.queued === true;
-            if (!useStreaming && responseText && !queued) {
-                params.updateAssistantContent(responseText);
+                const conversationId =
+                    (msg?.conversation_id as string) ??
+                    (runAck?.conversation_id as string);
+                const responseTextRaw = runAck?.response ?? msg?.response;
+                const responseText = typeof responseTextRaw === 'string' ? responseTextRaw : '';
+                // `new_conversation` nests the run ack under `msg.run`; `send_message_to_conversation`
+                // returns it flattened at the top level. Check both, like the other run fields below —
+                // otherwise the very first message in a brand-new conversation is never marked queued,
+                // so the pending bubble never gets `runStatus` and the polling fallback never engages.
+                const queued =
+                    msg?.queued === true || runAck?.queued === true;
+                if (!useStreaming && responseText && !queued) {
+                    trackActivity(responseText);
+                }
+                const agentMessageId =
+                    (msg?.agent_message_id as string) ||
+                    (runAck?.agent_message_id as string) ||
+                    undefined;
+                const agentRunId =
+                    (msg?.agent_run_id as string) ||
+                    (runAck?.agent_run_id as string) ||
+                    undefined;
+                const status =
+                    (msg?.status as string | undefined) ??
+                    (runAck?.status as string | undefined);
+                return { conversationId, agentMessageId, agentRunId, queued, status };
+            } finally {
+                clearRunTimeout();
             }
-            const agentMessageId =
-                (msg?.agent_message_id as string) ||
-                ((msg?.run as Record<string, unknown>)?.agent_message_id as string) ||
-                undefined;
-            const agentRunId =
-                (msg?.agent_run_id as string) ||
-                ((msg?.run as Record<string, unknown>)?.agent_run_id as string) ||
-                undefined;
-            const status =
-                (msg?.status as string | undefined) ??
-                ((msg?.run as Record<string, unknown>)?.status as string | undefined);
-            return { conversationId, agentMessageId, agentRunId, queued, status };
         },
-        [agentName, runImmediately]
+        [agentName, runImmediately, armRunTimeout, clearRunTimeout]
     );
 
     const syncAssistantMessageId = useCallback(
@@ -243,6 +323,7 @@ export function ChatInput({
             };
             let assistantKey = assistantMessageId;
 
+            let runPhase = false;
             try {
                 const prepareRes = await prepareMessageWithFile({
                     file_id: sentFileId,
@@ -280,6 +361,7 @@ export function ChatInput({
                 setPendingFile(null);
                 if (!chatId) isCreatingConversationRef.current = true;
 
+                runPhase = true;
                 const { conversationId, agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
                     message: prepareRes.agent_prompt,
                     conversationId: prepareRes.conversation_id ?? chatId ?? undefined,
@@ -288,6 +370,11 @@ export function ChatInput({
                     skipUserMessage: true,
                     files: prepareRes.files,
                 });
+                if (runTimedOutRef.current) {
+                    // Hang guard already converted the bubble to an error card.
+                    isCreatingConversationRef.current = false;
+                    return;
+                }
 
                 assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
                 if (queued && agentRunId) {
@@ -314,21 +401,32 @@ export function ChatInput({
                 }
                 setTimeout(() => textareaRef.current?.focus(), chatId ? 100 : 200);
             } catch (error) {
+                if (runTimedOutRef.current) {
+                    isCreatingConversationRef.current = false;
+                    return;
+                }
                 if (streamingAvailable) setStreamingAvailable(false);
                 isCreatingConversationRef.current = false;
                 onStatusChange('error');
-                setPendingFile({
-                    file: stagedFile,
-                    name: sentFileName,
-                    fileId: sentFileId,
-                    status: 'error',
-                    error: error instanceof Error ? error.message : 'Failed to send file',
-                });
-                setMessages((prev) =>
-                    prev.filter((msg) => msg.key !== userMessageKey && msg.key !== assistantKey)
-                );
+                const errorText = error instanceof Error ? error.message : 'Failed to send file';
+                if (runPhase) {
+                    // The file was accepted; the run itself failed — show an
+                    // error card instead of swallowing the user message.
+                    markAssistantError(assistantKey, errorText);
+                } else {
+                    setPendingFile({
+                        file: stagedFile,
+                        name: sentFileName,
+                        fileId: sentFileId,
+                        status: 'error',
+                        error: errorText,
+                    });
+                    setMessages((prev) =>
+                        prev.filter((msg) => msg.key !== userMessageKey && msg.key !== assistantKey)
+                    );
+                }
                 toast.error('Failed to send message with attachment', {
-                    description: error instanceof Error ? error.message : 'An error occurred',
+                    description: errorText,
                 });
             } finally {
                 setIsSubmitting(false);
@@ -376,6 +474,11 @@ export function ChatInput({
                 assistantMessageId,
                 updateAssistantContent,
             });
+            if (runTimedOutRef.current) {
+                // Hang guard already converted the bubble to an error card.
+                isCreatingConversationRef.current = false;
+                return;
+            }
             assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
             if (queued && agentRunId) {
                 linkUserMessageToRun(userMessageKey, agentRunId);
@@ -403,14 +506,19 @@ export function ChatInput({
             if (streamingAvailable) setStreamingAvailable(false);
             isCreatingConversationRef.current = false;
             onStatusChange('error');
+            const errorText = error instanceof Error ? error.message : 'An error occurred';
+            if (!runTimedOutRef.current) {
+                // Replace the pending bubble with an error card (never a fake
+                // assistant bubble or an endless loading state).
+                markAssistantError(assistantKey, errorText);
+            }
             toast.error('Failed to send message', {
-                description: error instanceof Error ? error.message : 'An error occurred',
+                description: errorText,
             });
-            setMessages((prev) => prev.filter((msg) => msg.key !== assistantKey));
         } finally {
             setIsSubmitting(false);
         }
-    }, [message, agentName, chatId, pendingFile, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun]);
+    }, [message, agentName, chatId, pendingFile, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
 
     const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
         const filename = `recording-${Date.now()}.webm`;
@@ -508,6 +616,11 @@ export function ChatInput({
                 updateAssistantContent,
                 skipUserMessage: true,
             });
+            if (runTimedOutRef.current) {
+                // Hang guard already converted the bubble to an error card.
+                isCreatingConversationRef.current = false;
+                return transcript;
+            }
             currentAssistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
             if (queued && agentRunId) {
                 linkUserMessageToRun(userMessageKey, agentRunId);
@@ -530,14 +643,17 @@ export function ChatInput({
             return transcript;
         } catch (agentErr) {
             isCreatingConversationRef.current = false;
-            setMessages((prev) => prev.filter((m) => m.key !== currentAssistantKey));
             onStatusChange('error');
+            const agentErrorText = agentErr instanceof Error ? agentErr.message : 'An error occurred';
+            if (!runTimedOutRef.current) {
+                markAssistantError(currentAssistantKey, agentErrorText);
+            }
             toast.error('Failed to send message', {
-                description: agentErr instanceof Error ? agentErr.message : 'An error occurred',
+                description: agentErrorText,
             });
             throw agentErr;
         }
-    }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun]);
+    }, [agentName, chatId, onConversationCreated, onStatusChange, onLoadingTypeChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
 
     const handleTranscriptionChange = useCallback((text: string) => {
         if (isAudioRecordingFlowRef.current) {
@@ -601,7 +717,7 @@ export function ChatInput({
     const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            handleSubmit(e);
+            handleSubmit(e as unknown as React.FormEvent<HTMLFormElement>);
         }
     }, [handleSubmit]);
 

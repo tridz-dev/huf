@@ -54,6 +54,11 @@ class SimpleResult:
         self.cost = cost
 
 
+class ProviderUnavailableError(Exception):
+    """Raised when the LLM provider cannot serve this request (conn refused, model missing,
+    bad model prefix, auth). Distinct from content-level errors."""
+
+
 # High-performance in-memory cache for provider capabilities
 # Stores capability flags to avoid Redis hits on every request
 _L1_CAPABILITY_CACHE = {}
@@ -65,6 +70,7 @@ def _is_transient_litellm_error(exc: Exception) -> bool:
     if any(k in msg for k in (
         "broken pipe", "connection reset", "connection aborted",
         "connection error", "unexpected eof", "remote end closed",
+        "connection refused", "failed to connect",
     )):
         return True
     if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
@@ -235,6 +241,24 @@ def _find_tool(agent, tool_name):
     return next((t for t in agent.tools if t.name == tool_name), None)
 
 
+def _tool_calls_signature(tool_calls_list: list) -> tuple:
+    """Return a hashable signature for a list of tool calls.
+
+    IDs are ignored so that repeated identical calls with fresh IDs are
+    detected as loops.
+    """
+    parts = []
+    for tc in tool_calls_list:
+        fn = tc.get("function", {})
+        args = fn.get("arguments", "")
+        try:
+            args = json.dumps(json.loads(args), sort_keys=True) if args else ""
+        except Exception:
+            args = str(args)
+        parts.append((fn.get("name", ""), args))
+    return tuple(parts)
+
+
 def _get_agent_max_context_chars(agent_doc) -> int:
     """Return the agent's configured tool-result context threshold."""
     try:
@@ -273,12 +297,13 @@ def _truncate_tool_result_for_context(result_content, max_context_chars: int = 2
     return result_content[:keep] + notice
 
 
-def _normalize_model_name(model: str, provider: str) -> str:
+def _normalize_model_name(model: str, provider: str, brand: str = None) -> str:
     """
     Normalize model name to LiteLLM format.
 
     If model already has provider prefix (e.g., "openai/gpt-4-turbo"), use as-is.
-    Otherwise, infer provider prefix from provider name.
+    Otherwise, infer the prefix from the provider brand (most reliable) and
+    fall back to the provider name.
 
     This allows users to keep existing model names while supporting LiteLLM format.
     """
@@ -294,6 +319,17 @@ def _normalize_model_name(model: str, provider: str) -> str:
     if "/" in model:
         # Already in LiteLLM format
         return model
+
+    # Brand-based routing takes precedence over the provider doc name: any
+    # provider with brand "ollama" routes through the ollama_chat endpoint
+    # (required for reasoning models like gpt-oss with tools attached),
+    # regardless of what the provider document is named.
+    brand_prefix_map = {
+        "ollama": "ollama_chat",
+        "lmstudio": "openai",  # LM Studio exposes an OpenAI-compatible API
+    }
+    if brand and brand.lower() in brand_prefix_map:
+        return f"{brand_prefix_map[brand.lower()]}/{model}"
 
     # Provider prefix mapping for auto-normalization
     provider_prefix_map = {
@@ -311,6 +347,8 @@ def _normalize_model_name(model: str, provider: str) -> str:
         "cohere": "cohere",
         "perplexity": "perplexity",
         "meta": "meta-llama",
+        "ollama": "ollama_chat",  # chat endpoint required for reasoning models (e.g. gpt-oss) with tools
+        "lmstudio": "openai",  # LM Studio exposes an OpenAI-compatible API
     }
 
     prefix = provider_prefix_map.get(provider.lower(), provider.lower())
@@ -341,6 +379,30 @@ def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
     else:
         # Most providers accept api_key parameter directly
         completion_kwargs["api_key"] = api_key
+
+
+def _resolve_api_base(provider_doc) -> str | None:
+    """Resolve the API base URL for a local/self-hosted provider.
+
+    Precedence: `api_base_url` field > `url`+`port` > None. When None is returned
+    LiteLLM falls back to the OLLAMA_API_BASE env var, then its localhost default.
+    """
+    if not provider_doc or not provider_doc.get("is_local_llm", 0):
+        return None
+
+    api_base = (provider_doc.get("api_base_url") or "").strip()
+    if api_base:
+        return api_base
+
+    url = (provider_doc.get("url") or "").strip()
+    if not url:
+        return None
+
+    url = url.rstrip("/")
+    port = str(provider_doc.get("port") or "").strip()
+    if port and not url.endswith(f":{port}"):
+        return f"{url}:{port}"
+    return url
 
 
 async def run(agent, enhanced_prompt, provider, model, context=None):
@@ -394,14 +456,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         if not api_key:
             frappe.throw("API key not configured in AI Provider.")
 
-        # Support local/custom OpenAI-compatible endpoints (e.g. Kimi Code API)
-        api_base = None
-        if getattr(provider_doc, "is_local_llm", False) and getattr(provider_doc, "url", None):
-            api_base = provider_doc.url
-            if getattr(provider_doc, "port", None):
-                api_base = f"{api_base.rstrip('/')}:{provider_doc.port}"
-
-        normalized_model = _normalize_model_name(model, provider)
+        normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
+        is_local_llm = bool(provider_doc.get("is_local_llm", 0))
+        api_base = _resolve_api_base(provider_doc)
 
         # Check prompt caching configuration
         enable_prompt_caching = False
@@ -421,6 +478,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
             cache_system_message = bool(agent_doc.get("cache_system_message", 0))
             cache_conversation_history = bool(agent_doc.get("cache_conversation_history", 0))
+
+        if is_local_llm:
+            # Local providers (Ollama/LM Studio) do not support prompt-caching cache_control blocks.
+            enable_prompt_caching = False
 
         max_context_chars = _get_agent_max_context_chars(agent_doc)
         
@@ -507,6 +568,15 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         if getattr(agent, "tools", None):
             tools = serialize_tools(agent.tools)
 
+        # Capability profile for local providers (probe results cached 1h by build_local_overrides).
+        local_overrides = {}
+        if is_local_llm:
+            try:
+                from huf.ai.local_runtime import build_local_overrides
+                local_overrides = build_local_overrides(provider_doc, model)
+            except Exception as e:
+                logger.warning(f"Failed to build local overrides for '{provider}': {e!s}")
+
         total_usage = {
             "input_tokens": 0,
             "output_tokens": 0,
@@ -519,6 +589,11 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         all_new_items = []
 
         MAX_ROUNDS = getattr(agent, "max_turns", 10) or 10
+
+        # Tool-call loop guard for non-streaming path (same rationale as run_stream).
+        last_tool_signature = None
+        tool_loop_repeats = 0
+        MAX_TOOL_LOOP_REPEATS = 1
 
         for round_num in range(MAX_ROUNDS):
 
@@ -552,15 +627,18 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             if api_base:
                 completion_kwargs["api_base"] = api_base
 
-            # Trim messages to fit context window, then sanitize tool-call pairs
-            try:
-                messages = trim_messages(messages=messages, model=normalized_model)
-            except Exception as e:
-                logger.warning(
-                    f"Failed to trim messages: {e!s}; continuing with untrimmed messages\n{frappe.get_traceback()}"
-                )
-                # Continue with untrimmed messages if trimming fails
-                pass
+            # Trim messages to fit context window, then sanitize tool-call pairs.
+            # Local model tokenizers are unknown to LiteLLM — skip trimming and rely
+            # on the char-based tool-result limiting (max_context_chars) instead.
+            if not is_local_llm:
+                try:
+                    messages = trim_messages(messages=messages, model=normalized_model)
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to trim messages: {e!s}; continuing with untrimmed messages\n{frappe.get_traceback()}"
+                    )
+                    # Continue with untrimmed messages if trimming fails
+                    pass
 
             messages = repair_message_sequence(
                 messages,
@@ -597,6 +675,19 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             if tools and is_json_mode and known_conflict:
                 tools = None
             
+            if tools and local_overrides.get("supports_tools") is False:
+                # Model does not support tool calling — strip tools and continue
+                # instead of letting the provider fail with a cryptic 400.
+                frappe.log_error(
+                    message=f"Model '{normalized_model}' does not support tools; continuing without tools.",
+                    title="LiteLLM Local Overrides"
+                )
+                if isinstance(context, dict):
+                    context.setdefault("local_llm_warnings", []).append(
+                        f"Model '{normalized_model}' does not support tool calling; tools were disabled for this run."
+                    )
+                tools = None
+
             if tools:
                 completion_kwargs["tools"] = tools
                 completion_kwargs["tool_choice"] = "auto"
@@ -666,7 +757,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     f"This may be temporary. Details: {str(e)}"
                 )
                 frappe.log_error(message=msg, title="LiteLLM Provider")
-                return SimpleResult(msg, total_usage, all_new_items)
+                raise ProviderUnavailableError(msg)
 
             except RateLimitError as e:
                 title = f"LiteLLM RateLimit: {normalized_model}"[:140]
@@ -686,7 +777,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             except APIError as e:
                 msg = f"API error for model '{normalized_model}': {str(e)}"
                 frappe.log_error(message=msg, title="LiteLLM Provider")
-                return SimpleResult(msg, total_usage, all_new_items)
+                raise ProviderUnavailableError(msg)
 
             except Exception as e:
                 msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
@@ -694,11 +785,30 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     message=f"{msg}\n\n{frappe.get_traceback()}",
                     title="LiteLLM Provider"
                 )
-                
                 if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
                     raise e
-                
-                return SimpleResult(msg, total_usage, all_new_items)
+
+                raise ProviderUnavailableError(msg)
+
+            # Empty-response guard: reasoning models (e.g. gpt-oss) on the 'ollama/'
+            # endpoint can return empty content with no tool calls. Retry the completion
+            # once; if still empty, fail loudly instead of storing an empty reply.
+            for _empty_check in range(2):
+                _choice = response.choices[0].message
+                if getattr(_choice, "tool_calls", None) or (_choice.content or "").strip():
+                    break
+                if _empty_check == 0:
+                    frappe.log_error(
+                        message=f"Model '{normalized_model}' returned an empty response; retrying the completion once.",
+                        title="LiteLLM Empty Response"
+                    )
+                    response = await _litellm_completion_with_retry(**completion_kwargs)
+                else:
+                    raise ProviderUnavailableError(
+                        f"Model '{normalized_model}' returned an empty response. "
+                        "Known issue with reasoning models (e.g. gpt-oss) on the 'ollama/' "
+                        "endpoint — use the 'ollama_chat/' prefix or check the model."
+                    )
 
             # Extract response
             choice = response.choices[0].message
@@ -773,6 +883,35 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # Handle tool calls
             tool_results = []
 
+            # Loop detection: identical signatures in consecutive rounds
+            # indicate a stuck local model.
+            tool_calls_list = []
+            for tc in choice.tool_calls:
+                tool_calls_list.append({
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    }
+                })
+            signature = _tool_calls_signature(tool_calls_list)
+            if signature == last_tool_signature:
+                tool_loop_repeats += 1
+            else:
+                last_tool_signature = signature
+                tool_loop_repeats = 0
+
+            if tool_loop_repeats > MAX_TOOL_LOOP_REPEATS:
+                msg = (
+                    "The model kept calling the same tool(s) repeatedly "
+                    "without producing a final answer. This can happen with "
+                    "local models that do not reliably consume tool results."
+                )
+                frappe.log_error(
+                    message=f"Tool-call loop detected for model '{normalized_model}'",
+                    title="LiteLLM Tool Loop"
+                )
+                raise ProviderUnavailableError(msg)
+
             for tool_call in choice.tool_calls:
                 function_call = tool_call.function
                 tool_name = function_call.name
@@ -846,18 +985,21 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             cost=total_cost,
         )
 
+    except ProviderUnavailableError:
+        raise
     except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError) as e:
         frappe.logger("huf").warning(f"Expected failure: {e!s}")
     except Exception as e:  # boundary exception handler: unexpected system error boundary
+        msg = f"LiteLLM Provider Error: {str(e)}"
         frappe.log_error(
-            message=f"LiteLLM Provider Error: {str(e)}\n\n{frappe.get_traceback()}",
+            message=f"{msg}\n\n{frappe.get_traceback()}",
             title="LiteLLM Provider"
         )
-        
+
         if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
             raise e
-            
-        return SimpleResult(f"LiteLLM Provider Error: {str(e)}")
+
+        raise ProviderUnavailableError(msg)
 
 
 async def get_simple_completion(model: str, messages: list, provider: str) -> str:
@@ -871,7 +1013,7 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         provider_doc = frappe.get_doc("AI Provider", provider)
         api_key = provider_doc.get_password("api_key")
         
-        normalized_model = _normalize_model_name(model, provider)
+        normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
         provider_name = normalized_model.split("/")[0]
         
         completion_kwargs = {
@@ -880,6 +1022,10 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
             "temperature": 0.3,
             "timeout": _DEFAULT_LITELLM_TIMEOUT,
         }
+
+        api_base = _resolve_api_base(provider_doc)
+        if api_base:
+            completion_kwargs["api_base"] = api_base
         
         _setup_api_key(provider_name, api_key, completion_kwargs)
         
@@ -945,7 +1091,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             yield {"type": "error", "error": "API key not configured in AI Provider."}
             return
 
-        normalized_model = _normalize_model_name(model, provider)
+        normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
+        is_local_llm = bool(provider_doc.get("is_local_llm", 0))
+        api_base = _resolve_api_base(provider_doc)
 
         # Check prompt caching configuration
         enable_prompt_caching = False
@@ -965,7 +1113,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
             cache_system_message = bool(agent_doc.get("cache_system_message", 0))
             cache_conversation_history = bool(agent_doc.get("cache_conversation_history", 0))
-        
+
+        if is_local_llm:
+            # Local providers (Ollama/LM Studio) do not support prompt-caching cache_control blocks.
+            enable_prompt_caching = False
+
         # Check if model supports prompt caching
         model_supports_caching = False
         cache_skipped_unsupported_model = False
@@ -1048,6 +1200,15 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         if getattr(agent, "tools", None):
             tools = serialize_tools(agent.tools)
 
+        # Capability profile for local providers (probe results cached 1h by build_local_overrides).
+        local_overrides = {}
+        if is_local_llm:
+            try:
+                from huf.ai.local_runtime import build_local_overrides
+                local_overrides = build_local_overrides(provider_doc, model)
+            except Exception as e:
+                logger.warning(f"Failed to build local overrides for '{provider}': {e!s}")
+
         # Get temperature and top_p
         temperature = None
         top_p = None
@@ -1077,15 +1238,20 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "stream_options": {"include_usage": True}, # Request usage stats in stream
             "timeout": _DEFAULT_LITELLM_TIMEOUT,
         }
-        
-        # Trim messages to fit context window, then sanitize tool-call pairs
-        try:
-            messages = trim_messages(messages=messages, model=normalized_model)
-        except Exception as e:
-            logger.warning(
-                f"Failed to trim messages: {e!s}; continuing with untrimmed messages\n{frappe.get_traceback()}"
-            )
-            pass
+        if api_base:
+            completion_kwargs["api_base"] = api_base
+
+        # Trim messages to fit context window, then sanitize tool-call pairs.
+        # Local model tokenizers are unknown to LiteLLM — skip trimming and rely
+        # on the char-based tool-result limiting (max_context_chars) instead.
+        if not is_local_llm:
+            try:
+                messages = trim_messages(messages=messages, model=normalized_model)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to trim messages: {e!s}; continuing with untrimmed messages\n{frappe.get_traceback()}"
+                )
+                pass
 
         messages = repair_message_sequence(
             messages,
@@ -1105,13 +1271,34 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         provider_name = normalized_model.split("/")[0]
         _setup_api_key(provider_name, api_key, completion_kwargs)
 
+        if tools and local_overrides.get("supports_tools") is False:
+            # Model does not support tool calling — strip tools and continue
+            # instead of letting the provider fail with a cryptic 400.
+            frappe.log_error(
+                message=f"Model '{normalized_model}' does not support tools; continuing without tools.",
+                title="LiteLLM Local Overrides"
+            )
+            if isinstance(context, dict):
+                context.setdefault("local_llm_warnings", []).append(
+                    f"Model '{normalized_model}' does not support tool calling; tools were disabled for this run."
+                )
+            tools = None
+
         if tools:
             completion_kwargs["tools"] = tools
             completion_kwargs["tool_choice"] = "auto"
 
         # Stream response
         full_response = ""
+        had_tool_calls = False
         MAX_ROUNDS = getattr(agent, "max_turns", 10) or 10
+
+        # Tool-call loop guard: some local models (e.g. gemma4 via Ollama)
+        # call the same tool repeatedly with new IDs and never produce a final
+        # answer. Detect consecutive identical signatures and stop early.
+        last_tool_signature = None
+        tool_loop_repeats = 0
+        MAX_TOOL_LOOP_REPEATS = 1  # allow one retry, stop on the second repeat
 
         for round_num in range(MAX_ROUNDS):
             try:
@@ -1185,10 +1372,39 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     if chunk.choices[0].finish_reason:
                         finish_reason = chunk.choices[0].finish_reason
 
-                        # If tool calls are present, execute them
-                        if finish_reason == "tool_calls" and current_tool_calls:
+                        # If tool calls are present, execute them.
+                        # Local models (e.g. gemma4 via Ollama) may emit tool-call
+                        # deltas but finish with reason "stop" instead of
+                        # "tool_calls", so trigger execution whenever we have
+                        # buffered tool calls at the end of a generation.
+                        if current_tool_calls and finish_reason in ("tool_calls", "stop"):
+                            had_tool_calls = True
                             # Yield tool calls
                             tool_calls_list = list(current_tool_calls.values())
+
+                            # Loop detection: identical signatures in
+                            # consecutive rounds indicate a stuck local model.
+                            signature = _tool_calls_signature(tool_calls_list)
+                            if signature == last_tool_signature:
+                                tool_loop_repeats += 1
+                            else:
+                                last_tool_signature = signature
+                                tool_loop_repeats = 0
+
+                            if tool_loop_repeats > MAX_TOOL_LOOP_REPEATS:
+                                msg = (
+                                    "The model kept calling the same tool(s) "
+                                    "repeatedly without producing a final answer. "
+                                    "This can happen with local models that do not "
+                                    "reliably consume tool results."
+                                )
+                                frappe.log_error(
+                                    message=f"Tool-call loop detected for model '{normalized_model}'",
+                                    title="LiteLLM Tool Loop"
+                                )
+                                yield {"type": "error", "error": msg}
+                                return
+
                             for tool_call in tool_calls_list:
                                 yield {
                                     "type": "tool_call",
@@ -1448,6 +1664,26 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             except (ValueError, TypeError, AttributeError, KeyError):
                 # Stream cost calculation is best-effort; ignore failures.
                 pass
+
+        # Never report an empty response as a successful completion.
+        if not full_response.strip() and not had_tool_calls:
+            if normalized_model.startswith("ollama/"):
+                msg = (
+                    f"Model '{normalized_model}' returned an empty response. "
+                    "Reasoning models such as gpt-oss require the Ollama chat "
+                    "endpoint. Use the 'ollama_chat/' model prefix (e.g. "
+                    "'ollama_chat/gpt-oss:20b') or select a provider whose brand "
+                    "is 'Ollama' so Huf normalizes the prefix automatically."
+                )
+            else:
+                msg = (
+                    f"Model '{normalized_model}' returned an empty response. "
+                    "Verify the model is loaded, the provider is reachable, and "
+                    "the request is supported by this model."
+                )
+            frappe.log_error(message=msg, title="LiteLLM Empty Response")
+            yield {"type": "error", "error": msg}
+            return
 
         yield {
             "type": "complete",
