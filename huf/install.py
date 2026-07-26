@@ -74,6 +74,7 @@ def after_install():
     create_flow_tools()
     register_integration_services()
     sync_tool_types()
+    sync_default_tool_categories()
     from huf.ai.tool_registry import sync_discovered_tools
     sync_discovered_tools(use_cache=False)
     frappe.db.commit()
@@ -123,6 +124,7 @@ def after_migrate():
 		create_flow_tools()
 		register_integration_services()
 		sync_tool_types()
+		sync_default_tool_categories()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
 		logger.info(
@@ -946,4 +948,38 @@ def sync_tool_types():
 			logger.warning(f"Failed to create tool type {category}: {e!s}")
 			continue
 	
+	frappe.db.commit()
+
+
+# General-purpose categories for user-authored tools. Seeded alongside the
+# app-integration categories from sync_tool_types(); purely additive — existing
+# Agent Tool Type records are never renamed or touched.
+DEFAULT_TOOL_CATEGORIES = [
+	"Data Operations",
+	"Integrations",
+	"Automation & Workflow",
+	"Communication",
+	"AI & Generation",
+	"Miscellaneous",
+]
+
+
+def sync_default_tool_categories():
+	"""
+	Ensure the curated general-purpose tool categories exist as Agent Tool Type
+	documents. Idempotent: creates missing records only, never duplicates or
+	modifies existing ones. Safe to run on every migrate.
+	"""
+	for category in DEFAULT_TOOL_CATEGORIES:
+		try:
+			if not frappe.db.exists("Agent Tool Type", category):
+				doc = frappe.get_doc({
+					"doctype": "Agent Tool Type",
+					"name1": category
+				})
+				doc.insert()
+		except Exception as e:
+			logger.warning(f"Failed to create default tool category {category}: {e!s}")
+			continue
+
 	frappe.db.commit()
