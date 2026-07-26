@@ -17,6 +17,7 @@ from huf.ai.gateway_adapters.types import (
 	NormalizedGatewayEvent,
 	OutboundDelivery,
 )
+from huf.ai.gateway_adapters.vk import VKGatewayAdapter
 
 __all__ = [
 	"GatewayAdapter",
@@ -29,5 +30,6 @@ __all__ = [
 	"GatewayReply",
 	"NormalizedGatewayEvent",
 	"OutboundDelivery",
+	"VKGatewayAdapter",
 	"assert_adapter_conforms",
 ]
