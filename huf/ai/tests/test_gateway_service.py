@@ -158,10 +158,17 @@ class TestGatewayIngress(unittest.TestCase):
 
     @patch("huf.ai.gateway_service.frappe")
     def test_direct_allow_list_requires_normalized_approved_entry(self, mock_frappe):
-        mock_frappe.db.exists.return_value = True
+        mock_frappe.get_all.return_value = ["ACCESS-001"]
         admitted, _ = gateway_service._admission(gateway(), {"sender_id": "provider:42"})
         assert admitted is True
-        assert mock_frappe.db.exists.call_args.args[0] == "Gateway Access Entry"
+        assert mock_frappe.get_all.call_args.args[0] == "Gateway Access Entry"
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_expired_access_entry_does_not_admit_sender(self, mock_frappe):
+        mock_frappe.get_all.return_value = []
+        admitted, _ = gateway_service._admission(gateway(), {"sender_id": "provider:42"})
+        assert admitted is False
+        assert ["expires_at", ">=", gateway_service.now_datetime()] in mock_frappe.get_all.call_args.kwargs["or_filters"]
 
     @patch("huf.ai.gateway_service.frappe")
     def test_pairing_creates_pending_entry_and_never_admits_triggering_message(self, mock_frappe):

@@ -60,10 +60,17 @@ def _route_target(target_type: str | None, agent: str | None, flow: str | None) 
 def _has_access_entry(gateway, entry_type: str, external_id: str) -> bool:
     if not external_id:
         return False
-    return bool(frappe.db.exists("Gateway Access Entry", {
-        "gateway": gateway.name, "entry_type": entry_type, "provider": gateway.provider,
-        "external_id": str(external_id), "state": "Approved",
-    }))
+    entries = frappe.get_all(
+        "Gateway Access Entry",
+        filters={
+            "gateway": gateway.name, "entry_type": entry_type, "provider": gateway.provider,
+            "external_id": str(external_id), "state": "Approved",
+        },
+        or_filters=[["expires_at", "is", "not set"], ["expires_at", ">=", now_datetime()]],
+        pluck="name",
+        limit_page_length=1,
+    )
+    return bool(entries)
 
 
 def _create_pairing_request(gateway, sender_id: str) -> None:
@@ -84,9 +91,9 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
         if policy == "Pairing":
             _create_pairing_request(gateway, sender_id)
             return False, "Sender pairing approval is required"
-        return (policy == "Open" or (policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id)), "Sender is not approved for this gateway")
-    room_ok = gateway.room_policy == "Open" or (gateway.room_policy == "Allow list" and _has_access_entry(gateway, "Room", conversation_id))
-    sender_ok = gateway.room_sender_policy == "Open" or _has_access_entry(gateway, "Sender", sender_id)
+        return (policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id), "Sender is not approved for this gateway")
+    room_ok = gateway.room_policy == "Allow list" and _has_access_entry(gateway, "Room", conversation_id)
+    sender_ok = gateway.room_sender_policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id)
     mentioned = bool(context.get("mentioned"))
     if gateway.mention_required and not mentioned:
         return False, "Room messages must mention the gateway"
