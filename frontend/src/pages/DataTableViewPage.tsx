@@ -125,6 +125,10 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 							<Pencil className="w-3.5 h-3.5 mr-2" />
 							Edit Table
 						</DropdownMenuItem>
+						<DropdownMenuItem onClick={() => setAgentAccessOpen(true)}>
+							<Bot className="w-3.5 h-3.5 mr-2" />
+							Add to agent…
+						</DropdownMenuItem>
 						<DropdownMenuItem
 							onClick={() => setDeleteDialogOpen(true)}
 							className="text-destructive focus:text-destructive"

@@ -1,16 +1,17 @@
 import json
+import re
 
 import frappe
 from frappe import _
 
 from huf.permissions import has_capability
+
 from .validators import (
 	LAYOUT_FIELD_TYPES,
 	get_search_fields,
 	resolve_autoname,
 	validate_and_prepare_fields,
 )
-
 
 # Data tables do not have a dedicated capability yet; reuse flow capabilities
 # as the closest admin-level permission boundary.
@@ -207,9 +208,7 @@ def update_data_table(
 		dt.search_fields = get_search_fields(validated_fields)
 		dt.save()
 
-		registry.field_count = len(
-			[f for f in validated_fields if f["fieldtype"] not in LAYOUT_FIELD_TYPES]
-		)
+		registry.field_count = len([f for f in validated_fields if f["fieldtype"] not in LAYOUT_FIELD_TYPES])
 
 	if description is not None:
 		registry.description = description

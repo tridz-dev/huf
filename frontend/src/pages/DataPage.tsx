@@ -13,8 +13,9 @@ import {
 	LoadMoreButton,
 } from '../components/dashboard';
 import { DeleteTableDialog } from '../components/data-table/DeleteTableDialog';
+import { TableAgentAccessModal } from '../components/data-table/TableAgentAccessModal';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getDataTables, deleteDataTable } from '../services/dataTableApi';
+import { getDataTables, deleteDataTable, getTableAgentAccessCounts } from '../services/dataTableApi';
 import { formatTimeAgo } from '../utils/time';
 import type { HufDataTable } from '../types/dataTable.types';
 
@@ -238,6 +239,12 @@ function DataPage() {
 				recordCount={deleteTable?.record_count || 0}
 				onConfirm={handleDeleteConfirm}
 				loading={deleting}
+			/>
+			<TableAgentAccessModal
+				open={!!accessTable}
+				onOpenChange={(open) => !open && setAccessTable(null)}
+				table={accessTable}
+				onSaved={loadAgentCounts}
 			/>
 		</PageLayout>
 	);

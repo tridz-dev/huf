@@ -83,6 +83,24 @@ export interface DataTableSchema {
 }
 
 /**
+ * Plain user-facing actions for the "Add to agent" flow.
+ * The backend owns the mapping to Agent Tool Function `types`
+ * (huf/huf/doctype/huf_data_table/api.py TABLE_ACTION_MAP).
+ */
+export type TableAgentAction = 'view' | 'create' | 'edit' | 'delete';
+
+/**
+ * One agent's access to a Huf data table, as returned by
+ * get_table_agent_access / set_table_agent_access.
+ */
+export interface TableAgentAccess {
+	agent: string;
+	agent_name: string;
+	actions: TableAgentAction[];
+	tools: string[];
+}
+
+/**
  * Field type metadata for the field type selector
  */
 export interface FieldTypeInfo {

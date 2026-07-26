@@ -7,6 +7,8 @@ import type {
 	DataTableFieldDef,
 	DataTableSchema,
 	HufDataTable,
+	TableAgentAccess,
+	TableAgentAction,
 } from '@/types/dataTable.types';
 
 /**
@@ -24,6 +26,21 @@ const DATA_TABLE_LIST_FIELDS = [
 	'creation',
 	'modified',
 ];
+
+/**
+ * frappe-js-sdk getDocList filter shape, spelled out with plain string field
+ * names (the SDK does not re-export its Filter type at the package root, and
+ * its Filter<T> is keyed to a specific document type which dynamic HUF table
+ * doctypes don't have). Mirrors Filter<T> from the SDK's db/types.
+ */
+type DocListFilters = Array<
+	| [
+			string,
+			'=' | '>' | '<' | '>=' | '<=' | '<>' | 'like' | '!=' | 'Timespan',
+			string | number | boolean | Date | null,
+	  ]
+	| [string, 'in' | 'not in' | 'between', Array<string | number | boolean | Date | null>]
+>;
 
 /**
  * Pagination params for data tables listing
@@ -58,7 +75,7 @@ export async function getDataTables(
 			search,
 		} = params || {};
 
-		const filters: Array<[string, string, unknown]> = [];
+		const filters: DocListFilters = [];
 		if (search && search.trim()) {
 			filters.push(['table_name', 'like', `%${search.trim()}%`]);
 		}

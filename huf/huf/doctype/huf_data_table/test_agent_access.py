@@ -1,0 +1,409 @@
+# Copyright (c) 2026, Huf and Contributors
+# See license.txt
+
+"""
+Integration tests for HUF Table -> Agent access scaffolding
+(huf.huf.doctype.huf_data_table.api.get_table_agent_access /
+set_table_agent_access).
+
+Creates its own fixtures (HUF Table + AI Provider/Model + Agent) because the
+site has none. Class fixtures are committed explicitly: DocType creation runs
+DDL (implicit commits in MariaDB), so rollback-based isolation cannot undo it.
+"""
+
+import json
+
+import frappe
+from frappe.tests import IntegrationTestCase
+
+from huf.huf.doctype.huf_data_table.api import (
+	TABLE_ACTION_MAP,
+	_table_tool_name,
+	create_data_table,
+	delete_data_table,
+	get_table_agent_access,
+	get_tables_agent_counts,
+	set_table_agent_access,
+	update_data_table,
+)
+
+
+class TestTableAgentAccess(IntegrationTestCase):
+	TABLE_NAME = "Test Agent Access Books"
+	DOCTYPE_NAME = f"HF {TABLE_NAME}"
+	EMPTY_TABLE_NAME = "Test Agent Access Empty"
+	EMPTY_DOCTYPE_NAME = f"HF {EMPTY_TABLE_NAME}"
+	PROVIDER = "Test Agent Access Provider"
+	MODEL = "test-agent-access-model"
+	AGENT = "Test Agent Access Agent"
+	AGENT2 = "Test Agent Access Agent Two"
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		frappe.set_user("Administrator")
+
+		result = create_data_table(
+			table_name=cls.TABLE_NAME,
+			fields=[
+				{"label": "Title", "fieldtype": "Data", "reqd": 1},
+				{"label": "Qty", "fieldtype": "Int"},
+				{"label": "Price", "fieldtype": "Float"},
+				{"label": "Status", "fieldtype": "Select", "options": "Open\nClosed"},
+				{"label": "Active", "fieldtype": "Check"},
+				{"fieldtype": "Section Break"},
+				{"label": "Notes", "fieldtype": "Small Text"},
+				{"label": "Internal Code", "fieldtype": "Data", "read_only": 1},
+			],
+		)
+		cls.registry_name = result["data"]["name"]
+
+		# A second table that never gets any agents (bulk-count "absent" case).
+		empty = create_data_table(
+			table_name=cls.EMPTY_TABLE_NAME,
+			fields=[{"label": "Title", "fieldtype": "Data"}],
+		)
+		cls.empty_registry_name = empty["data"]["name"]
+
+		frappe.get_doc(
+			{
+				"doctype": "AI Provider",
+				"provider_name": cls.PROVIDER,
+				"provider_brand": "openai",
+				"api_key": "sk-test-fixture",
+			}
+		).insert()
+		frappe.get_doc(
+			{
+				"doctype": "AI Model",
+				"model_name": cls.MODEL,
+				"provider": cls.PROVIDER,
+			}
+		).insert()
+		for agent_name in (cls.AGENT, cls.AGENT2):
+			frappe.get_doc(
+				{
+					"doctype": "Agent",
+					"agent_name": agent_name,
+					"provider": cls.PROVIDER,
+					"model": cls.MODEL,
+					"instructions": "Fixture agent for table agent access tests.",
+				}
+			).insert()
+		# DocType DDL implicitly commits in MariaDB; make fixture rows durable so
+		# per-test rollback cannot remove them.
+		frappe.db.commit()  # nosemgrep: test fixtures must survive DocType DDL
+
+	@classmethod
+	def tearDownClass(cls):
+		frappe.set_user("Administrator")
+		for doctype, name in [
+			("Agent", cls.AGENT),
+			("Agent", cls.AGENT2),
+			("AI Model", cls.MODEL),
+			("AI Provider", cls.PROVIDER),
+		]:
+			if frappe.db.exists(doctype, name):
+				frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
+		for tool in frappe.get_all(
+			"Agent Tool Function",
+			filters={"reference_doctype": cls.DOCTYPE_NAME},
+			pluck="name",
+		):
+			frappe.delete_doc("Agent Tool Function", tool, ignore_permissions=True, force=True)
+		for registry in (cls.registry_name, cls.empty_registry_name):
+			if frappe.db.exists("Huf Data Table", registry):
+				delete_data_table(registry)
+		frappe.db.commit()  # nosemgrep: test fixture cleanup after DocType DDL
+		super().tearDownClass()
+
+	def tearDown(self):
+		# Each test rolls back its own changes; re-assert the fixture user.
+		frappe.set_user("Administrator")
+		super().tearDown()
+
+	# -- helpers -------------------------------------------------------------
+
+	def _agent_tools(self):
+		return [row.tool for row in frappe.get_doc("Agent", self.AGENT).get("agent_tool")]
+
+	def _tool_doc(self, types):
+		return frappe.get_doc("Agent Tool Function", _table_tool_name(self.DOCTYPE_NAME, types))
+
+	# -- tests ---------------------------------------------------------------
+
+	def test_scaffold_creates_expected_tools(self):
+		result = set_table_agent_access(self.registry_name, self.AGENT, ["view", "create"])
+
+		self.assertEqual(result["agent"], self.AGENT)
+		self.assertEqual(result["actions"], ["view", "create"])
+
+		expected = {
+			"Get List": "read",
+			"Get Document": "read",
+			"Create Document": "create",
+		}
+		for types, permission in expected.items():
+			doc = self._tool_doc(types)
+			self.assertEqual(doc.types, types)
+			self.assertEqual(doc.reference_doctype, self.DOCTYPE_NAME)
+			self.assertEqual(doc.required_permission, permission)
+			self.assertEqual(doc.tool_type, "Data Table")
+			self.assertIn(self.TABLE_NAME, doc.description)
+
+			# params / function_definition must be auto-generated by the
+			# Agent Tool Function controller, not written by the scaffolder.
+			params = json.loads(doc.params)
+			self.assertEqual(params["type"], "object")
+			self.assertIn("properties", params)
+			definition = json.loads(doc.function_definition)
+			self.assertEqual(definition["name"], doc.tool_name)
+			self.assertEqual(definition["parameters"], params)
+
+		self.assertEqual(
+			sorted(self._agent_tools()),
+			sorted(_table_tool_name(self.DOCTYPE_NAME, t) for t in expected),
+		)
+
+	# -- parameter population tests (phase 4a-2) -----------------------------
+
+	def test_create_tool_schema_has_table_fields(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+
+		doc = self._tool_doc("Create Document")
+		properties = json.loads(doc.function_definition)["parameters"]["properties"]
+
+		# Real field names, not just non-empty.
+		self.assertEqual(properties["title"]["type"], "string")
+		self.assertEqual(properties["qty"]["type"], "integer")
+		self.assertEqual(properties["price"]["type"], "number")
+		self.assertEqual(properties["active"]["type"], "boolean")
+		# Select options become a JSON Schema enum.
+		self.assertEqual(properties["status"]["enum"], ["Open", "Closed"])
+		# Required fields land in the schema's required array.
+		self.assertEqual(json.loads(doc.params)["required"], ["title"])
+
+	def test_scaffolded_schema_excludes_layout_and_read_only(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+
+		properties = json.loads(self._tool_doc("Create Document").params)["properties"]
+		param_fieldnames = [row.fieldname for row in self._tool_doc("Create Document").parameters]
+
+		self.assertNotIn("internal_code", properties, "read_only field must be excluded")
+		self.assertIn("notes", properties, "data field after a Section Break must be kept")
+		for fieldname in param_fieldnames:
+			field = frappe.get_meta(self.DOCTYPE_NAME).get_field(fieldname)
+			self.assertNotIn(field.fieldtype, ("Section Break", "Column Break"))
+			self.assertFalse(field.hidden)
+			self.assertFalse(field.read_only)
+
+	def test_update_tool_has_document_id_plus_fields(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["edit"])
+
+		params = json.loads(self._tool_doc("Update Document").params)
+		self.assertIn("document_id", params["properties"])
+		for fieldname in ("title", "qty", "price", "status", "active", "notes"):
+			self.assertIn(fieldname, params["properties"])
+		# Only document_id is required: table `reqd` fields must NOT become
+		# required on update, or every partial update would be impossible.
+		self.assertEqual(params["required"], ["document_id"])
+
+	def test_get_list_tool_has_typed_filter_properties(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["view"])
+
+		filters = json.loads(self._tool_doc("Get List").params)["properties"]["filters"]
+		self.assertEqual(filters["properties"]["title"]["type"], "string")
+		self.assertEqual(filters["properties"]["qty"]["type"], "integer")
+		# Filters stay open: scaffolded params document fields, not restrict them.
+		self.assertTrue(filters["additionalProperties"])
+
+	def test_rescaffold_does_not_duplicate_param_rows(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+		first = [(r.fieldname, r.type) for r in self._tool_doc("Create Document").parameters]
+
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+		rows = self._tool_doc("Create Document").parameters
+		second = [(r.fieldname, r.type) for r in rows]
+
+		self.assertEqual(first, second)
+		self.assertEqual(len(rows), len({r.fieldname for r in rows}), "duplicate parameter rows")
+
+	def test_rescaffold_refreshes_params_after_schema_change(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+		self.assertNotIn(
+			"isbn",
+			json.loads(self._tool_doc("Create Document").params)["properties"],
+		)
+
+		# Add a field to the table, then re-run: the tool's schema must follow.
+		update_data_table(
+			self.registry_name,
+			fields=[
+				{"label": "Title", "fieldtype": "Data", "reqd": 1},
+				{"label": "Qty", "fieldtype": "Int"},
+				{"label": "Price", "fieldtype": "Float"},
+				{"label": "Status", "fieldtype": "Select", "options": "Open\nClosed"},
+				{"label": "Active", "fieldtype": "Check"},
+				{"fieldtype": "Section Break"},
+				{"label": "Notes", "fieldtype": "Small Text"},
+				{"label": "Internal Code", "fieldtype": "Data", "read_only": 1},
+				{"label": "Isbn", "fieldtype": "Data"},
+			],
+		)
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+
+		doc = self._tool_doc("Create Document")
+		properties = json.loads(doc.params)["properties"]
+		self.assertIn("isbn", properties, "new field missing after rescaffold")
+		rows = [r.fieldname for r in doc.parameters]
+		self.assertEqual(len(rows), len(set(rows)), "refresh duplicated parameter rows")
+
+		# Restore the original schema for other tests in this class.
+		update_data_table(
+			self.registry_name,
+			fields=[
+				{"label": "Title", "fieldtype": "Data", "reqd": 1},
+				{"label": "Qty", "fieldtype": "Int"},
+				{"label": "Price", "fieldtype": "Float"},
+				{"label": "Status", "fieldtype": "Select", "options": "Open\nClosed"},
+				{"label": "Active", "fieldtype": "Check"},
+				{"fieldtype": "Section Break"},
+				{"label": "Notes", "fieldtype": "Small Text"},
+				{"label": "Internal Code", "fieldtype": "Data", "read_only": 1},
+			],
+		)
+		set_table_agent_access(self.registry_name, self.AGENT, ["create"])
+		self.assertNotIn("isbn", json.loads(self._tool_doc("Create Document").params)["properties"])
+
+	def test_set_is_idempotent(self):
+		first = set_table_agent_access(self.registry_name, self.AGENT, ["view", "edit"])
+
+		tools_before = set(
+			frappe.get_all(
+				"Agent Tool Function",
+				filters={"reference_doctype": self.DOCTYPE_NAME},
+				pluck="name",
+			)
+		)
+
+		second = set_table_agent_access(self.registry_name, self.AGENT, ["view", "edit"])
+		self.assertEqual(first, second)
+
+		tools_after = set(
+			frappe.get_all(
+				"Agent Tool Function",
+				filters={"reference_doctype": self.DOCTYPE_NAME},
+				pluck="name",
+			)
+		)
+		self.assertEqual(tools_before, tools_after, "second call created new tool docs")
+
+		agent_tools = self._agent_tools()
+		self.assertEqual(len(agent_tools), 3)
+		self.assertEqual(len(agent_tools), len(set(agent_tools)), "duplicate child rows")
+
+	def test_tables_agent_counts(self):
+		# Converge to an exact state: AGENT holds 5 tools (all four actions),
+		# AGENT2 holds 2 (view) — 7 tool rows across 2 distinct agents.
+		set_table_agent_access(self.registry_name, self.AGENT, ["view", "create", "edit", "delete"])
+		set_table_agent_access(self.registry_name, self.AGENT2, ["view"])
+
+		tool_rows = frappe.get_all(
+			"Agent Tool",
+			filters={"parenttype": "Agent", "parent": ["in", [self.AGENT, self.AGENT2]]},
+			pluck="name",
+		)
+		self.assertGreater(len(tool_rows), 2, "fixture must have multiple tools per table")
+
+		counts = get_tables_agent_counts()
+
+		# Two agents on one table -> 2. Explicitly NOT 7: the easy bug here is
+		# counting attached tool rows instead of distinct agents.
+		self.assertEqual(counts[self.DOCTYPE_NAME], 2)
+		# A table with no agents is absent (or 0) — never a bogus count.
+		self.assertEqual(counts.get(self.EMPTY_DOCTYPE_NAME, 0), 0)
+
+	def test_tables_agent_counts_requires_read_capability(self):
+		frappe.set_user("Guest")
+		try:
+			self.assertRaises(frappe.PermissionError, get_tables_agent_counts)
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_uncheck_detaches_but_keeps_tool_doc(self):
+		set_table_agent_access(self.registry_name, self.AGENT, ["view", "create"])
+		result = set_table_agent_access(self.registry_name, self.AGENT, ["view"])
+
+		self.assertEqual(result["actions"], ["view"])
+
+		create_tool = _table_tool_name(self.DOCTYPE_NAME, "Create Document")
+		self.assertNotIn(create_tool, self._agent_tools())
+		# The tool doc must NOT be deleted — other agents may reuse it.
+		self.assertTrue(frappe.db.exists("Agent Tool Function", create_tool))
+
+		# Detaching everything leaves the agent with no access.
+		empty = set_table_agent_access(self.registry_name, self.AGENT, [])
+		self.assertEqual(empty["actions"], [])
+		self.assertEqual(self._agent_tools(), [])
+
+	def test_get_round_trips_set(self):
+		actions = ["view", "create", "edit", "delete"]
+		set_table_agent_access(self.registry_name, self.AGENT, actions)
+
+		access = get_table_agent_access(self.registry_name)
+		entry = next((e for e in access if e["agent"] == self.AGENT), None)
+		self.assertIsNotNone(entry)
+		self.assertEqual(entry["agent_name"], self.AGENT)
+		self.assertEqual(entry["actions"], actions)
+		# view -> Get List + Get Document, one tool per other action.
+		self.assertEqual(len(entry["tools"]), 5)
+
+	def test_view_counts_with_only_one_view_tool(self):
+		# Hand-attach only Get List: the agent still counts as having "view",
+		# and the attached tools list exposes the partial state.
+		set_table_agent_access(self.registry_name, self.AGENT, [])
+		agent = frappe.get_doc("Agent", self.AGENT)
+		agent.append(
+			"agent_tool",
+			{"tool": _table_tool_name(self.DOCTYPE_NAME, "Get List")},
+		)
+		agent.save()
+
+		access = get_table_agent_access(self.registry_name)
+		entry = next(e for e in access if e["agent"] == self.AGENT)
+		self.assertEqual(entry["actions"], ["view"])
+		self.assertEqual(len(entry["tools"]), 1)
+
+	def test_unknown_action_throws(self):
+		self.assertRaises(
+			frappe.ValidationError,
+			set_table_agent_access,
+			self.registry_name,
+			self.AGENT,
+			["view", "teleport"],
+		)
+
+	def test_requires_manage_capability(self):
+		frappe.set_user("Guest")
+		try:
+			self.assertRaises(
+				frappe.PermissionError,
+				set_table_agent_access,
+				self.registry_name,
+				self.AGENT,
+				["view"],
+			)
+			self.assertRaises(
+				frappe.PermissionError,
+				get_table_agent_access,
+				self.registry_name,
+			)
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_action_map_covers_four_plain_actions(self):
+		self.assertEqual(set(TABLE_ACTION_MAP), {"view", "create", "edit", "delete"})
+		self.assertEqual(
+			[types for types, _ in TABLE_ACTION_MAP["view"]],
+			["Get List", "Get Document"],
+		)
