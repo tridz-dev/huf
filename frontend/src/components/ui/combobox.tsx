@@ -34,6 +34,7 @@ export interface ComboboxProps {
   linkTo?: (value: string) => string | undefined;
   onSearchChange?: (search: string) => void;
   shouldFilter?: boolean;
+  className?: string;
 }
 
 export function Combobox({
@@ -47,6 +48,7 @@ export function Combobox({
   linkTo,
   onSearchChange,
   shouldFilter,
+  className,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -61,7 +63,7 @@ export function Combobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="h-9 w-full justify-between px-3 py-2"
+          className={cn('h-9 w-full justify-between bg-transparent px-3 py-2 font-normal', className)}
           disabled={disabled}
         >
           {selectedOption ? (
