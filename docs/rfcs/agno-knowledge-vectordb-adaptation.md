@@ -7,13 +7,17 @@
 
 ---
 
+> **Status / drift note (2026-07)**: This RFC was written 2026-03-03. Its direction has since been validated and is roughly half-landed on `develop`: `huf/ai/knowledge/embedding.py` provides LiteLLM multi-provider embeddings (OpenAI, Gemini, Cohere, HuggingFace, and any LiteLLM-compatible provider — exactly the "use LiteLLM for embeddings" decision from Phase 1.1); vector backends `chroma_backend.py`, `sqlite_vec_backend.py`, and `sqlite_vec_llamaindex.py` are registered alongside `sqlite_fts` in `backends/__init__.py`; `chunkers/sentence.py` exists as its own module; and new extractors `xlsx.py` and `pptx.py` have landed. More vector backends are in flight in open PRs: #280 (PGVector), #406 (hook-based backend registry / `BACKEND_CONTRACT.md`, depends on #280), #434 (Redis), #435 (zvec), #436 (Weaviate), #437 (FAISS). Section 2 has been updated to reflect this current state; the interface analysis, the "adapt interfaces, not orchestration" principle, and the Apache-2.0 license analysis remain the rationale record and are unchanged. The related RFCs referenced below (#274, #225) are now CLOSED (June 2026).
+
+---
+
 ## 1. Executive Summary
 
 **Verdict: Yes — we should adapt Agno's vectordb, embedder, reader, and chunker code for HUF.**
 
 Agno provides a clean, modular architecture with 18+ vector database backends, 18+ embedder providers, 20+ document readers, and 8 chunking strategies — all behind well-defined interfaces. The code is Apache 2.0 licensed (compatible with HUF), has fully optional dependencies per backend, and follows a consistent pattern that maps well to HUF's existing `KnowledgeBackend` abstraction.
 
-HUF currently has SQLite FTS5 only (keyword/BM25 search, no semantic/vector search). This is the single largest gap versus modern AI agent frameworks. Adapting Agno's architecture would:
+When this RFC was written (2026-03), HUF had SQLite FTS5 only (keyword/BM25 search, no semantic/vector search). This was the single largest gap versus modern AI agent frameworks. Adapting Agno's architecture would:
 
 1. Add **semantic vector search** to HUF's knowledge system
 2. Support **hybrid search** (BM25 + vector with Reciprocal Rank Fusion)
@@ -28,15 +32,17 @@ HUF currently has SQLite FTS5 only (keyword/BM25 search, no semantic/vector sear
 
 ## 2. What HUF Has Today
 
-### Current Architecture
+### Current Architecture (as of 2026-07)
 ```
 Knowledge Input (DocType)
     ↓
-Extractors (PDF, DOCX, Text, HTML, URL)
+Extractors (PDF, DOCX, Text, HTML, URL, XLSX, PPTX)
     ↓
-Chunker (LlamaIndex SentenceSplitter / fallback)
+Chunker (chunkers/sentence.py — LlamaIndex SentenceSplitter / fallback)
     ↓
-SQLite FTS5 Backend (BM25 keyword search)
+Backends (backends/__init__.py registry):
+  SQLite FTS5 (keyword) · SQLite-vec (vector) · ChromaDB (vector)
+  Embeddings via embedding.py — LiteLLM multi-provider
     ↓
 Retriever (knowledge_search API)
     ↓
@@ -54,20 +60,19 @@ class KnowledgeBackend(ABC):
     def get_stats(self) -> Dict
 ```
 
-### Current Limitations
+### Current Limitations (updated 2026-07 — the original 2026-03 version of this table claimed: keyword-only search, 0 vector DBs, 0 embedders, 5 readers, 1 chunking strategy)
 | Area | Current State | Impact |
 |------|--------------|--------|
-| **Search type** | BM25 keyword only | Misses semantically related content |
-| **Vector DBs** | 0 (SQLite FTS5 only) | No semantic search capability |
-| **Embedders** | 0 | No vector generation |
-| **Readers** | 5 (PDF, DOCX, Text, HTML, URL) | Missing Excel, PPT, Markdown-aware |
+| **Search type** | BM25 keyword + vector (SQLite-vec, ChromaDB) | Hybrid (RRF fusion) still not wired into the retriever |
+| **Vector DBs** | 2 landed (SQLite-vec, ChromaDB); 5+ in flight (PRs #280, #434–#437) | Coverage still thin vs. the 18+ target |
+| **Embedders** | 1 — `embedding.py`, LiteLLM multi-provider (OpenAI, Gemini, Cohere, HuggingFace, …) | The "use LiteLLM for embeddings" decision (Phase 1.1) landed as proposed |
+| **Readers** | 7 (PDF, DOCX, Text, HTML, URL, XLSX, PPTX) | Markdown-aware reader still missing |
 | **Chunking** | 1 (sentence-based) | No code-aware, semantic, or markdown chunking |
 | **Hybrid search** | No | Can't combine keyword + semantic |
 | **Metadata filters** | Reserved (not implemented) | Can't filter by document attributes |
 
 ### What's Working Well
-- Clean `KnowledgeBackend` ABC with pluggable backends
-- Commented-out `chroma` and `pgvector` entries in backend registry — the team anticipated this
+- Clean `KnowledgeBackend` ABC with pluggable backends — now registered: `sqlite_fts`, `sqlite_vec`, `chroma` (2026-07)
 - Frappe-integrated pipeline: Knowledge Source → Knowledge Input → chunks
 - Background job processing with Redis locking
 - Agent integration via Mandatory (auto-inject) and Optional (tool-based) modes
@@ -554,10 +559,10 @@ Context Builder → Agent Prompt
 | Agno's `Knowledge` class | Skip | Too coupled to Agno's DB/remote layers; HUF has its own pipeline |
 | Agno's `db` package (13 storage backends) | Skip | HUF uses Frappe's MariaDB/DocType system |
 | Cloud storage loaders (S3, GCS, Azure) | Defer | Can be added later via `input_type` expansion |
-| PgVector backend | Defer | Frappe typically uses MariaDB, not PostgreSQL; lower priority |
-| All 18+ vector backends | Defer | Start with 3 (Qdrant, ChromaDB, LanceDB); add more on demand |
+| PgVector backend | ~~Defer~~ → In flight (2026-07): open PR #280, plus #406 hook-based backend registry | Originally deferred (Frappe typically uses MariaDB); now landing via the backend contract |
+| All 18+ vector backends | Partially superseded (2026-07): ChromaDB + SQLite-vec landed; PRs #434 (Redis), #435 (zvec), #436 (Weaviate), #437 (FAISS) open | Started with a small set as planned; more landing on demand |
 | Agno's `Agent` class | Skip | HUF has its own agent system |
-| Memory/LearningMachine | Separate RFC | Important but separate from knowledge/RAG |
+| Memory/LearningMachine | Separate RFCs — #274 (scoped memory/knowledge bridge) and #225 (Hindsight evaluation); both now CLOSED (June 2026) | Important but separate from knowledge/RAG |
 | MCP Server exposure | Separate RFC | Valuable but orthogonal |
 | Adding Agno as pip dependency | No | We adapt code, not depend on framework |
 
