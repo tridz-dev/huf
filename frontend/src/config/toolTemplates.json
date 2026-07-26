@@ -46,6 +46,16 @@
       ]
     },
     {
+      "id": "web_search",
+      "name": "Web Search",
+      "description": "Search the web for live information via Google Programmable Search or Perplexity AI.",
+      "icon": "search",
+      "toolTypes": [
+        "Google Search",
+        "Perplexity Search"
+      ]
+    },
+    {
       "id": "run_agent",
       "name": "Run AI Agent",
       "description": "Delegate a task to another specialized AI Agent in your system.",
