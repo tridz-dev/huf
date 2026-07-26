@@ -178,6 +178,34 @@ export async function testSearch(
   }
 }
 
+export interface AdvancedConfigSchemaEntry {
+  key: string;
+  label: string;
+  type: 'number' | 'text' | 'boolean' | 'select';
+  default?: unknown;
+  help_text?: string;
+  options?: string[];
+  min?: number;
+  max?: number;
+  visible_when?: Record<string, unknown>;
+}
+
+export async function getAdvancedConfigSchema(
+  knowledgeType: string,
+): Promise<AdvancedConfigSchemaEntry[]> {
+  try {
+    const result = await call.get(
+      'huf.ai.knowledge.backends.get_advanced_config_schema',
+      { knowledge_type: knowledgeType },
+    );
+    const response = result as { message?: unknown } | undefined;
+    const payload = response?.message ?? response;
+    return Array.isArray(payload) ? (payload as AdvancedConfigSchemaEntry[]) : [];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching advanced config schema');
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Knowledge Input
 // ---------------------------------------------------------------------------

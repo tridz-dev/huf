@@ -22,6 +22,24 @@ import {
   knowledgeSourceFormSchema,
   type KnowledgeSourceFormValues,
 } from '../components/knowledge/types';
+
+function parseAdvancedConfig(value: unknown): Record<string, unknown> {
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      return JSON.parse(value) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function stringifyAdvancedConfig(value: Record<string, unknown> | undefined): string {
+  return JSON.stringify(value || {});
+}
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
@@ -48,6 +66,17 @@ function mapDocToFormValues(doc: Partial<KnowledgeSourceDoc>): KnowledgeSourceFo
     chroma_host: doc.chroma_host || 'localhost',
     chroma_port: doc.chroma_port ?? 8000,
     chroma_ssl: doc.chroma_ssl === 1,
+    pgvector_connection_mode: doc.pgvector_connection_mode || 'External PostgreSQL',
+    pgvector_table_name: doc.pgvector_table_name || 'huf_knowledge_vectors',
+    pgvector_distance_metric: doc.pgvector_distance_metric || 'cosine',
+    pgvector_index_type: doc.pgvector_index_type || 'hnsw',
+    pgvector_host: doc.pgvector_host || 'localhost',
+    pgvector_port: doc.pgvector_port ?? 5432,
+    pgvector_database: doc.pgvector_database || '',
+    pgvector_user: doc.pgvector_user || '',
+    pgvector_password: doc.pgvector_password || '',
+    pgvector_sslmode: doc.pgvector_sslmode || 'prefer',
+    advanced_config: parseAdvancedConfig(doc.advanced_config),
   };
 }
 
@@ -77,6 +106,17 @@ function KnowledgeSourceFormPage() {
         'chroma_host',
         'chroma_port',
         'chroma_ssl',
+        'pgvector_connection_mode',
+        'pgvector_table_name',
+        'pgvector_distance_metric',
+        'pgvector_index_type',
+        'pgvector_host',
+        'pgvector_port',
+        'pgvector_database',
+        'pgvector_user',
+        'pgvector_password',
+        'pgvector_sslmode',
+        'advanced_config',
       ],
       default: true,
       disabled: false,
@@ -224,6 +264,17 @@ function KnowledgeSourceFormPage() {
         chroma_host: values.chroma_host || '',
         chroma_port: values.chroma_port ?? 8000,
         chroma_ssl: values.chroma_ssl ? 1 : 0,
+        pgvector_connection_mode: values.pgvector_connection_mode,
+        pgvector_table_name: values.pgvector_table_name || 'huf_knowledge_vectors',
+        pgvector_distance_metric: values.pgvector_distance_metric,
+        pgvector_index_type: values.pgvector_index_type,
+        pgvector_host: values.pgvector_host || '',
+        pgvector_port: values.pgvector_port ?? 5432,
+        pgvector_database: values.pgvector_database || '',
+        pgvector_user: values.pgvector_user || '',
+        pgvector_password: values.pgvector_password || '',
+        pgvector_sslmode: values.pgvector_sslmode,
+        advanced_config: stringifyAdvancedConfig(values.advanced_config),
       };
 
       if (isNew) {
