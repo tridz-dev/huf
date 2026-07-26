@@ -33,6 +33,28 @@ import {
 import { CategoryTab } from '@/components/category/CategoryTab';
 import { CategoryModal } from '@/components/category/CategoryModal';
 import { getCategories } from '@/services/categoryApi';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
+import { InlineEditName } from '@/components/common/InlineEditName';
+
+const HUF_PATH_PREFIX = '/huf/';
+
+function isInternalPath(path: string): boolean {
+  try {
+    const url = new URL(path, window.location.origin);
+    // Reject absolute URLs, protocol-relative URLs, and different origins.
+    if (url.origin !== window.location.origin) return false;
+    // Reject dangerous schemes.
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+    // Strip javascript: / data: even if encoded.
+    const decoded = decodeURIComponent(path);
+    if (/^(javascript|data|vbscript):/i.test(decoded)) return false;
+    // Allow only paths under the Huf app prefix. `new URL` normalizes `..` so
+    // paths like /huf/agents/../../evil are rejected.
+    return url.pathname.startsWith(HUF_PATH_PREFIX);
+  } catch {
+    return false;
+  }
+}
 
 const agentPromptFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -263,7 +285,7 @@ export function AgentPromptFormPage() {
         const returnTo = state?.returnTo || fallback?.returnTo;
         const selectedPromptField = state?.selectedPromptField || fallback?.selectedPromptField;
 
-        if (returnTo) {
+        if (returnTo && isInternalPath(returnTo)) {
           navigate(returnTo, {
             state: {
               selectedPrompt: created.name,
@@ -310,7 +332,7 @@ export function AgentPromptFormPage() {
       const returnTo = state?.returnTo || fallback?.returnTo;
       const selectedPromptField = state?.selectedPromptField || fallback?.selectedPromptField;
 
-      if (returnTo) {
+      if (returnTo && isInternalPath(returnTo)) {
         navigate(returnTo, {
           state: {
             selectedPrompt: updated.name,
@@ -343,6 +365,12 @@ export function AgentPromptFormPage() {
       }
     }
   );
+
+  useSaveShortcut({
+    onSave: () => { void handleSave(); },
+    enabled: !loading,
+    isSubmitting: saving,
+  });
 
   const handleCreateNewVersion = () => {
     const currentValues = form.getValues();
@@ -419,7 +447,7 @@ export function AgentPromptFormPage() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading Agent Prompt...</div>
+        <div className="font-body text-steel-soft">Loading Agent Prompt...</div>
       </div>
     );
   }
@@ -438,11 +466,19 @@ export function AgentPromptFormPage() {
                   render={({ field }) => (
                     <FormItem className="space-y-0">
                       <FormControl>
-                        <Input
-                          {...field}
-                          className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
-                          placeholder="Prompt Title"
-                        />
+                        {isNew ? (
+                          <Input
+                            {...field}
+                            className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
+                            placeholder="Prompt Title"
+                          />
+                        ) : (
+                          <InlineEditName
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Prompt Title"
+                          />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -542,6 +578,9 @@ export function AgentPromptFormPage() {
                     placeholder="Auto-generated from title"
                     disabled={!isNew}
                   />
+                  <p className="text-xs text-steel-soft">
+                    URL-friendly identifier for this prompt template. Auto-generated from title if left blank.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Visibility</Label>
@@ -562,6 +601,9 @@ export function AgentPromptFormPage() {
                       <SelectItem value="Public">Public</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-steel-soft">
+                    Controls who can see and use this prompt template.
+                  </p>
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="description">Description</Label>
@@ -581,10 +623,16 @@ export function AgentPromptFormPage() {
                     onChange={(event) => form.setValue('tags', event.target.value, { shouldDirty: true })}
                     placeholder="Comma-separated tags"
                   />
+                  <p className="text-xs text-steel-soft">
+                    Comma-separated tags for search and filtering.
+                  </p>
                 </div>
-                <div className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
                     <Label className="text-base">Active</Label>
+                    <p className="text-xs text-steel-soft">
+                      Whether this prompt template is active and available for use.
+                    </p>
                   </div>
                   <Switch
                     checked={form.watch('is_active')}
@@ -614,6 +662,9 @@ export function AgentPromptFormPage() {
                 <CardTitle>Prompt Body</CardTitle>
               </CardHeader>
               <CardContent>
+                <p className="text-xs text-steel-soft mb-3">
+                  The prompt template content. This is the system prompt or instructions text.
+                </p>
                 <InstructionsTextarea
                   value={form.watch('prompt_body')}
                   onChange={(value) => form.setValue('prompt_body', value, { shouldDirty: true })}

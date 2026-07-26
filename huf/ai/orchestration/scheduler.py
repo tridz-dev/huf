@@ -26,12 +26,13 @@ def process_orchestrations():
             orch = frappe.get_doc("Agent Orchestration", o.name)
             
             is_running = False
+            timed_out = False
             for step in orch.agent_orchestration_plan:
                 if step.status == "in_progress":
                     last_update = step.modified
                     if not last_update:
                         last_update = orch.modified
-                        
+
                     if time_diff_in_seconds(now_datetime(), last_update) > JOB_TIMEOUT_SECONDS:
                         frappe.log_error(f"Orchestration {o.name} Step {step.step_index} timed out. Marking failed.", "Orchestration Scheduler")
                         step.status = "failed"
@@ -39,13 +40,15 @@ def process_orchestrations():
                         orch.status = "Failed"
                         orch.save(ignore_permissions=True)
                         frappe.db.commit()
-                        is_running = False
+                        timed_out = True
                     else:
                         is_running = True
-                    
+
                     break
-            
-            if is_running:
+
+            # Orchestration is either still running or was just marked Failed
+            # above — either way it must not be enqueued for another step.
+            if is_running or timed_out:
                 continue
 
             frappe.enqueue(

@@ -1,13 +1,14 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useLocation, useBlocker, type Location } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
+import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
 import { getToolTypes, getToolFunction, updateToolFunction, getToolFunctionsByName } from '../services/toolApi';
 import type { AgentDoc } from '../types/agent.types';
@@ -28,12 +29,14 @@ import type { AgentPromptOption } from '../components/agent/PromptTemplateSectio
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
 import { AgentKnowledgeModal } from '../components/agent/AgentKnowledgeModal';
+import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
 import type { AgentKnowledgeRow } from '../types/agent.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { writeToolDetailsSetting } from '../components/chat/useChatAgentIdentity';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
 
 type PromptListRow = {
   name: string;
@@ -73,6 +76,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     persist_conversation: agent.persist_conversation === 1,
     persist_user_history: agent.persist_user_history === 1,
     enable_multi_run: agent.enable_multi_run === 1,
+    run_immediately: agent.run_immediately === 1,
     description: agent.description || '',
     instructions: agent.instructions || '',
     default_plan: agent.default_plan || [],
@@ -92,11 +96,20 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     context_strategy: agent.context_strategy || undefined,
     summary_model: agent.summary_model || undefined,
     summary_ratio: agent.summary_ratio !== undefined && agent.summary_ratio !== null ? agent.summary_ratio : undefined,
+    summary_prompt_mode: agent.summary_prompt_mode || 'Local',
+    summary_prompt_template: agent.summary_prompt_template || '',
+    summary_prompt_version_locked: agent.summary_prompt_version_locked === 1,
+    summary_template_version_at_attach: agent.summary_template_version_at_attach !== undefined ? agent.summary_template_version_at_attach : undefined,
+    summary_prompt: agent.summary_prompt || '',
     history_limit: agent.history_limit !== undefined && agent.history_limit !== null ? agent.history_limit : undefined,
     max_knowledge_tokens:
       agent.max_knowledge_tokens !== undefined && agent.max_knowledge_tokens !== null ? agent.max_knowledge_tokens : undefined,
     max_turns: agent.max_turns !== undefined && agent.max_turns !== null ? agent.max_turns : undefined,
+    max_context_chars:
+      agent.max_context_chars !== undefined && agent.max_context_chars !== null ? agent.max_context_chars : undefined,
     enable_conversation_data: agent.enable_conversation_data === 1,
+    inject_conversation_data: agent.inject_conversation_data === 1,
+    conversation_data_api_permission: agent.conversation_data_api_permission || '',
     autonaming_of_conversation_title: agent.autonaming_of_conversation_title === 1,
     agent_color: agent.agent_color?.trim() || '',
     show_tool_execution_details: agent.show_tool_execution_details === 1,
@@ -104,6 +117,12 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
     stt_model: agent.stt_model || undefined,
+    allow_file_upload: agent.allow_file_upload === 1,
+    enable_ocr: agent.enable_ocr === 1,
+    max_upload_size_mb:
+      agent.max_upload_size_mb !== undefined && agent.max_upload_size_mb !== null
+        ? agent.max_upload_size_mb
+        : undefined,
   };
 }
 
@@ -116,12 +135,13 @@ export function AgentFormPage() {
   const [pendingSelectedPromptField, setPendingSelectedPromptField] = useState<string | null>(null);
   const [pendingScrollToPromptField, setPendingScrollToPromptField] = useState(false);
   const [resolvingPendingPrompt, setResolvingPendingPrompt] = useState(false);
+  const skipBlockRef = useRef(false);
 
   // Tab configuration - single source of truth
   const tabConfig = {
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
+      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'run_immediately', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
       default: true,
       disabled: false,
     },
@@ -161,10 +181,18 @@ export function AgentFormPage() {
        'context_strategy',
         'summary_model',
         'summary_ratio',
+        'summary_prompt_mode',
+        'summary_prompt_template',
+        'summary_prompt_version_locked',
+        'summary_template_version_at_attach',
+        'summary_prompt',
         'history_limit',
         'max_knowledge_tokens',
         'max_turns',
+        'max_context_chars',
         'enable_conversation_data',
+        'inject_conversation_data',
+        'conversation_data_api_permission',
         'autonaming_of_conversation_title',
         'agent_color',
         'show_tool_execution_details',
@@ -172,6 +200,9 @@ export function AgentFormPage() {
         'tts_model',
         'tts_voice',
         'stt_model',
+        'allow_file_upload',
+        'enable_ocr',
+        'max_upload_size_mb',
       ],
       default: false,
       disabled: false,
@@ -226,6 +257,8 @@ export function AgentFormPage() {
   const [allModels, setAllModels] = useState<AIModel[]>([]);
   const [promptOptions, setPromptOptions] = useState<AgentPromptOption[]>([]);
   const [loadingPrompts, setLoadingPrompts] = useState(false);
+  const [summaryPromptOptions, setSummaryPromptOptions] = useState<AgentPromptOption[]>([]);
+  const [loadingSummaryPrompts, setLoadingSummaryPrompts] = useState(false);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
@@ -268,6 +301,7 @@ export function AgentFormPage() {
         persist_conversation: true,
         persist_user_history: true,
         enable_multi_run: false,
+        run_immediately: true,
         description: '',
         instructions: '',
         default_plan: [],
@@ -285,17 +319,28 @@ export function AgentFormPage() {
         context_strategy: undefined,
         summary_model: undefined,
         summary_ratio: undefined,
+        summary_prompt_mode: "Local",
+        summary_prompt_template: '',
+        summary_prompt_version_locked: false,
+        summary_template_version_at_attach: undefined,
+        summary_prompt: '',
         history_limit: undefined,
         max_knowledge_tokens: undefined,
         max_turns: undefined,
+        max_context_chars: undefined,
         enable_conversation_data: false,
-        autonaming_of_conversation_title: false,
+        inject_conversation_data: true,
+        conversation_data_api_permission: '',
+        autonaming_of_conversation_title: true,
         agent_color: '',
         show_tool_execution_details: false,
         image_generation_model: undefined,
         tts_model: undefined,
         tts_voice: '',
         stt_model: undefined,
+        allow_file_upload: false,
+        enable_ocr: false,
+        max_upload_size_mb: 25,
       },
   });
 
@@ -367,6 +412,27 @@ export function AgentFormPage() {
   }, [knowledgeSources, initialKnowledgeSources, isNew]);
 
   const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
+
+  // Deliberately excludes `isNew` (unlike showSaveButton) - a blank new-agent form
+  // has nothing to lose, so it shouldn't block navigation until the user actually changes something.
+  const hasUnsavedChanges = isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged;
+
+  const shouldBlock = useCallback(
+    ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
+      if (skipBlockRef.current) {
+        skipBlockRef.current = false;
+        return false;
+      }
+      if (!hasUnsavedChanges) return false;
+      return (
+        currentLocation.pathname !== nextLocation.pathname ||
+        currentLocation.search !== nextLocation.search
+      );
+    },
+    [hasUnsavedChanges]
+  );
+
+  const blocker = useBlocker(shouldBlock);
 
   // Load trigger types on mount
   useEffect(() => {
@@ -477,7 +543,98 @@ export function AgentFormPage() {
   }, []);
 
   useEffect(() => {
-    const state = location.state as { selectedPrompt?: string; showTab?: string; selectedPromptField?: string } | null;
+    let cancelled = false;
+
+    const loadSummaryPromptOptions = async () => {
+      setLoadingSummaryPrompts(true);
+      try {
+        const prompts = await db.getDocList('Agent Summary Prompt', {
+          fields: ['name', 'title', 'version', 'is_latest', 'description'],
+          filters: [['is_active', '=', 1]],
+          limit: 500,
+          orderBy: { field: 'modified', order: 'desc' },
+        }) as PromptListRow[];
+
+        if (cancelled) {
+          return;
+        }
+
+        setSummaryPromptOptions(
+          prompts.map((prompt) => ({
+            value: prompt.name,
+            label: prompt.title || prompt.name,
+            description: prompt.description || undefined,
+            version: typeof prompt.version === 'number' ? prompt.version : undefined,
+            isLatest: prompt.is_latest === 1,
+          }))
+        );
+      } catch (error) {
+        console.error('Error loading summary prompt templates:', error);
+        if (!cancelled) {
+          setSummaryPromptOptions([]);
+          toast.error('Failed to load Agent Summary Prompt templates');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSummaryPrompts(false);
+        }
+      }
+    };
+
+    loadSummaryPromptOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const state = location.state as {
+      selectedPrompt?: string;
+      showTab?: string;
+      selectedPromptField?: string;
+      linkedKnowledge?: AgentKnowledgeRow;
+      linkedMcpServer?: MCPServerRef;
+    } | null;
+
+    if (state?.linkedKnowledge) {
+      const row = state.linkedKnowledge;
+      setKnowledgeSources((prev) => {
+        if (prev.some((ks) => ks.knowledge_source === row.knowledge_source)) {
+          return prev;
+        }
+        return [...prev, row];
+      });
+      setInitialKnowledgeSources((prev) => {
+        if (prev.some((ks) => ks.knowledge_source === row.knowledge_source)) {
+          return prev;
+        }
+        return [...prev, row];
+      });
+      setActiveTab('knowledge');
+      navigate(`${location.pathname}${location.search}#knowledge`, { replace: true, state: {} });
+      return;
+    }
+
+    if (state?.linkedMcpServer) {
+      const server = state.linkedMcpServer;
+      setMcpServers((prev) => {
+        if (prev.some((s) => s.mcp_server === server.mcp_server)) {
+          return prev;
+        }
+        return [...prev, server];
+      });
+      setInitialMcpServers((prev) => {
+        if (prev.some((s) => s.mcp_server === server.mcp_server)) {
+          return prev;
+        }
+        return [...prev, server];
+      });
+      setActiveTab('tools');
+      navigate(`${location.pathname}${location.search}#tools`, { replace: true, state: {} });
+      return;
+    }
+
     if (state?.selectedPrompt) {
       setPendingSelectedPrompt(state.selectedPrompt);
       setPendingSelectedPromptField(state.selectedPromptField || 'agent_prompt');
@@ -485,7 +642,7 @@ export function AgentFormPage() {
         setActiveTab(state.showTab);
       }
     }
-  }, [location.state]);
+  }, [location.state, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (!pendingSelectedPrompt) return;
@@ -497,11 +654,15 @@ export function AgentFormPage() {
     const run = async () => {
       setResolvingPendingPrompt(true);
       try {
-        const promptExists = promptOptions.some((option) => option.value === pendingSelectedPrompt);
+        const isSummaryPrompt = fieldName === 'summary_prompt_template';
+        const existingOptions = isSummaryPrompt ? summaryPromptOptions : promptOptions;
+        const promptExists = existingOptions.some((option) => option.value === pendingSelectedPrompt);
 
         // Ensure the selector's option list contains the newly created prompt.
         if (!promptExists) {
-          const promptDoc = await getAgentPrompt(pendingSelectedPrompt);
+          const promptDoc = isSummaryPrompt
+            ? await getAgentSummaryPrompt(pendingSelectedPrompt)
+            : await getAgentPrompt(pendingSelectedPrompt);
 
           if (promptDoc?.is_active === 1) {
             const option: AgentPromptOption = {
@@ -512,7 +673,8 @@ export function AgentFormPage() {
               isLatest: promptDoc.is_latest === 1,
             };
 
-            setPromptOptions((prev) => {
+            const setOptions = isSummaryPrompt ? setSummaryPromptOptions : setPromptOptions;
+            setOptions((prev) => {
               if (prev.some((p) => p.value === option.value)) return prev;
               return [option, ...prev];
             });
@@ -523,6 +685,9 @@ export function AgentFormPage() {
         if (fieldName === 'agent_prompt' && form.getValues('prompt_mode') !== 'Template') {
           form.setValue('prompt_mode', 'Template', { shouldDirty: true });
         }
+        if (fieldName === 'summary_prompt_template' && form.getValues('summary_prompt_mode') !== 'Template') {
+          form.setValue('summary_prompt_mode', 'Template', { shouldDirty: true });
+        }
 
         // Attach/select the created prompt in the form.
         form.setValue(fieldName as any, pendingSelectedPrompt as any, { shouldDirty: true });
@@ -530,7 +695,7 @@ export function AgentFormPage() {
         setPendingSelectedPrompt(null);
         setPendingSelectedPromptField(null);
 
-        if (fieldName === 'agent_prompt') {
+        if (fieldName === 'agent_prompt' || fieldName === 'summary_prompt_template') {
           setPendingScrollToPromptField(true);
         }
 
@@ -554,6 +719,7 @@ export function AgentFormPage() {
     pendingSelectedPromptField,
     resolvingPendingPrompt,
     promptOptions,
+    summaryPromptOptions,
     form,
     location.pathname,
     location.search,
@@ -582,6 +748,8 @@ export function AgentFormPage() {
 
   const watchPromptMode = form.watch('prompt_mode');
   const watchAgentPrompt = form.watch('agent_prompt');
+  const watchSummaryPromptMode = form.watch('summary_prompt_mode');
+  const watchSummaryPromptTemplate = form.watch('summary_prompt_template');
 
   useEffect(() => {
     // Don't clear prompt selection while we're applying an incoming selection from navigation.
@@ -598,6 +766,22 @@ export function AgentFormPage() {
       form.setValue('template_version_at_attach', undefined, { shouldDirty: false });
     }
   }, [watchPromptMode, watchAgentPrompt, form, pendingSelectedPrompt]);
+
+  useEffect(() => {
+    // Don't clear prompt selection while we're applying an incoming selection from navigation.
+    if (pendingSelectedPrompt) return;
+    if (watchSummaryPromptMode === 'Local') {
+      form.setValue('summary_prompt_template', '', { shouldDirty: false });
+      form.setValue('summary_prompt_version_locked', false, { shouldDirty: false });
+      form.setValue('summary_template_version_at_attach', undefined, { shouldDirty: false });
+      return;
+    }
+
+    if (watchSummaryPromptMode === 'Template' && !watchSummaryPromptTemplate) {
+      form.setValue('summary_prompt_version_locked', false, { shouldDirty: false });
+      form.setValue('summary_template_version_at_attach', undefined, { shouldDirty: false });
+    }
+  }, [watchSummaryPromptMode, watchSummaryPromptTemplate, form, pendingSelectedPrompt]);
 
   useEffect(() => {
     if (watchPromptMode !== 'Template' || !watchAgentPrompt) {
@@ -618,11 +802,33 @@ export function AgentFormPage() {
   }, [watchPromptMode, watchAgentPrompt, promptOptions, form]);
 
   useEffect(() => {
-    if (!pendingScrollToPromptField) return;
-    if (activeTab !== 'general') return;
-    if (watchPromptMode !== 'Template') return;
+    if (watchSummaryPromptMode !== 'Template' || !watchSummaryPromptTemplate) {
+      return;
+    }
 
-    const el = document.getElementById('agent-prompt-field');
+    const selectedPrompt = summaryPromptOptions.find((option) => option.value === watchSummaryPromptTemplate);
+    if (!selectedPrompt || typeof selectedPrompt.version !== 'number') {
+      return;
+    }
+
+    const currentVersion = form.getValues('summary_template_version_at_attach');
+    if (currentVersion === selectedPrompt.version) {
+      return;
+    }
+
+    form.setValue('summary_template_version_at_attach', selectedPrompt.version, { shouldDirty: true });
+  }, [watchSummaryPromptMode, watchSummaryPromptTemplate, summaryPromptOptions, form]);
+
+  useEffect(() => {
+    if (!pendingScrollToPromptField) return;
+
+    let el: HTMLElement | null = null;
+    if (activeTab === 'general' && watchPromptMode === 'Template') {
+      el = document.getElementById('agent-prompt-field');
+    } else if (activeTab === 'advanced' && watchSummaryPromptMode === 'Template') {
+      el = document.getElementById('summary-prompt-template-field');
+    }
+
     if (el) {
       // Wait a couple frames for the tab content to finish rendering.
       requestAnimationFrame(() => {
@@ -633,7 +839,7 @@ export function AgentFormPage() {
     }
 
     setPendingScrollToPromptField(false);
-  }, [pendingScrollToPromptField, activeTab, watchPromptMode]);
+  }, [pendingScrollToPromptField, activeTab, watchPromptMode, watchSummaryPromptMode]);
 
   // Load agent data when id is available (only for edit mode)
   useEffect(() => {
@@ -654,6 +860,7 @@ export function AgentFormPage() {
             persist_conversation: data.persist_conversation === 1,
             persist_user_history: data.persist_user_history === 1,
             enable_multi_run: data.enable_multi_run === 1,
+            run_immediately: data.run_immediately === 1,
             description: data.description || '',
             instructions: data.instructions || '',
             default_plan: data.default_plan || [],
@@ -671,10 +878,19 @@ export function AgentFormPage() {
             context_strategy: data.context_strategy || undefined,
             summary_model: data.summary_model || undefined,
             summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
+            summary_prompt_mode: data.summary_prompt_mode || 'Local',
+            summary_prompt_template: data.summary_prompt_template || '',
+            summary_prompt_version_locked: data.summary_prompt_version_locked === 1,
+            summary_template_version_at_attach: data.summary_template_version_at_attach !== undefined ? data.summary_template_version_at_attach : undefined,
+            summary_prompt: data.summary_prompt || '',
             history_limit: data.history_limit !== undefined && data.history_limit !== null ? data.history_limit : undefined,
             max_knowledge_tokens: data.max_knowledge_tokens !== undefined && data.max_knowledge_tokens !== null ? data.max_knowledge_tokens : undefined,
             max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
+            max_context_chars:
+              data.max_context_chars !== undefined && data.max_context_chars !== null ? data.max_context_chars : undefined,
             enable_conversation_data: data.enable_conversation_data === 1,
+            inject_conversation_data: data.inject_conversation_data === 1,
+            conversation_data_api_permission: data.conversation_data_api_permission || '',
             autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
             agent_color: data.agent_color?.trim() || '',
             show_tool_execution_details: data.show_tool_execution_details === 1,
@@ -683,6 +899,12 @@ export function AgentFormPage() {
             tts_model: data.tts_model || undefined,
             tts_voice: data.tts_voice || '',
             stt_model: data.stt_model || undefined,
+            allow_file_upload: data.allow_file_upload === 1,
+            enable_ocr: data.enable_ocr === 1,
+            max_upload_size_mb:
+              data.max_upload_size_mb !== undefined && data.max_upload_size_mb !== null
+                ? data.max_upload_size_mb
+                : undefined,
           });
         }
         // Track initial disabled state and persisted allow_chat
@@ -816,6 +1038,7 @@ export function AgentFormPage() {
         persist_conversation: values.persist_conversation ? 1 : 0,
         persist_user_history: values.persist_user_history ? 1 : 0,
         enable_multi_run: values.enable_multi_run ? 1 : 0,
+        run_immediately: values.run_immediately ? 1 : 0,
         description: values.description || '',
         instructions: values.instructions,
         default_plan: values.default_plan || [],
@@ -833,10 +1056,18 @@ export function AgentFormPage() {
         context_strategy: values.context_strategy || undefined,
         summary_model: values.summary_model || undefined,
         summary_ratio: values.summary_ratio !== undefined ? values.summary_ratio : undefined,
+        summary_prompt_mode: values.summary_prompt_mode || 'Local',
+        summary_prompt_template: values.summary_prompt_template || '',
+        summary_prompt_version_locked: values.summary_prompt_version_locked ? 1 : 0,
+        summary_template_version_at_attach: values.summary_template_version_at_attach !== undefined ? values.summary_template_version_at_attach : undefined,
+        summary_prompt: values.summary_prompt || '',
         history_limit: values.history_limit !== undefined ? values.history_limit : undefined,
         max_knowledge_tokens: values.max_knowledge_tokens !== undefined ? values.max_knowledge_tokens : undefined,
         max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
+        max_context_chars: values.max_context_chars !== undefined ? values.max_context_chars : undefined,
         enable_conversation_data: values.enable_conversation_data ? 1 : 0,
+        inject_conversation_data: values.inject_conversation_data ? 1 : 0,
+        conversation_data_api_permission: values.conversation_data_api_permission || undefined,
         autonaming_of_conversation_title: values.autonaming_of_conversation_title ? 1 : 0,
         agent_color: values.agent_color?.trim() || undefined,
         show_tool_execution_details: values.show_tool_execution_details ? 1 : 0,
@@ -845,6 +1076,9 @@ export function AgentFormPage() {
         tts_model: values.tts_model || undefined,
         tts_voice: values.tts_voice || undefined,
         stt_model: values.stt_model || undefined,
+        allow_file_upload: values.allow_file_upload ? 1 : 0,
+        enable_ocr: values.enable_ocr ? 1 : 0,
+        max_upload_size_mb: values.max_upload_size_mb !== undefined ? values.max_upload_size_mb : undefined,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -881,6 +1115,7 @@ export function AgentFormPage() {
           persist_conversation: newAgent.persist_conversation === 1,
           persist_user_history: newAgent.persist_user_history === 1,
           enable_multi_run: newAgent.enable_multi_run === 1,
+          run_immediately: newAgent.run_immediately === 1,
           description: newAgent.description || '',
           instructions: newAgent.instructions || '',
           default_plan: newAgent.default_plan || [],
@@ -898,10 +1133,19 @@ export function AgentFormPage() {
           context_strategy: newAgent.context_strategy || undefined,
           summary_model: newAgent.summary_model || undefined,
           summary_ratio: newAgent.summary_ratio !== undefined && newAgent.summary_ratio !== null ? newAgent.summary_ratio : undefined,
+          summary_prompt_mode: newAgent.summary_prompt_mode || 'Local',
+          summary_prompt_template: newAgent.summary_prompt_template || '',
+          summary_prompt_version_locked: newAgent.summary_prompt_version_locked === 1,
+          summary_template_version_at_attach: newAgent.summary_template_version_at_attach !== undefined ? newAgent.summary_template_version_at_attach : undefined,
+          summary_prompt: newAgent.summary_prompt || '',
           history_limit: newAgent.history_limit !== undefined && newAgent.history_limit !== null ? newAgent.history_limit : undefined,
           max_knowledge_tokens: newAgent.max_knowledge_tokens !== undefined && newAgent.max_knowledge_tokens !== null ? newAgent.max_knowledge_tokens : undefined,
           max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
+          max_context_chars:
+            newAgent.max_context_chars !== undefined && newAgent.max_context_chars !== null ? newAgent.max_context_chars : undefined,
           enable_conversation_data: newAgent.enable_conversation_data === 1,
+          inject_conversation_data: newAgent.inject_conversation_data === 1,
+          conversation_data_api_permission: newAgent.conversation_data_api_permission || '',
           autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
           agent_color: newAgent.agent_color?.trim() || '',
           show_tool_execution_details: newAgent.show_tool_execution_details === 1,
@@ -910,67 +1154,95 @@ export function AgentFormPage() {
           tts_model: newAgent.tts_model || undefined,
           tts_voice: newAgent.tts_voice || '',
           stt_model: newAgent.stt_model || undefined,
+          allow_file_upload: newAgent.allow_file_upload === 1,
+          enable_ocr: newAgent.enable_ocr === 1,
+          max_upload_size_mb:
+            newAgent.max_upload_size_mb !== undefined && newAgent.max_upload_size_mb !== null
+              ? newAgent.max_upload_size_mb
+              : undefined,
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
+        setInitialTools([...selectedTools]);
+        setInitialMcpServers([...mcpServers]);
         setInitialKnowledgeSources([...knowledgeSources]);
         setAgentStats({ last_run: newAgent.last_run ?? null, total_run: newAgent.total_run ?? null });
         // Sync tool-details setting to other tabs via localStorage
         writeToolDetailsSetting(newAgent.name, newAgent.show_tool_execution_details === 1);
         // Navigate to the edit page with the new agent's ID
+        skipBlockRef.current = true;
         navigate(`/agents/${newAgent.name}`);
       } else if (id) {
         // Update existing agent
-        await updateAgent(id, agentData as unknown as Partial<AgentDoc>);
+        const updated = await updateAgent(id, agentData as unknown as Partial<AgentDoc>);
         toast.success('Agent updated successfully!');
         // Sync tool-details setting to other tabs via localStorage
-        writeToolDetailsSetting(id, !!values.show_tool_execution_details);
-// Reset form state with the updated values to mark form as clean
-form.reset({
-  agent_name: values.agent_name,
-  provider: values.provider,
-  model: values.model,
-  temperature: values.temperature,
-  top_p: values.top_p,
-  disabled: values.disabled,
-  allow_chat: values.allow_chat,
-  persist_conversation: values.persist_conversation,
-  persist_user_history: values.persist_user_history,
-  enable_multi_run: values.enable_multi_run,
-  description: values.description,
-  instructions: values.instructions,
-  default_plan: values.default_plan || [],
-  prompt_mode: values.prompt_mode,
-  agent_prompt: values.agent_prompt,
-  prompt_version_locked: values.prompt_version_locked,
-  template_version_at_attach: values.template_version_at_attach,
-  allow_guest: values.allow_guest,
-  allowed_users: values.allowed_users || [],
-  allowed_roles: values.allowed_roles || [],
-  enable_prompt_caching: values.enable_prompt_caching,
-  cache_control_type: values.cache_control_type,
-  cache_system_message: values.cache_system_message,
-  cache_conversation_history: values.cache_conversation_history,
-  context_strategy: values.context_strategy,
-  summary_model: values.summary_model,
-  summary_ratio: values.summary_ratio,
-  history_limit: values.history_limit,
-  max_knowledge_tokens: values.max_knowledge_tokens,
-  max_turns: values.max_turns,
-  enable_conversation_data: values.enable_conversation_data,
-  autonaming_of_conversation_title: values.autonaming_of_conversation_title,
-  agent_color: values.agent_color,
-  show_tool_execution_details: values.show_tool_execution_details,
+        writeToolDetailsSetting(updated.name || id, !!values.show_tool_execution_details);
+        // Reset form state with the updated values to mark form as clean
+        form.reset({
+          agent_name: values.agent_name,
+          provider: values.provider,
+          model: values.model,
+          temperature: values.temperature,
+          top_p: values.top_p,
+          disabled: values.disabled,
+          allow_chat: values.allow_chat,
+          persist_conversation: values.persist_conversation,
+          persist_user_history: values.persist_user_history,
+          enable_multi_run: values.enable_multi_run,
+          run_immediately: values.run_immediately,
+          description: values.description,
+          instructions: values.instructions,
+          default_plan: values.default_plan || [],
+          prompt_mode: values.prompt_mode,
+          agent_prompt: values.agent_prompt,
+          prompt_version_locked: values.prompt_version_locked,
+          template_version_at_attach: values.template_version_at_attach,
+          allow_guest: values.allow_guest,
+          allowed_users: values.allowed_users || [],
+          allowed_roles: values.allowed_roles || [],
+          enable_prompt_caching: values.enable_prompt_caching,
+          cache_control_type: values.cache_control_type,
+          cache_system_message: values.cache_system_message,
+          cache_conversation_history: values.cache_conversation_history,
+          context_strategy: values.context_strategy,
+          summary_model: values.summary_model,
+          summary_ratio: values.summary_ratio,
+          summary_prompt_mode: values.summary_prompt_mode,
+          summary_prompt_template: values.summary_prompt_template,
+          summary_prompt_version_locked: values.summary_prompt_version_locked,
+          summary_template_version_at_attach: values.summary_template_version_at_attach,
+          summary_prompt: values.summary_prompt,
+          history_limit: values.history_limit,
+          max_knowledge_tokens: values.max_knowledge_tokens,
+          max_turns: values.max_turns,
+          max_context_chars: values.max_context_chars,
+          enable_conversation_data: values.enable_conversation_data,
+          inject_conversation_data: values.inject_conversation_data,
+          conversation_data_api_permission: values.conversation_data_api_permission,
+          autonaming_of_conversation_title: values.autonaming_of_conversation_title,
+          agent_color: values.agent_color,
+          show_tool_execution_details: values.show_tool_execution_details,
 
-  image_generation_model: values.image_generation_model,
-  tts_model: values.tts_model,
-  tts_voice: values.tts_voice,
-  stt_model: values.stt_model,
-});
-// Reset tools, disabled state, and persisted allow_chat after successful update
-setInitialTools([...selectedTools]);
-setInitialDisabled(values.disabled);
-setAllowChat(values.allow_chat);
+          image_generation_model: values.image_generation_model,
+          tts_model: values.tts_model,
+          tts_voice: values.tts_voice,
+          stt_model: values.stt_model,
+          allow_file_upload: values.allow_file_upload,
+          enable_ocr: values.enable_ocr,
+          max_upload_size_mb: values.max_upload_size_mb,
+        });
+        // Reset tools, disabled state, and persisted allow_chat after successful update
+        setInitialTools([...selectedTools]);
+        setInitialDisabled(values.disabled);
+        setAllowChat(values.allow_chat);
+
+        if (updated.name && updated.name !== id) {
+          skipBlockRef.current = true;
+          navigate(`/agents/${encodeURIComponent(updated.name)}`, { replace: true });
+          return;
+        }
+
         if (id) {
           getAgent(id).then((updatedData: AgentDoc) => {
             form.reset(mapAgentDocToFormValues(updatedData));
@@ -1058,6 +1330,12 @@ setAllowChat(values.allow_chat);
     () => createFormSubmitHandler(form, activeTab, tabFieldMapping, tabLabels, onSubmit),
     [form, activeTab, tabFieldMapping, tabLabels, onSubmit]
   );
+
+  useSaveShortcut({
+    onSave: handleFormSubmit,
+    enabled: showSaveButton,
+    isSubmitting: saving,
+  });
 
   const handleOptimizePrompt = () => {
     setOptimizingPrompt((value) => value);
@@ -1291,6 +1569,22 @@ setAllowChat(values.allow_chat);
     setShowKnowledgeModal(true);
   };
 
+  const handleCreateKnowledge = () => {
+    if (!id || id === 'new') {
+      toast.error('Please save the agent first before creating knowledge');
+      return;
+    }
+    navigate(`/knowledge/new?agent=${encodeURIComponent(id)}`);
+  };
+
+  const handleCreateMCP = () => {
+    if (!id || id === 'new') {
+      toast.error('Please save the agent first before creating MCP servers');
+      return;
+    }
+    navigate(`/mcp/new?agent=${encodeURIComponent(id)}`);
+  };
+
   const handleEditKnowledge = (index: number) => {
     setEditingKnowledgeIndex(index);
     setShowKnowledgeModal(true);
@@ -1349,6 +1643,8 @@ setAllowChat(values.allow_chat);
     reference_doctype?: string;
     doc_event?: string;
     condition?: string;
+    prompt_field?: string;
+    file_attachments?: AgentTriggerAttachmentRow[];
     app_name?: string;
     event_name?: string;
     webhook_slug?: string;
@@ -1383,6 +1679,17 @@ setAllowChat(values.allow_chat);
         webhook_key: values.webhook_key,
       };
 
+      // Doc Event extras: field to read the prompt from + file/audio attachment mappings
+      if (values.trigger_type === 'Doc Event') {
+        triggerData.prompt_field = values.prompt_field || '';
+        triggerData.file_attachments = (values.file_attachments || []).map((row) => ({
+          ...(row.name ? { name: row.name } : {}),
+          source_type: row.source_type,
+          field_name: row.field_name,
+          child_table: row.source_type === 'Child Table Field' ? row.child_table || '' : '',
+        }));
+      }
+
       if (editingTrigger) {
         // Update existing trigger
         await updateAgentTrigger(editingTrigger.name, triggerData);
@@ -1412,7 +1719,7 @@ setAllowChat(values.allow_chat);
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading agent...</div>
+        <div className="font-body text-steel-soft">Loading agent...</div>
       </div>
     );
   }
@@ -1444,13 +1751,13 @@ setAllowChat(values.allow_chat);
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="flex h-auto w-full justify-start overflow-x-auto overflow-y-hidden p-1">
+              <TabsList layout="scroll" className="w-full">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
                     value={tabKey}
                     disabled={config.disabled}
-                    className="flex-1 shrink-0"
+                    className="shrink-0 px-3 sm:min-w-[110px]"
                   >
                     {config.label}
                   </TabsTrigger>
@@ -1499,6 +1806,7 @@ setAllowChat(values.allow_chat);
                   onEditTool={handleEditTool}
                   mcpServers={mcpServers}
                   onAddMCP={() => setShowMCPServersModal(true)}
+                  onCreateMCP={handleCreateMCP}
                   onRemoveMCP={handleRemoveMCPServer}
                   onToggleMCP={handleToggleMCPServer}
                   onSyncMCP={handleSyncMCPServer}
@@ -1510,6 +1818,7 @@ setAllowChat(values.allow_chat);
                 <KnowledgeTab
                   knowledgeSources={knowledgeSources}
                   onAdd={handleAddKnowledge}
+                  onCreate={handleCreateKnowledge}
                   onEdit={handleEditKnowledge}
                   onRemove={handleRemoveKnowledge}
                 />
@@ -1520,7 +1829,12 @@ setAllowChat(values.allow_chat);
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-4">
-                <AdvancedTab form={form} allModels={allModels} />
+                <AdvancedTab
+                  form={form}
+                  allModels={allModels}
+                  summaryPromptOptions={summaryPromptOptions}
+                  loadingSummaryPrompts={loadingSummaryPrompts}
+                />
               </TabsContent>
             </Tabs>
           </form>
@@ -1587,6 +1901,8 @@ setAllowChat(values.allow_chat);
         toolName={editingToolId || undefined}
         currentAgentName={isNew ? undefined : id}
       />
+
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

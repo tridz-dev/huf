@@ -1,11 +1,30 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Form } from '../components/ui/form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { getMCPServer, createMCPServer, updateMCPServer, syncMCPTools, updateMCPTool, testMCPConnection, type MCPServerDoc } from '../services/mcpApi';
+import {
+  getMCPServer,
+  createMCPServer,
+  updateMCPServer,
+  deleteMCPServer,
+  syncMCPTools,
+  updateMCPTool,
+  testMCPConnection,
+  type MCPServerDoc,
+} from '../services/mcpApi';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { MCPHeader } from '../components/mcp/MCPHeader';
 import { DetailsTab } from '../components/mcp/DetailsTab';
@@ -13,29 +32,58 @@ import { ConnectionTab } from '../components/mcp/ConnectionTab';
 import { ToolsTab } from '../components/mcp/ToolsTab';
 import { mcpFormSchema, type MCPFormValues, type MCPTool } from '../components/mcp/types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
+import { useSaveShortcut } from '../hooks/useSaveShortcut';
+import { linkMcpServerToAgent } from '../services/agentApi';
 
 export function McpDetailsPage() {
   const { mcpId } = useParams<{ mcpId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromAgent = searchParams.get('agent');
   const isNew = mcpId === 'new';
 
   // Tab configuration - single source of truth
   const tabConfig = {
     details: {
       label: 'Details',
-      fields: ['server_name', 'enabled', 'description', 'tool_namespace', 'timeout_seconds'], // server_name only shown/required for new servers
-      default: true,
+      fields: ['server_name', 'enabled', 'description', 'tool_namespace', 'timeout_seconds'], // server_name is edited via the page header for new servers
+      default: false,
       disabled: false,
     },
     connection: {
       label: 'Connection',
-      fields: ['transport_type', 'server_url', 'auth_type', 'auth_header_name', 'auth_header_value'],
+      fields: [
+        'server_name',
+        'transport_type',
+        'server_url',
+        'auth_type',
+        'auth_header_name',
+        'auth_header_value',
+        'oauth_status',
+        'oauth_scope',
+        'oauth_extra_authorize_params',
+        'oauth_redirect_uri',
+        'oauth_authorization_endpoint',
+        'oauth_token_endpoint',
+        'oauth_registration_endpoint',
+        'oauth_client_id',
+        'oauth_client_secret',
+        'oauth_token_response_path',
+        'oauth_discovery_status',
+        'oauth_resource_metadata_url',
+        'oauth_authorization_server',
+        'oauth_client_registration_method',
+        'oauth_metadata_json',
+        'oauth_last_discovered_at',
+        'oauth_discovery_error',
+        'custom_headers',
+      ],
       default: false,
       disabled: false,
     },
     tools: {
       label: 'Tools',
-      fields: ['enable_auto_sync'], // Tools tab has enable_auto_sync field
+      fields: ['enable_auto_sync', 'auto_sync_interval'], // Tools tab has sync settings
       default: false,
       disabled: isNew, // Disabled for new MCP creation
     },
@@ -44,8 +92,8 @@ export function McpDetailsPage() {
   // Extract derived values from tab config (memoized to avoid recreating on every render)
   const validTabs = useMemo(() => Object.keys(tabConfig), []);
   const defaultTab = useMemo(
-    () => Object.entries(tabConfig).find(([_, config]) => config.default)?.[0] || validTabs[0],
-    [validTabs]
+    () => (isNew ? 'connection' : Object.entries(tabConfig).find(([, config]) => config.default)?.[0] || validTabs[0]),
+    [validTabs, isNew]
   );
   const tabFieldMapping: TabFieldMapping = useMemo(
     () => Object.fromEntries(
@@ -96,6 +144,8 @@ export function McpDetailsPage() {
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const form = useForm<MCPFormValues>({
     resolver: zodResolver(mcpFormSchema),
@@ -107,16 +157,53 @@ export function McpDetailsPage() {
       timeout_seconds: undefined,
       transport_type: 'http',
       server_url: '',
-      auth_type: 'none',
+      auth_type: 'oauth',
       auth_header_name: '',
       auth_header_value: '',
+      oauth_status: 'Not Connected',
+      oauth_scope: '',
+      oauth_extra_authorize_params: '',
+      oauth_redirect_uri: '',
+      oauth_authorization_endpoint: '',
+      oauth_token_endpoint: '',
+      oauth_registration_endpoint: '',
+      oauth_client_id: '',
+      oauth_client_secret: '',
+      oauth_token_response_path: '',
+      oauth_discovery_status: 'Not Started',
+      oauth_resource_metadata_url: '',
+      oauth_authorization_server: '',
+      oauth_client_registration_method: '',
+      oauth_metadata_json: '',
+      oauth_last_discovered_at: '',
+      oauth_discovery_error: '',
+      auto_sync_interval: 1,
       enable_auto_sync: false,
+      custom_headers: [],
     },
   });
 
   const watchEnabled = form.watch('enabled');
+  const watchServerUrl = form.watch('server_url');
   const isDirty = form.formState.isDirty;
   const [lastSync, setLastSync] = useState<string | undefined>();
+
+  // Auto-derive server_name from URL when creating a new MCP server
+  useEffect(() => {
+    if (!isNew) return;
+    const currentName = form.getValues('server_name');
+    if (currentName) return;
+    try {
+      const url = new URL(watchServerUrl.startsWith('http') ? watchServerUrl : `https://${watchServerUrl}`);
+      const host = url.hostname.replace(/^www\./, '');
+      const derived = host.split('.')[0] || host;
+      if (derived) {
+        form.setValue('server_name', derived, { shouldDirty: false });
+      }
+    } catch {
+      // invalid URL, ignore
+    }
+  }, [watchServerUrl, isNew, form]);
 
   // Load MCP server data when id is available (only for edit mode)
   useEffect(() => {
@@ -133,7 +220,26 @@ export function McpDetailsPage() {
           auth_type: data.auth_type || 'none',
           auth_header_name: data.auth_header_name || '',
           auth_header_value: '', // Don't load the encrypted value
+          oauth_status: data.oauth_status || 'Not Connected',
+          oauth_scope: data.oauth_scope || '',
+          oauth_extra_authorize_params: data.oauth_extra_authorize_params || '',
+          oauth_redirect_uri: data.oauth_redirect_uri || '',
+          oauth_authorization_endpoint: data.oauth_authorization_endpoint || '',
+          oauth_token_endpoint: data.oauth_token_endpoint || '',
+          oauth_registration_endpoint: data.oauth_registration_endpoint || '',
+          oauth_client_id: data.oauth_client_id || '',
+          oauth_client_secret: '', // Don't load the encrypted value
+          oauth_token_response_path: data.oauth_token_response_path || '',
+          oauth_discovery_status: data.oauth_discovery_status || 'Not Started',
+          oauth_resource_metadata_url: data.oauth_resource_metadata_url || '',
+          oauth_authorization_server: data.oauth_authorization_server || '',
+          oauth_client_registration_method: data.oauth_client_registration_method || '',
+          oauth_metadata_json: data.oauth_metadata_json || '',
+          oauth_last_discovered_at: data.oauth_last_discovered_at || '',
+          oauth_discovery_error: data.oauth_discovery_error || '',
+          auto_sync_interval: data.auto_sync_interval ?? 1,
           enable_auto_sync: data.enable_auto_sync === 1,
+          custom_headers: data.custom_headers || [],
         });
         
         // Load last_sync
@@ -176,11 +282,33 @@ export function McpDetailsPage() {
         auth_header_name: values.auth_header_name || '',
         auth_header_value: values.auth_header_value || '',
         enable_auto_sync: values.enable_auto_sync ? 1 : 0,
+        auto_sync_interval: values.auto_sync_interval,
+        oauth_scope: values.oauth_scope || '',
+        oauth_extra_authorize_params: values.oauth_extra_authorize_params || '',
+        oauth_redirect_uri: values.oauth_redirect_uri || '',
+        oauth_authorization_endpoint: values.oauth_authorization_endpoint || '',
+        oauth_token_endpoint: values.oauth_token_endpoint || '',
+        oauth_registration_endpoint: values.oauth_registration_endpoint || '',
+        oauth_client_id: values.oauth_client_id || '',
+        oauth_client_secret: values.oauth_client_secret || '',
+        oauth_token_response_path: values.oauth_token_response_path || '',
+        custom_headers: values.custom_headers || [],
       };
 
       if (isNew) {
         // Create new MCP server
         const newMCP = await createMCPServer(mcpData);
+
+        if (fromAgent) {
+          const linkedServer = await linkMcpServerToAgent(fromAgent, newMCP.name);
+          toast.success('MCP server created and linked to agent');
+          navigate(`/agents/${fromAgent}#tools`, {
+            state: { linkedMcpServer: linkedServer, showTab: 'tools' },
+            replace: true,
+          });
+          return;
+        }
+
         toast.success('MCP server created successfully!');
         // Reset form state with the created server's values
         form.reset({
@@ -194,7 +322,26 @@ export function McpDetailsPage() {
           auth_type: newMCP.auth_type || 'none',
           auth_header_name: newMCP.auth_header_name || '',
           auth_header_value: '', // Don't reset the encrypted value
+          oauth_status: newMCP.oauth_status || 'Not Connected',
+          oauth_scope: newMCP.oauth_scope || '',
+          oauth_extra_authorize_params: newMCP.oauth_extra_authorize_params || '',
+          oauth_redirect_uri: newMCP.oauth_redirect_uri || '',
+          oauth_authorization_endpoint: newMCP.oauth_authorization_endpoint || '',
+          oauth_token_endpoint: newMCP.oauth_token_endpoint || '',
+          oauth_registration_endpoint: newMCP.oauth_registration_endpoint || '',
+          oauth_client_id: newMCP.oauth_client_id || '',
+          oauth_client_secret: '', // Don't reset the encrypted value
+          oauth_token_response_path: newMCP.oauth_token_response_path || '',
+          oauth_discovery_status: newMCP.oauth_discovery_status || 'Not Started',
+          oauth_resource_metadata_url: newMCP.oauth_resource_metadata_url || '',
+          oauth_authorization_server: newMCP.oauth_authorization_server || '',
+          oauth_client_registration_method: newMCP.oauth_client_registration_method || '',
+          oauth_metadata_json: newMCP.oauth_metadata_json || '',
+          oauth_last_discovered_at: newMCP.oauth_last_discovered_at || '',
+          oauth_discovery_error: newMCP.oauth_discovery_error || '',
+          auto_sync_interval: newMCP.auto_sync_interval ?? 1,
           enable_auto_sync: newMCP.enable_auto_sync === 1,
+          custom_headers: newMCP.custom_headers || [],
         });
         
         // Load tools if available
@@ -206,7 +353,7 @@ export function McpDetailsPage() {
         navigate(`/mcp/${newMCP.name}`);
       } else if (mcpId) {
         // Update existing MCP server
-        await updateMCPServer(mcpId, mcpData);
+        const updated = await updateMCPServer(mcpId, mcpData);
         toast.success('MCP server updated successfully!');
         // Reset form state with the updated values to mark form as clean
         form.reset({
@@ -220,18 +367,36 @@ export function McpDetailsPage() {
           auth_type: values.auth_type,
           auth_header_name: values.auth_header_name,
           auth_header_value: '', // Don't reset the encrypted value
+          oauth_status: values.oauth_status,
+          oauth_scope: values.oauth_scope,
+          oauth_extra_authorize_params: values.oauth_extra_authorize_params,
+          oauth_redirect_uri: values.oauth_redirect_uri,
+          oauth_authorization_endpoint: values.oauth_authorization_endpoint,
+          oauth_token_endpoint: values.oauth_token_endpoint,
+          oauth_registration_endpoint: values.oauth_registration_endpoint,
+          oauth_client_id: values.oauth_client_id,
+          oauth_client_secret: '', // Don't reset the encrypted value
+          oauth_token_response_path: values.oauth_token_response_path,
+          oauth_discovery_status: values.oauth_discovery_status,
+          oauth_resource_metadata_url: values.oauth_resource_metadata_url,
+          oauth_authorization_server: values.oauth_authorization_server,
+          oauth_client_registration_method: values.oauth_client_registration_method,
+          oauth_metadata_json: values.oauth_metadata_json,
+          oauth_last_discovered_at: values.oauth_last_discovered_at,
+          oauth_discovery_error: values.oauth_discovery_error,
+          auto_sync_interval: values.auto_sync_interval,
           enable_auto_sync: values.enable_auto_sync,
+          custom_headers: values.custom_headers,
         });
-        
+
         // Reload tools after update
-        if (mcpId) {
-          getMCPServer(mcpId).then((updatedData: MCPServerDoc) => {
-            if (updatedData.tools && Array.isArray(updatedData.tools)) {
-              setTools(updatedData.tools as MCPTool[]);
-            }
-          }).catch((error) => {
-            console.error('Error reloading tools:', error);
-          });
+        if (updated.tools && Array.isArray(updated.tools)) {
+          setTools(updated.tools as MCPTool[]);
+        }
+
+        if (updated.name && updated.name !== mcpId) {
+          navigate(`/mcp/${encodeURIComponent(updated.name)}`, { replace: true });
+          return;
         }
       }
     } catch (error) {
@@ -251,6 +416,12 @@ export function McpDetailsPage() {
 
   // Show save button for new servers or when form is dirty
   const showSaveButton = isNew || isDirty;
+
+  useSaveShortcut({
+    onSave: handleFormSubmit,
+    enabled: showSaveButton,
+    isSubmitting: saving,
+  });
 
   // Handle tool sync (used by header button)
   const handleSyncTools = async () => {
@@ -343,10 +514,121 @@ export function McpDetailsPage() {
     }
   };
 
+  // One-click "Save & Connect" for URL-first MCP servers.
+  // Creates the doc, navigates to the edit page, and returns the new server name
+  // so the Connection tab can immediately start OAuth discovery.
+  const handleSaveAndConnect = async (): Promise<string | undefined> => {
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error('Please fill in the required fields before connecting.');
+      return undefined;
+    }
+
+    const values = form.getValues();
+    const mcpData: Partial<MCPServerDoc> = {
+      server_name: values.server_name,
+      enabled: values.enabled ? 1 : 0,
+      description: values.description || '',
+      tool_namespace: values.tool_namespace || '',
+      timeout_seconds: values.timeout_seconds,
+      transport_type: values.transport_type,
+      server_url: values.server_url,
+      auth_type: values.auth_type || 'oauth',
+      auth_header_name: values.auth_header_name || '',
+      auth_header_value: values.auth_header_value || '',
+      enable_auto_sync: values.enable_auto_sync ? 1 : 0,
+      auto_sync_interval: values.auto_sync_interval,
+      oauth_scope: values.oauth_scope || '',
+      oauth_extra_authorize_params: values.oauth_extra_authorize_params || '',
+      oauth_redirect_uri: values.oauth_redirect_uri || '',
+      oauth_authorization_endpoint: values.oauth_authorization_endpoint || '',
+      oauth_token_endpoint: values.oauth_token_endpoint || '',
+      oauth_registration_endpoint: values.oauth_registration_endpoint || '',
+      oauth_client_id: values.oauth_client_id || '',
+      oauth_client_secret: values.oauth_client_secret || '',
+      oauth_token_response_path: values.oauth_token_response_path || '',
+      custom_headers: values.custom_headers || [],
+    };
+
+    try {
+      const newMCP = await createMCPServer(mcpData);
+
+      if (fromAgent) {
+        const linkedServer = await linkMcpServerToAgent(fromAgent, newMCP.name);
+        toast.success('MCP server created and linked to agent');
+        navigate(`/agents/${fromAgent}#tools`, {
+          state: { linkedMcpServer: linkedServer, showTab: 'tools' },
+          replace: true,
+        });
+        return undefined;
+      }
+
+      toast.success('MCP server created. Starting OAuth connection...');
+      form.reset({
+        server_name: newMCP.server_name || '',
+        enabled: newMCP.enabled === 1,
+        description: newMCP.description || '',
+        tool_namespace: newMCP.tool_namespace || '',
+        timeout_seconds: newMCP.timeout_seconds,
+        transport_type: newMCP.transport_type || 'http',
+        server_url: newMCP.server_url || '',
+        auth_type: newMCP.auth_type || 'oauth',
+        auth_header_name: newMCP.auth_header_name || '',
+        auth_header_value: '',
+        oauth_status: newMCP.oauth_status || 'Not Connected',
+        oauth_scope: newMCP.oauth_scope || '',
+        oauth_extra_authorize_params: newMCP.oauth_extra_authorize_params || '',
+        oauth_redirect_uri: newMCP.oauth_redirect_uri || '',
+        oauth_authorization_endpoint: newMCP.oauth_authorization_endpoint || '',
+        oauth_token_endpoint: newMCP.oauth_token_endpoint || '',
+        oauth_registration_endpoint: newMCP.oauth_registration_endpoint || '',
+        oauth_client_id: newMCP.oauth_client_id || '',
+        oauth_client_secret: '',
+        oauth_token_response_path: newMCP.oauth_token_response_path || '',
+        oauth_discovery_status: newMCP.oauth_discovery_status || 'Not Started',
+        oauth_resource_metadata_url: newMCP.oauth_resource_metadata_url || '',
+        oauth_authorization_server: newMCP.oauth_authorization_server || '',
+        oauth_client_registration_method: newMCP.oauth_client_registration_method || '',
+        oauth_metadata_json: newMCP.oauth_metadata_json || '',
+        oauth_last_discovered_at: newMCP.oauth_last_discovered_at || '',
+        oauth_discovery_error: newMCP.oauth_discovery_error || '',
+        auto_sync_interval: newMCP.auto_sync_interval ?? 1,
+        enable_auto_sync: newMCP.enable_auto_sync === 1,
+        custom_headers: newMCP.custom_headers || [],
+      });
+
+      navigate(`/mcp/${newMCP.name}`);
+      return newMCP.name;
+    } catch (error) {
+      console.error('Error creating MCP server:', error);
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to create MCP server. Please try again.');
+      return undefined;
+    }
+  };
+
+  const handleCancel = () => {
+    navigate(-1);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!mcpId) return;
+
+    setDeleting(true);
+    try {
+      await deleteMCPServer(mcpId);
+      toast.success('MCP server deleted');
+      navigate('/mcp');
+    } catch (error) {
+      toast.error(getFrappeErrorMessage(error));
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-muted-foreground">Loading MCP server...</div>
+        <div className="font-body text-steel-soft">Loading MCP server...</div>
       </div>
     );
   }
@@ -362,15 +644,18 @@ export function McpDetailsPage() {
           saving={saving}
           syncing={syncing}
           testingConnection={testingConnection}
+          fromAgent={fromAgent || undefined}
           onSave={handleFormSubmit}
+          onCancel={fromAgent ? handleCancel : undefined}
           onSync={handleSyncTools}
           onTestConnection={handleTestConnection}
+          onDelete={!isNew && !fromAgent ? () => setDeleteDialogOpen(true) : undefined}
         />
 
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList layout="grid" cols={3}>
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
                     {config.label}
@@ -383,7 +668,12 @@ export function McpDetailsPage() {
               </TabsContent>
 
               <TabsContent value="connection" className="space-y-4">
-                <ConnectionTab form={form} />
+                <ConnectionTab
+                  form={form}
+                  serverName={mcpId || ''}
+                  isNew={isNew}
+                  onSaveAndConnect={isNew ? handleSaveAndConnect : undefined}
+                />
               </TabsContent>
 
               <TabsContent value="tools" className="space-y-4">
@@ -399,6 +689,28 @@ export function McpDetailsPage() {
             </Tabs>
           </form>
         </Form>
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={(next) => { if (!deleting) setDeleteDialogOpen(next); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete "{form.watch('server_name') || mcpId}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the MCP server. Agents referencing it may
+                lose tool access. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

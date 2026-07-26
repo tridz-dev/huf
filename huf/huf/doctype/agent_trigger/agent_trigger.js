@@ -30,3 +30,22 @@ frappe.ui.form.on('Agent Trigger', {
         });
     }
 });
+
+frappe.ui.form.on('Agent Trigger Attachment', {
+    source_type: function(frm, cdt, cdn) {
+        let row = locals[cdt][cdn];
+        if (row.source_type === "Child Table Field" && frm.doc.reference_doctype) {
+            frappe.model.with_doctype(frm.doc.reference_doctype, function() {
+                let parent_meta = frappe.get_meta(frm.doc.reference_doctype);
+
+                let tables = parent_meta.fields
+                    .filter(df => df.fieldtype === "Table")
+                    .map(df => df.fieldname);
+                frm.fields_dict["file_attachments"].grid.update_docfield_property(
+                    "child_table", "options", tables
+                );
+                frm.refresh_field("file_attachments");
+            });
+        }
+    }
+})

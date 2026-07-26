@@ -45,7 +45,7 @@ export function ParameterCard({
   };
 
   return (
-    <Card className="border-gray-200">
+    <Card>
       <CardContent className="p-4 space-y-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-medium text-sm">Parameter {index + 1}</h4>
@@ -54,7 +54,7 @@ export function ParameterCard({
             variant="ghost"
             size="sm"
             onClick={() => onDelete(index)}
-            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
           >
             <Trash2 className="w-4 h-4" />
           </Button>
@@ -63,7 +63,7 @@ export function ParameterCard({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor={`param-label-${index}`}>
-              Label<span className="text-red-500">*</span>
+              Label<span className="text-destructive">*</span>
             </Label>
             <Input
               id={`param-label-${index}`}
@@ -75,7 +75,7 @@ export function ParameterCard({
 
           <div className="space-y-2">
             <Label htmlFor={`param-fieldname-${index}`}>
-              Fieldname<span className="text-red-500">*</span>
+              Fieldname<span className="text-destructive">*</span>
             </Label>
             <Input
               id={`param-fieldname-${index}`}
@@ -89,7 +89,7 @@ export function ParameterCard({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor={`param-type-${index}`}>
-              Type<span className="text-red-500">*</span>
+              Type<span className="text-destructive">*</span>
             </Label>
             <Select
               value={parameter.type}
@@ -133,12 +133,14 @@ export function ParameterCard({
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor={`param-options-${index}`}>Options</Label>
-            <Input
+            <Textarea
               id={`param-options-${index}`}
               value={parameter.options || ''}
               onChange={(e) => handleChange('options', e.target.value)}
-              placeholder="Comma-separated options"
+              placeholder="One option per line"
+              className="min-h-[80px]"
             />
+            <p className="text-xs text-steel-soft">Enter each option on its own line.</p>
           </div>
 
           <div className="flex items-center space-x-2 pt-8">

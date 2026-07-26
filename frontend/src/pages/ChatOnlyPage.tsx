@@ -16,6 +16,11 @@ export default function ChatOnlyPage() {
   const [loadingAgents, setLoadingAgents] = useState(true);
   const [agentsError, setAgentsError] = useState<string | null>(null);
 
+  // When exactly one chat agent exists, treat it as selected immediately so
+  // single-agent users land straight in chat without a selector flash; the
+  // effect below still syncs the ?agent= search param.
+  const effectiveAgent = selectedAgent || (agents.length === 1 ? agents[0].name : "");
+
   useEffect(() => {
     let cancelled = false;
 
@@ -54,8 +59,8 @@ export default function ChatOnlyPage() {
   }, [agents, chatId, loadingAgents, selectedAgent, setSearchParams]);
 
   const currentAgent = useMemo(
-    () => agents.find((agent) => agent.name === selectedAgent),
-    [agents, selectedAgent]
+    () => agents.find((agent) => agent.name === effectiveAgent),
+    [agents, effectiveAgent]
   );
 
   const handleSelectAgent = useCallback(
@@ -77,7 +82,7 @@ export default function ChatOnlyPage() {
     []
   );
 
-  const shouldShowSelector = !chatId && (!selectedAgent || (!loadingAgents && !currentAgent));
+  const shouldShowSelector = !chatId && (!effectiveAgent || (!loadingAgents && !currentAgent));
 
   return (
     <ChatOnlyLayout agentLabel={currentAgent?.agent_name}>

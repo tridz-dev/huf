@@ -1,7 +1,9 @@
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
-import type { AgentDoc } from '@/types/agent.types';
+import type { AgentDoc, AgentKnowledgeRow } from '@/types/agent.types';
+import { getMCPServer, type MCPServerRef } from '@/services/mcpApi';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { getBrandLabel } from '@/utils/providerBrands';
 import { fetchPaginatedCount } from './utilsApi';
 
 /**
@@ -32,11 +34,20 @@ const AGENT_LIST_FIELDS = [
   'name',
   'agent_name',
   'description',
+  'provider',
   'model',
   'disabled',
   'last_run',
   'total_run',
   'agent_color',
+  'allow_chat',
+  'prompt_mode',
+  'agent_prompt',
+  'enable_multi_run',
+  'enable_prompt_caching',
+  'allow_guest',
+  'provider_brand',
+  'modified',
 ];
 
 /**
@@ -45,8 +56,10 @@ const AGENT_LIST_FIELDS = [
 const AGENT_MODEL_FIELDS = [
   'name',
   'agent_name',
-  'chef',
-  'slug',
+  'provider_brand',
+  'model',
+  'agent_color',
+  'description',
 ];
 
 const CHAT_AGENT_FIELDS = [
@@ -106,6 +119,7 @@ export interface GetAgentsParams {
   start?: number;
   search?: string;
   status?: 'active' | 'disabled' | 'all';
+  chat?: 'all' | 'chat' | 'no_chat';
 }
 
 /**
@@ -150,6 +164,7 @@ export async function getAgents(
       start = (page - 1) * limit,
       search,
       status,
+      chat,
     } = params;
 
     // Build filters
@@ -157,6 +172,12 @@ export async function getAgents(
 
     if (status && status !== 'all' && (status === 'disabled' || status === 'active')) {
       filters.push(['disabled', '=', status === 'disabled' ? 1 : 0]);
+    }
+
+    if (chat === 'chat') {
+      filters.push(['allow_chat', '=', 1]);
+    } else if (chat === 'no_chat') {
+      filters.push(['allow_chat', '=', 0]);
     }
 
     // Build search filters if provided
@@ -222,6 +243,16 @@ export async function getAgent(name: string): Promise<AgentDoc> {
 }
 
 /**
+ * Child table row for Agent Trigger file attachments (Agent Trigger Attachment)
+ */
+export interface AgentTriggerAttachmentRow {
+  name?: string;
+  source_type: 'DocField' | 'Child Table Field';
+  child_table?: string;
+  field_name: string;
+}
+
+/**
  * Agent Trigger document from Frappe (for editing)
  */
 export interface AgentTriggerDoc {
@@ -235,6 +266,8 @@ export interface AgentTriggerDoc {
   reference_doctype?: string;
   doc_event?: string;
   condition?: string;
+  prompt_field?: string;
+  file_attachments?: AgentTriggerAttachmentRow[];
   webhook_key?: string;
   webhook_slug?: string;
   app_name?: string;
@@ -366,13 +399,155 @@ export async function createAgent(data: Partial<AgentDoc>): Promise<AgentDoc> {
  */
 export async function updateAgent(name: string, data: Partial<AgentDoc>): Promise<AgentDoc> {
   try {
-    await db.updateDoc(doctype.Agent, name, data);
+    let targetName = name;
+    if (
+      data.agent_name &&
+      typeof data.agent_name === 'string' &&
+      data.agent_name.trim() &&
+      data.agent_name !== name
+    ) {
+      await db.renameDoc(doctype.Agent, name, data.agent_name);
+      targetName = data.agent_name;
+    }
+    await db.updateDoc(doctype.Agent, targetName, data);
     // Fetch updated document to return
-    const updatedAgent = await db.getDoc(doctype.Agent, name);
+    const updatedAgent = await db.getDoc(doctype.Agent, targetName);
     return updatedAgent as AgentDoc;
   } catch (error) {
     handleFrappeError(error, `Error updating agent ${name}`);
   }
+}
+
+type AgentMcpServerChildRow = {
+  name?: string;
+  mcp_server: string;
+  enabled?: 0 | 1 | boolean;
+  server_url?: string;
+  tool_count?: number;
+  server_name?: string;
+  description?: string;
+};
+
+function toMcpEnabledFlag(value: 0 | 1 | boolean | undefined): 0 | 1 {
+  return value === 1 || value === true ? 1 : 0;
+}
+
+/**
+ * Link a knowledge source to an agent (persists immediately).
+ */
+export async function linkKnowledgeToAgent(
+  agentName: string,
+  knowledgeSource: string,
+  defaults?: Partial<AgentKnowledgeRow>,
+): Promise<AgentKnowledgeRow> {
+  const agent = await getAgent(agentName);
+  const existing = agent.agent_knowledge || [];
+
+  const alreadyLinked = existing.some((row) => row.knowledge_source === knowledgeSource);
+  if (alreadyLinked) {
+    const linked = existing.find((row) => row.knowledge_source === knowledgeSource)!;
+    return {
+      name: linked.name,
+      knowledge_source: linked.knowledge_source,
+      mode: linked.mode || 'Optional',
+      priority: linked.priority ?? 0,
+      max_chunks: linked.max_chunks ?? 5,
+      token_budget: linked.token_budget ?? 2000,
+      description: linked.description || undefined,
+    };
+  }
+
+  const newRow = {
+    knowledge_source: knowledgeSource,
+    mode: defaults?.mode || 'Optional',
+    priority: defaults?.priority ?? 0,
+    max_chunks: defaults?.max_chunks ?? 5,
+    token_budget: defaults?.token_budget ?? 2000,
+    description: defaults?.description || '',
+  };
+
+  const updated = await updateAgent(agentName, {
+    agent_knowledge: [
+      ...existing.map((row) => ({
+        ...(row.name ? { name: row.name } : {}),
+        knowledge_source: row.knowledge_source,
+        mode: row.mode || 'Optional',
+        priority: row.priority ?? 0,
+        max_chunks: row.max_chunks ?? 5,
+        token_budget: row.token_budget ?? 2000,
+        description: row.description || '',
+      })),
+      newRow,
+    ],
+  });
+
+  const linkedRow = (updated.agent_knowledge || []).find(
+    (row) => row.knowledge_source === knowledgeSource,
+  );
+
+  return {
+    name: linkedRow?.name,
+    knowledge_source: knowledgeSource,
+    mode: newRow.mode as 'Mandatory' | 'Optional',
+    priority: newRow.priority,
+    max_chunks: newRow.max_chunks,
+    token_budget: newRow.token_budget,
+    description: newRow.description || undefined,
+  };
+}
+
+/**
+ * Link an MCP server to an agent (persists immediately).
+ */
+export async function linkMcpServerToAgent(
+  agentName: string,
+  mcpServerName: string,
+): Promise<MCPServerRef> {
+  const agent = await getAgent(agentName);
+  const existing = (agent.agent_mcp_server || []) as AgentMcpServerChildRow[];
+
+  const alreadyLinked = existing.some((row) => row.mcp_server === mcpServerName);
+  if (alreadyLinked) {
+    const linked = existing.find((row) => row.mcp_server === mcpServerName)!;
+    const mcpServerDoc = await getMCPServer(mcpServerName);
+    return {
+      name: linked.name || '',
+      mcp_server: mcpServerName,
+      server_name: mcpServerDoc.server_name || mcpServerName,
+      description: mcpServerDoc.description || linked.description,
+      server_url: mcpServerDoc.server_url || linked.server_url || '',
+      enabled: toMcpEnabledFlag(linked.enabled),
+      mcp_enabled: mcpServerDoc.enabled === 1 ? 1 : 0,
+      tool_count: linked.tool_count || 0,
+    };
+  }
+
+  const updated = await updateAgent(agentName, {
+    agent_mcp_server: [
+      ...existing.map((row) => ({
+        ...(row.name ? { name: row.name } : {}),
+        mcp_server: row.mcp_server,
+        enabled: toMcpEnabledFlag(row.enabled),
+      })),
+      { mcp_server: mcpServerName, enabled: 1 as const },
+    ],
+  });
+
+  const linkedRow = ((updated.agent_mcp_server || []) as AgentMcpServerChildRow[]).find(
+    (row) => row.mcp_server === mcpServerName,
+  );
+
+  const mcpServerDoc = await getMCPServer(mcpServerName);
+  return {
+    name: linkedRow?.name || '',
+    mcp_server: mcpServerName,
+    server_name: mcpServerDoc.server_name || mcpServerName,
+    description: mcpServerDoc.description,
+    server_url: mcpServerDoc.server_url || '',
+    enabled: 1,
+    mcp_enabled: mcpServerDoc.enabled === 1 ? 1 : 0,
+    tool_count: linkedRow?.tool_count || 0,
+  };
 }
 
 /**
@@ -381,9 +556,11 @@ export async function updateAgent(name: string, data: Partial<AgentDoc>): Promis
 export interface AgentModelItem {
   id: string;
   name: string;
-  chef: string;
-  chefSlug: string;
-  providers: string[];
+  providerBrand: string;
+  providerBrandLabel: string;
+  model?: string;
+  agent_color?: string | null;
+  description?: string | null;
 }
 
 /**
@@ -413,6 +590,7 @@ export interface RunAgentTestParams {
   prompt: string;
   provider: string;
   model: string;
+  now?: boolean;
 }
 
 /**
@@ -427,6 +605,9 @@ export interface RunAgentTestResponse {
     agent_run_id?: string;
     conversation_id?: string;
     session_id?: string;
+    queued?: boolean;
+    status?: string;
+    sequence?: number;
   };
 }
 
@@ -435,12 +616,16 @@ export interface RunAgentTestResponse {
  */
 export async function runAgentTest(params: RunAgentTestParams): Promise<RunAgentTestResponse> {
   try {
-    const result = await call.post('huf.ai.agent_integration.run_agent_sync', {
+    const payload: any = {
       agent_name: params.agent_name,
       prompt: params.prompt,
       provider: params.provider,
       model: params.model,
-    });
+    };
+    if (params.now !== undefined) {
+      payload.now = params.now;
+    }
+    const result = await call.post('huf.ai.agent_integration.run_agent_sync', payload);
     return result as RunAgentTestResponse;
   } catch (error) {
     handleFrappeError(error, 'Error running agent test');
@@ -489,9 +674,11 @@ export async function getAgentModels(
     const mappedModels: AgentModelItem[] = (agents as any[]).map((agent) => ({
       id: agent.name,
       name: agent.agent_name || agent.name,
-      chef: agent.chef || '',
-      chefSlug: agent.slug || '',
-      providers: agent.slug ? [agent.slug] : [],
+      providerBrand: agent.provider_brand || 'other',
+      providerBrandLabel: getBrandLabel(agent.provider_brand),
+      model: agent.model || '',
+      agent_color: agent.agent_color || null,
+      description: agent.description || null,
     }));
 
     const hasMore = mappedModels.length > limit;

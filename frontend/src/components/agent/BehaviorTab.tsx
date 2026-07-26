@@ -74,14 +74,14 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
 			<Card>
 				<CardHeader>
 					<CardTitle>Conversation Settings</CardTitle>
-					<CardDescription>Configure conversation behavior</CardDescription>
+					<CardDescription>Configure conversation behaviour</CardDescription>
 				</CardHeader>
 				<CardContent className="grid gap-4 sm:grid-cols-2">
 					<FormField
 						control={form.control}
 						name="allow_chat"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Allow Chat</FormLabel>
 									<FormDescription>
@@ -113,7 +113,7 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
 						control={form.control}
 						name="persist_conversation"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Persist History</FormLabel>
 									<FormDescription>
@@ -140,12 +140,11 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
 						control={form.control}
 						name="persist_user_history"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Persist per User (Doc/Schedule)</FormLabel>
 									<FormDescription>
-										When checked, Doc Event and Scheduled runs create conversation history per
-										initiating user.
+										When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.
 									</FormDescription>
 								</div>
 								<FormControl className="ml-1">
@@ -159,11 +158,11 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
 						control={form.control}
 						name="enable_multi_run"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Enable Multi Run</FormLabel>
 									<FormDescription>
-										When enabled, this agent can execute multiple runs.
+										Enables multi-step planning and execution. If enabled, the agent will analyze the request to create a step-by-step plan (or use a Default Plan) and execute them sequentially.
 									</FormDescription>
 								</div>
 								<FormControl>

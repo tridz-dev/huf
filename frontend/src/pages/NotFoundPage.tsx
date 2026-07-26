@@ -20,7 +20,7 @@ function NotFoundPage() {
         <div>
           <h1 className="text-4xl font-bold mb-2">404</h1>
           <h2 className="text-xl font-semibold mb-2">Page Not Found</h2>
-          <p className="text-muted-foreground">
+          <p className="text-steel">
             The page you're looking for doesn't exist or has been moved.
           </p>
         </div>

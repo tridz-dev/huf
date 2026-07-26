@@ -25,6 +25,10 @@ import { SidebarTrigger } from '../ui/sidebar';
 import { getAgent } from '@/services/agentApi';
 import ConversationTitle, { type ConversationTitleRef } from './ConversationTitle';
 import ConversationMenu from './ConversationMenu';
+import {
+  type ConversationTitleUpdatedDetail,
+  useConversationTitleSwitchFallback,
+} from './useConversationTitleFallback';
 
 function getRecentBucketLabel(ts?: string): string {
   const d = toDate(ts);
@@ -60,6 +64,9 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
   });
 
   const [activeTab, setActiveTab] = useState('recents');
+  const [animatingConversationId, setAnimatingConversationId] = useState<string | null>(null);
+  const [selectedConversationTitle, setSelectedConversationTitle] = useState<string | null>(null);
+  const [selectedAutonamingEnabled, setSelectedAutonamingEnabled] = useState(false);
 
   // Ref map to store refs for each conversation title
   const titleRefs = useRef<Map<string, ConversationTitleRef>>(new Map());
@@ -108,6 +115,104 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedChatId) {
+      setSelectedConversationTitle(null);
+      setSelectedAutonamingEnabled(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const conversationId = selectedChatId;
+
+    async function loadSelectedConversation() {
+      try {
+        const conversationDoc = await getConversation(conversationId);
+        if (cancelled || !conversationDoc) return;
+
+        setSelectedConversationTitle(conversationDoc.title ?? null);
+
+        if (conversationDoc.agent) {
+          const agentData = await getAgent(conversationDoc.agent);
+          if (!cancelled) {
+            setSelectedAutonamingEnabled(agentData.autonaming_of_conversation_title !== 0);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading selected conversation:', error);
+      }
+    }
+
+    void loadSelectedConversation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChatId]);
+
+  useConversationTitleSwitchFallback({
+    conversationId: selectedChatId,
+    currentTitle: selectedConversationTitle,
+    autonamingEnabled: selectedAutonamingEnabled,
+  });
+
+  const applyTitleUpdate = useCallback(async (detail: ConversationTitleUpdatedDetail) => {
+    const { conversationId, title, animate } = detail;
+
+    if (animate && conversationId === selectedChatId) {
+      setAnimatingConversationId(conversationId);
+      const duration = Math.max(title.length * 35 + 200, 500);
+      window.setTimeout(() => {
+        setAnimatingConversationId((current) => (current === conversationId ? null : current));
+      }, duration);
+    }
+
+    if (conversationId === selectedChatId) {
+      setSelectedConversationTitle(title);
+    }
+
+    try {
+      const conversationDoc = await getConversation(conversationId);
+      if (!conversationDoc) return;
+
+      const conversationItem: ChatListItem = {
+        id: conversationId,
+        title,
+        agent: conversationDoc.agent || '',
+        timestamp: conversationDoc.last_activity || conversationDoc.modified,
+        timestampLabel: conversationDoc.last_activity || conversationDoc.modified
+          ? formatTimeAgo(conversationDoc.last_activity || conversationDoc.modified)
+          : undefined,
+      };
+
+      if (recentsAddItemRef.current) {
+        recentsAddItemRef.current(conversationItem);
+      }
+
+      const agentName = conversationDoc.agent;
+      if (agentName && agentAddItemRefs.current.has(agentName)) {
+        const agentAddItem = agentAddItemRefs.current.get(agentName);
+        agentAddItem?.(conversationItem);
+      }
+    } catch (error) {
+      console.error('Error updating conversation title in list:', error);
+    }
+  }, [selectedChatId]);
+
+  // Listen for conversation title updates
+  useEffect(() => {
+    const handleTitleUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<ConversationTitleUpdatedDetail>;
+      void applyTitleUpdate(customEvent.detail);
+    };
+
+    window.addEventListener('huf:conversation-title-updated', handleTitleUpdated);
+    return () => {
+      window.removeEventListener('huf:conversation-title-updated', handleTitleUpdated);
+    };
+  }, [applyTitleUpdate]);
 
   // Listen for new conversation events
   useEffect(() => {
@@ -196,18 +301,18 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
   }, [navigate]);
 
   return (
-    <div className="h-full min-w-80 bg-sidebar flex flex-col overflow-hidden border-r border-zinc-200">
+    <div className="h-full min-w-80 bg-sidebar flex flex-col overflow-hidden border-r border-line">
       <div className="shrink-0 px-3 pt-3 pb-2 sticky top-0 z-1 bg-sidebar">
         <ChatListHeader onAgentSelect={handleAgentSelect} onClose={onClose} />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3 bg-sidebar [&::-webkit-scrollbar]:w-0 [-ms-overflow-style:none] [scrollbar-width:none]" id="chat-listing-scroll">
         <Tabs defaultValue="recents" value={activeTab} onValueChange={setActiveTab} className="space-y-2">
         <div className="sticky top-0 z-1 bg-sidebar">
-          <TabsList className="w-full h-8">
+          <TabsList variant="pill" layout="grid" cols={2} size="compact" className="w-full">
             {LIST_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.value}
-                className="w-1/2 space-x-1.5 text-xs font-medium h-7"
+                className="w-full space-x-1.5"
                 value={tab.value}
               >
                 <tab.icon className="w-3 h-3" />
@@ -225,15 +330,15 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
                     <Skeleton className="h-7 w-7 rounded-full" />
                     <Skeleton className="h-4 w-40" />
                   </div>
-                  <div className="ml-3 pl-3 border-l border-zinc-200 space-y-2">
-                    <Skeleton className="h-10 w-full rounded-md" />
-                    <Skeleton className="h-10 w-full rounded-md" />
+                  <div className="ml-3 pl-3 border-l border-line space-y-2">
+                    <Skeleton className="h-10 w-full rounded-none" />
+                    <Skeleton className="h-10 w-full rounded-none" />
                   </div>
                 </div>
               ))}
             </div>
           ) : agents.length === 0 ? (
-            <div className="p-3 text-sm text-muted-foreground text-center">No agents with conversations</div>
+            <div className="p-3 text-sm font-body text-steel-soft text-center">No agents with conversations</div>
           ) : (
             <Accordion
               type="multiple"
@@ -249,6 +354,7 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
                   isOpen={openAgents.includes(agent.name)}
                   onRename={handleRename}
                   titleRefs={titleRefs}
+                  animatingConversationId={animatingConversationId}
                   onAddItemReady={(addItem: (item: ChatListItem) => void) => {
                     agentAddItemRefs.current.set(agent.name, addItem);
                   }}
@@ -264,6 +370,7 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
             isActive={activeTab === 'recents'}
             onRename={handleRename}
             titleRefs={titleRefs}
+            animatingConversationId={animatingConversationId}
             onAddItemReady={(addItem) => {
               recentsAddItemRef.current = addItem;
             }}
@@ -282,6 +389,7 @@ function AgentConversationItem({
   isOpen,
   onRename,
   titleRefs,
+  animatingConversationId,
   onAddItemReady,
 }: {
   agent: AgentWithCount;
@@ -289,6 +397,7 @@ function AgentConversationItem({
   isOpen: boolean;
   onRename: (conversationId: string) => void;
   titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  animatingConversationId: string | null;
   onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
 }) {
   const navigate = useNavigate();
@@ -337,24 +446,24 @@ function AgentConversationItem({
   return (
     <AccordionItem value={agent.name} className="border-b-0">
       <AccordionTrigger
-        className="group gap-2 mb-1 py-1 px-1 hover:bg-zinc-200 cursor-pointer select-none rounded-lg"
+        className="group gap-2 mb-1 py-1 px-1 hover:bg-paper-deep cursor-pointer select-none rounded-none"
         arrowPosition="left"
       >
         <div className="flex-1 flex gap-x-2 items-center">
           <ChatAvatar variant="listing_ai" color={agent.agent_color || undefined}>
             {getInitials(agent.agent_name)}
           </ChatAvatar>
-          <span className="text-sm font-medium truncate text-zinc-500 group-hover:text-zinc-900 transition-colors">
+          <span className="text-sm font-medium truncate text-steel group-hover:text-ink transition-colors">
             {agent.agent_name}
           </span>
         </div>
-        <span className="text-[10px] min-w-6 text-zinc-400 bg-zinc-200 px-1.5 py-0.5 rounded-full border border-zinc-200 ml-auto">
+        <span className="text-[10px] min-w-6 text-steel-soft bg-paper-deep px-1.5 py-0.5 rounded-none border border-line ml-auto">
           {agent.conversationCount}
         </span>
         <Button 
           size="icon" 
           variant="ghost" 
-          className="h-fit w-fit opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-300 rounded text-zinc-400 hover:text-zinc-900 transition-all ml-1"
+          className="h-fit w-fit opacity-0 group-hover:opacity-100 p-1 hover:bg-paper-deep rounded text-steel-soft hover:text-ink transition-all ml-1"
           onClick={handleNewConversation}
         >
           <Plus className="w-3.5 h-3.5" />
@@ -362,18 +471,18 @@ function AgentConversationItem({
         </Button>
       </AccordionTrigger>
 
-      <AccordionContent className="space-y-0.5 ml-3 pl-3 border-l border-zinc-200 overflow-hidden transition-all duration-300 opacity-100">
+      <AccordionContent className="space-y-0.5 ml-3 pl-3 border-l border-line overflow-hidden transition-all duration-300 opacity-100">
         {initialLoading ? (
           <div className="space-y-2 p-2">
-            <Skeleton className="h-10 w-full rounded-md" />
-            <Skeleton className="h-10 w-full rounded-md" />
+            <Skeleton className="h-10 w-full rounded-none" />
+            <Skeleton className="h-10 w-full rounded-none" />
           </div>
         ) : conversations.length === 0 && agent.conversationCount === 0 ? (
-          <div className="p-2 text-xs text-muted-foreground">No conversations</div>
+          <div className="p-2 text-xs font-body text-steel-soft">No conversations</div>
         ) : conversations.length === 0 && agent.conversationCount > 0 ? (
           <div className="space-y-2 p-2">
-            <Skeleton className="h-10 w-full rounded-md" />
-            <Skeleton className="h-10 w-full rounded-md" />
+            <Skeleton className="h-10 w-full rounded-none" />
+            <Skeleton className="h-10 w-full rounded-none" />
           </div>
         ) : (
           <>
@@ -400,8 +509,8 @@ function AgentConversationItem({
                     className={cn(
                       'group flex w-full text-left flex-col p-1 rounded-md cursor-pointer transition-all border-l-2',
                       isSelected
-                        ? 'bg-zinc-200 border-indigo-500'
-                        : 'bg-transparent border-transparent hover:bg-zinc-200 hover:border-zinc-200'
+                        ? 'bg-paper-deep border-signal'
+                        : 'bg-transparent border-transparent hover:bg-paper-deep hover:border-line'
                     )}
                   >
                     <ConversationTitle
@@ -412,8 +521,9 @@ function AgentConversationItem({
                       variant="agent_list"
                       value={chat.title}
                       conversationId={chat.id}
+                      animate={animatingConversationId === chat.id}
                     />
-                    <p className="ps-1 text-[10px] text-zinc-400 truncate mt-0.5 group-hover:text-zinc-500">
+                    <p className="ps-1 text-[10px] text-steel-soft truncate mt-0.5 group-hover:text-steel">
                       {chat.timestampLabel ?? ''}
                     </p>
                   </Link>
@@ -429,7 +539,7 @@ function AgentConversationItem({
                 }}
                 disabled={loadingMore}
                 className={cn(
-                  'w-full text-xs text-zinc-500 hover:text-zinc-900 py-2 px-2 text-center transition-colors',
+                  'w-full text-xs text-steel hover:text-ink py-2 px-2 text-center transition-colors',
                   loadingMore && 'opacity-50 cursor-not-allowed'
                 )}
               >
@@ -448,12 +558,14 @@ function RecentsConversationList({
   isActive,
   onRename,
   titleRefs,
+  animatingConversationId,
   onAddItemReady,
 }: {
   selectedChatId: string | null;
   isActive: boolean;
   onRename: (conversationId: string) => void;
   titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  animatingConversationId: string | null;
   onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -540,7 +652,7 @@ function RecentsConversationList({
     return (
       <div className="space-y-1">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={`recent-skel-${i}`} className="flex px-2 py-1.5 gap-2 items-center rounded-md">
+          <div key={`recent-skel-${i}`} className="flex px-2 py-1.5 gap-2 items-center rounded-none">
             <Skeleton className="h-6 w-6 rounded-full shrink-0" />
             <div className="flex-1 space-y-1.5">
               <Skeleton className="h-3 w-2/3" />
@@ -555,14 +667,14 @@ function RecentsConversationList({
   return (
     <div ref={scrollContainerRef} className="space-y-3">
         {byRecents.every(([, items]) => items.length === 0) ? (
-          <div className="p-3 text-sm text-muted-foreground text-center">No conversations yet</div>
+          <div className="p-3 text-sm font-body text-steel-soft text-center">No conversations yet</div>
         ) : (
           <>
             {byRecents.map(([label, items]) => {
               if (items.length === 0) return null;
               return (
                 <div key={label}>
-                  <span className="px-1 text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
+                  <span className="px-1 text-[10px] font-medium text-steel-soft uppercase tracking-wider">
                     {label}
                   </span>
                   <div className="mt-1 space-y-0.5">
@@ -587,10 +699,10 @@ function RecentsConversationList({
                               }
                             }}
                             className={cn(
-                              'group flex w-full text-left px-2 py-1.5 gap-2 items-center rounded-md cursor-pointer transition-all',
+                              'group flex w-full text-left px-2 py-1.5 gap-2 items-center rounded-none cursor-pointer transition-all',
                               isSelected
-                                ? 'bg-zinc-200'
-                                : 'bg-transparent hover:bg-zinc-100'
+                                ? 'bg-panel border-l-2 border-signal'
+                                : 'bg-transparent hover:bg-panel'
                             )}
                           >
                             <ChatAvatar 
@@ -608,10 +720,11 @@ function RecentsConversationList({
                                 variant="recents_list"
                                 value={chat.title}
                                 conversationId={chat.id}
+                                animate={animatingConversationId === chat.id}
                               />
-                              <p className="ps-1 text-xs truncate text-zinc-500">{chat.agent}</p>
+                              <p className="ps-1 text-xs truncate text-steel">{chat.agent}</p>
                             </div>
-                            <span className="mb-1 flex-shrink-0 text-[10px] text-zinc-400 flex-shrink-0 self-end">
+                            <span className="mb-1 flex-shrink-0 text-[10px] text-steel-soft flex-shrink-0 self-end">
                               {chat.timestampLabel ?? ''}
                             </span>
                           </Link>
@@ -626,7 +739,7 @@ function RecentsConversationList({
               <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
             )}
             {loadingMore && (
-              <div className="p-2 text-xs text-muted-foreground text-center">Loading more...</div>
+              <div className="p-2 text-xs font-body text-steel-soft text-center">Loading more...</div>
             )}
           </>
         )}
@@ -652,7 +765,7 @@ function ChatListHeader({
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="-ml-1" />
-        <h1 className="font-semibold text-sm tracking-tight text-zinc-700">Chat</h1>
+        <h1 className="font-semibold text-sm tracking-tight text-ink">Chat</h1>
       </div>
       <div className="flex items-center gap-1">
         {onAgentSelect && (
@@ -666,7 +779,7 @@ function ChatListHeader({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-zinc-500 hover:text-zinc-900"
+            className="h-8 w-8 text-steel hover:text-ink"
             onClick={onClose}
           >
             <PanelLeftClose className="w-4 h-4" />

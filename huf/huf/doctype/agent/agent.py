@@ -1,6 +1,8 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -107,15 +109,37 @@ def get_cacheable_models(provider: str, model: str = None) -> dict:
 class Agent(Document):
     def validate(self):
         self._validate_prompt()
+        self._validate_summary_prompt()
 
         if self.allow_chat == 1 and self.persist_conversation == 0:
             frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
-        
+
         # Validate prompt caching configuration
         if self.enable_prompt_caching:
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._update_mcp_tool_counts()
+
+    def _update_mcp_tool_counts(self):
+        """Populate each agent_mcp_server row's tool_count from its linked MCP Server.
+
+        Done here rather than in AgentMCPServer.before_save()/before_insert():
+        child-table controller hooks don't fire on parent document save in
+        Frappe v16.
+        """
+        for row in self.agent_mcp_server:
+            if not row.mcp_server:
+                continue
+            try:
+                mcp_doc = frappe.get_doc("MCP Server", row.mcp_server)
+                if mcp_doc.available_tools:
+                    tools = json.loads(mcp_doc.available_tools)
+                    row.tool_count = len(tools) if isinstance(tools, list) else 0
+                else:
+                    row.tool_count = 0
+            except Exception:
+                row.tool_count = 0
 
     def _validate_advanced_models(self):
         def _has_modality(model_docname: str, required: str) -> bool:
@@ -219,6 +243,24 @@ class Agent(Document):
             version = frappe.db.get_value("Agent Prompt", self.agent_prompt, "version")
             self.template_version_at_attach = version or 1
 
+    def _validate_summary_prompt(self):
+        """Validate summary prompt configuration based on summary_prompt_mode."""
+        mode = self.summary_prompt_mode or "Local"
+
+        if mode == "Template":
+            if not self.summary_prompt_template:
+                frappe.throw(_("Please select an Agent Summary Prompt when using Template mode for Summary Prompt."))
+            if self.has_value_changed("summary_prompt_template") or not self.summary_template_version_at_attach:
+                self._record_summary_template_version()
+
+    def _record_summary_template_version(self):
+        """Snapshot the current version of the linked Agent Summary Prompt."""
+        if self.summary_prompt_template:
+            version = frappe.db.get_value(
+                "Agent Summary Prompt", self.summary_prompt_template, "version"
+            )
+            self.summary_template_version_at_attach = version or 1
+
     def get_indicator(doc):
         if doc.disabled:
             return _("Disabled"), "red", "disabled,=,Yes"
@@ -276,7 +318,8 @@ class Agent(Document):
                 prompt=planning_prompt,
                 provider=self.provider,
                 model=self.model,
-                channel_id="orchestration_planning"
+                channel_id="orchestration_planning",
+                now=True
             )
             
             planning_run_id = result.get("agent_run_id")

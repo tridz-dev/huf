@@ -3,12 +3,14 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Bot, PanelLeftOpen } from "lucide-react";
 import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import ChatAvatar from "./ChatAvatar";
 import { getInitials } from "@/utils/getInitials";
 import { getConversation } from "@/services/chatApi";
 import { getAgent } from "@/services/agentApi";
 import type { AgentDoc } from "@/types/agent.types";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
+import { ConversationDataPanel } from "@/components/conversation/ConversationDataPanel";
 
 interface ChatWindowHeaderProps {
     chatId?: string | null;
@@ -110,14 +112,14 @@ export function ChatWindowHeader({
 
     if (!agent) {
         return (
-            <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+            <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-line flex items-center justify-between bg-panel sticky top-0 z-10">
                 <div className="flex gap-x-3 items-center">
                     {showOpenSidebarBtn && (
                         <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-zinc-500 hover:text-zinc-900"
+                            className="h-8 w-8 text-steel hover:text-ink"
                             onClick={onToggleSidebar}
                         >
                             <PanelLeftOpen className="w-4 h-4" />
@@ -126,8 +128,8 @@ export function ChatWindowHeader({
                     )}
                     <ChatAvatar variant="chat_ai">?</ChatAvatar>
                     <div className="flex flex-col">
-                        <span className="font-semibold text-sm text-zinc-900">No agent selected</span>
-                        <span className="text-xs text-zinc-500">Select an agent to start chatting</span>
+                        <span className="font-semibold text-sm text-ink">No agent selected</span>
+                        <span className="text-xs text-steel">Select an agent to start chatting</span>
                     </div>
                 </div>
             </header>
@@ -135,14 +137,14 @@ export function ChatWindowHeader({
     }
 
     return (
-        <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-zinc-200 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-line flex items-center justify-between bg-panel sticky top-0 z-10">
             <div className="flex gap-x-3 items-center">
                 {showOpenSidebarBtn && (
                     <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-zinc-500 hover:text-zinc-900"
+                        className="h-8 w-8 text-steel hover:text-ink"
                         onClick={onToggleSidebar}
                     >
                         <PanelLeftOpen className="w-4 h-4" />
@@ -154,21 +156,27 @@ export function ChatWindowHeader({
                 </ChatAvatar>
                 <div className="flex flex-col">
                     <div className="flex gap-x-2 items-center">
-                        <span className="font-semibold text-sm text-zinc-900">{agent.agent_name}</span>
+                        <span className="font-semibold text-sm text-ink">{agent.agent_name}</span>
                         {(conversationModel || agent.model) && (
-                            <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-medium text-indigo-400">
+                            <Badge variant="outline" className="shrink-0">
                                 {conversationModel || agent.model}
-                            </span>
+                            </Badge>
                         )}
                     </div>
                     {agent.description && (
-                        <span className="text-xs text-zinc-500 max-w-[200px] truncate">
+                        <span className="text-xs text-steel max-w-[200px] truncate">
                             {agent.description}
                         </span>
                     )}
                 </div>
             </div>
-            <div>
+            <div className="flex items-center gap-2">
+                {chatId && agent.enable_conversation_data === 1 && (
+                    <ConversationDataPanel
+                        conversationId={chatId}
+                        canWrite={agent.conversation_data_api_permission === 'Write'}
+                    />
+                )}
                 <Link to={`/agents/${agent.name}`}>
                     <Button asChild variant="outline" className="gap-x-2 text-xs text-muted-foreground" size="sm">
                         <div>

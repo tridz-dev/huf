@@ -1,6 +1,7 @@
 export type AIProvider = {
   name: string;
   provider_name: string;
+  provider_brand?: string;
 };
 
 export type AIModel = {
@@ -8,6 +9,10 @@ export type AIModel = {
   model_name: string;
   provider: string;
   modalities?: string;
+  use_custom_pricing?: number;
+  input_cost_per_1m_tokens?: number | null;
+  output_cost_per_1m_tokens?: number | null;
+  cached_input_cost_per_1m_tokens?: number | null;
 };
 
 export type ToolType =
@@ -36,6 +41,11 @@ export type ToolType =
   | "Get Conversation Data"
   | "Set Conversation Data"
   | "Load Conversation Data"
+  | "Transcription"
+  /**
+   * @deprecated Legacy value kept for backward compatibility with saved docs.
+   * New tools should use "Transcription" (displayed as "Audio Transcription").
+   */
   | "Speech to Text";
 
 export type AgentToolFunctionRef = {
@@ -60,7 +70,7 @@ export type AgentEnvironment = "Dev" | "Prod";
 export type AgentStatus = "Draft" | "Active" | "Archived";
 
 export type ScheduledInterval = "Hourly" | "Daily" | "Weekly" | "Monthly" | "Yearly";
-export type DocEventType = "before_insert" | "after_insert" | "validate" | "before_save" | "after_save" | "before_submit" | "on_submit" | "after_submit" | "on_cancel" | "before_rename" | "after_rename" | "on_trash" | "after_delete";
+export type DocEventType = "before_insert" | "after_insert" | "validate" | "before_save" | "after_save" | "before_submit" | "on_submit" | "on_update" | "after_submit" | "on_cancel" | "before_rename" | "after_rename" | "on_trash" | "after_delete";
 export type TriggerType = "Schedule" | "Doc Event" | "Webhook" | "App Event" | "Manual";
 
 export type AgentTrigger = {
@@ -201,8 +211,7 @@ export interface AgentDoc {
   agent_name: string;
   provider: string;
   model: string;
-  chef?: string | null; // Chef/provider name (e.g., OpenAI, Anthropic)
-  slug?: string | null; // Provider slug (e.g., openai, anthropic)
+  provider_brand?: string | null;
   disabled: number; // 0 or 1
   temperature: number;
   top_p: number;
@@ -247,10 +256,18 @@ export interface AgentDoc {
   context_strategy?: string | null; // Summarize, FIFO, or None
   summary_model?: string | null; // AI Model name for summarization when strategy is Summarize
   summary_ratio?: number | null; // Ratio of history to summarize (0-1)
+  summary_prompt_mode?: 'Local' | 'Template';
+  summary_prompt_template?: string | null;
+  summary_prompt_version_locked?: number; // 0 or 1
+  summary_template_version_at_attach?: number;
+  summary_prompt?: string | null;
   history_limit?: number | null; // Maximum number of messages to keep
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
   max_turns?: number | null; // Maximum consecutive turns/steps
+  max_context_chars?: number | null; // Maximum characters for tool results before truncation
   enable_conversation_data?: number; // 0 or 1
+  inject_conversation_data?: number; // 0 or 1
+  conversation_data_api_permission?: '' | 'Read' | 'Write';
   autonaming_of_conversation_title?: number; // 0 or 1
 
   // Advanced model overrides
@@ -258,4 +275,10 @@ export interface AgentDoc {
   tts_model?: string | null;
   tts_voice?: string | null;
   stt_model?: string | null;
+  allow_file_upload?: 0 | 1;
+  enable_ocr?: 0 | 1;
+  max_upload_size_mb?: number | null;
+
+  // Execution policy (advanced): run turns directly instead of queue-first
+  run_immediately?: 0 | 1;
 }
