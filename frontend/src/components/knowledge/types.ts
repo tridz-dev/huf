@@ -4,7 +4,7 @@ import { isVectorKnowledgeType } from '@/data/knowledge';
 export const knowledgeSourceFormSchema = z.object({
 	source_name: z.string().min(1, 'Source name is required'),
 	description: z.string().optional(),
-	knowledge_type: z.enum(['sqlite_fts', 'sqlite_vec', 'chroma', 'pgvector'], {
+	knowledge_type: z.enum(['sqlite_fts', 'sqlite_vec', 'chroma', 'pgvector', 'zvec'], {
 		required_error: 'Knowledge type is required',
 	}),
 	scope: z.enum(['Site', 'Workspace', 'Agent', 'Global']).default('Site'),
@@ -13,7 +13,7 @@ export const knowledgeSourceFormSchema = z.object({
 	chunk_overlap: z.number().int().min(0).default(50),
 	disabled: z.boolean().default(false),
 
-	// Vector settings (sqlite_vec, chroma, and pgvector)
+	// Vector settings (sqlite_vec, chroma, pgvector, and zvec)
 	embedding_model: z.string().optional(),
 	vector_dimension: z.number().int().positive().default(1536).optional(),
 	embedding_provider: z.string().optional(),
