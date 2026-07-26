@@ -1,0 +1,31 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-07-26 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["gateway", "priority", "is_enabled", "match_type", "match_value", "section_target", "target_type", "agent", "flow", "description"],
+ "fields": [
+  {"fieldname":"gateway","fieldtype":"Link","in_list_view":1,"label":"Gateway","options":"Gateway","reqd":1},
+  {"default":"100","fieldname":"priority","fieldtype":"Int","in_list_view":1,"label":"Priority","reqd":1},
+  {"default":"1","fieldname":"is_enabled","fieldtype":"Check","in_list_view":1,"label":"Enabled"},
+  {"fieldname":"match_type","fieldtype":"Select","in_list_view":1,"label":"When a message comes from","options":"Any conversation\nDirect message\nRoom or channel\nThread\nSender","reqd":1},
+  {"description":"Provider identifier to match. Leave blank only for Any conversation.","fieldname":"match_value","fieldtype":"Data","label":"Provider value"},
+  {"fieldname":"section_target","fieldtype":"Section Break","label":"Route to"},
+  {"fieldname":"target_type","fieldtype":"Select","in_list_view":1,"label":"Target","options":"Agent\nFlow","reqd":1},
+  {"depends_on":"eval:doc.target_type == 'Agent'","fieldname":"agent","fieldtype":"Link","label":"Agent","options":"Agent"},
+  {"depends_on":"eval:doc.target_type == 'Flow'","fieldname":"flow","fieldtype":"Link","label":"Flow","options":"Flow Definition"},
+  {"fieldname":"description","fieldtype":"Small Text","label":"What this route does"}
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "Gateway Binding",
+ "owner": "Administrator",
+ "permissions": [{"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1}],
+ "sort_field": "priority",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}
