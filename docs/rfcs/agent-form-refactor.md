@@ -7,9 +7,11 @@
 
 ---
 
+> **Status / drift note (2026-07)**: This RFC was written 2026-02-20. Since then the problem it describes has roughly doubled: `AgentFormPage.tsx` has grown from ~896 to **~1,908 lines** and from 24 to **~48 `useState` hooks** (with ~25 handler functions and ~15 `useEffect`s), and the refactor was never carried out. The plan below is reaffirmed as written; the stale metrics in the body have been updated to current `develop` values. Note that PR #416 (`docs/architecture/god-component-inventory.md` + `docs/architecture/god-component-fix-plans.md`) cites this RFC as the adopted plan, with `AgentFormPage.tsx` as the pilot for the schema-driven form refactor.
+
 ## 1. Executive Summary
 
-The Agent form is the most complex UI surface in Huf. At ~900 lines in the orchestrator alone (`AgentFormPage.tsx`) plus ~1,740 lines across child components, it works today but is approaching a complexity threshold that will make it expensive to extend, localize, and maintain. This document captures the current implementation, its strengths and weaknesses, and proposes a schema-driven refactor inspired by patterns from Frappe, Strapi, Directus, n8n, and other large open-source form-heavy projects.
+The Agent form is the most complex UI surface in Huf. At ~1,908 lines in the orchestrator alone (`AgentFormPage.tsx`) plus ~2,090 lines across child components, it works today but is approaching a complexity threshold that will make it expensive to extend, localize, and maintain. This document captures the current implementation, its strengths and weaknesses, and proposes a schema-driven refactor inspired by patterns from Frappe, Strapi, Directus, n8n, and other large open-source form-heavy projects.
 
 ---
 
@@ -19,27 +21,27 @@ The Agent form is the most complex UI surface in Huf. At ~900 lines in the orche
 
 | File | Lines | Responsibility |
 |------|-------|----------------|
-| `pages/AgentFormPage.tsx` | 896 | God component: form init, tab routing, data loading, submission, change detection, 10+ handlers, 3 modals |
-| `components/agent/types.ts` | 19 | Zod schema + inferred type |
-| `components/agent/GeneralTab.tsx` | 213 | LLM config fields + instructions textarea |
-| `components/agent/BehaviorTab.tsx` | 135 | 4 boolean switch fields with cross-field logic |
+| `pages/AgentFormPage.tsx` | 1908 | God component: form init, tab routing, data loading, submission, change detection, 25+ handlers, 3 modals |
+| `components/agent/types.ts` | 92 | Zod schema + inferred type |
+| `components/agent/GeneralTab.tsx` | 383 | LLM config fields + instructions textarea |
+| `components/agent/BehaviorTab.tsx` | 209 | 4 boolean switch fields with cross-field logic |
 | `components/agent/TriggersTab.tsx` | 159 | Trigger list/table (no form fields) |
-| `components/agent/ToolsTab.tsx` | 266 | Tool + MCP server lists (no form fields) |
-| `components/agent/AgentHeader.tsx` | 153 | Inline agent name edit, status badges, action buttons |
+| `components/agent/ToolsTab.tsx` | 344 | Tool + MCP server lists (no form fields) |
+| `components/agent/AgentHeader.tsx` | 179 | Inline agent name edit, status badges, action buttons |
 | `components/agent/InstructionsTextarea.tsx` | 187 | Dual-mode (form/standalone) textarea with expand modal |
-| `components/agent/TriggerModal.tsx` | 279 | Separate form with inline Zod schema |
-| `components/agent/TriggerFieldsConfig.tsx` | 149 | JSON-ish config for trigger type fields (already schema-driven!) |
+| `components/agent/TriggerModal.tsx` | 326 | Separate form with inline Zod schema |
+| `components/agent/TriggerFieldsConfig.tsx` | 127 | JSON-ish config for trigger type fields (already schema-driven!) |
 | `components/agent/TriggerFieldsRenderer.tsx` | 180 | Renders fields from TriggerFieldsConfig |
-| `utils/formValidation.ts` | 123 | Hidden-tab error detection + submit handler factory |
+| `utils/formValidation.ts` | 122 | Hidden-tab error detection + submit handler factory |
 
 ### 2.2 Data Flow
 
 ```
 AgentFormPage (orchestrator)
   ├── useForm<AgentFormValues>() with zodResolver
-  ├── 24 useState hooks (!)
-  ├── 6 useEffect hooks
-  ├── 12+ handler functions
+  ├── 48 useState hooks (!)
+  ├── 15 useEffect hooks
+  ├── 25+ handler functions
   ├── loads: providers, models, toolTypes, triggers, docTypes, triggerTypes, agent, tools, mcpServers
   │
   ├── <AgentHeader form={form} ...12 props />
@@ -98,7 +100,7 @@ export const agentFormSchema = z.object({
 
 #### A. God Component Anti-Pattern (Critical)
 
-`AgentFormPage.tsx` is 896 lines with **24 `useState` hooks** and **12+ handler functions**. It's the form orchestrator, data fetcher, modal controller, change detector, and submission handler all in one. This is the single biggest maintenance risk.
+`AgentFormPage.tsx` is 1,908 lines with **48 `useState` hooks** and **25+ handler functions**. It's the form orchestrator, data fetcher, modal controller, change detector, and submission handler all in one. This is the single biggest maintenance risk.
 
 **Evidence:**
 - `loading`, `saving`, `deletingTrigger`, `optimizingPrompt`, `runningTest`, `mcpLoading` — 6 loading states
@@ -215,7 +217,7 @@ All these projects share one principle: **the form schema is the single source o
 
 ### Phase 1: Extract Hooks (Reduce God Component)
 
-**Goal**: Bring `AgentFormPage` from ~900 lines to ~200 lines.
+**Goal**: Bring `AgentFormPage` from ~1,900 lines to ~200 lines.
 
 ```
 hooks/
@@ -230,8 +232,8 @@ hooks/
 
 **Before** (AgentFormPage):
 ```tsx
-// 24 useState, 6 useEffect, 12 handlers
-export function AgentFormPage() { ... 896 lines ... }
+// 48 useState, 15 useEffect, 25+ handlers
+export function AgentFormPage() { ... 1908 lines ... }
 ```
 
 **After**:
