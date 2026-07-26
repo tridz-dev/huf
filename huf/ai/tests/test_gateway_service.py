@@ -15,6 +15,11 @@ def gateway(**overrides):
         "default_target_type": "",
         "default_agent": "",
         "default_flow": "",
+        "direct_policy": "Allow list",
+        "room_policy": "Allow list",
+        "room_sender_policy": "Allow list",
+        "mention_required": 1,
+        "pairing_ttl_minutes": 60,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -136,7 +141,7 @@ class TestGatewayIngress(unittest.TestCase):
 
         def get_doc(value, *args, **kwargs):
             if value == "Gateway":
-                return gateway(access_policy="Deny by default")
+                return gateway(direct_policy="Disabled")
             return event
 
         mock_frappe.get_doc.side_effect = get_doc
@@ -150,3 +155,26 @@ class TestGatewayIngress(unittest.TestCase):
             {"status": "Rejected", "error_message": "Sender is not approved for this gateway"}
         )
         mock_frappe.enqueue.assert_not_called()
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_direct_allow_list_requires_normalized_approved_entry(self, mock_frappe):
+        mock_frappe.db.exists.return_value = True
+        admitted, _ = gateway_service._admission(gateway(), {"sender_id": "provider:42"})
+        assert admitted is True
+        assert mock_frappe.db.exists.call_args.args[0] == "Gateway Access Entry"
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_pairing_creates_pending_entry_and_never_admits_triggering_message(self, mock_frappe):
+        mock_frappe.db.exists.return_value = None
+        admitted, reason = gateway_service._admission(gateway(direct_policy="Pairing"), {"sender_id": "42"})
+        assert admitted is False
+        assert reason == "Sender pairing approval is required"
+        pending = mock_frappe.get_doc.call_args.args[0]
+        assert pending["doctype"] == "Gateway Access Entry"
+        assert pending["state"] == "Pending"
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_room_requires_room_sender_and_mention_when_configured(self, mock_frappe):
+        admitted, reason = gateway_service._admission(gateway(), {"sender_id": "42", "conversation_id": "room:1", "is_room": True, "mentioned": False})
+        assert admitted is False
+        assert reason == "Room messages must mention the gateway"

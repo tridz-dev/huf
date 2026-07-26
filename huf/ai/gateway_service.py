@@ -13,7 +13,7 @@ from typing import Any
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import add_to_date, now_datetime
 
 
 MATCH_CONTEXT_KEY = {
@@ -57,19 +57,52 @@ def _route_target(target_type: str | None, agent: str | None, flow: str | None) 
     return None
 
 
-def _sender_is_allowed(gateway, sender_id: str) -> bool:
-    """Apply the conservative default-deny sender policy before routing."""
-    if gateway.access_policy != "Allow list":
-        # Pairing is intentionally fail-closed until a provider adapter can
-        # establish and persist a verified pairing identity.
+def _has_access_entry(gateway, entry_type: str, external_id: str) -> bool:
+    if not external_id:
         return False
-    allowed = gateway.allowed_senders or []
-    if isinstance(allowed, str):
-        try:
-            allowed = json.loads(allowed)
-        except json.JSONDecodeError:
-            allowed = []
-    return str(sender_id or "") in {str(value) for value in allowed if value is not None}
+    return bool(frappe.db.exists("Gateway Access Entry", {
+        "gateway": gateway.name, "entry_type": entry_type, "provider": gateway.provider,
+        "external_id": str(external_id), "state": "Approved",
+    }))
+
+
+def _create_pairing_request(gateway, sender_id: str) -> None:
+    """Create at most one live request. The original message is never executed."""
+    if not sender_id:
+        return
+    existing = frappe.db.exists("Gateway Access Entry", {"gateway": gateway.name, "entry_type": "Sender", "provider": gateway.provider, "external_id": str(sender_id), "state": "Pending"})
+    if existing:
+        return
+    frappe.get_doc({"doctype": "Gateway Access Entry", "gateway": gateway.name, "entry_type": "Sender", "provider": gateway.provider, "external_id": str(sender_id), "state": "Pending", "expires_at": add_to_date(now_datetime(), minutes=int(gateway.pairing_ttl_minutes or 60))}).insert(ignore_permissions=True)
+
+
+def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
+    sender_id, conversation_id = str(context.get("sender_id") or ""), str(context.get("conversation_id") or "")
+    is_room = bool(context.get("is_room"))
+    if not is_room:
+        policy = gateway.direct_policy or "Allow list"
+        if policy == "Pairing":
+            _create_pairing_request(gateway, sender_id)
+            return False, "Sender pairing approval is required"
+        return (policy == "Open" or (policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id)), "Sender is not approved for this gateway")
+    room_ok = gateway.room_policy == "Open" or (gateway.room_policy == "Allow list" and _has_access_entry(gateway, "Room", conversation_id))
+    sender_ok = gateway.room_sender_policy == "Open" or _has_access_entry(gateway, "Sender", sender_id)
+    mentioned = bool(context.get("mentioned"))
+    if gateway.mention_required and not mentioned:
+        return False, "Room messages must mention the gateway"
+    return room_ok and sender_ok, "Room or sender is not approved for this gateway"
+
+
+@frappe.whitelist(methods=["POST"])
+def approve_gateway_access_entry(entry_name: str) -> dict:
+    """Approve a pending pairing request; only system administrators may widen admission."""
+    if not frappe.has_permission("Gateway Access Entry", "write"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    entry = frappe.get_doc("Gateway Access Entry", entry_name)
+    if entry.state != "Pending" or (entry.expires_at and entry.expires_at < now_datetime()):
+        frappe.throw(_("This pairing request is not active."))
+    entry.db_set({"state": "Approved", "approved_by": frappe.session.user, "approved_at": now_datetime()})
+    return {"name": entry.name, "state": "Approved"}
 
 
 def resolve_gateway_route(gateway_name: str, context: dict[str, Any]) -> dict:
@@ -153,8 +186,9 @@ def ingest_gateway_event(
     if not gateway.is_enabled:
         event.db_set({"status": "Rejected", "error_message": "Gateway is disabled"})
         return {"event_name": event.name, "status": "Rejected"}
-    if not _sender_is_allowed(gateway, str(context.get("sender_id") or "")):
-        event.db_set({"status": "Rejected", "error_message": "Sender is not approved for this gateway"})
+    admitted, reason = _admission(gateway, context)
+    if not admitted:
+        event.db_set({"status": "Rejected", "error_message": reason})
         return {"event_name": event.name, "status": "Rejected"}
 
     route = resolve_gateway_route(gateway_name, context)
