@@ -240,7 +240,7 @@ huf_knowledge_backends = {
 
 * The class must be importable.
 * The class must subclass `KnowledgeBackend`.
-* Hook-provided type keys **cannot override built-in backends** (`sqlite_fts`, `sqlite_vec`, `chroma`, `pgvector`, `zvec`). Collisions are skipped and logged as a warning.
+* Hook-provided type keys **cannot override built-in backends** (`sqlite_fts`, `sqlite_vec`, `chroma`, `pgvector`, `zvec`, `faiss`). Collisions are skipped and logged as a warning.
 * Duplicate type keys across apps keep the first registration encountered and warn on subsequent ones.
 * Malformed hook entries (non-dict values) are skipped with a warning.
 

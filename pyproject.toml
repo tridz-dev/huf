@@ -25,6 +25,8 @@ dependencies = [
     "llama-index-vector-stores-postgres",
     "redisvl>=0.5",
     "zvec>=0.2.1",
+    "llama-index-vector-stores-faiss",
+    "faiss-cpu",
     "psycopg[binary]>=3.1.0",
     "pypdf",
     "python-docx",
