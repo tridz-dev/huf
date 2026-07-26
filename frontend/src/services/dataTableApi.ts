@@ -219,6 +219,37 @@ export async function deleteDataTable(name: string): Promise<{ deleted_records: 
 	}
 }
 
+export async function getTableAgentAccess(table: string): Promise<TableAgentAccess[]> {
+	try {
+		const result = await call.get('huf.huf.doctype.huf_data_table.api.get_table_agent_access', { table });
+		return (result.message ?? []) as TableAgentAccess[];
+	} catch (error) {
+		handleFrappeError(error, 'Error fetching agent access');
+	}
+}
+
+export async function setTableAgentAccess(
+	table: string,
+	agent: string,
+	actions: TableAgentAction[]
+): Promise<TableAgentAccess> {
+	try {
+		const result = await call.post('huf.huf.doctype.huf_data_table.api.set_table_agent_access', { table, agent, actions });
+		return result.message as TableAgentAccess;
+	} catch (error) {
+		handleFrappeError(error, 'Error updating agent access');
+	}
+}
+
+export async function getTableAgentAccessCounts(): Promise<Record<string, number>> {
+	try {
+		const result = await call.get('huf.huf.doctype.huf_data_table.api.get_tables_agent_counts');
+		return (result.message ?? {}) as Record<string, number>;
+	} catch {
+		return {};
+	}
+}
+
 // ─── Bulk Import (wraps Frappe Data Import via HUF backend bridge) ───
 
 export interface BulkImportTemplate {

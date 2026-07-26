@@ -516,3 +516,190 @@ def get_table_records(
 	if has_more:
 		records = records[:limit]
 	return {'items': records, 'hasMore': has_more}
+
+
+# Agent access scaffolding: one deterministic tool set per Huf Data Table.
+TABLE_ACTION_MAP = {
+	'view': (('Get List', 'read'), ('Get Document', 'read')),
+	'create': (('Create Document', 'create'),),
+	'edit': (('Update Document', 'write'),),
+	'delete': (('Delete Document', 'delete'),),
+}
+_TYPES_TO_ACTION = {types: action for action, specs in TABLE_ACTION_MAP.items() for types, _ in specs}
+_TABLE_TOOL_TYPE = 'Data Table'
+_PARAM_TOOL_TYPES = {'Get List', 'Create Document', 'Update Document'}
+_FIELD_TYPE_TO_PARAM_TYPE = {
+	'Data': 'string', 'Text': 'string', 'Small Text': 'string', 'Long Text': 'string',
+	'Int': 'integer', 'Float': 'number', 'Currency': 'number', 'Percent': 'number',
+	'Check': 'boolean', 'Date': 'string', 'Datetime': 'string', 'Time': 'string',
+	'Link': 'string', 'Select': 'string', 'Phone': 'string',
+}
+_PARAM_EXCLUDED_FIELD_TYPES = {'Section Break', 'Column Break', 'Tab Break', 'HTML', 'Heading'}
+_TOOL_DESCRIPTIONS = {
+	'Get List': 'List records from {label} with optional filters',
+	'Get Document': 'Get a single {label} record by ID',
+	'Create Document': 'Create a new {label} record',
+	'Update Document': 'Update an existing {label} record',
+	'Delete Document': 'Delete a {label} record',
+}
+
+
+def _resolve_table_registry(table: str):
+	if frappe.db.exists('Huf Data Table', table):
+		return frappe.get_doc('Huf Data Table', table)
+	name = frappe.db.get_value('Huf Data Table', {'table_name': table}, 'name')
+	if name:
+		return frappe.get_doc('Huf Data Table', name)
+	frappe.throw(_('Unknown data table: {0}').format(table))
+
+
+def _table_tool_name(doctype_name: str, types: str) -> str:
+	return re.sub(r'[^a-zA-Z0-9_-]', '_', f'{doctype_name} - {types}')
+
+
+def _ensure_table_tool_type() -> str:
+	if not frappe.db.exists('Agent Tool Type', _TABLE_TOOL_TYPE):
+		frappe.get_doc({'doctype': 'Agent Tool Type', 'name1': _TABLE_TOOL_TYPE}).insert()
+	return _TABLE_TOOL_TYPE
+
+
+def _table_field_params(doctype_name: str, types: str) -> list[dict]:
+	rows = []
+	for field in frappe.get_meta(doctype_name).fields:
+		if field.fieldtype in _PARAM_EXCLUDED_FIELD_TYPES or field.hidden or field.read_only:
+			continue
+		rows.append({
+			'label': field.label or field.fieldname,
+			'fieldname': field.fieldname,
+			'type': _FIELD_TYPE_TO_PARAM_TYPE.get(field.fieldtype, 'string'),
+			'required': 1 if types == 'Create Document' and field.reqd else 0,
+			'description': field.description or '',
+			'options': field.options if field.fieldtype == 'Select' and field.options else '',
+		})
+	return rows
+
+
+def _sync_tool_params(tool_name: str, doctype_name: str, types: str) -> None:
+	if types not in _PARAM_TOOL_TYPES:
+		return
+	tool = frappe.get_doc('Agent Tool Function', tool_name)
+	desired = _table_field_params(doctype_name, types)
+	current = [
+		{'label': row.label or '', 'fieldname': row.fieldname or '', 'type': row.type or '',
+		 'required': 1 if row.required else 0, 'description': row.description or '', 'options': row.options or ''}
+		for row in tool.parameters
+	]
+	if current != desired:
+		tool.set('parameters', desired)
+		tool.save()
+
+
+def _scaffold_tool(doctype_name: str, table_label: str, types: str, permission: str) -> str:
+	tool_name = _table_tool_name(doctype_name, types)
+	if frappe.db.exists('Agent Tool Function', tool_name):
+		_sync_tool_params(tool_name, doctype_name, types)
+		return tool_name
+	doc = {
+		'doctype': 'Agent Tool Function',
+		'tool_name': tool_name,
+		'description': _TOOL_DESCRIPTIONS[types].format(label=table_label),
+		'types': types,
+		'reference_doctype': doctype_name,
+		'required_permission': permission,
+		'tool_type': _ensure_table_tool_type(),
+	}
+	if types in _PARAM_TOOL_TYPES:
+		doc['parameters'] = _table_field_params(doctype_name, types)
+	frappe.get_doc(doc).insert()
+	return tool_name
+
+
+def _compute_access(doctype_name: str, agent: str | None = None) -> list[dict]:
+	tools = frappe.get_all(
+		'Agent Tool Function',
+		filters={'reference_doctype': doctype_name, 'types': ['in', list(_TYPES_TO_ACTION)]},
+		fields=['name', 'types'],
+	)
+	if not tools:
+		return []
+	tool_types = {tool.name: tool.types for tool in tools}
+	filters = {'parenttype': 'Agent', 'tool': ['in', list(tool_types)]}
+	if agent:
+		filters['parent'] = agent
+	by_agent = {}
+	for link in frappe.get_all('Agent Tool', filters=filters, fields=['parent', 'tool']):
+		entry = by_agent.setdefault(link.parent, {'actions': set(), 'tools': []})
+		entry['tools'].append(link.tool)
+		action = _TYPES_TO_ACTION.get(tool_types.get(link.tool))
+		if action:
+			entry['actions'].add(action)
+	return [
+		{
+			'agent': name,
+			'agent_name': frappe.db.get_value('Agent', name, 'agent_name') or name,
+			'actions': [action for action in TABLE_ACTION_MAP if action in entry['actions']],
+			'tools': sorted(entry['tools']),
+		}
+		for name, entry in sorted(by_agent.items())
+	]
+
+
+@frappe.whitelist()
+def get_table_agent_access(table: str) -> list:
+	_require_read()
+	return _compute_access(_resolve_table_registry(table).doctype_name)
+
+
+@frappe.whitelist()
+def get_tables_agent_counts() -> dict:
+	_require_read()
+	counts = {}
+	for registry in frappe.get_all('Huf Data Table', fields=['doctype_name']):
+		agents = {entry['agent'] for entry in _compute_access(registry.doctype_name)}
+		if agents:
+			counts[registry.doctype_name] = len(agents)
+	return counts
+
+
+@frappe.whitelist()
+def set_table_agent_access(table: str, agent: str, actions: str | list) -> dict:
+	_require_write()
+	if isinstance(actions, str):
+		actions = json.loads(actions)
+	actions = [str(action).strip().lower() for action in actions]
+	unknown = [action for action in actions if action not in TABLE_ACTION_MAP]
+	if unknown:
+		frappe.throw(_('Unknown action(s): {0}').format(', '.join(unknown)))
+	registry = _resolve_table_registry(table)
+	agent_doc = frappe.get_doc('Agent', agent)
+	wanted = {
+		_scaffold_tool(registry.doctype_name, registry.table_name, types, permission)
+		for action in actions
+		for types, permission in TABLE_ACTION_MAP[action]
+	}
+	changed = False
+	existing = {row.tool for row in agent_doc.agent_tool}
+	for tool_name in sorted(wanted - existing):
+		agent_doc.append('agent_tool', {'tool': tool_name})
+		changed = True
+	attached = [row.tool for row in agent_doc.agent_tool]
+	attached_meta = {
+		tool.name: tool
+		for tool in frappe.get_all(
+			'Agent Tool Function',
+			filters={'name': ['in', attached], 'reference_doctype': registry.doctype_name},
+			fields=['name', 'types'],
+		)
+	}
+	detach = {
+		name for name, tool in attached_meta.items()
+		if _TYPES_TO_ACTION.get(tool.types) and _TYPES_TO_ACTION[tool.types] not in actions
+	}
+	if detach:
+		agent_doc.agent_tool = [row for row in agent_doc.agent_tool if row.tool not in detach]
+		changed = True
+	if changed:
+		agent_doc.save()
+	for entry in _compute_access(registry.doctype_name, agent=agent_doc.name):
+		return entry
+	return {'agent': agent_doc.name, 'agent_name': agent_doc.agent_name, 'actions': [], 'tools': []}
