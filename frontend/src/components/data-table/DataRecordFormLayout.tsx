@@ -17,6 +17,7 @@ import type { DataTableFieldDef } from '@/types/dataTable.types';
 
 export interface LayoutSection {
 	label?: string;
+	tabLabel?: string;
 	columns: DataTableFieldDef[][];
 }
 
@@ -25,7 +26,10 @@ const LAYOUT_DEFAULT_LABELS = new Set(['section break', 'column break']);
 export function buildFormLayout(fields: DataTableFieldDef[]): LayoutSection[] {
 	const sections: LayoutSection[] = [{ columns: [[]] }];
 	for (const field of fields) {
-		if (field.fieldtype === 'Section Break') {
+		if (field.fieldtype === 'Tab Break') {
+			const raw = field.label?.trim();
+			sections.push({ tabLabel: raw || undefined, columns: [[]] });
+		} else if (field.fieldtype === 'Section Break') {
 			const raw = field.label?.trim();
 			const label = raw && !LAYOUT_DEFAULT_LABELS.has(raw.toLowerCase()) ? raw : undefined;
 			sections.push({ label, columns: [[]] });

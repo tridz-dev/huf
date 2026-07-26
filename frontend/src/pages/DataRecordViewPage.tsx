@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Form } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
 	getTableRecord,
 	updateTableRecord,
@@ -203,6 +204,45 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 		(field) => field.fieldtype !== 'Section Break' && field.fieldtype !== 'Column Break'
 	);
 	const sections = buildFormLayout(schema.fields);
+	const tabGroups = sections.reduce<{ label?: string; sections: typeof sections }[]>((groups, section) => {
+		if (section.tabLabel !== undefined) {
+			groups.push({ label: section.tabLabel, sections: [section] });
+		} else {
+			const current = groups[groups.length - 1];
+			if (current) current.sections.push(section);
+		}
+		return groups;
+	}, [{ sections: [] }]);
+	const hasTabs = tabGroups.length > 1;
+
+	const renderSection = (section: (typeof sections)[number], index: number) => (
+		<Card key={index}>
+			{section.label && (
+				<CardHeader>
+					<CardTitle>{section.label}</CardTitle>
+				</CardHeader>
+			)}
+			<CardContent className={cn('grid gap-6', !section.label && 'pt-6')}>
+				{section.columns.length > 1 ? (
+					<div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${section.columns.length}, minmax(0, 1fr))` }}>
+						{section.columns.map((column, columnIndex) => (
+							<div key={columnIndex} className="space-y-4">
+								{column.map((field) => (
+									<FieldInput key={field.fieldname} field={field} value={formData[field.fieldname]} onChange={(value) => handleChange(field.fieldname, value)} isEditing={isEditing} />
+								))}
+							</div>
+						))}
+					</div>
+				) : (
+					<div className="space-y-4">
+						{section.columns[0]?.map((field) => (
+							<FieldInput key={field.fieldname} field={field} value={formData[field.fieldname]} onChange={(value) => handleChange(field.fieldname, value)} isEditing={isEditing} />
+						))}
+					</div>
+				)}
+			</CardContent>
+		</Card>
+	);
 
 	const titleField = schema.title_field_name;
 	const recordTitle = isNew
@@ -220,52 +260,15 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 				<Separator />
 
                 <Form {...formMethods}>
-                    <div className="space-y-6">
-                        {sections.map((section, index) => (
-                            <Card key={index}>
-                                {section.label && (
-                                    <CardHeader>
-                                        <CardTitle>{section.label}</CardTitle>
-                                    </CardHeader>
-                                )}
-                                <CardContent className={cn("grid gap-6", !section.label && "pt-6")}>
-                                    {section.columns.length > 1 ? (
-                                        <div
-                                            className="grid gap-4"
-                                            style={{
-                                                gridTemplateColumns: `repeat(${section.columns.length}, minmax(0, 1fr))`,
-                                            }}
-                                        >
-                                            {section.columns.map((column, columnIndex) => (
-                                                <div key={columnIndex} className="space-y-4">
-                                                    {column.map((field) => (
-                                                        <FieldInput
-                                                            key={field.fieldname}
-                                                            field={field}
-                                                            value={formData[field.fieldname]}
-                                                            onChange={(value) => handleChange(field.fieldname, value)}
-                                                            isEditing={isEditing as boolean}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4">
-                                            {section.columns[0]?.map((field) => (
-                                                <FieldInput
-                                                    key={field.fieldname}
-                                                    field={field}
-                                                    value={formData[field.fieldname]}
-                                                    onChange={(value) => handleChange(field.fieldname, value)}
-                                                    isEditing={isEditing}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        ))}
+					<div className="space-y-6">
+						{hasTabs ? (
+							<Tabs defaultValue="tab-0" className="w-full">
+								<TabsList className="w-full justify-start rounded-none border-b border-line bg-transparent p-0">
+									{tabGroups.map((tab, index) => <TabsTrigger key={index} value={`tab-${index}`} className="rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-ink">{tab.label || `Tab ${index + 1}`}</TabsTrigger>)}
+								</TabsList>
+								{tabGroups.map((tab, index) => <TabsContent key={index} value={`tab-${index}`} className="mt-4 space-y-6">{tab.sections.map(renderSection)}</TabsContent>)}
+							</Tabs>
+						) : tabGroups[0]?.sections.map(renderSection)}
 
                         {dataFields.length === 0 && (
                             <p className="text-sm font-body text-steel text-center py-8">
