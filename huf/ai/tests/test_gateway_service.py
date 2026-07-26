@@ -1,6 +1,7 @@
 """Focused unit tests for the provider-neutral Gateway foundation."""
 
 from types import SimpleNamespace
+import unittest
 from unittest.mock import MagicMock, patch
 
 from huf.ai import gateway_service
@@ -32,7 +33,7 @@ def binding(**overrides):
     return SimpleNamespace(**values)
 
 
-class TestGatewayRouting:
+class TestGatewayRouting(unittest.TestCase):
     @patch("huf.ai.gateway_service.frappe")
     def test_highest_priority_matching_binding_wins(self, mock_frappe):
         mock_frappe.get_doc.return_value = gateway()
@@ -81,7 +82,7 @@ class TestGatewayRouting:
         mock_frappe.get_all.assert_not_called()
 
 
-class TestGatewayIngress:
+class TestGatewayIngress(unittest.TestCase):
     def test_payload_redaction_removes_provider_secrets(self):
         assert gateway_service._redact_payload(
             {"token": "top-secret", "body": {"signature": "sig", "message": "hello"}}
