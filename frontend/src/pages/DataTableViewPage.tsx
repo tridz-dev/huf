@@ -188,7 +188,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				<div className="flex items-center gap-4">
 					<div className="flex-1">
 						<Input
-							placeholder="Search API records... (Press Enter)"
+							placeholder="Search records..."
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') loadRecords(true); }}

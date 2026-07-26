@@ -57,7 +57,7 @@ export function DataListView<TData, TValue>({
                     <div className="relative">
                         <Filter className="absolute left-2 top-2.5 h-3.5 w-3.5 text-steel" />
 					    <Input
-						    placeholder="Filter columns locally..."
+						    placeholder="Filter..."
 						    value={globalFilter ?? ''}
 						    onChange={(e) => setGlobalFilter(e.target.value)}
 						    className="h-8 w-[200px] pl-8 rounded-none border-line bg-panel text-ink"
