@@ -123,9 +123,9 @@ class TestBackendRegistry(unittest.TestCase):
 			if hook_name != "huf_knowledge_backends":
 				return []
 			if app_name == "app_a":
-				return {"weaviate": ["app_a.weaviate.WeaviateBackend"]}
+				return {"qdrant": ["app_a.qdrant.QdrantBackend"]}
 			if app_name == "app_b":
-				return {"weaviate": ["app_b.weaviate.OtherBackend"]}
+				return {"qdrant": ["app_b.qdrant.OtherBackend"]}
 			return []
 
 		mock_get_hooks.side_effect = fake_hooks
@@ -133,10 +133,10 @@ class TestBackendRegistry(unittest.TestCase):
 		with patch("huf.ai.knowledge.backends.frappe.logger") as mock_logger:
 			registry = _discover_backends()
 
-		self.assertEqual(registry["weaviate"], "app_a.weaviate.WeaviateBackend")
+		self.assertEqual(registry["qdrant"], "app_a.qdrant.QdrantBackend")
 		mock_logger.return_value.warning.assert_called_once()
 		warning_message = mock_logger.return_value.warning.call_args[0][0]
-		self.assertIn("weaviate", warning_message)
+		self.assertIn("qdrant", warning_message)
 		self.assertIn("duplicate", warning_message)
 
 	@patch("huf.ai.knowledge.backends.frappe.get_installed_apps")
@@ -149,14 +149,14 @@ class TestBackendRegistry(unittest.TestCase):
 
 		def fake_hooks(hook_name, app_name=None):
 			if hook_name == "huf_knowledge_backends" and app_name == "my_app":
-				return {"weaviate": ["my_app.weaviate.FirstBackend", "my_app.weaviate.SecondBackend"]}
+				return {"qdrant": ["my_app.qdrant.FirstBackend", "my_app.qdrant.SecondBackend"]}
 			return []
 
 		mock_get_hooks.side_effect = fake_hooks
 
 		registry = _discover_backends()
 
-		self.assertEqual(registry["weaviate"], "my_app.weaviate.FirstBackend")
+		self.assertEqual(registry["qdrant"], "my_app.qdrant.FirstBackend")
 
 	@patch("huf.ai.knowledge.backends.frappe.get_installed_apps")
 	@patch("huf.ai.knowledge.backends.frappe.get_hooks")
