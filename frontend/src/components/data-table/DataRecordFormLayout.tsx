@@ -11,29 +11,7 @@ import {
 } from '@/components/ui/select';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
-export interface LayoutSection {
-	label?: string;
-	columns: DataTableFieldDef[][];
-}
 
-const LAYOUT_DEFAULT_LABELS = new Set(['section break', 'column break']);
-
-export function buildFormLayout(fields: DataTableFieldDef[]): LayoutSection[] {
-	const sections: LayoutSection[] = [{ columns: [[]] }];
-	for (const field of fields) {
-		if (field.fieldtype === 'Section Break') {
-			const raw = field.label?.trim();
-			const label = raw && !LAYOUT_DEFAULT_LABELS.has(raw.toLowerCase()) ? raw : undefined;
-			sections.push({ label, columns: [[]] });
-		} else if (field.fieldtype === 'Column Break') {
-			sections[sections.length - 1].columns.push([]);
-		} else {
-			const currentSection = sections[sections.length - 1];
-			currentSection.columns[currentSection.columns.length - 1].push(field);
-		}
-	}
-	return sections.filter((section) => section.columns.some((col) => col.length > 0));
-}
 
 export function initFormData(
 	fields: DataTableFieldDef[],
@@ -41,7 +19,7 @@ export function initFormData(
 ): Record<string, unknown> {
 	const data: Record<string, unknown> = {};
 	for (const field of fields) {
-		if (field.fieldtype === 'Section Break' || field.fieldtype === 'Column Break') continue;
+		if (field.fieldtype === 'Tab Break' || field.fieldtype === 'Section Break' || field.fieldtype === 'Column Break') continue;
 		if (record) {
 			data[field.fieldname] = record[field.fieldname] ?? field.default ?? '';
 		} else {

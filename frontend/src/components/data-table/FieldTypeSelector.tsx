@@ -15,6 +15,7 @@ import {
 	Link2,
 	Palette,
 	Phone,
+	Folder,
 	Minus,
 	Columns,
 	LucideIcon,
@@ -41,6 +42,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 	Link2,
 	Palette,
 	Phone,
+	Folder,
 	Minus,
 	Columns,
 };
@@ -99,6 +101,7 @@ const GROUPS: FieldTypeGroup[] = [
 	{
 		label: 'Layout',
 		types: [
+			{ type: 'Tab Break', label: 'Tab', icon: 'Folder' },
 			{ type: 'Section Break', label: 'Section', icon: 'Minus' },
 			{ type: 'Column Break', label: 'Column', icon: 'Columns' },
 		],

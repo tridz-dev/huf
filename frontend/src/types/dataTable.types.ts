@@ -39,13 +39,14 @@ export type DataTableFieldType =
 	| 'Rating'
 	| 'Color'
 	| 'Phone'
+	| 'Tab Break'
 	| 'Section Break'
 	| 'Column Break';
 
 /**
  * Layout-only field types (no DB column)
  */
-export type LayoutFieldType = 'Section Break' | 'Column Break';
+export type LayoutFieldType = 'Tab Break' | 'Section Break' | 'Column Break';
 
 /**
  * Huf Data Table registry record (from Frappe)

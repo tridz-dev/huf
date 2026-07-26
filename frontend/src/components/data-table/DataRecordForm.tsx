@@ -10,9 +10,11 @@ import {
 	SheetFooter,
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createTableRecord, updateTableRecord } from '@/services/dataTableApi';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
-import { buildFormLayout, FieldInput, initFormData } from './DataRecordFormLayout';
+import { FieldInput, initFormData } from './DataRecordFormLayout';
+import { buildFormLayout, type LayoutSection } from '@/utils/dataTableLayout';
 
 interface DataRecordFormProps {
 	open: boolean;
@@ -73,9 +75,51 @@ export function DataRecordForm({
 	};
 
 	const dataFields = fields.filter(
-		(field) => field.fieldtype !== 'Section Break' && field.fieldtype !== 'Column Break'
+		(field) => field.fieldtype !== 'Tab Break' && field.fieldtype !== 'Section Break' && field.fieldtype !== 'Column Break'
 	);
-	const sections = buildFormLayout(fields);
+	const layout = buildFormLayout(fields);
+	const hasTabs = layout.tabs.length > 1;
+
+	const renderSection = (section: LayoutSection, sIdx: number) => (
+		<div key={sIdx}>
+			{sIdx > 0 && <Separator className="my-4" />}
+			{section.label && (
+				<p className="text-sm font-medium text-muted-foreground mb-3">
+					{section.label}
+				</p>
+			)}
+			{section.columns.length > 1 ? (
+				<div
+					className="grid gap-4"
+					style={{ gridTemplateColumns: `repeat(${section.columns.length}, minmax(0, 1fr))` }}
+				>
+					{section.columns.map((col, cIdx) => (
+						<div key={cIdx} className="space-y-4">
+							{col.fields.map((field) => (
+								<FieldInput
+									key={field.fieldname}
+									field={field}
+									value={formData[field.fieldname]}
+									onChange={(val) => setValue(field.fieldname, val)}
+								/>
+							))}
+						</div>
+					))}
+				</div>
+			) : (
+				<div className="space-y-4">
+					{section.columns[0]?.fields.map((field) => (
+						<FieldInput
+							key={field.fieldname}
+							field={field}
+							value={formData[field.fieldname]}
+							onChange={(val) => setValue(field.fieldname, val)}
+						/>
+					))}
+				</div>
+			)}
+		</div>
+	);
 
 	return (
 		<Sheet open={open} onOpenChange={handleOpen}>
@@ -84,46 +128,28 @@ export function DataRecordForm({
 					<SheetTitle>{isEdit ? 'Edit Record' : 'Add New Record'}</SheetTitle>
 				</SheetHeader>
 				<div className="space-y-4 py-4">
-					{sections.map((section, sIdx) => (
-						<div key={sIdx}>
-							{sIdx > 0 && <Separator className="my-4" />}
-							{section.label && (
-								<p className="text-sm font-medium text-muted-foreground mb-3">
-									{section.label}
-								</p>
-							)}
-							{section.columns.length > 1 ? (
-								<div
-									className="grid gap-4"
-									style={{ gridTemplateColumns: `repeat(${section.columns.length}, minmax(0, 1fr))` }}
-								>
-									{section.columns.map((col, cIdx) => (
-										<div key={cIdx} className="space-y-4">
-											{col.map((field) => (
-												<FieldInput
-													key={field.fieldname}
-													field={field}
-													value={formData[field.fieldname]}
-													onChange={(val) => setValue(field.fieldname, val)}
-												/>
-											))}
-										</div>
-									))}
-								</div>
-							) : (
-								<div className="space-y-4">
-									{section.columns[0]?.map((field) => (
-										<FieldInput
-											key={field.fieldname}
-											field={field}
-											value={formData[field.fieldname]}
-											onChange={(val) => setValue(field.fieldname, val)}
-										/>
-									))}
-								</div>
-							)}
-						</div>
-					))}
+					{hasTabs ? (
+						<Tabs defaultValue="tab-0" className="w-full">
+							<TabsList className="w-full justify-start rounded-none border-b border-line bg-transparent p-0">
+								{layout.tabs.map((tab, tIdx) => (
+									<TabsTrigger
+										key={`tab-${tIdx}`}
+										value={`tab-${tIdx}`}
+										className="rounded-none border-b-2 border-transparent px-4 py-2 font-medium text-steel-soft hover:bg-paper-deep hover:text-ink data-[state=active]:border-ink data-[state=active]:text-ink data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+									>
+										{tab.label || `Tab ${tIdx + 1}`}
+									</TabsTrigger>
+								))}
+							</TabsList>
+							{layout.tabs.map((tab, tIdx) => (
+								<TabsContent key={`tab-${tIdx}`} value={`tab-${tIdx}`} className="mt-4 focus-visible:outline-none">
+									{tab.sections.map((section, sIdx) => renderSection(section, sIdx))}
+								</TabsContent>
+							))}
+						</Tabs>
+					) : (
+						layout.tabs[0]?.sections.map((section, sIdx) => renderSection(section, sIdx))
+					)}
 
 					{dataFields.length === 0 && (
 						<p className="text-sm text-muted-foreground text-center py-8">
