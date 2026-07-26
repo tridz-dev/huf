@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import {
 	Select,
 	SelectContent,
@@ -65,27 +64,25 @@ export function FieldConfigPanel({
 
 	return (
 		<div className="space-y-4">
-			<div className="flex items-center justify-between">
+			<div className="sticky top-0 z-10 bg-panel border-b border-line pb-3 -mx-1 px-1 mb-4 flex items-center justify-between">
 				<div>
 					<h3 className="font-medium text-sm">
 						{isLayout ? field.fieldtype : 'Field Properties'}
 					</h3>
-					<p className="text-xs text-muted-foreground mt-1">
+					<p className="text-xs text-steel mt-1">
 						{isLayout ? 'Layout element settings' : field.fieldtype}
 					</p>
 				</div>
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-7 w-7 text-muted-foreground"
+					className="h-7 w-7 text-steel rounded-none"
 					onClick={onOpenTableSettings}
 					title="Open table settings"
 				>
 					<Settings className="w-3.5 h-3.5" />
 				</Button>
 			</div>
-
-			<Separator />
 
 			{properties.includes('label') && (
 				<div className="space-y-1.5">
@@ -100,7 +97,7 @@ export function FieldConfigPanel({
 						className="h-8 text-sm"
 					/>
 					{!isLayout && (
-						<p className="text-[10px] text-muted-foreground">
+						<p className="text-[10px] text-steel">
 							Name: {field.fieldname}
 						</p>
 					)}
@@ -177,9 +174,8 @@ export function FieldConfigPanel({
 			)}
 
 			{!isLayout && (
-				<div className="space-y-3">
-					<Separator />
-					<p className="text-xs font-medium text-muted-foreground">Properties</p>
+				<div className="rounded-none border border-line bg-panel p-4 space-y-3 mt-4">
+					<p className="text-xs font-medium text-steel mb-2">Properties</p>
 
 					{properties.includes('reqd') && (
 						<div className="flex items-center gap-2">
@@ -258,17 +254,17 @@ export function FieldConfigPanel({
 				</div>
 			)}
 
-			<Separator />
-
-			<Button
-				variant="destructive"
-				size="sm"
-				className="w-full"
-				onClick={onDelete}
-			>
-				<Trash2 className="w-3.5 h-3.5 mr-2" />
-				Delete Field
-			</Button>
+			<div className="pt-4 border-t border-line mt-4">
+				<Button
+					variant="destructive"
+					size="sm"
+					className="w-full rounded-none"
+					onClick={onDelete}
+				>
+					<Trash2 className="w-3.5 h-3.5 mr-2" />
+					Delete Field
+				</Button>
+			</div>
 		</div>
 	);
 }
