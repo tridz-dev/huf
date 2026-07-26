@@ -535,6 +535,36 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
         </Card>
       )}
 
+      {watchKnowledgeType === 'zvec' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>zvec Settings</CardTitle>
+            <CardDescription>
+              Embedded vector database — runs in-process, stores to a portable file, no server needed
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <h4 className="text-sm font-medium mb-2">Advanced Configuration</h4>
+            <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+          </CardContent>
+        </Card>
+      )}
+
+      {watchKnowledgeType === 'redis' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Redis Connection Settings</CardTitle>
+            <CardDescription>
+              Connect HUF Knowledge to Redis with RediSearch vector search
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+
+            <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Chunking Settings</CardTitle>
