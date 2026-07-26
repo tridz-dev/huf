@@ -28,6 +28,61 @@ def _require_read():
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 
+def _import_permitted_roles() -> list[str]:
+	"""Frappe roles allowed to import into generated HF DocTypes.
+
+	Mirrors the HUF capability gate: every default Huf role holding the
+	write capability maps to a backing Frappe role that receives an
+	import-enabled DocPerm on generated tables.
+	"""
+	roles = {SYSTEM_MANAGER}
+	for huf_role, capabilities in DEFAULT_ROLE_CAPABILITIES.items():
+		if _WRITE_CAPABILITY in capabilities:
+			frappe_role = HUF_ROLE_FRAPPE_ROLE_MAP.get(huf_role)
+			if frappe_role:
+				roles.add(frappe_role)
+	return [r for r in sorted(roles) if r == SYSTEM_MANAGER or frappe.db.exists("Role", r)]
+
+
+def _table_permission_row(role: str) -> dict:
+	return {
+		"role": role,
+		"read": 1,
+		"write": 1,
+		"create": 1,
+		"delete": 1,
+		"print": 1,
+		"email": 1,
+		"share": 1,
+		"import": 1,
+	}
+
+
+def _ensure_import_enabled(doctype_name: str) -> None:
+	"""Retrofit allow_import + import DocPerm onto a generated HF DocType.
+
+	Tables created before bulk-import support lack these flags, and
+	Frappe's Data Import validates against them.
+	"""
+	dt = frappe.get_doc("DocType", doctype_name)
+	changed = False
+	if not dt.allow_import:
+		dt.allow_import = 1
+		changed = True
+
+	existing = {p.role: p for p in dt.permissions}
+	for role in _import_permitted_roles():
+		perm = existing.get(role)
+		if perm is None:
+			dt.append("permissions", _table_permission_row(role))
+			changed = True
+		elif not perm.get("import"):
+			perm.set("import", 1)
+			changed = True
+
+	if changed:
+		dt.save(ignore_permissions=True)
+
 @frappe.whitelist()
 def create_data_table(
 	table_name: str,
@@ -260,55 +315,158 @@ def get_table_schema(name: str) -> dict:
 
 
 @frappe.whitelist()
-def get_table_records(
-	doctype_name: str,
-	fields: str | list[str] = "*",
-	filters: str | list | None = None,
-	search: str | None = None,
-	limit: int = 20,
-	start: int = 0,
-	order_by: str = "modified desc",
-) -> dict:
-	"""Get records for a table, supporting a unified search text across search_fields.
+def get_bulk_import_template_url(table_id: str, export_records: bool | str = False) -> dict:
+	"""Generate a CSV import template for a Huf data table and return its download URL.
+
+	Uses Frappe's Data Import exporter. The template is stored as a private
+	File so the SPA can download it through the authenticated file route.
+
+	Requires: flows.use (blank template) or flows.manage (export_records=True)
+	"""
+	export_data = bool(frappe.parse_json(export_records))
+	if export_data:
+		_require_write()
+	else:
+		_require_read()
+
+	registry = frappe.get_doc("Huf Data Table", table_id)
+	doctype_name = registry.doctype_name
+	meta = frappe.get_meta(doctype_name)
+
+	fieldnames = ["name"] + [
+		f.fieldname
+		for f in meta.fields
+		if f.fieldtype not in (display_fieldtypes + no_value_fields + table_fields)
+	]
+
+	# Imported lazily: pulls in xlsx/openpyxl chains not needed elsewhere.
+	from frappe.core.doctype.data_import.exporter import Exporter
+	from frappe.utils.csvutils import to_csv
+
+	exporter = Exporter(
+		doctype_name,
+		export_fields={doctype_name: fieldnames},
+		export_data=export_data,
+		file_type="CSV",
+	)
+	csv_content = to_csv(exporter.get_csv_array_for_export())
+
+	file_name = f"{registry.table_name}-import-template.csv"
+	file_doc = frappe.get_doc(
+		{
+			"doctype": "File",
+			"file_name": file_name,
+			"content": csv_content,
+			"is_private": 1,
+		}
+	)
+	file_doc.insert(ignore_permissions=True)
+
+	return {
+		"success": True,
+		"data": {
+			"file_url": file_doc.file_url,
+			"file_name": file_doc.file_name,
+		},
+	}
+
+
+@frappe.whitelist()
+def start_table_bulk_import(table_id: str, file_url: str) -> dict:
+	"""Create a Frappe Data Import for a Huf data table and enqueue the import.
+
+	Equivalent to Frappe's `form_start_import`, but gated on the HUF
+	`flows.manage` capability instead of Data Import DocType DocPerms.
+
+	Requires: flows.manage
+	"""
+	_require_write()
+
+	registry = frappe.get_doc("Huf Data Table", table_id)
+	doctype_name = registry.doctype_name
+
+	if not frappe.db.exists("File", {"file_url": file_url}):
+		frappe.throw(_("Import file not found: {0}").format(file_url))
+
+	# Older tables predate allow_import; retrofit before Data Import validates.
+	_ensure_import_enabled(doctype_name)
+
+	data_import = frappe.get_doc(
+		{
+			"doctype": "Data Import",
+			"reference_doctype": doctype_name,
+			"import_type": "Insert New Records",
+			"import_file": file_url,
+			"mute_emails": 1,
+		}
+	)
+	# Bypass Data Import DocType DocPerms (System Manager only); the HUF
+	# capability gate above is the authorization boundary. Validation of the
+	# target DocType's allow_import/import DocPerm still runs in validate().
+	data_import.insert(ignore_permissions=True)
+
+	enqueued = data_import.start_import()
+
+	return {
+		"success": True,
+		"data": {
+			"import_name": data_import.name,
+			"status": data_import.status,
+			"enqueued": bool(enqueued),
+		},
+	}
+
+
+@frappe.whitelist()
+def get_table_bulk_import_status(import_name: str) -> dict:
+	"""Get status and error details for a Data Import against a Huf data table.
 
 	Requires: flows.use
 	"""
 	_require_read()
 
-	if isinstance(fields, str):
-		try:
-			fields = json.loads(fields)
-		except ValueError:
-			fields = [fields]
-	if isinstance(filters, str) and filters:
-		filters = json.loads(filters)
+	data_import = frappe.get_doc("Data Import", import_name)
+	if not frappe.db.exists("Huf Data Table", {"doctype_name": data_import.reference_doctype}):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-	or_filters = []
-	if search and search.strip():
-		search_text = search.strip()
-		meta = frappe.get_meta(doctype_name)
-		if meta.search_fields:
-			s_fields = [sf.strip() for sf in meta.search_fields.split(",")]
-			for sf in s_fields:
-				or_filters.append([sf, "like", f"%{search_text}%"])
-		
-		name_field = meta.title_field or "name"
-		if name_field not in (meta.search_fields or ""):
-			or_filters.append([name_field, "like", f"%{search_text}%"])
-
-	records = frappe.get_list(
-		doctype_name,
-		fields=fields,
-		filters=filters,
-		or_filters=or_filters,
-		limit_page_length=limit + 1,
-		limit_start=start,
-		order_by=order_by,
+	log_counts = frappe.get_all(
+		"Data Import Log",
+		fields=[{"COUNT": "*", "as": "count"}, "success"],
+		filters={"data_import": import_name},
+		group_by="success",
 	)
 
-	has_more = len(records) > limit
-	if has_more:
-		records = records[:limit]
+	success_count = 0
+	failed_count = 0
+	for log in log_counts:
+		if log.get("success"):
+			success_count = log.get("count")
+		else:
+			failed_count = log.get("count")
 
-	return {"items": records, "hasMore": has_more}
+	error_logs = frappe.get_all(
+		"Data Import Log",
+		fields=["row_indexes", "messages", "exception"],
+		filters={"data_import": import_name, "success": 0},
+		order_by="log_index",
+		limit_page_length=50,
+	)
 
+	return {
+		"success": True,
+		"data": {
+			"import_name": import_name,
+			"status": data_import.status,
+			"success": success_count,
+			"failed": failed_count,
+			"total": data_import.payload_count,
+			"errors": [
+				{
+					"row_indexes": log.row_indexes,
+					"messages": log.messages,
+					"exception": log.exception,
+				}
+				for log in error_logs
+			],
+		},
+	}
