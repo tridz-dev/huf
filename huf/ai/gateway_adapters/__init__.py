@@ -18,6 +18,7 @@ from huf.ai.gateway_adapters.types import (
 	OutboundDelivery,
 )
 from huf.ai.gateway_adapters.vk import VKGatewayAdapter
+from huf.ai.gateway_adapters.wecom import WeComGatewayAdapter
 
 __all__ = [
 	"GatewayAdapter",
@@ -31,5 +32,6 @@ __all__ = [
 	"NormalizedGatewayEvent",
 	"OutboundDelivery",
 	"VKGatewayAdapter",
+	"WeComGatewayAdapter",
 	"assert_adapter_conforms",
 ]
