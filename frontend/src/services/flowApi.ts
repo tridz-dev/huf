@@ -39,7 +39,7 @@ export interface BackendFlowGraph {
 
 export interface BackendNode {
     id: string;
-    type: 'trigger.webhook' | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval' | 'condition' | 'http_request' | 'transform' | 'loop' | 'end';
+    type: 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval' | 'condition' | 'http_request' | 'transform' | 'loop' | 'end';
     config: Record<string, unknown>;
     /** Frontend-only: stored for visual layout, ignored by engine */
     _position?: { x: number; y: number };
@@ -102,6 +102,19 @@ export interface FlowRunDetail {
     last_agent_run: string | null;
     started_at: string | null;
     completed_at: string | null;
+}
+
+/** Pending human approval (from get_pending_approvals endpoint) */
+export interface PendingApproval {
+    flow_run_id: string;
+    flow_id: string;
+    current_node_id: string;
+    title: string;
+    instructions: string;
+    approval_type: string;
+    started_at: string | null;
+    waiting_since: string | null;
+    view_link: string;
 }
 
 // ─── Flow Definition APIs ────────────────────────────────────────────
@@ -279,5 +292,15 @@ export async function resumeFlowRun(
         return result.message as { flow_run_id: string; status: string; current_node_id: string };
     } catch (error) {
         handleFrappeError(error, `Error resuming flow run ${flowRunId}`);
+    }
+}
+
+/** List flow runs waiting for human approval */
+export async function getPendingApprovals(): Promise<PendingApproval[]> {
+    try {
+        const result = await call.get('huf.ai.flow_api.get_pending_approvals');
+        return result.message as PendingApproval[];
+    } catch (error) {
+        handleFrappeError(error, 'Error fetching pending approvals');
     }
 }
