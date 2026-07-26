@@ -52,7 +52,7 @@ function AgentSettingsTab() {
     }
     setSaving(true);
     try {
-      const data: AgentSettingsDoc = {
+      const data: Partial<AgentSettingsDoc> = {
         default_provider: defaultProvider || undefined,
         default_model: defaultModel || undefined,
       };
