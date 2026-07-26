@@ -25,6 +25,7 @@ export type NewAgentMessageEvent = {
     generated_video?: string;
     agent_run_id?: string;
     conversation_index?: number;
+    injected_memories?: string[];
 };
 
 export type AgentRunStatusEvent = {

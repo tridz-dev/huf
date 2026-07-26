@@ -158,6 +158,16 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_load_conversation_data"
                     elif function_doc.types == "Perplexity Search":
                         function_path = "huf.ai.sdk_tools.handle_perplexity_search"
+                    elif function_doc.types == "Save Memory Record":
+                        function_path = "huf.ai.memory_tools.handle_save_memory_record"
+                    elif function_doc.types == "Search Memory Records":
+                        function_path = "huf.ai.memory_tools.handle_search_memory_records"
+                    elif function_doc.types == "Get Memory Record":
+                        function_path = "huf.ai.memory_tools.handle_get_memory_record"
+                    elif function_doc.types == "Archive Memory Record":
+                        function_path = "huf.ai.memory_tools.handle_archive_memory_record"
+                    elif function_doc.types == "Promote Memory to Knowledge":
+                        function_path = "huf.ai.memory_tools.handle_promote_memory_to_knowledge"
 
                     else:
                         continue
@@ -273,6 +283,38 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                 }
             )
             if tool: tools.append(tool)
+
+    if getattr(agent, "enable_memory", False):
+        existing_tool_names = {getattr(t, "name", "") for t in tools}
+        memory_tool_specs = []
+        if getattr(agent, "enable_memory_search_tool", True):
+            memory_tool_specs.append(("search_memory_records", "Search Memory Records"))
+        if getattr(agent, "enable_memory_write_tool", True):
+            memory_tool_specs.append(("save_memory_record", "Save Memory Record"))
+
+        for tool_name, tool_type in memory_tool_specs:
+            if tool_name in existing_tool_names:
+                continue
+            function_name = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "name")
+            if not function_name:
+                continue
+            try:
+                function_doc = frappe.get_doc("Agent Tool Function", function_name)
+                params = {}
+                if function_doc.params:
+                    params = json.loads(function_doc.params)
+                tool = create_function_tool(
+                    function_doc.tool_name,
+                    function_doc.description,
+                    function_doc.function_path,
+                    params,
+                    tool_type=tool_type,
+                )
+                if tool:
+                    tools.append(tool)
+                    existing_tool_names.add(tool_name)
+            except Exception as e:
+                frappe.logger("huf").debug(f"Error wiring memory tool {tool_name}: {e!s}")
 
     existing_types = [t.name for t in tools] if tools else []
     if "get_result_context" not in existing_types:

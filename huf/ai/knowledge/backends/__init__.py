@@ -2,10 +2,11 @@
 Knowledge Backend Abstraction
 
 This module provides a unified interface for knowledge storage backends.
-Supported: SQLite FTS (keyword search), SQLite Vec (vector search), ChromaDB (vector search), PGVector (vector search), Zvec (vector search), Pinecone (vector search)
+Supported: SQLite FTS (keyword search), SQLite Vec (vector search), SQLite Hybrid (RRF), ChromaDB (vector search), PGVector (vector search), Zvec (vector search), Pinecone (vector search)
 
 """
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -17,6 +18,7 @@ from frappe import _
 _BUILTIN_BACKENDS = {
 	"sqlite_fts": "huf.ai.knowledge.backends.sqlite_fts.SQLiteFTSBackend",
 	"sqlite_vec": "huf.ai.knowledge.backends.sqlite_vec_backend.SQLiteVecBackend",
+	"sqlite_hybrid": "huf.ai.knowledge.backends.sqlite_hybrid.SQLiteHybridBackend",
 	"chroma": "huf.ai.knowledge.backends.chroma_backend.ChromaBackend",
 	"pgvector": "huf.ai.knowledge.backends.pgvector_backend.PGVectorBackend",
 	"zvec": "huf.ai.knowledge.backends.zvec_backend.ZvecBackend",
@@ -24,6 +26,15 @@ _BUILTIN_BACKENDS = {
 	"faiss": "huf.ai.knowledge.backends.faiss_backend.FaissBackend",
 	"pinecone": "huf.ai.knowledge.backends.pinecone_backend.PineconeBackend",
 }
+
+_SAFE_FILTER_KEY = re.compile(r"^[A-Za-z0-9_]+$")
+
+
+def validate_filter_key(key: str) -> str:
+	"""Validate metadata filter keys before they are interpolated into SQL JSON paths."""
+	if not _SAFE_FILTER_KEY.match(key or ""):
+		raise ValueError(f"Invalid filter key: {key!r}")
+	return key
 
 
 @dataclass

@@ -260,6 +260,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
       generatedImage: event.generated_image,
       generatedAudio: event.generated_audio,
       generatedVideo: event.generated_video,
+      injected_memories: event.injected_memories,
       runStatus: undefined,
       error: undefined,
       versions: existing.versions.map((v) =>
@@ -278,6 +279,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
     generatedImage: event.generated_image,
     generatedAudio: event.generated_audio,
     generatedVideo: event.generated_video,
+    injected_memories: event.injected_memories,
     versions: [
       {
         id: event.message_id,
@@ -502,6 +504,7 @@ export function mergeConversationItemsIntoMessages(
       voiceMessage: item.voiceMessage,
       sttModel: item.sttModel,
       status: item.status,
+      injected_memories: item.injectedMemories,
       versions: [
         {
           id: item.id,
@@ -574,4 +577,3 @@ export function mergeConversationItemsIntoMessages(
 
   return [...mapped, ...remainingTempMessages];
 }
-

@@ -10,7 +10,7 @@ from .retriever import knowledge_search, get_search_diagnostics
 def create_knowledge_search_tool(agent_name: str) -> Optional[dict]:
 	"""
 	Create a knowledge_search tool definition for an agent.
-	
+
 	This tool allows agents to search knowledge sources.
 	"""
 	# Get all knowledge sources for this agent (valid for search)
@@ -18,21 +18,21 @@ def create_knowledge_search_tool(agent_name: str) -> Optional[dict]:
 		agent = frappe.get_doc("Agent", agent_name)
 	except Exception:
 		return None
-		
+
 	available_sources = []
 	for ak in agent.get("agent_knowledge", []):
 		# Both Optional and Mandatory sources can be searched via tool
 		# if the agent needs more specific info
 		available_sources.append(f"{ak.knowledge_source} ({ak.mode})")
-	
+
 	if not available_sources:
 		return None
-	
+
 	# Build tool definition
 	return {
 		"tool_name": "knowledge_search",
 		"description": f"""Search the agent's knowledge base for relevant information.
-		
+
 Available knowledge sources: {', '.join(available_sources)}
 
 Use this tool when you need to find specific information from the knowledge base.
@@ -59,6 +59,13 @@ Always cite the source when using information from search results.""",
 				"required": False,
 				"description": "Maximum number of results to return (default: 5)",
 			},
+			{
+				"label": "Filters",
+				"fieldname": "filters",
+				"type": "json",
+				"required": False,
+				"description": "Optional dictionary of metadata filters (e.g. {\"author\": \"safwan\"}). Keys can match columns or custom metadata fields.",
+			},
 		],
 	}
 
@@ -68,19 +75,20 @@ def handle_knowledge_search(
 	query: str,
 	knowledge_source: Optional[str] = None,
 	top_k: int = 5,
+	filters: Optional[dict] = None,
 ) -> str:
 	"""
 	Handle knowledge_search tool call from agent.
-	
+
 	Returns formatted search results.
 	"""
 	# Get allowed sources
 	agent = frappe.get_doc("Agent", agent_name)
 	allowed_sources = [
-		ak.knowledge_source 
+		ak.knowledge_source
 		for ak in agent.get("agent_knowledge", [])
 	]
-	
+
 	# Validate requested source
 	if knowledge_source:
 		if knowledge_source not in allowed_sources:
@@ -101,22 +109,30 @@ def handle_knowledge_search(
 			# Let's default to the highest priority one.
 			# Sort by priority
 			sorted_knowledge = sorted(
-				agent.get("agent_knowledge", []), 
-				key=lambda x: x.priority or 0, 
+				agent.get("agent_knowledge", []),
+				key=lambda x: x.priority or 0,
 				reverse=True
 			)
 			if sorted_knowledge:
 				knowledge_source = sorted_knowledge[0].knowledge_source
-	
+
 	if not knowledge_source:
 		return "Error: No knowledge sources available for this agent."
 
 	# Perform search (ignore_permissions=True: agent has explicit knowledge linkage)
 	try:
+		if isinstance(filters, str):
+			import json
+			try:
+				filters = json.loads(filters)
+			except Exception:
+				filters = None
+
 		results = knowledge_search(
 			query=query,
 			knowledge_source=knowledge_source,
 			top_k=top_k,
+			filters=filters,
 			ignore_permissions=True,
 		)
 
@@ -181,14 +197,14 @@ def handle_get_knowledge_sources(agent_name: str) -> str:
 	try:
 		agent = frappe.get_doc("Agent", agent_name)
 		sources = []
-		
+
 		for ak in agent.get("agent_knowledge", []):
 			sources.append(f"- {ak.knowledge_source} (Mode: {ak.mode}, Priority: {ak.priority})")
-			
+
 		if not sources:
 			return "No knowledge sources assigned to this agent."
-			
+
 		return "Available Knowledge Sources:\n" + "\n".join(sources)
-		
+
 	except Exception as e:
 		return f"Error retrieving knowledge sources: {str(e)}"

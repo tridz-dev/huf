@@ -231,10 +231,29 @@ class SQLiteFTSBackend(KnowledgeBackend):
 		# Escape special FTS5 characters
 		safe_query = self._escape_fts_query(query)
 
+		from . import validate_filter_key
+
+		filter_clauses = []
+		filter_values: list[Any] = []
+		if filters:
+			top_level_cols = ["input_id", "input_type", "source_title", "chunk_index"]
+			for key, value in filters.items():
+				if key in top_level_cols:
+					filter_clauses.append(f"c.{key} = ?")
+				else:
+					validate_filter_key(key)
+					filter_clauses.append(f"json_extract(c.metadata, '$.{key}') = ?")
+				filter_values.append(value)
+
+		where_sql = ""
+		if filter_clauses:
+			where_sql = " AND " + " AND ".join(filter_clauses)
+
 		# BM25 column weights from config, cast to float so they are safe to
 		# interpolate as numeric literals (never raw config strings).
 		text_weight = float(self._config.get("fts_bm25_text_weight", 1.0))
 		title_weight = float(self._config.get("fts_bm25_title_weight", 0.75))
+		params: list[Any] = [safe_query] + filter_values + [top_k]
 
 		with self._get_connection(readonly=True) as conn:
 			cursor = conn.execute(
@@ -249,10 +268,11 @@ class SQLiteFTSBackend(KnowledgeBackend):
 				FROM chunks_fts
 				JOIN chunks c ON chunks_fts.rowid = c.rowid
 				WHERE chunks_fts MATCH ?
+				{where_sql}
 				ORDER BY score
 				LIMIT ?
 			""",
-				(safe_query, top_k),
+				params,
 			)
 
 			results = []
