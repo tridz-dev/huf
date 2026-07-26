@@ -51,7 +51,6 @@ def get_users() -> list[dict]:
 		"Huf User Role",
 		fields=["user", "full_name", "huf_role", "enabled", "invited_by", "invited_on"],
 		order_by="creation asc",
-		ignore_permissions=True,
 	)
 
 	# Attach email separately (full_name is fetched, email is the user itself
@@ -93,7 +92,7 @@ def invite_user(email: str, full_name: str, huf_role: str) -> dict:
 			"send_welcome_email": 0,
 			"user_type": "System User",
 		})
-		user_doc.insert(ignore_permissions=True)
+		user_doc.insert()
 
 	# Create Huf User Role (controller syncs the Frappe role).
 	if frappe.db.exists("Huf User Role", {"user": email}):
@@ -109,8 +108,7 @@ def invite_user(email: str, full_name: str, huf_role: str) -> dict:
 		"invited_by": frappe.session.user,
 		"invited_on": now_datetime(),
 	})
-	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
+	doc.insert()
 
 	return doc.as_dict()
 
@@ -131,10 +129,10 @@ def update_user_role(user: str, huf_role: str) -> dict:
 	if not frappe.db.exists("Huf User Role", {"user": user}):
 		frappe.throw(_("User '{0}' has no Huf User Role record.").format(user))
 
-	doc = frappe.get_doc("Huf User Role", user)
+	name = frappe.db.get_value("Huf User Role", {"user": user}, "name")
+	doc = frappe.get_doc("Huf User Role", name)
 	doc.huf_role = huf_role
-	doc.save(ignore_permissions=True)
-	frappe.db.commit()
+	doc.save()
 
 	_bust_cache(user)
 	return doc.as_dict()
@@ -153,10 +151,10 @@ def set_user_enabled(user: str, enabled: int) -> dict:
 	if not frappe.db.exists("Huf User Role", {"user": user}):
 		frappe.throw(_("User '{0}' has no Huf User Role record.").format(user))
 
-	doc = frappe.get_doc("Huf User Role", user)
+	name = frappe.db.get_value("Huf User Role", {"user": user}, "name")
+	doc = frappe.get_doc("Huf User Role", name)
 	doc.enabled = int(enabled)
-	doc.save(ignore_permissions=True)
-	frappe.db.commit()
+	doc.save()
 
 	_bust_cache(user)
 	return doc.as_dict()
@@ -182,7 +180,6 @@ def get_huf_roles() -> list[dict]:
 		"Huf Role",
 		fields=["role_name", "description", "is_system_role", "frappe_role"],
 		order_by="creation asc",
-		ignore_permissions=True,
 	)
 
 	for role in roles:
@@ -190,7 +187,6 @@ def get_huf_roles() -> list[dict]:
 			"Huf Role Permission",
 			filters={"parent": role["role_name"]},
 			fields=["capability", "label"],
-			ignore_permissions=True,
 		)
 		role["capabilities"] = [r.capability for r in cap_rows]
 
@@ -234,8 +230,7 @@ def create_huf_role(role_name: str, description: str, capabilities: list) -> dic
 	for cap in capabilities:
 		doc.append("permissions", {"capability": cap})
 
-	doc.insert(ignore_permissions=True)
-	frappe.db.commit()
+	doc.insert()
 	return doc.as_dict()
 
 
@@ -265,6 +260,5 @@ def update_huf_role(role_name: str, capabilities: list, description: str = None)
 	for cap in capabilities:
 		doc.append("permissions", {"capability": cap})
 
-	doc.save(ignore_permissions=True)
-	frappe.db.commit()
+	doc.save()
 	return doc.as_dict()

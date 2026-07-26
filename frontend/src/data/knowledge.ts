@@ -6,9 +6,29 @@
 export const knowledgeTypes = [
   { label: 'SQLite FTS', value: 'sqlite_fts' },
   { label: 'SQLite Vec', value: 'sqlite_vec' },
+  { label: 'ChromaDB', value: 'chroma' },
 ] as const;
 
 export type KnowledgeTypeOption = (typeof knowledgeTypes)[number]['value'];
+
+export const VECTOR_KNOWLEDGE_TYPES = ['sqlite_vec', 'chroma'] as const;
+
+export function isVectorKnowledgeType(type: string): boolean {
+  return (VECTOR_KNOWLEDGE_TYPES as readonly string[]).includes(type);
+}
+
+export const knowledgeTypeLabels: Record<string, string> = {
+  sqlite_fts: 'FTS',
+  sqlite_vec: 'Vec',
+  chroma: 'Chroma',
+};
+
+export const chromaModes = [
+  { label: 'File', value: 'File' },
+  { label: 'Server', value: 'Server' },
+] as const;
+
+export type ChromaModeOption = (typeof chromaModes)[number]['value'];
 
 export const knowledgeScopes = [
   { label: 'Site', value: 'Site' },

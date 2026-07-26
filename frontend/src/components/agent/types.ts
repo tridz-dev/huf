@@ -11,6 +11,7 @@ export const agentFormSchema = z.object({
   persist_conversation: z.boolean(),
   persist_user_history: z.boolean(),
   enable_multi_run: z.boolean(),
+  run_immediately: z.boolean().optional(),
   description: z.string().optional(),
   instructions: z.string(),
 
@@ -39,10 +40,18 @@ export const agentFormSchema = z.object({
   context_strategy: z.string().optional(),
   summary_model: z.string().optional(),
   summary_ratio: z.number().optional(),
+  summary_prompt_mode: z.enum(["Local", "Template"]).default("Local"),
+  summary_prompt_template: z.string().optional(),
+  summary_prompt_version_locked: z.boolean().optional(),
+  summary_template_version_at_attach: z.number().optional(),
+  summary_prompt: z.string().optional(),
   history_limit: z.number().optional(),
   max_knowledge_tokens: z.number().optional(),
   max_turns: z.number().optional(),
+  max_context_chars: z.number().optional(),
   enable_conversation_data: z.boolean().optional(),
+  inject_conversation_data: z.boolean().optional(),
+  conversation_data_api_permission: z.string().optional(),
   autonaming_of_conversation_title: z.boolean().optional(),
 
   agent_color: z
@@ -59,12 +68,23 @@ export const agentFormSchema = z.object({
   tts_model: z.string().optional(),
   tts_voice: z.string().optional(),
   stt_model: z.string().optional(),
+
+  allow_file_upload: z.boolean().optional(),
+  enable_ocr: z.boolean().optional(),
+  max_upload_size_mb: z.number().int().positive().optional(),
 }).superRefine((values, ctx) => {
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["agent_prompt"],
       message: 'Select an Agent Prompt when using Template mode',
+    });
+  }
+  if (values.summary_prompt_mode === "Template" && !values.summary_prompt_template?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["summary_prompt_template"],
+      message: 'Select an Agent Summary Prompt when using Template mode for Summary Prompt',
     });
   }
 });

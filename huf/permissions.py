@@ -54,6 +54,7 @@ CAPABILITIES: dict[str, str] = {
 	"system.providers.manage": "Manage AI Providers",
 	"system.models.manage": "Manage AI Models",
 	"system.mcp.manage": "Manage MCP Servers",
+	"system.integrations.manage": "Manage Integrations",
 	"system.settings.manage": "Manage Settings",
 	# --- Users & Roles ---
 	"users.invite": "Invite Users",
@@ -107,6 +108,13 @@ HUF_ROLE_FRAPPE_ROLE_MAP: dict[str, str] = {
 	"Huf Viewer": "Huf Viewer",
 }
 
+# Standard Frappe role constants.
+# Prefer these over string literals so renames/customizations are localized.
+SYSTEM_MANAGER = "System Manager"
+ADMINISTRATOR = "Administrator"
+GUEST = "Guest"
+ALL_ROLES = "All"
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -123,7 +131,7 @@ def _bust_cache(user: str) -> None:
 
 
 def _is_system_manager(user: str) -> bool:
-	return "System Manager" in frappe.get_roles(user)
+	return SYSTEM_MANAGER in frappe.get_roles(user)
 
 
 # ---------------------------------------------------------------------------
@@ -136,14 +144,27 @@ def get_user_huf_role(user: str | None = None) -> str | None:
 	if not user:
 		user = frappe.session.user
 
-	if user == "Administrator":
+	if user == ADMINISTRATOR or _is_system_manager(user):
 		return "Huf Admin"
 
-	return frappe.db.get_value(
+	huf_role = frappe.db.get_value(
 		"Huf User Role",
 		{"user": user, "enabled": 1},
 		"huf_role",
 	)
+	if huf_role:
+		return huf_role
+
+	# Fallback: check standard Frappe Roles if no Huf User Role record exists
+	user_roles = frappe.get_roles(user)
+	if "Huf Manager" in user_roles:
+		return "Huf Manager"
+	if "Huf User" in user_roles:
+		return "Huf User"
+	if "Huf Viewer" in user_roles:
+		return "Huf Viewer"
+
+	return None
 
 
 def get_user_capabilities(user: str | None = None) -> list[str]:
@@ -157,7 +178,7 @@ def get_user_capabilities(user: str | None = None) -> list[str]:
 		user = frappe.session.user
 
 	# Administrator / System Manager get every capability.
-	if user == "Administrator" or _is_system_manager(user):
+	if user == ADMINISTRATOR or _is_system_manager(user):
 		return list(CAPABILITIES.keys())
 
 	cached = frappe.cache().get_value(_cache_key(user))

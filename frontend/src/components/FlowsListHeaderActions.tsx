@@ -25,7 +25,7 @@ export function FlowsListHeaderActions() {
   };
 
   return (
-    <Button onClick={handleNewFlow} size="sm" disabled={creating}>
+    <Button variant="display" onClick={handleNewFlow} size="sm" disabled={creating}>
       {creating ? (
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
       ) : (

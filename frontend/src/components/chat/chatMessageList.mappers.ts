@@ -1,5 +1,5 @@
-import type { ToolCallEvent, NewAgentMessageEvent } from '@/hooks/useChatSocket';
-import type { ChatMessage } from '@/services/chatApi';
+import type { ToolCallEvent, NewAgentMessageEvent, AgentRunStatusEvent } from '@/hooks/useChatSocket';
+import type { AgentRunStatusResponse, ChatMessage, PendingConversationRun } from '@/services/chatApi';
 import { mapToolStatusToState } from './utils';
 import type { MessageType } from './types';
 
@@ -133,18 +133,138 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
   return [...prev, newMessage];
 }
 
+/** Canonical run lifecycle statuses match the Agent Run doctype Select options. */
+const CANONICAL_RUN_STATUSES: Record<string, AgentRunStatusEvent['status']> = {
+  queued: 'Queued',
+  started: 'Started',
+  success: 'Success',
+  failed: 'Failed',
+};
+
+function normalizeAgentRunStatusEvent(raw: Record<string, unknown>): AgentRunStatusEvent {
+  const rawStatus = typeof raw.status === 'string' ? raw.status : '';
+  const status =
+    CANONICAL_RUN_STATUSES[rawStatus.trim().toLowerCase()] ??
+    (rawStatus as AgentRunStatusEvent['status']) ??
+    'Queued';
+  return {
+    ...raw,
+    type: 'agent_run_status',
+    agent_run_id: (raw.agent_run_id as string) ?? '',
+    conversation_id: (raw.conversation_id as string) ?? '',
+    session_id: raw.session_id as string | undefined,
+    status,
+    response: raw.response as string | undefined,
+    error: raw.error as string | undefined,
+    agent_message_id: raw.agent_message_id as string | undefined,
+    sequence: typeof raw.sequence === 'number' ? raw.sequence : undefined,
+  } as AgentRunStatusEvent;
+}
+
+export function upsertAgentRunStatusFromSocket(
+  prev: MessageType[],
+  rawEvent: AgentRunStatusEvent | Record<string, unknown>
+): MessageType[] {
+  const event = normalizeAgentRunStatusEvent(
+    typeof rawEvent?.type === 'string' ? (rawEvent as Record<string, unknown>) : (rawEvent as Record<string, unknown>)
+  );
+
+  if (!event.agent_run_id) return prev;
+
+  const runIndex = prev.findIndex((msg) => msg.key === event.agent_run_id);
+
+  const createPendingMessage = (content: string = ''): MessageType => ({
+    key: event.agent_run_id,
+    from: 'assistant',
+    runStatus: event.status,
+    versions: [{ id: event.agent_run_id, content }],
+  });
+
+  if (event.status === 'Queued' || event.status === 'Started') {
+    if (runIndex >= 0) {
+      const updated = [...prev];
+      updated[runIndex] = { ...updated[runIndex], runStatus: event.status };
+      return updated;
+    }
+    return [...prev, createPendingMessage()];
+  }
+
+  if (event.status === 'Success') {
+    if (runIndex < 0) {
+      // If the persisted message already reconciled with this run, don't create a duplicate.
+      if (event.agent_message_id && prev.some((msg) => msg.versions.some((v) => v.id === event.agent_message_id))) {
+        return prev;
+      }
+      return [...prev, createPendingMessage(event.response ?? '')];
+    }
+    const updated = [...prev];
+    const existing = updated[runIndex];
+    updated[runIndex] = {
+      ...existing,
+      runStatus: 'Success',
+      versions: existing.versions.map((v, i) =>
+        i === 0 ? { ...v, content: event.response ?? v.content } : v
+      ),
+    };
+    return updated;
+  }
+
+  if (event.status === 'Failed') {
+    let targetIndex = runIndex;
+    if (targetIndex < 0 && event.agent_message_id) {
+      targetIndex = prev.findIndex(
+        (msg) =>
+          msg.key === event.agent_message_id ||
+          msg.versions.some((v) => v.id === event.agent_message_id)
+      );
+    }
+    if (targetIndex < 0) {
+      return [
+        ...prev,
+        {
+          key: event.agent_run_id,
+          from: 'assistant',
+          runStatus: 'Failed',
+          error: event.error,
+          versions: [{ id: event.agent_run_id, content: event.error ?? '' }],
+        },
+      ];
+    }
+    const updated = [...prev];
+    updated[targetIndex] = {
+      ...updated[targetIndex],
+      runStatus: 'Failed',
+      error: event.error,
+    };
+    return updated;
+  }
+
+  return prev;
+}
+
 export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgentMessageEvent): MessageType[] {
-  const messageIndex = prev.findIndex((msg) => msg.versions.some((v) => v.id === event.message_id));
+  let messageIndex = prev.findIndex((msg) => msg.versions.some((v) => v.id === event.message_id));
+
+  if (messageIndex < 0 && event.agent_run_id) {
+    messageIndex = prev.findIndex((msg) => msg.key === event.agent_run_id);
+  }
 
   if (messageIndex >= 0) {
     const updated = [...prev];
+    const existing = updated[messageIndex];
     updated[messageIndex] = {
-      ...updated[messageIndex],
+      ...existing,
+      key: event.message_id,
       kind: event.kind,
       generatedImage: event.generated_image,
       generatedAudio: event.generated_audio,
-      versions: updated[messageIndex].versions.map((v) =>
-        v.id === event.message_id ? { ...v, content: event.content || v.content } : v
+      generatedVideo: event.generated_video,
+      runStatus: undefined,
+      error: undefined,
+      versions: existing.versions.map((v) =>
+        v.id === event.message_id || v.id === event.agent_run_id
+          ? { ...v, id: event.message_id, content: event.content ?? v.content }
+          : v
       ),
     };
     return updated;
@@ -156,6 +276,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
     kind: event.kind,
     generatedImage: event.generated_image,
     generatedAudio: event.generated_audio,
+    generatedVideo: event.generated_video,
     versions: [
       {
         id: event.message_id,
@@ -164,6 +285,190 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
     ],
   };
   return [...prev, newMessage];
+}
+
+/**
+ * Apply a polled agent run status as the same state transition the socket
+ * handlers would produce. Reuses the socket mappers so the reconciliation
+ * logic stays in one place:
+ * - the run status event updates the pending bubble (keyed by agent_run_id);
+ * - on Success with an agent_message_id, the follow-up new message event
+ *   reconciles the bubble with the persisted Agent Message.
+ */
+export function applyPolledRunStatus(
+  prev: MessageType[],
+  poll: AgentRunStatusResponse,
+  conversationId: string
+): MessageType[] {
+  // Ignore status payloads that belong to another conversation.
+  if (poll.conversation_id && poll.conversation_id !== conversationId) {
+    return prev;
+  }
+
+  const eventConversationId = poll.conversation_id ?? conversationId;
+
+  const withStatus = upsertAgentRunStatusFromSocket(prev, {
+    type: 'agent_run_status',
+    agent_run_id: poll.agent_run_id,
+    conversation_id: eventConversationId,
+    status: poll.status,
+    response: poll.response ?? undefined,
+    error: poll.error ?? undefined,
+    agent_message_id: poll.agent_message_id ?? undefined,
+  });
+
+  if (poll.status === 'Success' && poll.agent_message_id) {
+    return upsertAgentMessageFromSocket(withStatus, {
+      type: 'new_agent_message',
+      conversation_id: eventConversationId,
+      message_id: poll.agent_message_id,
+      content: poll.response ?? '',
+      agent_run_id: poll.agent_run_id,
+    });
+  }
+
+  return withStatus;
+}
+
+const PENDING_RUN_STATUSES = new Set<MessageType['runStatus']>(['Queued', 'Started']);
+
+function isPendingRunMessage(msg: MessageType): boolean {
+  return msg.runStatus === 'Queued' || msg.runStatus === 'Started';
+}
+
+function normalizeRunStatus(status: string): 'Queued' | 'Started' | null {
+  const normalized = CANONICAL_RUN_STATUSES[status.trim().toLowerCase()];
+  if (normalized === 'Queued' || normalized === 'Started') {
+    return normalized;
+  }
+  return null;
+}
+
+export function filterMessagesForConversation(
+  conversationItems: ChatMessage[],
+  conversationId: string
+): ChatMessage[] {
+  return conversationItems.filter((item) => item.conversation === conversationId);
+}
+
+export function hasStaleConversationItems(
+  conversationItems: ChatMessage[],
+  conversationId: string
+): boolean {
+  return (
+    conversationItems.length > 0 &&
+    !conversationItems.some((item) => item.conversation === conversationId)
+  );
+}
+
+function messageContent(msg: MessageType): string {
+  return msg.versions[0]?.content?.trim() ?? '';
+}
+
+function hasPersistedUserForRun(
+  run: PendingConversationRun,
+  conversationItems: ChatMessage[],
+  prev: MessageType[]
+): boolean {
+  const prompt = run.prompt?.trim();
+  if (!prompt) {
+    return false;
+  }
+
+  if (
+    conversationItems.some(
+      (item) =>
+        !item.isAgent &&
+        (item.agentRun === run.name || item.content?.trim() === prompt)
+    )
+  ) {
+    return true;
+  }
+
+  return prev.some(
+    (msg) =>
+      msg.from === 'user' &&
+      (msg.agentRunId === run.name || messageContent(msg) === prompt)
+  );
+}
+
+function isHydratedUserMessageKey(key: string): boolean {
+  return key.startsWith('pending-user-');
+}
+
+/**
+ * Rebuild pending user/assistant bubbles from open Agent Run records.
+ * Idempotent: skips runs already represented in prev or conversationItems.
+ */
+export function mergePendingRunsIntoMessages(
+  prev: MessageType[],
+  runs: PendingConversationRun[],
+  conversationItems: ChatMessage[]
+): MessageType[] {
+  if (runs.length === 0) {
+    return prev;
+  }
+
+  const completedAssistantRunIds = new Set(
+    conversationItems
+      .filter((item) => item.isAgent && item.agentRun)
+      .map((item) => item.agentRun as string)
+  );
+
+  const runsToHydrate = runs
+    .map((run) => ({ run, status: normalizeRunStatus(run.status) }))
+    .filter((entry): entry is { run: PendingConversationRun; status: 'Queued' | 'Started' } =>
+      entry.status !== null
+    )
+    .filter(({ run }) => !completedAssistantRunIds.has(run.name))
+    .filter(({ run }) => !run.prompt?.startsWith('[SILENT_TRIGGER]'))
+    .sort((a, b) => {
+      const seqA = a.run.sequence ?? 0;
+      const seqB = b.run.sequence ?? 0;
+      if (seqA !== seqB) return seqA - seqB;
+      return a.run.name.localeCompare(b.run.name);
+    });
+
+  if (runsToHydrate.length === 0) {
+    return prev;
+  }
+
+  let result = [...prev];
+  const existingKeys = new Set(prev.map((msg) => msg.key));
+
+  for (const { run, status } of runsToHydrate) {
+    const prompt = run.prompt?.trim();
+    if (prompt && !hasPersistedUserForRun(run, conversationItems, result)) {
+      const userKey = `pending-user-${run.name}`;
+      if (!existingKeys.has(userKey)) {
+        result.push({
+          key: userKey,
+          from: 'user',
+          agentRunId: run.name,
+          versions: [{ id: userKey, content: prompt }],
+        });
+        existingKeys.add(userKey);
+      }
+    }
+
+    if (!existingKeys.has(run.name)) {
+      result.push({
+        key: run.name,
+        from: 'assistant',
+        runStatus: status,
+        versions: [{ id: run.name, content: '' }],
+      });
+      existingKeys.add(run.name);
+    } else {
+      result = result.map((msg) =>
+        msg.key === run.name && PENDING_RUN_STATUSES.has(msg.runStatus)
+          ? { ...msg, runStatus: status }
+          : msg
+      );
+    }
+  }
+
+  return result;
 }
 
 export function mergeConversationItemsIntoMessages(
@@ -188,10 +493,14 @@ export function mergeConversationItemsIntoMessages(
     const baseMessage: MessageType = {
       key: item.id,
       from: item.isAgent ? 'assistant' : 'user',
+      agentRunId: !item.isAgent ? item.agentRun : undefined,
       kind: item.kind,
       generatedImage: item.generatedImage,
       generatedAudio: item.generatedAudio,
+      generatedVideo: item.generatedVideo,
       voiceMessage: item.voiceMessage,
+      sttModel: item.sttModel,
+      status: item.status,
       versions: [
         {
           id: item.id,
@@ -232,14 +541,35 @@ export function mergeConversationItemsIntoMessages(
   });
 
   const apiMessageIds = new Set(conversationItems.map((item) => item.id));
-  
+
+  const shouldPreserveTempMessage = (msg: MessageType): boolean => {
+    if (apiMessageIds.has(msg.key)) return false;
+    if (isPendingRunMessage(msg)) return true;
+    if (msg.tools && msg.tools.length > 0) return true;
+
+    const runId = msg.agentRunId ?? (isHydratedUserMessageKey(msg.key)
+      ? msg.key.slice('pending-user-'.length)
+      : undefined);
+    const content = messageContent(msg);
+
+    if (runId || isHydratedUserMessageKey(msg.key)) {
+      const userPersisted = conversationItems.some(
+        (item) =>
+          !item.isAgent &&
+          (item.agentRun === runId ||
+            (content.length > 0 && item.content?.trim() === content))
+      );
+      if (!userPersisted) return true;
+    }
+
+    return false;
+  };
+
   // During transition, preserve all messages not in API response
-  // Otherwise, only preserve temporary messages with tools
+  // Otherwise, preserve pending runs, linked user bubbles, and tool UI state
   const remainingTempMessages = preserveDuringTransition
     ? prev.filter((msg) => !apiMessageIds.has(msg.key))
-    : prev.filter(
-        (msg) => !apiMessageIds.has(msg.key) && msg.tools && msg.tools.length > 0
-      );
+    : prev.filter(shouldPreserveTempMessage);
 
   return [...mapped, ...remainingTempMessages];
 }

@@ -5,6 +5,9 @@ from datetime import datetime
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
+from huf.ai.transaction import commit_if_background
+
+logger = frappe.logger("huf")
 
 TOOL_DOCTYPE = "Agent Tool Function"
 CACHE_DOCTYPE = "Agent Settings"  # Singleton for caching
@@ -51,7 +54,7 @@ class PermissionAwareToolRegistry:
                     all_tools.append(tool_doc)
 
             except Exception as e:
-                frappe.log_error(f"Error checking tool permission for {tool_link.tool}: {e}", "Tool Registry")
+                logger.warning(f"Error checking tool permission for {tool_link.tool}: {e}")
         
         return all_tools
     
@@ -94,40 +97,6 @@ class PermissionAwareToolRegistry:
                      
         return True
 
-def _iter_declared_tools():
-    for group in frappe.get_hooks("huf_tools") or []:
-        for tool in (group if isinstance(group, (list, tuple)) else [group]):
-            yield tool
-
-def validate_tool_def(d):
-    required = {"tool_name","description","function_path","parameters"}
-    missing = required - set(d)
-    if missing:
-        frappe.throw(f"Invalid tool def {d.get('tool_name')}: missing {missing}")
-    mod, fn = d["function_path"].rsplit(".", 1)
-    callable_obj = getattr(importlib.import_module(mod), fn, None)
-    if not callable(callable_obj):
-        frappe.throw(f"Function not callable: {d['function_path']}")
-    return d
-
-def upsert_tool_doc(d):
-    docname = frappe.db.get_value(TOOL_DOCTYPE, {"tool_name": d["tool_name"]})
-    payload = {
-        "doctype": TOOL_DOCTYPE,
-        "tool_name": d["tool_name"],
-        "description": d["description"],
-        "types":"App Provided",
-        "function_path": d["function_path"],
-        "parameters": [{"param_name": p["name"], "param_type": p["type"], "required": int(p.get("required", False))}
-                       for p in d["parameters"]],
-    }
-    if docname:
-        doc = frappe.get_doc(TOOL_DOCTYPE, docname)
-        doc.update(payload)
-        doc.save(ignore_permissions=True)
-    else:
-        frappe.get_doc(payload).insert(ignore_permissions=True)
-
 def _get_app_modified_time(app_name):
     """
     Get modification time of app's hooks.py file as proxy for app changes.
@@ -145,6 +114,7 @@ def _get_app_modified_time(app_name):
             mtime = os.path.getmtime(hooks_path)
             return datetime.fromtimestamp(mtime)
     except Exception:
+        # Cache probe is best-effort; ignore failures.
         pass
     return None
 
@@ -161,7 +131,7 @@ def _get_cached_scans():
             if hasattr(settings, "last_app_scans") and settings.last_app_scans:
                 return json.loads(settings.last_app_scans)
     except Exception:
-        # DocType might not exist yet, fail silently
+        # Cache may not exist yet; fail silently.
         pass
     return {}
 
@@ -191,7 +161,7 @@ def _update_cached_scans(apps_scanned):
         settings.last_app_scans = json.dumps(cache)
         settings.save(ignore_permissions=True)
     except Exception:
-        # Cache update is non-critical, fail silently
+        # Cache update is non-critical; fail silently.
         pass
 
 def _get_apps_to_scan():
@@ -217,11 +187,31 @@ def _get_apps_to_scan():
                 last_scan = datetime.fromisoformat(last_scan_str)
                 if app_modified > last_scan:
                     apps_to_scan.append(app)
-            except Exception:
+            except ValueError:
                 # If cache is invalid, scan the app
                 apps_to_scan.append(app)
     
     return apps_to_scan
+
+
+def _normalize_hook_tools(hook_value):
+    """Normalize huf_tools hook values into a flat list of tool-definition dicts."""
+    normalized = []
+
+    if isinstance(hook_value, str):
+        try:
+            hook_value = frappe.get_attr(hook_value)
+        except (ImportError, AttributeError):
+            return normalized
+
+    if isinstance(hook_value, dict):
+        return [hook_value]
+
+    if isinstance(hook_value, (list, tuple)):
+        for item in hook_value:
+            normalized.extend(_normalize_hook_tools(item))
+
+    return normalized
 
 def get_tools_by_app(apps_to_scan=None, use_cache=True):
     """
@@ -245,8 +235,13 @@ def get_tools_by_app(apps_to_scan=None, use_cache=True):
     
     for app in apps_to_scan:
         app_hooks = frappe.get_hooks("huf_tools", app_name=app) or []
-        if app_hooks:
-            tools_by_app[app] = app_hooks
+        app_tools = []
+
+        for hook_entry in app_hooks:
+            app_tools.extend(_normalize_hook_tools(hook_entry))
+
+        if app_tools:
+            tools_by_app[app] = app_tools
     
     # Update cache with scanned apps
     if use_cache and apps_to_scan:
@@ -277,6 +272,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
     try:
         tools_by_app = get_tools_by_app(apps_to_scan, use_cache=cache_enabled)
     except Exception as e:
+        # Catastrophic sync failure: cannot read hooks at all.
         frappe.log_error(f"Failed to get tools from apps: {str(e)}", "Tool Sync Error")
         return {
             "synced_apps": [],
@@ -295,9 +291,20 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                     tools_to_process.append((app, d))
         except Exception as e:
             errors.append(f"App '{app}': Failed to process tools list: {str(e)}")
-            frappe.log_error(f"Failed to process tools for app '{app}': {str(e)}", "Tool Sync Error")
+            logger.warning(f"Failed to process tools for app '{app}': {e!s}")
             continue
-    
+
+    # Ensure all tool types exist
+    for app, d in tools_to_process:
+        try:
+            category = d.get("category") or d.get("tool_type")
+            if category and not frappe.db.exists("Agent Tool Type", category):
+                tool_type_doc = frappe.new_doc("Agent Tool Type")
+                tool_type_doc.name1 = category
+                tool_type_doc.insert(ignore_permissions=True)
+        except Exception as e:
+            errors.append(f"Failed to create Tool Type '{category}': {str(e)}")
+    commit_if_background()
     # BATCH 2: Validate all functions first (before any DB operations)
     validated_tools = []
     validation_cache = {}  # function_path -> bool
@@ -338,7 +345,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 errors.append(f"App '{app}': Tool '{tool_name}': Function '{func_path}' is not callable")
         except Exception as e:
             errors.append(f"App '{app}': Error processing tool: {str(e)}")
-            frappe.log_error(f"Error processing tool in app '{app}': {str(e)}", "Tool Sync Error")
+            logger.warning(f"Error processing tool in app '{app}': {e!s}")
             continue
     
     # BATCH 3: Get all existing tools in one query
@@ -356,7 +363,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             existing_tools = {t.tool_name: t.name for t in existing_docs}
     except Exception as e:
         errors.append(f"Failed to fetch existing tools: {str(e)}")
-        frappe.log_error(f"Failed to fetch existing tools: {str(e)}", "Tool Sync Error")
+        logger.warning(f"Failed to fetch existing tools: {e!s}")
     
     # BATCH 4: Prepare bulk operations (with error handling)
     to_create = []
@@ -377,13 +384,15 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 "tool_name": tool_name,
                 "description": d.get("description", ""),
                 "types": "App Provided",
+                "tool_type": d.get("category") or d.get("tool_type"),
                 "function_path": d.get("function_path"),
                 "parameters": [
                     {
-                        "label": p.get("name", "").title(),
-                        "fieldname": p.get("name", ""),
+                        "label": p.get("label") or p.get("name", "").replace("_", " ").title(),
+                        "fieldname": p.get("fieldname") or p.get("name", ""),
                         "param_type": p.get("type", "Data"),
                         "required": int(p.get("required", False)),
+                        "description": p.get("description", ""),
                     }
                     for p in parameters
                 ],
@@ -397,7 +406,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 to_create.append(payload)
         except Exception as e:
             errors.append(f"App '{app}': Failed to prepare tool '{d.get('tool_name', 'unknown')}': {str(e)}")
-            frappe.log_error(f"Failed to prepare tool in app '{app}': {str(e)}", "Tool Sync Error")
+            logger.warning(f"Failed to prepare tool in app '{app}': {e!s}")
             continue
     
     # BATCH 5: Execute database operations (with per-tool error handling)
@@ -409,9 +418,9 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             synced_count += 1
         except Exception as e:
             tool_name = payload.get("tool_name", "unknown")
-            error_msg = f"Failed to update tool '{tool_name}' (docname: {docname}): {str(e)}"
+            error_msg = f"Failed to update tool '{tool_name}': {str(e)}"
             errors.append(error_msg)
-            frappe.log_error(error_msg, "Tool Sync Error")
+            logger.warning(error_msg[:140])
             continue
     
     for payload in to_create:
@@ -422,7 +431,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             tool_name = payload.get("tool_name", "unknown")
             error_msg = f"Failed to create tool '{tool_name}': {str(e)}"
             errors.append(error_msg)
-            frappe.log_error(error_msg, "Tool Sync Error")
+            logger.warning(error_msg[:140])
             continue
 
     # Only cleanup orphaned tools if scanning all apps (not incremental)
@@ -439,17 +448,16 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                         frappe.delete_doc("Agent Tool Function", t.name, ignore_permissions=True, force=True)
                     except Exception as e:
                         errors.append(f"Failed to delete orphaned tool '{t.tool_name}': {str(e)}")
-                        frappe.log_error(f"Failed to delete orphaned tool '{t.tool_name}': {str(e)}", "Tool Sync Error")
+                        logger.warning(f"Failed to delete orphaned tool '{t.tool_name}': {e!s}")
         except Exception as e:
             errors.append(f"Failed to cleanup orphaned tools: {str(e)}")
-            frappe.log_error(f"Failed to cleanup orphaned tools: {str(e)}", "Tool Sync Error")
+            logger.warning(f"Failed to cleanup orphaned tools: {e!s}")
     
     # Log summary of errors if any
     if errors:
-        frappe.log_error(
+        logger.warning(
             f"Tool sync completed with {len(errors)} error(s). Synced {synced_count} tools successfully.\n"
-            f"Errors:\n" + "\n".join(errors[:20]),  # Limit to first 20 errors
-            "Tool Sync Errors"
+            f"Errors:\n" + "\n".join(errors[:20])  # Limit to first 20 errors
         )
     
     return {
@@ -459,21 +467,17 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
         "error_count": len(errors)
     }
 
-def sync_app_tools(app_name):
+def sync_app_tools(app_name=None):
     """
-    Sync tools for a specific app (called from after_app_install hook).
+    Sync tools for a specific app (called from after_app_install / after_app_uninstall hooks).
     
     Args:
         app_name: Name of the app to sync tools for
     """
+    if not app_name:
+        return
     try:
         result = sync_discovered_tools(apps_to_scan=[app_name])
-        frappe.log_error(
-            f"Synced tools for app '{app_name}': {result.get('total_tools', 0)} tools",
-            "Tool Sync"
-        )
+        logger.info(f"Synced tools for app '{app_name}': {result.get('total_tools', 0)} tools")
     except Exception as e:
-        frappe.log_error(
-            f"Failed to sync tools for app '{app_name}': {str(e)}",
-            "Tool Sync Error"
-        )
+        logger.warning(f"Failed to sync tools for app '{app_name}': {e!s}")

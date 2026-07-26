@@ -14,7 +14,7 @@ export default defineConfig({
         name: 'Huf',
         short_name: 'Huf',
         description: 'Build and run smart AI agents with tools, chat, and automation.',
-        start_url: '/huf',
+        start_url: '/huf/',
         scope: '/huf/',
         display: 'standalone',
         background_color: '#ffffff',

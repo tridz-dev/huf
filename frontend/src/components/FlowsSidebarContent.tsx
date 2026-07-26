@@ -70,7 +70,7 @@ export function FlowsSidebarContent() {
     <>
       <div className="mb-4">
         <button
-          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-primary/10 rounded-md transition-colors"
+          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-panel hover:text-ink rounded-md transition-colors"
           onClick={() => setFlowsExpanded(!flowsExpanded)}
         >
           {flowsExpanded ? (
@@ -83,7 +83,7 @@ export function FlowsSidebarContent() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-primary/10"
+            className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-panel hover:text-ink"
             onClick={(e) => {
               e.stopPropagation();
               handleCreateFlow();
@@ -105,8 +105,8 @@ export function FlowsSidebarContent() {
                     <button
                       className={`flex-1 px-2 py-1.5 text-sm text-sidebar-foreground rounded-md text-left transition-colors ${
                         activeFlowId === flow.id
-                          ? 'bg-primary/10 text-primary'
-                          : 'hover:bg-primary/10'
+                          ? 'bg-panel text-ink border-l-2 border-signal'
+                          : 'hover:bg-panel hover:text-ink'
                       }`}
                       onClick={() => setActiveFlow(flow.id)}
                     >
@@ -115,10 +115,10 @@ export function FlowsSidebarContent() {
                         <span
                           className={`h-2 w-2 rounded-full ${
                             flow.status === 'active'
-                              ? 'bg-green-500'
+                              ? 'bg-good'
                               : flow.status === 'error'
-                              ? 'bg-red-500'
-                              : 'bg-gray-400'
+                              ? 'bg-signal'
+                              : 'bg-steel-soft'
                           }`}
                         />
                       </div>
@@ -159,7 +159,7 @@ export function FlowsSidebarContent() {
 
       <div>
         <button
-          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-primary/10 rounded-md transition-colors"
+          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-panel hover:text-ink rounded-md transition-colors"
           onClick={() => setTablesExpanded(!tablesExpanded)}
         >
           {tablesExpanded ? (
@@ -175,7 +175,7 @@ export function FlowsSidebarContent() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full justify-start text-xs hover:bg-primary/10"
+                      className="w-full justify-start text-xs hover:bg-panel hover:text-ink"
                       disabled
                     >
                       <Plus className="w-3 h-3 mr-1" />

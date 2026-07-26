@@ -12,6 +12,8 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import type { AgentOrchestrationPlanRow } from '@/types/agent.types'
 import { Trash2 } from 'lucide-react'
 
+const PLAN_FIELD_COL = 'w-40'
+
 interface DefaultPlanTableProps {
 	rows: AgentOrchestrationPlanRow[]
 	onUpdateRow: (index: number, field: keyof AgentOrchestrationPlanRow, value: string) => void
@@ -27,15 +29,15 @@ export function DefaultPlanTable({
 }: DefaultPlanTableProps) {
 	return (
 		<>
-			<div className="overflow-hidden rounded-md border">
+			<div className="overflow-hidden rounded-none border">
 				<div className="max-h-72 overflow-auto">
-					<Table>
-						<TableHeader className="bg-muted sticky top-0 z-10">
+					<Table className="table-fixed w-full">
+						<TableHeader className="bg-paper-deep sticky top-0 z-10">
 							<TableRow>
 								<TableHead className="w-16">Step</TableHead>
-								<TableHead className="w-40">Status</TableHead>
-								<TableHead>Instruction</TableHead>
-								<TableHead>Output</TableHead>
+								<TableHead className={PLAN_FIELD_COL}>Status</TableHead>
+								<TableHead className={PLAN_FIELD_COL}>Instruction</TableHead>
+								<TableHead className={PLAN_FIELD_COL}>Output</TableHead>
 								<TableHead className="w-12" />
 							</TableRow>
 						</TableHeader>
@@ -44,12 +46,12 @@ export function DefaultPlanTable({
 								rows.map((step, index) => (
 									<TableRow key={step.name || `new-${index}`}>
 										<TableCell className="font-medium">{index + 1}</TableCell>
-										<TableCell>
+										<TableCell className={PLAN_FIELD_COL}>
 											<Select
 												value={step.status}
 												onValueChange={(value) => onUpdateRow(index, 'status', value)}
 											>
-												<SelectTrigger>
+												<SelectTrigger className="w-full">
 													<SelectValue placeholder="Select status" />
 												</SelectTrigger>
 												<SelectContent>
@@ -60,17 +62,19 @@ export function DefaultPlanTable({
 												</SelectContent>
 											</Select>
 										</TableCell>
-										<TableCell>
+										<TableCell className={PLAN_FIELD_COL}>
 											<Textarea
 												value={step.instruction}
-												className="min-h-[60px] resize-y"
+												rows={1}
+												className="h-9 min-h-9 w-full resize-none py-2"
 												onChange={(e) => onUpdateRow(index, 'instruction', e.target.value)}
 											/>
 										</TableCell>
-										<TableCell>
+										<TableCell className={PLAN_FIELD_COL}>
 											<Textarea
 												value={step.output_ref}
-												className="min-h-[60px] resize-y"
+												rows={1}
+												className="h-9 min-h-9 w-full resize-none py-2"
 												onChange={(e) => onUpdateRow(index, 'output_ref', e.target.value)}
 											/>
 										</TableCell>
@@ -90,7 +94,7 @@ export function DefaultPlanTable({
 							) : (
 								<TableRow>
 									<TableCell colSpan={5} className="h-24 text-center">
-										<div className="text-muted-foreground">No steps defined yet.</div>
+										<div className="font-body text-steel-soft">No steps defined yet.</div>
 									</TableCell>
 								</TableRow>
 							)}
@@ -105,4 +109,3 @@ export function DefaultPlanTable({
 		</>
 	)
 }
-

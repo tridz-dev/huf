@@ -1,8 +1,9 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
-import React, { useState, useRef, forwardRef, useImperativeHandle } from "react";
+import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from "react";
 import { toast } from 'sonner';
 import { updateConversationTitle } from "@/services/chatApi";
+import { useTypewriterText } from "@/hooks/useTypewriterText";
 
 const conversationTitleVariants = cva(
     "px-1 w-full font-medium truncate text-zinc-900 bg-transparent outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-sm cursor-pointer",
@@ -20,74 +21,76 @@ export interface ConversationTitleRef {
     activateInput: () => void;
 }
 
-type ConversationTitle = {
-    value:string,
-    conversationId:string
+type ConversationTitleProps = {
+    value: string,
+    conversationId: string,
+    animate?: boolean,
 } & VariantProps<typeof conversationTitleVariants>
 
-const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitle>(
-    function ConversationTitle({variant,value,conversationId}, ref){
-    const [active,setActive]=useState(false);
-    const inputRef=useRef<HTMLInputElement>(null);
+const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitleProps>(
+    function ConversationTitle({variant, value, conversationId, animate = false}, ref){
+    const [active, setActive] = useState(false);
+    const [shouldAnimate, setShouldAnimate] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
     const isProgrammaticActivation = useRef(false);
     const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    
+    const displayText = useTypewriterText(value, { enabled: shouldAnimate && !active });
+
+    useEffect(() => {
+        if (animate) {
+            setShouldAnimate(true);
+            return;
+        }
+        setShouldAnimate(false);
+    }, [animate, value]);
+
+    useEffect(() => {
+        if (!active && inputRef.current && inputRef.current.value !== value) {
+            inputRef.current.value = value;
+        }
+    }, [value, active]);
+
     function handleDisableReadOnlyFocus(e:React.MouseEvent<HTMLInputElement>){
-        // Only prevent default if not active AND not programmatically activating
-        // This prevents interference with programmatic focus
         if (!active && !isProgrammaticActivation.current){
             e.preventDefault()
         }
     }
 
     function handleFocus(){
-        // Clear any pending blur timeout
         if (blurTimeoutRef.current) {
             clearTimeout(blurTimeoutRef.current);
             blurTimeoutRef.current = null;
         }
-        // If we're programmatically activating, ensure the input is not readOnly
-        // This prevents the browser from blurring due to readOnly state changes
         if (isProgrammaticActivation.current && inputRef.current) {
             inputRef.current.readOnly = false;
         }
     }
     
-    // Internal function for double-click toggle behavior
     function toggleInput(){
+        setShouldAnimate(false);
         isProgrammaticActivation.current = false;
         setActive((prev)=>!prev)
         setTimeout(()=>inputRef?.current?.focus(),0)
     }
 
-    // Exposed function for programmatic activation (always activates, doesn't toggle)
     function activateInput(){
-        // Clear any pending blur
+        setShouldAnimate(false);
         if (blurTimeoutRef.current) {
             clearTimeout(blurTimeoutRef.current);
             blurTimeoutRef.current = null;
         }
-        // Set flag IMMEDIATELY to prevent onMouseDown from interfering
         isProgrammaticActivation.current = true;
-        // Always activate (don't toggle) - ensures input is ready for editing when called from context menu
         setActive(true);
-        // Use requestAnimationFrame to ensure DOM is updated before focusing
-        // This is especially important when called from context menu which may be closing
         requestAnimationFrame(() => {
-            // Double RAF to ensure menu has fully closed and DOM is stable
             requestAnimationFrame(() => {
                 if (inputRef?.current) {
-                    // Explicitly set readOnly to false before focusing to prevent blur
                     inputRef.current.readOnly = false;
-                    // Small delay to ensure readOnly change is processed
                     setTimeout(() => {
                         if (inputRef?.current && isProgrammaticActivation.current) {
                             inputRef.current.focus();
-                            // Select all text for better UX when renaming
                             inputRef.current.select();
                         }
                     }, 10);
-                    // Reset flag after focus has stabilized
                     setTimeout(() => {
                         isProgrammaticActivation.current = false;
                     }, 100);
@@ -106,9 +109,7 @@ const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitle>(
     }
 
     function onBlur(e:React.FocusEvent<HTMLInputElement>){
-        // Don't process blur if we're programmatically activating (prevents race condition)
         if (isProgrammaticActivation.current) {
-            // If we're programmatically activating and blur happens, refocus after a short delay
             blurTimeoutRef.current = setTimeout(() => {
                 if (isProgrammaticActivation.current && inputRef.current) {
                     inputRef.current.focus();
@@ -143,9 +144,9 @@ const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitle>(
         }
     }
 
-    async function updateTitle(value:string){
+    async function updateTitle(nextValue:string){
         try{
-            await updateConversationTitle(conversationId,value)
+            await updateConversationTitle(conversationId, nextValue)
             toast.success("Conversation title updated")
         }catch(error){
             toast.error('Failed to update conversation title', {
@@ -153,6 +154,27 @@ const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitle>(
             });
             resetValue();
         }
+    }
+
+    if (!active) {
+        return (
+            <div
+                className={cn(conversationTitleVariants({ variant }), "relative min-w-0")}
+                onDoubleClick={toggleInput}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') toggleInput();
+                }}
+            >
+                <span className="invisible block truncate" aria-hidden="true">
+                    {value}
+                </span>
+                <span className="absolute inset-0 truncate px-1">
+                    {shouldAnimate ? displayText : value}
+                </span>
+            </div>
+        );
     }
 
     return (

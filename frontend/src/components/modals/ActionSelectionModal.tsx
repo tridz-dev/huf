@@ -113,14 +113,14 @@ export function ActionSelectionModal({
 
     return (
       <div className="mb-6">
-        <h3 className="text-sm font-medium mb-3 text-muted-foreground">{title}</h3>
+        <h3 className="text-sm font-medium mb-3 text-steel">{title}</h3>
         <div className="grid grid-cols-2 gap-3">
           {actions.map((action) => {
             const Icon = iconMap[action.icon || "FileText"];
             return (
               <button
                 key={action.id}
-                className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-primary/50 hover:bg-accent transition-all"
+                className="flex items-center gap-3 p-3 rounded-none border border-border hover:border-primary/50 hover:bg-accent transition-all"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -129,7 +129,7 @@ export function ActionSelectionModal({
                 <div className="text-left flex-1 min-w-0">
                   <div className="text-sm font-medium">{action.name}</div>
                   {action.description && (
-                    <div className="text-xs text-muted-foreground truncate">
+                    <div className="text-xs text-steel-soft truncate">
                       {action.description}
                     </div>
                   )}
@@ -150,7 +150,7 @@ export function ActionSelectionModal({
         </DialogHeader>
 
         <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-steel-soft" />
           <Input
             placeholder="Search actions..."
             value={searchQuery}

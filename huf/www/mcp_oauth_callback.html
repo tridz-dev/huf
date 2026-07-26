@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MCP OAuth — {{ "Connected" if success else "Error" }}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f4f5f6; }
+    .card { background: #fff; border-radius: 12px; padding: 48px 40px; max-width: 420px; text-align: center; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h2 { margin: 0 0 8px; color: #1f2329; }
+    p { color: #6b7280; margin: 0 0 24px; }
+    .close-hint { font-size: 13px; color: #9ca3af; }
+  </style>
+  {% if success %}
+  <script>
+    // Auto-close; parent tab poll will reload the form
+    setTimeout(() => window.close(), 2000);
+  </script>
+  {% endif %}
+</head>
+<body>
+  <div class="card">
+    {% if success %}
+      <div class="icon">✅</div>
+      <h2>Connected!</h2>
+      <p>MCP Server <strong>{{ server_name }}</strong> is now connected.<br>This tab will close automatically.</p>
+      <p class="close-hint">You can also close this tab manually.</p>
+    {% else %}
+      <div class="icon">❌</div>
+      <h2>Connection Failed</h2>
+      <p>{{ error_message }}</p>
+      <p class="close-hint">Close this tab and try again from the MCP Server form.</p>
+    {% endif %}
+  </div>
+</body>
+</html>

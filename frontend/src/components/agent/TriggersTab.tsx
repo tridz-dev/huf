@@ -62,7 +62,7 @@ export function TriggersTab({
       <CardContent>
         {triggers.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No triggers added yet.</p>
+            <p className="font-body text-steel-soft mb-4">No triggers added yet.</p>
             <Button onClick={onAddTrigger} variant="outline" type="button">
               <Plus className="w-4 h-4 mr-2" />
               Add Trigger
@@ -72,7 +72,7 @@ export function TriggersTab({
           <>
             <div className="flex items-center gap-3 mb-4">
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-muted-foreground" />
+                <Filter className="w-4 h-4 text-steel-soft" />
                 <Select value={triggerFilter} onValueChange={onTriggerFilterChange}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Filter by type" />
@@ -97,7 +97,7 @@ export function TriggersTab({
                   <SelectItem value="disabled">Disabled</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="text-sm text-muted-foreground ml-auto">
+              <div className="text-sm text-steel ml-auto">
                 {filteredTriggers.length} of {triggers.length} triggers
               </div>
             </div>

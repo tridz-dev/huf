@@ -29,8 +29,8 @@ import {
 } from '@/services/agentPromptApi';
 import { formatTimeAgo } from '@/utils/time';
 
-function getStatusVariant(enabled: 0 | 1): 'default' | 'secondary' {
-  return enabled === 1 ? 'default' : 'secondary';
+function getStatusVariant(enabled: 0 | 1): 'success' | 'secondary' {
+  return enabled === 1 ? 'success' : 'secondary';
 }
 
 export function AgentPromptsPage() {
@@ -97,7 +97,7 @@ export function AgentPromptsPage() {
       {
         accessorKey: 'slug',
         header: 'Slug',
-        cell: ({ row }) => <div className="text-sm text-muted-foreground">{row.original.slug || '-'}</div>,
+        cell: ({ row }) => <div className="text-sm text-steel">{row.original.slug || '-'}</div>,
       },
       {
         accessorKey: 'version',
@@ -131,7 +131,7 @@ export function AgentPromptsPage() {
           </Button>
         ),
         cell: ({ row }) => (
-          <div className="text-sm text-muted-foreground">{formatTimeAgo(row.original.modified ?? null)}</div>
+          <div className="text-sm text-steel">{formatTimeAgo(row.original.modified ?? null)}</div>
         ),
         sortingFn: (rowA, rowB) => {
           const timeA = rowA.original.modified ? new Date(rowA.original.modified).getTime() : 0;
@@ -182,10 +182,10 @@ export function AgentPromptsPage() {
       <div className="w-full">
         {initialLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : (
-          <div className="overflow-hidden rounded-md border">
+          <div className="overflow-hidden rounded-none border">
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -205,7 +205,7 @@ export function AgentPromptsPage() {
                   table.getRowModel().rows.map((row) => (
                     <TableRow
                       key={row.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-paper-deep"
                       onClick={() => navigate(`/prompts/${row.original.name}`)}
                     >
                       {row.getVisibleCells().map((cell) => (
@@ -218,7 +218,7 @@ export function AgentPromptsPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="text-muted-foreground">No Agent Prompts found.</div>
+                      <div className="font-body text-steel">No Agent Prompts found.</div>
                     </TableCell>
                   </TableRow>
                 )}
@@ -236,7 +236,7 @@ export function AgentPromptsPage() {
       />
 
       {!hasMore && prompts.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined ? `Showing all ${total} prompts` : 'No more prompts to load'}
         </div>
       )}

@@ -10,10 +10,25 @@ dynamic = ["version"]
 dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
     "openai-agents",
-    "litellm>=1.0.0,!=1.82.7,!=1.82.8",
+    # Upper-bounded below 1.83.8: from ~1.83.8 onward litellm's own PyPI
+    # metadata restricts installs to Python <3.14, and 1.90+ builds a Rust
+    # extension (litellm-rust) whose PyO3 build caps at Python 3.13 — both
+    # break under frappe v16's Python 3.14 requirement. Revisit this ceiling
+    # once litellm ships a Python 3.14-compatible release.
+    "litellm>=1.0.0,!=1.82.7,!=1.82.8,<1.83.8",
     "llama-index-core>=0.10.0",
     "sqlite-vec",
-    "pysqlite3-binary",
+    "pysqlite3-binary; platform_machine == 'x86_64' and python_version < '3.14'",
+    "httpx>=0.24.0",
+    "chromadb",
+    "llama-index-vector-stores-chroma",
+    "pypdf",
+    "python-docx",
+    "openpyxl",
+    "python-pptx",
+    "beautifulsoup4",
+    "aiohttp",
+    "pypdfium2>=4.26.0",
 ]
 
 [build-system]

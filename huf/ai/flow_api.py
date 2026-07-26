@@ -8,6 +8,7 @@ Provides REST-style APIs for:
 - Agent tools (run_flow, get_flow_run, resume_flow_run, approve/reject)
 """
 
+import hmac
 import json
 
 import frappe
@@ -81,7 +82,6 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
-	frappe.db.commit()
 	return {"flow_id": doc.flow_id, "version": doc.version}
 
 
@@ -328,6 +328,30 @@ def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _webhook_key_is_valid(defn: dict, webhook_key: str | None) -> bool:
+	"""Return True only if the flow's entry node is a webhook trigger with a
+	non-empty configured auth key that matches webhook_key (constant-time).
+
+	Fails closed: returns False if the entry node is missing, is not a
+	trigger.webhook, or has no/empty auth configured.
+	"""
+	entry_id = defn.get("entry")
+	entry_node = None
+	for n in defn.get("nodes", []):
+		if n.get("id") == entry_id and n.get("type") == "trigger.webhook":
+			entry_node = n
+			break
+
+	if entry_node is None:
+		return False
+
+	expected_auth = entry_node.get("config", {}).get("auth")
+	if not expected_auth:
+		return False
+
+	return hmac.compare_digest(str(webhook_key or ""), str(expected_auth))
+
+
 @frappe.whitelist(allow_guest=True)
 def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 	"""
@@ -351,18 +375,14 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
 
-	# Validate webhook auth
-	nodes = defn.get("nodes", [])
-	entry_node = None
-	for n in nodes:
-		if n.get("id") == defn.get("entry") and n.get("type") == "trigger.webhook":
-			entry_node = n
-			break
+	# Frappe's make_form_dict drops query string arguments if the request has a JSON body.
+	# We must manually extract webhook_key from request.args if it's missing.
+	if webhook_key is None and getattr(frappe, "request", None) and frappe.request.args:
+		webhook_key = frappe.request.args.get("webhook_key")
 
-	if entry_node:
-		expected_auth = entry_node.get("config", {}).get("auth")
-		if expected_auth and webhook_key != expected_auth:
-			frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
+	# Validate webhook auth — mandatory, fail closed.
+	if not _webhook_key_is_valid(defn, webhook_key):
+		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
 
 	# Get payload from request
 	payload = {}
@@ -456,8 +476,6 @@ def schedule_flow(flow_id: str, cron: str, schedule_name: str | None = None, tim
 		})
 		doc.insert()
 	
-	frappe.db.commit()
-	
 	return {
 		"schedule_id": doc.name,
 		"flow_id": flow_id,
@@ -491,7 +509,6 @@ def unschedule_flow(flow_id: str) -> dict:
 		}
 	
 	frappe.delete_doc("Scheduled Job Type", existing, ignore_missing=True)
-	frappe.db.commit()
 	
 	return {
 		"status": "unscheduled",

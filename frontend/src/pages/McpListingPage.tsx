@@ -7,13 +7,16 @@ import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getMCPServers } from '../services/mcpApi';
 import { formatTimeAgo } from '../utils/time';
 import type { MCPServerDoc } from '../services/mcpApi';
+import type { BadgeVariant } from '@/utils/status';
 
-function getStatusVariant(enabled: 0 | 1): 'default' | 'secondary' {
-  return enabled === 1 ? 'default' : 'secondary';
-}
-
-function getStatusLabel(enabled: 0 | 1): 'enabled' | 'disabled' {
-  return enabled === 1 ? 'enabled' : 'disabled';
+function getMcpStatus(server: MCPServerDoc): { label: string; variant: BadgeVariant } {
+  if (server.enabled !== 1) return { label: 'disabled', variant: 'secondary' };
+  if (server.auth_type === 'oauth') {
+    if (server.oauth_status === 'Connected') return { label: 'connected', variant: 'success' };
+    if (server.oauth_status === 'Token Expired') return { label: 'token expired', variant: 'destructive' };
+    return { label: 'not connected', variant: 'outline' };
+  }
+  return { label: 'enabled', variant: 'success' };
 }
 
 export default function McpListingPage() {
@@ -75,7 +78,8 @@ export default function McpListingPage() {
 
   return (
     <PageLayout
-      subtitle="Manage Model Context Protocol (MCP) servers and their configurations"
+      title="MCP Servers"
+      subtitle="Connect Model Context Protocol servers."
       filters={
         <FilterBar
           searchPlaceholder="Search MCP servers..."
@@ -87,7 +91,7 @@ export default function McpListingPage() {
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load MCP servers</p>
-          <p className="text-sm text-muted-foreground mb-4">{error.message || 'An error occurred while fetching MCP servers.'}</p>
+          <p className="text-sm text-steel mb-4">{error.message || 'An error occurred while fetching MCP servers.'}</p>
         </div>
       )}
       <GridView
@@ -96,18 +100,18 @@ export default function McpListingPage() {
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No MCP servers found.</p>
+            <p className="font-body text-steel-soft mb-4">No MCP servers found.</p>
           </div>
         }
         renderItem={(server) => {
-          const status = getStatusLabel(server.enabled);
+          const status = getMcpStatus(server);
           return (
             <ItemCard
               title={server.server_name || server.name}
               description={server.description?.slice(0, 100) || 'No description'}
               status={{
-                label: status,
-                variant: getStatusVariant(server.enabled),
+                label: status.label,
+                variant: status.variant,
               }}
               metadata={[
                 ...(server.tool_namespace ? [{ label: 'Namespace', value: server.tool_namespace, icon: Tag }] : []),
@@ -133,7 +137,7 @@ export default function McpListingPage() {
         disabled={!!search || initialLoading}
       />
       {!hasMore && servers.length > 0 && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
+        <div className="text-center py-4 text-sm font-body text-steel">
           {total !== undefined ? `Showing all ${total} MCP servers` : 'No more MCP servers to load'}
         </div>
       )}

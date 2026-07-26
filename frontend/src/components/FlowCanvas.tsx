@@ -366,13 +366,13 @@ export function FlowCanvas({
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         className="bg-background w-full h-full"
       >
-        <Background variant={'dots' as any} gap={16} size={2} color="oklch(var(--muted-foreground) / 0.35)" />
+        <Background variant={'dots' as any} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
         <Controls className="!bottom-6" />
         <MiniMap
           nodeColor={(node) => {
-            if (node.type === 'trigger') return 'oklch(var(--primary))';
+            if (node.type === 'trigger') return 'var(--primary)';
             if (node.type === 'end') return '#10b981';
-            return 'oklch(var(--muted))';
+            return 'var(--muted)';
           }}
           className="!bg-background !border-border !bottom-6"
         />
@@ -382,7 +382,6 @@ export function FlowCanvas({
               <Button
                 variant="default"
                 size="sm"
-                className="rounded-full shadow-lg bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={() => {
                   setModalMode('trigger');
                   setCurrentNodeId(null);
@@ -396,7 +395,7 @@ export function FlowCanvas({
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10 rounded-full bg-background/60 backdrop-blur-sm"
+              className="h-10 w-10"
               onClick={() => {
                 if (showLeftSidebar || showRightSidebar) {
                   onToggleLeftSidebar();
@@ -416,7 +415,7 @@ export function FlowCanvas({
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10 rounded-full bg-background/60 backdrop-blur-sm"
+              className="h-10 w-10"
               onClick={onToggleLeftSidebar}
             >
               <PanelLeftOpen className="w-4 h-4" />
@@ -428,7 +427,7 @@ export function FlowCanvas({
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10 rounded-full bg-background/60 backdrop-blur-sm"
+              className="h-10 w-10"
               onClick={onToggleRightSidebar}
             >
               <PanelRightOpen className="w-4 h-4" />
