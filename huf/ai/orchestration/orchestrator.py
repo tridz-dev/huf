@@ -154,7 +154,7 @@ def execute_next_step(orch=None, orch_name=None):
     if not next_step:
         orch.status = "Completed"
         orch.last_run_at = now_datetime()
-        orch.save(ignore_permissions=True)
+        orch.save()
         if orch.parent_run:
             frappe.db.set_value("Agent Run", orch.parent_run, {
                 "status": "Success",
@@ -170,7 +170,7 @@ def execute_next_step(orch=None, orch_name=None):
     next_step.status = "in_progress"
     orch.current_step = next_step.step_index
     orch.last_run_at = now_datetime()
-    orch.save(ignore_permissions=True)
+    orch.save()
     frappe.db.commit()
 
     try:
@@ -216,7 +216,7 @@ def execute_next_step(orch=None, orch_name=None):
         orch.status = "Failed"
         frappe.log_error(frappe.get_traceback(), "Orchestration Step Error")
 
-    orch.save(ignore_permissions=True)
+    orch.save()
     frappe.db.commit()
 
     return "ok" if next_step.status == "done" else "failed"

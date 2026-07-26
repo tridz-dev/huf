@@ -38,7 +38,7 @@ def process_orchestrations():
                         step.status = "failed"
                         orch.error_log = (orch.error_log or "") + f"\nStep {step.step_index} timed out (stuck for > 15m)."
                         orch.status = "Failed"
-                        orch.save(ignore_permissions=True)
+                        orch.save()
                         frappe.db.commit()
                         timed_out = True
                     else:

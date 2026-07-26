@@ -185,7 +185,7 @@ def discover_mcp_server(server_name: str) -> dict:
         if result.get("discovery_status") != "Ready":
             server.oauth_discovery_status = result.get("discovery_status", "Failed")
             server.oauth_discovery_error = result.get("discovery_error")
-            server.save(ignore_permissions=True)
+            server.save()
             return result
 
         # Persist discovered metadata
@@ -213,7 +213,7 @@ def discover_mcp_server(server_name: str) -> dict:
         if not server.oauth_scope and result.get("scopes_supported"):
             server.oauth_scope = " ".join(result["scopes_supported"])
 
-        server.save(ignore_permissions=True)
+        server.save()
 
         # Return a sanitized version (no full metadata dump to frontend)
         return {

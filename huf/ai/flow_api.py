@@ -391,8 +391,9 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 			raw = frappe.request.get_data(as_text=True)
 			if raw:
 				payload = frappe.parse_json(raw)
-		except Exception:
-			pass
+		except (json.JSONDecodeError, TypeError):
+			frappe.log_error(frappe.get_traceback(), "Flow Webhook Payload Parse Error")
+			payload = {}
 
 		if not payload:
 			if frappe.request.form:
@@ -603,7 +604,10 @@ def execute_scheduled_flow(flow_id: str) -> dict:
 		}
 	except Exception as e:
 		error_msg = str(e)
-		frappe.log_error(f"Error executing scheduled flow '{flow_id}': {error_msg}", "Flow Scheduler")
+		frappe.log_error(
+			frappe.get_traceback(),
+			f"Scheduled Flow Execution Error: {flow_id}",
+		)
 		return {"status": "error", "error": error_msg, "flow_id": flow_id}
 
 
@@ -806,9 +810,9 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str |
 		if isinstance(payload, str):
 			try:
 				payload = json.loads(payload)
-			except Exception:
+			except (json.JSONDecodeError, TypeError):
 				payload = {}
-				
+
 		from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
 
 		flow_run = create_flow_run(flow_id=flow_id, payload=payload or {}, mode=mode)
@@ -825,6 +829,7 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str |
 			"current_node_id": flow_run.current_node_id,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Run Flow Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -861,6 +866,7 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 			"waiting": waiting,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Get Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -888,6 +894,7 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 			"current_node_id": doc.current_node_id,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Resume Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -916,6 +923,7 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 			"current_node_id": doc.current_node_id,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Approve Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 

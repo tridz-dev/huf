@@ -341,7 +341,7 @@
    "write": 1
   },
   {
-   "create": 0,
+   "create": 1,
    "delete": 0,
    "email": 1,
    "export": 1,
@@ -350,10 +350,10 @@
    "report": 1,
    "role": "Huf Manager",
    "share": 1,
-   "write": 0
+   "write": 1
   },
   {
-   "create": 0,
+   "create": 1,
    "delete": 0,
    "email": 1,
    "export": 1,
@@ -362,7 +362,7 @@
    "report": 1,
    "role": "Huf User",
    "share": 1,
-   "write": 0
+   "write": 1
   },
   {
    "create": 0,

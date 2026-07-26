@@ -65,7 +65,7 @@ class KnowledgeInput(Document):
 				file_doc = frappe.get_doc("File", {"file_url": self.file})
 				self.file_name = file_doc.file_name
 				self.file_type = file_doc.file_type or self.get_file_type_from_name(file_doc.file_name)
-			except Exception:
+			except (frappe.DoesNotExistError, AttributeError):
 				pass
 	
 	def get_file_type_from_name(self, filename):

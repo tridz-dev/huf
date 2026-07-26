@@ -50,7 +50,7 @@ class AgentManager:
             agent_tools = create_agent_tools(self.agent_doc)
             if agent_tools:
                 self.tools.extend(agent_tools)
-        except Exception as e:
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load agent tools: {e!s}")
 
         # Add knowledge_search tool and get_knowledge_sources tool if agent has knowledge
@@ -86,7 +86,7 @@ class AgentManager:
                     return handle_get_knowledge_sources(agent_name=self.agent_doc.agent_name)
                 self.tools.append(get_knowledge_sources_tool)
 
-        except Exception as e:
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
 
     def _setup_client(self):
@@ -380,8 +380,10 @@ def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
             message=message,
             user=frappe.session.user,
         )
-    except Exception:
-        pass
+    except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+            frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as exc:
+        # Non-critical UI notification; do not fail the run.
+        frappe.logger("huf").debug(f"Realtime publish failed: {exc!s}")
 
 
 def _emit_conversation_title_updated(conversation_name, title):
@@ -399,8 +401,10 @@ def _emit_conversation_title_updated(conversation_name, title):
             },
             user=owner,
         )
-    except Exception:
-        pass
+    except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+            frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as exc:
+        # Non-critical UI notification; do not fail the title update.
+        frappe.logger("huf").debug(f"Realtime title update publish failed: {exc!s}")
 
 
 def _parse_prompt_cache_options(prompt_cache_options):
@@ -501,7 +505,12 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                     update_data["status"] = "Completed"
 
                 doc.update(update_data)
-                doc.save(ignore_permissions=True)
+                if not frappe.has_permission("Agent Tool Call", "write", doc=doc):
+                    frappe.throw(
+                        _("Not permitted to update Agent Tool Call records."),
+                        frappe.PermissionError,
+                    )
+                doc.save()
                 return doc.name
             else:
                 return None
@@ -537,12 +546,22 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "status": "Queued",
                 "call_id": tool_call_id
             })
-            doc.insert(ignore_permissions=True)
+            if not frappe.has_permission("Agent Tool Call", "create"):
+                frappe.throw(
+                    _("Not permitted to create Agent Tool Call records."),
+                    frappe.PermissionError,
+                )
+            doc.insert()
             return doc.name
 
+    except frappe.PermissionError:
+        raise
     except Exception as e:
         # Tool-call persistence boundary: any failure here corrupts run audit state.
-        frappe.log_error(f"Error processing tool call: {str(e)}", "Agent Tool Call Error")
+        frappe.log_error(
+            f"Error processing tool call: {str(e)}\n{frappe.get_traceback()}",
+            "Agent Tool Call Error"
+        )
         return None
 
 def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None, is_output=False):
@@ -648,7 +667,12 @@ def run_background_summarization(conversation_name, agent_name):
             frappe.db.commit()  # nosemgrep: justified background-job commit
 
     except Exception as e:
+        # Background job entry point: log full traceback for observability.
         logger.warning(f"Background summarization failed: {e!s}")
+        frappe.log_error(
+            f"Background summarization failed: {e!s}\n{frappe.get_traceback()}",
+            "Agent Background Summarization Error"
+        )
 
 @frappe.whitelist()
 def generate_conversation_title(conversation_name, agent_name):
@@ -692,7 +716,12 @@ def generate_conversation_title(conversation_name, agent_name):
             frappe.db.commit()  # nosemgrep: justified background-job commit
             _emit_conversation_title_updated(conversation_name, title)
     except Exception as e:
+        # Background job entry point: log full traceback for observability.
         logger.warning(f"Conversation title generation failed: {e!s}")
+        frappe.log_error(
+            f"Conversation title generation failed: {e!s}\n{frappe.get_traceback()}",
+            "Agent Conversation Title Error"
+        )
 
 def _history_without_pending_user_turn(history, skip_user_message: bool):
 	"""When the user message was already persisted (e.g. file prepare), drop it from history.
@@ -864,8 +893,14 @@ def run_agent_sync(
         if flow_id:
             run_doc_data["flow_id"] = flow_id
 
+    if not frappe.has_permission("Agent Run", "create"):
+        frappe.throw(
+            _("You do not have permission to create an Agent Run."),
+            frappe.PermissionError
+        )
+
     run_doc = frappe.get_doc(run_doc_data)
-    run_doc.insert(ignore_permissions=True)
+    run_doc.insert()
 
     execution_kwargs = {
         "agent_name": agent_name,
@@ -951,8 +986,9 @@ def run_agent_sync(
     if _has_queued_runs(conversation.name, exclude_run_id=run_doc.name):
         try:
             frappe.cache().delete(lock_key)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Defensive cleanup: must not mask the queued-runs validation error.
+            frappe.logger("huf").debug(f"Cache lock delete failed: {exc!s}")
         frappe.throw(
             _(
                 "This conversation has queued runs pending. Wait for them to complete before using the direct-execution override."
@@ -976,14 +1012,16 @@ def run_agent_sync(
         heartbeat.stop()
         try:
             frappe.cache().delete(lock_key)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Defensive finally cleanup: must not suppress the original exception.
+            frappe.logger("huf").debug(f"Cache lock delete failed: {exc!s}")
         # A queued run may have arrived while we held the lock; wake a drainer.
         try:
             if _has_queued_runs(conversation.name):
                 _enqueue_drain(conversation.name)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Defensive finally cleanup: must not suppress the original exception.
+            frappe.logger("huf").warning(f"Drain enqueue failed: {exc!s}")
 
 
 def _is_truthy(value):
@@ -1161,7 +1199,8 @@ def _execute_agent_run(
                 user_query=prompt,
                 max_tokens=agent_doc.max_knowledge_tokens or 4000
             )
-        except Exception:
+        except (ImportError, ValueError, TypeError, KeyError, AttributeError, RuntimeError,
+                frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError):
             # Abort the run instead of continuing with partial state.
             # Mandatory knowledge context is required for this agent; failing here
             # prevents inconsistent tool-call messages from being committed later.
@@ -1530,7 +1569,7 @@ def _execute_agent_run(
                         cached_tokens=cached_tokens,
                         litellm_response=mock_response
                     )
-            except Exception as e:
+            except (ImportError, AttributeError, TypeError, ValueError, KeyError, RuntimeError) as e:
                 frappe.logger("huf").warning(
                     f"Cost calculation failed for {resolved_model} in sync: {e}"
                 )
@@ -1548,7 +1587,8 @@ def _execute_agent_run(
                         total_cost = total_cost + %s
                     WHERE name = %s
                 """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
-            except Exception as e:
+            except (RuntimeError, TypeError, ValueError,
+                    frappe.ValidationError, frappe.PermissionError) as e:
                 frappe.logger("huf").warning(
                     f"Failed to update conversation metrics: {str(e)}"
                 )
@@ -1620,8 +1660,16 @@ def _execute_agent_run(
                     channel_id=channel_id,
                     external_id=external_id,
                 )
-            except Exception as hook_err:
-                frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
+            except (ValueError, KeyError, TypeError, AttributeError,
+                    frappe.DoesNotExistError, frappe.ValidationError,
+                    frappe.PermissionError, frappe.TimestampMismatchError) as hook_err:
+                frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+            except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
+                frappe.log_error(
+                    f"Error in Sub-Agent Success Hook: {str(hook_err)}\n{frappe.get_traceback()}",
+                    "Agent Integration Error"
+                )
 
             # 3. Real-Time UI Notification
             frappe.publish_realtime(
@@ -1698,7 +1746,8 @@ def _execute_agent_run(
                     kind="Error"
                 )
                 transaction_checkpoint(reason="agent_streaming_progress")
-            except Exception as inner_e:
+            except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                    frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as inner_e:
                 frappe.logger("huf").warning(
                     f"Failed to handle context window error in sync: {str(inner_e)}"
                 )
@@ -1718,7 +1767,8 @@ def _execute_agent_run(
                     kind="Error"
                 )
                 transaction_checkpoint(reason="agent_streaming_progress")
-            except Exception as inner_e:
+            except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                    frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as inner_e:
                 frappe.logger("huf").warning(
                     f"Failed to handle rate limit error in sync: {str(inner_e)}"
                 )
@@ -1747,8 +1797,16 @@ def _execute_agent_run(
                     channel_id=channel_id,
                     external_id=external_id,
                 )
-            except Exception as hook_err:
-                frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+            except (ValueError, KeyError, TypeError, AttributeError,
+                    frappe.DoesNotExistError, frappe.ValidationError,
+                    frappe.PermissionError, frappe.TimestampMismatchError) as hook_err:
+                frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+            except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
+                frappe.log_error(
+                    f"Error in Sub-Agent Failure Hook: {str(hook_err)}\n{frappe.get_traceback()}",
+                    "Agent Integration Error"
+                )
 
             # 3. Real-Time UI Notification
             frappe.publish_realtime(
@@ -1791,8 +1849,8 @@ def _next_run_sequence(conversation_id: str) -> int:
     seq_key = f"agent_run_seq:{conversation_id}"
     try:
         return int(frappe.cache().incr(seq_key))
-    except Exception:
-        # Redis unavailable: gaps are acceptable; 0 lets the drain loop fall
+    except (RuntimeError, TypeError, ValueError, AttributeError):
+        # Redis/cache unavailable: gaps are acceptable; 0 lets the drain loop fall
         # back to creation-time ordering.
         return 0
 
@@ -1833,8 +1891,8 @@ def _reset_run_to_queued(run_id: str, error_message: str = None):
             values["error_message"] = error_message
         frappe.db.set_value("Agent Run", run_id, values, update_modified=True)
         frappe.db.commit()
-    except Exception:
-        pass
+    except Exception as exc:  # top-level recovery helper
+        frappe.logger("huf").debug(f"Failed to reset run {run_id} to queued: {exc!s}")
 
 
 class _RunHeartbeat:
@@ -1859,8 +1917,8 @@ class _RunHeartbeat:
         while not self._stop.wait(self.interval):
             try:
                 frappe.cache().expire(self.lock_key, _QUEUE_LOCK_TTL)
-            except Exception:
-                pass
+            except Exception as exc:  # worker-thread heartbeat: must never kill the heartbeat thread
+                frappe.logger("huf").debug(f"Lock heartbeat renewal failed for {self.lock_key}: {exc!s}")
 
 
 def _run_queued_agent(lock_attempt=0, **kwargs):
@@ -1895,19 +1953,22 @@ def _run_queued_agent(lock_attempt=0, **kwargs):
             last_result = _drain_run(run_doc, lock_key)
         return last_result
     except Exception:
+        # Background queue drainer boundary: log full traceback.
         frappe.log_error(f"Conversation drainer failed: {frappe.get_traceback()}", "Huf")
     finally:
         try:
             frappe.cache().delete(lock_key)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Defensive finally cleanup: must not suppress the original exception.
+            frappe.logger("huf").debug(f"Cache lock delete failed: {exc!s}")
         # Re-check after releasing lock. If a submit happened between our last
         # SELECT and the delete, enqueue a sweeper so the run is not orphaned.
         try:
             if _has_queued_runs(conversation_id):
                 _enqueue_drain(conversation_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Defensive finally cleanup: must not suppress the original exception.
+            frappe.logger("huf").warning(f"Post-release drain enqueue failed for {conversation_id}: {exc!s}")
 
 
 def _drain_run(run_doc, lock_key: str):
@@ -1948,6 +2009,7 @@ def _drain_run(run_doc, lock_key: str):
         result = _execute_agent_run(**execution_kwargs)
         return result
     except Exception as e:
+        # Worker thread boundary: ensure the queued run is marked failed and logged.
         _fail_queued_run(run_doc.name, str(e))
         try:
             _emit_run_lifecycle_event(
@@ -1956,8 +2018,10 @@ def _drain_run(run_doc, lock_key: str):
                 "failed",
                 {"error": str(e)},
             )
-        except Exception:
-            pass
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as exc:
+            # Non-critical lifecycle event notification.
+            frappe.logger("huf").debug(f"Failed-run lifecycle event emission failed for {run_doc.name}: {exc!s}")
         frappe.log_error(f"Queued agent run failed: {frappe.get_traceback()}", "Huf")
     finally:
         heartbeat.stop()
@@ -1995,8 +2059,8 @@ def _fail_queued_run(run_id, error_message):
                 "error_message": error_message,
             }, update_modified=True)
             frappe.db.commit()
-    except Exception:
-        pass
+    except Exception as exc:  # top-level recovery helper
+        frappe.logger("huf").warning(f"Failed to mark run {run_id} as Failed: {exc!s}")
 
 
 def recover_stalled_agent_runs():
@@ -2027,7 +2091,7 @@ def recover_stalled_agent_runs():
             lock_key = _conversation_lock_key(conversation)
             try:
                 ttl = frappe.cache().ttl(lock_key)
-            except Exception:
+            except (RuntimeError, TypeError, ValueError, AttributeError):
                 ttl = None
             if ttl and ttl > 0:
                 continue
@@ -2052,13 +2116,14 @@ def recover_stalled_agent_runs():
             lock_key = _conversation_lock_key(run.conversation)
             try:
                 ttl = frappe.cache().ttl(lock_key)
-            except Exception:
+            except (RuntimeError, TypeError, ValueError, AttributeError):
                 ttl = None
             if ttl and ttl > 0:
                 continue
             _enqueue_drain(run.conversation)
             drained_conversations.add(run.conversation)
     except Exception:
+        # Scheduler entry point / top-level recovery helper: log full traceback.
         frappe.log_error(f"Agent run recovery failed: {frappe.get_traceback()}", "Huf")
 
 
@@ -2201,6 +2266,13 @@ async def run_agent_stream(
         history = _history_without_pending_user_turn(history, skip_user_message)
 
         # Create Agent Run document
+        if not frappe.has_permission("Agent Run", "create"):
+            yield {
+                "type": "error",
+                "error": "You do not have permission to create an Agent Run."
+            }
+            return
+
         run_doc = frappe.get_doc({
             "doctype": "Agent Run",
             "agent": agent_name,
@@ -2211,7 +2283,7 @@ async def run_agent_stream(
             "model": resolved_model,
             "provider": resolved_provider
         })
-        run_doc.insert(ignore_permissions=True)
+        run_doc.insert()
         if not skip_user_message:
             conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
         else:
@@ -2295,13 +2367,13 @@ async def run_agent_stream(
 
         knowledge_context = None
         try:
-
             knowledge_context = build_knowledge_context(
                 agent_name=agent_name,
                 user_query=prompt,
                 max_tokens=agent_doc.max_knowledge_tokens or 4000
             )
-        except Exception:
+        except (ImportError, ValueError, TypeError, KeyError, AttributeError, RuntimeError,
+                frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError):
             # Abort the stream instead of continuing with partial state.
             # Mandatory knowledge context is required for this agent; failing here
             # prevents inconsistent tool-call messages from being committed later.
@@ -2488,7 +2560,7 @@ async def run_agent_stream(
                             input_tokens = token_counter(model=pricing_model, messages=msgs_for_count)
                             output_tokens = token_counter(model=pricing_model, text=full_response)
                             total_tokens = input_tokens + output_tokens
-                        except Exception as e:
+                        except (ImportError, AttributeError, TypeError, ValueError, KeyError, RuntimeError) as e:
                             frappe.logger("huf").warning(
                                 f"Fallback token counting failed: {e}"
                             )
@@ -2521,7 +2593,7 @@ async def run_agent_stream(
                                 litellm_response=mock_response
                             )
 
-                    except Exception as e:
+                    except (ImportError, AttributeError, TypeError, ValueError, KeyError, RuntimeError) as e:
                         frappe.logger("huf").warning(
                             f"Cost calculation failed for {resolved_model}: {e}"
                         )
@@ -2538,7 +2610,8 @@ async def run_agent_stream(
                                 total_cost = total_cost + %s
                             WHERE name = %s
                         """, (input_tokens, output_tokens, total_tokens, cost, conversation.name))
-                    except Exception as e:
+                    except (RuntimeError, TypeError, ValueError,
+                            frappe.ValidationError, frappe.PermissionError) as e:
                         frappe.logger("huf").warning(
                             f"Failed to update conv metrics stream: {str(e)}"
                         )
@@ -2594,8 +2667,16 @@ async def run_agent_stream(
                                 channel_id=channel_id,
                                 external_id=external_id
                             )
-                        except Exception as hook_err:
-                            frappe.log_error(f"Error in Sub-Agent Success Hook: {str(hook_err)}", "Agent Integration Error")
+                        except (ValueError, KeyError, TypeError, AttributeError,
+                                frappe.DoesNotExistError, frappe.ValidationError,
+                                frappe.PermissionError, frappe.TimestampMismatchError) as hook_err:
+                            frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+                        except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
+                            frappe.log_error(
+                                f"Error in Sub-Agent Success Hook: {str(hook_err)}\n{frappe.get_traceback()}",
+                                "Agent Integration Error"
+                            )
 
                         frappe.publish_realtime(
                             event=f"conversation:{parent_conversation_id}",
@@ -2619,7 +2700,8 @@ async def run_agent_stream(
                                     conversation_name=conversation.name,
                                     agent_name=agent_name
                                 )
-                    except Exception:
+                    except (RuntimeError, TypeError, ValueError, AttributeError,
+                            frappe.ValidationError, frappe.PermissionError):
                         # Best-effort auto-naming enqueue; ignore failures.
                         pass
 
@@ -2670,7 +2752,8 @@ async def run_agent_stream(
                             transaction_checkpoint(reason="agent_streaming_progress")
                             chunk["error"] = user_error_msg # override so the client sees the same message
                             error_msg = user_error_msg
-                        except Exception as inner_e:
+                        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                                frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as inner_e:
                             frappe.logger("huf").warning(
                                 f"Failed to handle context window error in stream inner block: {str(inner_e)}"
                             )
@@ -2692,7 +2775,8 @@ async def run_agent_stream(
                             transaction_checkpoint(reason="agent_streaming_progress")
                             chunk["error"] = user_error_msg # override so the client sees the same message
                             error_msg = user_error_msg
-                        except Exception as inner_e:
+                        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                                frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as inner_e:
                             frappe.logger("huf").warning(
                                 f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
                             )
@@ -2721,8 +2805,16 @@ async def run_agent_stream(
                                 channel_id=channel_id,
                                 external_id=external_id
                             )
-                        except Exception as hook_err:
-                            frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+                        except (ValueError, KeyError, TypeError, AttributeError,
+                                frappe.DoesNotExistError, frappe.ValidationError,
+                                frappe.PermissionError, frappe.TimestampMismatchError) as hook_err:
+                            frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+                        except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
+                            frappe.log_error(
+                                f"Error in Sub-Agent Failure Hook: {str(hook_err)}\n{frappe.get_traceback()}",
+                                "Agent Integration Error"
+                            )
 
                         frappe.publish_realtime(
                             event=f"conversation:{parent_conversation_id}",
@@ -2760,7 +2852,8 @@ async def run_agent_stream(
                         kind="Error"
                     )
                     transaction_checkpoint(reason="agent_streaming_progress")
-                except Exception as inner_e:
+                except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                        frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as inner_e:
                     frappe.logger("huf").warning(
                         f"Failed to handle context window error in stream inner block: {str(inner_e)}"
                     )
@@ -2780,11 +2873,11 @@ async def run_agent_stream(
                         kind="Error"
                     )
                     transaction_checkpoint(reason="agent_streaming_progress")
-                except Exception as inner_e:
+                except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                        frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as inner_e:
                     frappe.logger("huf").warning(
                         f"Failed to handle rate limit in stream inner block: {str(inner_e)}"
                     )
-
 
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "status": "Failed",
@@ -2810,8 +2903,16 @@ async def run_agent_stream(
                         channel_id=channel_id,
                         external_id=external_id
                     )
-                except Exception as hook_err:
-                    frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+                except (ValueError, KeyError, TypeError, AttributeError,
+                        frappe.DoesNotExistError, frappe.ValidationError,
+                        frappe.PermissionError, frappe.TimestampMismatchError) as hook_err:
+                    frappe.logger("huf").warning(f"Agent hook dispatch failure: {hook_err!s}")
+
+                except Exception as hook_err:  # boundary exception handler: agent hook dispatcher
+                    frappe.log_error(
+                        f"Error in Sub-Agent Failure Hook: {str(hook_err)}\n{frappe.get_traceback()}",
+                        "Agent Integration Error"
+                    )
 
                 frappe.publish_realtime(
                     event=f"conversation:{parent_conversation_id}",
@@ -2867,7 +2968,10 @@ async def run_agent_stream(
                         }, update_modified=True)
                     safe_commit()
             except Exception as clean_err:
-                frappe.logger("huf").warning(f"Error in stream disconnect response recovery: {clean_err}")
+                # Defensive finally cleanup: must not suppress the original exception.
+                frappe.logger("huf").warning(
+                    f"Error in stream disconnect response recovery: {clean_err}\n{frappe.get_traceback()}"
+                )
 
 # ---------------------------------------------------------------------------
 # Permission query conditions — used by hooks.py permission_query_conditions

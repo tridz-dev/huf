@@ -61,6 +61,7 @@ class HufRole(Document):
 			"Huf User Role",
 			filters={"huf_role": self.name, "enabled": 1},
 			fields=["user"],
+			# Reading role assignments to bust affected users' capability cache; the caller already holds permission to modify this role.
 			ignore_permissions=True,
 		)
 		for row in users:

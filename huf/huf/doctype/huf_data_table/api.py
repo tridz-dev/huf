@@ -226,8 +226,8 @@ def delete_data_table(name: str) -> dict:
 	record_count = 0
 	try:
 		record_count = frappe.db.count(doctype_name)
-	except Exception:
-		pass
+	except (frappe.DoesNotExistError, frappe.DataError):
+		record_count = 0
 
 	if frappe.db.exists("DocType", doctype_name):
 		frappe.delete_doc("DocType", doctype_name, force=True)
@@ -255,7 +255,7 @@ def get_table_record_counts(names: str | list[str]) -> dict:
 		try:
 			registry = frappe.get_doc("Huf Data Table", name)
 			counts[name] = frappe.db.count(registry.doctype_name)
-		except Exception:
+		except (frappe.DoesNotExistError, frappe.DataError):
 			counts[name] = 0
 
 	return counts
