@@ -48,10 +48,10 @@
     {
       "id": "web_search",
       "name": "Web Search",
-      "description": "Search the web for live information via Google Programmable Search.",
+      "description": "Search the web for live information via Perplexity AI.",
       "icon": "search",
       "toolTypes": [
-        "Google Search"
+        "Perplexity Search"
       ]
     },
     {
