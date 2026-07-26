@@ -95,7 +95,7 @@ def upload_audio_and_transcribe(filename: str, b64data: str, docname: str = None
                     },
                 )
             except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError) as e:
-                logger.warning(f"Error checking tool permission for {tool_link.tool}: {e!s}")
+                logger.warning(f"Create audio user message failed: {e!s}")
     except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, RuntimeError) as e:
         logger.warning(f"Audio transcription failed: {e!s}")
         frappe.db.set_value("Agent Message", msg.name, "status", "Failed")

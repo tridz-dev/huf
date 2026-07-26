@@ -5,7 +5,7 @@ import frappe
 from frappe import _
 from frappe.model import display_fieldtypes, no_value_fields, table_fields
 
-from huf.permissions import has_capability
+from huf.permissions import DEFAULT_ROLE_CAPABILITIES, HUF_ROLE_FRAPPE_ROLE_MAP, SYSTEM_MANAGER, has_capability
 
 from .validators import (
 	LAYOUT_FIELD_TYPES,
