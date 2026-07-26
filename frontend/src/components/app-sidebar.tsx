@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, ChevronRight, Shield } from "lucide-react"
+import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, ChevronRight, Shield, FileText } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -49,8 +49,8 @@ const buildNavItems = [
   {
     title: "Agent Prompts",
     url: "/prompts",
-    icon: ScrollText,
-    capability: "agent.use",
+    icon: FileText,
+    capability: "agent.edit",
   },
   {
     title: "Flows",
@@ -68,7 +68,7 @@ const buildNavItems = [
     title: "Knowledge",
     url: "/knowledge",
     icon: BookOpen,
-    capability: "agent.use",
+    capability: "knowledge.use",
   },
 ]
 
@@ -118,13 +118,13 @@ const settingsNavItems = [
     title: "Models",
     url: "/models",
     icon: Cpu,
-    capability: "system.providers.manage",
+    capability: "system.models.manage",
 	},
 	{
 		title: "Agent Summary Prompts",
 		url: "/summary-prompts",
 		icon: ScrollText,
-		capability: "agent.use",
+		capability: "agent.edit",
   },
   {
     title: "Console",

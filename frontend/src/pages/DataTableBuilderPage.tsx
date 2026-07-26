@@ -196,7 +196,7 @@ export function DataTableBuilderPage() {
 			const newField: DataTableFieldDef = {
 				fieldname,
 				fieldtype: type,
-				label: isLayout ? '' : '',
+				label: '',
 				...(isLayout ? {} : { in_list_view: state.fields.filter(
 					(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
 				).length < 4 ? 1 : 0 as 0 | 1 }),
@@ -253,9 +253,9 @@ export function DataTableBuilderPage() {
 				allowNavigationRef.current = true;
 				navigate(`/data/${result.name}`);
 			}
-		} catch (err: any) {
+		} catch (err: unknown) {
 			toast.error(isEdit ? 'Failed to update table' : 'Failed to create table', {
-				description: err.message,
+				description: err instanceof Error ? err.message : String(err),
 			});
 		} finally {
 			setSaving(false);

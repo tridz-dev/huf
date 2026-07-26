@@ -214,7 +214,7 @@ function AppShell() {
           <Route
             path="/models"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.models.manage">
                 <Suspense fallback={<PageLoader />}>
                   <ModelsPageWrapper />
                 </Suspense>
@@ -224,7 +224,7 @@ function AppShell() {
           <Route
             path="/providers"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.providers.manage">
                 <Suspense fallback={<PageLoader />}>
                   <AiProvidersPageWrapper />
                 </Suspense>
@@ -366,7 +366,7 @@ function AppShell() {
           <Route
             path="/integrations"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationSettingsListingPageWrapper />
                 </Suspense>
@@ -376,7 +376,7 @@ function AppShell() {
           <Route
             path="/integrations/:settingId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationSettingsDetailsPageWrapper />
                 </Suspense>
@@ -386,7 +386,7 @@ function AppShell() {
           <Route
             path="/integration-services"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationServicesListingPageWrapper />
                 </Suspense>
@@ -396,7 +396,7 @@ function AppShell() {
           <Route
             path="/integration-services/:serviceId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationServiceFormPageWrapper />
                 </Suspense>
@@ -406,7 +406,7 @@ function AppShell() {
           <Route
             path="/mcp"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.mcp.manage">
                 <UnifiedLayout headerActions={<McpHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <McpListingPage />
@@ -418,7 +418,7 @@ function AppShell() {
           <Route
             path="/mcp/:mcpId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="system.mcp.manage">
                 <Suspense fallback={<PageLoader />}>
                   <McpDetailsPageWrapper />
                 </Suspense>
@@ -438,7 +438,7 @@ function AppShell() {
           <Route
             path="/users"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="users.manage">
                 <UnifiedLayout headerActions={<UsersHeaderActions />}>
                   <UsersPage />
                 </UnifiedLayout>
@@ -448,7 +448,7 @@ function AppShell() {
           <Route
             path="/roles"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute capability="roles.manage">
                 <UnifiedLayout>
                   <RolesPage />
                 </UnifiedLayout>
