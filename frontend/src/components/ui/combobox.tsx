@@ -32,6 +32,8 @@ export interface ComboboxProps {
   emptyText?: string;
   searchPlaceholder?: string;
   linkTo?: (value: string) => string | undefined;
+  onSearchChange?: (search: string) => void;
+  shouldFilter?: boolean;
 }
 
 export function Combobox({
@@ -43,6 +45,8 @@ export function Combobox({
   emptyText = 'No option found.',
   searchPlaceholder = 'Search...',
   linkTo,
+  onSearchChange,
+  shouldFilter,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -72,8 +76,8 @@ export function Combobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+        <Command shouldFilter={shouldFilter}>
+          <CommandInput placeholder={searchPlaceholder} onValueChange={onSearchChange} />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
