@@ -16,6 +16,7 @@ import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 interface BuilderState {
 	tableName: string;
 	description: string;
+	tableGroup: string;
 	icon: string;
 	autonameMethod: string;
 	titleField: string;
@@ -28,6 +29,7 @@ interface BuilderState {
 type BuilderAction =
 	| { type: 'SET_TABLE_NAME'; payload: string }
 	| { type: 'SET_DESCRIPTION'; payload: string }
+	| { type: 'SET_TABLE_GROUP'; payload: string }
 	| { type: 'SET_ICON'; payload: string }
 	| { type: 'SET_AUTONAME_METHOD'; payload: string }
 	| { type: 'SET_TITLE_FIELD'; payload: string }
@@ -42,6 +44,7 @@ type BuilderAction =
 const initialState: BuilderState = {
 	tableName: '',
 	description: '',
+	tableGroup: '',
 	icon: '',
 	autonameMethod: 'Autoincrement',
 	titleField: '',
@@ -57,6 +60,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			return { ...state, tableName: action.payload, isDirty: true };
 		case 'SET_DESCRIPTION':
 			return { ...state, description: action.payload, isDirty: true };
+		case 'SET_TABLE_GROUP':
+			return { ...state, tableGroup: action.payload, isDirty: true };
 		case 'SET_ICON':
 			return { ...state, icon: action.payload, isDirty: true };
 		case 'SET_AUTONAME_METHOD':
@@ -114,6 +119,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				...state,
 				tableName: action.payload.table_name,
 				description: action.payload.description || '',
+				tableGroup: action.payload.table_group || '',
 				icon: action.payload.icon || '',
 				autonameMethod: action.payload.autoname_method || 'Autoincrement',
 				titleField: action.payload.title_field_name || '',
@@ -233,6 +239,7 @@ export function DataTableBuilderPage() {
 				await updateDataTable(state.registryName || tableId, {
 					fields: state.fields,
 					description: state.description,
+					table_group: state.tableGroup,
 					icon: state.icon,
 				});
 				toast.success('Table updated successfully');
@@ -244,6 +251,7 @@ export function DataTableBuilderPage() {
 					table_name: state.tableName.trim(),
 					fields: state.fields,
 					description: state.description,
+					table_group: state.tableGroup,
 					icon: state.icon,
 					autoname_method: state.autonameMethod,
 					title_field: state.titleField,
@@ -306,6 +314,7 @@ export function DataTableBuilderPage() {
 			<TableSettingsPanel
 				tableName={state.tableName}
 				description={state.description}
+				tableGroup={state.tableGroup}
 				icon={state.icon}
 				autonameMethod={state.autonameMethod}
 				titleField={state.titleField}
@@ -316,6 +325,9 @@ export function DataTableBuilderPage() {
 				}
 				onDescriptionChange={(v) =>
 					dispatch({ type: 'SET_DESCRIPTION', payload: v })
+				}
+				onTableGroupChange={(v) =>
+					dispatch({ type: 'SET_TABLE_GROUP', payload: v })
 				}
 				onIconChange={(v) =>
 					dispatch({ type: 'SET_ICON', payload: v })
@@ -334,8 +346,8 @@ export function DataTableBuilderPage() {
 		<div className="h-full flex flex-col">
 			<div className="flex-1 flex overflow-hidden relative">
 				{/* Left: Builder Canvas */}
-				<div className="flex-1 overflow-y-auto p-6">
-					<div className="max-w-2xl mx-auto">
+				<div className="flex-1 overflow-y-auto p-6 bg-paper">
+					<div className="max-w-2xl mx-auto rounded-none border border-line bg-panel p-6">
 						<TableBuilderCanvas
 							fields={state.fields}
 							selectedFieldIndex={state.selectedFieldIndex}
@@ -366,7 +378,7 @@ export function DataTableBuilderPage() {
 							type="button"
 							size="icon"
 							variant="outline"
-							className="fixed bottom-20 right-4 z-20 rounded-full bg-panel"
+							className="fixed bottom-20 right-4 z-20 rounded-none bg-panel"
 							onClick={() => setIsSidebarOpen(true)}
 						>
 							<Settings2 className="w-4 h-4" />
@@ -385,14 +397,14 @@ export function DataTableBuilderPage() {
 						</Sheet>
 					</>
 				) : (
-					<div className="w-80 border-l bg-paper-deep/30 overflow-y-auto p-4">
+					<div className="w-80 border-l border-line bg-panel overflow-y-auto p-4">
 						{sidebarContent}
 					</div>
 				)}
 			</div>
 
 			{/* Bottom action bar */}
-			<div className="border-t px-6 py-3 flex items-center justify-between bg-paper">
+			<div className="border-t border-line px-6 py-4 flex items-center justify-between bg-panel">
 				<Button
 					variant="outline"
 					onClick={() => navigate(isEdit ? `/data/${tableId}` : '/data')}

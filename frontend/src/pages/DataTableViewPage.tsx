@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DataRecordList } from '@/components/data-table/DataRecordList';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
+import { BulkImportModal } from '@/components/data-table/BulkImportModal';
 import {
 	getTableSchema,
 	getTableRecords,
@@ -32,6 +33,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+	const [importModalOpen, setImportModalOpen] = useState(false);
 
 	const loadSchema = useCallback(async () => {
 		if (!tableId) return;
@@ -55,6 +57,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				const result = await getTableRecords(schema.doctype_name, {
 					limit: 20,
 					start,
+					search: search || undefined,
 				});
 				if (reset) {
 					setRecords(result.items);
@@ -70,7 +73,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				setRecordsLoading(false);
 			}
 		},
-		[schema, page]
+		[schema, page, search]
 	);
 
 	useEffect(() => {
@@ -102,13 +105,17 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 		onHeaderActionsChange(
 			<div className="flex items-center gap-2">
-				<Button size="sm" onClick={handleAddRecord}>
+				<Button size="sm" onClick={handleAddRecord} className="rounded-none">
 					<Plus className="w-3.5 h-3.5 mr-1.5" />
 					Add Record
 				</Button>
+				<Button size="sm" variant="outline" onClick={() => setImportModalOpen(true)}>
+					<Upload className="w-3.5 h-3.5 mr-1.5" />
+					Import Data
+				</Button>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button variant="outline" size="sm" className="w-8 px-0">
+						<Button variant="outline" size="sm" className="w-8 px-0 rounded-none border-line text-steel hover:bg-paper-deep hover:text-ink">
 							<MoreVertical className="h-4 w-4" />
 							<span className="sr-only">Open menu</span>
 						</Button>
@@ -117,6 +124,10 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 						<DropdownMenuItem onClick={() => navigate(`/data/${tableId}/edit`)}>
 							<Pencil className="w-3.5 h-3.5 mr-2" />
 							Edit Table
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={() => setAgentAccessOpen(true)}>
+							<Bot className="w-3.5 h-3.5 mr-2" />
+							Add to agent…
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							onClick={() => setDeleteDialogOpen(true)}
@@ -190,13 +201,14 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 							placeholder="Search records..."
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
-							className="h-8 text-sm max-w-sm"
+                            onKeyDown={(e) => { if (e.key === 'Enter') loadRecords(true); }}
+							className="h-8 text-sm max-w-sm rounded-none border-line bg-panel text-ink focus-visible:ring-1 focus-visible:ring-steel"
 						/>
 					</div>
 					<Button
 						variant="ghost"
 						size="icon"
-						className="h-8 w-8"
+						className="h-8 w-8 rounded-none border border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
 						onClick={() => loadRecords(true)}
 					>
 						<RefreshCcw className="w-3.5 h-3.5" />
@@ -205,12 +217,12 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 				{/* Records table */}
 				{records.length === 0 && !recordsLoading ? (
-					<div className="flex flex-col items-center justify-center py-16 border border-dashed rounded-none">
+					<div className="flex flex-col items-center justify-center py-16 border border-dashed border-line bg-panel rounded-none">
 						<Database className="w-10 h-10 text-steel-soft mb-3" />
 						<p className="text-sm text-steel mb-3">
 							No records in this table yet
 						</p>
-						<Button size="sm" onClick={handleAddRecord}>
+						<Button size="sm" onClick={handleAddRecord} className="rounded-none">
 							<Plus className="w-3.5 h-3.5 mr-1.5" />
 							Add First Record
 						</Button>
@@ -232,6 +244,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 							size="sm"
 							onClick={() => loadRecords(false)}
 							disabled={recordsLoading}
+                            className="rounded-none border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
 						>
 							{recordsLoading ? (
 								<Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
@@ -251,6 +264,17 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				onConfirm={handleDeleteTable}
 				loading={deleting}
 			/>
+
+			{/* Bulk Import Modal */}
+			{tableId && (
+				<BulkImportModal
+					open={importModalOpen}
+					onOpenChange={setImportModalOpen}
+					tableId={tableId}
+					tableName={schema.table_name}
+					onImportComplete={() => loadRecords(true)}
+				/>
+			)}
 		</div>
 	);
 }
