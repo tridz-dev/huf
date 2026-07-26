@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Combobox, ComboboxOption } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
-import { getTableRecords, getTableSchema, getTableRecord } from '@/services/dataTableApi';
+import { getTableRecords, getTableRecord } from '@/services/dataTableApi';
+import { db } from '@/lib/frappe-sdk';
 
 export interface LinkFieldInputProps {
   targetDoctype?: string;
@@ -26,9 +27,13 @@ export function LinkFieldInput({ targetDoctype, value, onChange, disabled }: Lin
     let isMounted = true;
     const init = async () => {
       try {
-        const schema = await getTableSchema(targetDoctype);
-        if (isMounted && (schema as unknown as { title_field?: string })?.title_field) {
-          setTitleField((schema as unknown as { title_field?: string }).title_field!);
+        const result = await db.getDocList('Huf Data Table', {
+          fields: ['name', 'title_field_name'],
+          filters: [['doctype_name', '=', targetDoctype]],
+          limit: 1
+        });
+        if (isMounted && result && result.length > 0 && result[0].title_field_name) {
+          setTitleField(result[0].title_field_name);
         }
       } catch (err) {
         console.error('Failed to fetch schema for link field', err);
