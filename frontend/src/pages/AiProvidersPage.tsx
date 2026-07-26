@@ -16,7 +16,7 @@ import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/d
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { createModel, getModels, getProvider, getProviders, updateProvider, createProvider } from '../services/providerApi';
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIProvider, AIModel } from '../types/agent.types';
 import { ProviderBrandSelect } from '@/components/providers/ProviderBrandSelect';
@@ -66,6 +66,7 @@ const STARTER_PATHS: Record<StarterPath, {
 };
 
 export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const configureHandledRef = useRef(false);
   const [models, setModels] = useState<AIModel[]>([]);
@@ -75,6 +76,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   const [loadingProvider, setLoadingProvider] = useState(false);
   const [saving, setSaving] = useState(false);
   const [starterPath, setStarterPath] = useState<StarterPath | null>(null);
+  const [completedStarter, setCompletedStarter] = useState<StarterPath | null>(null);
   const [starterApiKey, setStarterApiKey] = useState('');
   const [starterSaving, setStarterSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -321,6 +323,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       toast.success(`${starter.providerName} is ready`, {
         description: `You can now create an agent with ${starter.modelName}. The key has not been tested yet.`,
       });
+      setCompletedStarter(starterPath);
       setStarterPath(null);
       setStarterApiKey('');
       reset();
@@ -365,7 +368,20 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row">
-          {(Object.entries(STARTER_PATHS) as [StarterPath, typeof STARTER_PATHS[StarterPath]][]).map(([path, starter]) => (
+          {completedStarter ? (
+            <div className="flex w-full flex-col gap-3 rounded-md border border-primary/20 bg-background/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div>
+                  <p className="text-sm font-medium">Your {STARTER_PATHS[completedStarter].providerName} starter is ready</p>
+                  <p className="text-xs text-muted-foreground">Next, create an agent and choose {STARTER_PATHS[completedStarter].modelName}.</p>
+                </div>
+              </div>
+              <Button className="shrink-0" onClick={() => navigate('/agents/new')}>
+                Create your first agent<ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          ) : (Object.entries(STARTER_PATHS) as [StarterPath, typeof STARTER_PATHS[StarterPath]][]).map(([path, starter]) => (
             <Button key={path} variant="outline" className="h-auto flex-1 justify-between whitespace-normal text-left" onClick={() => setStarterPath(path)}>
               <span>
                 <span className="block font-medium">{starter.title}</span>
