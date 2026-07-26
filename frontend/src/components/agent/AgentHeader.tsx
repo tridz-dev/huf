@@ -14,6 +14,8 @@ import {
 import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
+import { formatTimeAgo } from '@/utils/time';
+import { InlineEditName } from '@/components/common/InlineEditName';
 
 interface AgentHeaderProps {
   form: UseFormReturn<AgentFormValues>;
@@ -31,6 +33,9 @@ interface AgentHeaderProps {
   onViewLogs: () => void;
   onDelete: () => void;
   agentId?: string;
+  allowChat: boolean;
+  lastRun?: string | null;
+  totalRun?: number | null;
 }
 
 export function AgentHeader({
@@ -49,6 +54,9 @@ export function AgentHeader({
   onViewLogs,
   // onDelete,
   agentId,
+  allowChat,
+  lastRun,
+  totalRun,
 }: AgentHeaderProps) {
   const watchProvider = form.watch('provider');
   const watchModel = form.watch('model');
@@ -67,12 +75,20 @@ export function AgentHeader({
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
-          <Input
-            value={form.watch('agent_name')}
-            onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
-            className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-            placeholder="Agent Name"
-          />
+          {isNew ? (
+            <Input
+              value={form.watch('agent_name')}
+              onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
+              className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
+              placeholder="Agent Name"
+            />
+          ) : (
+            <InlineEditName
+              value={form.watch('agent_name')}
+              onChange={(value) => form.setValue('agent_name', value, { shouldDirty: true })}
+              placeholder="Agent Name"
+            />
+          )}
           <Badge variant={watchDisabled ? 'secondary' : 'default'}>
             {watchDisabled ? 'Disabled' : 'Active'}
           </Badge>
@@ -83,15 +99,25 @@ export function AgentHeader({
             {models.find(m => m.name === watchModel)?.model_name || watchModel || 'Model'}
           </Badge>
         </div>
-        {activeTriggerCount > 0 && (
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            {activeTriggerCount} active {activeTriggerCount === 1 ? 'trigger' : 'triggers'}
-          </div>
-        )}
+        <div className="flex flex-col gap-1 text-sm text-steel">
+          {activeTriggerCount > 0 && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 shrink-0" />
+              <span>
+                {activeTriggerCount} active {activeTriggerCount === 1 ? 'trigger' : 'triggers'}
+              </span>
+            </div>
+          )}
+          {!isNew && (lastRun !== undefined || totalRun !== undefined) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+              <span>Last run: {lastRun ? formatTimeAgo(lastRun) : 'Never'}</span>
+              <span>Total runs: {totalRun ?? 0}</span>
+            </div>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-2">
-        <Button 
+        {!isNew && (<Button 
           variant="outline" 
           size="icon-sm" 
           onClick={onRunTest} 
@@ -100,11 +126,11 @@ export function AgentHeader({
           title={isNew ? 'Save agent first to run test' : runningTest ? 'Running...' : 'Run test'}
         >
           <Play className="w-4 h-4" />
-        </Button>
-        <Button variant="outline" size="sm" type="button" onClick={handleOpenChat}>
+        </Button>)}
+        {(!isNew && allowChat) && (<Button variant="outline" size="sm" type="button" onClick={handleOpenChat}>
           <MessageSquare className="w-4 h-4 mr-2" />
           Chat
-        </Button>
+        </Button>)}
         {showSaveButton && (
           <Button size="sm" onClick={onSave} disabled={saving}>
             <Save className="w-4 h-4 mr-2" />

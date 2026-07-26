@@ -8,18 +8,24 @@
  * Toolbar toggles "JSX only" (default) / "Full message".
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, ExternalLink, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
-import { parseJSXPreviews, hasJSXPreviews } from '@/utils/jsxPreviewParser';
-import { parseArtifacts, hasArtifacts } from '@/utils/artifactParser';
-import { parseWebPreviews, hasWebPreviews } from '@/utils/webPreviewParser';
-import { MessageResponse } from '@/components/ai-elements/message';
+import {
+	parseMessagePreviewContent,
+	hasJsxOrChartContent,
+} from '@/utils/messageContentParser';
+import { readPreviewCache } from '@/utils/previewCache';
 import { JSXPreviewRenderer } from '@/components/chat/JSXPreviewRenderer';
+
+/** Lazy load MessageResponse (Streamdown) - ~1.2MB, only needed for full message view */
+const MessageResponse = lazy(() =>
+	import('@/components/ai-elements/message').then((m) => ({ default: m.MessageResponse })),
+);
 import { WebPreviewRenderer } from '@/components/chat/WebPreviewRenderer';
 import { ArtifactRenderer } from '@/components/chat/ArtifactRenderer';
 import type { ParsedJSXPreview, ParsedArtifact, ParsedWebPreview } from '@/types/artifact.types';
@@ -33,18 +39,49 @@ interface AgentMessageDoc {
 	agent?: string;
 }
 
-function decodeHtmlEntities(text: string): string {
-	if (typeof document === 'undefined') {
-		return text
-			.replace(/&lt;/g, '<')
-			.replace(/&gt;/g, '>')
-			.replace(/&quot;/g, '"')
-			.replace(/&#39;/g, "'")
-			.replace(/&amp;/g, '&');
+function applyParsedContent(
+	setTextContent: (v: string) => void,
+	setJsxPreviews: (v: ParsedJSXPreview[]) => void,
+	setWebPreviews: (v: ParsedWebPreview[]) => void,
+	setArtifacts: (v: ParsedArtifact[]) => void,
+	content: string
+): boolean {
+	const parsed = parseMessagePreviewContent(content);
+	setTextContent(parsed.textContent);
+	setJsxPreviews(parsed.jsxPreviews);
+	setWebPreviews(parsed.webPreviews);
+	setArtifacts(parsed.artifacts);
+	return hasJsxOrChartContent(parsed);
+}
+
+async function fetchMessageContentById(messageId: string): Promise<AgentMessageDoc | null> {
+	try {
+		const doc = await db.getDoc(doctype['Agent Message'], messageId);
+		return doc as unknown as AgentMessageDoc;
+	} catch {
+		return null;
 	}
-	const textarea = document.createElement('textarea');
-	textarea.innerHTML = text;
-	return textarea.value;
+}
+
+async function fetchMessageByAgentRun(messageId: string): Promise<AgentMessageDoc | null> {
+	try {
+		const messages = await db.getDocList(doctype['Agent Message'], {
+			fields: ['name', 'content', 'conversation', 'kind', 'role', 'agent'],
+			filters: [['agent_run', '=', messageId]],
+			orderBy: { field: 'creation', order: 'desc' },
+			limit: 5,
+		});
+
+		for (const doc of messages as AgentMessageDoc[]) {
+			if (hasJsxOrChartContent(parseMessagePreviewContent(doc.content || ''))) {
+				return doc;
+			}
+		}
+
+		return messages.length > 0 ? (messages[0] as AgentMessageDoc) : null;
+	} catch {
+		return null;
+	}
 }
 
 export function PreviewViewPage() {
@@ -67,40 +104,60 @@ export function PreviewViewPage() {
 			return;
 		}
 
-		async function fetchMessage() {
+		async function loadPreview() {
+			const cached = readPreviewCache(messageId!);
+			if (cached) {
+				setTextContent(cached.textContent);
+				setJsxPreviews(cached.jsxPreviews);
+				setWebPreviews(cached.webPreviews);
+				setArtifacts(cached.artifacts);
+				setLoading(false);
+				return;
+			}
+
 			try {
-				const doc = await db.getDoc(doctype['Agent Message'], messageId!);
-				const agentMessage = doc as unknown as AgentMessageDoc;
-				setMessage(agentMessage);
+				let agentMessage = await fetchMessageContentById(messageId!);
 
-				const decoded = decodeHtmlEntities(agentMessage.content || '');
+				if (agentMessage) {
+					const hasJsx = applyParsedContent(
+						setTextContent,
+						setJsxPreviews,
+						setWebPreviews,
+						setArtifacts,
+						agentMessage.content || ''
+					);
 
-				// Parse in same order as MessageContentWithArtifacts: JSX → web → artifacts
-				let remaining = decoded;
-				const previews: ParsedJSXPreview[] = [];
-				const web: ParsedWebPreview[] = [];
-				const arts: ParsedArtifact[] = [];
-
-				if (hasJSXPreviews(remaining)) {
-					const parsed = parseJSXPreviews(remaining);
-					remaining = parsed.text;
-					previews.push(...parsed.previews);
+					if (!hasJsx) {
+						const fallback = await fetchMessageByAgentRun(messageId!);
+						if (fallback) {
+							agentMessage = fallback;
+							applyParsedContent(
+								setTextContent,
+								setJsxPreviews,
+								setWebPreviews,
+								setArtifacts,
+								fallback.content || ''
+							);
+						}
+					}
+				} else {
+					agentMessage = await fetchMessageByAgentRun(messageId!);
+					if (agentMessage) {
+						applyParsedContent(
+							setTextContent,
+							setJsxPreviews,
+							setWebPreviews,
+							setArtifacts,
+							agentMessage.content || ''
+						);
+					}
 				}
-				if (hasWebPreviews(remaining)) {
-					const parsed = parseWebPreviews(remaining);
-					remaining = parsed.text;
-					web.push(...parsed.previews);
-				}
-				if (hasArtifacts(remaining)) {
-					const parsed = parseArtifacts(remaining);
-					remaining = parsed.text;
-					arts.push(...parsed.artifacts);
-				}
 
-				setTextContent(remaining.replace(/\n{3,}/g, '\n\n').trim());
-				setJsxPreviews(previews);
-				setWebPreviews(web);
-				setArtifacts(arts);
+				if (agentMessage) {
+					setMessage(agentMessage);
+				} else {
+					setError('Failed to load message. It may not exist or you may not have access.');
+				}
 			} catch (err) {
 				handleFrappeError(err, 'Error fetching message');
 				setError('Failed to load message. It may not exist or you may not have access.');
@@ -109,14 +166,14 @@ export function PreviewViewPage() {
 			}
 		}
 
-		fetchMessage();
+		loadPreview();
 	}, [messageId]);
 
 	// Loading state
 	if (loading) {
 		return (
-			<div className="flex h-screen items-center justify-center bg-background">
-				<div className="flex flex-col items-center gap-3 text-muted-foreground">
+			<div className="flex h-screen items-center justify-center bg-paper">
+				<div className="flex flex-col items-center gap-3 text-steel">
 					<Loader2 className="size-8 animate-spin" />
 					<p className="text-sm">Loading preview...</p>
 				</div>
@@ -127,12 +184,12 @@ export function PreviewViewPage() {
 	// Error state
 	if (error) {
 		return (
-			<div className="flex h-screen items-center justify-center bg-background">
+			<div className="flex h-screen items-center justify-center bg-paper">
 				<div className="flex max-w-md flex-col items-center gap-4 text-center">
-					<AlertCircle className="size-10 text-muted-foreground" />
+					<AlertCircle className="size-10 text-steel-soft" />
 					<div>
 						<p className="font-medium text-foreground">{error}</p>
-						<p className="mt-1 text-sm text-muted-foreground">
+						<p className="mt-1 text-sm text-steel">
 							Message ID: {messageId}
 						</p>
 					</div>
@@ -165,7 +222,7 @@ export function PreviewViewPage() {
 	const viewFullUrl = messageId ? `/view/${messageId}?preview=full` : '';
 
 	return (
-		<div className="flex h-screen flex-col bg-background">
+		<div className="flex h-screen flex-col bg-paper">
 			{/* Toolbar */}
 			<header className="flex shrink-0 items-center justify-between border-b px-4 py-2">
 				<div className="flex items-center gap-3">
@@ -207,9 +264,8 @@ export function PreviewViewPage() {
 			<main ref={containerRef} className="min-h-0 flex-1 overflow-auto p-6">
 				<div className="mx-auto max-w-4xl space-y-4">
 					{jsxOnly ? (
-						/* JSX-only mode: only JSX previews and jsx/chart artifacts */
 						!showJsxOnlyContent ? (
-							<p className="text-sm text-muted-foreground">
+							<p className="text-sm text-steel">
 								No JSX or chart content in this message. Switch to Full message to see
 								everything.
 							</p>
@@ -224,12 +280,20 @@ export function PreviewViewPage() {
 							</>
 						)
 					) : !hasContent ? (
-						<p className="text-sm text-muted-foreground">No content in this message.</p>
+						<p className="text-sm font-body text-steel-soft">No content in this message.</p>
 					) : (
 						<>
 							{textContent && textContent.trim() && (
 								<div className="prose prose-sm dark:prose-invert max-w-none">
-									<MessageResponse>{textContent}</MessageResponse>
+									<Suspense
+										fallback={
+											<div className="animate-pulse rounded bg-paper-deep/50 p-4 text-sm text-steel">
+												Loading…
+											</div>
+										}
+									>
+										<MessageResponse>{textContent}</MessageResponse>
+									</Suspense>
 								</div>
 							)}
 							{jsxPreviews.map((preview, idx) => (

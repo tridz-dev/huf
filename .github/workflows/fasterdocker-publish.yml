@@ -1,0 +1,163 @@
+name: Publish FasterDocker images
+
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      huf_image_tag:
+        description: 'Tag for HUF demo image (e.g. 06655cf or v0.11.0)'
+        required: true
+        default: 'latest'
+
+env:
+  REGISTRY: ghcr.io
+  HUF_DEMO_IMAGE: ghcr.io/tridz-dev/huf-demo
+
+jobs:
+  # Physical MariaDB snapshots are architecture-specific, so we build the demo
+  # image once per architecture on native runners and then assemble a manifest
+  # list. Using QEMU for the snapshot generation would be fragile and slow.
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            os: ubuntu-latest
+            suffix: amd64
+          - platform: linux/arm64
+            os: ubuntu-24.04-arm
+            suffix: arm64
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # ghcr.io container packages have their own "Manage Actions access"
+          # list, separate from repo/org Actions permissions. This package
+          # was first created via a manual push (not GITHUB_TOKEN), so that
+          # list was never populated and GITHUB_TOKEN gets permission_denied.
+          # Use a PAT with write:packages that already has push rights instead.
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Determine tags
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "huf_tag=${{ github.event.inputs.huf_image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "huf_tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build native Frappe runtime base image
+        # build-demo.sh (via Dockerfile.huf) expects huf-frappe-runtime:16.25.0
+        # to already exist locally. On a fresh runner it doesn't, and without
+        # this step Docker tries (and fails) to pull it from Docker Hub.
+        run: |
+          set -euo pipefail
+          docker build -f docker/fast/Dockerfile.runtime -t huf-frappe-runtime:16.25.0 .
+
+      - name: Bake site seed
+        # docker/fast/.bake-output is gitignored (repo only ships a .gitkeep),
+        # so a fresh checkout has no seed. Build a seed-less huf-app first,
+        # use it to bake a real site via compose.bake.yml, then build the seed
+        # image and rebuild huf-app so the seed is actually embedded before
+        # build-demo.sh runs. Mirrors the manual steps used to verify this
+        # locally on arm64.
+        env:
+          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+        run: |
+          set -euo pipefail
+          docker build -f docker/fast/Dockerfile.huf -t "huf-app:${HUF_IMAGE_TAG}" .
+          # site-baker writes to this bind mount as UID 1000 (frappe). On a
+          # fresh Linux runner the checked-out directory is owned by the
+          # runner user, so mkdir inside the container fails with
+          # "Permission denied" (macOS Docker Desktop bind mounts don't
+          # enforce this, which is why it worked when verified locally).
+          mkdir -p docker/fast/.bake-output
+          chmod -R 0777 docker/fast/.bake-output
+          docker compose -p fasterdocker -f docker/compose.bake.yml up -d --build
+          trap 'docker compose -p fasterdocker -f docker/compose.bake.yml down -v --remove-orphans || true' EXIT
+          code="$(docker wait fasterdocker-build-site-baker)"
+          docker compose -p fasterdocker -f docker/compose.bake.yml logs site-baker
+          if [ "${code}" != "0" ]; then
+            echo "::error::site-baker exited with code ${code}"
+            exit 1
+          fi
+          docker compose -p fasterdocker -f docker/compose.bake.yml down -v --remove-orphans
+          trap - EXIT
+          ./docker/fast/bake-seed.sh sql
+          docker build -f docker/fast/Dockerfile.huf -t "huf-app:${HUF_IMAGE_TAG}" .
+
+      - name: Build and push per-arch HUF demo image
+        env:
+          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+          HUF_DEMO_IMAGE: ${{ env.HUF_DEMO_IMAGE }}
+          DOCKER_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          ./docker/fast/build-demo.sh
+          docker tag "huf-demo:${HUF_IMAGE_TAG}" "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-${{ matrix.suffix }}"
+          docker push "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-${{ matrix.suffix }}"
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        # Without this, `git rev-parse --short HEAD` in "Determine tags"
+        # below has no repo to read. It fails silently (the echo/output write
+        # still "succeeds"), producing an empty huf_tag and
+        # "ERROR: invalid reference format" from imagetools create.
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # ghcr.io container packages have their own "Manage Actions access"
+          # list, separate from repo/org Actions permissions. This package
+          # was first created via a manual push (not GITHUB_TOKEN), so that
+          # list was never populated and GITHUB_TOKEN gets permission_denied.
+          # Use a PAT with write:packages that already has push rights instead.
+          password: ${{ secrets.GHCR_PUSH_TOKEN }}
+
+      - name: Determine tags
+        id: tags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "huf_tag=${{ github.event.inputs.huf_image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "huf_tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push manifest list
+        env:
+          HUF_IMAGE_TAG: ${{ steps.tags.outputs.huf_tag }}
+          HUF_DEMO_IMAGE: ${{ env.HUF_DEMO_IMAGE }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            -t "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}" \
+            -t "${HUF_DEMO_IMAGE}:latest" \
+            "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-amd64" \
+            "${HUF_DEMO_IMAGE}:${HUF_IMAGE_TAG}-arm64"

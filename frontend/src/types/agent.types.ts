@@ -1,12 +1,18 @@
 export type AIProvider = {
   name: string;
   provider_name: string;
+  provider_brand?: string;
 };
 
 export type AIModel = {
   name: string;
   model_name: string;
   provider: string;
+  modalities?: string;
+  use_custom_pricing?: number;
+  input_cost_per_1m_tokens?: number | null;
+  output_cost_per_1m_tokens?: number | null;
+  cached_input_cost_per_1m_tokens?: number | null;
 };
 
 export type ToolType =
@@ -31,6 +37,15 @@ export type ToolType =
   | "GET"
   | "POST"
   | "Run Agent"
+  | "Client Side Tool"
+  | "Get Conversation Data"
+  | "Set Conversation Data"
+  | "Load Conversation Data"
+  | "Transcription"
+  /**
+   * @deprecated Legacy value kept for backward compatibility with saved docs.
+   * New tools should use "Transcription" (displayed as "Audio Transcription").
+   */
   | "Speech to Text";
 
 export type AgentToolFunctionRef = {
@@ -55,7 +70,7 @@ export type AgentEnvironment = "Dev" | "Prod";
 export type AgentStatus = "Draft" | "Active" | "Archived";
 
 export type ScheduledInterval = "Hourly" | "Daily" | "Weekly" | "Monthly" | "Yearly";
-export type DocEventType = "before_insert" | "after_insert" | "validate" | "before_save" | "after_save" | "before_submit" | "on_submit" | "after_submit" | "on_cancel" | "before_rename" | "after_rename" | "on_trash" | "after_delete";
+export type DocEventType = "before_insert" | "after_insert" | "validate" | "before_save" | "after_save" | "before_submit" | "on_submit" | "on_update" | "after_submit" | "on_cancel" | "before_rename" | "after_rename" | "on_trash" | "after_delete";
 export type TriggerType = "Schedule" | "Doc Event" | "Webhook" | "App Event" | "Manual";
 
 export type AgentTrigger = {
@@ -151,6 +166,31 @@ export type AgentRun = {
   created_at: string;
 };
 
+export interface AgentPermissionUserRow {
+  user: string;
+}
+
+export interface AgentPermissionRoleRow {
+  role: string;
+}
+
+export interface AgentKnowledgeRow {
+  name?: string;
+  knowledge_source: string;
+  mode: 'Mandatory' | 'Optional';
+  priority: number;
+  max_chunks: number;
+  token_budget: number;
+  description?: string;
+}
+
+export interface AgentOrchestrationPlanRow {
+  name?: string;
+  step_index: number;
+  status: "pending" | "in_progress" | "done" | "failed";
+  instruction: string;
+  output_ref: string;
+}
 /**
  * Agent document type from Frappe
  * Represents the raw Agent document structure from Frappe database
@@ -171,8 +211,7 @@ export interface AgentDoc {
   agent_name: string;
   provider: string;
   model: string;
-  chef?: string | null; // Chef/provider name (e.g., OpenAI, Anthropic)
-  slug?: string | null; // Provider slug (e.g., openai, anthropic)
+  provider_brand?: string | null;
   disabled: number; // 0 or 1
   temperature: number;
   top_p: number;
@@ -192,11 +231,54 @@ export interface AgentDoc {
   description?: string | null;
   instructions: string;
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
+  agent_knowledge?: AgentKnowledgeRow[];
   agent_mcp_server?: Array<{
     mcp_server: string;
     enabled: 0 | 1;
-  }>; // Array of MCP server references
+  }>;
   last_run?: string | null; // Last execution timestamp
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
+  show_tool_execution_details?: 0 | 1; // 0 or 1
+  allow_guest?: number; // 0 or 1
+  allowed_users?: AgentPermissionUserRow[];
+  allowed_roles?: AgentPermissionRoleRow[];
+  default_plan: AgentOrchestrationPlanRow[];
+  prompt_mode: 'Local' | 'Template';
+  agent_prompt?: string;
+  prompt_version_locked?: number; // 0 or 1
+  template_version_at_attach?: number; // Version number when prompt was attached
+  copied_from_prompt?: string | null; // Name of the prompt this agent was copied from, if any
+  enable_prompt_caching?: number; // 0 or 1
+  cache_control_type?: string | null; // ephemeral or auto (DocType)
+  cache_system_message?: number; // 0 or 1
+  cache_conversation_history?: number; // 0 or 1
+  context_strategy?: string | null; // Summarize, FIFO, or None
+  summary_model?: string | null; // AI Model name for summarization when strategy is Summarize
+  summary_ratio?: number | null; // Ratio of history to summarize (0-1)
+  summary_prompt_mode?: 'Local' | 'Template';
+  summary_prompt_template?: string | null;
+  summary_prompt_version_locked?: number; // 0 or 1
+  summary_template_version_at_attach?: number;
+  summary_prompt?: string | null;
+  history_limit?: number | null; // Maximum number of messages to keep
+  max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
+  max_turns?: number | null; // Maximum consecutive turns/steps
+  max_context_chars?: number | null; // Maximum characters for tool results before truncation
+  enable_conversation_data?: number; // 0 or 1
+  inject_conversation_data?: number; // 0 or 1
+  conversation_data_api_permission?: '' | 'Read' | 'Write';
+  autonaming_of_conversation_title?: number; // 0 or 1
+
+  // Advanced model overrides
+  image_generation_model?: string | null;
+  tts_model?: string | null;
+  tts_voice?: string | null;
+  stt_model?: string | null;
+  allow_file_upload?: 0 | 1;
+  enable_ocr?: 0 | 1;
+  max_upload_size_mb?: number | null;
+
+  // Execution policy (advanced): run turns directly instead of queue-first
+  run_immediately?: 0 | 1;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Expand, Sparkles } from 'lucide-react';
+import { Expand } from 'lucide-react';
 import { FormControl } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -127,7 +127,7 @@ export function InstructionsTextarea({
         
         {/* Action buttons */}
         <div className={cn("absolute right-4 flex gap-2",isFormMode ? "top-4" : "top-2")}>
-          {showOptimize && onOptimizePrompt && (
+          {/* {showOptimize && onOptimizePrompt && (
             <Button
               type="button"
               size="sm"
@@ -138,7 +138,7 @@ export function InstructionsTextarea({
               <Sparkles className="w-4 h-4 mr-2" />
               {optimizingPrompt ? 'Optimizing...' : 'Optimize'}
             </Button>
-          )}
+          )} */}
         </div>
         
         {showExpand && !modalOpen && (
@@ -157,7 +157,7 @@ export function InstructionsTextarea({
 
       {/* Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-[95vw] w-full min-w-[600px] max-h-[90vh] flex flex-col">
+        <DialogContent className="w-full min-w-0 max-h-[90vh] sm:max-w-[95vw] flex flex-col">
           <DialogHeader>
             <DialogTitle>{modalTitle}</DialogTitle>
             <DialogDescription>Define system prompt, goals, and constraints</DialogDescription>

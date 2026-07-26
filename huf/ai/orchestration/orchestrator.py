@@ -4,6 +4,7 @@ import frappe
 from frappe.utils import now_datetime
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent_integration import run_agent_sync
+from huf.ai.transaction import commit_if_background
 
 
 def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversation_id=None, override_plan=None):
@@ -58,12 +59,12 @@ def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversati
         orch.status = "Failed"
         orch.error_log = "Planning failed: No steps available from Agent or Generator"
         orch.save()
-        frappe.db.commit()
+        commit_if_background()
         return orch.name
 
     orch.status = "Running"
     orch.save()
-    frappe.db.commit()
+    commit_if_background()
 
     return orch.name
 
@@ -75,7 +76,9 @@ def recreate_orchestration_plan(orch_name):
     orch = frappe.get_doc("Agent Orchestration", orch_name)
     agent_doc = frappe.get_doc("Agent", orch.agent)
     
-    plan_output = run_planning(orch.agent, agent_doc.instructions, agent_doc.provider, agent_doc.model)
+    from huf.ai.prompt_resolver import resolve_prompt
+    resolved_instructions = resolve_prompt(agent_doc) or ""
+    plan_output = run_planning(orch.agent, resolved_instructions, agent_doc.provider, agent_doc.model)
     steps = parse_plan_steps(plan_output)
     
     if steps:
@@ -186,7 +189,8 @@ def execute_next_step(orch=None, orch_name=None):
             channel_id="orchestration",
             parent_run_id=orch.parent_run,
             orchestration_id=orch.name,
-            conversation_id=orch.conversation
+            conversation_id=orch.conversation,
+            now=True
         )
 
         if result.get("success"):

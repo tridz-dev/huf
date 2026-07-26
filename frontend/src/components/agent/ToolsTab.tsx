@@ -1,4 +1,4 @@
-import { Plus, Server, Plug, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw, Edit, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,15 +6,20 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { MCPServerRef } from '@/services/mcpApi';
+import { getToolIconForType } from '../tools/toolIconMap';
+import { getAgentsUsingTool } from '@/services/toolApi';
+import { useEffect, useState } from 'react';
 
 interface ToolsTabProps {
   selectedTools: AgentToolFunctionRef[];
   toolTypes: AgentToolType[];
   onAddTools: () => void;
   onRemoveTool: (toolId: string) => void;
+  onEditTool?: (toolId: string) => void;
   // MCP Server props
   mcpServers?: MCPServerRef[];
   onAddMCP?: () => void;
+  onCreateMCP?: () => void;
   onRemoveMCP?: (serverId: string) => void;
   onToggleMCP?: (serverId: string, enabled: boolean) => void;
   onSyncMCP?: (serverId: string) => void;
@@ -23,17 +28,46 @@ interface ToolsTabProps {
 
 export function ToolsTab({
   selectedTools,
-  toolTypes,
+  toolTypes: _toolTypes,
   onAddTools,
   onRemoveTool,
+  onEditTool,
   mcpServers = [],
   onAddMCP,
+  onCreateMCP,
   onRemoveMCP,
   onToggleMCP,
   onSyncMCP,
   mcpLoading = false,
 }: ToolsTabProps) {
+  const [toolUsageMap, setToolUsageMap] = useState<Map<string, string[]>>(new Map());
 
+  // Load tool usage data for all selected tools
+  useEffect(() => {
+    if (selectedTools.length === 0) {
+      setToolUsageMap(new Map());
+      return;
+    }
+
+    const loadToolUsage = async () => {
+      const usageMap = new Map<string, string[]>();
+      await Promise.all(
+        selectedTools.map(async (tool) => {
+          try {
+            const agents = await getAgentsUsingTool(tool.name);
+            if (agents.length > 0) {
+              usageMap.set(tool.name, agents);
+            }
+          } catch (error) {
+            console.error(`Error loading usage for tool ${tool.name}:`, error);
+          }
+        })
+      );
+      setToolUsageMap(usageMap);
+    };
+
+    loadToolUsage();
+  }, [selectedTools]);
   const handleMCPAction = (action: string, serverId?: string) => {
     switch (action) {
       case 'add':
@@ -95,7 +129,7 @@ export function ToolsTab({
                 <Server className="w-5 h-5" />
                 Tools
               </CardTitle>
-              <CardDescription>Function tools available to this agent</CardDescription>
+              <CardDescription>The set of tools this agent is allowed to use to interact with the system.</CardDescription>
             </div>
             <Button size="sm" variant="outline" onClick={onAddTools} type="button">
               <Plus className="w-4 h-4 mr-2" />
@@ -105,8 +139,9 @@ export function ToolsTab({
         </CardHeader>
         <CardContent>
           {selectedTools.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">No tools added yet.</p>
+            <div className="text-center py-12 border border-dashed rounded-none bg-paper-deep/20">
+              <p className="font-body text-steel-soft mb-2">No tools configured yet.</p>
+              <p className="text-xs font-body text-steel-soft mb-4">Add tools to let this agent query data, run APIs, or call other agents.</p>
               <Button onClick={onAddTools} variant="outline" type="button">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Tool
@@ -115,35 +150,56 @@ export function ToolsTab({
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {selectedTools.map((tool) => {
-                const toolType = toolTypes.find((tt) => tt.name === tool.tool_type);
-                const toolTypeDisplayName = toolType?.name1;
-
+                const ToolIcon = getToolIconForType(tool.types);
+                const usedByAgents = toolUsageMap.get(tool.name) || [];
+                const isShared = usedByAgents.length > 0;
+                
                 return (
                   <div
                     key={tool.name}
-                    className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                    className="group flex flex-col lg:flex-row h-full lg:items-start lg:justify-between gap-3 rounded-none border p-4 hover:bg-paper-deep transition-colors"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
-                        {toolTypeDisplayName && (
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            {toolTypeDisplayName}
-                          </Badge>
+                    <div className="flex-1 min-w-0 flex items-start gap-3">
+                      <div className="mt-0.5 rounded-none border bg-paper-deep/30 p-1.5 text-steel">
+                        <ToolIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 space-y-1 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
+                        </div>
+                        <p className="text-xs text-steel-soft line-clamp-2">
+                          {tool.description || 'No description available.'}
+                        </p>
+                        {isShared && (
+                          <div className="flex w-fit items-center text-amber-600 bg-amber-50 px-2 py-0.5 rounded-none mt-2 text-[11px] font-semibold">
+                            <Users className="w-3 h-3 mr-1.5" />
+                            <span>Used in {usedByAgents.length} agent{usedByAgents.length > 1 ? 's' : ''}</span>
+                          </div>
                         )}
                       </div>
-                      {tool.description && (
-                        <p className="text-xs text-muted-foreground">{tool.description}</p>
-                      )}
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onRemoveTool(tool.name)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1 mt-2 lg:mt-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      {onEditTool && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEditTool(tool.name)}
+                          title="Edit tool"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveTool(tool.name)}
+                        title="Remove tool"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
@@ -161,47 +217,69 @@ export function ToolsTab({
                 <Plug className="w-5 h-5" />
                 Model Context Protocol (MCP)
               </CardTitle>
-              <CardDescription>Connected MCP servers for extended capabilities</CardDescription>
+              <CardDescription>Connect to external MCP servers for additional tool capabilities</CardDescription>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => handleMCPAction('add')}
-              disabled={mcpLoading}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Connect MCP
-            </Button>
+            <div className="flex items-center gap-2">
+              {onCreateMCP && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={onCreateMCP}
+                  disabled={mcpLoading}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create MCP
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => handleMCPAction('add')}
+                disabled={mcpLoading}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Connect MCP
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
           {mcpServers.length === 0 ? (
             <div className="text-center py-8">
               <div className="flex justify-center mb-4">
-                <div className="rounded-full bg-muted p-3">
-                  <Plug className="w-6 h-6 text-muted-foreground" />
+                <div className="rounded-full bg-paper-deep p-3">
+                  <Plug className="w-6 h-6 text-steel-soft" />
                 </div>
               </div>
-              <p className="text-muted-foreground mb-2">No MCP servers connected</p>
-              <p className="text-xs text-muted-foreground mb-4">
+              <p className="font-body text-steel mb-2">No MCP servers connected</p>
+              <p className="text-xs text-steel-soft mb-4">
                 Connect external MCP servers to extend agent capabilities with tools like Gmail, GitHub, Slack, and more.
               </p>
-              <Button
-                variant="outline"
-                type="button"
-                onClick={() => handleMCPAction('add')}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Connect MCP Server
-              </Button>
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                {onCreateMCP && (
+                  <Button variant="secondary" type="button" onClick={onCreateMCP}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create MCP
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => handleMCPAction('add')}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Connect MCP Server
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="">
               {mcpServers.map((mcp) => (
                 <div
                   key={mcp.name}
-                  className="flex items-start justify-between gap-3 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                  className="flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-3 rounded-none border p-4 hover:bg-paper-deep transition-colors"
                 >
                   <Link 
                     to={`/mcp/${mcp.mcp_server}`}
@@ -217,15 +295,15 @@ export function ToolsTab({
                       )}
                     </div>
                     {mcp.description && (
-                      <p className="text-xs text-muted-foreground">{mcp.description}</p>
+                      <p className="text-xs text-steel-soft">{mcp.description}</p>
                     )}
                     {mcp.server_url && (
-                        <p className="text-xs text-muted-foreground mt-1" title={mcp.server_url}>
+                        <p className="text-xs text-steel-soft mt-1" title={mcp.server_url}>
                         {mcp.server_url}
                       </p>
                     )}
                   </Link>
-                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-1 shrink-0 mt-2 sm:mt-0" onClick={(e) => e.stopPropagation()}>
                     <Button
                       type="button"
                       variant="ghost"

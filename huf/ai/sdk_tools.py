@@ -20,12 +20,42 @@ from .tool_functions import (
     get_value, set_value, get_report_result,attach_file_to_document
 )
 import re
-import hashlib
 from datetime import datetime, timedelta
 
 
 from .tool_registry import PermissionAwareToolRegistry
+from huf.ai.transaction import commit_if_background
+from huf.ai import audio_service
+
+logger = frappe.logger("huf")
 MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES
+
+# Guest-allowed tools of these types MUST pin a reference_doctype; otherwise the
+# LLM could supply an arbitrary doctype and, combined with the guest
+# ignore_permissions bypass, reach data outside the tool's intended scope.
+_GUEST_DOCTYPE_PINNED_TYPES = {
+    "Get Document",
+    "Get Multiple Documents",
+    "Get List",
+    "Create Document",
+    "Create Multiple Documents",
+    "Update Document",
+    "Update Multiple Documents",
+    "Delete Document",
+    "Delete Multiple Documents",
+    "Attach File to Document",
+}
+
+
+def _frappe_run_context_dict(ctx) -> dict:
+    """Huf run context may be a dict or an Agents SDK ToolContext wrapping that dict."""
+    if ctx is None:
+        return {}
+    if isinstance(ctx, dict):
+        return ctx
+    inner = getattr(ctx, "context", None)
+    return inner if isinstance(inner, dict) else {}
+
 
 def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_guest: bool = False):
     """Guard function to block dangerous tools for Guest users"""
@@ -53,7 +83,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
     2. Native tools from Agent Tool Function documents
     """
     tools = []
-    
+
     # Load MCP tools from linked MCP servers
     if hasattr(agent, "agent_mcp_server") and agent.agent_mcp_server:
         try:
@@ -61,15 +91,14 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             mcp_tools = create_mcp_tools(agent)
             tools.extend(mcp_tools)
         except Exception as e:
-            frappe.log_error(
-                f"Error loading MCP tools for agent: {str(e)}",
-                "MCP Tool Loading Error"
+            frappe.logger("huf").warning(
+                f"Error loading MCP tools for agent: {e!s}"
             )
-    
+
     # Load native tools from Agent Tool Function documents
 
     from huf.ai.tool_registry import PermissionAwareToolRegistry
-    
+
     allowed_tool_docs = PermissionAwareToolRegistry.get_allowed_tools(agent, frappe.session.user)
 
     for function_doc in allowed_tool_docs:
@@ -81,7 +110,7 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         continue
                     function_path = function_doc.function_path
                 elif function_doc.types == "Client Side Tool":
-                    function_path = "huf.ai.cilent_side_tool.client_side_function"
+                    function_path = "huf.ai.client_side_tool.client_side_function"
                     if not function_doc.function_name:
                         continue
                 else:
@@ -136,10 +165,9 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     if function_doc.params:
                         try:
                             params = json.loads(function_doc.params)
-                        except Exception as e:
-                            frappe.log_error(
-                                "SDK Functions Debug",
-                                f"Error parsing params for {function_doc.name}: {str(e)}"
+                        except json.JSONDecodeError as e:
+                            frappe.logger("huf").debug(
+                                f"Error parsing params for {function_doc.name}: {e!s}"
                             )
 
                     if "additionalProperties" in params:
@@ -161,14 +189,14 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         and function_doc.reference_doctype
                     ):
                         extra_args["reference_doctype"] = function_doc.reference_doctype
-                    
+
                     elif function_doc.types == "Client Side Tool":
                         if function_doc.function_name:
                             extra_args["function_name"] = function_doc.function_name
 
                     elif function_doc.types == "Run Agent":
                         if function_doc.agent:
-                            extra_args["agent_name"] = function_doc.agent
+                            extra_args["target_agent_name"] = function_doc.agent
 
                     tool = create_function_tool(
                         function_doc.tool_name,
@@ -184,15 +212,14 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         tools.append(tool)
 
             except Exception as e:
-                frappe.log_error(
-                    "SDK Functions Debug",
-                    f"Error processing function {function_doc.name}: {str(e)}"
+                frappe.logger("huf").debug(
+                    f"Error processing function {function_doc.name}: {e!s}"
                 )
 
-    
+
     if hasattr(agent, "enable_conversation_data") and agent.enable_conversation_data:
         existing_types = [t.name for t in tools]
-        
+
         # Get Conversation Data
         if "get_conversation_data" not in existing_types:
             tool = create_function_tool(
@@ -222,7 +249,9 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         "name": {"type": "string", "description": "Name of the item to set"},
                         "value": {"type": "string", "description": "Value to store (scalar, object, or array)"},
                         "value_type": {"type": "string", "description": "Type of value (scalar, object, array). Optional."},
-                        "source": {"type": "string", "description": "Source of data (agent/user). Default: agent"}
+                        "source": {"type": "string", "description": "Source of data (agent/user). Default: agent"},
+                        "auto_inject": {"type": "boolean", "description": "Whether to auto-inject this variable in the system prompt on future turns. Set false for high-volume variables to prevent context bloat. Default: true"},
+                        "inject_mode": {"type": "string", "enum": ["visible", "hidden"], "description": "Injection mode. 'visible' to auto-inject in system prompt (if enabled on agent), 'hidden' to keep it in the data layer only. Default: visible"}
                     },
                     "required": ["name", "value"]
                 }
@@ -242,6 +271,29 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                 }
             )
             if tool: tools.append(tool)
+
+    existing_types = [t.name for t in tools] if tools else []
+    if "get_result_context" not in existing_types:
+        tool = create_function_tool(
+            name="get_result_context",
+            description="Get the full result context of an out-of-band message reference by its handle.",
+            tool_name="huf.ai.sdk_tools.handle_get_result_context",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "reference_doctype": {
+                        "type": "string",
+                        "description": "The DocType of the referenced record (e.g. 'Agent Tool Call')"
+                    },
+                    "reference_name": {
+                        "type": "string",
+                        "description": "The name/ID of the referenced record"
+                    }
+                },
+                "required": ["reference_doctype", "reference_name"]
+            }
+        )
+        if tool: tools.append(tool)
 
     return tools
 
@@ -292,21 +344,29 @@ def create_function_tool(
 
                 args_dict = json.loads(args_json or "{}")
 
-                if isinstance(ctx, dict):
-                    if "conversation_id" in ctx:
-                        args_dict["conversation_id"] = ctx["conversation_id"]
-                    if "agent_run_id" in ctx:
-                        args_dict["agent_run_id"] = ctx["agent_run_id"]
-                    if "agent_name" in ctx:
-                        args_dict["agent_name"] = ctx["agent_name"]
+                huf_ctx = _frappe_run_context_dict(ctx)
+                if "conversation_id" in huf_ctx:
+                    args_dict["conversation_id"] = huf_ctx["conversation_id"]
+                if "agent_run_id" in huf_ctx:
+                    args_dict["agent_run_id"] = huf_ctx["agent_run_id"]
+                if "agent_name" in huf_ctx:
+                    args_dict["agent_name"] = huf_ctx["agent_name"]
 
                 if _extra_args:
                     args_dict.update(_extra_args)
 
                 if "ignore_permissions" in args_dict:
                     del args_dict["ignore_permissions"]
-                
+
                 if allowed_for_guest and frappe.session.user == "Guest":
+                    if tool_type in _GUEST_DOCTYPE_PINNED_TYPES and not _extra_args.get("reference_doctype"):
+                        return json.dumps({
+                            "error": (
+                                "This tool is not available for guest access: it has no "
+                                "fixed target doctype configured."
+                            ),
+                            "denied": True,
+                        })
                     args_dict["ignore_permissions"] = True
 
                 if _function.__name__ in ["handle_get_request", "handle_post_request"]:
@@ -315,20 +375,20 @@ def create_function_tool(
 
                 sig = inspect.signature(_function)
                 accepts_kwargs = any(
-                    p.kind == inspect.Parameter.VAR_KEYWORD 
+                    p.kind == inspect.Parameter.VAR_KEYWORD
                     for p in sig.parameters.values()
                 )
                 if accepts_kwargs:
                     result = _function(**args_dict)
                 else:
                     valid_params = set(sig.parameters.keys())
-                    
+
                     filtered_args = {
-                        k: v for k, v in args_dict.items() 
+                        k: v for k, v in args_dict.items()
                         if k in valid_params
                     }
                     result = _function(**filtered_args)
-                
+
                 # Handle async functions
                 if asyncio.iscoroutine(result):
                     result = await result
@@ -339,7 +399,9 @@ def create_function_tool(
                 return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
 
             except Exception as e:
-                frappe.log_error(f"Error in on_invoke_tool for tool '{name}': {str(e)}", "SDK Functions Debug")
+                frappe.logger("huf").debug(
+                    f"Error in on_invoke_tool for tool '{name}': {e!s}"
+                )
                 return json.dumps({"error": str(e)})
 
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', (name or ""))
@@ -360,7 +422,9 @@ def create_function_tool(
         return tool
 
     except Exception as e:
-        frappe.log_error(f"Error creating FunctionTool for {name}: {str(e)}", "SDK Functions Debug")
+        frappe.logger("huf").debug(
+            f"Error creating FunctionTool for {name}: {e!s}"
+        )
         return None
 
 
@@ -378,28 +442,27 @@ def get_function_from_name(tool_name: str) -> Callable:
 	try:
 		try:
 			module_name, func_name = tool_name.rsplit(".", 1)
-		except ValueError as ve:
-			frappe.log_error(
-				"SDK Functions Debug",
-				f"Invalid function name format: {tool_name}. Should be 'module.function'",
+		except ValueError:
+			frappe.logger("huf").debug(
+				f"Invalid function name format: {tool_name}. Should be 'module.function'"
 			)
 			return None
 
 		try:
 			module = __import__(module_name, fromlist=[func_name])
 		except ImportError as ie:
-			frappe.log_error("SDK Functions Debug", f"Module import error: {str(ie)}")
+			frappe.logger("huf").debug(f"Module import error: {ie!s}")
 			return None
 
 		try:
 			available_attrs = dir(module)
-		except Exception as e:
-			frappe.log_error("SDK Functions Debug", f"Error getting module attributes: {str(e)}")
+		except (TypeError, AttributeError) as e:
+			frappe.logger("huf").debug(f"Error getting module attributes: {e!s}")
 
 		try:
 			function = getattr(module, func_name)
 		except AttributeError as ae:
-			frappe.log_error("SDK Functions Debug", f"Function not found in module: {str(ae)}")
+			frappe.logger("huf").debug(f"Function not found in module: {ae!s}")
 			return None
 
 		if not callable(function):
@@ -408,8 +471,8 @@ def get_function_from_name(tool_name: str) -> Callable:
 		return function
 
 	except Exception as e:
-		frappe.log_error(
-			"SDK Functions Debug", f"Unexpected error getting function {tool_name}: {str(e)}"
+		frappe.logger("huf").debug(
+			f"Unexpected error getting function {tool_name}: {e!s}"
 		)
 		return None
 
@@ -439,7 +502,7 @@ def wrap_frappe_function(func: Callable) -> Callable:
 
 			return {"success": True, "result": result}
 		except Exception as e:
-			frappe.log_error(f"Error in function {func.__name__}: {e}")
+			logger.warning(f"Wrapped function {func.__name__} failed: {e}")
 			return {"success": False, "error": str(e)}
 
 
@@ -456,24 +519,25 @@ def _sanitize_for_doctype(doctype: str, data: dict) -> dict:
         meta = frappe.get_meta(doctype)
         valid_fields = {df.fieldname for df in meta.fields}
         cleaned = {}
-        
+
         for key, value in (data or {}).items():
             if key not in valid_fields:
                 continue
-                
+
             df = meta.get_field(key)
             if df.fieldtype == "Table":
                 if isinstance(value, list):
                     cleaned[key] = [
-                        _sanitize_for_doctype(df.options, row) 
-                        for row in value 
+                        _sanitize_for_doctype(df.options, row)
+                        for row in value
                         if isinstance(row, dict)
                     ]
             else:
                 cleaned[key] = value
-                
+
         return cleaned
     except Exception:
+        # Defensive fallback: if meta lookup fails, return original data unchanged.
         return data or {}
 
 # Standard CRUD function generators
@@ -675,18 +739,20 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
                 "permission_denied": True
             }
 
+        # Support both flat kwargs and a "doc" wrapper {"doc": {"field": "value"}}
+        if "doc" in kwargs and isinstance(kwargs["doc"], dict):
+            doc_fields = kwargs.pop("doc")
+            kwargs.update(doc_fields)
+
         doc = frappe.get_doc({"doctype": reference_doctype, **kwargs})
         doc.insert(ignore_permissions=ignore_permissions)
 
-        doc_dict = doc.as_dict()
-        import datetime
-        for k, v in doc_dict.items():
-            if isinstance(v, (datetime.datetime, datetime.date, datetime.time)):
-                doc_dict[k] = str(v)
+        # Return a concise dictionary to prevent polluting the LLM context with a huge document payload
+        result_dict = {"name": doc.name, "creation": str(doc.creation)}
 
-        return {"success": True, "result": doc_dict, "message": f"{reference_doctype} created"}
+        return {"success": True, "result": result_dict, "message": f"{reference_doctype} created"}
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_create_document: {str(e)}")
+        logger.warning(f"handle_create_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -724,7 +790,7 @@ def handle_delete_document(document_id=None, reference_doctype=None, ignore_perm
 
         return {"success": True, "message": f"{reference_doctype} {document_id} deleted"}
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_delete_document: {str(e)}")
+        logger.warning(f"handle_delete_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -812,13 +878,15 @@ def handle_get_list(
 				warning = f"{warning}\n{filter_warning}" if warning else filter_warning
 
 		page_length = limit if limit and int(limit) > 0 else None
+		ignore_permissions = kwargs.get("ignore_permissions", False)
 
-		result = frappe.get_all(
+		result = frappe.get_list(
 			reference_doctype,
 			filters=filters,
 			fields=filtered_fields,
 			limit_page_length=page_length,
 			order_by=order_by,
+			ignore_permissions=ignore_permissions,
 		)
 
 
@@ -836,13 +904,13 @@ def handle_get_list(
 			response["warning"] = warning
 
 
-		response["valid_fields"] = valid_fields[:20]  
+		response["valid_fields"] = valid_fields[:20]
 		if len(valid_fields) > 20:
 			response["valid_fields_note"] = f"Showing first 20 of {len(valid_fields)} available fields"
 
 		return response
 	except Exception as e:
-		frappe.log_error("SDK Functions Debug", f"Error in handle_get_list: {str(e)}")
+		logger.warning(f"handle_get_list failed: {e!s}")
 		return {"success": False, "error": str(e)}
 
 
@@ -879,15 +947,21 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
             doc.set(field, value)
 
         doc.save(ignore_permissions=ignore_permissions)
-        frappe.db.commit() 
+        commit_if_background()
+
+        # Build a concise result dict
+        result_dict = {"name": doc.name, "modified": str(doc.modified)}
+        # Add the fields that were updated so the LLM has explicit confirmation
+        for field in data.keys():
+             result_dict[field] = getattr(doc, field, data.get(field))
 
         return {
             "success": True,
-            "result": doc.as_dict(),
+            "result": result_dict,
             "message": f"{reference_doctype} {document_id} updated successfully.",
         }
     except Exception as e:
-        frappe.log_error("SDK Functions Debug", f"Error in handle_update_document: {str(e)}")
+        logger.warning(f"handle_update_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -938,7 +1012,7 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
         }
 
     except Exception as e:
-        frappe.log_error(f"Error in handle_get_document: {str(e)}", "SDK Functions Debug")
+        logger.warning(f"handle_get_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_create_documents(reference_doctype: str, documents: list = None, data: list = None, **kwargs):
@@ -976,7 +1050,7 @@ def handle_delete_documents(reference_doctype: str, document_ids: list, **kwargs
 def handle_submit_document(reference_doctype: str, document_id: str, ignore_permissions=False, **kwargs):
     if not ignore_permissions and not frappe.has_permission(reference_doctype, "submit", doc=document_id):
         return {"success": False, "error": "No permission to submit"}
-    
+
     doc = frappe.get_doc(reference_doctype, document_id)
     doc.submit()
     return {"success": True, "message": "Submitted"}
@@ -989,7 +1063,7 @@ def handle_cancel_document(reference_doctype: str, document_id: str, ignore_perm
     doc.cancel()
     return {"success": True, "message": "Cancelled"}
 
-def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, **kwargs):
+def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, ignore_permissions=False, **kwargs):
     """
     Get a field value (or multiple values) from a DocType.
     Matches the auto-generated JSON schema: doctype + filters + fieldname.
@@ -1001,7 +1075,24 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
         }
 
     try:
-        value = frappe.db.get_value(doctype, filters, fieldname)
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
+        if not doc_name:
+            return {
+                "success": False,
+                "error": f"No {doctype} found matching filters {filters}"
+            }
+
+        if not ignore_permissions and not frappe.has_permission(doctype, "read", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have read permission on {doctype} {doc_name}"
+            }
+
+        value = frappe.db.get_value(doctype, doc_name, fieldname)
         return {
             "success": True,
             "doctype": doctype,
@@ -1014,7 +1105,7 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
 
 
 
-def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, **kwargs):
+def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str = None, value=None, ignore_permissions=False, **kwargs):
     """
     Set a field value on a document that matches filters.
     """
@@ -1022,56 +1113,93 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
         return {"success": False, "error": "Missing required parameters"}
 
     try:
-        doc_name = frappe.db.get_value(doctype, filters, "name")
+        if isinstance(filters, dict):
+            doc_name = frappe.db.get_value(doctype, filters, "name")
+        else:
+            doc_name = filters
+
         if not doc_name:
             return {
                 "success": False,
                 "error": f"No {doctype} found matching filters {filters}"
             }
 
-        updated = frappe.db.set_value(doctype, doc_name, fieldname, value)
-        frappe.db.commit()
+        if not ignore_permissions and not frappe.has_permission(doctype, "write", doc=doc_name):
+            return {
+                "success": False,
+                "error": f"You do not have write permission on {doctype} {doc_name}"
+            }
+
+        doc = frappe.get_doc(doctype, doc_name)
+        doc.set(fieldname, value)
+        doc.save(ignore_permissions=ignore_permissions)
+        commit_if_background()
 
         return {
             "success": True,
             "doctype": doctype,
             "name": doc_name,
             "fieldname": fieldname,
-            "new_value": updated[fieldname] if isinstance(updated, dict) else value
+            "new_value": doc.get(fieldname)
         }
 
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "handle_set_value failed")
+        logger.warning(f"handle_set_value failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
-def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, **kwargs):
+def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, ignore_permissions=False, **kwargs):
+    if not ignore_permissions and not frappe.has_permission("Report", "read", doc=report_name):
+        return {"success": False, "error": f"You do not have permission to read Report {report_name}"}
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
 
-def handle_run_agent(agent_name: str, prompt: str, **kwargs):
+def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
     """
     Queue another agent execution instead of blocking.
     """
     try:
-        if not frappe.db.exists("Agent", agent_name):
-            return {"success": False, "error": f"Agent '{agent_name}' does not exist"}
+        if not frappe.db.exists("Agent", target_agent_name):
+            return {"success": False, "error": f"Agent '{target_agent_name}' does not exist"}
 
-        target_agent = frappe.get_doc("Agent", agent_name)
+        target_agent = frappe.get_doc("Agent", target_agent_name)
+        
+        from huf.ai.agent_integration import _is_user_allowed
+        if not _is_user_allowed(target_agent, frappe.session.user):
+            return {
+                "success": False, 
+                "error": f"Permission Denied: User '{frappe.session.user}' is not authorized to run the sub-agent '{target_agent_name}'."
+            }
+        
+        conversation_id = kwargs.get("conversation_id")
+        agent_run_id = kwargs.get("agent_run_id")
+        agent_name_self = kwargs.get("agent_name")
+
+        if target_agent_name == agent_name_self:
+            return {
+                "success": False, 
+                "error": f"Circular Dependency Error: An agent cannot invoke itself as a sub-agent."
+            }
 
         job = enqueue(
             "huf.ai.agent_integration.run_agent_sync",
             queue="default",
-            timeout=300,
+            timeout=1500,
             is_async=True,
-            agent_name=agent_name,
+            agent_name=target_agent_name,
             prompt=prompt,
             provider=target_agent.provider,
             model=target_agent.model,
+            parent_conversation_id=conversation_id,
+            invoked_by_agent=agent_name_self,
         )
 
-        return {"success": True, "queued": True, "job_id": job.id}
+        return {
+            "status": "Queued",
+            "message": "The task is currently being processed in the background. IMPORTANT: DO NOT tell the user that the task is completed or successful yet. Inform the user that you are working on it and will provide an update shortly. Do not mention the terms 'sub-agent' or 'background queue' explicitly, keep it natural (e.g., 'I am processing this for you now...').",
+            "job_id": job.id
+        }
     except Exception as e:
-        frappe.log_error("Run Agent Tool Error", str(e))
+        logger.warning(f"handle_run_agent failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
@@ -1089,7 +1217,7 @@ def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
         if k in ["file_path", "file_url"]:
             normalized_kwargs[k] = v
             continue
-            
+
         if isinstance(v, str):
             normalized_kwargs[k] = v
 
@@ -1101,7 +1229,7 @@ def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
         )
         return {"success": True, "result": result}
     except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "handle_attach_file_to_document: failed")
+        logger.warning(f"handle_attach_file_to_document failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -1120,10 +1248,13 @@ def _load_state(state_json: str | None | dict) -> dict:
             data = json.loads(state_json)
             if isinstance(data, str): # Handle double encoded
                 try: data = json.loads(data)
-                except: pass
+                except (json.JSONDecodeError, TypeError, KeyError) as e:
+                    frappe.logger("huf").warning(
+                        f"Skipped double-decoding of conversation_data state: {e}"
+                    )
         except (json.JSONDecodeError, TypeError):
              return {"version": 1, "scope": {}, "items": []}
-             
+
     if "items" not in data or not isinstance(data["items"], list):
         data["items"] = []
     if "version" not in data:
@@ -1134,20 +1265,20 @@ def handle_get_conversation_data(name: str, default: Any = None, conversation_id
     """Get a value from conversation data."""
     if not conversation_id:
         return {"success": False, "error": "No conversation context provided"}
-    
+
     try:
         data_json = frappe.db.get_value("Agent Conversation", conversation_id, "conversation_data")
         state = _load_state(data_json)
-        
+
         value = default
         for item in state["items"]:
             if item.get("name") == name:
                 value = item.get("value", default)
                 break
-                
+
         return {"success": True, "value": value}
     except Exception as e:
-        frappe.log_error(f"Error getting conversation data: {str(e)}", "Conversation Data")
+        logger.warning(f"handle_get_conversation_data failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_set_conversation_data(
@@ -1156,12 +1287,14 @@ def handle_set_conversation_data(
     value_type: str = None, 
     source: str = "agent", 
     conversation_id: str = None, 
+    auto_inject: bool = None,
+    inject_mode: str = None,
     **kwargs
 ):
     """Set a value in conversation data."""
     if not conversation_id:
         return {"success": False, "error": "No conversation context provided"}
-    
+
     try:
         # Debug Log
         frappe.logger().info(f"[Conversation Data] Setting {name} for {conversation_id}")
@@ -1193,22 +1326,42 @@ def handle_set_conversation_data(
         found = False
         for i, item in enumerate(state["items"]):
             if item.get("name") == name:
+                resolved_auto_inject = auto_inject if auto_inject is not None else kwargs.get("auto_inject")
+                if resolved_auto_inject is None:
+                    resolved_auto_inject = item.get("auto_inject", True)
+                
+                resolved_inject_mode = inject_mode if inject_mode is not None else kwargs.get("inject_mode")
+                if resolved_inject_mode is None:
+                    resolved_inject_mode = item.get("inject_mode", "visible")
+                
+                updated_item["auto_inject"] = resolved_auto_inject
+                updated_item["inject_mode"] = resolved_inject_mode
                 state["items"][i] = updated_item
                 found = True
                 break
-        
+
         if not found:
+            resolved_auto_inject = auto_inject if auto_inject is not None else kwargs.get("auto_inject")
+            if resolved_auto_inject is None:
+                resolved_auto_inject = True
+            
+            resolved_inject_mode = inject_mode if inject_mode is not None else kwargs.get("inject_mode")
+            if resolved_inject_mode is None:
+                resolved_inject_mode = "visible"
+                
+            updated_item["auto_inject"] = resolved_auto_inject
+            updated_item["inject_mode"] = resolved_inject_mode
             state["items"].append(updated_item)
 
         new_json = json.dumps(state, ensure_ascii=False, indent=2)
-        
+
         frappe.db.set_value("Agent Conversation", conversation_id, "conversation_data", new_json)
-        frappe.db.commit() # Persist changes immediately
-        
+        commit_if_background() # Persist changes immediately
+
         return {"success": True, "message": f"Set '{name}' match successfully"}
-    
+
     except Exception as e:
-        frappe.log_error(f"Error setting conversation data: {str(e)}", "Conversation Data")
+        logger.warning(f"handle_set_conversation_data failed: {e!s}")
         return {"success": False, "error": str(e)}
 
 def handle_load_conversation_data(conversation_id: str = None, **kwargs):
@@ -1222,6 +1375,67 @@ def handle_load_conversation_data(conversation_id: str = None, **kwargs):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
+ALLOWED_RESULT_CONTEXT_DOCTYPES = frozenset({
+    "Agent Tool Call",
+    "Agent Context Artifact",
+})
+
+
+def handle_get_result_context(reference_doctype: str, reference_name: str, **kwargs):
+    """
+    Get the full result context of an out-of-band message reference by its handle.
+
+    Only explicitly allow-listed DocTypes are exposed, and the caller must have
+    Frappe read permission on the requested document.
+    """
+    try:
+        if not reference_doctype or not reference_name:
+            return {"success": False, "error": "Both reference_doctype and reference_name are required."}
+
+        if reference_doctype not in ALLOWED_RESULT_CONTEXT_DOCTYPES:
+            # Security event: retain Error Log for unauthorized allow-list attempts.
+            frappe.log_error(
+                f"get_result_context rejected for {reference_doctype}",
+                "Security: get_result_context allow-list"
+            )
+            return {"success": False, "error": f"DocType '{reference_doctype}' is not accessible via get_result_context."}
+
+        if not frappe.db.exists(reference_doctype, reference_name):
+            return {"success": False, "error": f"Document {reference_name} of type {reference_doctype} not found."}
+
+        doc = frappe.get_doc(reference_doctype, reference_name)
+
+        if not frappe.has_permission(reference_doctype, "read", doc=doc):
+            return {"success": False, "error": f"You do not have permission to read {reference_doctype} {reference_name}."}
+
+        # If it's Agent Tool Call, retrieve the tool_result
+        if reference_doctype == "Agent Tool Call":
+            return {
+                "success": True,
+                "tool": doc.tool,
+                "tool_args": doc.tool_args,
+                "status": doc.status,
+                "tool_result": doc.tool_result,
+                "error_message": doc.error_message
+            }
+
+        # If it's Agent Context Artifact, retrieve payload
+        if reference_doctype == "Agent Context Artifact":
+            return {
+                "success": True,
+                "artifact_type": doc.artifact_type,
+                "summary": doc.summary,
+                "payload_json": doc.payload_json,
+                "reference_doctype": doc.reference_doctype,
+                "reference_name": doc.reference_name
+            }
+
+        # Unreachable because of the allow-list, but kept as defense-in-depth.
+        return {"success": False, "error": "Unexpected DocType."}
+    except Exception as e:
+        logger.warning(f"handle_get_result_context failed: {e!s}")
+        return {"success": False, "error": str(e)}
 
 def _get_default_image_model(provider_name: str) -> str:
     """
@@ -1244,7 +1458,7 @@ def _get_default_image_model(provider_name: str) -> str:
         "bedrock": "bedrock/stability.stable-diffusion-xl-v0",
         "recraft": "recraft/recraftv3",
     }
-    
+
     return defaults.get(provider_name.lower())
 
 @frappe.whitelist()
@@ -1283,17 +1497,17 @@ async def handle_generate_image(
         # Get agent configuration from context
         if not agent_name:
             return {"success": False, "error": "Agent name not found in context"}
-        
+
         agent_doc = frappe.get_doc("Agent", agent_name)
         provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
         api_key = provider_doc.get_password("api_key")
-        
+
         if not api_key:
             return {"success": False, "error": "API key not configured for provider"}
-        
+
         # Determine image generation model
         image_model = None
-        
+
         if hasattr(agent_doc, "image_generation_model") and agent_doc.image_generation_model:
             # Use explicitly configured image model
             model_doc = frappe.get_doc("AI Model", agent_doc.image_generation_model)
@@ -1302,21 +1516,21 @@ async def handle_generate_image(
             # Auto-detect suitable image model based on provider
             provider_name = provider_doc.provider_name.lower()
             image_model = _get_default_image_model(provider_name)
-        
+
         if not image_model:
             return {
                 "success": False,
                 "error": f"Image generation not supported for provider '{provider_doc.provider_name}'. Please configure an image_generation_model in agent settings."
             }
-        
+
         # Normalize to LiteLLM format
         from huf.ai.providers.litellm import _normalize_model_name
         normalized_model = _normalize_model_name(image_model, agent_doc.provider)
-        
+
         # Call LiteLLM image generation
         import litellm
-        litellm.drop_params = True 
-        
+        litellm.drop_params = True
+
         response = await asyncio.to_thread(
             litellm.image_generation,
             prompt=prompt,
@@ -1326,7 +1540,7 @@ async def handle_generate_image(
             quality=quality,
             api_key=api_key
         )
-        
+
         # Get conversation_index once if conversation_id exists
         # Each Agent Message needs a unique, sequential conversation_index to maintain order.
         conversation_index = None
@@ -1337,11 +1551,19 @@ async def handle_generate_image(
                     FROM `tabAgent Message`
                     WHERE conversation = %s
                 """, (conversation_id,), as_dict=1)
-                
+
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
             except Exception:
-                conversation_index = 1
-        
+                # Hard failure: message ordering is required; abort and alert admin.
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"Failed to compute conversation_index for {conversation_id}"
+                )
+                frappe.throw(
+                    "Could not determine message order for this conversation. Please retry.",
+                    title="Message Ordering Error"
+                )
+
         # Process response and save images
         images = []
         if hasattr(response, 'data') and response.data:
@@ -1349,41 +1571,48 @@ async def handle_generate_image(
                 # Get image URL or base64
                 image_url = None
                 image_b64 = None
-                
+
                 # Handle Pydantic model / Object access
                 if hasattr(image_data, 'url'):
                     image_url = image_data.url
                 if hasattr(image_data, 'b64_json'):
                     image_b64 = image_data.b64_json
-                
+
                 # Handle Dictionary access (if not an object)
                 if not image_url and not image_b64 and isinstance(image_data, dict):
                     image_url = image_data.get('url')
                     image_b64 = image_data.get('b64_json')
-                
+
                 if not image_url and not image_b64:
                     continue
-                
+
                 # Download and save image
                 image_bytes = None
                 filename = f"generated_image_{idx + 1}.png"
-                
+
                 if image_url and image_url.startswith('http'):
-                    # Download from URL
-                    img_response = requests.get(image_url, timeout=30)
-                    img_response.raise_for_status()
-                    image_bytes = img_response.content
+                    # Download from URL (with SSRF protection)
+                    from huf.ai.http_handler import _http_request
+                    try:
+                        img_response = _http_request("GET", image_url, timeout=30)
+                        img_response.raise_for_status()
+                        image_bytes = img_response.content
+                    except ValueError as e:
+                        frappe.logger("huf").warning(
+                            f"Image URL blocked by SSRF filter: {image_url} — {e}"
+                        )
+                        continue
                 elif image_b64:
                     # Base64 encoded
                     image_bytes = base64.b64decode(image_b64)
                 elif image_url:
-                    # Local file path or other format
+                    # Unexpected image URL format; retain Error Log for investigation.
                     frappe.log_error(f"Unsupported image URL format: {image_url}", "Image Generation")
                     continue
-                
+
                 if not image_bytes:
                     continue
-                
+
                 # Create Agent Message first (we'll attach the file to it)
                 message_doc = None
                 if conversation_id and conversation_index is not None:
@@ -1391,7 +1620,7 @@ async def handle_generate_image(
                         # Get provider and model from agent
                         provider = agent_doc.provider
                         model = agent_doc.model
-                        
+
                         # Create Agent Message with kind "Image" first (without image)
                         message_doc = frappe.get_doc({
                             "doctype": "Agent Message",
@@ -1409,12 +1638,9 @@ async def handle_generate_image(
                         })
                         message_doc.insert(ignore_permissions=True)
                     except Exception as e:
-                        frappe.log_error(
-                            f"Error creating Agent Message for generated image: {str(e)}",
-                            "Image Generation Message Creation"
-                        )
+                        logger.warning(f"Create image message failed: {e!s}")
                         # Continue even if message creation fails
-                
+
                 # Save file attached to the Agent Message (or conversation if message creation failed)
                 if message_doc:
                     saved_file = save_file(
@@ -1434,21 +1660,21 @@ async def handle_generate_image(
                         conversation_id or "Unknown",
                         is_private=False
                     )
-                
+
                 # save_file returns a File document object
                 file_url = getattr(saved_file, 'file_url', None)
                 file_id = getattr(saved_file, 'name', None)
-                
+
                 # Ensure we have a file_url
                 if not file_url:
                     file_url = f"/files/{getattr(saved_file, 'file_name', filename)}"
-                
+
                 # Update the message with the file URL if message was created
                 # This ensures the Attach Image field displays the image correctly
                 if message_doc and file_url:
                     message_doc.db_set("generated_image", file_url)
-                    frappe.db.commit()
-                    
+                    commit_if_background()
+
                     # Emit socket event for new agent message (Image)
                     try:
                         frappe.publish_realtime(
@@ -1467,16 +1693,15 @@ async def handle_generate_image(
                             after_commit=False
                         )
                     except Exception as e:
-                        frappe.log_error(
-                            f"Error emitting new_agent_message socket event: {str(e)}",
-                            "Image Generation Socket Event"
+                        frappe.logger("huf").debug(
+                            f"Error emitting new_agent_message socket event: {e!s}"
                         )
-                
+
                 images.append({
                     "url": file_url or f"/files/{filename}",
                     "file_id": file_id
                 })
-        
+
         # Update conversation total_messages once after all images are created
         if conversation_id and conversation_index is not None and images:
             try:
@@ -1487,199 +1712,27 @@ async def handle_generate_image(
                     WHERE name = %s
                 """, (final_index, conversation_id))
             except Exception as e:
-                frappe.log_error(
-                    f"Error updating conversation total_messages: {str(e)}",
-                    "Image Generation Message Creation"
+                frappe.logger("huf").debug(
+                    f"Error updating conversation total_messages: {e!s}"
                 )
-        
+
         if not images:
             return {
                 "success": False,
                 "error": "Image generation succeeded but no images were returned"
             }
-        
-        print("Returned images: ", images)
+
         return {
             "success": True,
             "images": images,
             "message": f"Generated {len(images)} image(s) successfully"
         }
-        
+
     except Exception as e:
-        frappe.log_error(f"Image generation error: {str(e)}", "Image Generation Tool")
+        # Hard provider/tool failure: retain Error Log for admin attention.
+        frappe.log_error(f"Image generation error: {e!s}", "Image Generation Tool")
         return {"success": False, "error": str(e)}
 
-
-def _determine_ocr_strategy(file_path: str, file_type: str) -> str:
-    """Determine OCR strategy based on file type."""
-    # Check file extension if type not clear
-    ext = file_path.lower().split('.')[-1] if '.' in file_path else ""
-    
-    # PDF and documents - use OCR endpoint
-    if file_type in ["pdf", "application/pdf"] or ext == "pdf":
-        return "ocr"
-    
-    # Images - use vision models
-    if file_type.startswith("image/") or ext in ["jpg", "jpeg", "png", "webp", "gif"]:
-        return "vision"
-    
-    # Default to vision for unknown types
-    return "vision"
-
-
-def _get_default_ocr_model(provider_name: str, strategy: str) -> str:
-    """Get default OCR/Vision model for a provider."""
-    if strategy == "ocr":
-        # OCR endpoint models
-        defaults = {
-            "mistral": "mistral/mistral-ocr-latest",
-            "azure": "azure_ai/ocr",
-            "google": "vertex_ai/ocr",
-            "vertex_ai": "vertex_ai/ocr",
-        }
-    else:
-        # Vision models
-        defaults = {
-            "mistral": "mistral/mistral-small-latest",
-            "openai": "gpt-4o",
-            "google": "gemini/gemini-2.5-flash",
-            "gemini": "gemini/gemini-2.5-flash",
-            "anthropic": "claude-3-5-sonnet-20241022",
-        }
-    
-    return defaults.get(provider_name.lower())
-
-
-async def _process_with_ocr_endpoint(
-    file_path: str,
-    model: str,
-    api_key: str,
-    pages: str = None,
-    include_images: bool = False
-):
-    """Process document using LiteLLM OCR endpoint."""
-    import litellm
-    import base64
-    
-    try:
-        # Read file and encode to base64
-        with open(file_path, "rb") as f:
-            file_content = f.read()
-            base64_content = base64.b64encode(file_content).decode('utf-8')
-        
-        # Determine document type
-        ext = file_path.lower().split('.')[-1]
-        mime_type = "application/pdf" if ext == "pdf" else f"image/{ext}"
-        
-        # Build OCR parameters
-        ocr_params = {
-            "model": model,
-            "document": {
-                "type": "document_url",
-                "document_url": f"data:{mime_type};base64,{base64_content}"
-            },
-            "api_key": api_key
-        }
-        
-        # Add optional parameters
-        if pages:
-            # Convert comma-separated string to list of integers
-            page_list = [int(p.strip()) for p in pages.split(",")]
-            ocr_params["pages"] = page_list
-        
-        if include_images:
-            ocr_params["include_image_base64"] = True
-        
-        # Call LiteLLM OCR
-        response = await asyncio.to_thread(
-            litellm.ocr,
-            **ocr_params
-        )
-        
-        # Extract text from all pages
-        all_text = []
-        pages_data = []
-        
-        for page in response.pages:
-            all_text.append(f"## Page {page.index + 1}\n\n{page.markdown}")
-            pages_data.append({
-                "index": page.index,
-                "text": page.markdown,
-                "dimensions": page.dimensions if hasattr(page, 'dimensions') else None
-            })
-        
-        combined_text = "\n\n".join(all_text)
-        
-        return {
-            "success": True,
-            "text": combined_text,
-            "pages": pages_data
-        }
-        
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-async def _process_with_vision_model(
-    file_path: str,
-    model: str,
-    api_key: str
-):
-    """Process image using LiteLLM vision models."""
-    import litellm
-    import base64
-    
-    try:
-        # Read file and encode to base64
-        with open(file_path, "rb") as f:
-            file_content = f.read()
-            base64_image = base64.b64encode(file_content).decode('utf-8')
-        
-        # Determine image type
-        ext = file_path.lower().split('.')[-1]
-        
-        if ext == "pdf":
-            mime_type = "application/pdf"
-        elif ext in ["jpg", "jpeg", "png", "webp", "gif"]:
-            mime_type = f"image/{ext}"
-        else:
-            mime_type = "image/jpeg"
-        
-        # Build vision request
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Extract all text from this image. Preserve formatting, structure, and layout. Return the text in markdown format."
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": f"data:{mime_type};base64,{base64_image}"
-                    }
-                ]
-            }
-        ]
-        
-        # Call LiteLLM completion with vision
-        response = await asyncio.to_thread(
-            litellm.completion,
-            model=model,
-            messages=messages,
-            api_key=api_key
-        )
-        
-        extracted_text = response.choices[0].message.content
-        
-        return {
-            "success": True,
-            "text": extracted_text,
-            "pages": [{"index": 0, "text": extracted_text}]
-        }
-        
-    except Exception as e:
-        return {"success": False, "error": str(e)}
 
 @frappe.whitelist()
 async def handle_ocr_document(
@@ -1690,199 +1743,65 @@ async def handle_ocr_document(
     model: str = None,
     agent_name: str = None,
     conversation_id: str = None,
+    create_message: bool = True,
     **kwargs
 ):
     """
-    Extract text from documents and images using OCR.
-    
-    Intelligently routes to:
-    - LiteLLM OCR endpoint for PDFs (multi-page documents)
-    - Vision models for single images (better context understanding)
-    
+    Extract text from documents and images using OCR / document parsing.
+
+    Supports any common document or image format:
+    - PDFs: LiteLLM OCR endpoint, local PDF extraction, or vision models (provider dependent)
+    - Images (jpg, png, webp, gif, etc.): vision models
+    - Office/text documents (docx, txt, md, html, csv, json, etc.): local extractors
+
     Args:
-        file_id: File document ID (preferred)
-        file_url: File URL/path (alternative)
+        file_id: File document ID (preferred and most reliable)
+        file_url: File URL/path (alternative; supports /files/ and /private/files/)
         pages: Comma-separated page numbers (e.g., "0,1,2") - PDFs only
-        include_images: Extract images from document (PDFs only)
-        model: Optional model override
+        include_images: Extract embedded images as base64 - PDFs with OCR endpoint only
+        model: Optional OCR/vision model override
         agent_name: Automatically passed from context
         conversation_id: Automatically passed from context
-    
+
     Returns:
         dict: {
             "success": bool,
             "text": str,              # Extracted text in markdown
-            "pages": list,            # Page-by-page breakdown (PDFs)
-            "strategy": str,          # "ocr" or "vision"
+            "pages": list,            # Page-by-page breakdown
+            "strategy": str,          # "ocr", "vision", "local", "local_pdf"
             "file_id": str,
+            "file_name": str,
+            "file_hash": str,         # SHA-256 of processed file (for verification)
             "message_id": str,
-            "model": str
+            "model": str,
+            "error": str
         }
     """
     try:
-        # Get agent configuration from context
+        from huf.ai.ocr_engine import extract_document
+
         if not agent_name:
             return {"success": False, "error": "Agent name not found in context"}
-        
+
         agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-        
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
-        
-        # Get file
-        file_doc = None
-        if file_id:
-            try:
-                file_doc = frappe.get_doc("File", file_id)
-            except Exception as e:
-                return {"success": False, "error": f"File not found: {str(e)}"}
-        elif file_url:
-            # Try to find file by URL
-            file_path = file_url.replace("/files/", "")
-            file_doc = frappe.db.get_value("File", 
-                {"file_url": file_url}, 
-                ["name"], as_dict=True)
-            if file_doc:
-                file_doc = frappe.get_doc("File", file_doc.name)
-            else:
-                # Try by file name
-                file_doc = frappe.db.get_value("File", 
-                    {"file_name": file_path}, 
-                    ["name"], as_dict=True)
-                if file_doc:
-                    file_doc = frappe.get_doc("File", file_doc.name)
-        
-        if not file_doc:
-            return {"success": False, "error": "Either file_id or file_url is required"}
-        
-        # Get file path and type
-        file_path = file_doc.get_full_path()
-        file_type = file_doc.file_type or ""
-        file_name = file_doc.file_name or ""
-        
-        # Determine strategy
-        strategy = _determine_ocr_strategy(file_path, file_type)
-        
-        # Override strategy for Google/Gemini: Use Vision (Multimodal) for PDFs too
-        provider_name = provider_doc.provider_name.lower()
-        if provider_name in ["google", "gemini"] and (strategy == "ocr" or file_path.lower().endswith(".pdf")):
-            strategy = "vision"
-        
-        # Determine model
-        ocr_model = None
-        if model:
-            ocr_model = model
-        else:
-            provider_name = provider_doc.provider_name.lower()
-            ocr_model = _get_default_ocr_model(provider_name, strategy)
-        
-        if not ocr_model:
-            return {
-                "success": False,
-                "error": f"OCR not supported for provider '{provider_doc.provider_name}' with strategy '{strategy}'. Please provide a model parameter."
-            }
-        
-        # Normalize model name
-        from huf.ai.providers.litellm import _normalize_model_name
-        normalized_model = _normalize_model_name(ocr_model, agent_doc.provider)
-        
-        # Route to appropriate method
-        if strategy == "ocr":
-            result = await _process_with_ocr_endpoint(
-                file_path, normalized_model, api_key, pages, include_images
-            )
-        else:
-            result = await _process_with_vision_model(
-                file_path, normalized_model, api_key
-            )
-        
-        if not result["success"]:
-            return result
-        
-        extracted_text = result["text"]
-        pages_data = result.get("pages", [])
-        
-        # Create Agent Message with extracted text
-        message_doc = None
-        if conversation_id:
-            try:
-                # Get conversation_index
-                last_index = frappe.db.sql("""
-                    SELECT MAX(conversation_index) as last_index
-                    FROM `tabAgent Message`
-                    WHERE conversation = %s
-                """, (conversation_id,), as_dict=1)
-                
-                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-                
-                # Create Agent Message
-                message_doc = frappe.get_doc({
-                    "doctype": "Agent Message",
-                    "conversation": conversation_id,
-                    "role": "agent",
-                    "content": f"Extracted text from {file_name}:\n\n{extracted_text[:500]}{'...' if len(extracted_text) > 500 else ''}",
-                    "kind": "Message",
-                    "agent": agent_name,
-                    "provider": agent_doc.provider,
-                    "model": agent_doc.model,
-                    "agent_run": kwargs.get("agent_run_id"),
-                    "conversation_index": conversation_index,
-                    "is_agent_message": 1,
-                    "user": "Agent"
-                })
-                message_doc.insert(ignore_permissions=True)
-                
-                # Update conversation
-                frappe.db.sql("""
-                    UPDATE `tabAgent Conversation`
-                    SET total_messages = %s, last_activity = NOW()
-                    WHERE name = %s
-                """, (conversation_index, conversation_id))
-                
-                frappe.db.commit()
-                
-                # Emit socket event
-                try:
-                    frappe.publish_realtime(
-                        event=f'conversation:{conversation_id}',
-                        message={
-                            "type": "new_agent_message",
-                            "conversation_id": conversation_id,
-                            "message_id": message_doc.name,
-                            "kind": "Message",
-                            "content": message_doc.content,
-                            "conversation_index": conversation_index,
-                        },
-                        user=frappe.session.user,
-                        after_commit=False
-                    )
-                except Exception as e:
-                    frappe.log_error(
-                        f"Error emitting new_agent_message socket event: {str(e)}",
-                        "OCR Socket Event"
-                    )
-            except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for OCR: {str(e)}",
-                    "OCR Message Creation"
-                )
-        
-        return {
-            "success": True,
-            "text": extracted_text,
-            "pages": pages_data,
-            "strategy": strategy,
-            "file_id": file_doc.name,
-            "file_name": file_name,
-            "message_id": message_doc.name if message_doc else None,
-            "model": normalized_model,
-            "conversation_id": conversation_id
-        }
-        
+
+        result = await extract_document(
+            agent_doc=agent_doc,
+            file_id=file_id,
+            file_url=file_url,
+            pages=pages,
+            include_images=bool(include_images),
+            model=model,
+            create_message=create_message,
+            conversation_id=conversation_id,
+            agent_run_id=kwargs.get("agent_run_id"),
+        )
+
+        return result.as_dict()
+
     except Exception as e:
-        frappe.log_error(f"OCR error: {str(e)}", "OCR Tool")
+        # Hard OCR failure: retain Error Log for admin attention.
+        frappe.log_error(f"OCR error: {e!s}", "OCR Tool")
         return {"success": False, "error": str(e)}
 
 def _get_default_voice(provider_name: str) -> str:
@@ -1920,8 +1839,164 @@ def _get_default_tts_model(provider_name: str) -> str:
         "aws": "aws/polly",
         "minimax": "minimax/speech-01",
     }
-    
+
     return defaults.get(provider_name.lower())
+
+def _resolve_tts_config(
+    agent_doc,
+    tool_model: str | None = None,
+    tool_voice: str | None = None,
+) -> dict:
+    """
+    Resolve the TTS model, voice, API key, and provider for audio generation.
+
+    Priority (highest → lowest):
+
+    1. **Tool-call parameter** - ``model`` / ``voice`` values passed by the
+       agent at runtime (highest precedence; lets individual calls override).
+    2. **Agent-level TTS configuration** - ``agent.tts_model`` / ``agent.tts_voice``
+       fields set on the Agent DocType.  The API key is fetched from the *TTS
+       model's own provider* (``AI Model → AI Provider``), which may be a
+       completely different provider from the agent's main conversational model.
+    3. **Provider default** - ``_get_default_tts_model`` / ``_get_default_voice``
+       derived from the agent's main provider (fallback when nothing else is set).
+
+    Args:
+        agent_doc:   Loaded ``Agent`` Frappe document.
+        tool_model:  Optional model name supplied by the tool call at runtime.
+        tool_voice:  Optional voice name supplied by the tool call at runtime.
+
+    Returns:
+        dict:
+            - ``tts_model``     - Normalised LiteLLM model string.
+            - ``voice``         - Voice identifier for the TTS provider.
+            - ``api_key``       - Decrypted API key for the TTS provider.
+            - ``provider_name`` - Lowercase provider name (used for env-var routing).
+            - ``provider_doc``  - Loaded ``AI Provider`` document for the TTS provider.
+            - ``source``        - How the model was resolved: ``"tool_param"``,
+                                  ``"agent_config"``, or ``"provider_default"``.
+
+    Raises:
+        ValueError: If no TTS model can be determined and the provider does not
+                    natively support TTS.
+    """
+    from huf.ai.providers.litellm import _normalize_model_name
+
+    if tool_model:
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+        if not api_key:
+            raise ValueError(
+                f"API key is not configured for provider "
+                f"'{provider_doc.provider_name}'. Please add it to the AI Provider document."
+            )
+        provider_name = provider_doc.provider_name.lower()
+        voice = tool_voice or _get_default_voice(provider_name)
+        normalized = _normalize_model_name(tool_model, agent_doc.provider)
+        return {
+            "tts_model":     normalized,
+            "voice":         voice,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  provider_doc,
+            "source":        "tool_param",
+        }
+
+    if getattr(agent_doc, "tts_model", None):
+        tts_model_doc = frappe.get_doc("AI Model", agent_doc.tts_model)
+
+        if not tts_model_doc.provider:
+            raise ValueError(
+                f"TTS model '{agent_doc.tts_model}' has no provider linked. "
+                f"Please set a provider on the AI Model document."
+            )
+
+        tts_provider_doc = frappe.get_doc("AI Provider", tts_model_doc.provider)
+        api_key = tts_provider_doc.get_password("api_key")
+
+        if not api_key:
+            raise ValueError(
+                f"API key is not configured for TTS provider "
+                f"'{tts_provider_doc.provider_name}'. "
+                f"Please add the API key to that AI Provider document."
+            )
+
+        provider_name = tts_provider_doc.provider_name.lower()
+
+        voice = (
+            getattr(agent_doc, "tts_voice", None)
+            or _get_default_voice(provider_name)
+            or tool_voice
+        )
+
+        normalized = _normalize_model_name(
+            tts_model_doc.model_name, tts_model_doc.provider
+        )
+        return {
+            "tts_model":     normalized,
+            "voice":         voice,
+            "api_key":       api_key,
+            "provider_name": provider_name,
+            "provider_doc":  tts_provider_doc,
+            "source":        "agent_config",
+        }
+
+    provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+    api_key = provider_doc.get_password("api_key")
+
+    if not api_key:
+        raise ValueError(
+            f"API key is not configured for provider "
+            f"'{provider_doc.provider_name}'. Please add it to the AI Provider document."
+        )
+
+    provider_name = provider_doc.provider_name.lower()
+    tts_model = _get_default_tts_model(provider_name)
+
+    if not tts_model:
+        raise ValueError(
+            f"Text-to-speech is not natively supported by provider "
+            f"'{provider_doc.provider_name}'. Please either:\n"
+            f"  \u2022 Set a dedicated 'TTS Model' on the Agent "
+            f"(Advanced Settings \u2192 Audio Generation), or\n"
+            f"  \u2022 Pass a 'model' parameter directly to the generate_audio tool."
+        )
+
+    voice = tool_voice or _get_default_voice(provider_name)
+    normalized = _normalize_model_name(tts_model, agent_doc.provider)
+    return {
+        "tts_model":     normalized,
+        "voice":         voice,
+        "api_key":       api_key,
+        "provider_name": provider_name,
+        "provider_doc":  provider_doc,
+        "source":        "provider_default",
+    }
+
+def _get_default_stt_model(provider_name: str) -> str:
+    """
+    Get default STT model for a provider.
+
+    Backward-compatible alias for ``audio_service._get_default_stt_model``.
+    """
+    return audio_service._get_default_stt_model(provider_name)
+
+def _resolve_stt_config(
+    agent_doc,
+    tool_model: str | None = None,
+) -> dict:
+    """
+    Resolve the STT model, API key, and provider for audio transcription.
+    Priority (highest → lowest):
+    1. Tool-call parameter
+    2. Agent-level STT configuration
+    3. Provider default
+
+    Backward-compatible alias for ``audio_service.resolve_stt_config``.
+    """
+    agent_name = getattr(agent_doc, "name", None) or agent_doc
+    return audio_service.resolve_stt_config(agent_name, model=tool_model)
+
 
 @frappe.whitelist()
 async def handle_generate_audio(
@@ -1962,6 +2037,8 @@ async def handle_generate_audio(
                 "speed": float,
                 "format": str,
                 "model": str
+                "model_source": str,
+                "tts_provider": str,
             },
             "message": str,
             "conversation_id": str
@@ -1971,87 +2048,48 @@ async def handle_generate_audio(
         # Get agent configuration from context
         if not agent_name:
             return {"success": False, "error": "Agent name not found in context"}
-        
-        agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-        
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
-        
-        # Determine TTS model
-        tts_model = None
-        
-        if model:
-            # Use explicitly provided model
-            tts_model = model
 
-            # If model is provided but voice isn't, determine default voice based on provider
-            if not voice:
-                voice = _get_default_voice(provider_doc.provider_name.lower())
-        else:
-            # Auto-detect suitable TTS model based on provider
-            provider_name = provider_doc.provider_name.lower()
-            tts_model = _get_default_tts_model(provider_name)
-            
-            # If voice not provided, get default for this provider
-            if not voice:
-                voice = _get_default_voice(provider_name)
-        
-        if not tts_model:
-            return {
-                "success": False,
-                "error": f"Text-to-speech not supported for provider '{provider_doc.provider_name}'. Please provide a model parameter."
-            }
-        
-        # Determine Voice if not provided
-        if not voice:
-            voice = _get_default_voice(provider_doc.provider_name.lower())
-        
-        # Normalize to LiteLLM format
-        from huf.ai.providers.litellm import _normalize_model_name
-        normalized_model = _normalize_model_name(tts_model, agent_doc.provider)
-        
-        # Call LiteLLM speech generation
+        agent_doc = frappe.get_doc("Agent", agent_name)
+
+        try:
+            tts_config = _resolve_tts_config(
+                agent_doc, tool_model=model, tool_voice=voice
+            )
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+
+        normalized_model = tts_config["tts_model"]
+        voice            = tts_config["voice"]
+        api_key          = tts_config["api_key"]
+        provider_name    = tts_config["provider_name"]
+        tts_source       = tts_config["source"]
+        tts_provider_doc = tts_config["provider_doc"]
+
         import litellm
-        
-        # Build parameters for speech generation
-        speech_params = {
+
+        speech_params: dict = {
             "model": normalized_model,
             "input": input,
-            "voice": voice
+            "voice": voice,
         }
-        
-        env_var_providers = {
-            "google": "GEMINI_API_KEY",
-            "vertex_ai": "GEMINI_API_KEY",
-            "gemini": "GEMINI_API_KEY",
-        }
-        
-        provider_key = provider_doc.provider_name.lower()
-        if provider_key in env_var_providers:
-            import os
-            os.environ[env_var_providers[provider_key]] = api_key
-        else:
-            speech_params["api_key"] = api_key
-        
-        # Add optional parameters
-        # LiteLLM forwards provider-specific params automatically
+
+        speech_params["api_key"] = api_key
+
         if speed != 1.0:
             speech_params["speed"] = speed
         if response_format != "mp3":
             speech_params["response_format"] = response_format
-        
+
         # Call LiteLLM speech (returns HttpxBinaryResponseContent)
         response = await asyncio.to_thread(
             litellm.speech,
             **speech_params
         )
-        
+
         # Get audio content from response
         # LiteLLM speech() returns HttpxBinaryResponseContent
         audio_bytes = response.content
-        
+
         # Get conversation_index for message ordering
         conversation_index = None
         if conversation_id:
@@ -2061,14 +2099,22 @@ async def handle_generate_audio(
                     FROM `tabAgent Message`
                     WHERE conversation = %s
                 """, (conversation_id,), as_dict=1)
-                
+
                 conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
             except Exception:
-                conversation_index = 1
-        
+                # Hard failure: message ordering is required; abort and alert admin.
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    f"Failed to compute conversation_index for {conversation_id}"
+                )
+                frappe.throw(
+                    "Could not determine message order for this conversation. Please retry.",
+                    title="Message Ordering Error"
+                )
+
         # Generate filename
         filename = f"generated_audio_{conversation_index}.{response_format}"
-        
+
         # Create Agent Message first (we'll attach the file to it)
         message_doc = None
         if conversation_id and conversation_index is not None:
@@ -2076,7 +2122,7 @@ async def handle_generate_audio(
                 # Get provider and model from agent
                 provider = agent_doc.provider
                 model_name = agent_doc.model
-                
+
                 # Create Agent Message with kind "Audio"
                 message_doc = frappe.get_doc({
                     "doctype": "Agent Message",
@@ -2090,15 +2136,23 @@ async def handle_generate_audio(
                     "agent_run": kwargs.get("agent_run_id"),
                     "conversation_index": conversation_index,
                     "is_agent_message": 1,
-                    "user": "Agent"
+                    "user": "Agent",
+                    "tts_voice": voice
                 })
                 message_doc.insert(ignore_permissions=True)
+
+                if tts_source == "agent_config" and getattr(agent_doc, "tts_model", None):
+                    frappe.db.set_value(
+                        "Agent Message", message_doc.name,
+                        "tts_model", agent_doc.tts_model,
+                        update_modified=False
+                    )
+                    message_doc.tts_model = agent_doc.tts_model
+
             except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for generated audio: {str(e)}",
-                    "Audio Generation Message Creation"
-                )
-        
+                logger.warning(f"Create audio message failed: {e!s}")
+                message_doc = None
+
         # Save file attached to the Agent Message
         if message_doc:
             saved_file = save_file(
@@ -2118,19 +2172,19 @@ async def handle_generate_audio(
                 conversation_id or "Unknown",
                 is_private=False
             )
-        
+
         # Get file URL
         file_url = getattr(saved_file, 'file_url', None)
         file_id = getattr(saved_file, 'name', None)
-        
+
         if not file_url:
             file_url = f"/files/{getattr(saved_file, 'file_name', filename)}"
-        
+
         # Update the message with the file URL
         if message_doc and file_url:
             message_doc.db_set("generated_audio", file_url)
-            frappe.db.commit()
-            
+            commit_if_background()
+
             # Emit socket event for new agent message (Audio)
             try:
                 frappe.publish_realtime(
@@ -2149,11 +2203,10 @@ async def handle_generate_audio(
                     after_commit=False
                 )
             except Exception as e:
-                frappe.log_error(
-                    f"Error emitting new_agent_message socket event: {str(e)}",
-                    "Audio Generation Socket Event"
+                frappe.logger("huf").debug(
+                    f"Error emitting new_agent_message socket event: {e!s}"
                 )
-        
+
         # Update conversation total_messages
         if conversation_id and conversation_index is not None:
             try:
@@ -2163,11 +2216,10 @@ async def handle_generate_audio(
                     WHERE name = %s
                 """, (conversation_index, conversation_id))
             except Exception as e:
-                frappe.log_error(
-                    f"Error updating conversation total_messages: {str(e)}",
-                    "Audio Generation Message Creation"
+                frappe.logger("huf").debug(
+                    f"Error updating conversation total_messages: {e!s}"
                 )
-        
+
         return {
             "success": True,
             "audio": {
@@ -2178,20 +2230,24 @@ async def handle_generate_audio(
                 "voice": voice,
                 "speed": speed,
                 "format": response_format,
-                "model": normalized_model
+                "model": normalized_model,
+                "model_source": tts_source,
+                "tts_provider": tts_provider_doc.provider_name,
             },
             "message": "Generated audio successfully",
             "conversation_id": conversation_id
         }
-        
+
     except Exception as e:
-        frappe.log_error(title="Audio Generation Tool", message=f"Audio generation error: {str(e)}")
+        # Hard provider/tool failure: retain Error Log for admin attention.
+        frappe.log_error(title="Audio Generation Tool", message=f"Audio generation error: {e!s}")
         return {"success": False, "error": str(e)}
 
 @frappe.whitelist()
 async def handle_transcribe_audio(
     file_id: str = None,
     file_url: str = None,
+    file_path: str = None,
     language: str = None,
     model: str = None,
     agent_name: str = None,
@@ -2200,222 +2256,73 @@ async def handle_transcribe_audio(
 ):
     """
     Transcribe audio using LiteLLM's transcription function.
-    
+
+    This is a pure agent tool: it resolves the audio file, calls the
+    canonical audio service, and returns the transcript. It does **not**
+    create or update Agent Message records. Callers that need chat/UI
+    persistence should use ``huf.ai.audio_api.transcribe`` or the chat
+    endpoints, which layer message creation on top of the same service.
+
     Uses LiteLLM's transcription() function. The model used is either:
     1. The explicitly provided model parameter, OR
     2. An auto-detected suitable transcription model based on the provider
-    
+
     Args:
         file_id: File document ID (preferred) - File must exist in Frappe
         file_url: File URL/path (alternative) - e.g., "/files/audio.mp3"
+        file_path: Absolute server path inside an allowed audio import
+               directory (alternative to file_id/file_url)
         language: Optional language code (e.g., "en", "es", "fr") - ISO 639-1 format
         model: Optional model name (e.g., "whisper-1", "whisper-large-v3")
                If not provided, defaults based on provider
         agent_name: Automatically passed from context
-        conversation_id: Automatically passed from context
-    
+        conversation_id: Present for context but ignored; this tool does
+            not create messages.
+
     Returns:
         dict: {
             "success": bool,
             "text": str,
+            "transcript": str,
             "file_id": str,
-            "message_id": str,
-            "language": str
+            "file_url": str,
+            "local_path": str,
+            "language": str,
+            "model": str,
+            "provider": str
         }
     """
     try:
-        # Get message_id for upsert logic
-        message_id = kwargs.get("message_id")
-        
-        # Get agent configuration from context
-        if not agent_name:
-            return {"success": False, "error": "Agent name not found in context"}
-        
-        agent_doc = frappe.get_doc("Agent", agent_name)
-        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-        api_key = provider_doc.get_password("api_key")
-        
-        if not api_key:
-            return {"success": False, "error": "API key not configured for provider"}
-        
-        # Get audio file
-        file_doc = None
-        if file_id:
-            try:
-                file_doc = frappe.get_doc("File", file_id)
-            except Exception as e:
-                return {"success": False, "error": f"File not found: {str(e)}"}
-        elif file_url:
-            # Try to find file by URL
-            try:
-                file_doc = frappe.get_doc("File", {"file_url": file_url})
-            except Exception:
-                # Try alternative lookup
-                file_name = file_url.replace("/files/", "")
-                file_doc = frappe.get_doc("File", {"file_name": file_name})
-            
-            if not file_doc:
-                return {"success": False, "error": f"File not found at URL: {file_url}"}
-        else:
-            return {"success": False, "error": "Either file_id or file_url is required"}
-        
-        # Get file path for LiteLLM
-        # LiteLLM transcription accepts file path or file-like object
-        try:
-            file_path = file_doc.get_full_path()
-        except Exception as e:
-            return {"success": False, "error": f"Error getting file path: {str(e)}"}
-        
-        # Determine transcription model
-        if not model:
-            provider_name = provider_doc.provider_name.lower()
-            if provider_name in ["openai", "azure"]:
-                model = "whisper-1"
-            elif provider_name == "groq":
-                model = "groq/whisper-large-v3"
-            elif provider_name == "deepgram":
-                model = "deepgram/nova-2"
-            else:
-                model = "whisper-1"  # Default fallback
-        
-        # Normalize model name for LiteLLM
-        from huf.ai.providers.litellm import _normalize_model_name
-        normalized_model = _normalize_model_name(model, agent_doc.provider)
-        
-        # Call LiteLLM transcription
-        import litellm
-        
-        # Build parameters for transcription
-        # LiteLLM accepts file path (string) or file-like object
-        transcription_params = {
-            "model": normalized_model,
-            "file": file_path,  # Pass file path directly
-            "api_key": api_key
-        }
-        
-        # Add optional parameters
-        if language:
-            transcription_params["language"] = language
-        
-        # Call LiteLLM transcription
-        def _sync_transcribe(params):
-            with open(file_path, "rb") as audio_file:
-                params["file"] = audio_file
-                return litellm.transcription(**params)
+        # Pure transcription (no message/socket side effects) via the
+        # canonical audio service.
+        result = await asyncio.to_thread(
+            audio_service.transcribe_audio_file,
+            file_id=file_id,
+            file_url=file_url,
+            local_path=file_path,
+            agent_name=agent_name,
+            language=language,
+            model=model,
+        )
 
-        try:
-            response = await asyncio.to_thread(_sync_transcribe, transcription_params)
-        except Exception as e:
-            return {"success": False, "error": f"Transcription failed: {str(e)}"}
-        
-        # Extract text from response
-        # LiteLLM transcription returns a dict with 'text' key or object
-        if hasattr(response, "text"):
-            transcribed_text = response.text
-        elif isinstance(response, dict):
-            transcribed_text = response.get("text", "")
-        else:
-             transcribed_text = str(response)
-        
-        if not transcribed_text:
-            return {"success": False, "error": "Transcription returned empty result"}
-        
-        # Create Agent Message with transcription result
-        message_doc = None
-        if conversation_id:
-            try:
-                # Get conversation_index
-                last_index = frappe.db.sql("""
-                    SELECT MAX(conversation_index) as last_index
-                    FROM `tabAgent Message`
-                    WHERE conversation = %s
-                """, (conversation_id,), as_dict=1)
-                
-                conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-                
-                # Create or Update Agent Message
-                if message_id and frappe.db.exists("Agent Message", message_id):
-                    message_doc = frappe.get_doc("Agent Message", message_id)
-                    message_doc.content = transcribed_text
-                    if not message_doc.kind: message_doc.kind = "Audio"
-                    message_doc.save(ignore_permissions=True)
-                    
-                else:
-                    message_doc = frappe.get_doc({
-                        "doctype": "Agent Message",
-                        "conversation": conversation_id,
-                        "role": "user",
-                        "content": transcribed_text,
-                        "kind": "Audio",
-                        "agent": agent_name,
-                        "provider": agent_doc.provider,
-                        "model": agent_doc.model,
-                        "agent_run": kwargs.get("agent_run_id"),
-                        "conversation_index": conversation_index,
-                        "is_agent_message": 0,
-                        "user": frappe.session.user
-                    })
-                    message_doc.insert(ignore_permissions=True)
-                
-                # Check if file is already attached to this message
-                if file_doc and message_doc:
-                    if not file_doc.attached_to_name:
-                        file_doc.db_set("attached_to_name", message_doc.name)
-                        file_doc.db_set("attached_to_doctype", "Agent Message")
-                        file_doc.db_set("is_private", 0)
+        if not result.get("success"):
+            return result
 
-                # Update conversation total_messages
-                if not message_id:
-                    frappe.db.sql("""
-                        UPDATE `tabAgent Conversation`
-                        SET total_messages = %s, last_activity = NOW()
-                        WHERE name = %s
-                    """, (conversation_index, conversation_id))
-                else:
-                    frappe.db.set_value("Agent Conversation", conversation_id, "last_activity", frappe.utils.now())
-                
-                frappe.db.commit()
-                
-                # Emit socket event for new message
-                try:
-                    frappe.publish_realtime(
-                        event=f'conversation:{conversation_id}',
-                        message={
-                            "type": "update_message" if message_id else "new_user_message",
-                            "conversation_id": conversation_id,
-                            "message_id": message_doc.name,
-                            "content": transcribed_text,
-                            "kind": "Audio",
-                            "file": {
-                                "file_name": file_doc.file_name,
-                                "file_url": file_doc.file_url 
-                            } if file_doc else None,
-                            "conversation_index": conversation_index,
-                        },
-                        user=frappe.session.user,
-                        after_commit=False
-                    )
-                except Exception as e:
-                    frappe.log_error(
-                        f"Error emitting new_user_message socket event: {str(e)}",
-                        "Audio Transcription Socket Event"
-                    )
-                    
-            except Exception as e:
-                frappe.log_error(
-                    f"Error creating Agent Message for transcription: {str(e)}",
-                    "Audio Transcription Message Creation"
-                )
-        
+        transcribed_text = result["text"]
+
         return {
             "success": True,
             "text": transcribed_text,
-            "file_id": file_doc.name,
-            "message_id": message_doc.name if message_doc else None,
-            "language": language or "auto-detected",
-            "model": normalized_model
+            "transcript": transcribed_text,
+            "file_id": result.get("file_id"),
+            "file_url": result.get("file_url"),
+            "local_path": result.get("local_path"),
+            "language": result.get("language") or "auto-detected",
+            "model": result.get("stt_model"),
+            "provider": result.get("provider"),
         }
-        
+
     except Exception as e:
-        frappe.log_error(f"Audio transcription error: {str(e)}", "Audio Transcription Tool")
+        # Hard transcription failure: retain Error Log for admin attention.
+        frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
         return {"success": False, "error": str(e)}

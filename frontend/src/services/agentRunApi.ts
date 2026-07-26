@@ -1,7 +1,7 @@
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
-import { fetchDocCount } from './utilsApi';
+import { fetchPaginatedCount } from './utilsApi';
 
 /**
  * Agent Run document from Frappe
@@ -97,16 +97,12 @@ export async function getAgentRuns(
     const hasMore = mappedRuns.length > limit;
     const items = hasMore ? mappedRuns.slice(0, limit) : mappedRuns;
 
-    // Only fetch count on first page
-    let total: number | undefined;
-    if (page === 1) {
-      try {
-        const countFilters = [...filters];
-        total = await fetchDocCount(doctype['Agent Run'], countFilters);
-      } catch {
-        // Ignore count errors - total is optional
-      }
-    }
+    const total = await fetchPaginatedCount(
+      page,
+      items.length,
+      doctype['Agent Run'],
+      filters
+    );
 
     return {
       items,

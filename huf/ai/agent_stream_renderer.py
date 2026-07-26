@@ -13,7 +13,7 @@ import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 from werkzeug.wrappers import Response
 
-from huf.ai.agent_integration import run_agent_stream
+from huf.ai.agent_integration import _has_queued_runs, run_agent_stream
 
 
 class AgentStreamRenderer(BaseRenderer):
@@ -26,19 +26,26 @@ class AgentStreamRenderer(BaseRenderer):
 
 	def can_render(self) -> bool:
 		"""Determine if this renderer should handle the current path."""
-		return self.path == "huf/stream" or self.path.startswith("huf/stream/")
+		return self.path == "huf/stream" or self.path.startswith("huf/stream/") or self.path == "huf/stream/ping"
 
 	def render(self):
 		"""Render either HTML page or SSE stream based on path."""
+		# Handle ping endpoint first
+		if self.path == "huf/stream/ping":
+			return self._render_ping()
+
 		# Check if agent_name is in form_dict (from rule /huf/stream/<path:agent_name>)
 		agent_name = frappe.form_dict.get("agent_name")
-		
+
 		# Fallback: Extract from path
 		if not agent_name and self.path.startswith("huf/stream/"):
 			parts = self.path.split("/")
 			if len(parts) >= 3:
 				agent_name = parts[2]
-		
+				# Don't treat "ping" as agent name
+				if agent_name == "ping":
+					return self._render_ping()
+
 		if agent_name:
 			try:
 				agent_name = urllib.parse.unquote(agent_name)
@@ -51,10 +58,33 @@ class AgentStreamRenderer(BaseRenderer):
 		else:
 			return self._render_error("Invalid path format. Expected: /huf/stream/<agent_name>")
 
+	def _sse_error_response(self, error_message: str):
+		"""Return a single-event SSE error response (same chunk shape the stream uses for errors)."""
+		def error_generator() -> Generator[str, None, None]:
+			error_data = {"type": "error", "error": error_message}
+			yield f"data: {json.dumps(error_data)}\n\n"
+
+		return Response(
+			error_generator(),
+			mimetype="text/event-stream",
+			headers={
+				"Cache-Control": "no-cache",
+				"Connection": "keep-alive",
+				"X-Accel-Buffering": "no",
+			},
+		)
+
 	def _render_agent_stream(self, agent_name: str):
 		"""Generate SSE stream for agent response."""
 		# Get prompt from query parameters or request body
 		prompt = frappe.form_dict.get("prompt") or frappe.form_dict.get("message", "")
+		
+		# Optional Overrides
+		provider = frappe.form_dict.get("provider")
+		model = frappe.form_dict.get("model")
+		prompt_template = frappe.form_dict.get("prompt_template")
+		prompt_version = frappe.form_dict.get("prompt_version")
+		prompt_cache_options = frappe.form_dict.get("prompt_cache_options")
 		
 		if not prompt:
 			# Try to get from POST body
@@ -62,6 +92,11 @@ class AgentStreamRenderer(BaseRenderer):
 				if frappe.request.method == "POST":
 					body = frappe.request.get_json(force=True) or {}
 					prompt = body.get("prompt") or body.get("message", "")
+					if not provider: provider = body.get("provider")
+					if not model: model = body.get("model")
+					if not prompt_template: prompt_template = body.get("prompt_template")
+					if not prompt_version: prompt_version = body.get("prompt_version")
+					if not prompt_cache_options: prompt_cache_options = body.get("prompt_cache_options")
 			except Exception:
 				pass
 		
@@ -83,9 +118,11 @@ class AgentStreamRenderer(BaseRenderer):
 		# Get agent configuration
 		try:
 			agent_doc = frappe.get_doc("Agent", agent_name)
-			provider = agent_doc.provider
-			model_doc = frappe.get_doc("AI Model", agent_doc.model)
-			model = model_doc.model_name
+			if not provider:
+				provider = agent_doc.provider
+			if not model:
+				model_doc = frappe.get_doc("AI Model", agent_doc.model)
+				model = model_doc.model_name
 		except frappe.DoesNotExistError:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": f"Agent '{agent_name}' not found"}
@@ -115,30 +152,65 @@ class AgentStreamRenderer(BaseRenderer):
 				},
 			)
 		
+		# Queue-first policy: streaming is a direct-execution compatibility path,
+		# allowed only when the agent opts in via the 'Run Immediately' policy.
+		if not getattr(agent_doc, "run_immediately", 0):
+			return self._sse_error_response(
+				"Streaming requires the agent's 'Run Immediately' policy. "
+				"This agent runs queue-first; use the standard chat API instead."
+			)
+
 		# Get optional parameters
 		channel_id = frappe.form_dict.get("channel_id", "sse_stream")
 		external_id = frappe.form_dict.get("external_id") or frappe.session.user
 		
 		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
-		if not conversation_id:
-			try:
-				if frappe.request.method == "POST":
-					body = frappe.request.get_json(force=True) or {}
+		create_new = frappe.form_dict.get("create_new", False)
+		skip_user_message = frappe.form_dict.get("skip_user_message", False)
+		files = None
+		try:
+			if frappe.request.method == "POST":
+				body = frappe.request.get_json(force=True) or {}
+				if not conversation_id:
 					conversation_id = body.get("conversation_id") or body.get("conversation")
-			except Exception:
-				pass
+				create_new = body.get("create_new", create_new)
+				skip_user_message = body.get("skip_user_message", skip_user_message)
+				files = body.get("files")
+		except Exception:
+			pass
+
+		create_new = bool(create_new)
+		skip_user_message = bool(skip_user_message)
+
+		# Queue-ordering parity with run_agent_sync's direct path: a direct
+		# stream must not jump ahead of queued runs for the same conversation.
+		# If no conversation id is available here the stream starts a brand-new
+		# conversation, which by definition has no queued runs — skip the check.
+		stream_conversation_id = None if create_new else conversation_id
+		if stream_conversation_id and _has_queued_runs(stream_conversation_id):
+			return self._sse_error_response(
+				"This conversation has queued runs pending. "
+				"Wait for them to complete before using the direct-execution override."
+			)
 		
 		# Create async generator wrapper
 		def stream_generator() -> Generator[str, None, None]:
 			"""Wrapper to convert async generator to sync generator for Werkzeug Response."""
 			loop = None
+			created_loop = False
 			try:
 				# Try to get existing event loop
 				try:
 					loop = asyncio.get_event_loop()
+					if loop.is_closed():
+						loop = None
 				except RuntimeError:
+					loop = None
+					
+				if loop is None:
 					loop = asyncio.new_event_loop()
 					asyncio.set_event_loop(loop)
+					created_loop = True
 				
 				# Create async generator
 				async_gen = run_agent_stream(
@@ -148,7 +220,13 @@ class AgentStreamRenderer(BaseRenderer):
 					model=model,
 					channel_id=channel_id,
 					external_id=external_id,
-					conversation_id=conversation_id
+					conversation_id=None if create_new else conversation_id,
+					create_new=create_new,
+					prompt_template=prompt_template,
+					prompt_version=prompt_version,
+					prompt_cache_options=prompt_cache_options,
+					skip_user_message=skip_user_message,
+					files=files,
 				)
 				
 				# Convert async generator to sync
@@ -170,12 +248,20 @@ class AgentStreamRenderer(BaseRenderer):
 				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}"}
 				yield f"data: {json.dumps(error_data)}\n\n"
 			finally:
-				# Don't close loop if it was already running
-				if loop and loop != asyncio.get_event_loop():
+				# Close the loop if we created it AND unset it to prevent leaking closed loops!
+				if created_loop and loop:
 					try:
+						# Clean up pending tasks
+						pending = asyncio.all_tasks(loop)
+						for task in pending:
+							task.cancel()
+						if pending:
+							loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
 						loop.close()
 					except Exception:
 						pass
+					finally:
+						asyncio.set_event_loop(None)
 		
 		response = Response(
 			stream_generator(),
@@ -188,6 +274,13 @@ class AgentStreamRenderer(BaseRenderer):
 		)
 		
 		return response
+
+	def _render_ping(self):
+		"""Render lightweight ping response for streaming availability check."""
+		response_data = {"ok": True, "status": "ok"}
+		json_response = json.dumps(response_data)
+		headers = {"Content-Type": "application/json; charset=utf-8"}
+		return self.build_response(json_response, headers=headers)
 
 	def _render_error(self, error_message: str):
 		"""Render error response."""
@@ -412,4 +505,3 @@ class AgentStreamRenderer(BaseRenderer):
 
 		headers = {"Content-Type": "text/html; charset=utf-8"}
 		return self.build_response(html_content, headers=headers)
-

@@ -1,0 +1,109 @@
+# FasterDocker bench-start dev/test profile.
+#
+# One HUF/Frappe container running `bench start`, plus MariaDB and a single
+# Redis. No nginx frontend, no split web/worker/socketio/scheduler containers.
+# The HUF app image bundles the SQL seed, so the bench container self-seeds on
+# first boot — no separate seed-init image or container is required.
+#
+# Usage:
+#   export HUF_IMAGE_TAG=$(git rev-parse --short HEAD)
+#   docker compose -p fasterdocker -f docker/compose.bench.yml up --wait
+#
+# Exposes the bench web port directly (default 8000) and socketio (9000).
+# Endpoints:
+#   http://localhost:8000/api/method/ping
+#   http://localhost:8000/huf
+#
+# This compose is intentionally generic: override APP_NAME, SITE_NAME, image
+# names, and ports via .env for other Frappe apps.
+
+name: fasterdocker
+
+x-frappe-env: &frappe_env
+  SITE_NAME: ${SITE_NAME:-huf.localhost}
+  FRAPPE_SITE_NAME_HEADER: ${SITE_NAME:-huf.localhost}
+  DB_HOST: mariadb
+  DB_PORT: "3306"
+  REDIS_CACHE: redis://redis:6379/0
+  REDIS_QUEUE: redis://redis:6379/1
+  REDIS_SOCKETIO: redis://redis:6379/2
+  FRAPPE_REDIS_CACHE: redis://redis:6379/0
+  FRAPPE_REDIS_QUEUE: redis://redis:6379/1
+  FRAPPE_REDIS_SOCKETIO: redis://redis:6379/2
+  APP_NAME: ${APP_NAME:-huf}
+  BENCH_START_PORT: ${BENCH_START_PORT:-8000}
+  BENCH_WORKER_QUEUES: ${BENCH_WORKER_QUEUES:-default,short,long}
+
+services:
+  mariadb:
+    container_name: fasterdocker-run-mariadb
+    image: ${MARIADB_IMAGE:-mariadb:10.11.11}
+    platform: ${DOCKER_PLATFORM:-linux/arm64}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-fasterdocker-mysql-root}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 20s
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - fasterdocker
+
+  redis:
+    container_name: fasterdocker-run-redis
+    image: ${REDIS_IMAGE:-redis:6.2-alpine}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 2s
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fasterdocker
+
+  bench:
+    container_name: fasterdocker-run-bench
+    image: ${HUF_APP_IMAGE:-huf-app}:${HUF_IMAGE_TAG:-latest}
+    environment:
+      <<: *frappe_env
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    ports:
+      - "${BENCH_WEB_PUBLISH_PORT:-8000}:8000"
+      - "${BENCH_SOCKETIO_PUBLISH_PORT:-9000}:9000"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-H", "Host: ${SITE_NAME:-huf.localhost}", "http://localhost:8000/api/method/ping"]
+      start_period: 30s
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - fasterdocker
+    command: ["/usr/local/bin/bench-start.sh"]
+
+volumes:
+  mariadb-data:
+  sites:
+  logs:
+  redis-data:
+
+networks:
+  fasterdocker:
+    driver: bridge

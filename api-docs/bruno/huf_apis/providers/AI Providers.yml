@@ -1,0 +1,25 @@
+info:
+  name: AI Providers
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: '{{BASE_URL}}/api/resource/AI%20Provider?fields=["name"]&limit_page_length=0&as_dict=true'
+  params:
+    - name: fields
+      value: '["name"]'
+      type: query
+    - name: limit_page_length
+      value: "0"
+      type: query
+    - name: as_dict
+      value: "true"
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

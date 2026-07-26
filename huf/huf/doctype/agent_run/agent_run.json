@@ -4,11 +4,13 @@
  "creation": "2025-08-11 19:27:48.765866",
  "doctype": "DocType",
  "engine": "InnoDB",
-  "field_order": [
+ "field_order": [
   "request_tab",
   "conversation",
   "agent",
   "prompt",
+  "sequence",
+  "runtime_context",
   "response_tab",
   "response",
   "status",
@@ -20,6 +22,7 @@
   "input_tokens",
   "cost",
   "call_recording",
+  "prompt_template",
   "column_break_qy3x",
   "model",
   "end_time",
@@ -30,7 +33,17 @@
   "agent_orchestration",
   "knowledge_section",
   "knowledge_sources_used",
-  "chunks_injected"
+  "chunks_injected",
+  "flow_section",
+  "flow_run",
+  "flow_node_id",
+  "column_break_flow1",
+  "flow_id",
+  "run_kind",
+  "trigger_reference_section",
+  "reference_doctype",
+  "column_break_hbrm",
+  "reference_name"
  ],
  "fields": [
   {
@@ -46,6 +59,13 @@
    "in_list_view": 1,
    "label": "Agent",
    "options": "Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "prompt_template",
+   "fieldtype": "Link",
+   "label": "Prompt Template",
+   "options": "Agent Prompt",
    "read_only": 1
   },
   {
@@ -85,6 +105,21 @@
    "fieldname": "request_tab",
    "fieldtype": "Tab Break",
    "label": "Request"
+  },
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Sequence",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "runtime_context",
+   "fieldtype": "JSON",
+   "hidden": 1,
+   "label": "Runtime Context",
+   "read_only": 1
   },
   {
    "fieldname": "response_tab",
@@ -178,6 +213,25 @@
    "read_only": 1
   },
   {
+   "fieldname": "trigger_reference_section",
+   "fieldtype": "Section Break",
+   "label": "Trigger Reference"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Name",
+   "options": "reference_doctype",
+   "read_only": 1
+  },
+  {
    "fieldname": "call_recording",
    "fieldtype": "Attach",
    "label": "Call Recording",
@@ -199,12 +253,52 @@
    "fieldtype": "Int",
    "label": "Chunks Injected",
    "read_only": 1
+  },
+  {
+   "fieldname": "flow_section",
+   "fieldtype": "Section Break",
+   "label": "Flow"
+  },
+  {
+   "fieldname": "flow_run",
+   "fieldtype": "Link",
+   "label": "Flow Run",
+   "options": "Flow Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "flow_node_id",
+   "fieldtype": "Data",
+   "label": "Flow Node ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_flow1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "flow_id",
+   "fieldtype": "Data",
+   "label": "Flow ID",
+   "read_only": 1
+  },
+  {
+   "default": "agent",
+   "fieldname": "run_kind",
+   "fieldtype": "Select",
+   "label": "Run Kind",
+   "options": "agent\ntool\norchestrator",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_hbrm",
+   "fieldtype": "Column Break"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-12-29 15:02:15.973547",
+ "modified": "2026-07-14 16:40:35.708364",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",
@@ -221,6 +315,42 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Viewer",
+   "share": 1,
+   "write": 0
   }
  ],
  "row_format": "Dynamic",

@@ -11,8 +11,7 @@
   "port",
   "provider_name",
   "api_key",
-  "slug",
-  "chef"
+  "provider_brand"
  ],
  "fields": [
   {
@@ -31,14 +30,11 @@
    "reqd": 1
   },
   {
-   "fieldname": "slug",
-   "fieldtype": "Data",
-   "label": "Slug"
-  },
-  {
-   "fieldname": "chef",
-   "fieldtype": "Data",
-   "label": "Chef"
+   "fieldname": "provider_brand",
+   "fieldtype": "Select",
+   "label": "Provider Brand",
+   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nother",
+   "reqd": 1
   },
   {
    "default": "0",
@@ -63,7 +59,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-23 16:18:02.769392",
+ "modified": "2026-03-11 12:23:24.111361",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "AI Provider",
@@ -81,7 +77,32 @@
    "role": "System Manager",
    "share": 1,
    "write": 1
-  }
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 0,
+   "select": 1
+  },
+  {
+    "create": 0,
+    "delete": 0,
+    "email": 1,
+    "export": 1,
+    "print": 1,
+    "read": 1,
+    "report": 1,
+    "role": "Huf User",
+    "share": 1,
+    "write": 0
+}
  ],
  "row_format": "Dynamic",
  "sort_field": "modified",
