@@ -13,7 +13,7 @@ export function useToolCreationOptions() {
       try {
         const [doctypes, agentsList] = await Promise.all([getDocTypes(), getAgents()]);
         setDocTypes(doctypes || []);
-        setAgents(Array.isArray(agentsList) ? agentsList : (agentsList as any)?.items || []);
+        setAgents(Array.isArray(agentsList) ? agentsList : agentsList?.items || []);
       } catch (error) {
         console.error('Error loading tool form options:', error);
       } finally {

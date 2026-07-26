@@ -76,8 +76,8 @@ function DataPage() {
 			setDeleteTable(null);
 			// Reload the page to refresh the list since we removed a table
 			window.location.reload();
-		} catch (err: any) {
-			toast.error('Failed to delete table', { description: err.message });
+		} catch (err) {
+			toast.error('Failed to delete table', { description: err instanceof Error ? err.message : 'An error occurred.' });
 		} finally {
 			setDeleting(false);
 		}

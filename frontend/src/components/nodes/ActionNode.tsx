@@ -15,6 +15,7 @@ import {
   Bot,
   Wrench,
   Trash2,
+  type LucideIcon,
 } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
@@ -24,7 +25,7 @@ import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { NODE_CARD_BASE, NODE_HANDLE, NODE_ICON_WELL, getExecutionStatusClasses } from './nodeStyles';
 import { cn } from '@/lib/utils';
 
-const iconMap: Record<string, any> = {
+const iconMap: Record<string, LucideIcon> = {
   Play,
   Repeat,
   GitBranch,

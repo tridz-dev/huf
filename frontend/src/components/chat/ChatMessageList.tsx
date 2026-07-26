@@ -173,7 +173,7 @@ export function ChatMessageList({
                 hasMore: response.hasMore,
             };
         },
-        initialParams: initialParams as any,
+        initialParams,
         pageSize: 20,
         direction: 'reverse',
         enabled: shouldFetchMessages,

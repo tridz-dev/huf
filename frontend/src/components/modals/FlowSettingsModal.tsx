@@ -71,9 +71,9 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
       setIsDeleting(false);
       onClose();
       navigate('/flows');
-    } catch (err: any) {
+    } catch (err) {
       toast.error('Failed to delete flow', {
-        description: err.message || 'Unknown error'
+        description: err instanceof Error && err.message ? err.message : 'Unknown error'
       });
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -160,7 +160,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="mode">Execution Mode</Label>
-              <Select value={mode} onValueChange={(v: any) => setMode(v)}>
+              <Select value={mode} onValueChange={(v) => setMode(v as 'normal' | 'agentic')}>
                 <SelectTrigger id="mode">
                   <SelectValue />
                 </SelectTrigger>

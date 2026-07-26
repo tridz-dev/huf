@@ -24,7 +24,8 @@ import {
   Wrench,
   Route,
   GitCommitHorizontal,
-  Globe
+  Globe,
+  type LucideIcon
 } from "lucide-react";
 import { actionOptions } from "../../data/actions";
 import { ActionConfig } from "../../types/flow.types";
@@ -35,7 +36,7 @@ interface ActionSelectionModalProps {
   onSelect: (actionType: string, config: ActionConfig) => void;
 }
 
-const iconMap: Record<string, any> = {
+const iconMap: Record<string, LucideIcon> = {
   Repeat,
   GitBranch,
   RotateCw,

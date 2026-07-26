@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -87,7 +88,7 @@ export async function getAgentRuns(
     // Fetch data
     const runs = await db.getDocList(doctype['Agent Run'], {
       fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child'],
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }),
       orderBy: { field: 'creation', order: 'desc' },

@@ -10,6 +10,79 @@ frappe.ui.form.on("Agent Chat", {
 });
 
 function render_chat_ui(frm) {
+    function sendAudioToServer(frm, dataUrl, filename) {
+        const messagesEl = $(frm.fields_dict.chat_ui.wrapper).find(".agent-chat-messages");
+        append_message(messagesEl, "user", frappe.session.user, `(voice message: ${filename})`, new Date());
+
+        frappe.call({
+            method: "huf.ai.agent_chat.upload_audio_and_transcribe",
+            args: {
+                docname: frm.doc.name,
+                filename: filename,
+                b64data: dataUrl,
+                agent: frm.doc.agent,
+                conversation: frm.doc.conversation
+            },
+            callback: function (r) {
+                if (r.message && r.message.success) {
+                    append_message(messagesEl, "user", frappe.session.user, r.message.transcript, new Date());
+
+                    if (r.message.run && r.message.run.success) {
+                        append_message(messagesEl, "agent", frm.doc.agent, r.message.run.response, new Date());
+                        if (r.message.run.conversation_id && !frm.doc.conversation) {
+                            frm.set_value("conversation", r.message.run.conversation_id);
+                        }
+                    }
+                    scroll_to_bottom(messagesEl);
+                } else {
+                    append_message(messagesEl, "system", "System", "Transcription failed: " + (r.message?.error || "Unknown"), new Date());
+                }
+            }
+
+        });
+    }
+
+    function sendDocToServer(frm, dataUrl, filename) {
+        const messagesEl = $(frm.fields_dict.chat_ui.wrapper).find(".agent-chat-messages");
+        append_message(messagesEl, "user", frappe.session.user, `(file upload: ${filename})`, new Date());
+
+        // Show processing status
+        const statusId = "status-" + frappe.utils.get_random(5);
+        append_message(messagesEl, "system", "System", "Uploading and processing...", new Date(), statusId);
+        scroll_to_bottom(messagesEl);
+
+
+        frappe.call({
+            method: "huf.ai.agent_chat.upload_file_and_process",
+            args: {
+                docname: frm.doc.name,
+                filename: filename,
+                b64data: dataUrl,
+                agent: frm.doc.agent,
+                conversation: frm.doc.conversation
+            },
+            callback: function (r) {
+                // Remove status message
+                messagesEl.find(`#${statusId}`).closest('div[style*="margin-bottom:16px"]').remove();
+
+                if (r.message && r.message.success) {
+                    
+                    let text = r.message.text || "Processed successfully.";
+                    // Optionally show the extracted text as a system / agent message
+                    append_message(messagesEl, "agent", frm.doc.agent, `**Extracted from ${filename}:**\n\n${text}`, new Date());
+
+                    if (r.message.conversation_id && !frm.doc.conversation) {
+                        frm.set_value("conversation", r.message.conversation_id);
+                    }
+
+                    scroll_to_bottom(messagesEl);
+                } else {
+                    append_message(messagesEl, "system", "System", "Processing failed: " + (r.message?.error || "Unknown"), new Date());
+                }
+            }
+        });
+    }
+
     const wrapper = $(frm.fields_dict.chat_ui.wrapper);
     wrapper.css({
         "padding": "0",
@@ -150,79 +223,6 @@ function render_chat_ui(frm) {
                                 </svg>`);
             }
         });
-
-        function sendAudioToServer(frm, dataUrl, filename) {
-            const messagesEl = $(frm.fields_dict.chat_ui.wrapper).find(".agent-chat-messages");
-            append_message(messagesEl, "user", frappe.session.user, `(voice message: ${filename})`, new Date());
-
-            frappe.call({
-                method: "huf.ai.agent_chat.upload_audio_and_transcribe",
-                args: {
-                    docname: frm.doc.name,
-                    filename: filename,
-                    b64data: dataUrl,
-                    agent: frm.doc.agent,
-                    conversation: frm.doc.conversation
-                },
-                callback: function (r) {
-                    if (r.message && r.message.success) {
-                        append_message(messagesEl, "user", frappe.session.user, r.message.transcript, new Date());
-
-                        if (r.message.run && r.message.run.success) {
-                            append_message(messagesEl, "agent", frm.doc.agent, r.message.run.response, new Date());
-                            if (r.message.run.conversation_id && !frm.doc.conversation) {
-                                frm.set_value("conversation", r.message.run.conversation_id);
-                            }
-                        }
-                        scroll_to_bottom(messagesEl);
-                    } else {
-                        append_message(messagesEl, "system", "System", "Transcription failed: " + (r.message?.error || "Unknown"), new Date());
-                    }
-                }
-
-            });
-        }
-
-        function sendDocToServer(frm, dataUrl, filename) {
-            const messagesEl = $(frm.fields_dict.chat_ui.wrapper).find(".agent-chat-messages");
-            append_message(messagesEl, "user", frappe.session.user, `(file upload: ${filename})`, new Date());
-
-            // Show processing status
-            const statusId = "status-" + frappe.utils.get_random(5);
-            append_message(messagesEl, "system", "System", "Uploading and processing...", new Date(), statusId);
-            scroll_to_bottom(messagesEl);
-
-
-            frappe.call({
-                method: "huf.ai.agent_chat.upload_file_and_process",
-                args: {
-                    docname: frm.doc.name,
-                    filename: filename,
-                    b64data: dataUrl,
-                    agent: frm.doc.agent,
-                    conversation: frm.doc.conversation
-                },
-                callback: function (r) {
-                    // Remove status message
-                    messagesEl.find(`#${statusId}`).closest('div[style*="margin-bottom:16px"]').remove();
-
-                    if (r.message && r.message.success) {
-                        
-                        let text = r.message.text || "Processed successfully.";
-                        // Optionally show the extracted text as a system / agent message
-                        append_message(messagesEl, "agent", frm.doc.agent, `**Extracted from ${filename}:**\n\n${text}`, new Date());
-
-                        if (r.message.conversation_id && !frm.doc.conversation) {
-                            frm.set_value("conversation", r.message.conversation_id);
-                        }
-
-                        scroll_to_bottom(messagesEl);
-                    } else {
-                        append_message(messagesEl, "system", "System", "Processing failed: " + (r.message?.error || "Unknown"), new Date());
-                    }
-                }
-            });
-        }
 
         textarea.on("input", function () {
             this.style.height = "auto";
@@ -387,7 +387,7 @@ function do_send(frm, msg, textarea, messagesEl) {
         let buffer = '';
         let fullResponse = '';
 
-        while (true) {
+        for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
 

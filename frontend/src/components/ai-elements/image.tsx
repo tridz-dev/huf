@@ -30,6 +30,9 @@ export const Image = ({
   onLoad,
   ...props
 }: ImageProps) => {
+  // uint8Array is accepted for type parity with Experimental_GeneratedImage
+  // but intentionally not forwarded to the <img> element.
+  void uint8Array;
   const imageSrc = src || (base64 && mediaType ? `data:${mediaType};base64,${base64}` : undefined);
   
   const handleDownload = async () => {

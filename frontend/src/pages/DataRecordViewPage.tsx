@@ -39,8 +39,8 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 			const result = await getTableRecord(schema.doctype_name, recordName);
 			setRecord(result);
 			setFormData(initFormData(schema.fields, result));
-		} catch (error: any) {
-			toast.error('Failed to load record', { description: error?.message });
+		} catch (error) {
+			toast.error('Failed to load record', { description: error instanceof Error ? error.message : undefined });
 			navigate(tableId ? `/data/${tableId}` : '/data');
 		} finally {
 			setLoading(false);
@@ -86,8 +86,8 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 				await updateTableRecord(schema.doctype_name, recordName, formData);
 				toast.success('Record updated');
 			}
-		} catch (error: any) {
-			toast.error('Failed to save record', { description: error?.message });
+		} catch (error) {
+			toast.error('Failed to save record', { description: error instanceof Error ? error.message : undefined });
 		} finally {
 			setSaving(false);
 		}
@@ -106,8 +106,8 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 			await deleteTableRecord(schema.doctype_name, recordName);
 			toast.success('Record deleted');
 			navigate(tableId ? `/data/${tableId}` : '/data');
-		} catch (error: any) {
-			toast.error('Failed to delete record', { description: error?.message });
+		} catch (error) {
+			toast.error('Failed to delete record', { description: error instanceof Error ? error.message : undefined });
 		} finally {
 			setDeleting(false);
 		}
