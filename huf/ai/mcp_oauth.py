@@ -390,21 +390,8 @@ def _save_tokens(server, token_data: dict):
     """Persist access_token, refresh_token, expiry and status to the server doc."""
     expires_in = token_data.get("expires_in")
     expires_at = add_to_date(now_datetime(), seconds=int(expires_in)) if expires_in else None
-    
-    # Support custom token paths (e.g. authed_user.access_token) if configured
-    token_path = getattr(server, "oauth_token_response_path", None) or "access_token"
-    
-    access_token = token_data
-    for key in token_path.split("."):
-        if isinstance(access_token, dict) and key in access_token:
-            access_token = access_token.get(key)
-        else:
-            access_token = None
-            break
-            
-    # Fallback to standard root access_token if path extraction failed
-    if not access_token:
-        access_token = token_data.get("access_token")
+
+    access_token = token_data.get("access_token")
 
     server.oauth_access_token = access_token
     if token_data.get("refresh_token"):

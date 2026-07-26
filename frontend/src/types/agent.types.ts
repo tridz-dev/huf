@@ -41,6 +41,7 @@ export type ToolType =
   | "Get Conversation Data"
   | "Set Conversation Data"
   | "Load Conversation Data"
+  | "Perplexity Search"
   | "Transcription"
   /**
    * @deprecated Legacy value kept for backward compatibility with saved docs.

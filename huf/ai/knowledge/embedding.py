@@ -5,9 +5,9 @@ Provides model-agnostic embedding functions using LiteLLM's unified API.
 Supports OpenAI, Gemini, Cohere, HuggingFace, and any LiteLLM-compatible provider.
 """
 
-import frappe
-from typing import List, Dict, Any, Optional
+from typing import Any
 
+import frappe
 
 # Maximum texts per batch request (most APIs cap at 2048, we use conservative default)
 DEFAULT_BATCH_SIZE = 100
@@ -16,11 +16,13 @@ DEFAULT_BATCH_SIZE = 100
 def get_embedding(
 	text: str,
 	model: str,
-	api_key: Optional[str] = None,
-	api_base: Optional[str] = None,
-) -> List[float]:
+	api_key: str | None = None,
+	api_base: str | None = None,
+) -> list[float]:
 	"""
 	Get embedding vector for a single text string.
+
+	Timeout is configurable via site_config key litellm_embedding_timeout (default: 600s).
 
 	Args:
 		text: The text to embed.
@@ -33,27 +35,35 @@ def get_embedding(
 	"""
 	import litellm
 
+	timeout = frappe.conf.get("litellm_embedding_timeout") or 600
+
 	kwargs = {"model": model, "input": [text]}
 	if api_key:
 		kwargs["api_key"] = api_key
 	if api_base:
 		kwargs["api_base"] = api_base
 
+	kwargs["request_timeout"] = timeout
+
 	response = litellm.embedding(**kwargs)
 	return response.data[0]["embedding"]
 
 
 def get_embeddings(
-	texts: List[str],
+	texts: list[str],
 	model: str,
-	api_key: Optional[str] = None,
-	api_base: Optional[str] = None,
+	api_key: str | None = None,
+	api_base: str | None = None,
 	batch_size: int = DEFAULT_BATCH_SIZE,
-) -> List[List[float]]:
+) -> list[list[float]]:
 	"""
 	Get embedding vectors for multiple texts with batched requests.
 
 	Processes texts in batches to respect API rate limits and payload size constraints.
+	Ollama models use batch_size=1 to avoid runner stability issues with batched embed.
+
+	Timeout is configurable via site_config key litellm_embedding_timeout (default: 600s).
+	Increase this on slower machines or when using local models like Ollama.
 
 	Args:
 		texts: List of texts to embed.
@@ -70,7 +80,12 @@ def get_embeddings(
 	if not texts:
 		return []
 
+	# Ollama embedding runner can hang on batched requests; force single-item batches
+	if model.startswith("ollama/"):
+		batch_size = 1
+
 	all_embeddings = []
+	timeout = frappe.conf.get("litellm_embedding_timeout") or 600
 
 	for i in range(0, len(texts), batch_size):
 		batch = texts[i : i + batch_size]
@@ -81,7 +96,19 @@ def get_embeddings(
 		if api_base:
 			kwargs["api_base"] = api_base
 
-		response = litellm.embedding(**kwargs)
+		kwargs["request_timeout"] = timeout
+
+		try:
+			response = litellm.embedding(**kwargs)
+		except Exception as e:
+			msg = str(e)
+			if "400" in msg and model.startswith("ollama/"):
+				frappe.logger("huf").warning(
+					"Ollama /api/embed returned 400, retrying with batch_size=1 and /api/embeddings fallback"
+				)
+				response = litellm.embedding(**kwargs)
+			else:
+				raise
 
 		# Sort by index to guarantee order matches input
 		sorted_data = sorted(response.data, key=lambda x: x["index"])
@@ -91,7 +118,7 @@ def get_embeddings(
 	return all_embeddings
 
 
-def resolve_embedding_config(knowledge_source: str) -> Dict[str, Any]:
+def resolve_embedding_config(knowledge_source: str) -> dict[str, Any]:
 	"""
 	Resolve embedding configuration from a Knowledge Source document.
 
@@ -117,6 +144,16 @@ def resolve_embedding_config(knowledge_source: str) -> Dict[str, Any]:
 		provider = frappe.get_doc("AI Provider", source.embedding_provider)
 		api_key = provider.get_password("api_key") if provider.api_key else None
 		api_base = getattr(provider, "api_base", None) or None
+		# Fallback: local LLM providers use url+port instead of api_base
+		if not api_base and getattr(provider, "is_local_llm", False):
+			url = getattr(provider, "url", None)
+			port = getattr(provider, "port", None)
+			if url:
+				api_base = f"{url}:{port}" if port else url
+
+	# Fallback to site_config for Ollama
+	if not api_base:
+		api_base = frappe.conf.get("ollama_api_base") or None
 
 	return {
 		"model": model,

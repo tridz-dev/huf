@@ -15,6 +15,7 @@ import {
 	Link2,
 	Palette,
 	Phone,
+	Folder,
 	Minus,
 	Columns,
 	LucideIcon,
@@ -41,6 +42,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 	Link2,
 	Palette,
 	Phone,
+	Folder,
 	Minus,
 	Columns,
 };
@@ -99,6 +101,7 @@ const GROUPS: FieldTypeGroup[] = [
 	{
 		label: 'Layout',
 		types: [
+			{ type: 'Tab Break', label: 'Tab', icon: 'Folder' },
 			{ type: 'Section Break', label: 'Section', icon: 'Minus' },
 			{ type: 'Column Break', label: 'Column', icon: 'Columns' },
 		],
@@ -121,14 +124,14 @@ export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps)
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>{trigger}</PopoverTrigger>
-			<PopoverContent className="w-80 p-0" align="center" side="top" collisionPadding={16}>
-				<div className="p-3 border-b">
+			<PopoverContent className="w-80 p-0 rounded-none border border-line bg-panel" align="center" side="top" collisionPadding={16}>
+				<div className="sticky top-0 z-10 bg-panel border-b border-line p-3">
 					<h4 className="font-medium text-sm">Choose Field Type</h4>
 				</div>
 				<div className="p-3 max-h-96 overflow-y-auto space-y-4">
 					{GROUPS.map((group) => (
 						<div key={group.label}>
-							<p className="text-xs font-medium text-muted-foreground mb-2">
+							<p className="text-xs font-medium text-steel mb-2">
 								{group.label}
 							</p>
 							<div className="grid grid-cols-2 gap-1">
@@ -139,10 +142,10 @@ export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps)
 											key={ft.type}
 											variant="ghost"
 											size="sm"
-											className="justify-start gap-2 h-8 text-xs font-normal"
+											className="justify-start gap-2 h-8 text-xs font-normal rounded-none"
 											onClick={() => handleSelect(ft.type)}
 										>
-											<Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+											<Icon className="w-3.5 h-3.5 text-steel shrink-0" />
 											{ft.label}
 										</Button>
 									);

@@ -143,7 +143,7 @@ VALID_TYPES = [
     "Cancel Document", "Get Amended Document", "Custom Function", "App Provided",
     "Attach File to Document", "Get Report Result", "Get Value", "Set Value",
     "GET", "POST", "Run Agent", "Client Side Tool", "Get Conversation Data",
-    "Set Conversation Data", "Load Conversation Data"
+    "Set Conversation Data", "Load Conversation Data", "Perplexity Search"
 ]
 
 def upsert_tool(data: dict, source_app: str, source_file: str) -> tuple:

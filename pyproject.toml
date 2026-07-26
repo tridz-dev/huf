@@ -22,6 +22,14 @@ dependencies = [
     "httpx>=0.24.0",
     "chromadb",
     "llama-index-vector-stores-chroma",
+    "llama-index-vector-stores-postgres",
+    "llama-index-vector-stores-weaviate",
+    "llama-index-vector-stores-pinecone",
+    "redisvl>=0.5",
+    "zvec>=0.2.1",
+    "llama-index-vector-stores-faiss",
+    "faiss-cpu",
+    "psycopg[binary]>=3.1.0",
     "pypdf",
     "python-docx",
     "openpyxl",
@@ -29,6 +37,8 @@ dependencies = [
     "beautifulsoup4",
     "aiohttp",
     "pypdfium2>=4.26.0",
+    "serpapi",
+    "youtube-transcript-api",
 ]
 
 [build-system]

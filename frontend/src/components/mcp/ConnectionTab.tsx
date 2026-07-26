@@ -7,10 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { UseFormReturn } from 'react-hook-form';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import type { MCPFormValues } from './types';
-import { mcpAuthTypes, mcpAuthHeaderNames, mcpTransportTypes } from '@/data/mcp';
+import { mcpAuthTypes, mcpAuthHeaderNames, mcpTransportTypes, type MCPAuthType } from '@/data/mcp';
 import {
   resolveAndStartMCPOAuthFlow,
   disconnectMCPOAuth,
@@ -26,6 +27,12 @@ function getOAuthStatusVariant(status?: string): BadgeVariant {
   return 'outline';
 }
 
+const credentialLabels: Partial<Record<MCPAuthType, string>> = {
+  api_key: 'API Key',
+  bearer_token: 'Token',
+  custom_header: 'Header Value',
+};
+
 interface ConnectionTabProps {
   form: UseFormReturn<MCPFormValues>;
   serverName: string;
@@ -38,7 +45,8 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
   const watchOAuthStatus = form.watch('oauth_status');
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [showAdvancedOAuth, setShowAdvancedOAuth] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showManualOAuth, setShowManualOAuth] = useState(false);
 
   const popupRef = useRef<Window | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -256,238 +264,86 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
         </CardContent>
       </Card>
 
-      {/* Advanced settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Advanced Connection Settings</CardTitle>
-          <CardDescription>
-            Transport, authentication mode, OAuth overrides, and custom headers.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6">
-          <FormField
-            control={form.control}
-            name="transport_type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Transport Type</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select transport type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {mcpTransportTypes.map((transportType) => (
-                      <SelectItem key={transportType.value} value={transportType.value}>
-                        {transportType.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormDescription>Communication protocol for MCP server</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="auth_type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Authentication Mode</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value || 'none'}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select authentication mode" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {mcpAuthTypes.map((authType) => (
-                      <SelectItem key={authType.value} value={authType.value}>
-                        {authType.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormDescription>Leave as OAuth 2.1 for automatic discovery; switch only if the server requires a different mode</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {showAuthFields && (
-            <>
+      {/* Advanced settings — collapsed by default */}
+      <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer select-none">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <CardTitle className="text-base">Advanced Settings</CardTitle>
+                  <CardDescription>
+                    Authentication mode, transport, and custom headers. Usually not needed.
+                  </CardDescription>
+                </div>
+                <ChevronDown
+                  className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
+                />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="grid gap-6">
               <FormField
                 control={form.control}
-                name="auth_header_name"
+                name="auth_type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Auth Header Name</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Authorization"
-                        {...field}
-                      />
-                    </FormControl>
+                    <FormLabel>Authentication Mode</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || 'none'}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select authentication mode" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {mcpAuthTypes.map((authType) => (
+                          <SelectItem key={authType.value} value={authType.value}>
+                            {authType.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Leave as OAuth 2.1 for automatic discovery; switch only if the server requires a different mode</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="auth_header_value"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Auth Header Value</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="Enter API key, bearer token, or header value"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </>
-          )}
-
-          {watchAuthType === 'oauth' && (
-            <>
-              <FormField
-                control={form.control}
-                name="oauth_scope"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>OAuth Scope</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="read write"
-                        className="min-h-[80px] resize-y"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>Space-separated OAuth scopes. Leave blank for provider default.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="oauth_extra_authorize_params"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Extra Authorize Params (JSON)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder='{"access_type": "offline"}'
-                        className="min-h-[80px] resize-y"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAdvancedOAuth((v) => !v)}
-              >
-                {showAdvancedOAuth ? 'Hide OAuth Overrides' : 'Show OAuth Overrides'}
-              </Button>
-
-              {showAdvancedOAuth && (
+              {showAuthFields && (
                 <>
-                  <FormField
-                    control={form.control}
-                    name="oauth_redirect_uri"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Custom Redirect URI</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="https://provider.example.com/mcp-oauth-callback"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>Optional: override the auto-generated callback URL</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {watchAuthType === 'custom_header' && (
+                    <FormField
+                      control={form.control}
+                      name="auth_header_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Header Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Authorization"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   <FormField
                     control={form.control}
-                    name="oauth_authorization_endpoint"
+                    name="auth_header_value"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Authorization Endpoint</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="https://provider.example.com/oauth/authorize"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="oauth_token_endpoint"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Token Endpoint</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="https://provider.example.com/oauth/token"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="oauth_client_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Client ID</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Client ID" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="oauth_client_secret"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Client Secret</FormLabel>
+                        <FormLabel>{credentialLabels[watchAuthType as MCPAuthType] || 'Credential'}</FormLabel>
                         <FormControl>
                           <Input
                             type="password"
-                            placeholder="Leave blank if using PKCE-only public client"
+                            placeholder="Enter API key, bearer token, or header value"
                             {...field}
                           />
                         </FormControl>
@@ -497,71 +353,247 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                   />
                 </>
               )}
-            </>
-          )}
 
-          <div className="border-t pt-6">
-            <h4 className="text-sm font-medium mb-2">Custom Headers</h4>
-            {fields.length === 0 ? (
-              <p className="text-sm text-muted-foreground mb-4">No custom headers configured.</p>
-            ) : (
-              <div className="space-y-4 mb-4">
-                {fields.map((field, index) => (
-                  <div key={field.id} className="grid gap-4 rounded-lg border p-4 md:grid-cols-[1fr_1fr_auto]">
-                    <FormField
-                      control={form.control}
-                      name={`custom_headers.${index}.header_name`}
-                      render={({ field: f }) => (
-                        <FormItem>
-                          <FormLabel>Header Name</FormLabel>
-                          <FormControl>
-                            <Input {...f} placeholder="X-Custom-Header" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`custom_headers.${index}.header_value`}
-                      render={({ field: f }) => (
-                        <FormItem>
-                          <FormLabel>Header Value</FormLabel>
-                          <FormControl>
-                            <Input {...f} placeholder="Header value" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex items-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => remove(index)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+              <FormField
+                control={form.control}
+                name="transport_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Transport Type</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select transport type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {mcpTransportTypes.map((transportType) => (
+                          <SelectItem key={transportType.value} value={transportType.value}>
+                            {transportType.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Leave as HTTP unless connecting to a legacy SSE-only server</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="border-t pt-6">
+                <h4 className="text-sm font-medium mb-2">Custom Headers</h4>
+                {fields.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mb-4">No custom headers configured.</p>
+                ) : (
+                  <div className="space-y-4 mb-4">
+                    {fields.map((field, index) => (
+                      <div key={field.id} className="grid gap-4 rounded-lg border p-4 md:grid-cols-[1fr_1fr_auto]">
+                        <FormField
+                          control={form.control}
+                          name={`custom_headers.${index}.header_name`}
+                          render={({ field: f }) => (
+                            <FormItem>
+                              <FormLabel>Header Name</FormLabel>
+                              <FormControl>
+                                <Input {...f} placeholder="X-Custom-Header" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`custom_headers.${index}.header_value`}
+                          render={({ field: f }) => (
+                            <FormItem>
+                              <FormLabel>Header Value</FormLabel>
+                              <FormControl>
+                                <Input {...f} placeholder="Header value" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="flex items-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => remove(index)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => append({ header_name: '', header_value: '' })}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Header
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => append({ header_name: '', header_value: '' })}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Header
+                </Button>
+              </div>
+
+              {watchAuthType === 'oauth' && (
+                <div className="rounded-lg border">
+                  <Collapsible open={showManualOAuth} onOpenChange={setShowManualOAuth}>
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-4 p-4 text-left"
+                      >
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-medium">Manual OAuth Fallback</p>
+                          <p className="text-sm text-muted-foreground">
+                            Only for servers without automatic discovery or client registration.
+                          </p>
+                        </div>
+                        <ChevronDown
+                          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${showManualOAuth ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="grid gap-6 border-t p-4">
+                        <FormField
+                          control={form.control}
+                          name="oauth_client_id"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Client ID</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Client ID" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="oauth_client_secret"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Client Secret</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="password"
+                                  placeholder="Leave blank if using PKCE-only public client"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="oauth_authorization_endpoint"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Authorization Endpoint</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="https://provider.example.com/oauth/authorize"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="oauth_token_endpoint"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Token Endpoint</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="https://provider.example.com/oauth/token"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="oauth_scope"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>OAuth Scope</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="read write"
+                                  className="min-h-[80px] resize-y"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormDescription>Space-separated OAuth scopes. Leave blank for provider default.</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="oauth_extra_authorize_params"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Extra Authorize Params (JSON)</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder='{"access_type": "offline"}'
+                                  className="min-h-[80px] resize-y"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="oauth_redirect_uri"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Custom Redirect URI</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="https://provider.example.com/mcp-oauth-callback"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormDescription>Optional: override the auto-generated callback URL</FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
     </div>
   );
 }
