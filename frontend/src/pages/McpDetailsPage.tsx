@@ -68,7 +68,6 @@ export function McpDetailsPage() {
         'oauth_registration_endpoint',
         'oauth_client_id',
         'oauth_client_secret',
-        'oauth_token_response_path',
         'oauth_discovery_status',
         'oauth_resource_metadata_url',
         'oauth_authorization_server',
@@ -169,7 +168,6 @@ export function McpDetailsPage() {
       oauth_registration_endpoint: '',
       oauth_client_id: '',
       oauth_client_secret: '',
-      oauth_token_response_path: '',
       oauth_discovery_status: 'Not Started',
       oauth_resource_metadata_url: '',
       oauth_authorization_server: '',
@@ -229,7 +227,6 @@ export function McpDetailsPage() {
           oauth_registration_endpoint: data.oauth_registration_endpoint || '',
           oauth_client_id: data.oauth_client_id || '',
           oauth_client_secret: '', // Don't load the encrypted value
-          oauth_token_response_path: data.oauth_token_response_path || '',
           oauth_discovery_status: data.oauth_discovery_status || 'Not Started',
           oauth_resource_metadata_url: data.oauth_resource_metadata_url || '',
           oauth_authorization_server: data.oauth_authorization_server || '',
@@ -291,7 +288,6 @@ export function McpDetailsPage() {
         oauth_registration_endpoint: values.oauth_registration_endpoint || '',
         oauth_client_id: values.oauth_client_id || '',
         oauth_client_secret: values.oauth_client_secret || '',
-        oauth_token_response_path: values.oauth_token_response_path || '',
         custom_headers: values.custom_headers || [],
       };
 
@@ -331,7 +327,6 @@ export function McpDetailsPage() {
           oauth_registration_endpoint: newMCP.oauth_registration_endpoint || '',
           oauth_client_id: newMCP.oauth_client_id || '',
           oauth_client_secret: '', // Don't reset the encrypted value
-          oauth_token_response_path: newMCP.oauth_token_response_path || '',
           oauth_discovery_status: newMCP.oauth_discovery_status || 'Not Started',
           oauth_resource_metadata_url: newMCP.oauth_resource_metadata_url || '',
           oauth_authorization_server: newMCP.oauth_authorization_server || '',
@@ -376,7 +371,6 @@ export function McpDetailsPage() {
           oauth_registration_endpoint: values.oauth_registration_endpoint,
           oauth_client_id: values.oauth_client_id,
           oauth_client_secret: '', // Don't reset the encrypted value
-          oauth_token_response_path: values.oauth_token_response_path,
           oauth_discovery_status: values.oauth_discovery_status,
           oauth_resource_metadata_url: values.oauth_resource_metadata_url,
           oauth_authorization_server: values.oauth_authorization_server,
@@ -546,7 +540,6 @@ export function McpDetailsPage() {
       oauth_registration_endpoint: values.oauth_registration_endpoint || '',
       oauth_client_id: values.oauth_client_id || '',
       oauth_client_secret: values.oauth_client_secret || '',
-      oauth_token_response_path: values.oauth_token_response_path || '',
       custom_headers: values.custom_headers || [],
     };
 
@@ -584,7 +577,6 @@ export function McpDetailsPage() {
         oauth_registration_endpoint: newMCP.oauth_registration_endpoint || '',
         oauth_client_id: newMCP.oauth_client_id || '',
         oauth_client_secret: '',
-        oauth_token_response_path: newMCP.oauth_token_response_path || '',
         oauth_discovery_status: newMCP.oauth_discovery_status || 'Not Started',
         oauth_resource_metadata_url: newMCP.oauth_resource_metadata_url || '',
         oauth_authorization_server: newMCP.oauth_authorization_server || '',
