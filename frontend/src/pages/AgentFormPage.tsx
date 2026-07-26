@@ -11,7 +11,7 @@ import { usePermissions } from '../contexts/PermissionsContext';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
 import type { AgentSkillRow } from '../types/skill.types';
 import { getSkillOptions } from '../services/skillApi';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest } from '../services/agentApi';
+import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest, deleteAgent, duplicateAgent } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
@@ -25,6 +25,7 @@ import { TriggerModal } from '../components/agent/TriggerModal';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { db } from '../lib/frappe-sdk';
 import { AgentHeader } from '../components/agent/AgentHeader';
+import { DeleteAgentDialog } from '../components/agent/DeleteAgentDialog';
 import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
@@ -301,6 +302,9 @@ export function AgentFormPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [deletingTrigger, setDeletingTrigger] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [providers, setProviders] = useState<AIProvider[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [allModels, setAllModels] = useState<AIModel[]>([]);
@@ -1624,13 +1628,39 @@ export function AgentFormPage() {
     }
   };
 
-  const handleDuplicate = () => {
-    toast.info('Coming Soon!');
+  const handleDuplicate = async () => {
+    if (!id || isNew) return;
+    setDuplicating(true);
+    try {
+      const copy = await duplicateAgent(id);
+      toast.success('Agent duplicated');
+      navigate(`/agents/${copy.name}`);
+    } catch (error) {
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to duplicate agent');
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const handleDelete = () => {
-    toast.info('Deleting agent...');
-    navigate('/agents');
+    setShowDeleteDialog(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!id || isNew) return;
+    setDeleting(true);
+    try {
+      await deleteAgent(id);
+      toast.success('Agent deleted');
+      navigate('/agents');
+    } catch (error) {
+      const errorMessage = getFrappeErrorMessage(error);
+      toast.error(errorMessage || 'Failed to delete agent');
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
+    }
   };
 
   const handleViewLogs = () => {
@@ -1986,12 +2016,21 @@ export function AgentFormPage() {
           onSave={handleFormSubmit}
           onRunTest={handleRunTest}
           onDuplicate={handleDuplicate}
+          duplicating={duplicating}
           onViewLogs={handleViewLogs}
           onDelete={handleDelete}
           agentId={!isNew && id ? id : undefined}
           allowChat={allowChat}
           lastRun={agentStats.last_run}
           totalRun={agentStats.total_run}
+        />
+
+        <DeleteAgentDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          agentName={form.watch('agent_name') || id || ''}
+          onConfirm={handleConfirmDelete}
+          loading={deleting}
         />
 
         <Form {...form}>

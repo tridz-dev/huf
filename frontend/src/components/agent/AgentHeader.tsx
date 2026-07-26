@@ -1,4 +1,4 @@
-import { Clock, Play, Save, MessageSquare, MoreVertical, FileText, Lock } from 'lucide-react';
+import { Clock, Play, Save, MessageSquare, MoreVertical, FileText, Lock, Copy, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -36,6 +36,7 @@ interface AgentHeaderProps {
   onDuplicate: () => void;
   onViewLogs: () => void;
   onDelete: () => void;
+  duplicating?: boolean;
   agentId?: string;
   allowChat: boolean;
   lastRun?: string | null;
@@ -56,9 +57,10 @@ export function AgentHeader({
   runningTest = false,
   onSave,
   onRunTest,
-  // onDuplicate,
+  onDuplicate,
   onViewLogs,
-  // onDelete,
+  onDelete,
+  duplicating = false,
   agentId,
   allowChat,
   lastRun,
@@ -170,18 +172,18 @@ export function AgentHeader({
             {!isNew && (
               <>
                 <DropdownMenuSeparator />
-                {/* <DropdownMenuItem onClick={onDuplicate}>
+                <DropdownMenuItem onClick={onDuplicate} disabled={duplicating || locked}>
                   <Copy className="w-4 h-4 mr-2" />
-                  Duplicate
-                </DropdownMenuItem> */}
+                  {duplicating ? 'Duplicating...' : 'Duplicate'}
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={onViewLogs}>
                   <FileText className="w-4 h-4 mr-2" />
                   View Logs
                 </DropdownMenuItem>
-                {/* <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                <DropdownMenuItem onClick={onDelete} disabled={locked} className="text-destructive">
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete
-                </DropdownMenuItem> */}
+                </DropdownMenuItem>
               </>
             )}
           </DropdownMenuContent>
