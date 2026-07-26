@@ -21,6 +21,8 @@ ALLOWED_FIELD_TYPES = {
 	"Phone",
 	"Section Break",
 	"Column Break",
+	"Attach",
+	"Attach Image",
 }
 
 LAYOUT_FIELD_TYPES = {"Section Break", "Column Break"}

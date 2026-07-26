@@ -40,7 +40,9 @@ export type DataTableFieldType =
 	| 'Color'
 	| 'Phone'
 	| 'Section Break'
-	| 'Column Break';
+	| 'Column Break'
+	| 'Attach'
+	| 'Attach Image';
 
 /**
  * Layout-only field types (no DB column)

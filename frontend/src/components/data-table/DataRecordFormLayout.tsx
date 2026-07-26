@@ -1,3 +1,6 @@
+import { useState, useRef } from 'react';
+import { Loader2, Upload, X, Paperclip } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -60,6 +63,43 @@ export interface FieldInputProps {
 export function FieldInput({ field, value, onChange }: FieldInputProps) {
 	const isRequired = field.reqd === 1;
 	const isReadOnly = field.read_only === 1;
+	
+	const [isUploading, setIsUploading] = useState(false);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		if (!file) return;
+
+		setIsUploading(true);
+		try {
+			const formData = new FormData();
+			formData.append('file', file, file.name);
+			formData.append('is_private', '1');
+			formData.append('fieldname', field.fieldname);
+
+			const response = await fetch('/api/method/upload_file', {
+				method: 'POST',
+				body: formData,
+				headers: {
+					'Accept': 'application/json',
+				},
+			});
+
+			if (!response.ok) throw new Error('Upload failed');
+			const data = await response.json();
+			if (data.message && data.message.file_url) {
+				onChange(data.message.file_url);
+			}
+		} catch (err) {
+			console.error(err);
+		} finally {
+			setIsUploading(false);
+			if (fileInputRef.current) {
+				fileInputRef.current.value = '';
+			}
+		}
+	};
 
 	return (
 		<div className="space-y-1.5">
@@ -224,6 +264,71 @@ export function FieldInput({ field, value, onChange }: FieldInputProps) {
 					disabled={isReadOnly}
 					className="h-8 w-16"
 				/>
+			)}
+
+			{(field.fieldtype === 'Attach' || field.fieldtype === 'Attach Image') && (
+				<div className="space-y-2">
+					<input
+						type="file"
+						className="hidden"
+						ref={fileInputRef}
+						onChange={handleFileUpload}
+						disabled={isReadOnly || isUploading}
+						accept={field.fieldtype === 'Attach Image' ? 'image/*' : undefined}
+					/>
+					
+					{value ? (
+						<div className="flex items-center gap-3 border border-line bg-panel p-2 rounded-none">
+							{field.fieldtype === 'Attach Image' ? (
+								<img 
+									src={value as string} 
+									alt="Preview" 
+									className="size-10 object-cover border border-line rounded-none"
+								/>
+							) : (
+								<div className="flex size-10 items-center justify-center bg-paper-deep border border-line rounded-none text-steel">
+									<Paperclip className="size-5" />
+								</div>
+							)}
+							<div className="min-w-0 flex-1">
+								<a 
+									href={value as string} 
+									target="_blank" 
+									rel="noopener noreferrer"
+									className="truncate text-sm font-medium text-ink hover:underline block"
+								>
+									{(value as string).split('/').pop()}
+								</a>
+							</div>
+							{!isReadOnly && (
+								<Button
+									type="button"
+									variant="ghost"
+									size="icon-sm"
+									className="rounded-none text-steel hover:text-ink hover:bg-paper-deep"
+									onClick={() => onChange('')}
+								>
+									<X className="size-4" />
+								</Button>
+							)}
+						</div>
+					) : (
+						<Button
+							type="button"
+							variant="outline"
+							className="rounded-none border-line bg-panel hover:bg-paper-deep text-ink w-full justify-start h-8 text-sm"
+							onClick={() => fileInputRef.current?.click()}
+							disabled={isReadOnly || isUploading}
+						>
+							{isUploading ? (
+								<Loader2 className="size-4 mr-2 animate-spin" />
+							) : (
+								<Upload className="size-4 mr-2" />
+							)}
+							{isUploading ? 'Uploading...' : 'Select File'}
+						</Button>
+					)}
+				</div>
 			)}
 
 			{field.description && field.fieldtype !== 'Check' && (
