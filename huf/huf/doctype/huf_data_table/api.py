@@ -33,6 +33,7 @@ def create_data_table(
 	table_name: str,
 	fields: str | list[dict],
 	description: str = "",
+	table_group: str = "",
 	icon: str = "",
 	autoname_method: str = "Autoincrement",
 	title_field: str = "",
@@ -104,6 +105,7 @@ def create_data_table(
 			"table_name": table_name,
 			"doctype_name": doctype_name,
 			"description": description,
+			"table_group": table_group,
 			"icon": icon,
 			"field_count": data_field_count,
 			"autoname_method": autoname_method,
@@ -127,6 +129,7 @@ def update_data_table(
 	name: str,
 	fields: str | list[dict] | None = None,
 	description: str | None = None,
+	table_group: str | None = None,
 	icon: str | None = None,
 ) -> dict:
 	"""Update table structure (add/remove/reorder fields, update metadata).
@@ -155,6 +158,8 @@ def update_data_table(
 
 	if description is not None:
 		registry.description = description
+	if table_group is not None:
+		registry.table_group = table_group
 	if icon is not None:
 		registry.icon = icon
 
@@ -246,6 +251,7 @@ def get_table_schema(name: str) -> dict:
 		"table_name": registry.table_name,
 		"doctype_name": registry.doctype_name,
 		"description": registry.description,
+		"table_group": registry.table_group,
 		"icon": registry.icon,
 		"autoname_method": registry.autoname_method,
 		"title_field_name": registry.title_field_name,

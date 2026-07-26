@@ -83,6 +83,19 @@ function DataPage() {
 		}
 	};
 
+	const groupedTables = tables.reduce((acc, table) => {
+		const groupName = table.table_group || 'Ungrouped';
+		if (!acc[groupName]) acc[groupName] = [];
+		acc[groupName].push(table);
+		return acc;
+	}, {} as Record<string, HufDataTable[]>);
+
+	const groupNames = Object.keys(groupedTables).sort((a, b) => {
+		if (a === 'Ungrouped') return 1;
+		if (b === 'Ungrouped') return -1;
+		return a.localeCompare(b);
+	});
+
 	return (
 		<PageLayout
 			subtitle="Create and manage custom data tables"
@@ -94,57 +107,76 @@ function DataPage() {
 				/>
 			}
 		>
-			<GridView
-				items={tables}
-				columns={{ sm: 1, md: 2, lg: 3 }}
-				loading={initialLoading}
-				emptyState={
-					<div className="text-center py-12">
-						<Database className="w-12 h-12 text-steel-soft mx-auto mb-4" />
-						<p className="font-body text-steel-soft mb-2">No data tables yet</p>
-						<p className="text-sm text-steel">
-							Create your first table to start managing structured data.
-						</p>
-					</div>
-				}
-				renderItem={(table) => (
-					<ItemCard
-						title={table.table_name}
-						description={table.description || 'No description'}
-						icon={table.icon ? TABLE_ICON_MAP[table.icon] ?? Table2 : Table2}
-						status={
-							table.is_active
-								? { label: 'Active', variant: 'success' }
-								: { label: 'Inactive', variant: 'secondary' }
-						}
-						metadata={[
-							{ label: 'Fields', value: table.field_count?.toString() || '0', icon: Table2 },
-							{
-								label: 'Records',
-								value: table.record_count?.toString() || '0',
-								icon: Database,
-							},
-							{ label: 'Modified', value: formatTimeAgo(table.modified) },
-						]}
-						menuIcon={Settings}
-						menuActions={[
-							{
-								icon: Pencil,
-								label: 'Edit Table',
-								onClick: () => navigate(`/data/${table.name}/edit`),
-							},
-							{
-								icon: Trash2,
-								label: 'Delete Table',
-								variant: 'destructive',
-								onClick: () => setDeleteTable(table),
-							},
-						]}
-						onClick={() => navigate(`/data/${table.name}`)}
-					/>
-				)}
-				keyExtractor={(table) => table.name}
-			/>
+			{groupNames.length === 0 ? (
+				<GridView
+					items={[]}
+					columns={{ sm: 1, md: 2, lg: 3 }}
+					loading={initialLoading}
+					emptyState={
+						<div className="text-center py-12">
+							<Database className="w-12 h-12 text-steel-soft mx-auto mb-4" />
+							<p className="font-body text-steel-soft mb-2">No data tables yet</p>
+							<p className="text-sm text-steel">
+								Create your first table to start managing structured data.
+							</p>
+						</div>
+					}
+					renderItem={() => <></>}
+					keyExtractor={() => ''}
+				/>
+			) : (
+				<div className="space-y-4">
+					{groupNames.map((groupName) => (
+						<div key={groupName}>
+							<h2 className="text-lg font-medium text-ink mb-4 mt-8 first:mt-0">
+								{groupName}
+							</h2>
+							<GridView
+								items={groupedTables[groupName]}
+								columns={{ sm: 1, md: 2, lg: 3 }}
+								loading={initialLoading}
+								renderItem={(table) => (
+									<ItemCard
+										title={table.table_name}
+										description={table.description || 'No description'}
+										icon={table.icon ? TABLE_ICON_MAP[table.icon] ?? Table2 : Table2}
+										status={
+											table.is_active
+												? { label: 'Active', variant: 'success' }
+												: { label: 'Inactive', variant: 'secondary' }
+										}
+										metadata={[
+											{ label: 'Fields', value: table.field_count?.toString() || '0', icon: Table2 },
+											{
+												label: 'Records',
+												value: table.record_count?.toString() || '0',
+												icon: Database,
+											},
+											{ label: 'Modified', value: formatTimeAgo(table.modified) },
+										]}
+										menuIcon={Settings}
+										menuActions={[
+											{
+												icon: Pencil,
+												label: 'Edit Table',
+												onClick: () => navigate(`/data/${table.name}/edit`),
+											},
+											{
+												icon: Trash2,
+												label: 'Delete Table',
+												variant: 'destructive',
+												onClick: () => setDeleteTable(table),
+											},
+										]}
+										onClick={() => navigate(`/data/${table.name}`)}
+									/>
+								)}
+								keyExtractor={(table) => table.name}
+							/>
+						</div>
+					))}
+				</div>
+			)}
 			<LoadMoreButton
 				hasMore={hasMore}
 				loading={loadingMore}

@@ -20,6 +20,7 @@ const DATA_TABLE_LIST_FIELDS = [
 	'icon',
 	'field_count',
 	'is_active',
+	'table_group',
 	'creation',
 	'modified',
 ];
@@ -138,6 +139,7 @@ export async function createDataTable(data: {
 	icon?: string;
 	autoname_method?: string;
 	title_field?: string;
+	table_group?: string;
 }): Promise<{ name: string; table_name: string; doctype_name: string }> {
 	try {
 		const result = await call.post('huf.huf.doctype.huf_data_table.api.create_data_table', data);
@@ -156,6 +158,7 @@ export async function updateDataTable(
 		fields?: DataTableFieldDef[];
 		description?: string;
 		icon?: string;
+		table_group?: string;
 	}
 ): Promise<void> {
 	try {

@@ -17,6 +17,7 @@ interface TableSettingsPanelProps {
 	icon: string;
 	autonameMethod: string;
 	titleField: string;
+	tableGroup: string;
 	fields: DataTableFieldDef[];
 	isEdit: boolean;
 	onTableNameChange: (value: string) => void;
@@ -24,6 +25,7 @@ interface TableSettingsPanelProps {
 	onIconChange: (value: string) => void;
 	onAutonameMethodChange: (value: string) => void;
 	onTitleFieldChange: (value: string) => void;
+	onTableGroupChange: (value: string) => void;
 }
 
 export function TableSettingsPanel({
@@ -32,6 +34,7 @@ export function TableSettingsPanel({
 	icon,
 	autonameMethod,
 	titleField,
+	tableGroup,
 	fields,
 	isEdit,
 	onTableNameChange,
@@ -39,6 +42,7 @@ export function TableSettingsPanel({
 	onIconChange,
 	onAutonameMethodChange,
 	onTitleFieldChange,
+	onTableGroupChange,
 }: TableSettingsPanelProps) {
 	const dataFields = fields.filter(
 		(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
@@ -48,7 +52,7 @@ export function TableSettingsPanel({
 		<div className="space-y-4">
 			<div>
 				<h3 className="font-medium text-sm">Table Settings</h3>
-				<p className="text-xs text-muted-foreground mt-1">
+				<p className="text-xs text-steel-soft mt-1">
 					Configure your table properties
 				</p>
 			</div>
@@ -64,6 +68,19 @@ export function TableSettingsPanel({
 					placeholder="e.g. Products, Contacts"
 					className="h-8 text-sm"
 					disabled={isEdit}
+				/>
+			</div>
+
+			<div className="space-y-1.5">
+				<Label htmlFor="table-group" className="text-xs">
+					Group
+				</Label>
+				<Input
+					id="table-group"
+					value={tableGroup}
+					onChange={(e) => onTableGroupChange(e.target.value)}
+					placeholder="e.g. Customers"
+					className="h-8 text-sm"
 				/>
 			</div>
 
