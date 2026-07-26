@@ -18,3 +18,5 @@ class Gateway(Document):
             frappe.throw(_("Choose a default agent or clear the default route."))
         if self.default_target_type == "Flow" and not self.default_flow:
             frappe.throw(_("Choose a default flow or clear the default route."))
+        if self.direct_policy == "Open":
+            frappe.throw(_("Public direct-message gateways are not available in this release."))
