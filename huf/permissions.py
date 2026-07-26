@@ -60,6 +60,11 @@ CAPABILITIES: dict[str, str] = {
 	"users.invite": "Invite Users",
 	"users.manage": "Manage Users",
 	"roles.manage": "Manage Roles",
+	# --- Code Execution ---
+	"execution_profile.manage": "Manage Execution Profiles",
+	"network_access_policy.manage": "Manage Network Access Policies",
+	"execution.approve": "Approve Code Executions",
+	"code_execution.run": "Run Code Execution Tool",
 }
 
 # Capabilities granted to each default Huf Role.
@@ -84,6 +89,10 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"flows.use",
 		"flows.create",
 		"flows.manage",
+		"execution_profile.manage",
+		"network_access_policy.manage",
+		"execution.approve",
+		"code_execution.run",
 	],
 	"Huf User": [
 		"agent.use",
@@ -92,6 +101,7 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"knowledge.use",
 		"tools.use",
 		"flows.use",
+		"code_execution.run",
 	],
 	"Huf Viewer": [
 		"agent.use",

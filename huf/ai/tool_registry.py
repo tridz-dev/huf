@@ -51,7 +51,7 @@ class PermissionAwareToolRegistry:
             try:
                 tool_doc = frappe.get_doc("Agent Tool Function", tool_link.tool)
                 
-                if cls._can_use_tool(tool_doc, user):
+                if cls._can_use_tool(tool_doc, user) and cls._allows_code_execution(tool_doc, agent_doc, user):
                     all_tools.append(tool_doc)
 
             except Exception as e:
@@ -96,6 +96,40 @@ class PermissionAwareToolRegistry:
                 if not frappe.has_permission(doctype=tool_doc.reference_doctype, ptype=perm_type, user=user):
                     return False
                      
+        return True
+
+    @classmethod
+    def _allows_code_execution(cls, tool_doc, agent_doc, user: str) -> bool:
+        """Additional gate for tools of type 'Code Execution'.
+
+        A Code Execution tool is only returned when ALL of:
+          (a) the acting user holds the ``code_execution.run`` capability;
+          (b) the agent has ``allow_code_execution`` enabled;
+          (c) the agent references an Execution Profile that is not disabled.
+        Tools of any other type pass straight through this gate.
+        """
+        if tool_doc.types != "Code Execution":
+            return True
+
+        from huf.permissions import has_capability
+
+        # (a) acting user must be allowed to run code at all.
+        if not has_capability(user, "code_execution.run"):
+            return False
+
+        # (b) the agent must have code execution enabled.
+        if not getattr(agent_doc, "allow_code_execution", None):
+            return False
+
+        # (c) the agent must reference an enabled Execution Profile.
+        profile_name = getattr(agent_doc, "execution_profile", None)
+        if not profile_name:
+            return False
+
+        disabled = frappe.db.get_value("Execution Profile", profile_name, "disabled")
+        if disabled is None or disabled:
+            return False
+
         return True
 
 def _get_app_modified_time(app_name):

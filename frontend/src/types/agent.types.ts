@@ -42,6 +42,7 @@ export type ToolType =
   | "Set Conversation Data"
   | "Load Conversation Data"
   | "Perplexity Search"
+  | "Code Execution"
   | "Transcription"
   /**
    * @deprecated Legacy value kept for backward compatibility with saved docs.
@@ -281,6 +282,9 @@ export interface AgentDoc {
   allow_file_upload?: 0 | 1;
   enable_ocr?: 0 | 1;
   max_upload_size_mb?: number | null;
+  allow_code_execution?: 0 | 1;
+  execution_profile?: string | null; // Link to Execution Profile
+  execution_shared_dir_limit_mb?: number | null;
 
   // Execution policy (advanced): run turns directly instead of queue-first
   run_immediately?: 0 | 1;

@@ -1,0 +1,52 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-07-11 04:30:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "host_or_cidr",
+  "port_range",
+  "protocol"
+ ],
+ "fields": [
+  {
+   "description": "Allowed destination hostname, IP address, or CIDR range (e.g. api.example.com or 10.0.0.0/8).",
+   "fieldname": "host_or_cidr",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Host / CIDR",
+   "reqd": 1
+  },
+  {
+   "description": "Optional allowed port or port range (e.g. 443 or 1000-2000). Leave blank to allow any port.",
+   "fieldname": "port_range",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Port Range"
+  },
+  {
+   "default": "https",
+   "fieldname": "protocol",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Protocol",
+   "options": "https\nhttp\ntcp"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-11 04:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Network Access Policy Rule",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
