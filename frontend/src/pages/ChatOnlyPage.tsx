@@ -4,7 +4,7 @@ import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatAgentSelector } from "@/components/chat-only/ChatAgentSelector";
 import { ChatOnlyLayout } from "@/components/chat-only/ChatOnlyLayout";
 import { getChatAgents, type ChatAgentItem } from "@/services/agentApi";
-import { getConversationsByAgent } from "@/services/chatApi";
+import { getConversation, getConversationsByAgent } from "@/services/chatApi";
 
 export default function ChatOnlyPage() {
   const navigate = useNavigate();
@@ -19,11 +19,39 @@ export default function ChatOnlyPage() {
   // Map of agent name -> latest conversation id, used for "Continue last chat"
   // on the multi-agent landing. Loaded lazily after agents resolve.
   const [resumeChats, setResumeChats] = useState<Record<string, string>>({});
+  // Agent owning the open conversation, resolved on /ui/chat/<chatId> routes
+  // where no ?agent= search param exists. Stays empty until known; failures
+  // are ignored so the chat itself keeps working without the header chip.
+  const [conversationAgent, setConversationAgent] = useState("");
 
-  // When exactly one chat agent exists, treat it as selected immediately so
-  // single-agent users land straight in chat without a selector flash; the
-  // effect below still syncs the ?agent= search param.
-  const effectiveAgent = selectedAgent || (agents.length === 1 ? agents[0].name : "");
+  // Priority: explicit ?agent= param > open conversation's agent > the
+  // single-agent shortcut (so single-agent users land straight in chat
+  // without a selector flash; the effect below still syncs the param).
+  const effectiveAgent =
+    selectedAgent || conversationAgent || (agents.length === 1 ? agents[0].name : "");
+
+  useEffect(() => {
+    if (!chatId) {
+      setConversationAgent("");
+      return;
+    }
+
+    let cancelled = false;
+
+    getConversation(chatId)
+      .then((conversation) => {
+        if (!cancelled) {
+          setConversationAgent(conversation?.agent || "");
+        }
+      })
+      .catch(() => {
+        // Header chip stays hidden; the conversation view is unaffected.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId]);
 
   useEffect(() => {
     let cancelled = false;

@@ -28,7 +28,9 @@ export function ChatHeader({ agents = [], currentAgentName }: ChatHeaderProps) {
   const displayEmail = user?.email || "";
 
   const currentAgent = agents.find((agent) => agent.name === currentAgentName);
-  const agentLabel = currentAgent?.agent_name || currentAgent?.name;
+  // Show the label once the agent is known, even if it is not in the user's
+  // allowed agents list (the switcher below still requires list membership).
+  const agentLabel = currentAgent?.agent_name || currentAgent?.name || currentAgentName;
   const showAgentSwitcher = agents.length > 1 && !!currentAgent;
 
   const openAgentChat = (agentName: string) => {
