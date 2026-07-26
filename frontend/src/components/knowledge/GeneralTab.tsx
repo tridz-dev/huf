@@ -550,6 +550,21 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
         </Card>
       )}
 
+      {watchKnowledgeType === 'redis' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Redis Connection Settings</CardTitle>
+            <CardDescription>
+              Connect HUF Knowledge to Redis with RediSearch vector search
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+
+            <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Chunking Settings</CardTitle>

@@ -9,11 +9,14 @@ export const knowledgeTypes = [
 	{ label: 'ChromaDB', value: 'chroma' },
 	{ label: 'PGVector', value: 'pgvector' },
 	{ label: 'zvec (Embedded)', value: 'zvec' },
+	{ label: 'Redis', value: 'redis' },
+
 ] as const;
 
 export type KnowledgeTypeOption = (typeof knowledgeTypes)[number]['value'];
 
-export const VECTOR_KNOWLEDGE_TYPES = ['sqlite_vec', 'chroma', 'pgvector', 'zvec'] as const;
+export const VECTOR_KNOWLEDGE_TYPES = ['sqlite_vec', 'chroma', 'pgvector', 'redis', 'zvec'] as const;
+
 
 export function isVectorKnowledgeType(type: string): boolean {
 	return (VECTOR_KNOWLEDGE_TYPES as readonly string[]).includes(type);
@@ -25,6 +28,8 @@ export const knowledgeTypeLabels: Record<string, string> = {
 	chroma: 'Chroma',
 	pgvector: 'PGVector',
 	zvec: 'zvec',
+	redis: 'Redis',
+
 };
 
 export const chromaModes = [
