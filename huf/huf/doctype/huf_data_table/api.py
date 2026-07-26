@@ -81,15 +81,27 @@ def _import_permitted_roles() -> list[str]:
 
 
 def _table_permission_row(role: str) -> dict:
+	if role == SYSTEM_MANAGER:
+		return {
+			"role": role,
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1,
+			"print": 1,
+			"email": 1,
+			"share": 1,
+			"import": 1,
+		}
 	return {
 		"role": role,
-		"read": 1,
-		"write": 1,
+		"read": 0,
+		"write": 0,
 		"create": 1,
-		"delete": 1,
-		"print": 1,
-		"email": 1,
-		"share": 1,
+		"delete": 0,
+		"print": 0,
+		"email": 0,
+		"share": 0,
 		"import": 1,
 	}
 

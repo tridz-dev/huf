@@ -118,6 +118,7 @@ def _build_permissions(role_caps: dict[str, set[str]]) -> list[dict]:
 			"print": 1,
 			"email": 1,
 			"share": 1,
+			"import": 1,
 			"if_owner": 0,
 		}
 	]
@@ -144,6 +145,7 @@ def _build_permissions(role_caps: dict[str, set[str]]) -> list[dict]:
 					"print": 0,
 					"email": 0,
 					"share": 0,
+					"import": 0,
 				},
 			)
 			row["read"] = 1
@@ -165,6 +167,7 @@ def _build_permissions(role_caps: dict[str, set[str]]) -> list[dict]:
 					"print": 0,
 					"email": 0,
 					"share": 0,
+					"import": 0,
 				},
 			)
 			row["read"] = 1
@@ -176,8 +179,10 @@ def _build_permissions(role_caps: dict[str, set[str]]) -> list[dict]:
 		if _DATA_CREATE in caps:
 			if (frappe_role, 0) in rows:
 				rows[(frappe_role, 0)]["create"] = 1
+				rows[(frappe_role, 0)]["import"] = 1
 			elif (frappe_role, 1) in rows:
 				rows[(frappe_role, 1)]["create"] = 1
+				rows[(frappe_role, 1)]["import"] = 1
 			else:
 				key = (frappe_role, 0)
 				rows[key] = {
@@ -190,6 +195,7 @@ def _build_permissions(role_caps: dict[str, set[str]]) -> list[dict]:
 					"print": 0,
 					"email": 0,
 					"share": 0,
+					"import": 1,
 				}
 
 	# Drop rows that ended up with no effective permissions.
