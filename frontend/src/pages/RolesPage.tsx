@@ -13,6 +13,7 @@ const CATEGORY_ORDER = [
   { key: 'knowledge', label: 'Knowledge' },
   { key: 'tools', label: 'Tools' },
   { key: 'flows', label: 'Flows' },
+  { key: 'data', label: 'Data' },
   { key: 'system', label: 'System' },
   { key: 'users', label: 'Users' },
   { key: 'roles', label: 'Roles' },
@@ -36,12 +37,12 @@ function RoleCard({ role }: { role: HufRole }) {
   const groups = groupCapabilities(role.capabilities);
 
   return (
-    <div className="border rounded-none p-4 space-y-3">
+    <div className="border rounded-lg p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center gap-2">
         <span className="font-semibold text-base">{role.role_name}</span>
         {role.is_system_role === 1 && (
-          <span className="inline-flex items-center gap-1 text-xs text-steel-soft">
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             <Lock className="h-3 w-3" />
             System
           </span>
@@ -49,14 +50,14 @@ function RoleCard({ role }: { role: HufRole }) {
       </div>
 
       {role.description && (
-        <p className="text-sm text-steel">{role.description}</p>
+        <p className="text-sm text-muted-foreground">{role.description}</p>
       )}
 
       {/* Capabilities grouped by category */}
       <div className="space-y-2">
         {CATEGORY_ORDER.filter((cat) => groups[cat.key]?.length).map((cat) => (
           <div key={cat.key}>
-            <div className="text-xs font-medium text-steel-soft mb-1">{cat.label}</div>
+            <div className="text-xs font-medium text-muted-foreground mb-1">{cat.label}</div>
             <div className="flex flex-wrap gap-1">
               {groups[cat.key].map((cap) => (
                 <Badge key={cap} variant="secondary" className="text-xs font-mono">
@@ -69,7 +70,7 @@ function RoleCard({ role }: { role: HufRole }) {
       </div>
 
       {role.capabilities.length === 0 && (
-        <p className="text-xs font-body text-steel-soft italic">No capabilities assigned.</p>
+        <p className="text-xs text-muted-foreground italic">No capabilities assigned.</p>
       )}
     </div>
   );
@@ -97,13 +98,13 @@ export default function RolesPage() {
             <ShieldCheck className="h-6 w-6" />
             Roles
           </h1>
-          <p className="text-sm text-steel mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             View capability sets granted to each Huf role. System roles cannot be deleted.
           </p>
         </div>
 
         {loading ? (
-          <div className="text-sm font-body text-steel-soft py-12 text-center">Loading…</div>
+          <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {roles.map((role) => (

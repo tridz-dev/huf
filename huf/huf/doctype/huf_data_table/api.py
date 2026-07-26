@@ -5,8 +5,14 @@ import frappe
 from frappe import _
 from frappe.model import display_fieldtypes, no_value_fields, table_fields
 
-from huf.permissions import DEFAULT_ROLE_CAPABILITIES, HUF_ROLE_FRAPPE_ROLE_MAP, SYSTEM_MANAGER, has_capability
+from huf.permissions import (
+	DEFAULT_ROLE_CAPABILITIES,
+	HUF_ROLE_FRAPPE_ROLE_MAP,
+	SYSTEM_MANAGER,
+	has_capability,
+)
 
+from .permissions import sync_data_table_permissions
 from .validators import (
 	LAYOUT_FIELD_TYPES,
 	get_search_fields,
@@ -14,20 +20,48 @@ from .validators import (
 	validate_and_prepare_fields,
 )
 
-# Data tables do not have a dedicated capability yet; reuse flow capabilities
-# as the closest admin-level permission boundary.
-_WRITE_CAPABILITY = "flows.manage"
-_READ_CAPABILITY = "flows.use"
+_MANAGE_CAPABILITY = "data.tables.manage"
+_VIEW_CAPABILITIES = {
+	"data.tables.manage",
+	"data.records.view_own",
+	"data.records.view_all",
+}
+_WRITE_CAPABILITIES = {
+	"data.tables.manage",
+	"data.records.create",
+	"data.records.edit_own",
+	"data.records.edit_all",
+}
+
+
+def _has_any_capability(capabilities: set[str]) -> bool:
+	return any(has_capability(frappe.session.user, capability) for capability in capabilities)
+
+
+def _require_data_manage():
+	"""Throw if the current user cannot manage data tables."""
+	if not has_capability(frappe.session.user, _MANAGE_CAPABILITY):
+		frappe.throw(
+			_("You don't have permission to manage data tables."),
+			frappe.PermissionError,
+		)
+
+
+def _require_data_view():
+	"""Throw if the current user has no data-table access at all."""
+	if not _has_any_capability(_VIEW_CAPABILITIES):
+		frappe.throw(
+			_("You don't have permission to view data tables."),
+			frappe.PermissionError,
+		)
 
 
 def _require_write():
-	if not has_capability(frappe.session.user, _WRITE_CAPABILITY):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	_require_data_manage()
 
 
 def _require_read():
-	if not has_capability(frappe.session.user, _READ_CAPABILITY):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	_require_data_view()
 
 
 def _import_permitted_roles() -> list[str]:
@@ -39,7 +73,7 @@ def _import_permitted_roles() -> list[str]:
 	"""
 	roles = {SYSTEM_MANAGER}
 	for huf_role, capabilities in DEFAULT_ROLE_CAPABILITIES.items():
-		if _WRITE_CAPABILITY in capabilities:
+		if _WRITE_CAPABILITIES.intersection(capabilities):
 			frappe_role = HUF_ROLE_FRAPPE_ROLE_MAP.get(huf_role)
 			if frappe_role:
 				roles.add(frappe_role)
@@ -47,15 +81,27 @@ def _import_permitted_roles() -> list[str]:
 
 
 def _table_permission_row(role: str) -> dict:
+	if role == SYSTEM_MANAGER:
+		return {
+			"role": role,
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1,
+			"print": 1,
+			"email": 1,
+			"share": 1,
+			"import": 1,
+		}
 	return {
 		"role": role,
-		"read": 1,
-		"write": 1,
+		"read": 0,
+		"write": 0,
 		"create": 1,
-		"delete": 1,
-		"print": 1,
-		"email": 1,
-		"share": 1,
+		"delete": 0,
+		"print": 0,
+		"email": 0,
+		"share": 0,
 		"import": 1,
 	}
 
@@ -85,6 +131,7 @@ def _ensure_import_enabled(doctype_name: str) -> None:
 	if changed:
 		dt.save(ignore_permissions=True)
 
+
 @frappe.whitelist()
 def create_data_table(
 	table_name: str,
@@ -97,15 +144,20 @@ def create_data_table(
 ) -> dict:
 	"""Create a new data table (DocType + registry entry).
 
-	Requires: flows.manage
+	Requires: data.tables.manage
 	"""
-	_require_write()
+	_require_data_manage()
+
 	if isinstance(fields, str):
 		fields = json.loads(fields)
 
 	table_name = table_name.strip()
 	if not table_name:
 		frappe.throw("Table name is required")
+	if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,139}", table_name):
+		frappe.throw(
+			"Table name may only contain letters, numbers, spaces, underscores, and hyphens."
+		)
 
 	doctype_name = f"HF {table_name}"
 
@@ -159,7 +211,11 @@ def create_data_table(
 			"title_field_name": title_field,
 		}
 	)
-	registry.insert()
+	registry.insert(ignore_permissions=True)
+
+	# Sync permissions so all roles with data.* capabilities get access
+	# to this new table immediately.
+	sync_data_table_permissions()
 
 	return {
 		"success": True,
@@ -181,9 +237,10 @@ def update_data_table(
 ) -> dict:
 	"""Update table structure (add/remove/reorder fields, update metadata).
 
-	Requires: flows.manage
+	Requires: data.tables.manage
 	"""
-	_require_write()
+	_require_data_manage()
+
 	registry = frappe.get_doc("Huf Data Table", name)
 
 	if fields is not None:
@@ -217,9 +274,10 @@ def update_data_table(
 def delete_data_table(name: str) -> dict:
 	"""Delete a data table and all its records.
 
-	Requires: flows.manage
+	Requires: data.tables.manage
 	"""
-	_require_write()
+	_require_data_manage()
+
 	registry = frappe.get_doc("Huf Data Table", name)
 	doctype_name = registry.doctype_name
 
@@ -244,7 +302,7 @@ def get_table_record_counts(names: str | list[str]) -> dict:
 	Standard REST can't count records across dynamic DocTypes,
 	so this helper exists for the listing page enrichment.
 
-	Requires: flows.use
+	Requires: data records view capability.
 	"""
 	_require_read()
 	if isinstance(names, str):
@@ -265,7 +323,7 @@ def get_table_record_counts(names: str | list[str]) -> dict:
 def get_table_schema(name: str) -> dict:
 	"""Get complete table schema (fields with all properties).
 
-	Requires: flows.use
+	Requires: data records view capability.
 	"""
 	_require_read()
 	registry = frappe.get_doc("Huf Data Table", name)
@@ -311,7 +369,7 @@ def get_bulk_import_template_url(table_id: str, export_records: bool | str = Fal
 	Uses Frappe's Data Import exporter. The template is stored as a private
 	File so the SPA can download it through the authenticated file route.
 
-	Requires: flows.use (blank template) or flows.manage (export_records=True)
+	Requires: data records view capability for blank templates, data.tables.manage for exports.
 	"""
 	export_data = bool(frappe.parse_json(export_records))
 	if export_data:
@@ -366,9 +424,9 @@ def start_table_bulk_import(table_id: str, file_url: str) -> dict:
 	"""Create a Frappe Data Import for a Huf data table and enqueue the import.
 
 	Equivalent to Frappe's `form_start_import`, but gated on the HUF
-	`flows.manage` capability instead of Data Import DocType DocPerms.
+	`data.tables.manage` capability instead of Data Import DocType DocPerms.
 
-	Requires: flows.manage
+	Requires: data.tables.manage
 	"""
 	_require_write()
 
@@ -411,7 +469,7 @@ def start_table_bulk_import(table_id: str, file_url: str) -> dict:
 def get_table_bulk_import_status(import_name: str) -> dict:
 	"""Get status and error details for a Data Import against a Huf data table.
 
-	Requires: flows.use
+	Requires: data records view capability.
 	"""
 	_require_read()
 
@@ -694,3 +752,15 @@ def set_table_agent_access(table: str, agent: str, actions: str | list) -> dict:
 	for entry in _compute_access(registry.doctype_name, agent=agent_doc.name):
 		return entry
 	return {'agent': agent_doc.name, 'agent_name': agent_doc.agent_name, 'actions': [], 'tools': []}
+
+
+@frappe.whitelist()
+def apply_data_permissions() -> dict:
+	"""
+	Rebuild DocType permissions for all data tables.
+
+	Called by the Huf Role on_update hook whenever role capabilities change.
+	"""
+	_require_data_manage()
+	sync_data_table_permissions()
+	return {"success": True}

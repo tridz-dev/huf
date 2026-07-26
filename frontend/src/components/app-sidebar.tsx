@@ -18,8 +18,9 @@ import {
 } from "@/components/ui/sidebar"
 
 /**
- * Each nav item may declare an optional `capability` string.
- * If present the item is hidden from users who don't have that capability.
+ * Each nav item may declare an optional `capability` string or list.
+ * If present the item is hidden from users who don't have that capability
+ * (a list means any-of: one matching capability is enough).
  * Items with capability === null are always visible (e.g. Dashboard).
  */
 const dashboardNavItems = [
@@ -76,7 +77,11 @@ const knowNavItems = [
     title: "Tables",
     url: "/data",
     icon: Database,
-    capability: "agent.view_all",
+    capability: [
+      "data.tables.manage",
+      "data.records.view_own",
+      "data.records.view_all",
+    ],
   },
   {
     title: "Sources",
@@ -199,13 +204,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [])
 
-	const filterItemsByCapability = <T extends { capability: string | null }>(items: T[]) => {
+	const filterItemsByCapability = <T extends { capability: string | string[] | null }>(items: T[]) => {
 		if (isLoading) {
 			return items.filter((item) => item.capability === null)
 		}
-		return items.filter(
-			(item) => item.capability === null || (item.capability && hasCapability(item.capability)),
-		)
+		return items.filter((item) => {
+			if (item.capability === null) return true
+			const caps = Array.isArray(item.capability) ? item.capability : [item.capability]
+			return caps.some((cap) => hasCapability(cap))
+		})
 	}
 
 	const isPathInItems = (items: { url: string }[]) =>
