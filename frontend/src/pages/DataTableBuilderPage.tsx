@@ -193,6 +193,8 @@ export function DataTableBuilderPage() {
 	const handleAddField = useCallback(
 		(type: DataTableFieldType) => {
 			const isLayout = type === 'Section Break' || type === 'Column Break';
+			// Frappe does not permit `in_list_view` on Attach/Attach Image fields.
+			const supportsListView = type !== 'Attach' && type !== 'Attach Image';
 			const baseName = isLayout
 				? type.toLowerCase().replace(/\s+/g, '_')
 				: 'new_field';
@@ -206,7 +208,7 @@ export function DataTableBuilderPage() {
 				fieldname,
 				fieldtype: type,
 				label: isLayout ? '' : '',
-				...(isLayout ? {} : { in_list_view: state.fields.filter(
+				...(isLayout || !supportsListView ? {} : { in_list_view: state.fields.filter(
 					(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
 				).length < 4 ? 1 : 0 as 0 | 1 }),
 			};
