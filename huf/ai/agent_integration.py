@@ -1218,6 +1218,14 @@ def _execute_agent_run(
         else:
             enhanced_prompt = base_prompt
 
+        from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
+        segment_tokens = compute_segment_tokens(
+            agent_doc, agent, resolved_model, resolved_provider, history, knowledge_context, prompt
+        )
+        prefix_breakpoints = compute_prefix_breakpoints(
+            agent_doc, agent, resolved_model, resolved_provider, history
+        )
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
@@ -1525,6 +1533,8 @@ def _execute_agent_run(
                     "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
                     "total_tokens": total_tokens,
                     "completeness": "provider_reported" if usage else "estimated",
+                    "segment_tokens": segment_tokens,
+                    "prefix_breakpoints": prefix_breakpoints,
                 }),
                 "cost_source": "provider_reported" if getattr(result, "cost", None) is not None else "unknown",
                 "cost_calculation_status": "calculated" if cost is not None else "unavailable",
@@ -2285,8 +2295,16 @@ async def run_agent_stream(
         else:
             enhanced_prompt = base_prompt
 
+        from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
+        segment_tokens = compute_segment_tokens(
+            agent_doc, agent, resolved_model, resolved_provider, history, knowledge_context, prompt
+        )
+        prefix_breakpoints = compute_prefix_breakpoints(
+            agent_doc, agent, resolved_model, resolved_provider, history
+        )
+
         context["conversation_history"] = history
-        
+
         # Stream from provider
         full_response = ""
         try:
@@ -2507,6 +2525,8 @@ async def run_agent_stream(
                             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
                             "total_tokens": total_tokens,
                             "completeness": "provider_reported" if usage else "estimated",
+                            "segment_tokens": segment_tokens,
+                            "prefix_breakpoints": prefix_breakpoints,
                         }),
                         "cost_source": "provider_reported" if chunk.get("cost") is not None else "unknown",
                         "cost_calculation_status": "calculated" if cost is not None else "unavailable",

@@ -14,6 +14,9 @@ import { handleFrappeError } from '@/lib/frappe-error';
 import { calculateDuration, formatTimeAgo } from '@/utils/time';
 import { getAgentRunStatusVariant } from '@/utils/status';
 import { getArtifacts, type AgentContextArtifactDoc } from '@/services/agentContextArtifactApi';
+import { getRunContextMetrics } from '@/services/runContextMetricsApi';
+import type { RunContextMetricsResponse } from '@/types/runContextMetrics.types';
+import { ContextBar } from '@/components/ui/context-bar';
 import {
   ColumnDef,
   flexRender,
@@ -113,6 +116,7 @@ function AgentRunDetailPage() {
   const [loadingChildRuns, setLoadingChildRuns] = useState(false);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [isSilentDegradation, setIsSilentDegradation] = useState(false);
+  const [contextMetrics, setContextMetrics] = useState<RunContextMetricsResponse | null>(null);
 
   useEffect(() => {
     if (!runId) {
@@ -125,6 +129,11 @@ function AgentRunDetailPage() {
       const data = await fetchAgentRunDetail(runId);
       setRun(data);
       setLoading(false);
+    })();
+
+    (async () => {
+      const metrics = await getRunContextMetrics(runId);
+      setContextMetrics(metrics);
     })();
   }, [runId]);
 
@@ -464,6 +473,73 @@ function AgentRunDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        {contextMetrics?.segment_tokens && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Context</CardTitle>
+              <CardDescription>
+                What filled the context window this turn, and whether caching paid off.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ContextBar
+                segments={contextMetrics.segment_tokens}
+                total={contextMetrics.context_window}
+                cacheState={
+                  typeof contextMetrics.metrics.cache_read_share === 'number'
+                    ? {
+                        cacheRead: run.cached_tokens || 0,
+                        cacheWrite: 0,
+                        uncached: Math.max(
+                          (contextMetrics.total_tokens || run.input_tokens || 0) - (run.cached_tokens || 0),
+                          0
+                        ),
+                      }
+                    : undefined
+                }
+              />
+              <div className="grid grid-cols-2 gap-y-1 gap-x-4 text-sm sm:grid-cols-3">
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Cache read share</span>
+                  <span className="font-medium">
+                    {typeof contextMetrics.metrics.cache_read_share === 'number'
+                      ? `${(contextMetrics.metrics.cache_read_share * 100).toFixed(0)}%`
+                      : 'Unavailable'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Effective multiplier</span>
+                  <span className="font-medium">
+                    {typeof contextMetrics.metrics.effective_input_multiplier === 'number'
+                      ? `${contextMetrics.metrics.effective_input_multiplier.toFixed(2)}x`
+                      : 'Unavailable'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Wasted writes</span>
+                  <span className="font-medium">
+                    {typeof contextMetrics.metrics.wasted_writes_tokens === 'number'
+                      ? contextMetrics.metrics.wasted_writes_tokens
+                      : 'Not yet tracked'}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Prefix stability</span>
+                  <span className="font-medium capitalize">{contextMetrics.metrics.prefix_stability}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-steel">Counterfactual savings</span>
+                  <span className="font-medium">
+                    {typeof contextMetrics.metrics.counterfactual_savings === 'number'
+                      ? `$${contextMetrics.metrics.counterfactual_savings.toFixed(6)}`
+                      : 'Unavailable'}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
