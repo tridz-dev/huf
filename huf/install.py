@@ -888,6 +888,14 @@ def register_integration_services():
 				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
 			]
 		},
+		{
+			"service_name": "serpapi",
+			"category": "Google",
+			"description": "SerpApi search data: hotels, reviews (Google Maps, TripAdvisor, Yelp), and YouTube",
+			"required_credentials": [
+				{"key": "api_key", "label": "SerpApi API Key", "required": True}
+			]
+		},
 	]
 	
 	# Create or update each service

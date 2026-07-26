@@ -29,6 +29,8 @@ dependencies = [
     "beautifulsoup4",
     "aiohttp",
     "pypdfium2>=4.26.0",
+    "serpapi",
+    "youtube-transcript-api",
 ]
 
 [build-system]
