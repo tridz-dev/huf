@@ -105,6 +105,7 @@ def _get_alt_env_names(service: str, key: str) -> list:
 			"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN",
 			"GOOGLE_MAPS_API_KEY"
 		],
+		"google_maps": ["GOOGLE_MAPS_API_KEY", "PLACE_API_KEY", "GOOGLE_PLACES_API_KEY"],
 		"aws": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"],
 		"baidu": ["BAIDU_API_KEY"],
 		"brave": ["BRAVE_API_KEY"],
