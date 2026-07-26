@@ -26,7 +26,7 @@ PROMPT_DOCTYPE = "Agent Prompt"
 MCP_DOCTYPE = "MCP Server"
 
 
-class SkillExportError(frappe.ValidationError):
+class SkillExportError(frappe.exceptions.ValidationError):
 	"""Raised when a skill export fails."""
 
 
