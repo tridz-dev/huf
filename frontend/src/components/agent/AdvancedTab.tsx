@@ -8,6 +8,7 @@ import { UseFormReturn } from 'react-hook-form';
 import type { AgentFormValues } from './types';
 import type { AIModel } from '@/types/agent.types';
 import { Combobox } from '@/components/ui/combobox';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus } from 'lucide-react';
@@ -38,6 +39,12 @@ export interface ExecutionProfileOption {
 	approvalMode?: string;
 }
 
+export interface SSHConnectionOption {
+	value: string;
+	label: string;
+	description?: string;
+}
+
 interface AdvancedTabProps {
 	form: UseFormReturn<AgentFormValues>;
 	allModels: AIModel[];
@@ -45,6 +52,8 @@ interface AdvancedTabProps {
 	loadingSummaryPrompts?: boolean;
 	executionProfileOptions?: ExecutionProfileOption[];
 	loadingExecutionProfiles?: boolean;
+	sshConnectionOptions?: SSHConnectionOption[];
+	loadingSSHConnections?: boolean;
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
@@ -82,6 +91,8 @@ export function AdvancedTab({
 	loadingSummaryPrompts = false,
 	executionProfileOptions = [],
 	loadingExecutionProfiles = false,
+	sshConnectionOptions = [],
+	loadingSSHConnections = false,
 }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
 	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
@@ -104,6 +115,11 @@ export function AdvancedTab({
 	const executionProfileComboboxOptions = executionProfileOptions.map((option) => ({
 		...option,
 		subtitle: option.approvalMode ? `Approval: ${option.approvalMode}` : undefined,
+	}));
+	const sshConnectionMultiSelectOptions = sshConnectionOptions.map((option) => ({
+		value: option.value,
+		label: option.label,
+		description: option.description,
 	}));
 	const selectedApprovalHint = approvalModeDescription(selectedExecutionProfile?.approvalMode);
 
@@ -875,6 +891,64 @@ This includes whether each tool call is completed and its corresponding result.`
 									</FormItem>
 								)}
 							/>
+						</>
+					)}
+				</div>
+			</FormSettingsSection>
+
+			<FormSettingsSection
+				title="SSH Execution"
+				description="Allow this agent to run one-shot SSH commands against explicitly allowlisted SSH Connection records. Interactive PTY sessions are deferred."
+			>
+				<div className="grid gap-6 sm:grid-cols-2">
+					<FormField
+						control={form.control}
+						name="allow_ssh"
+						render={({ field }) => (
+							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+								<div className="space-y-0.5">
+									<FormLabel className="text-base">Allow SSH Execution</FormLabel>
+									<FormDescription>
+										Enables the SSH execution tool for this agent only when at least one SSH Connection is selected below and the acting user holds the ssh.run capability.
+									</FormDescription>
+								</div>
+								<FormControl>
+									<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+								</FormControl>
+							</FormItem>
+						)}
+					/>
+
+					{form.watch('allow_ssh') && (
+						<>
+							<FormField
+								control={form.control}
+								name="ssh_connections"
+								render={({ field }) => (
+									<FormItem className="sm:col-span-2">
+										<FormLabel>Allowlisted SSH Connections</FormLabel>
+										<FormControl>
+											<MultiSelectCombobox
+												options={sshConnectionMultiSelectOptions}
+												values={field.value || []}
+												onValuesChange={field.onChange}
+												placeholder={loadingSSHConnections ? 'Loading SSH connections...' : 'Select SSH connections'}
+												searchPlaceholder="Search SSH connections..."
+												emptyText="No enabled SSH connections found."
+												disabled={loadingSSHConnections}
+											/>
+										</FormControl>
+										<FormDescription>
+											Each command call must pick one of these connections. Use the Frappe desk SSH Connection DocType to store credentials, enroll host keys, and rotate secrets.
+										</FormDescription>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<div className="sm:col-span-2 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+								SSH uses the selected Execution Profile only when present, for approval mode and network policy. Without a profile, the backend falls back to strict default timeouts and Ask Every Time approval.
+							</div>
 						</>
 					)}
 				</div>

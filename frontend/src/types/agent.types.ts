@@ -288,4 +288,12 @@ export interface AgentDoc {
 
   // Execution policy (advanced): run turns directly instead of queue-first
   run_immediately?: 0 | 1;
+  allow_ssh?: 0 | 1;
+  ssh_connections?: Array<{
+    name?: string;
+    ssh_connection: string;
+    host?: string;
+    username?: string;
+    enabled?: 0 | 1 | boolean;
+  }>;
 }

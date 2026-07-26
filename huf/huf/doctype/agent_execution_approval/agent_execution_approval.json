@@ -6,6 +6,7 @@
  "engine": "InnoDB",
  "field_order": [
   "agent_tool_call",
+  "execution_kind",
   "requested_capability",
   "code_ref",
   "status",
@@ -27,6 +28,14 @@
    "label": "Agent Tool Call",
    "options": "Agent Tool Call",
    "reqd": 1
+  },
+  {
+   "default": "code_execution",
+   "fieldname": "execution_kind",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Execution Kind",
+   "options": "code_execution\nssh_exec"
   },
   {
    "description": "The broker capability (dot-string) the sandbox requested, e.g. doc.create or http.request.",

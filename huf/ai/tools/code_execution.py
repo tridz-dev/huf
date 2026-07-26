@@ -625,7 +625,12 @@ def run_python(
 				"expires_on": add_to_date(now_datetime(), hours=_APPROVAL_TTL_HOURS),
 			}
 		)
-		approval.insert(ignore_permissions=True)
+		original_user = frappe.session.user
+		try:
+			frappe.set_user("Administrator")
+			approval.insert(ignore_permissions=True)
+		finally:
+			frappe.set_user(original_user)
 
 		# Hold the resumable dispatch payload (raw code + snapshot + the
 		# original ``acting_user``) in Redis for as long as the approval is

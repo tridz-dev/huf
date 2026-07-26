@@ -9,7 +9,6 @@ from frappe.utils import get_datetime, now_datetime
 
 class AgentExecutionApproval(Document):
 	def has_permission(self, permission_type=None, verbose=False):
-		from huf.permissions import has_capability
 		user = frappe.session.user
 
 		# System Manager always has full access (safety net).
@@ -17,36 +16,64 @@ class AgentExecutionApproval(Document):
 			return True
 
 		# Strict capability checks for mutating actions. Approval records are
-		# normally created by the dispatcher (Phase 3) under ignore_permissions;
-		# manual create/write/delete requires the execution.approve capability.
+		# normally created by the dispatcher under ignore_permissions; manual
+		# create/write/delete requires the execution-kind-specific approval capability.
 		if permission_type == "create":
-			return has_capability(user, "execution.approve")
+			return _has_approval_capability(self, user)
 
 		if permission_type in ("write", "save"):
-			return has_capability(user, "execution.approve")
+			return _has_approval_capability(self, user)
 
 		if permission_type == "delete":
-			return has_capability(user, "execution.approve")
+			return _has_approval_capability(self, user)
 
 		# Read / access is broadly allowed so designated approvers can see
 		# pending approvals; the approve/reject endpoints do their own scoping.
 		return True
 
 
+def _approval_capability(doc: Document | None) -> str:
+	kind = (getattr(doc, "execution_kind", None) or "code_execution").strip().lower()
+	if kind == "ssh_exec":
+		return "ssh.approve"
+	return "execution.approve"
+
+
+def _has_approval_capability(doc: Document | None, user: str) -> bool:
+	from huf.permissions import has_capability
+
+	return has_capability(user, _approval_capability(doc))
+
+
+def _execution_module(execution_kind: str | None):
+	"""Resolve the backing execution module for an approval kind."""
+	kind = (execution_kind or "code_execution").strip().lower()
+	if kind == "code_execution":
+		from huf.ai.tools import code_execution as module
+
+		return module
+	if kind == "ssh_exec":
+		from huf.ai.tools import ssh_execution as module
+
+		return module
+	frappe.throw(
+		_("Unsupported execution kind: {0}").format(execution_kind or "(blank)"),
+		frappe.ValidationError,
+	)
+
+
 def _can_decide(doc: Document, user: str) -> bool:
 	"""Return True if *user* may record an approve/reject decision on *doc*.
 
 	The acting user must satisfy at least one of:
-	  (a) holds the ``execution.approve`` capability (this also covers
+	  (a) holds the execution-kind-specific approval capability (this also covers
 	      System Manager / Administrator, who receive every capability);
 	  (b) the approval's ``approver_role`` is set and the user has that role;
 	  (c) the approval's ``approver_users`` child table (``Agent User`` rows)
 	      contains the user.
 	"""
-	from huf.permissions import has_capability
-
 	# (a) capability-based approver (System Manager / Administrator included).
-	if has_capability(user, "execution.approve"):
+	if _has_approval_capability(doc, user):
 		return True
 
 	# (b) designated approver role.
@@ -97,9 +124,7 @@ def _mark_expired(doc: Document) -> None:
 	doc.save(ignore_permissions=True)
 	_finalize_tool_call(doc, _("Execution approval expired before a decision was recorded."))
 
-	from huf.ai.tools.code_execution import clear_pending_execution
-
-	clear_pending_execution(doc.name)
+	_execution_module(doc.execution_kind).clear_pending_execution(doc.name)
 	frappe.db.commit()
 
 
@@ -165,11 +190,11 @@ def _load_dispatch_payload(doc: Document) -> dict:
 	decision; an integrity/acting-user problem aborts with the approval left
 	Pending (see ``load_pending_execution``).
 	"""
-	from huf.ai.tools.code_execution import PendingExecutionExpired, load_pending_execution
+	module = _execution_module(doc.execution_kind)
 
 	try:
-		return load_pending_execution(doc)
-	except PendingExecutionExpired:
+		return module.load_pending_execution(doc)
+	except module.PendingExecutionExpired:
 		_mark_expired(doc)
 		frappe.throw(
 			_("The parked execution is no longer available; the approval was marked Expired."),
@@ -196,9 +221,7 @@ def approve_execution(agent_execution_approval_name: str, comment: str | None = 
 		agent_execution_approval_name, "Approved", comment, before_decide=_preflight
 	)
 
-	from huf.ai.tools.code_execution import enqueue_approved_execution
-
-	enqueue_approved_execution(doc, payload)
+	_execution_module(doc.execution_kind).enqueue_approved_execution(doc, payload)
 	return {"name": doc.name, "status": doc.status, "agent_tool_call": doc.agent_tool_call}
 
 
@@ -216,7 +239,5 @@ def reject_execution(agent_execution_approval_name: str, comment: str | None = N
 		reason = f"{reason} {comment}"[:600]
 	_finalize_tool_call(doc, reason)
 
-	from huf.ai.tools.code_execution import clear_pending_execution
-
-	clear_pending_execution(doc.name)
+	_execution_module(doc.execution_kind).clear_pending_execution(doc.name)
 	return {"name": doc.name, "status": doc.status, "agent_tool_call": doc.agent_tool_call}

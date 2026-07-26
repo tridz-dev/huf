@@ -1,0 +1,224 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:display_name",
+ "creation": "2026-07-12 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "display_name",
+  "enabled",
+  "column_break_identity",
+  "host",
+  "port",
+  "username",
+  "auth_section",
+  "auth_method",
+  "password",
+  "private_key",
+  "private_key_passphrase",
+  "host_key_section",
+  "host_key_verification",
+  "host_key_fingerprint",
+  "column_break_host_key",
+  "host_key_type",
+  "host_key_enrolled_by",
+  "host_key_enrolled_on",
+  "metadata_section",
+  "last_tested_on",
+  "last_test_status",
+  "key_rotated_on",
+  "last_error"
+ ],
+ "fields": [
+  {
+   "fieldname": "display_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Display Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "host",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Host",
+   "reqd": 1
+  },
+  {
+   "default": "22",
+   "fieldname": "port",
+   "fieldtype": "Int",
+   "label": "Port",
+   "reqd": 1
+  },
+  {
+   "fieldname": "username",
+   "fieldtype": "Data",
+   "label": "Username",
+   "reqd": 1
+  },
+  {
+   "fieldname": "auth_section",
+   "fieldtype": "Section Break",
+   "label": "Authentication"
+  },
+  {
+   "default": "Password",
+   "fieldname": "auth_method",
+   "fieldtype": "Select",
+   "label": "Auth Method",
+   "options": "Password\nPrivate Key",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.auth_method === 'Password'",
+   "fieldname": "password",
+   "fieldtype": "Password",
+   "label": "Password"
+  },
+  {
+   "depends_on": "eval:doc.auth_method === 'Private Key'",
+   "fieldname": "private_key",
+   "fieldtype": "Password",
+   "label": "Private Key"
+  },
+  {
+   "depends_on": "eval:doc.auth_method === 'Private Key'",
+   "fieldname": "private_key_passphrase",
+   "fieldtype": "Password",
+   "label": "Private Key Passphrase"
+  },
+  {
+   "fieldname": "host_key_section",
+   "fieldtype": "Section Break",
+   "label": "Host Key"
+  },
+  {
+   "default": "Strict (Pinned)",
+   "fieldname": "host_key_verification",
+   "fieldtype": "Select",
+   "label": "Host Key Verification",
+   "options": "Strict (Pinned)",
+   "reqd": 1
+  },
+  {
+   "fieldname": "host_key_fingerprint",
+   "fieldtype": "Data",
+   "label": "Host Key Fingerprint",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_host_key",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "host_key_type",
+   "fieldtype": "Data",
+   "label": "Host Key Type",
+   "read_only": 1
+  },
+  {
+   "fieldname": "host_key_enrolled_by",
+   "fieldtype": "Link",
+   "label": "Host Key Enrolled By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "host_key_enrolled_on",
+   "fieldtype": "Datetime",
+   "label": "Host Key Enrolled On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Metadata"
+  },
+  {
+   "fieldname": "last_tested_on",
+   "fieldtype": "Datetime",
+   "label": "Last Tested On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_test_status",
+   "fieldtype": "Data",
+   "label": "Last Test Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "key_rotated_on",
+   "fieldtype": "Datetime",
+   "label": "Key Rotated On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-07-12 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "SSH Connection",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "select": 1,
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "select": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

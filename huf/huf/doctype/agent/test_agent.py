@@ -258,6 +258,7 @@ class TestAgentCodeExecution(FrappeTestCase):
 			{
 				"doctype": "Agent",
 				"agent_name": f"test-agent-{frappe.generate_hash(length=8)}",
+				"instructions": "Test code execution agent instructions",
 				"provider": self.provider,
 				"model": self.model,
 				"allow_code_execution": allow_code_execution,

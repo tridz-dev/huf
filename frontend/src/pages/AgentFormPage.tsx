@@ -27,7 +27,7 @@ import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
-import { AdvancedTab, type ExecutionProfileOption } from '../components/agent/AdvancedTab';
+import { AdvancedTab, type ExecutionProfileOption, type SSHConnectionOption } from '../components/agent/AdvancedTab';
 import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
@@ -53,6 +53,13 @@ type ExecutionProfileListRow = {
   name: string;
   profile_name?: string | null;
   approval_mode?: string | null;
+};
+
+type SSHConnectionListRow = {
+  name: string;
+  display_name?: string | null;
+  host?: string | null;
+  username?: string | null;
 };
 
 type AgentToolRow = {
@@ -138,6 +145,8 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
       agent.execution_shared_dir_limit_mb !== undefined && agent.execution_shared_dir_limit_mb !== null
         ? agent.execution_shared_dir_limit_mb
         : undefined,
+    allow_ssh: agent.allow_ssh === 1,
+    ssh_connections: (agent.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
   };
 }
 
@@ -227,6 +236,8 @@ export function AgentFormPage() {
         'allow_code_execution',
         'execution_profile',
         'execution_shared_dir_limit_mb',
+        'allow_ssh',
+        'ssh_connections',
       ],
       default: false,
       disabled: false,
@@ -285,6 +296,8 @@ export function AgentFormPage() {
   const [loadingSummaryPrompts, setLoadingSummaryPrompts] = useState(false);
   const [executionProfileOptions, setExecutionProfileOptions] = useState<ExecutionProfileOption[]>([]);
   const [loadingExecutionProfiles, setLoadingExecutionProfiles] = useState(false);
+  const [sshConnectionOptions, setSSHConnectionOptions] = useState<SSHConnectionOption[]>([]);
+  const [loadingSSHConnections, setLoadingSSHConnections] = useState(false);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
@@ -370,6 +383,8 @@ export function AgentFormPage() {
         allow_code_execution: false,
         execution_profile: undefined,
         execution_shared_dir_limit_mb: undefined,
+        allow_ssh: false,
+        ssh_connections: [],
       },
   });
 
@@ -565,6 +580,50 @@ export function AgentFormPage() {
     };
 
     loadPromptOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSSHConnectionOptions = async () => {
+      setLoadingSSHConnections(true);
+      try {
+        const rows = await db.getDocList('SSH Connection', {
+          fields: ['name', 'display_name', 'host', 'username'],
+          filters: [['enabled', '=', 1]],
+          limit: 500,
+          orderBy: { field: 'modified', order: 'desc' },
+        }) as SSHConnectionListRow[];
+
+        if (cancelled) {
+          return;
+        }
+
+        setSSHConnectionOptions(
+          rows.map((row) => ({
+            value: row.name,
+            label: row.display_name || row.name,
+            description: [row.username, row.host].filter(Boolean).join('@') || undefined,
+          }))
+        );
+      } catch (error) {
+        console.error('Error loading SSH connections:', error);
+        if (!cancelled) {
+          setSSHConnectionOptions([]);
+          toast.error('Failed to load SSH Connections');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSSHConnections(false);
+        }
+      }
+    };
+
+    loadSSHConnectionOptions();
 
     return () => {
       cancelled = true;
@@ -984,6 +1043,8 @@ export function AgentFormPage() {
               data.execution_shared_dir_limit_mb !== undefined && data.execution_shared_dir_limit_mb !== null
                 ? data.execution_shared_dir_limit_mb
                 : undefined,
+            allow_ssh: data.allow_ssh === 1,
+            ssh_connections: (data.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
           });
         }
         // Track initial disabled state and persisted allow_chat
@@ -1162,6 +1223,10 @@ export function AgentFormPage() {
         allow_code_execution: values.allow_code_execution ? 1 : 0,
         execution_profile: values.execution_profile || undefined,
         execution_shared_dir_limit_mb: values.execution_shared_dir_limit_mb !== undefined ? values.execution_shared_dir_limit_mb : undefined,
+        allow_ssh: values.allow_ssh ? 1 : 0,
+        ssh_connections: (values.ssh_connections || []).map((connectionName) => ({
+          ssh_connection: connectionName,
+        })),
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -1249,6 +1314,8 @@ export function AgentFormPage() {
             newAgent.execution_shared_dir_limit_mb !== undefined && newAgent.execution_shared_dir_limit_mb !== null
               ? newAgent.execution_shared_dir_limit_mb
               : undefined,
+          allow_ssh: newAgent.allow_ssh === 1,
+          ssh_connections: (newAgent.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
         });
         setInitialDisabled(newAgent.disabled === 1);
         setAllowChat(newAgent.allow_chat === 1);
@@ -1939,6 +2006,8 @@ export function AgentFormPage() {
                   loadingSummaryPrompts={loadingSummaryPrompts}
                   executionProfileOptions={executionProfileOptions}
                   loadingExecutionProfiles={loadingExecutionProfiles}
+                  sshConnectionOptions={sshConnectionOptions}
+                  loadingSSHConnections={loadingSSHConnections}
                 />
               </TabsContent>
             </Tabs>
