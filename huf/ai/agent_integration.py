@@ -1226,6 +1226,14 @@ def _execute_agent_run(
         else:
             enhanced_prompt = base_prompt
 
+        from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
+        segment_tokens = compute_segment_tokens(
+            agent_doc, agent, resolved_model, resolved_provider, history, knowledge_context, prompt
+        )
+        prefix_breakpoints = compute_prefix_breakpoints(
+            agent_doc, agent, resolved_model, resolved_provider, history
+        )
+
         context = {
             "channel": channel_id,
             "external_id": external_id,
@@ -1398,6 +1406,8 @@ def _execute_agent_run(
         input_tokens = 0
         output_tokens = 0
         cached_tokens = 0
+        cache_creation_tokens = 0
+        cache_skipped_unsupported_model = False
 
         if usage:
             
@@ -1412,17 +1422,57 @@ def _execute_agent_run(
                 if details:
                     if isinstance(details, dict):
                         cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
+                        cache_creation_tokens = (
+                            details.get("cache_creation_input_tokens")
+                            or details.get("cache_write_tokens")
+                            or details.get("cache_creation_tokens")
+                            or 0
+                        )
                     else:
                         cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
+                        cache_creation_tokens = (
+                            getattr(details, "cache_creation_input_tokens", None)
+                            or getattr(details, "cache_write_tokens", None)
+                            or getattr(details, "cache_creation_tokens", None)
+                            or 0
+                        )
                 elif isinstance(usage, dict):
                     cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
-                
+                    cache_creation_tokens = (
+                        usage.get("cache_creation_tokens")
+                        or usage.get("cache_creation_input_tokens")
+                        or usage.get("cache_write_input_tokens")
+                        or usage.get("cache_miss_tokens")
+                        or 0
+                    )
+
+                if not cache_creation_tokens and isinstance(usage, dict):
+                    cache_creation_tokens = (
+                        usage.get("cache_creation_tokens")
+                        or usage.get("cache_creation_input_tokens")
+                        or usage.get("cache_write_input_tokens")
+                        or usage.get("cache_miss_tokens")
+                        or 0
+                    )
+
+                if isinstance(usage, dict):
+                    cache_skipped_unsupported_model = bool(usage.get("cache_skipped_unsupported_model", False))
+
             else: 
                 input_tokens = (getattr(usage, "input_tokens", getattr(usage, "prompt_tokens", 0))) or 0
                 output_tokens = (getattr(usage, "output_tokens", getattr(usage, "completion_tokens", 0))) or 0
                 cached_tokens = getattr(usage, "cached_tokens", None) or 0
+                cache_creation_tokens = (
+                    getattr(usage, "cache_creation_tokens", None)
+                    or getattr(usage, "cache_creation_input_tokens", None)
+                    or getattr(usage, "cache_write_input_tokens", None)
+                    or getattr(usage, "cache_miss_tokens", None)
+                    or 0
+                )
+                cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
             
             cached_tokens = cached_tokens or 0
+            cache_creation_tokens = cache_creation_tokens or 0
             
             try:
                 # Prefer cost directly from the result
@@ -1480,7 +1530,22 @@ def _execute_agent_run(
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "cached_tokens": cached_tokens,
-                "cost": cost
+                "cost": cost,
+                "usage_snapshot": json.dumps({
+                    "schema_version": 1,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "cache_read_tokens": cached_tokens if usage else None,
+                    "cache_creation_tokens": cache_creation_tokens if usage else None,
+                    "cache_miss_tokens": cache_creation_tokens if usage else None,
+                    "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+                    "total_tokens": total_tokens,
+                    "completeness": "provider_reported" if usage else "estimated",
+                    "segment_tokens": segment_tokens,
+                    "prefix_breakpoints": prefix_breakpoints,
+                }),
+                "cost_source": "provider_reported" if getattr(result, "cost", None) is not None else "unknown",
+                "cost_calculation_status": "calculated" if cost is not None else "unavailable",
             })
 
         agent_message = conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
@@ -2238,8 +2303,16 @@ async def run_agent_stream(
         else:
             enhanced_prompt = base_prompt
 
+        from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
+        segment_tokens = compute_segment_tokens(
+            agent_doc, agent, resolved_model, resolved_provider, history, knowledge_context, prompt
+        )
+        prefix_breakpoints = compute_prefix_breakpoints(
+            agent_doc, agent, resolved_model, resolved_provider, history
+        )
+
         context["conversation_history"] = history
-        
+
         # Stream from provider
         full_response = ""
         try:
@@ -2301,6 +2374,8 @@ async def run_agent_stream(
                     input_tokens = 0
                     output_tokens = 0
                     cached_tokens = 0
+                    cache_creation_tokens = 0
+                    cache_skipped_unsupported_model = False
                     total_tokens = 0
                     
                     if usage:
@@ -2316,19 +2391,59 @@ async def run_agent_stream(
                             if details:
                                 if isinstance(details, dict):
                                     cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
+                                    cache_creation_tokens = (
+                                        details.get("cache_creation_input_tokens")
+                                        or details.get("cache_write_tokens")
+                                        or details.get("cache_creation_tokens")
+                                        or 0
+                                    )
                                 else:
                                     cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
+                                    cache_creation_tokens = (
+                                        getattr(details, "cache_creation_input_tokens", None)
+                                        or getattr(details, "cache_write_tokens", None)
+                                        or getattr(details, "cache_creation_tokens", None)
+                                        or 0
+                                    )
                             elif isinstance(usage, dict):
                                 cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
-                            
+                                cache_creation_tokens = (
+                                    usage.get("cache_creation_tokens")
+                                    or usage.get("cache_creation_input_tokens")
+                                    or usage.get("cache_write_input_tokens")
+                                    or usage.get("cache_miss_tokens")
+                                    or 0
+                                )
+
+                            if not cache_creation_tokens and isinstance(usage, dict):
+                                cache_creation_tokens = (
+                                    usage.get("cache_creation_tokens")
+                                    or usage.get("cache_creation_input_tokens")
+                                    or usage.get("cache_write_input_tokens")
+                                    or usage.get("cache_miss_tokens")
+                                    or 0
+                                )
+
+                            if isinstance(usage, dict):
+                                cache_skipped_unsupported_model = bool(usage.get("cache_skipped_unsupported_model", False))
+
                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
                         else:
                             input_tokens = (getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))) or 0
                             output_tokens = (getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))) or 0
                             cached_tokens = getattr(usage, "cached_tokens", None) or 0
+                            cache_creation_tokens = (
+                                getattr(usage, "cache_creation_tokens", None)
+                                or getattr(usage, "cache_creation_input_tokens", None)
+                                or getattr(usage, "cache_write_input_tokens", None)
+                                or getattr(usage, "cache_miss_tokens", None)
+                                or 0
+                            )
+                            cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
                             total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) or (input_tokens + output_tokens)
                     
                     cached_tokens = cached_tokens or 0
+                    cache_creation_tokens = cache_creation_tokens or 0
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
@@ -2408,6 +2523,21 @@ async def run_agent_stream(
                         "output_tokens": output_tokens,
                         "cached_tokens": cached_tokens,
                         "cost": cost,
+                        "usage_snapshot": json.dumps({
+                            "schema_version": 1,
+                            "input_tokens": input_tokens,
+                            "output_tokens": output_tokens,
+                            "cache_read_tokens": cached_tokens if usage else None,
+                            "cache_creation_tokens": cache_creation_tokens if usage else None,
+                            "cache_miss_tokens": cache_creation_tokens if usage else None,
+                            "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+                            "total_tokens": total_tokens,
+                            "completeness": "provider_reported" if usage else "estimated",
+                            "segment_tokens": segment_tokens,
+                            "prefix_breakpoints": prefix_breakpoints,
+                        }),
+                        "cost_source": "provider_reported" if chunk.get("cost") is not None else "unknown",
+                        "cost_calculation_status": "calculated" if cost is not None else "unavailable",
                         "end_time": now_datetime()
                     }, update_modified=True)
                     safe_commit()

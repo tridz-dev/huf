@@ -106,6 +106,42 @@ def _build_text_content(text: str, provider_name: str, cache_enabled: bool, cach
     return [{"type": "text", "text": text}]
 
 
+def _format_conversation_history(
+    conversation_history: list,
+    provider_name: str,
+    cache_enabled: bool,
+    cache_control_type: str,
+) -> list:
+    """Format conversation history messages, applying cache_control to the history prefix breakpoint if enabled."""
+    if not conversation_history:
+        return []
+
+    formatted = [dict(msg) for msg in conversation_history]
+    if not cache_enabled:
+        return formatted
+
+    last_msg = dict(formatted[-1])
+    content = last_msg.get("content")
+
+    if isinstance(content, str):
+        last_msg["content"] = _build_text_content(content, provider_name, True, cache_control_type)
+    elif isinstance(content, list) and len(content) > 0:
+        content_copy = [dict(b) if isinstance(b, dict) else b for b in content]
+        last_block = content_copy[-1]
+        if isinstance(last_block, dict):
+            last_block_copy = dict(last_block)
+            if provider_name == "anthropic":
+                last_block_copy["cache_control"] = {"type": cache_control_type}
+            content_copy[-1] = last_block_copy
+        last_msg["content"] = content_copy
+    elif content is None or content == "":
+        if provider_name == "anthropic":
+            last_msg["content"] = [{"type": "text", "text": "", "cache_control": {"type": cache_control_type}}]
+
+    formatted[-1] = last_msg
+    return formatted
+
+
 def _file_dict_to_data_image_url(file_dict: dict) -> dict | None:
     """Embed a local Frappe file as a base64 data URI for multimodal LLM calls.
 
@@ -381,12 +417,16 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         
         # Check if model supports prompt caching
         model_supports_caching = False
+        cache_skipped_unsupported_model = False
         if enable_prompt_caching:
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
+                if not model_supports_caching:
+                    cache_skipped_unsupported_model = True
             except Exception:
                 # Prompt-caching check failed; disable caching and log for investigation.
                 model_supports_caching = False
+                cache_skipped_unsupported_model = True
                 frappe.log_error(
                     f"Failed to check prompt caching support for model {normalized_model}",
                     "LiteLLM Prompt Caching"
@@ -423,7 +463,17 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         
         # Insert Conversation History if available
         if context and context.get("conversation_history"):
-            messages.extend(context["conversation_history"])
+            history_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_conversation_history
+            )
+            messages.extend(
+                _format_conversation_history(
+                    context["conversation_history"],
+                    provider_name,
+                    history_cache_enabled,
+                    cache_control_type,
+                )
+            )
         
         # Add user message with cache_control if conversation history caching is enabled
         cache_dynamic_content = cache_conversation_history
@@ -448,7 +498,14 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         if getattr(agent, "tools", None):
             tools = serialize_tools(agent.tools)
 
-        total_usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0}
+        total_usage = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cached_tokens": 0,
+            "cache_creation_tokens": 0,
+            "cache_miss_tokens": 0,
+            "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+        }
         total_cost = 0.0
         all_new_items = []
 
@@ -636,14 +693,52 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             total_usage["input_tokens"] += (getattr(usage, "prompt_tokens", 0) or 0)
             total_usage["output_tokens"] += (getattr(usage, "completion_tokens", 0) or 0)
 
-            # Track cached tokens if available
-            if enable_prompt_caching and hasattr(usage, "prompt_tokens_details"):
+            # Track cached tokens and cache creation/write tokens if available
+            round_cached = 0
+            round_creation = 0
+
+            if hasattr(usage, "prompt_tokens_details") and usage.prompt_tokens_details:
                 details = usage.prompt_tokens_details
-                if details:
-                    if isinstance(details, dict):
-                        total_usage["cached_tokens"] += (details.get("cached_tokens") or details.get("cache_hit_tokens") or 0)
-                    else:
-                        total_usage["cached_tokens"] += (getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0)
+                if isinstance(details, dict):
+                    round_cached = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
+                    round_creation = (
+                        details.get("cache_creation_input_tokens")
+                        or details.get("cache_write_tokens")
+                        or details.get("cache_creation_tokens")
+                        or 0
+                    )
+                else:
+                    round_cached = (
+                        getattr(details, "cached_tokens", None)
+                        or getattr(details, "cache_hit_tokens", None)
+                        or 0
+                    )
+                    round_creation = (
+                        getattr(details, "cache_creation_input_tokens", None)
+                        or getattr(details, "cache_write_tokens", None)
+                        or getattr(details, "cache_creation_tokens", None)
+                        or 0
+                    )
+            elif isinstance(usage, dict):
+                round_cached = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
+                round_creation = (
+                    usage.get("cache_creation_input_tokens")
+                    or usage.get("cache_write_input_tokens")
+                    or usage.get("cache_creation_tokens")
+                    or usage.get("cache_miss_tokens")
+                    or 0
+                )
+
+            if not round_creation:
+                round_creation = (
+                    getattr(usage, "cache_creation_input_tokens", None)
+                    or getattr(usage, "cache_write_input_tokens", None)
+                    or 0
+                )
+
+            total_usage["cached_tokens"] += (round_cached or 0)
+            total_usage["cache_creation_tokens"] += (round_creation or 0)
+            total_usage["cache_miss_tokens"] += (round_creation or 0)
 
             assistant_message = {
                 "role": "assistant",
@@ -848,12 +943,16 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         
         # Check if model supports prompt caching
         model_supports_caching = False
+        cache_skipped_unsupported_model = False
         if enable_prompt_caching:
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
+                if not model_supports_caching:
+                    cache_skipped_unsupported_model = True
             except Exception:
                 # Prompt-caching check failed; disable caching and log for investigation.
                 model_supports_caching = False
+                cache_skipped_unsupported_model = True
                 frappe.log_error(
                     message=f"Failed to check prompt caching support for model {normalized_model}",
                     title="LiteLLM Prompt Caching"
@@ -890,7 +989,17 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         
         # Insert Conversation History if available
         if context and context.get("conversation_history"):
-            messages.extend(context["conversation_history"])
+            history_cache_enabled = (
+                enable_prompt_caching and model_supports_caching and cache_conversation_history
+            )
+            messages.extend(
+                _format_conversation_history(
+                    context["conversation_history"],
+                    provider_name,
+                    history_cache_enabled,
+                    cache_control_type,
+                )
+            )
         
         cache_dynamic_content = cache_conversation_history
         if isinstance(cache_dynamic_content_override, bool):
@@ -1251,16 +1360,42 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         elif stream_usage and hasattr(stream_usage, "model_dump"):
              stream_usage = stream_usage.model_dump()
 
+        if not stream_usage or not isinstance(stream_usage, dict):
+            stream_usage = {}
+
+        # Extract cache creation tokens and cache skipped flag for stream_usage
+        s_cached = 0
+        s_creation = 0
+        s_details = stream_usage.get("prompt_tokens_details") or {}
+        if isinstance(s_details, dict):
+            s_cached = int(s_details.get("cached_tokens", 0) or s_details.get("cache_hit_tokens", 0) or 0)
+            s_creation = int(
+                s_details.get("cache_creation_input_tokens", 0)
+                or s_details.get("cache_write_tokens", 0)
+                or s_details.get("cache_creation_tokens", 0)
+                or 0
+            )
+
+        if not s_creation:
+            s_creation = int(
+                stream_usage.get("cache_creation_input_tokens", 0)
+                or stream_usage.get("cache_write_input_tokens", 0)
+                or stream_usage.get("cache_creation_tokens", 0)
+                or stream_usage.get("cache_miss_tokens", 0)
+                or 0
+            )
+
+        stream_usage["cached_tokens"] = s_cached
+        stream_usage["cache_creation_tokens"] = s_creation
+        stream_usage["cache_miss_tokens"] = s_creation
+        stream_usage["cache_skipped_unsupported_model"] = cache_skipped_unsupported_model
+
         # Calculate cost from streaming usage
         stream_cost = 0.0
         if stream_usage and isinstance(stream_usage, dict):
             try:
                 s_input   = int(stream_usage.get("prompt_tokens", 0) or 0)
                 s_output  = int(stream_usage.get("completion_tokens", 0) or 0)
-                s_cached  = 0
-                s_details = stream_usage.get("prompt_tokens_details") or {}
-                if isinstance(s_details, dict):
-                    s_cached = int(s_details.get("cached_tokens", 0) or s_details.get("cache_hit_tokens", 0) or 0)
                 stream_cost, _src = calculate_cost(
                     model_name=model,
                     input_tokens=s_input,
