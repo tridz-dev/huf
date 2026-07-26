@@ -597,6 +597,111 @@ GOOGLE_MAPS_TOOLS = [
 	},
 ]
 
+GOOGLE_PLACES_TOOLS = [
+	{
+		"tool_name": "gplaces_text_search",
+		"description": (
+			"Search for places with a free-text query using the Google Places API (New). "
+			"Supports filters (type, rating, price, open now), location bias/restriction, and pagination. "
+			"Requires a Google Maps/Places API key in Integration Settings or env (GOOGLE_MAPS_API_KEY, PLACE_API_KEY, GOOGLE_PLACES_API_KEY)."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_text_search",
+		"category": "Google Places",
+		"parameters": [
+			_p("query", required=True, description="Free-text search query, e.g. 'vegan restaurants in Lisbon'"),
+			_p("language_code", description="Response language, e.g. 'en', 'fr'"),
+			_p("region_code", description="Region bias as CLDR country code, e.g. 'us', 'in'"),
+			_p("included_type", description="Restrict to a single place type, e.g. 'restaurant', 'museum'"),
+			_p("min_rating", type="number", description="Minimum average user rating (0.0-5.0)"),
+			_p("price_levels", description="CSV of PRICE_LEVEL_FREE, PRICE_LEVEL_INEXPENSIVE, PRICE_LEVEL_MODERATE, PRICE_LEVEL_EXPENSIVE, PRICE_LEVEL_VERY_EXPENSIVE"),
+			_p("open_now", type="boolean", description="Only return places open at query time"),
+			_p("rank_preference", description="RELEVANCE (default) or DISTANCE (requires location)"),
+			_p("latitude", type="number", description="Center latitude for location bias/restriction"),
+			_p("longitude", type="number", description="Center longitude for location bias/restriction"),
+			_p("radius", type="number", description="Search radius in metres (default 50000, min 1)"),
+			_p("strict_location", type="boolean", description="With latitude/longitude: hard-restrict to the circle instead of biasing"),
+			_p("page_size", type="integer", description="Results per page, 1-20 (default 10)"),
+			_p("page_token", description="next_page_token from a previous response to fetch the next page"),
+		],
+	},
+	{
+		"tool_name": "gplaces_place_details",
+		"description": (
+			"Get full details for a single place by place_id: contact info, opening hours, "
+			"photos (resource names for gplaces_place_photo), up to 5 reviews, review summary, "
+			"accessibility/payment/parking options. Requires a Google Places API key."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_place_details",
+		"category": "Google Places",
+		"parameters": [
+			_p("place_id", required=True, description="Google place ID, e.g. 'ChIJN1t_tDeuEmsRUsoyG83frY4'"),
+			_p("language_code", description="Response language, e.g. 'en', 'fr'"),
+			_p("region_code", description="Region code as CLDR country code, e.g. 'us'"),
+		],
+	},
+	{
+		"tool_name": "gplaces_place_photo",
+		"description": (
+			"Resolve a photo resource name (from gplaces_place_details photos[].name) to a usable image URL. "
+			"Requires a Google Places API key."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_place_photo",
+		"category": "Google Places",
+		"parameters": [
+			_p("photo_name", required=True, description="Photo resource name, e.g. 'places/PLACE_ID/photos/PHOTO_ID'"),
+			_p("max_height_px", type="integer", description="Max image height in pixels (default 800)"),
+			_p("max_width_px", type="integer", description="Max image width in pixels (default 800)"),
+			_p("skip_http_redirect", type="boolean", description="Default true: return JSON photoUri. False: follow the media redirect manually"),
+		],
+	},
+	{
+		"tool_name": "gplaces_autocomplete",
+		"description": (
+			"Place autocomplete suggestions for a partial input (cities, districts, neighborhoods by default; "
+			"country-level results are filtered out). Results are cached for 24h. "
+			"Supports location bias/restriction and origin-based distance sorting. Requires a Google Places API key."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_autocomplete",
+		"category": "Google Places",
+		"parameters": [
+			_p("input", required=True, description="Partial place name typed by the user (max 200 chars)"),
+			_p("included_primary_types", description="CSV of primary types (default: locality,sublocality,administrative_area_level_1,administrative_area_level_2,neighborhood)"),
+			_p("language_code", description="Response language, e.g. 'en', 'fr'"),
+			_p("region_code", description="Region bias as CLDR country code, e.g. 'us'"),
+			_p("session_token", description="Session token for billing/session grouping"),
+			_p("include_query_predictions", type="boolean", description="Also return query (non-place) predictions"),
+			_p("latitude", type="number", description="Center latitude for location bias/restriction"),
+			_p("longitude", type="number", description="Center longitude for location bias/restriction"),
+			_p("radius", type="number", description="Radius in metres (default 50000, min 1)"),
+			_p("strict_location", type="boolean", description="With latitude/longitude: hard-restrict to the circle instead of biasing"),
+			_p("origin_latitude", type="number", description="Origin latitude; adds straight-line distance_meters to suggestions"),
+			_p("origin_longitude", type="number", description="Origin longitude; adds straight-line distance_meters to suggestions"),
+		],
+	},
+	{
+		"tool_name": "gplaces_nearby_search",
+		"description": (
+			"Search for places near a latitude/longitude using the Google Places API (New). "
+			"Filter by included/excluded types and rank by popularity or distance. Requires a Google Places API key."
+		),
+		"function_path": "huf.ai.tools.google_places.handle_gplaces_nearby_search",
+		"category": "Google Places",
+		"parameters": [
+			_p("latitude", type="number", required=True, description="Center latitude"),
+			_p("longitude", type="number", required=True, description="Center longitude"),
+			_p("radius", type="number", description="Search radius in metres (default 50000, min 1)"),
+			_p("included_types", description="CSV of place types to include, e.g. 'restaurant,cafe'"),
+			_p("excluded_types", description="CSV of place types to exclude"),
+			_p("included_primary_types", description="CSV of primary types to include"),
+			_p("excluded_primary_types", description="CSV of primary types to exclude"),
+			_p("max_result_count", type="integer", description="Max results, 1-20 (default 10)"),
+			_p("language_code", description="Response language, e.g. 'en', 'fr'"),
+			_p("region_code", description="Region code as CLDR country code, e.g. 'us'"),
+			_p("rank_preference", description="POPULARITY (default) or DISTANCE"),
+		],
+	},
+]
+
 GOOGLE_DRIVE_TOOLS = [
 	{
 		"tool_name": "gdrive_list_files",
@@ -672,6 +777,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ GOOGLE_SHEETS_TOOLS
 	+ GOOGLE_CALENDAR_TOOLS
 	+ GOOGLE_MAPS_TOOLS
+	+ GOOGLE_PLACES_TOOLS
 	+ GOOGLE_DRIVE_TOOLS
 	+ GOOGLE_MEET_TOOLS
 )
