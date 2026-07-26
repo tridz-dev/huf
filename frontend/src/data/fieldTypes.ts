@@ -160,6 +160,8 @@ export const FIELD_PROPERTIES: Record<string, string[]> = {
 	Rating: ['label', 'read_only', 'description', 'in_list_view'],
 	Color: ['label', 'reqd', 'read_only', 'description', 'in_list_view'],
 	Phone: ['label', 'reqd', 'unique', 'read_only', 'default', 'description', 'in_list_view'],
+	Attach: ['label', 'reqd', 'read_only', 'description', 'in_list_view'],
+	'Attach Image': ['label', 'reqd', 'read_only', 'description', 'in_list_view'],
 	'Section Break': ['label'],
 	'Column Break': [],
 };
