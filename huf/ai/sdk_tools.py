@@ -156,7 +156,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         function_path = "huf.ai.sdk_tools.handle_set_conversation_data"
                     elif function_doc.types == "Load Conversation Data":
                         function_path = "huf.ai.sdk_tools.handle_load_conversation_data"
-
+                    elif function_doc.types == "Google Search":
+                        function_path = "huf.ai.sdk_tools.handle_google_search"
                     else:
                         continue
 
@@ -2326,3 +2327,67 @@ async def handle_transcribe_audio(
         # Hard transcription failure: retain Error Log for admin attention.
         frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
         return {"success": False, "error": str(e)}
+
+def handle_google_search(query: str, max_results: int = 5, **kwargs):
+    """
+    Perform a web search using Google Programmable Search Engine.
+
+    Reads the API key and search engine ID from site_config
+    (``google_pse_api_key`` and ``google_pse_engine_id``).
+
+    Args:
+        query: The search query string
+        max_results: Maximum number of results to return (default: 5, max: 10)
+
+    Returns:
+        dict: {
+            "success": bool,
+            "query": str,
+            "results": list,        # [{"title", "link", "snippet"}, ...]
+            "total_results": int,
+            "error": str
+        }
+    """
+    site_config = frappe.get_site_config()
+    api_key = site_config.get("google_pse_api_key")
+    engine_id = site_config.get("google_pse_engine_id")
+
+    if not api_key:
+        frappe.throw(
+            _("Google Search is not configured. Please set 'google_pse_api_key' in site config.")
+        )
+    if not engine_id:
+        frappe.throw(
+            _("Google Search is not configured. Please set 'google_pse_engine_id' in site config.")
+        )
+
+    try:
+        num = max(1, min(int(max_results or 5), 10))
+
+        response = requests.get(
+            "https://www.googleapis.com/customsearch/v1",
+            params={"key": api_key, "cx": engine_id, "q": query, "num": num},
+            timeout=30,
+        )
+        response.raise_for_status()
+
+        items = response.json().get("items", [])
+        results = [
+            {
+                "title": item.get("title"),
+                "link": item.get("link"),
+                "snippet": item.get("snippet"),
+            }
+            for item in items
+        ]
+
+        return {
+            "success": True,
+            "query": query,
+            "results": results,
+            "total_results": len(results),
+        }
+    except Exception as e:
+        logger.warning(f"handle_google_search failed: {e!s}")
+        return {"success": False, "error": str(e)}
+
