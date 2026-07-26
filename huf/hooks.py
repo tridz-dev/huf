@@ -67,7 +67,7 @@ website_route_rules = [
     # Docs routes must come before the catch-all /huf route
     {"from_route": "/huf/docs", "to_route": "huf/docs"},
     {
-        "from_route": "/huf/docs/<path:app_path>", 
+        "from_route": "/huf/docs/<path:app_path>",
         "to_route": "huf/docs/<path:app_path>"
     },
     {"from_route": "/mcp-oauth-callback", "to_route": "mcp_oauth_callback"},
@@ -346,7 +346,8 @@ huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
 # -----------------------
 # Register additional knowledge backends with the hook-based backend
 # registry (see huf.ai.knowledge.backends). Built-in backends
-# (sqlite_fts, sqlite_vec, chroma, pgvector, zvec, pinecone) cannot be overridden.
+# (sqlite_fts, sqlite_vec, chroma, pgvector, zvec, weaviate, faiss, pinecone) cannot be overridden.
+
 huf_knowledge_backends = {
     "redis": "huf.ai.knowledge.backends.redis_backend.RedisBackend",
 }

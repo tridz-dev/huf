@@ -24,7 +24,8 @@ def _build_backend_config(source) -> dict:
 		"chunk_overlap": source.chunk_overlap,
 	}
 
-	if source.knowledge_type in ("sqlite_vec", "chroma", "pgvector", "redis", "zvec", "pinecone"):
+	if source.knowledge_type in ("sqlite_vec", "chroma", "pgvector", "redis", "zvec", "weaviate", "faiss", "pinecone"):
+
 		config["embedding_model"] = source.embedding_model
 		config["vector_dimension"] = source.vector_dimension
 		config["embedding_provider"] = getattr(source, "embedding_provider", None)
