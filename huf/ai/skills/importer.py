@@ -53,7 +53,7 @@ ALLOWED_GIT_DOMAINS = {
 }
 
 
-class SkillImportError(frappe.exceptions.ValidationError):
+class SkillImportError(frappe.ValidationError):
 	"""Raised when a skill import fails."""
 
 
