@@ -145,6 +145,12 @@ const settingsNavItems = [
     capability: "agent.use",
   },
   {
+    title: "Gateways",
+    url: "/gateways",
+    icon: MessageSquare,
+    capability: "system.integrations.manage",
+  },
+  {
     title: "Integrations",
     url: "/integrations",
     icon: Link2,

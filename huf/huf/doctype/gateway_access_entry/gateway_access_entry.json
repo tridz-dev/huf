@@ -1,0 +1,18 @@
+{
+ "actions": [], "autoname": "hash", "creation": "2026-07-26 00:00:00.000000", "doctype": "DocType", "engine": "InnoDB",
+ "field_order": ["gateway", "entry_type", "provider", "external_id", "state", "expires_at", "display_label", "approved_by", "approved_at", "revoked_at", "notes"],
+ "fields": [
+  {"fieldname":"gateway","fieldtype":"Link","label":"Gateway","options":"Gateway","reqd":1,"in_list_view":1},
+  {"fieldname":"entry_type","fieldtype":"Select","label":"Applies to","options":"Sender\nRoom","reqd":1,"in_list_view":1},
+  {"fieldname":"provider","fieldtype":"Data","label":"Provider","reqd":1,"read_only":1},
+  {"fieldname":"external_id","fieldtype":"Data","label":"Canonical provider ID","reqd":1,"in_list_view":1},
+  {"default":"Pending","fieldname":"state","fieldtype":"Select","label":"State","options":"Pending\nApproved\nRevoked","reqd":1,"in_list_view":1},
+  {"fieldname":"expires_at","fieldtype":"Datetime","label":"Expires at"},
+  {"fieldname":"display_label","fieldtype":"Data","label":"Display label"},
+  {"fieldname":"approved_by","fieldtype":"Link","label":"Approved by","options":"User","read_only":1},
+  {"fieldname":"approved_at","fieldtype":"Datetime","label":"Approved at","read_only":1},
+  {"fieldname":"revoked_at","fieldtype":"Datetime","label":"Revoked at","read_only":1},
+  {"fieldname":"notes","fieldtype":"Small Text","label":"Notes"}
+ ],
+ "module":"Huf", "name":"Gateway Access Entry", "permissions":[{"create":1,"delete":1,"read":1,"write":1,"role":"System Manager"}], "track_changes":1
+}
