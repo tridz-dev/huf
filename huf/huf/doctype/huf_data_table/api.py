@@ -3,6 +3,7 @@ import re
 
 import frappe
 from frappe import _
+from frappe.model import display_fieldtypes, no_value_fields, table_fields
 
 from huf.permissions import has_capability
 
@@ -134,22 +135,12 @@ def create_data_table(
 			"sort_order": "DESC",
 			"track_changes": 1,
 			"allow_rename": 1,
+			"allow_import": 1,
 		}
 	)
 	dt.set(
 		"permissions",
-		[
-			{
-				"role": "System Manager",
-				"read": 1,
-				"write": 1,
-				"create": 1,
-				"delete": 1,
-				"print": 1,
-				"email": 1,
-				"share": 1,
-			}
-		],
+		[_table_permission_row(role) for role in _import_permitted_roles()],
 	)
 	dt.insert()
 

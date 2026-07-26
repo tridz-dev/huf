@@ -250,8 +250,8 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 		: (record && titleField && (record[titleField] as string)) || (recordName as string);
 
 	return (
-		<div className="h-full overflow-auto">
-			<div className="p-6 space-y-6 max-w-5xl mx-auto">
+		<div className="h-full overflow-auto p-6">
+			<div className="p-6 space-y-6 max-w-5xl mx-auto bg-panel border border-line rounded-lg shadow-sm">
 				<div className="space-y-1">
 					<h2 className="text-xl font-semibold text-ink">{recordTitle}</h2>
 					<p className="text-sm text-steel">{schema.table_name}</p>
