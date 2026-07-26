@@ -4,8 +4,8 @@
 # TODO: Gmail OAuth2 stub - gmail.py only retrieves a static access token,
 #       no refresh-token flow is implemented yet. (gmail.py:15-19)
 # TODO: Optional deps (boto3, docker, duckduckgo-search, yfinance,
-#       pytube/pytubefix, youtube-transcript-api) are imported with
-#       ImportError fallbacks but not declared in pyproject.toml (by design).
+#       pytube/pytubefix) are imported with ImportError fallbacks but not
+#       declared in pyproject.toml (by design).
 # TODO: Some tool handlers use explicit positional params before **kwargs
 #       (discord, github, gmail, jira, slack, telegram). Works in practice
 #       since Frappe calls with kwargs, but is inconsistent with other tools.
@@ -116,7 +116,7 @@ def _get_alt_env_names(service: str, key: str) -> list:
 		"notion": ["NOTION_API_KEY", "NOTION_DATABASE_ID"],
 		"openweather": ["OPENWEATHER_API_KEY"],
 		"reddit": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
-		"serpapi": ["SERP_API_KEY"],
+		"serpapi": ["SERP_API_KEY", "SERPAPI_API_KEY"],
 		"serper": ["SERPER_API_KEY"],
 		"shopify": ["SHOPIFY_SHOP_NAME", "SHOPIFY_ACCESS_TOKEN"],
 		"tavily": ["TAVILY_API_KEY"],
