@@ -14,6 +14,7 @@ import {
 } from '../components/dashboard';
 import { DeleteTableDialog } from '../components/data-table/DeleteTableDialog';
 import { TableAgentAccessModal } from '../components/data-table/TableAgentAccessModal';
+import { AppTablesSection } from '../components/data-table/AppTablesSection';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getDataTables, deleteDataTable, getTableAgentAccessCounts } from '../services/dataTableApi';
 import { formatTimeAgo } from '../utils/time';
@@ -31,6 +32,8 @@ function DataPage() {
 	const [deleteTable, setDeleteTable] = useState<HufDataTable | null>(null);
 	const [deleting, setDeleting] = useState(false);
 	const [viewModeOverride, setViewModeOverride] = useState<'flat' | 'grouped' | null>(null);
+	const [accessTable, setAccessTable] = useState<HufDataTable | null>(null);
+	const [agentAccessCounts, setAgentAccessCounts] = useState<Record<string, number>>({});
 
 	const {
 		items: tables,
@@ -71,6 +74,14 @@ function DataPage() {
 			});
 		}
 	}, [error]);
+
+	const loadAgentCounts = async () => {
+		setAgentAccessCounts(await getTableAgentAccessCounts());
+	};
+
+	useEffect(() => {
+		void loadAgentCounts();
+	}, []);
 
 	const handleDeleteConfirm = async () => {
 		if (!deleteTable) return;
@@ -125,10 +136,20 @@ function DataPage() {
 						value: table.record_count?.toString() || '0',
 						icon: Database,
 					},
+					{
+						label: 'Agents',
+						value: (agentAccessCounts[table.name] ?? 0).toString(),
+						icon: Settings,
+					},
 					{ label: 'Modified', value: formatTimeAgo(table.modified) },
 				]}
 				menuIcon={Settings}
 				menuActions={[
+					{
+						icon: Settings,
+						label: 'Agent Access',
+						onClick: () => setAccessTable(table),
+					},
 					{
 						icon: Pencil,
 						label: 'Edit Table',
@@ -144,7 +165,7 @@ function DataPage() {
 				onClick={() => navigate(`/data/${table.name}`)}
 			/>
 		),
-		[navigate]
+		[navigate, agentAccessCounts]
 	);
 
 	return (
@@ -231,6 +252,8 @@ function DataPage() {
 						: 'No more tables to load'}
 				</div>
 			)}
+
+			<AppTablesSection />
 
 			<DeleteTableDialog
 				open={!!deleteTable}

@@ -241,7 +241,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								disabled={isReadOnly}
 								className="h-8 w-16 rounded-none border-line p-1"
 							/>
-						) : (field.fieldtype === 'Attach' || field.fieldtype === 'Attach Image') ? (
+						) : ((field.fieldtype as string) === 'Attach' || (field.fieldtype as string) === 'Attach Image') ? (
 							<div className="space-y-2">
 								<input
 									type="file"
@@ -249,11 +249,11 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 									ref={fileInputRef}
 									onChange={handleFileUpload}
 									disabled={isReadOnly || isUploading}
-									accept={field.fieldtype === 'Attach Image' ? 'image/*' : undefined}
+									accept={(field.fieldtype as string) === 'Attach Image' ? 'image/*' : undefined}
 								/>
 								{value ? (
 									<div className="flex items-center gap-3 border border-line bg-panel p-2 rounded-none">
-										{field.fieldtype === 'Attach Image' ? (
+										{(field.fieldtype as string) === 'Attach Image' ? (
 											<img src={value as string} alt="Preview" className="size-10 object-cover border border-line rounded-none" />
 										) : (
 											<div className="flex size-10 items-center justify-center bg-paper-deep border border-line rounded-none text-steel">
