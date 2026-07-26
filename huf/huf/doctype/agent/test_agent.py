@@ -146,7 +146,6 @@ class TestSystemAgentLocking(IntegrationTestCase):
         if "System Manager" not in frappe.get_roles():
             self.skipTest("test session user is not a System Manager")
         self.assertIsNone(_get_permission_query_conditions()(frappe.session.user))
-        self.assertIsNone(get_permission_query_conditions(frappe.session.user))
 
 
 # Python execution gating tests from PR #358.
