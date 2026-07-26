@@ -436,6 +436,91 @@ class TestNearbySearch(unittest.TestCase):
 		mock_post.assert_not_called()
 
 
+class TestConfig(unittest.TestCase):
+	"""Optional operational knobs are configurable via Integration Settings."""
+
+	@patch(f"{MODULE}.get_credential")
+	@patch(f"{MODULE}.frappe")
+	@patch(f"{MODULE}.update_last_error")
+	@patch(f"{MODULE}.require_credential", return_value="test-key")
+	@patch(f"{MODULE}.requests.post")
+	def test_cache_ttl_override(self, mock_post, _cred, _err, mock_frappe, mock_cfg):
+		mock_post.return_value = _mock_response({"suggestions": []})
+		cache = MagicMock()
+		cache.get_value.return_value = None
+		mock_frappe.cache.return_value = cache
+		mock_cfg.side_effect = lambda service, key, default=None: {
+			"places_cache_ttl": "120",
+			"places_cache_enabled": "true",
+		}.get(key, default)
+
+		google_places.handle_gplaces_autocomplete(input="test")
+		self.assertEqual(cache.set_value.call_args.kwargs["expires_in_sec"], 120)
+
+	@patch(f"{MODULE}.get_credential")
+	@patch(f"{MODULE}.frappe")
+	@patch(f"{MODULE}.update_last_error")
+	@patch(f"{MODULE}.require_credential", return_value="test-key")
+	@patch(f"{MODULE}.requests.post")
+	def test_cache_disabled(self, mock_post, _cred, _err, mock_frappe, mock_cfg):
+		mock_post.return_value = _mock_response({"suggestions": []})
+		cache = MagicMock()
+		cache.get_value.return_value = None
+		mock_frappe.cache.return_value = cache
+		mock_cfg.side_effect = lambda service, key, default=None: (
+			False if key == "places_cache_enabled" else default
+		)
+
+		google_places.handle_gplaces_autocomplete(input="test")
+		cache.get_value.assert_not_called()
+		cache.set_value.assert_not_called()
+
+	@patch(f"{MODULE}.get_credential")
+	@patch(f"{MODULE}.update_last_error")
+	@patch(f"{MODULE}.require_credential", return_value="test-key")
+	@patch(f"{MODULE}.requests.post")
+	def test_default_radius_override(self, mock_post, _cred, _err, mock_cfg):
+		mock_post.return_value = _mock_response({"places": []})
+		mock_cfg.side_effect = lambda service, key, default=None: (
+			"10000" if key == "places_default_radius" else default
+		)
+
+		google_places.handle_gplaces_text_search(query="coffee", latitude=10, longitude=20)
+		body = mock_post.call_args.kwargs["json"]
+		self.assertEqual(body["locationBias"]["circle"]["radius"], 10000.0)
+
+	@patch(f"{MODULE}.get_credential")
+	@patch(f"{MODULE}.update_last_error")
+	@patch(f"{MODULE}.require_credential", return_value="test-key")
+	@patch(f"{MODULE}.requests.post")
+	def test_request_timeout_override(self, mock_post, _cred, _err, mock_cfg):
+		mock_post.return_value = _mock_response({"places": []})
+		mock_cfg.side_effect = lambda service, key, default=None: (
+			"7" if key == "places_request_timeout" else default
+		)
+
+		google_places.handle_gplaces_text_search(query="coffee")
+		self.assertEqual(mock_post.call_args.kwargs["timeout"], 7)
+
+	@patch(f"{MODULE}.get_credential")
+	@patch(f"{MODULE}.frappe")
+	@patch(f"{MODULE}.update_last_error")
+	@patch(f"{MODULE}.require_credential", return_value="test-key")
+	@patch(f"{MODULE}.requests.post")
+	def test_autocomplete_primary_types_override(self, mock_post, _cred, _err, mock_frappe, mock_cfg):
+		mock_post.return_value = _mock_response({"suggestions": []})
+		cache = MagicMock()
+		cache.get_value.return_value = None
+		mock_frappe.cache.return_value = cache
+		mock_cfg.side_effect = lambda service, key, default=None: (
+			"locality,country" if key == "places_autocomplete_primary_types" else default
+		)
+
+		google_places.handle_gplaces_autocomplete(input="test")
+		body = mock_post.call_args.kwargs["json"]
+		self.assertEqual(body["includedPrimaryTypes"], ["locality", "country"])
+
+
 class TestErrorEnvelope(unittest.TestCase):
 	@patch(f"{MODULE}.update_last_error")
 	@patch(f"{MODULE}.require_credential", return_value="test-key")
