@@ -5,7 +5,10 @@ import frappe
 
 def _add_index(doctype, fields, name, unique=False):
     try:
-        frappe.db.add_index(doctype, fields, name, unique=unique)
+        if unique:
+            frappe.db.add_unique(doctype, fields, name)
+        else:
+            frappe.db.add_index(doctype, fields, name)
     except Exception as error:
         # A previously deployed/manual index must not make migrate fail.
         if "Duplicate key name" not in str(error):
