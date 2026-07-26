@@ -26,7 +26,8 @@ class PermissionAwareToolRegistry:
         "Delete Multiple Documents": {"permission": "delete"},
         "Submit Document": {"permission": "submit"},
         "Cancel Document": {"permission": "cancel"},
-        "Attach File to Document": {"permission": "create"} 
+        "Attach File to Document": {"permission": "create"},
+        "Builder": {"permission": "write"}
     }
     
     MUTATING_TOOL_TYPES = {
@@ -35,7 +36,7 @@ class PermissionAwareToolRegistry:
         "Delete Document", "Delete Multiple Documents",
         "Submit Document", "Cancel Document",
         "Set Value", "POST", "Run Agent",
-        "Attach File to Document"
+        "Attach File to Document", "Builder"
     }
 
     @classmethod

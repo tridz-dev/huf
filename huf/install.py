@@ -66,6 +66,7 @@ def after_install():
     create_huf_roles()
     create_demo_ai_providers()
     create_demo_ai_models()
+    create_hub_orchestrator_agent()
     create_image_generation_tool()
     create_transcribe_audio_tool()
     create_generate_audio_tool()
@@ -140,6 +141,11 @@ def after_migrate():
 		_log_seed_results(results, seed_logger)
 	except Exception as e:
 		logger.warning(f"App seeding failed: {e!s}")
+
+	try:
+		create_hub_orchestrator_agent()
+	except Exception as e:
+		logger.warning(f"Failed to seed Hub Orchestrator agent after migrate: {e!s}")
 
 
 def _log_seed_results(results, logger):
@@ -273,6 +279,19 @@ def create_demo_ai_models():
             doc.flags.ignore_mandatory = True
             doc.flags.ignore_validate = True
             doc.insert(ignore_permissions=True)
+
+def create_hub_orchestrator_agent():
+	"""
+	Idempotent: seed the "Hub Orchestrator" system agent that powers hub chat.
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.ai.app_seeding.hub_orchestrator import create_hub_orchestrator_agent as _create
+
+	try:
+		_create()
+	except Exception as e:
+		logger.warning(f"Failed to seed Hub Orchestrator agent: {e!s}")
+
 
 def create_image_generation_tool():
     """Create the image generation tool in Agent Tool Function DocType."""

@@ -1,0 +1,16 @@
+GROUND FACTS (already verified — do not re-derive):
+- Repo: /Users/safwan/Code/HUF/huf on branch feat/design-simplified-hub-homepage-interface @ 4a28794d (develop merged; is_system + role fix landed).
+- Prior analysis: ongoing/hub-simple-analysis/HUB-SIMPLE-ANALYSIS.md (read first for context).
+- PERSONAS for this audit: (P1) "normal business user" — non-technical, wants an assistant that answers/does things; (P2) "functional consultant" — ERP/Frappe-savvy but NOT a developer; configures systems for clients, comfortable with forms and settings, allergic to code/JSON/API jargon.
+- READ-ONLY. DO NOT modify files. DO NOT push. This is a static, code-observable audit (you cannot run the app) — judge from routes, copy strings, required fields, defaults, empty states, and onboarding logic. Another agent audits the core builder flows — your lane is FIRST RUN and TIME-TO-VALUE only.
+
+TASKS:
+A1. FIRST-RUN SEQUENCE: reconstruct the exact journey from fresh install to first successful agent reply. Start: what does install.py seed (providers/models/tools, with or without API keys)? Then login → `/` (HubSimplePage). List every screen/decision/field the user must traverse to get ONE useful AI answer. Count the steps. Identify the first moment of value and everything standing before it.
+A2. BLOCKING WALLS: for each wall (no provider, no API key, no model, no Hub Orchestrator agent, streaming unavailable), what does the user actually see (quote the copy), and would P1/P2 know what to do next? Check HubSimplePage no-provider card, error fallbacks, /models page empty state, provider creation form (which fields are required, what jargon: "API key", "base URL", "LiteLLM format"?).
+A3. JARGON AUDIT (first-run surfaces only): collect user-facing strings on the hub, sidebar nav labels, /models, /providers pages. Flag terms a business user won't know: MCP, RAG, tokens, temperature, top_p, SSE, orchestrator, DocType, webhook, etc. file:line each.
+A4. DEFAULTS & SAFE PATHS: are there sensible defaults that shorten time-to-value (pre-selected provider brand, suggested model, demo agent)? Note the demo-assistant seed exists but is disabled AND not loaded (scanner skips huf app). What would the shortest realistic path to value be if defaults were fixed?
+A5. TIME-TO-VALUE ESTIMATE: estimate minutes-to-first-value for P1 and P2 today (state assumptions), and what it could be with the top 3 cheapest fixes.
+
+OUTPUT: write detailed findings to ongoing/hub-simple-analysis/06a-first-run.md organized by task ID with file:line refs and quoted copy.
+
+REPLY ONLY with: one line per task ID, top 3 findings one line each, <TTV today P1/P2 in minutes>, <verdict: SMOOTH|BUMPY|BLOCKED>.

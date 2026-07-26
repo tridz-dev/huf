@@ -1,0 +1,17 @@
+GROUND FACTS (already verified — do not re-derive):
+- Repo: /Users/safwan/Code/HUF/huf on branch feat/design-simplified-hub-homepage-interface @ 4a28794d.
+- Prior analysis: ongoing/hub-simple-analysis/HUB-SIMPLE-ANALYSIS.md (read first).
+- PERSONAS: (P1) normal business user — non-technical; (P2) functional consultant — ERP-savvy, no code. Audit intuitiveness of the CORE FLOWS for these personas.
+- READ-ONLY. DO NOT modify files. DO NOT push. Static code-observable audit. Another agent covers first-run/onboarding — your lane is the core product flows and information architecture.
+
+TASKS:
+W1. IA / NAVIGATION: list the sidebar nav + hub slash commands + routes as a business user sees them (labels, order, icons). Which labels are developer-framed (MCP Servers, Executions, Console, DocTypes)? Is there a coherent mental model (Agents vs Flows vs Chat vs Data — would P1 know where to go to "make the AI answer invoice questions")?
+W2. AGENT CREATION FLOW (P2's core job): walk the /agents/:id form tab by tab (General, Behavior, Triggers, Tools, Advanced, Knowledge, Permissions — read the tab components). For each tab: required fields, jargon (temperature, top_p, max turns, context strategy, prompt mode), defaults, and whether a functional consultant could configure an agent without docs. Count minimum required decisions to create a working chat agent.
+W3. TOOLS & TRIGGERS: how intimidating is adding a tool (CRUD/HTTP/custom function forms — are code/JSON editors exposed to P2?) and a trigger (doc events named like backend hooks: after_insert, on_submit?). Any plain-language framing or is it raw Frappe vocabulary?
+W4. CHAT & RESULTS: from /chat and executions pages — can P1 understand what happened after a run (status labels, token/cost display, error copy)? Is Agent Run / Execution language human?
+W5. FLOWS BUILDER: FlowCanvas + node modals — could P2 build a simple approval flow? What concepts leak (edges, expressions, orchestrator JSON)?
+W6. TOP FRICTION RANKING: rank the 10 highest-friction moments for the two personas across all the above, each with file:line evidence and a one-line cheapest-fix.
+
+OUTPUT: write detailed findings to ongoing/hub-simple-analysis/06b-flows-intuitiveness.md organized by task ID with file:line refs and quoted copy.
+
+REPLY ONLY with: one line per task ID, top 3 findings one line each, <verdict: INTUITIVE|MIXED|EXPERT-ONLY>.

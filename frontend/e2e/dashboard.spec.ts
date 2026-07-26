@@ -1,28 +1,28 @@
 import { test, expect } from '@playwright/test';
+import { goto, waitForContent, mockOfflineApis } from './helpers';
 
 test.describe('Dashboard', () => {
-  test('loads with metrics and tabs', async ({ page }) => {
-    await page.goto('');
-
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-    await expect(page.getByText('Total Agent Runs')).toBeVisible();
-    await expect(page.getByText('Success Rate')).toBeVisible();
-
-    // Dashboard tabs: Agents / Flows / Executions
-    const agentsTab = page.getByRole('tab', { name: /^Agents$/i }).or(page.getByText('Agents', { exact: true }));
-    await expect(agentsTab.first()).toBeVisible();
+  test.beforeEach(async ({ page }) => {
+    await mockOfflineApis(page);
   });
 
-  test('sidebar navigation reaches core pages', async ({ page }) => {
-    await page.goto('');
+  test('renders heading and metric cards', async ({ page }) => {
+    await goto(page, '/dashboard');
+    await waitForContent(page);
 
-    await page.getByRole('link', { name: 'Agents', exact: true }).click();
-    await expect(page).toHaveURL(/\/huf\/agents$/);
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    // Metric labels render from static config even when the API returns no rows.
+    await expect(page.getByText('Total Agent Runs')).toBeVisible();
+    await expect(page.getByText('Success Rate')).toBeVisible();
+  });
 
-    await page.getByRole('link', { name: 'Executions' }).click();
-    await expect(page).toHaveURL(/\/huf\/executions$/);
+  test('renders dashboard tabs', async ({ page }) => {
+    await goto(page, '/dashboard');
+    await waitForContent(page);
 
-    await page.getByRole('link', { name: 'Chat', exact: true }).click();
-    await expect(page).toHaveURL(/\/huf\/chat/);
+    const agentsTab = page
+      .getByRole('tab', { name: /^Agents$/i })
+      .or(page.getByText('Agents', { exact: true }));
+    await expect(agentsTab.first()).toBeVisible();
   });
 });

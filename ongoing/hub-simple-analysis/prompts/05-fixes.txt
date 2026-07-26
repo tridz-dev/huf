@@ -1,0 +1,28 @@
+GROUND FACTS (already verified — do not re-derive):
+- Repo: /Users/safwan/Code/HUF/huf on branch feat/design-simplified-hub-homepage-interface @ 4740f801 (develop merged).
+- Analysis context: ongoing/hub-simple-analysis/HUB-SIMPLE-ANALYSIS.md and 02a/02b recon files — READ FIRST (at least the "role" and "system agent" sections).
+- Backend facts: Agent doctype at huf/huf/doctype/agent/agent.json (+agent.py) has allow_rename: 1 and no is_system field. huf/permissions.py get_me returns huf_role and capabilities; there is NO 'system.admin' capability. Frontend role bug: frontend/src/pages/HubSimplePage.tsx lines ~71-73 uses capabilities.includes('system.admin').
+- DO NOT push. Local commits only. Follow repo conventions (Python: tabs, ruff, frappe patterns; TS: strict, existing patterns).
+
+TASKS:
+T1. IS_SYSTEM FIELD ON AGENT:
+  - Add `is_system` (Check, default 0, read_only: 1, hidden: 1) to agent.json. Hidden in the form for everyone; it is set only by seeding/code. Place it near source_app/source_file provenance fields.
+  - Controller guards in agent.py:
+    a) on_trash: if is_system, frappe.throw(_("System agents cannot be deleted.")) — unless frappe.flags.in_install/in_migrate/in_uninstall.
+    b) before_rename (or autoname-safe equivalent): block rename of is_system agents with a clear throw.
+    c) validate: block setting disabled=1 on a system agent by a normal user? NO — allow disable (admins may need it), only block delete/rename. Also prevent users from flipping is_system via API: in validate, if not new and is_system changed and not frappe.flags.in_seeding/in_install/in_migrate and "System Manager" not in frappe.get_roles(), reset/throw.
+  - Update huf/ai/app_seeding/loaders.py upsert_agent so agent seeds can set is_system (pass-through field; ensure _upsert_doc doesn't strip it).
+T2. FIX HUB ROLE DETECTION:
+  - In HubSimplePage.tsx, derive the persona from the real `huf_role` returned by get_me (exposed via PermissionsContext / permissionsApi — check the actual shape). Mapping: Huf Admin (and System Manager) -> 'admin', Huf Manager -> 'builder', Huf User -> 'builder', Huf Viewer -> 'viewer'. Remove the dead 'operator' branch and its greeting/prompt entries, and remove the capabilities.includes('system.admin') check.
+  - If PermissionsContext does not currently expose huf_role, extend it minimally (get_me already returns it — verify in huf/permissions.py and frontend/src/services/permissionsApi.ts).
+T3. TESTS/GATES:
+  - Backend: if a test file exists for Agent (huf/huf/doctype/agent/test_agent.py), add minimal tests for delete/rename guards if the test harness pattern supports it cheaply; if no site is available to run bench tests, note that they were not run.
+  - Frontend: cd frontend && yarn typecheck && yarn lint — both must pass with no NEW failures.
+  - git grep sanity: no remaining 'system.admin' reference in frontend/src.
+T4. COMMIT: one commit per concern is fine or a single commit:
+  "feat(agent): add is_system protection; fix hub role detection" ending with:
+  Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+
+OUTPUT: write detailed log to ongoing/hub-simple-analysis/05-fixes.md (what changed, file:line, gate results, anything uncertain).
+
+REPLY ONLY with: <HEAD SHA>, <typecheck pass/fail>, <lint pass/fail>, <backend tests run: yes/no>, <verdict: CLEAN|NEEDS-ATTENTION>.

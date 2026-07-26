@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { AppSidebar } from '../components/app-sidebar';
 import { UnifiedHeader } from './UnifiedHeader';
 import {
@@ -23,8 +23,11 @@ interface UnifiedLayoutProps {
 }
 
 export function UnifiedLayout({ children, hideHeader, headerActions, breadcrumbs }: UnifiedLayoutProps) {
+  const location = useLocation();
+  const defaultOpen = location.pathname !== '/';
+
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={defaultOpen}>
       <AppSidebar />
       <SidebarInset className="h-svh max-h-svh overflow-hidden">
         {!hideHeader && (

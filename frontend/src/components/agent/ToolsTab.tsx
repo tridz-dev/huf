@@ -23,6 +23,8 @@ interface ToolsTabProps {
   onToggleMCP?: (serverId: string, enabled: boolean) => void;
   onSyncMCP?: (serverId: string) => void;
   mcpLoading?: boolean;
+  /** True when tool attach/detach must be read-only (system agent + non-admin). */
+  locked?: boolean;
 }
 
 export function ToolsTab({
@@ -36,6 +38,7 @@ export function ToolsTab({
   onToggleMCP,
   onSyncMCP,
   mcpLoading = false,
+  locked = false,
 }: ToolsTabProps) {
   const [toolUsageMap, setToolUsageMap] = useState<Map<string, string[]>>(new Map());
 
@@ -128,7 +131,7 @@ export function ToolsTab({
               </CardTitle>
               <CardDescription>The set of tools this agent is allowed to use to interact with the system.</CardDescription>
             </div>
-            <Button size="sm" variant="outline" onClick={onAddTools} type="button">
+            <Button size="sm" variant="outline" onClick={onAddTools} type="button" disabled={locked}>
               <Plus className="w-4 h-4 mr-2" />
               Add Tool
             </Button>
@@ -139,7 +142,7 @@ export function ToolsTab({
             <div className="text-center py-12 border border-dashed rounded-none bg-paper-deep/20">
               <p className="font-body text-steel-soft mb-2">No tools configured yet.</p>
               <p className="text-xs font-body text-steel-soft mb-4">Add tools to let this agent query data, run APIs, or call other agents.</p>
-              <Button onClick={onAddTools} variant="outline" type="button">
+              <Button onClick={onAddTools} variant="outline" type="button" disabled={locked}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Tool
               </Button>
@@ -192,7 +195,8 @@ export function ToolsTab({
                         variant="ghost"
                         size="sm"
                         onClick={() => onRemoveTool(tool.name)}
-                        title="Remove tool"
+                        disabled={locked}
+                        title={locked ? 'System agent tools are locked' : 'Remove tool'}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
