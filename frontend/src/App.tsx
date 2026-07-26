@@ -65,7 +65,9 @@ const IntegrationServiceFormPageWrapper = lazy(
   () => import('./pages/IntegrationServiceFormPageWrapper'),
 );
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
-const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
+// TODO(#473-followup): Gateways page is kept in source but unlinked from routes
+// while the feature is incomplete. See docs/gateway-todo.md.
+// const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 
 import { useEffect } from 'react';
@@ -487,7 +489,9 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route
+          {/* TODO(#473-followup): Gateways route is disabled while the feature is
+              incomplete. Restore once docs/gateway-todo.md items are resolved. */}
+          {/* <Route
             path="/gateways"
             element={
               <ProtectedRoute>
@@ -498,7 +502,7 @@ function AppShell() {
                 </UnifiedLayout>
               </ProtectedRoute>
             }
-          />
+          /> */}
           <Route
             path="/integration-services"
             element={

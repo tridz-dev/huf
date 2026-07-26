@@ -155,12 +155,15 @@ const settingsNavItems = [
     icon: Terminal,
     capability: "agent.use",
   },
-  {
-    title: "Gateways",
-    url: "/gateways",
-    icon: MessageSquare,
-    capability: "system.integrations.manage",
-  },
+  // TODO(#473-followup): Gateways navigation is hidden while the feature is
+  // incomplete (no live provider adapters, no in-app connection form). Restore
+  // once the items in docs/gateway-todo.md are resolved.
+  // {
+  //   title: "Gateways",
+  //   url: "/gateways",
+  //   icon: MessageSquare,
+  //   capability: "system.integrations.manage",
+  // },
   {
     title: "Integrations",
     url: "/integrations",

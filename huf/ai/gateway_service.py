@@ -262,6 +262,9 @@ def process_gateway_event(event_name: str) -> dict:
         if event.target_type == "Flow":
             from huf.ai.flow_engine import create_flow_run
 
+            # TODO(#473-followup): Gateway trigger_type is temporarily removed from
+            # Flow Run options because the feature is incomplete. Re-enable once
+            # docs/gateway-todo.md checklist is done and adapters are live.
             flow_run = create_flow_run(
                 flow_id=event.target_flow,
                 payload={"gateway_event": event.name, "message": event.message_text},
