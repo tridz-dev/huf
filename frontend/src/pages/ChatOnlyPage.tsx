@@ -4,6 +4,7 @@ import { ChatMessageList } from "@/components/chat/ChatMessageList";
 import { ChatAgentSelector } from "@/components/chat-only/ChatAgentSelector";
 import { ChatOnlyLayout } from "@/components/chat-only/ChatOnlyLayout";
 import { getChatAgents, type ChatAgentItem } from "@/services/agentApi";
+import { getConversationsByAgent } from "@/services/chatApi";
 
 export default function ChatOnlyPage() {
   const navigate = useNavigate();
@@ -15,6 +16,9 @@ export default function ChatOnlyPage() {
   const [agents, setAgents] = useState<ChatAgentItem[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(true);
   const [agentsError, setAgentsError] = useState<string | null>(null);
+  // Map of agent name -> latest conversation id, used for "Continue last chat"
+  // on the multi-agent landing. Loaded lazily after agents resolve.
+  const [resumeChats, setResumeChats] = useState<Record<string, string>>({});
 
   // When exactly one chat agent exists, treat it as selected immediately so
   // single-agent users land straight in chat without a selector flash; the
@@ -58,6 +62,42 @@ export default function ChatOnlyPage() {
     setSearchParams({ agent: agents[0].name }, { replace: true });
   }, [agents, chatId, loadingAgents, selectedAgent, setSearchParams]);
 
+  // Fetch the latest conversation per agent so the landing can offer
+  // "Continue last chat". Only worth the extra calls when there is a
+  // multi-agent landing to show; failures just leave the action hidden.
+  useEffect(() => {
+    if (loadingAgents || agents.length < 2) {
+      setResumeChats({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadResumeChats() {
+      const entries = await Promise.all(
+        agents.map(async (agent) => {
+          const response = await getConversationsByAgent(agent.name, { limit: 1 });
+          const latestId = response.data[0]?.id;
+          return latestId ? ([agent.name, latestId] as const) : null;
+        })
+      );
+
+      if (!cancelled) {
+        setResumeChats(
+          Object.fromEntries(
+            entries.filter((entry): entry is readonly [string, string] => entry !== null)
+          )
+        );
+      }
+    }
+
+    loadResumeChats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agents, loadingAgents]);
+
   const currentAgent = useMemo(
     () => agents.find((agent) => agent.name === effectiveAgent),
     [agents, effectiveAgent]
@@ -85,17 +125,20 @@ export default function ChatOnlyPage() {
   const shouldShowSelector = !chatId && (!effectiveAgent || (!loadingAgents && !currentAgent));
 
   return (
-    <ChatOnlyLayout agentLabel={currentAgent?.agent_name}>
+    <ChatOnlyLayout agents={agents} currentAgentName={effectiveAgent}>
       {shouldShowSelector ? (
         <ChatAgentSelector
           agents={agents}
           loading={loadingAgents}
           error={agentsError}
           onSelectAgent={handleSelectAgent}
+          resumeChats={resumeChats}
+          onResumeChat={handleConversationCreated}
         />
       ) : (
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           <ChatMessageList
+            key={chatId ?? effectiveAgent}
             chatId={chatId}
             onConversationCreated={handleConversationCreated}
             getNewConversationPath={getNewConversationPath}

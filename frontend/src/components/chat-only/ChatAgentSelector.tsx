@@ -1,9 +1,11 @@
-import { Bot, MessageSquarePlus } from "lucide-react";
+import { Bot, History, MessageSquarePlus } from "lucide-react";
 import type { ReactNode } from "react";
+import { useUser } from "@/contexts/UserContext";
 import ChatAvatar from "@/components/chat/ChatAvatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
+import { getFirstName } from "@/utils/getFirstName";
 import { getInitials } from "@/utils/getInitials";
 import type { ChatAgentItem } from "@/services/agentApi";
 
@@ -12,6 +14,9 @@ interface ChatAgentSelectorProps {
   loading: boolean;
   error?: string | null;
   onSelectAgent: (agentName: string) => void;
+  /** Map of agent name -> latest conversation id, for "Continue last chat". */
+  resumeChats?: Record<string, string>;
+  onResumeChat?: (chatId: string) => void;
 }
 
 export function ChatAgentSelector({
@@ -19,7 +24,12 @@ export function ChatAgentSelector({
   loading,
   error,
   onSelectAgent,
+  resumeChats = {},
+  onResumeChat,
 }: ChatAgentSelectorProps) {
+  const { user } = useUser();
+  const firstName = getFirstName(user?.full_name || user?.name);
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center px-5">
@@ -64,38 +74,60 @@ export function ChatAgentSelector({
           <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
             <MessageSquarePlus className="size-5" />
           </div>
-          <h1 className="text-xl font-semibold text-zinc-950">Choose an assistant</h1>
+          <h1 className="text-xl font-semibold text-zinc-950">
+            {firstName ? `Hi ${firstName}, choose an assistant` : "Choose an assistant"}
+          </h1>
           <p className="text-sm text-zinc-500">Start a focused chat with one of your available Huf agents.</p>
         </div>
 
         <div className="space-y-2">
-          {agents.map((agent) => (
-            <Button
-              key={agent.name}
-              type="button"
-              variant="outline"
-              className="h-auto w-full justify-start gap-3 rounded-xl px-4 py-3 text-left"
-              onClick={() => onSelectAgent(agent.name)}
-            >
-              <ChatAvatar variant="listing_ai" color={agent.agent_color || DEFAULT_AGENT_COLOR}>
-                {getInitials(agent.agent_name || agent.name)}
-              </ChatAvatar>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-zinc-900">
-                  {agent.agent_name || agent.name}
-                </span>
-                {agent.description ? (
-                  <span className="block truncate text-xs font-normal text-zinc-500">
-                    {agent.description}
+          {agents.map((agent) => {
+            const resumeChatId = resumeChats[agent.name];
+            return (
+              <div
+                key={agent.name}
+                className="flex items-center gap-1 rounded-xl border border-input bg-background pr-1 shadow-sm"
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto min-w-0 flex-1 justify-start gap-3 rounded-xl px-4 py-3 text-left"
+                  onClick={() => onSelectAgent(agent.name)}
+                >
+                  <ChatAvatar variant="listing_ai" color={agent.agent_color || DEFAULT_AGENT_COLOR}>
+                    {getInitials(agent.agent_name || agent.name)}
+                  </ChatAvatar>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-zinc-900">
+                      {agent.agent_name || agent.name}
+                    </span>
+                    {agent.description ? (
+                      <span className="block truncate text-xs font-normal text-zinc-500">
+                        {agent.description}
+                      </span>
+                    ) : (
+                      <span className="block truncate text-xs font-normal text-zinc-500">
+                        {agent.model || "Chat agent"}
+                      </span>
+                    )}
                   </span>
-                ) : (
-                  <span className="block truncate text-xs font-normal text-zinc-500">
-                    {agent.model || "Chat agent"}
-                  </span>
+                </Button>
+                {resumeChatId && onResumeChat && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 gap-1.5 text-xs text-zinc-500 hover:text-zinc-900"
+                    onClick={() => onResumeChat(resumeChatId)}
+                  >
+                    <History className="size-3.5" />
+                    <span className="hidden sm:inline">Continue last chat</span>
+                    <span className="sm:hidden">Continue</span>
+                  </Button>
                 )}
-              </span>
-            </Button>
-          ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

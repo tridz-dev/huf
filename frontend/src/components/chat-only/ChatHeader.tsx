@@ -1,6 +1,8 @@
-import { ChevronsUpDown, LogOut, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, LayoutGrid, LogOut, Zap } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useUser } from "@/contexts/UserContext";
 import UserAvatar from "@/components/UserAvatar";
+import ChatAvatar from "@/components/chat/ChatAvatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,15 +12,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DEFAULT_AGENT_COLOR } from "@/data/color";
+import { getInitials } from "@/utils/getInitials";
+import type { ChatAgentItem } from "@/services/agentApi";
 
 interface ChatHeaderProps {
-  agentLabel?: string;
+  agents?: ChatAgentItem[];
+  currentAgentName?: string;
 }
 
-export function ChatHeader({ agentLabel }: ChatHeaderProps) {
+export function ChatHeader({ agents = [], currentAgentName }: ChatHeaderProps) {
   const { logout, user } = useUser();
+  const navigate = useNavigate();
   const displayName = user?.full_name || user?.name || "User";
   const displayEmail = user?.email || "";
+
+  const currentAgent = agents.find((agent) => agent.name === currentAgentName);
+  const agentLabel = currentAgent?.agent_name || currentAgent?.name;
+  const showAgentSwitcher = agents.length > 1 && !!currentAgent;
+
+  const openAgentChat = (agentName: string) => {
+    navigate(`/ui/chat?agent=${encodeURIComponent(agentName)}`);
+  };
 
   return (
     <header className="h-14 shrink-0 border-b border-zinc-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/75">
@@ -30,10 +45,60 @@ export function ChatHeader({ agentLabel }: ChatHeaderProps) {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-semibold text-zinc-950">HufAI</span>
-              {agentLabel && (
-                <span className="hidden max-w-[180px] truncate rounded-full border border-zinc-200 px-2 py-0.5 text-xs text-zinc-600 sm:inline">
-                  {agentLabel}
-                </span>
+              {showAgentSwitcher ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex min-h-11 min-w-0 max-w-[140px] items-center gap-1 truncate rounded-full border border-zinc-200 px-3 text-xs text-zinc-600 transition-colors hover:bg-zinc-100 sm:max-w-[200px]"
+                    >
+                      <span className="truncate">{agentLabel}</span>
+                      <ChevronDown className="size-3.5 shrink-0 text-zinc-400" />
+                      <span className="sr-only">Switch assistant</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-64">
+                    <DropdownMenuLabel className="text-xs font-normal text-zinc-500">
+                      Assistants
+                    </DropdownMenuLabel>
+                    {agents.map((agent) => (
+                      <DropdownMenuItem
+                        key={agent.name}
+                        onClick={() => openAgentChat(agent.name)}
+                        className="gap-2"
+                      >
+                        <ChatAvatar
+                          variant="listing_ai"
+                          color={agent.agent_color || DEFAULT_AGENT_COLOR}
+                        >
+                          {getInitials(agent.agent_name || agent.name)}
+                        </ChatAvatar>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm">
+                            {agent.agent_name || agent.name}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {agent.description || agent.model || "Chat agent"}
+                          </span>
+                        </span>
+                        {agent.name === currentAgentName && (
+                          <Check className="size-4 shrink-0 text-primary" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate("/ui/chat")}>
+                      <LayoutGrid className="mr-2 size-4" />
+                      All assistants
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                agentLabel && (
+                  <span className="hidden max-w-[180px] truncate rounded-full border border-zinc-200 px-2 py-0.5 text-xs text-zinc-600 sm:inline">
+                    {agentLabel}
+                  </span>
+                )
               )}
             </div>
             <p className="truncate text-xs text-zinc-500">Chat</p>
