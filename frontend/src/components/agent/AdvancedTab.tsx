@@ -45,6 +45,12 @@ export interface SSHConnectionOption {
 	description?: string;
 }
 
+export interface MemoryPolicyOption {
+	value: string;
+	label: string;
+	description?: string;
+}
+
 interface AdvancedTabProps {
 	form: UseFormReturn<AgentFormValues>;
 	allModels: AIModel[];
@@ -54,6 +60,8 @@ interface AdvancedTabProps {
 	loadingExecutionProfiles?: boolean;
 	sshConnectionOptions?: SSHConnectionOption[];
 	loadingSSHConnections?: boolean;
+	memoryPolicyOptions?: MemoryPolicyOption[];
+	loadingMemoryPolicies?: boolean;
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
@@ -93,6 +101,8 @@ export function AdvancedTab({
 	loadingExecutionProfiles = false,
 	sshConnectionOptions = [],
 	loadingSSHConnections = false,
+	memoryPolicyOptions = [],
+	loadingMemoryPolicies = false,
 }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
 	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
@@ -100,6 +110,7 @@ export function AdvancedTab({
 	const contextStrategy = form.watch('context_strategy');
 	const summaryPromptMode = form.watch('summary_prompt_mode');
 	const enableConversationData = form.watch('enable_conversation_data');
+	const enableMemory = form.watch('enable_memory');
 	const navigate = useNavigate();
 	const location = useLocation();
 	const selectedSummaryPrompt = summaryPromptOptions.find(
@@ -115,6 +126,10 @@ export function AdvancedTab({
 	const executionProfileComboboxOptions = executionProfileOptions.map((option) => ({
 		...option,
 		subtitle: option.approvalMode ? `Approval: ${option.approvalMode}` : undefined,
+	}));
+	const memoryPolicyComboboxOptions = memoryPolicyOptions.map((option) => ({
+		value: option.value,
+		label: option.label,
 	}));
 	const sshConnectionMultiSelectOptions = sshConnectionOptions.map((option) => ({
 		value: option.value,
@@ -561,6 +576,97 @@ export function AdvancedTab({
 						</FormItem>
 					)}
 				/>
+			</FormSettingsSection>
+
+			<FormSettingsSection
+				title="Memory Settings"
+				description="Enable long-term, scoped memory for this agent and configure memory policies and automated memory tools."
+			>
+				<FormField
+					control={form.control}
+					name="enable_memory"
+					render={({ field }) => (
+						<FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+							<div className="space-y-0.5 pr-4">
+								<FormLabel className="text-base">Enable Memory</FormLabel>
+								<FormDescription>
+									Enable long-term, scoped memory for this agent.
+								</FormDescription>
+							</div>
+							<FormControl>
+								<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+							</FormControl>
+						</FormItem>
+					)}
+				/>
+
+				{enableMemory && (
+					<>
+						<FormField
+							control={form.control}
+							name="memory_policy"
+							render={({ field }) => (
+								<FormItem className="sm:col-span-2">
+									<FormLabel>Memory Policy</FormLabel>
+									<FormControl>
+										<Combobox
+											options={memoryPolicyComboboxOptions}
+											value={field.value}
+											onValueChange={(v) => field.onChange(v || undefined)}
+											placeholder={loadingMemoryPolicies ? 'Loading policies...' : 'Select a Memory Policy'}
+											disabled={loadingMemoryPolicies}
+											searchPlaceholder="Search memory policies..."
+											emptyText="No enabled Memory Policies found."
+											linkTo={linkRoutes.memoryPolicy}
+										/>
+									</FormControl>
+									<FormDescription>
+										Policy governing memory capture and retrieval.
+									</FormDescription>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+
+						<div className="grid gap-6 sm:grid-cols-2 sm:col-span-2">
+							<FormField
+								control={form.control}
+								name="enable_memory_search_tool"
+								render={({ field }) => (
+									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+										<div className="space-y-0.5 pr-4">
+											<FormLabel className="text-base">Enable Memory Search Tool</FormLabel>
+											<FormDescription>
+												Automatically provide the agent with a tool to search memory records.
+											</FormDescription>
+										</div>
+										<FormControl>
+											<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+										</FormControl>
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={form.control}
+								name="enable_memory_write_tool"
+								render={({ field }) => (
+									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+										<div className="space-y-0.5 pr-4">
+											<FormLabel className="text-base">Enable Memory Write Tool</FormLabel>
+											<FormDescription>
+												Automatically provide the agent with a tool to save new memory records.
+											</FormDescription>
+										</div>
+										<FormControl>
+											<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+										</FormControl>
+									</FormItem>
+								)}
+							/>
+						</div>
+					</>
+				)}
 			</FormSettingsSection>
 
 			<FormSettingsSection

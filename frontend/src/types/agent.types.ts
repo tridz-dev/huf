@@ -288,6 +288,10 @@ export interface AgentDoc {
   inject_conversation_data?: number; // 0 or 1
   conversation_data_api_permission?: '' | 'Read' | 'Write';
   autonaming_of_conversation_title?: number; // 0 or 1
+  enable_memory?: number; // 0 or 1
+  memory_policy?: string | null;
+  enable_memory_search_tool?: number; // 0 or 1
+  enable_memory_write_tool?: number; // 0 or 1
 
   // Advanced model overrides
   image_generation_model?: string | null;
