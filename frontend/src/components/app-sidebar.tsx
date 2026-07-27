@@ -154,7 +154,19 @@ const settingsNavItems = [
 		url: "/summary-prompts",
 		icon: ScrollText,
 		capability: "agent.use",
-  },
+	},
+	{
+		title: "Execution Profiles",
+		url: "/execution-profiles",
+		icon: Shield,
+		capability: "agent.use",
+	},
+	{
+		title: "SSH Connections",
+		url: "/ssh-connections",
+		icon: Terminal,
+		capability: "agent.use",
+	},
   {
     title: "Console",
     url: "/console",
