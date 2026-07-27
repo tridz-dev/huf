@@ -164,12 +164,17 @@ export function AgentFormPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const isNew = id === 'new';
-  const { hufRole } = usePermissions();
+  const { hufRole, hasCapability } = usePermissions();
   // Backend maps Administrator / System Manager to the "Huf Admin" Huf role.
   const isAdmin = hufRole === 'Huf Admin';
   const [isSystemAgent, setIsSystemAgent] = useState(false);
   // System agents are locked: protected fields are read-only for non-admins.
   const systemLocked = isSystemAgent && !isAdmin;
+  // Mirrors the backend's Agent.has_permission() capability checks (agent.py) —
+  // without this, the UI would offer Save/Duplicate/Delete to users the server
+  // will reject, so they only find out after submitting.
+  const canManageAgent = hasCapability(isNew ? 'agent.create' : 'agent.edit');
+  const permissionLocked = !canManageAgent;
   const [pendingSelectedPrompt, setPendingSelectedPrompt] = useState<string | null>(null);
   const [pendingSelectedPromptField, setPendingSelectedPromptField] = useState<string | null>(null);
   const [pendingScrollToPromptField, setPendingScrollToPromptField] = useState(false);
@@ -492,7 +497,7 @@ export function AgentFormPage() {
     });
   }, [agentSkills, initialAgentSkills, isNew]);
 
-  const showSaveButton = isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged;
+  const showSaveButton = canManageAgent && (isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged);
 
   // Deliberately excludes `isNew` (unlike showSaveButton) - a blank new-agent form
   // has nothing to lose, so it shouldn't block navigation until the user actually changes something.
@@ -556,26 +561,49 @@ export function AgentFormPage() {
     }
   }, [showTriggerModal, docTypes.length, loadingDocTypes]);
 
-  // Load providers, models, and tool types on mount
+  // Load providers, models, and tool types on mount.
+  // Each lookup is independent (a Huf User, for instance, can't list Users/Roles)
+  // so a denied/failed one must not blank fields that loaded fine — hence
+  // allSettled with a per-field fallback instead of Promise.all + one catch.
   useEffect(() => {
-    Promise.all([
+    const labels = ['providers', 'models', 'tool types', 'skill options', 'users', 'roles'];
+    Promise.allSettled([
       getProviders(),
       getModels(),
       getToolTypes(),
       getSkillOptions(),
       db.getDocList('User', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
       db.getDocList('Role', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
-    ]).then(([providersData, modelsData, toolTypesData, skillOptionsData, usersData, rolesData]) => {
-      setProviders(providersData as AIProvider[]);
-      const modelsArray: AIModel[] = Array.isArray(modelsData) ? modelsData : (modelsData as { items: AIModel[] }).items;
-      setAllModels(modelsArray);
-      setToolTypes(toolTypesData);
-      setSkillOptions((skillOptionsData || []) as { value: string; label: string; subtitle?: string }[]);
-      setUsers(usersData as Array<{ name: string }>);
-      setRoles((rolesData as Array<{ name: string }>).filter((role) => role.name !== 'Guest'));
-    }).catch((error) => {
-      console.error('Error loading providers/models/types:', error);
-      toast.error('Failed to load providers and models');
+    ]).then(([providersResult, modelsResult, toolTypesResult, skillOptionsResult, usersResult, rolesResult]) => {
+      const results = [providersResult, modelsResult, toolTypesResult, skillOptionsResult, usersResult, rolesResult];
+      results.forEach((result, i) => {
+        if (result.status === 'rejected') {
+          console.error(`Error loading ${labels[i]}:`, result.reason);
+          toast.error(`Failed to load ${labels[i]}`);
+        }
+      });
+
+      if (providersResult.status === 'fulfilled') {
+        setProviders(providersResult.value as AIProvider[]);
+      }
+      if (modelsResult.status === 'fulfilled') {
+        const modelsArray: AIModel[] = Array.isArray(modelsResult.value)
+          ? modelsResult.value
+          : (modelsResult.value as { items: AIModel[] }).items;
+        setAllModels(modelsArray);
+      }
+      if (toolTypesResult.status === 'fulfilled') {
+        setToolTypes(toolTypesResult.value);
+      }
+      if (skillOptionsResult.status === 'fulfilled') {
+        setSkillOptions((skillOptionsResult.value || []) as { value: string; label: string; subtitle?: string }[]);
+      }
+      if (usersResult.status === 'fulfilled') {
+        setUsers(usersResult.value as Array<{ name: string }>);
+      }
+      if (rolesResult.status === 'fulfilled') {
+        setRoles((rolesResult.value as Array<{ name: string }>).filter((role) => role.name !== 'Guest'));
+      }
     });
   }, []);
 
@@ -2001,6 +2029,17 @@ export function AgentFormPage() {
             </AlertDescription>
           </Alert>
         )}
+        {permissionLocked && (
+          <Alert>
+            <Lock className="h-4 w-4" />
+            <AlertTitle>Read-only</AlertTitle>
+            <AlertDescription>
+              {isNew
+                ? "You don't have permission to create agents. Contact a Huf Admin or Manager for access."
+                : "You don't have permission to edit this agent. You can use it, but changes won't be saved."}
+            </AlertDescription>
+          </Alert>
+        )}
         <AgentHeader
           form={form}
           watchDisabled={watchDisabled}
@@ -2009,7 +2048,7 @@ export function AgentFormPage() {
           activeTriggerCount={activeTriggerCount}
           isNew={isNew}
           isSystem={isSystemAgent}
-          locked={systemLocked}
+          locked={systemLocked || permissionLocked}
           showSaveButton={showSaveButton}
           saving={saving}
           runningTest={runningTest}
