@@ -67,6 +67,13 @@ def _run_subprocess(cmd, timeout=DEFAULT_TIMEOUT_SECONDS):
             "output": e.stdout or "",
             "stderr": e.stderr or "",
         }
+    except FileNotFoundError:
+        return {
+            "success": False,
+            "error": "Docker CLI is not installed or not on PATH. Install docker-cli in the Huf runtime or use ssh_connection for a remote Docker host.",
+            "output": "",
+            "stderr": "",
+        }
 
 def _run_via_ssh_connection(ssh_connection, cmd_str, timeout=DEFAULT_TIMEOUT_SECONDS):
     from huf.ai.tools.ssh_execution import _connect_transport, _run_exec_over_transport

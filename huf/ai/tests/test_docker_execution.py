@@ -20,6 +20,12 @@ class TestDockerExecution(unittest.TestCase):
         mock_run.return_value = {"success": True, "output": "", "stderr": ""}
         handle_action(action="list_containers", timeout_seconds=9999)
         self.assertEqual(mock_run.call_args.kwargs["timeout"], 300)
+
+    @patch("huf.ai.tools.docker_execution.subprocess.run", side_effect=FileNotFoundError)
+    def test_missing_docker_cli_is_actionable(self, mock_run):
+        result = handle_action(action="list_containers")
+        self.assertFalse(result["success"])
+        self.assertIn("Docker CLI is not installed", result["error"])
     
     @patch("huf.ai.tools.docker_execution._run_subprocess")
     def test_list_containers_local(self, mock_run):
