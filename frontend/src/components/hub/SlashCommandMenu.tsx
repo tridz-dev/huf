@@ -23,9 +23,11 @@ interface SlashCommandMenuProps {
   isVisible: boolean;
   query: string;
   onSelect: (command: string) => void;
+  /** Which side of the input to open on. 'below' suits a centred composer, 'above' a bottom-docked one. */
+  placement?: 'below' | 'above';
 }
 
-export function SlashCommandMenu({ isVisible, query, onSelect }: SlashCommandMenuProps) {
+export function SlashCommandMenu({ isVisible, query, onSelect, placement = 'below' }: SlashCommandMenuProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -55,11 +57,13 @@ export function SlashCommandMenu({ isVisible, query, onSelect }: SlashCommandMen
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, y: -4 }}
+        initial={{ opacity: 0, y: placement === 'below' ? -4 : 4 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.1 }}
-        className="absolute left-0 right-0 top-full mt-1 bg-panel rounded border border-line shadow-xl overflow-hidden z-50"
+        className={`absolute left-0 right-0 bg-panel rounded border border-line shadow-xl overflow-hidden z-50 ${
+          placement === 'below' ? 'top-full mt-1' : 'bottom-full mb-1'
+        }`}
         style={{ maxHeight: 320 }}
       >
         <div className="overflow-y-auto py-1" style={{ maxHeight: 280 }}>
