@@ -294,11 +294,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <SidebarMenuButton
                 tooltip="Keyboard shortcuts"
                 onClick={() => setShortcutsHelpOpen(true)}
-                className="group-data-[collapsible=icon]:justify-center"
+                className="group/shortcut-hint group-data-[collapsible=icon]:justify-center"
               >
                 <Keyboard strokeWidth={1.6} />
                 <span className="font-body text-[13.5px] flex-1">Keyboard shortcuts</span>
-                <ShortcutKey size="sm">?</ShortcutKey>
+                <ShortcutKey size="sm" hoverOnly="shortcut-hint">?</ShortcutKey>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
