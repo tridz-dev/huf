@@ -15,6 +15,8 @@ import {
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { Lock } from 'lucide-react';
+import { Alert, AlertTitle, AlertDescription } from '../components/ui/alert';
 import {
   getMCPServer,
   createMCPServer,
@@ -34,6 +36,7 @@ import { mcpFormSchema, type MCPFormValues, type MCPTool } from '../components/m
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
 import { linkMcpServerToAgent } from '../services/agentApi';
+import { usePermissions } from '../contexts/PermissionsContext';
 
 export function McpDetailsPage() {
   const { mcpId } = useParams<{ mcpId: string }>();
@@ -41,6 +44,11 @@ export function McpDetailsPage() {
   const [searchParams] = useSearchParams();
   const fromAgent = searchParams.get('agent');
   const isNew = mcpId === 'new';
+  const { hasCapability } = usePermissions();
+  // Mirrors the backend capability requirement for MCP Server mutations
+  // (system.mcp.manage) - without this the save button and delete action
+  // were offered to any logged-in user regardless of capability.
+  const canManageMcp = hasCapability('system.mcp.manage');
 
   // Tab configuration - single source of truth
   const tabConfig = {
@@ -409,7 +417,7 @@ export function McpDetailsPage() {
   );
 
   // Show save button for new servers or when form is dirty
-  const showSaveButton = isNew || isDirty;
+  const showSaveButton = canManageMcp && (isNew || isDirty);
 
   useSaveShortcut({
     onSave: handleFormSubmit,
@@ -628,6 +636,17 @@ export function McpDetailsPage() {
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 space-y-6 max-w-6xl mx-auto">
+        {!canManageMcp && (
+          <Alert>
+            <Lock className="h-4 w-4" />
+            <AlertTitle>Read-only</AlertTitle>
+            <AlertDescription>
+              {isNew
+                ? "You don't have permission to create MCP servers. Contact a Huf Admin for access."
+                : "You don't have permission to edit this MCP server. Changes won't be saved."}
+            </AlertDescription>
+          </Alert>
+        )}
         <MCPHeader
           form={form}
           watchEnabled={watchEnabled}
@@ -641,7 +660,7 @@ export function McpDetailsPage() {
           onCancel={fromAgent ? handleCancel : undefined}
           onSync={handleSyncTools}
           onTestConnection={handleTestConnection}
-          onDelete={!isNew && !fromAgent ? () => setDeleteDialogOpen(true) : undefined}
+          onDelete={!isNew && !fromAgent && canManageMcp ? () => setDeleteDialogOpen(true) : undefined}
         />
 
         <Form {...form}>
@@ -664,7 +683,7 @@ export function McpDetailsPage() {
                   form={form}
                   serverName={mcpId || ''}
                   isNew={isNew}
-                  onSaveAndConnect={isNew ? handleSaveAndConnect : undefined}
+                  onSaveAndConnect={isNew && canManageMcp ? handleSaveAndConnect : undefined}
                 />
               </TabsContent>
 

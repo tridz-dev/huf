@@ -249,7 +249,7 @@ function AppShell() {
           <Route
             path="/data/new"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="data.tables.manage">
                 <DataTableBuilderWrapper />
               </ProtectedRoute>
             }
@@ -275,7 +275,7 @@ function AppShell() {
           <Route
             path="/data/:tableId/edit"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="data.tables.manage">
                 <DataTableBuilderWrapper />
               </ProtectedRoute>
             }
