@@ -222,6 +222,13 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   };
 
   useEffect(() => {
+    const starterParam = searchParams.get('starter');
+    if (starterParam && (starterParam === 'openrouter' || starterParam === 'google')) {
+      setStarterPath(starterParam as StarterPath);
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
     const configureId = searchParams.get('configure');
     if (!configureId || configureHandledRef.current) {
       return;
