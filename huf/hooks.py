@@ -73,6 +73,7 @@ website_route_rules = [
         "to_route": "huf/docs/<path:app_path>"
     },
     {"from_route": "/mcp-oauth-callback", "to_route": "mcp_oauth_callback"},
+    {"from_route": "/huf", "to_route": "huf"},
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
 ]
 
