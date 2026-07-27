@@ -75,6 +75,7 @@ def after_install():
     create_flow_tools()
     create_memory_tools()
     create_default_memory_policies()
+    create_default_execution_profiles()
     register_integration_services()
     sync_tool_types()
     sync_default_tool_categories()
@@ -128,6 +129,7 @@ def after_migrate():
 		create_flow_tools()
 		create_memory_tools()
 		create_default_memory_policies()
+		create_default_execution_profiles()
 		register_integration_services()
 		sync_tool_types()
 		sync_default_tool_categories()
@@ -1194,3 +1196,53 @@ def create_default_memory_policies():
 			)
 
 	frappe.db.commit()
+
+
+def create_default_execution_profiles():
+	"""Create default Execution Profile presets shipped with Huf."""
+	profiles = [
+		{
+			"profile_name": "Restricted",
+			"approval_mode": "Ask Every Time",
+			"is_builtin": 1,
+			"filesystem_policy": "Scratch Only",
+			"max_wall_time_s": 30,
+			"max_cpu_seconds": 30,
+			"max_memory_mb": 256,
+			"max_output_bytes": 1048576,
+		},
+		{
+			"profile_name": "Trusted",
+			"approval_mode": "Auto Approve",
+			"is_builtin": 1,
+			"filesystem_policy": "Scratch Only",
+			"max_wall_time_s": 60,
+			"max_cpu_seconds": 60,
+			"max_memory_mb": 512,
+			"max_output_bytes": 2097152,
+		},
+		{
+			"profile_name": "Blocked",
+			"approval_mode": "Never Allow",
+			"is_builtin": 1,
+			"filesystem_policy": "None",
+			"max_wall_time_s": 5,
+			"max_cpu_seconds": 5,
+			"max_memory_mb": 128,
+			"max_output_bytes": 65536,
+		},
+	]
+	for profile in profiles:
+		if frappe.db.exists("Execution Profile", profile["profile_name"]):
+			continue
+		try:
+			doc = frappe.new_doc("Execution Profile")
+			doc.update(profile)
+			doc.insert(ignore_permissions=True)
+		except Exception as e:
+			logger.warning(
+				f"Failed to create default execution profile {profile['profile_name']}: {e!s}"
+			)
+
+	frappe.db.commit()
+
