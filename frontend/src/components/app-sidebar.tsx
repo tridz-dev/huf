@@ -1,9 +1,8 @@
 import * as React from "react"
-import { Home, LayoutDashboard, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, Shield, LayoutGrid, Brain, Sparkles } from "lucide-react"
+import { ArrowLeft, Home, LayoutDashboard, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Terminal, Settings, Shield, LayoutGrid, Brain, Sparkles } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
-import { NavCollapsibleGroup } from "@/components/nav-collapsible"
 import { NavUser } from "@/components/nav-user"
 import { AppSidebarHeader } from "@/components/app-sidebar-header"
 import { usePermissions } from "@/contexts/PermissionsContext"
@@ -13,6 +12,9 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
@@ -50,6 +52,12 @@ const useNavItems = [
     capability: "agent.use",
     badge: "Experimental",
   },
+  {
+    title: "Chat",
+    url: "/chat",
+    icon: MessageSquare,
+    capability: "chat.use",
+  },
 ]
 
 const buildNavItems = [
@@ -60,7 +68,7 @@ const buildNavItems = [
     capability: "agent.use",
   },
   {
-    title: "Agent Prompts",
+    title: "Prompts",
     url: "/prompts",
     icon: ScrollText,
     capability: "agent.use",
@@ -115,12 +123,6 @@ const knowNavItems = [
 
 const operateNavItems = [
 	{
-		title: "Chat",
-		url: "/chat",
-		icon: MessageSquare,
-		capability: "chat.use",
-	},
-	{
 		title: "Executions",
 		url: "/executions",
 		icon: Zap,
@@ -128,101 +130,52 @@ const operateNavItems = [
 		badge: "Experimental",
 	},
 	{
-		title: "SSH",
-		url: "/ssh",
+		title: "Console",
+		url: "/console",
 		icon: Terminal,
 		capability: "agent.use",
-		badge: "Experimental",
-	},
-	{
-		title: "Artifacts",
-		url: "/artifacts",
-		icon: Boxes,
-		capability: "agent.view_all",
 	},
 ]
 
 /**
- * Settings-adjacent pages are grouped under a single collapsible sidebar
- * entry instead of each getting a top-level item, to keep the primary nav
- * short. User management lives here too — it's an admin task, not a daily
- * destination. Same capability-gating rules as allNavItems.
+ * Settings is a second-level rail, not an accordion. Opening it replaces the
+ * primary navigation so the longer administration list never pushes the main
+ * destinations off-screen.
  */
-const settingsNavItems = [
+const settingsNavGroups = [
   {
-    title: "AI Providers",
-    url: "/providers",
-    icon: Plug,
-    capability: "system.providers.manage",
+    label: "Intelligence",
+    items: [
+      { title: "AI Providers", url: "/providers", icon: Plug, capability: "system.providers.manage" },
+      { title: "Models", url: "/models", icon: Cpu, capability: "system.providers.manage" },
+    ],
   },
   {
-    title: "Models",
-    url: "/models",
-    icon: Cpu,
-    capability: "system.providers.manage",
-	},
-	{
-		title: "Agent Summary Prompts",
-		url: "/summary-prompts",
-		icon: ScrollText,
-		capability: "agent.use",
-	},
-	{
-		title: "Execution Profiles",
-		url: "/execution-profiles",
-		icon: Shield,
-		capability: "agent.use",
-	},
-	{
-		title: "SSH Connections",
-		url: "/ssh-connections",
-		icon: Terminal,
-		capability: "agent.use",
-	},
-  {
-    title: "Console",
-    url: "/console",
-    icon: Terminal,
-    capability: "agent.use",
-  },
-  // TODO(#473-followup): Gateways navigation is hidden while the feature is
-  // incomplete (no live provider adapters, no in-app connection form). Restore
-  // once the items in docs/gateway-todo.md are resolved.
-  // {
-  //   title: "Gateways",
-  //   url: "/gateways",
-  //   icon: MessageSquare,
-  //   capability: "system.integrations.manage",
-  // },
-  {
-    title: "Integrations",
-    url: "/integrations",
-    icon: Link2,
-    capability: "system.integrations.manage",
+    label: "Runtime",
+    items: [
+      { title: "Code Execution", url: "/execution-profiles", icon: Shield, capability: "agent.use" },
+      { title: "SSH Connections", url: "/ssh-connections", icon: Terminal, capability: "agent.use" },
+    ],
   },
   {
-    title: "Integration Services",
-    url: "/integration-services",
-    icon: Boxes,
-    capability: "system.integrations.manage",
+    label: "Connectivity",
+    items: [
+      { title: "Gateways", url: "/gateways", icon: MessageSquare, capability: "system.integrations.manage" },
+      { title: "Channels", url: "/channels", icon: MessageSquare, capability: "system.integrations.manage" },
+      { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
+      { title: "MCP Servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
+    ],
   },
   {
-    title: "MCP Servers",
-    url: "/mcp",
-    icon: Server,
-    capability: "system.mcp.manage",
-  },
-  {
-    title: "Roles",
-    url: "/roles",
-    icon: Shield,
-    capability: "roles.manage",
-  },
-  {
-    title: "Users",
-    url: "/users",
-    icon: Users,
-    capability: "users.manage",
+    label: "Access",
+    items: [
+      {
+        title: "Members",
+        url: "/members",
+        icon: Users,
+        capability: ["users.manage", "roles.manage"],
+      },
+    ],
   },
 ]
 
@@ -269,18 +222,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	)
 	const knowledgeItems = filterItemsByCapability(knowNavItems)
 	const operateItems = filterItemsByCapability(operateNavItems)
-  const settingsItems = isLoading
-    ? []
-    : settingsNavItems.filter((item) => item.capability === null || hasCapability(item.capability))
-
-  // Settings is the only collapsible group; its open state is owned here so
-  // the active route auto-opens it on navigation.
+  const settingsGroups = settingsNavGroups
+    .map((group) => ({
+      ...group,
+      items: filterItemsByCapability(
+        group.items as Array<(typeof group.items)[number] & { capability: string | string[] | null }>,
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
+  const settingsItems = settingsGroups.flatMap((group) => group.items)
   const settingsActive = isPathInItems(settingsItems)
-  const [settingsOpen, setSettingsOpen] = React.useState(settingsActive)
+  const [settingsMode, setSettingsMode] = React.useState(settingsActive)
 
   React.useEffect(() => {
     if (settingsActive) {
-      setSettingsOpen(true)
+      setSettingsMode(true)
     }
   }, [settingsActive])
 
@@ -290,22 +246,45 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <AppSidebarHeader />
       </SidebarHeader>
       <SidebarContent>
-			{dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
-			{useItems.length > 0 && <NavMain items={useItems} label="Use" />}
-			{buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
-			{knowledgeItems.length > 0 && <NavMain items={knowledgeItems} label="Know" />}
-			{operateItems.length > 0 && <NavMain items={operateItems} label="Operate" />}
-			{settingsItems.length > 0 && (
-			  <NavCollapsibleGroup
-			    title="Settings"
-			    icon={Settings}
-			    items={settingsItems}
-			    open={settingsOpen}
-			    onOpenChange={setSettingsOpen}
-			  />
-			)}
+        {settingsMode ? (
+          <>
+            <SidebarMenu className="px-2">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Back to main navigation"
+                  onClick={() => setSettingsMode(false)}
+                  className="font-medium"
+                >
+                  <ArrowLeft strokeWidth={1.6} />
+                  <span className="font-body text-[13.5px]">Settings</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+            {settingsGroups.map((group) => (
+              <NavMain key={group.label} items={group.items} label={group.label} />
+            ))}
+          </>
+        ) : (
+          <>
+            {dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
+            {useItems.length > 0 && <NavMain items={useItems} label="Use" />}
+            {buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
+            {knowledgeItems.length > 0 && <NavMain items={knowledgeItems} label="Know" />}
+            {operateItems.length > 0 && <NavMain items={operateItems} label="Operate" />}
+          </>
+        )}
       </SidebarContent>
       <SidebarFooter className="p-0 mb-1 mt-2 border-t border-sidebar-border">
+        {!settingsMode && settingsItems.length > 0 && (
+          <SidebarMenu className="px-2 pt-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Settings" onClick={() => setSettingsMode(true)}>
+                <Settings strokeWidth={1.6} />
+                <span className="font-body text-[13.5px]">Settings</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
         <NavUser />
       </SidebarFooter>
       <SidebarRail />

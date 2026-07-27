@@ -303,7 +303,7 @@ function HomePage() {
               >
                 <div>
                   <span className="block font-medium">Try Gemini with Google AI Studio</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">gemini-2.5-flash · Fast and intelligent model</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">gemini-3.5-flash · Fast and intelligent model</span>
                 </div>
                 <ArrowRight className="ml-3 h-4 w-4 shrink-0" />
               </Button>

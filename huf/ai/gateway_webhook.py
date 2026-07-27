@@ -16,9 +16,16 @@ from frappe import _
 
 
 _ADAPTER_CLASSES = {
+	"WhatsApp": ("huf.ai.gateway_adapters.whatsapp", "WhatsAppGatewayAdapter"),
+	"Messenger": ("huf.ai.gateway_adapters.messenger", "MessengerGatewayAdapter"),
+	"Instagram": ("huf.ai.gateway_adapters.instagram", "InstagramGatewayAdapter"),
+	"Discord": ("huf.ai.gateway_adapters.discord", "DiscordGatewayAdapter"),
+	"Email": ("huf.ai.gateway_adapters.email", "EmailGatewayAdapter"),
+	"SMS": ("huf.ai.gateway_adapters.sms", "SMSGatewayAdapter"),
+	"Google Chat": ("huf.ai.gateway_adapters.google_chat", "GoogleChatGatewayAdapter"),
+	"Microsoft Teams": ("huf.ai.gateway_adapters.teams", "TeamsGatewayAdapter"),
 	"VK": ("huf.ai.gateway_adapters.vk", "VKGatewayAdapter"),
 	"WeCom": ("huf.ai.gateway_adapters.wecom", "WeComGatewayAdapter"),
-	"WhatsApp": ("huf.ai.gateway_adapters.whatsapp", "WhatsAppGatewayAdapter"),
 }
 
 
@@ -102,8 +109,13 @@ def handle_gateway_webhook(gateway_name: str) -> dict | None:
 
 	adapter = get_gateway_adapter(gateway)
 	request = _inbound_request()
+<<<<<<< HEAD
 	if request.method == "GET" and gateway.provider in ("WeCom", "WhatsApp"):
 		_text_response(adapter.verify_url(request) or "")
+=======
+	if request.method == "GET" and hasattr(adapter, "verify_url"):
+		_text_response(adapter.verify_url(request))
+>>>>>>> develop
 		return None
 	if not adapter.verify_inbound(request):
 		return {"success": False, "error": "Provider verification failed"}

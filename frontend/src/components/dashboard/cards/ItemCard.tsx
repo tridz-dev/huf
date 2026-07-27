@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ComponentType, ReactNode } from 'react';
 import { LucideIcon, MoreVertical } from 'lucide-react';
 import { CardHeader, CardTitle, CardDescription, CardContent, CardAction } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +25,7 @@ interface ActionButton {
 interface ItemCardProps {
   title: string;
   description?: string;
-  icon?: LucideIcon;
+  icon?: ComponentType<{ className?: string }>;
   avatarColor?: string | null;
   status?: {
     label: string;

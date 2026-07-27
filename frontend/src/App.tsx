@@ -45,8 +45,6 @@ const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
-const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
-const AgentContextArtifactDetailPage = lazy(() => import('./pages/AgentContextArtifactDetailPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
@@ -63,6 +61,7 @@ const ConsolePage = lazy(() => import('./pages/ConsolePage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
+const ChannelsPageWrapper = lazy(() => import('./pages/ChannelsPageWrapper'));
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
@@ -73,9 +72,7 @@ const IntegrationServiceFormPageWrapper = lazy(
   () => import('./pages/IntegrationServiceFormPageWrapper'),
 );
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
-// TODO(#473-followup): Gateways page is kept in source but unlinked from routes
-// while the feature is incomplete. See docs/gateway-todo.md.
-// const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
+const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 
 import { useEffect } from 'react';
@@ -87,6 +84,7 @@ import {
 } from './services/streamChatApi';
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
+const MembersPage = lazy(() => import('./pages/MembersPage'));
 
 function ChatOnlyRedirectGuard() {
   const location = useLocation();
@@ -445,30 +443,7 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/artifacts"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <AgentContextArtifactsPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/artifacts/:artifactId"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <AgentContextArtifactDetailPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/artifacts/*" element={<Navigate to="/executions" replace />} />
           <Route
             path="/settings"
             element={
@@ -550,6 +525,16 @@ function AppShell() {
             }
           />
           <Route
+            path="/channels"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChannelsPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/integrations"
             element={
               <ProtectedRoute>
@@ -569,9 +554,7 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          {/* TODO(#473-followup): Gateways route is disabled while the feature is
-              incomplete. Restore once docs/gateway-todo.md items are resolved. */}
-          {/* <Route
+          <Route
             path="/gateways"
             element={
               <ProtectedRoute>
@@ -582,7 +565,7 @@ function AppShell() {
                 </UnifiedLayout>
               </ProtectedRoute>
             }
-          /> */}
+          />
           <Route
             path="/integration-services"
             element={
@@ -632,6 +615,16 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <PreviewViewPage />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/members"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <MembersPage />
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
