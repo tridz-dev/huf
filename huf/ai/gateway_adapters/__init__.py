@@ -19,6 +19,7 @@ from huf.ai.gateway_adapters.types import (
 )
 from huf.ai.gateway_adapters.vk import VKGatewayAdapter
 from huf.ai.gateway_adapters.wecom import WeComGatewayAdapter
+from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter
 
 __all__ = [
 	"GatewayAdapter",
@@ -33,5 +34,6 @@ __all__ = [
 	"OutboundDelivery",
 	"VKGatewayAdapter",
 	"WeComGatewayAdapter",
+	"WhatsAppGatewayAdapter",
 	"assert_adapter_conforms",
 ]
