@@ -59,9 +59,9 @@ const RAIL_VISIBLE_KEY = 'hub:rail-visible';
 
 function readRailVisible(): boolean {
   try {
-    return localStorage.getItem(RAIL_VISIBLE_KEY) !== 'false';
+    return localStorage.getItem(RAIL_VISIBLE_KEY) === 'true';
   } catch {
-    return true;
+    return false;
   }
 }
 
