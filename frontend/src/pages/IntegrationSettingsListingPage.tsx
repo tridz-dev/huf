@@ -11,13 +11,16 @@ import {
 import { ServiceCatalogModal } from '@/components/integrations/ServiceCatalogModal';
 import type { IntegrationSettingsDoc, IntegrationServiceDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
+import { getServiceIdentity, messagingServiceNames } from '@/data/serviceIdentity';
 
 interface IntegrationSettingsListingPageProps {
   catalogOpenKey?: number;
+  kind?: 'channels' | 'integrations';
 }
 
 export function IntegrationSettingsListingPage({
   catalogOpenKey,
+  kind = 'integrations',
 }: IntegrationSettingsListingPageProps) {
   const navigate = useNavigate();
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -91,11 +94,13 @@ export function IntegrationSettingsListingPage({
   });
 
   const settings = useMemo(() => {
-    if (categoryFilter === 'all') return allSettings;
-    return allSettings.filter(
-      (item) => serviceCategoryMap.get(item.service) === categoryFilter,
-    );
-  }, [allSettings, categoryFilter, serviceCategoryMap]);
+    const byKind = allSettings.filter((item) => {
+      const isMessaging = messagingServiceNames.has(item.service.toLowerCase());
+      return kind === 'channels' ? isMessaging : !isMessaging;
+    });
+    if (categoryFilter === 'all') return byKind;
+    return byKind.filter((item) => serviceCategoryMap.get(item.service) === categoryFilter);
+  }, [allSettings, categoryFilter, kind, serviceCategoryMap]);
 
   useEffect(() => {
     if (error) {
@@ -107,7 +112,11 @@ export function IntegrationSettingsListingPage({
 
   return (
     <PageLayout
-      subtitle="Connect external services like Slack, Telegram, GitHub, and Google Workspace"
+      subtitle={
+        kind === 'channels'
+          ? 'Connect the messaging apps where people talk to your agents'
+          : 'Connect calendars, project tools, developer services, and business systems'
+      }
       filters={
         <FilterBar
           searchPlaceholder="Search integrations..."
@@ -125,7 +134,7 @@ export function IntegrationSettingsListingPage({
         />
       }
     >
-      <ServiceCatalogModal open={catalogOpen} onOpenChange={setCatalogOpen} />
+      <ServiceCatalogModal open={catalogOpen} onOpenChange={setCatalogOpen} kind={kind} />
 
       {error && !initialLoading && (
         <div className="text-center py-12">
@@ -140,18 +149,21 @@ export function IntegrationSettingsListingPage({
         loading={initialLoading}
         emptyState={
           <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">No integrations configured yet.</p>
+            <p className="font-body text-steel-soft mb-4">
+              {kind === 'channels' ? 'No channels configured yet.' : 'No integrations configured yet.'}
+            </p>
             <button
               type="button"
               className="text-sm text-primary hover:underline"
               onClick={() => setCatalogOpen(true)}
             >
-              Add your first integration
+              {kind === 'channels' ? 'Add your first channel' : 'Add your first integration'}
             </button>
           </div>
         }
         renderItem={(setting) => {
           const category = serviceCategoryMap.get(setting.service);
+          const identity = getServiceIdentity(setting.service);
           const metadata = [
             ...(category ? [{ label: 'Category', value: category }] : []),
             ...(setting.is_default ? [{ label: 'Default', value: 'Yes', icon: Star }] : []),
@@ -166,7 +178,8 @@ export function IntegrationSettingsListingPage({
           return (
             <ItemCard
               title={setting.name}
-              description={`${setting.service.replace(/_/g, ' ')} integration`}
+              description={`${identity.title} ${kind === 'channels' ? 'channel' : 'integration'}`}
+              icon={identity.icon}
               status={{
                 label: setting.is_active ? 'active' : 'inactive',
                 variant: setting.is_active ? 'default' : 'secondary',

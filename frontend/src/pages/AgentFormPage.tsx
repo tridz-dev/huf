@@ -11,7 +11,7 @@ import { usePermissions } from '../contexts/PermissionsContext';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
 import type { AgentSkillRow } from '../types/skill.types';
 import { getSkillOptions } from '../services/skillApi';
-import { getAgent, updateAgent, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest, deleteAgent, duplicateAgent } from '../services/agentApi';
+import { getAgent, getAgentSection, updateAgent, updateAgentSection, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentConfigSection, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest, deleteAgent, duplicateAgent } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
@@ -191,7 +191,7 @@ export function AgentFormPage() {
   const skipBlockRef = useRef(false);
 
   // Tab configuration - single source of truth
-  const tabConfig = {
+  const tabConfig = useMemo(() => ({
     general: {
       label: 'General',
       fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'run_immediately', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
@@ -275,7 +275,7 @@ export function AgentFormPage() {
       default: false,
       disabled: false,
     },
-  } as const;
+  } as const), []);
 
   // Extract derived values from tab config (memoized to avoid recreating on every render)
   const validTabs = Object.keys(tabConfig);
@@ -363,6 +363,9 @@ export function AgentFormPage() {
   const [initialAgentSkills, setInitialAgentSkills] = useState<AgentSkillRow[]>([]);
   const [skillOptions, setSkillOptions] = useState<{ value: string; label: string; subtitle?: string }[]>([]);
   const [agentStats, setAgentStats] = useState<{ last_run?: string | null; total_run?: number | null }>({});
+  const [sectionRevisions, setSectionRevisions] = useState<Partial<Record<AgentConfigSection, string>>>({});
+  const [loadedSections, setLoadedSections] = useState<Set<AgentConfigSection>>(new Set());
+  const [loadingSection, setLoadingSection] = useState<AgentConfigSection | null>(null);
   const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
   const [editingKnowledgeIndex, setEditingKnowledgeIndex] = useState<number | null>(null);
   const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
@@ -1137,7 +1140,24 @@ export function AgentFormPage() {
   // Load agent data when id is available (only for edit mode)
   useEffect(() => {
     if (id && !isNew) {
-      getAgent(id).then((data: AgentDoc) => {
+      getAgentSection(id, 'general').then((response) => {
+        const data = {
+          name: response.name,
+          modified: response.modified,
+          ...response.values,
+        } as AgentDoc;
+        setLoadedSections(new Set(['general']));
+        if (data.modified) {
+          setSectionRevisions({
+            general: data.modified,
+            behavior: data.modified,
+            tools: data.modified,
+            knowledge: data.modified,
+            skills: data.modified,
+            permissions: data.modified,
+            advanced: data.modified,
+          });
+        }
         // Resolved merge conflict: prefer using the utility function when available, fallback to explicit mapping if not.
         if (typeof mapAgentDocToFormValues === 'function') {
           form.reset(mapAgentDocToFormValues(data));
@@ -1345,6 +1365,109 @@ export function AgentFormPage() {
     }
   }, [id, isNew, form]);
 
+  useEffect(() => {
+    if (!id || isNew || activeTab === 'triggers') return;
+    const section = activeTab as AgentConfigSection;
+    if (loadedSections.has(section)) return;
+
+    let cancelled = false;
+    setLoadingSection(section);
+    getAgentSection(id, section)
+      .then(async (response) => {
+        if (cancelled) return;
+        const data = response.values as AgentDoc;
+        setSectionRevisions((current) => ({ ...current, [section]: response.modified }));
+
+        if (section === 'tools') {
+          const toolNames = ((data.agent_tool || []) as AgentToolRow[])
+            .map((item) => item.tool)
+            .filter(Boolean) as string[];
+          const tools = toolNames.length ? await getToolFunctionsByName(toolNames) : [];
+          if (cancelled) return;
+          setSelectedTools(tools);
+          setInitialTools(tools);
+
+          const servers = ((data.agent_mcp_server || []) as AgentMcpServerRow[]).map((item) => ({
+            name: item.name || '',
+            mcp_server: item.mcp_server,
+            server_url: item.server_url || '',
+            enabled: item.enabled === 1 || item.enabled === true ? 1 : 0,
+            tool_count: item.tool_count || 0,
+            server_name: item.server_name ?? undefined,
+            description: item.description ?? undefined,
+          }));
+          const enrichedServers = await Promise.all(
+            servers.map(async (server) => {
+              try {
+                const mcpDoc = await getMCPServer(server.mcp_server);
+                return {
+                  ...server,
+                  server_name: mcpDoc.server_name || server.server_name || server.mcp_server,
+                  description: mcpDoc.description || server.description,
+                  mcp_enabled: mcpDoc.enabled === 1 ? 1 : 0,
+                  server_url: mcpDoc.server_url || server.server_url,
+                };
+              } catch {
+                return { ...server, mcp_enabled: undefined };
+              }
+            }),
+          );
+          if (cancelled) return;
+          setMcpServers(enrichedServers);
+          setInitialMcpServers(enrichedServers);
+        } else if (section === 'knowledge') {
+          const rows = (data.agent_knowledge || []).map((item) => ({
+            name: item.name,
+            knowledge_source: item.knowledge_source,
+            mode: item.mode || 'Optional',
+            priority: item.priority ?? 0,
+            max_chunks: item.max_chunks ?? 5,
+            token_budget: item.token_budget ?? 2000,
+            description: item.description || undefined,
+          }));
+          setKnowledgeSources(rows);
+          setInitialKnowledgeSources(rows);
+        } else if (section === 'skills') {
+          const rows = (data.agent_skill || []).map((item) => ({
+            name: item.name,
+            skill: item.skill,
+            mode: item.mode || 'Optional',
+            auto_load: normalizeFlag(item.auto_load),
+            priority: item.priority ?? 0,
+            description: item.description || undefined,
+          }));
+          setAgentSkills(rows);
+          setInitialAgentSkills(rows);
+        } else {
+          const mapped = mapAgentDocToFormValues(data);
+          const fields = tabConfig[section].fields;
+          const sectionValues = Object.fromEntries(
+            fields.map((field) => [field, mapped[field as keyof AgentFormValues]]),
+          ) as Partial<AgentFormValues>;
+          form.reset(
+            { ...form.getValues(), ...sectionValues },
+            { keepDirtyValues: true },
+          );
+          if (section === 'behavior') {
+            setAllowChat(data.allow_chat === 1);
+          }
+        }
+
+        setLoadedSections((current) => new Set(current).add(section));
+      })
+      .catch((error) => {
+        console.error(`Error loading ${section} section:`, error);
+        toast.error(`Failed to load ${tabConfig[section].label}`);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSection(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, form, id, isNew, loadedSections, tabConfig]);
+
   const onSubmit = useCallback(async (values: AgentFormValues) => {
     setSaving(true);
     try {
@@ -1439,6 +1562,60 @@ export function AgentFormPage() {
           description: skill.description || '',
         })),
       } as AgentUpdatePayload;
+
+      if (!isNew && id && activeTab !== 'triggers') {
+        const section = activeTab as AgentConfigSection;
+        const expectedModified = sectionRevisions[section];
+        if (!expectedModified) {
+          toast.error('This section is not ready to save. Reload the agent and try again.');
+          return;
+        }
+
+        const sectionFields: Record<AgentConfigSection, readonly string[]> = {
+          general: tabConfig.general.fields,
+          behavior: tabConfig.behavior.fields,
+          tools: ['agent_tool', 'agent_mcp_server'],
+          knowledge: ['agent_knowledge'],
+          skills: ['agent_skill'],
+          permissions: tabConfig.permissions.fields,
+          advanced: tabConfig.advanced.fields,
+        };
+        const sectionPayload = Object.fromEntries(
+          sectionFields[section]
+            .filter((field) => field in agentData)
+            .map((field) => [field, agentData[field as keyof AgentUpdatePayload]]),
+        ) as Partial<AgentDoc>;
+
+        const result = await updateAgentSection(id, section, sectionPayload, expectedModified);
+        const savedAgentId = result.name;
+        setSectionRevisions((current) =>
+          Object.fromEntries(
+            Object.keys(current).map((key) => [key, result.modified]),
+          ) as Partial<Record<AgentConfigSection, string>>,
+        );
+        sectionFields[section].forEach((field) => {
+          const fieldName = field as keyof AgentFormValues;
+          form.resetField(fieldName, { defaultValue: values[fieldName] });
+        });
+        if (section === 'tools') {
+          setInitialTools([...selectedTools]);
+          setInitialMcpServers([...mcpServers]);
+        } else if (section === 'knowledge') {
+          setInitialKnowledgeSources([...knowledgeSources]);
+        } else if (section === 'skills') {
+          setInitialAgentSkills([...agentSkills]);
+        } else if (section === 'general') {
+          setInitialDisabled(values.disabled);
+        } else if (section === 'behavior') {
+          setAllowChat(values.allow_chat);
+        }
+        writeToolDetailsSetting(savedAgentId, !!values.show_tool_execution_details);
+        if (savedAgentId !== id) {
+          navigate(`/agents/${encodeURIComponent(savedAgentId)}`, { replace: true });
+        }
+        toast.success(`${tabConfig[section].label} saved`);
+        return;
+      }
 
       if (isNew) {
         // Create new agent
@@ -1698,7 +1875,7 @@ export function AgentFormPage() {
     } finally {
       setSaving(false);
     }
-  }, [form, id, isNew, mcpServers, navigate, selectedTools, knowledgeSources, agentSkills]);
+  }, [activeTab, agentSkills, form, id, isNew, knowledgeSources, mcpServers, navigate, sectionRevisions, selectedTools, tabConfig]);
 
   // Memoize the form submit handler to avoid recreating it on every render
   const handleFormSubmit = useMemo(
@@ -2197,6 +2374,12 @@ export function AgentFormPage() {
                   </TabsTrigger>
                 ))}
               </TabsList>
+
+              {loadingSection === activeTab && (
+                <div className="py-8 text-center text-sm text-steel-soft">
+                  Loading {tabConfig[activeTab as keyof typeof tabConfig].label.toLowerCase()}…
+                </div>
+              )}
 
               <TabsContent value="general" className="space-y-4">
                 <GeneralTab
