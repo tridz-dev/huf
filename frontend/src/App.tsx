@@ -48,6 +48,7 @@ const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourc
 const MemoryPage = lazy(() => import('./pages/MemoryPage'));
 const SkillsPage = lazy(() => import('./pages/SkillsPage'));
 const SkillFormPageWrapper = lazy(() => import('./pages/SkillFormPageWrapper'));
+const SshPage = lazy(() => import('./pages/SshPage'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
@@ -483,6 +484,18 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <SkillFormPageWrapper />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ssh"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <SshPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />

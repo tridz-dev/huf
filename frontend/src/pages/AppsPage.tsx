@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageLayout, GridView, BaseCard, FilterBar } from '../components/dashboard';
+import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -345,6 +346,7 @@ function AppsPage() {
 	return (
 		<PageLayout
 			title="Apps"
+			badge={<ExperimentalBadge />}
 			subtitle="Launch applications built on HUF"
 			toolbar={
 				<Button

@@ -3,6 +3,7 @@ import { Sparkles, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
+import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getSkills } from '../services/skillApi';
 import { formatTimeAgo } from '../utils/time';
@@ -90,6 +91,8 @@ export function SkillsPage() {
 
   return (
     <PageLayout
+      title="Skills"
+      badge={<ExperimentalBadge />}
       subtitle="Manage reusable skill bundles for your agents"
       filters={
         <FilterBar

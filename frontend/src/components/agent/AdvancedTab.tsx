@@ -15,6 +15,7 @@ import { Plus } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { AgentPromptOption } from './PromptTemplateSection';
 import { FormSettingsSection } from './FormSettingsSection';
+import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import {
 	MODEL_MODALITY_IMAGE,
 	MODEL_MODALITY_TTS,
@@ -897,7 +898,12 @@ This includes whether each tool call is completed and its corresponding result.`
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="SSH Execution"
+				title={
+					<div className="flex items-center gap-2.5">
+						<span>SSH Execution</span>
+						<ExperimentalBadge size="sm" />
+					</div>
+				}
 				description="Allow this agent to run one-shot SSH commands against explicitly allowlisted SSH Connection records. Interactive PTY sessions are deferred."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
