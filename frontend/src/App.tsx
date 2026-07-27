@@ -45,8 +45,6 @@ const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
-const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
-const AgentContextArtifactDetailPage = lazy(() => import('./pages/AgentContextArtifactDetailPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
@@ -63,6 +61,7 @@ const ConsolePage = lazy(() => import('./pages/ConsolePage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
+const ChannelsPageWrapper = lazy(() => import('./pages/ChannelsPageWrapper'));
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
@@ -87,6 +86,7 @@ import {
 } from './services/streamChatApi';
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
+const MembersPage = lazy(() => import('./pages/MembersPage'));
 
 function ChatOnlyRedirectGuard() {
   const location = useLocation();
@@ -445,30 +445,7 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/artifacts"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <AgentContextArtifactsPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/artifacts/:artifactId"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <AgentContextArtifactDetailPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/artifacts/*" element={<Navigate to="/executions" replace />} />
           <Route
             path="/settings"
             element={
@@ -546,6 +523,16 @@ function AppShell() {
                     <SshPage />
                   </Suspense>
                 </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/channels"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChannelsPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -632,6 +619,16 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <PreviewViewPage />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/members"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <MembersPage />
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
