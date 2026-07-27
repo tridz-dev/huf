@@ -601,17 +601,60 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		node=node,
 		run_kind="tool",
 		prompt=f"Tool: {tool_name}\nArgs: {json.dumps(args, default=str)}",
+		agent_name=config.get("agent_name") or config.get("agent"),
 	)
+
+	# Check MCP tool info
+	is_mcp_tool = 0
+	mcp_server = None
+	mcp_tool_entry = frappe.db.get_value("MCP Server Tool", {"tool_name": tool_name, "enabled": 1}, "parent")
+	if mcp_tool_entry:
+		is_mcp_tool = 1
+		mcp_server = mcp_tool_entry
+
+	from uuid import uuid4
+	tool_call_id = f"call_{uuid4().hex[:12]}"
+
+	# Create Agent Tool Call audit record
+	tool_call_doc = frappe.get_doc({
+		"doctype": "Agent Tool Call",
+		"agent_run": run_doc.name,
+		"conversation": getattr(flow_run, "conversation", None),
+		"tool": tool_name,
+		"is_mcp_tool": is_mcp_tool,
+		"mcp_server": mcp_server,
+		"tool_args": json.dumps(args, default=str) if args else None,
+		"status": "Started",
+		"call_id": tool_call_id,
+	})
+	tool_call_doc.insert(ignore_permissions=True)
 
 	try:
 		result = execute_tool(tool_name, args)
+		is_success = result.get("success", False) if isinstance(result, dict) else bool(result)
+		tool_result = result.get("result", result) if isinstance(result, dict) else result
+		error_msg = result.get("error", "") if isinstance(result, dict) else ""
+
+		# Format result for JSON field
+		if isinstance(tool_result, (dict, list)):
+			formatted_result = tool_result
+		else:
+			formatted_result = {"output": str(tool_result)} if tool_result is not None else None
+
+		# Update Agent Tool Call record
+		tool_call_doc.update({
+			"status": "Completed" if is_success else "Failed",
+			"tool_result": formatted_result,
+			"error_message": error_msg or None,
+		})
+		tool_call_doc.save(ignore_permissions=True)
 
 		# Update the agent run
 		run_doc.db_set(
 			{
-				"status": "Success" if result.get("success") else "Failed",
+				"status": "Success" if is_success else "Failed",
 				"response": json.dumps(result, default=str),
-				"error_message": result.get("error", ""),
+				"error_message": error_msg,
 				"end_time": now_datetime(),
 			}
 		)
@@ -632,6 +675,11 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			"error": result.get("error"),
 		}
 	except Exception as e:
+		try:
+			tool_call_doc.update({"status": "Failed", "error_message": str(e)})
+			tool_call_doc.save(ignore_permissions=True)
+		except Exception:
+			pass
 		run_doc.db_set({"status": "Failed", "error_message": str(e), "end_time": now_datetime()})
 		commit_if_background()
 		return {"status": "failed", "error": str(e)}
@@ -1298,11 +1346,26 @@ def _build_agent_prompt(config: dict, context: dict) -> str:
 	return json.dumps(context, indent=2, default=str)
 
 
-def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = "") -> "frappe.Document":
+def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = "", agent_name: str = None) -> "frappe.Document":
 	"""Create an Agent Run document linked to a flow run."""
+	if not agent_name and node:
+		config = node.get("config") or node.get("data", {}).get("config") or {}
+		agent_name = config.get("agent_name") or config.get("agent")
+	if not agent_name and getattr(flow_run, "last_agent_run", None):
+		agent_name = frappe.db.get_value("Agent Run", flow_run.last_agent_run, "agent")
+	if not agent_name and getattr(flow_run, "flow_id", None):
+		try:
+			flow_def = frappe.db.get_value("Flow Definition", flow_run.flow_id, "definition_json")
+			if flow_def:
+				flow_data = json.loads(flow_def) if isinstance(flow_def, str) else flow_def
+				agent_name = flow_data.get("agent") or flow_data.get("agent_name")
+		except Exception:
+			pass
+
 	run_doc = frappe.get_doc(
 		{
 			"doctype": "Agent Run",
+			"agent": agent_name or None,
 			"status": "Started",
 			"prompt": prompt,
 			"flow_run": flow_run.name,
