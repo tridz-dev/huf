@@ -1,4 +1,4 @@
-"""Email Gateway Adapter for two-way Email communications."""
+"""Email Gateway Adapter for two-way Email communications using Frappe Communication and Email Account."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from huf.ai.gateway_adapters.types import (
 
 
 class EmailGatewayAdapter(GatewayAdapter):
-	"""Handle incoming email webhooks and outbound email delivery."""
+	"""Handle incoming email webhooks and outbound email delivery via Frappe Communication Engine."""
 
 	provider_id = "email"
 	credential_schema = GatewayCredentialSchema(
@@ -74,7 +74,7 @@ class EmailGatewayAdapter(GatewayAdapter):
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
-		"""Deliver email reply via frappe.sendmail."""
+		"""Deliver email reply via frappe.sendmail and log Communication record."""
 		recipient = reply.conversation_id
 		subject = "Re: Agent Response"
 		sender = self._sender_email or None
@@ -87,7 +87,56 @@ class EmailGatewayAdapter(GatewayAdapter):
 			now=True,
 		)
 
+		# Log to Frappe Communication DocType
+		try:
+			comm = frappe.get_doc({
+				"doctype": "Communication",
+				"communication_type": "Communication",
+				"communication_medium": "Email",
+				"sent_or_received": "Sent",
+				"sender": sender or frappe.session.user,
+				"recipients": recipient,
+				"subject": subject,
+				"content": reply.text,
+			})
+			comm.insert(ignore_permissions=True)
+			message_id = comm.name
+		except Exception:
+			message_id = f"email-{hash(reply.text)}"
+
 		return OutboundDelivery(
-			provider_message_id=f"email-{hash(reply.text)}",
+			provider_message_id=message_id,
 			provider_response={"status": "sent", "recipient": recipient},
+		)
+
+
+def on_communication_inserted(doc, method=None):
+	"""Frappe doc_event hook triggered when a new Communication is created."""
+	if doc.communication_type != "Communication" or doc.sent_or_received != "Received":
+		return
+
+	# Check if an Email Gateway exists and is enabled
+	gateways = frappe.get_all(
+		"Gateway",
+		filters={"provider": "Email", "is_enabled": 1},
+		fields=["name"],
+	)
+	if not gateways:
+		return
+
+	from huf.ai.gateway_service import ingest_gateway_event
+
+	for gw in gateways:
+		context = {
+			"sender_id": doc.sender or "",
+			"conversation_id": doc.recipients or doc.sender or "",
+			"thread_id": doc.in_reply_to or None,
+			"message_text": doc.content or doc.subject or "",
+		}
+		ingest_gateway_event(
+			gw["name"],
+			doc.message_id or doc.name,
+			context,
+			verified_sender=True,
+			raw_payload=doc.as_dict(),
 		)
