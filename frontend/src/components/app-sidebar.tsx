@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ArrowLeft, Home, LayoutDashboard, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Terminal, Settings, Shield, LayoutGrid, Brain, Sparkles } from "lucide-react"
+import { ArrowLeft, Home, LayoutDashboard, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Terminal, Settings, Shield, LayoutGrid, Brain, Sparkles, Keyboard } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -8,6 +8,8 @@ import { AppSidebarHeader } from "@/components/app-sidebar-header"
 import { usePermissions } from "@/contexts/PermissionsContext"
 import { fetchDocCountQuiet } from "@/services/utilsApi"
 import { doctype } from "@/data/doctypes"
+import { ShortcutKey } from "@/components/ui/shortcut-key"
+import { useShortcutsHelp } from "@/components/shortcuts/ShortcutsHelpContext"
 import {
   Sidebar,
   SidebarContent,
@@ -183,6 +185,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { hasCapability, isLoading } = usePermissions()
   const [agentCount, setAgentCount] = React.useState<number | undefined>(undefined)
+  const { setOpen: setShortcutsHelpOpen } = useShortcutsHelp()
 
   React.useEffect(() => {
     let cancelled = false
@@ -281,6 +284,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <SidebarMenuButton tooltip="Settings" onClick={() => setSettingsMode(true)}>
                 <Settings strokeWidth={1.6} />
                 <span className="font-body text-[13.5px]">Settings</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
+        {!settingsMode && (
+          <SidebarMenu className="px-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Keyboard shortcuts"
+                onClick={() => setShortcutsHelpOpen(true)}
+                className="group-data-[collapsible=icon]:justify-center"
+              >
+                <Keyboard strokeWidth={1.6} />
+                <span className="font-body text-[13.5px] flex-1">Keyboard shortcuts</span>
+                <ShortcutKey size="sm">?</ShortcutKey>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
