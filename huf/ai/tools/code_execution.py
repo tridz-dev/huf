@@ -38,10 +38,12 @@ import tempfile
 from typing import Any
 from urllib.parse import urlparse
 
-import frappe
-from frappe.utils import get_files_path
 from frappe.utils.data import add_to_date, now_datetime
 from frappe.utils.file_manager import save_file
+
+
+def get_files_path(is_private: bool = True) -> str:
+	return frappe.get_site_path("private" if is_private else "public", "files")
 
 from huf.ai.http_handler import handle_http_request
 from huf.ai.tool_functions import get_report_result
