@@ -53,6 +53,10 @@ export const agentFormSchema = z.object({
   inject_conversation_data: z.boolean().optional(),
   conversation_data_api_permission: z.string().optional(),
   autonaming_of_conversation_title: z.boolean().optional(),
+  enable_memory: z.boolean().optional(),
+  memory_policy: z.string().optional(),
+  enable_memory_search_tool: z.boolean().optional(),
+  enable_memory_write_tool: z.boolean().optional(),
 
   agent_color: z
     .string()
