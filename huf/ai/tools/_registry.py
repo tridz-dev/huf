@@ -1233,7 +1233,7 @@ BUILDER_TOOLS = [
 DOCKER_TOOLS = [
 	{
 		"tool_name": "docker_execution",
-		"description": "Manage Docker containers and images. Actions: list_containers, list_images, inspect_container, logs, stop_container, start_container, restart_container, remove_container, pull_image, run_container, exec_container. Supports local socket, context_name, connection_string (e.g. ssh://, tcp://), or a Frappe ssh_connection name.",
+		"description": "Manage Docker containers and images with bounded, explicit operations. Destructive actions require confirm_destructive=true. Supports local socket, Docker contexts, TLS endpoints, or a Frappe SSH Connection.",
 		"function_path": "huf.ai.tools.docker_execution.handle_action",
 		"category": "Developer Tools",
 		"parameters": [
@@ -1243,6 +1243,16 @@ DOCKER_TOOLS = [
 			_p("command", description="Command to execute (for exec_container)"),
 			_p("name", description="Name for new container (for run_container)"),
 			_p("ports", description="Ports to publish (comma separated, e.g. '80:80')"),
+			_p("environment", description="Environment variables (comma separated KEY=VALUE entries)"),
+			_p("volumes", description="Bind mounts (comma separated host:container[:mode] entries)"),
+			_p("network", description="Docker network for a new container"),
+			_p("workdir", description="Working directory for run or exec"),
+			_p("user", description="User for a new container"),
+			_p("memory", description="Memory limit for a new container, e.g. 512m"),
+			_p("cpus", type="number", description="CPU limit for a new container"),
+			_p("auto_remove", type="boolean", description="Remove the container when it exits"),
+			_p("confirm_destructive", type="boolean", description="Required confirmation for stop, restart, or remove"),
+			_p("timeout_seconds", type="integer", description="Maximum operation time, capped at 300 seconds"),
 			_p("tail", type="integer", description="Number of log lines to tail"),
 			_p("connection_string", description="Docker daemon URL (unix://, ssh://, tcp://)"),
 			_p("context_name", description="Docker context name"),

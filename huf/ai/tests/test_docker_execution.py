@@ -8,6 +8,18 @@ from unittest.mock import patch
 from huf.ai.tools.docker_execution import handle_action
 
 class TestDockerExecution(unittest.TestCase):
+
+    def test_destructive_actions_require_confirmation(self):
+        res = handle_action(action="remove_container", container="web")
+        self.assertFalse(res["success"])
+        self.assertIn("confirm_destructive", res["error"])
+
+    @patch("huf.ai.tools.docker_execution._run_subprocess")
+    def test_required_fields_and_timeout_are_bounded(self, mock_run):
+        self.assertFalse(handle_action(action="exec_container", container="web")["success"])
+        mock_run.return_value = {"success": True, "output": "", "stderr": ""}
+        handle_action(action="list_containers", timeout_seconds=9999)
+        self.assertEqual(mock_run.call_args.kwargs["timeout"], 300)
     
     @patch("huf.ai.tools.docker_execution._run_subprocess")
     def test_list_containers_local(self, mock_run):
@@ -30,11 +42,15 @@ class TestDockerExecution(unittest.TestCase):
             action="run_container", 
             image="nginx", 
             name="web", 
-            ports="80:80, 443:443"
+            ports="80:80, 443:443",
+            environment="APP_ENV=test,PORT=80",
+            volumes="/tmp/data:/data:ro",
+            network="bridge",
+            command="nginx -g 'daemon off;'",
         )
         
         mock_run.assert_called_once()
-        expected_cmd = ["docker", "run", "-d", "--name", "web", "-p", "80:80", "-p", "443:443", "nginx"]
+        expected_cmd = ["docker", "run", "-d", "--name", "web", "-p", "80:80", "-p", "443:443", "-e", "APP_ENV=test", "-e", "PORT=80", "-v", "/tmp/data:/data:ro", "--network", "bridge", "nginx", "nginx", "-g", "daemon off;"]
         self.assertEqual(mock_run.call_args[0][0], expected_cmd)
 
     @patch("huf.ai.tools.docker_execution._run_via_ssh_connection")
@@ -44,10 +60,11 @@ class TestDockerExecution(unittest.TestCase):
         res = handle_action(
             action="stop_container",
             container="web",
-            ssh_connection="Test Server"
+            ssh_connection="Test Server",
+            confirm_destructive=True,
         )
         
-        mock_ssh.assert_called_once_with("Test Server", "docker stop web")
+        mock_ssh.assert_called_once_with("Test Server", "docker stop web", timeout=60)
         self.assertTrue(res["success"])
 
     @patch("huf.ai.tools.docker_execution._run_subprocess")
