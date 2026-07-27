@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Loader2, Upload, X, Paperclip } from 'lucide-react';
+import { Loader2, Upload, X, Paperclip, FileText as FileIcon, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -289,6 +289,72 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 	);
 }
 
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif'];
+const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'mov'];
+
+function getFileExtension(url: string): string {
+	const withoutQuery = url.split('?')[0];
+	const parts = withoutQuery.split('.');
+	return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
+}
+
+function getFileName(url: string): string {
+	const withoutQuery = url.split('?')[0];
+	const parts = withoutQuery.split('/');
+	return parts[parts.length - 1] || url;
+}
+
+/** Renders an Attach/Attach Image field's stored file URL as an image thumbnail, an
+ * inline video player, or a generic file link — based on the file's extension, since
+ * `Attach` can hold any file type while `Attach Image` is always an image. */
+function AttachFieldView({ fieldtype, value }: { fieldtype: string; value: unknown }) {
+	const url = typeof value === 'string' ? value : '';
+	if (!url) {
+		return <span className="text-steel-soft italic text-sm">Empty</span>;
+	}
+
+	const ext = getFileExtension(url);
+	const isImage = fieldtype === 'Attach Image' || IMAGE_EXTENSIONS.includes(ext);
+	const isVideo = !isImage && VIDEO_EXTENSIONS.includes(ext);
+
+	if (isImage) {
+		return (
+			<a href={url} target="_blank" rel="noreferrer" className="inline-block">
+				<img
+					src={url}
+					alt={getFileName(url)}
+					className="max-h-48 rounded-none border border-line object-contain"
+				/>
+			</a>
+		);
+	}
+
+	if (isVideo) {
+		return (
+			<video
+				src={url}
+				controls
+				className="max-h-64 max-w-full rounded-none border border-line"
+			>
+				Your browser does not support video playback.
+			</video>
+		);
+	}
+
+	return (
+		<a
+			href={url}
+			target="_blank"
+			rel="noreferrer"
+			className="inline-flex items-center gap-2 px-3 py-1.5 rounded-none border border-line bg-panel text-sm text-ink hover:bg-paper-deep"
+		>
+			<FileIcon className="w-4 h-4 text-steel shrink-0" />
+			<span className="truncate max-w-xs">{getFileName(url)}</span>
+			<ExternalLink className="w-3.5 h-3.5 text-steel shrink-0" />
+		</a>
+	);
+}
+
 export function FieldView({ field, value }: { field: DataTableFieldDef, value: unknown }) {
     let displayValue: React.ReactNode = String(value ?? '');
     
@@ -317,6 +383,8 @@ export function FieldView({ field, value }: { field: DataTableFieldDef, value: u
         ) : (
             <span className="text-steel-soft italic text-sm">Empty</span>
         );
+    } else if ((field.fieldtype as string) === 'Attach' || (field.fieldtype as string) === 'Attach Image') {
+        displayValue = <AttachFieldView fieldtype={field.fieldtype} value={value} />;
     } else if (field.fieldtype === 'Date' || field.fieldtype === 'Datetime') {
         if (value) {
             const d = new Date(String(value));
