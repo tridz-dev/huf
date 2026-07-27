@@ -58,6 +58,57 @@ class ProviderUnavailableError(Exception):
     """Raised when the LLM provider cannot serve this request (conn refused, model missing,
     bad model prefix, auth). Distinct from content-level errors."""
 
+    def __init__(self, public_message: str, *, log_message: str | None = None):
+        super().__init__(public_message)
+        self.public_message = public_message
+        self.log_message = log_message or public_message
+
+
+def _sanitize_provider_error_message(raw_message: str, normalized_model: str | None = None) -> str:
+    """Return a user-safe provider error message with no LiteLLM/provider internals."""
+    text = (raw_message or "").lower()
+
+    if "api key not configured" in text or "password not found" in text or "invalid api key" in text:
+        return "This provider is not configured correctly yet. Add or update its API key and try again."
+
+    if any(marker in text for marker in (
+        "no longer available",
+        "model not found",
+        "notfounderror",
+        "unsupported model",
+    )):
+        return "The selected model is no longer available from this provider. Choose a different model and try again."
+
+    if "ratelimit" in text or "rate limit" in text or "too many requests" in text:
+        return "This provider is rate-limiting requests right now. Please wait a moment and try again."
+
+    if "contextwindowexceedederror" in text or "context window" in text or "maximum context length" in text:
+        return "This conversation is too large for the selected model. Start a new conversation or reduce the context and try again."
+
+    if any(marker in text for marker in (
+        "internalservererror",
+        "server error",
+        "service unavailable",
+        "temporarily unavailable",
+        "connection refused",
+        "failed to connect",
+        "connection error",
+        "connection reset",
+        "broken pipe",
+        "unexpected eof",
+    )):
+        return "The AI provider is temporarily unavailable. Please try again in a moment."
+
+    model_hint = f" for {normalized_model}" if normalized_model else ""
+    return f"The AI provider could not complete this request{model_hint}. Please try again or choose a different model."
+
+
+def _raise_provider_unavailable(raw_message: str, normalized_model: str | None = None):
+    raise ProviderUnavailableError(
+        _sanitize_provider_error_message(raw_message, normalized_model),
+        log_message=raw_message,
+    )
+
 
 # High-performance in-memory cache for provider capabilities
 # Stores capability flags to avoid Redis hits on every request
@@ -752,12 +803,12 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     pass
 
             except InternalServerError as e:
-                msg = (
+                raw_msg = (
                     f"OpenAI API server error with model '{normalized_model}'. "
                     f"This may be temporary. Details: {str(e)}"
                 )
-                frappe.log_error(message=msg, title="LiteLLM Provider")
-                raise ProviderUnavailableError(msg)
+                frappe.log_error(message=raw_msg, title="LiteLLM Provider")
+                _raise_provider_unavailable(raw_msg, normalized_model)
 
             except RateLimitError as e:
                 title = f"LiteLLM RateLimit: {normalized_model}"[:140]
@@ -775,20 +826,20 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 raise e
 
             except APIError as e:
-                msg = f"API error for model '{normalized_model}': {str(e)}"
-                frappe.log_error(message=msg, title="LiteLLM Provider")
-                raise ProviderUnavailableError(msg)
+                raw_msg = f"API error for model '{normalized_model}': {str(e)}"
+                frappe.log_error(message=raw_msg, title="LiteLLM Provider")
+                _raise_provider_unavailable(raw_msg, normalized_model)
 
             except Exception as e:
-                msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
                 frappe.log_error(
-                    message=f"{msg}\n\n{frappe.get_traceback()}",
+                    message=f"{raw_msg}\n\n{frappe.get_traceback()}",
                     title="LiteLLM Provider"
                 )
                 if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
                     raise e
 
-                raise ProviderUnavailableError(msg)
+                _raise_provider_unavailable(raw_msg, normalized_model)
 
             # Empty-response guard: reasoning models (e.g. gpt-oss) on the 'ollama/'
             # endpoint can return empty content with no tool calls. Retry the completion
@@ -804,11 +855,12 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     )
                     response = await _litellm_completion_with_retry(**completion_kwargs)
                 else:
-                    raise ProviderUnavailableError(
+                    raw_msg = (
                         f"Model '{normalized_model}' returned an empty response. "
                         "Known issue with reasoning models (e.g. gpt-oss) on the 'ollama/' "
                         "endpoint — use the 'ollama_chat/' prefix or check the model."
                     )
+                    raise ProviderUnavailableError(raw_msg, log_message=raw_msg)
 
             # Extract response
             choice = response.choices[0].message
@@ -999,7 +1051,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         if "ContextWindowExceededError" in str(e) or "RateLimitError" in str(e):
             raise e
 
-        raise ProviderUnavailableError(msg)
+        _raise_provider_unavailable(msg)
 
 
 async def get_simple_completion(model: str, messages: list, provider: str) -> str:
@@ -1594,23 +1646,28 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     break
 
             except InternalServerError as e:
-                yield {"type": "error", "error": f"OpenAI API server error: {str(e)}"}
+                raw_msg = f"OpenAI API server error: {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
                 return
             except RateLimitError as e:
-                yield {"type": "error", "error": f"RateLimitError: {str(e)}"}
+                raw_msg = f"RateLimitError: {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
                 return
             except ContextWindowExceededError as e:
-                yield {"type": "error", "error": f"ContextWindowExceededError: {str(e)}"}
+                raw_msg = f"ContextWindowExceededError: {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
                 return
             except APIError as e:
-                yield {"type": "error", "error": f"API error: {str(e)}"}
+                raw_msg = f"API error: {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
                 return
             except Exception as e:
                 frappe.log_error(
                     message=f"LiteLLM streaming round error: {str(e)}\n\n{frappe.get_traceback()}",
                     title="LiteLLM Streaming"
                 )
-                yield {"type": "error", "error": f"LiteLLM error: {str(e)}"}
+                raw_msg = f"LiteLLM error: {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
                 return
 
         # Max rounds reached

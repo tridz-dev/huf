@@ -26,6 +26,7 @@ from frappe.tests.utils import FrappeTestCase
 from huf.ai.providers import litellm as litellm_module
 from huf.ai.providers.litellm import (
     ProviderUnavailableError,
+    _sanitize_provider_error_message,
     _is_transient_litellm_error,
     _normalize_model_name,
     _resolve_api_base,
@@ -188,3 +189,25 @@ class TestTransientRetryKeywords(FrappeTestCase):
     def test_non_transient_errors_unchanged(self):
         self.assertFalse(_is_transient_litellm_error(Exception("invalid api key")))
         self.assertFalse(_is_transient_litellm_error(Exception("model not found")))
+
+
+class TestProviderErrorSanitization(FrappeTestCase):
+    def test_unavailable_model_message_hides_litellm_details(self):
+        message = _sanitize_provider_error_message(
+            "LiteLLM error: litellm.NotFoundError: Vertex_ai_betaException - model models/gemini-2.5-flash is no longer available",
+            "gemini-2.5-flash",
+        )
+        self.assertEqual(
+            message,
+            "The selected model is no longer available from this provider. Choose a different model and try again.",
+        )
+
+    def test_generic_provider_message_hides_litellm_branding(self):
+        message = _sanitize_provider_error_message(
+            "LiteLLM Provider Error: provider exploded in some internal way",
+            "gemini-3.5-flash",
+        )
+        self.assertEqual(
+            message,
+            "The AI provider could not complete this request for gemini-3.5-flash. Please try again or choose a different model.",
+        )
