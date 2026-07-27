@@ -336,8 +336,7 @@ export default function HubSimplePage() {
                 </div>
 
                 {/* Input composer */}
-                <div className="w-full max-w-2xl relative">
-                  <SlashCommandMenu isVisible={showSlashMenu} query={slashQuery} onSelect={handleSlashSelect} />
+                <div className="w-full max-w-2xl">
                   <div className={`relative bg-panel border transition-all duration-200 ${
                     isInputFocused ? 'rounded-xl border-signal' : 'rounded-xl border-line hover:border-steel-soft'
                   }`}>
@@ -358,13 +357,14 @@ export default function HubSimplePage() {
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>
+                    <SlashCommandMenu isVisible={showSlashMenu} query={slashQuery} onSelect={handleSlashSelect} />
                   </div>
 
                   {/* Starter prompts */}
                   <motion.div
                     animate={{ opacity: showSlashMenu ? 0 : 1 }}
                     transition={{ duration: 0.15 }}
-                    className="mt-5 grid grid-cols-2 gap-2"
+                    className={`mt-5 grid grid-cols-2 gap-2 ${showSlashMenu ? 'pointer-events-none' : ''}`}
                   >
                     {(STARTER_PROMPTS[role] || STARTER_PROMPTS.admin).map((prompt, i) => (
                       <motion.button
