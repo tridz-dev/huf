@@ -287,3 +287,64 @@ class TestWebhookEndpointSecurity(FrappeTestCase):
                         flow_webhook("flow-1", webhook_key="wrong-key")
         finally:
             frappe.request = None
+
+    def test_clean_flow_webhook_accepts_frappe_cloud_secret_header(self):
+        from huf.ai.flow_api import flow_webhook_clean
+
+        definition_json = (
+            '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'
+            '"config":{"auth":"correct-key"}}]}'
+        )
+        defn_doc = SimpleNamespace(status="Active", definition_json=definition_json, owner="flow-owner")
+        flow_run = SimpleNamespace(name="FLOW-RUN-1", status="Queued")
+        mock_request = frappe._dict(
+            args={},
+            form={},
+            headers={"X-Webhook-Secret": "correct-key"},
+            get_data=lambda **kw: b'{"event":"Site Status Update","site":"demo.frappe.cloud"}',
+        )
+        frappe.request = mock_request
+        try:
+            with patch("frappe.get_all", return_value=[{"name": "flow-1", "definition_json": definition_json}]):
+                with patch("frappe.db.exists", return_value=True):
+                    with patch("frappe.get_doc", return_value=defn_doc):
+                        with patch("frappe.set_user") as mock_set_user:
+                            with patch("huf.ai.flow_engine.create_flow_run", return_value=flow_run) as mock_create_run:
+                                with patch("frappe.enqueue") as mock_enqueue:
+                                    result = flow_webhook_clean()
+
+            self.assertEqual(result["flow_run_id"], "FLOW-RUN-1")
+            mock_set_user.assert_called_once_with("flow-owner")
+            mock_create_run.assert_called_once()
+            self.assertEqual(mock_create_run.call_args.kwargs["flow_id"], "flow-1")
+            self.assertEqual(mock_create_run.call_args.kwargs["payload"]["event"], "Site Status Update")
+            mock_enqueue.assert_called_once()
+        finally:
+            frappe.request = None
+
+    def test_clean_flow_webhook_rejects_ambiguous_key_without_flow_id(self):
+        from huf.ai.flow_api import flow_webhook_clean
+
+        definition_json = (
+            '{"entry":"start","nodes":[{"id":"start","type":"trigger.webhook",'
+            '"config":{"auth":"shared-key"}}]}'
+        )
+        mock_request = frappe._dict(
+            args={},
+            form={},
+            headers={"X-Webhook-Secret": "shared-key"},
+            get_data=lambda **kw: b"{}",
+        )
+        frappe.request = mock_request
+        try:
+            with patch(
+                "frappe.get_all",
+                return_value=[
+                    {"name": "flow-1", "definition_json": definition_json},
+                    {"name": "flow-2", "definition_json": definition_json},
+                ],
+            ):
+                with self.assertRaises(Exception):
+                    flow_webhook_clean()
+        finally:
+            frappe.request = None
