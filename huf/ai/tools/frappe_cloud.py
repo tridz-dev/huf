@@ -55,10 +55,34 @@ def _message(data):
 	return data.get("message", {})
 
 
+def _compact(data, fields=None):
+	if not fields:
+		return data
+	if isinstance(data, list):
+		return [{field: item.get(field) for field in fields if isinstance(item, dict) and field in item} for item in data]
+	if isinstance(data, dict):
+		return {field: data.get(field) for field in fields if field in data}
+	return data
+
+
+def _result(data, kwargs, fields=None):
+	message = _message(data)
+	if kwargs.get("full") or kwargs.get("debug"):
+		return _success(message)
+	return _success(_compact(message, fields))
+
+
+def _required(kwargs, *keys):
+	missing = [key for key in keys if not kwargs.get(key)]
+	if missing:
+		return f"{', '.join(missing)} {'are' if len(missing) > 1 else 'is'} required"
+	return None
+
+
 def handle_fc_list_benches(**kwargs) -> str:
 	try:
 		data = _make_fc_request("POST", "press.api.bench.all", json_data={"bench_filter": kwargs.get("filters")})
-		return _success(_message(data) or [])
+		return _result(data, kwargs, fields=("name", "title", "version", "status", "number_of_sites", "number_of_apps"))
 	except Exception as e:
 		return _failure("List Benches", e)
 
@@ -69,7 +93,7 @@ def handle_fc_get_bench(**kwargs) -> str:
 		if not name:
 			return json.dumps({"success": False, "error": "bench is required"})
 		data = _make_fc_request("POST", "press.api.bench.get", json_data={"name": name})
-		return _success(_message(data))
+		return _result(data, kwargs, fields=("name", "title", "version", "status", "no_sites", "creation"))
 	except Exception as e:
 		return _failure("Get Bench", e)
 
@@ -119,9 +143,45 @@ def handle_fc_add_app_to_bench(**kwargs) -> str:
 def handle_fc_list_sites(**kwargs) -> str:
 	try:
 		data = _make_fc_request("POST", "press.api.site.all", json_data={"site_filter": kwargs.get("filters")})
-		return _success(_message(data) or [])
+		return _result(data, kwargs, fields=("name", "status", "group", "bench", "cluster", "version", "creation"))
 	except Exception as e:
 		return _failure("List Sites", e)
+
+
+def handle_fc_site_options(**kwargs) -> str:
+	try:
+		data = _make_fc_request("POST", "press.api.site.options_for_new", json_data={"for_bench": kwargs.get("bench")})
+		if kwargs.get("full") or kwargs.get("debug"):
+			return _success(_message(data))
+		message = _message(data)
+		return _success(
+			{
+				"versions": message.get("versions", []),
+				"domain": message.get("domain"),
+				"providers": message.get("providers", []),
+				"closest_cluster": message.get("closest_cluster"),
+			}
+		)
+	except Exception as e:
+		return _failure("Site Options", e)
+
+
+def handle_fc_site_plans(**kwargs) -> str:
+	try:
+		data = _make_fc_request("POST", "press.api.site.get_plans", json_data={"rg": kwargs.get("bench")})
+		plans = _message(data) or []
+		return _success(
+			[
+				{
+					"name": plan.get("name"),
+					"price_usd": plan.get("price_usd"),
+					"private_benches": plan.get("private_benches"),
+				}
+				for plan in plans
+			]
+		)
+	except Exception as e:
+		return _failure("Site Plans", e)
 
 
 def handle_fc_create_site(**kwargs) -> str:
@@ -135,10 +195,11 @@ def handle_fc_create_site(**kwargs) -> str:
 			"apps": kwargs.get("apps") or ["frappe"],
 			"version": kwargs.get("version", "Version 16"),
 			"domain": kwargs.get("domain", "frappe.cloud"),
+			"plan": kwargs.get("plan", "USD 5"),
 		}
 		if kwargs.get("bench"):
 			site["group"] = kwargs["bench"]
-		for key in ("plan", "provider", "cluster"):
+		for key in ("provider", "cluster"):
 			if kwargs.get(key):
 				site[key] = kwargs[key]
 
@@ -172,7 +233,7 @@ def handle_fc_download_backup(**kwargs) -> str:
 	try:
 		site_name = kwargs.get("site_name") or kwargs.get("name")
 		data = _make_fc_request("POST", "press.api.site.backups", json_data={"name": site_name})
-		return _success(_message(data) or [])
+		return _result(data, kwargs, fields=("name", "status", "with_files", "database_size", "creation", "offsite"))
 	except Exception as e:
 		return _failure("Download Backup", e)
 
@@ -235,3 +296,78 @@ def handle_fc_get_admin_login_link(**kwargs) -> str:
 		return _success(_message(data))
 	except Exception as e:
 		return _failure("Get Admin Login Link", e)
+
+
+def handle_fc_list_webhooks(**kwargs) -> str:
+	try:
+		filters = {}
+		if kwargs.get("endpoint"):
+			filters["endpoint"] = kwargs["endpoint"]
+		data = _make_fc_request(
+			"POST",
+			"press.api.client.get_list",
+			json_data={
+				"doctype": "Press Webhook",
+				"fields": ["name", "endpoint", "enabled"],
+				"filters": filters,
+				"limit": kwargs.get("limit", 20),
+			},
+		)
+		return _result(data, kwargs, fields=("name", "endpoint", "enabled"))
+	except Exception as e:
+		return _failure("List Webhooks", e)
+
+
+def handle_fc_available_webhook_events(**kwargs) -> str:
+	try:
+		data = _make_fc_request("POST", "press.api.webhook.available_events")
+		return _result(data, kwargs, fields=("name", "description"))
+	except Exception as e:
+		return _failure("Available Webhook Events", e)
+
+
+def handle_fc_add_webhook(**kwargs) -> str:
+	try:
+		if error := _required(kwargs, "endpoint", "secret", "events"):
+			return json.dumps({"success": False, "error": error})
+		data = _make_fc_request(
+			"POST",
+			"press.api.webhook.add",
+			json_data={"endpoint": kwargs["endpoint"], "secret": kwargs["secret"], "events": kwargs["events"]},
+		)
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Add Webhook", e)
+
+
+def handle_fc_update_webhook(**kwargs) -> str:
+	try:
+		if error := _required(kwargs, "name", "endpoint", "events"):
+			return json.dumps({"success": False, "error": error})
+		data = _make_fc_request(
+			"POST",
+			"press.api.webhook.update",
+			json_data={
+				"name": kwargs["name"],
+				"endpoint": kwargs["endpoint"],
+				"secret": kwargs.get("secret", ""),
+				"events": kwargs["events"],
+			},
+		)
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Update Webhook", e)
+
+
+def handle_fc_delete_webhook(**kwargs) -> str:
+	try:
+		if error := _required(kwargs, "name"):
+			return json.dumps({"success": False, "error": error})
+		data = _make_fc_request(
+			"POST",
+			"press.api.client.delete",
+			json_data={"doctype": "Press Webhook", "name": kwargs["name"]},
+		)
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Delete Webhook", e)
