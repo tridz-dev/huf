@@ -216,14 +216,7 @@ def create_hub_orchestrator_agent() -> bool:
 
 
 def provision_hub_orchestrator(provider_doc=None) -> bool:
-    """
-    Re-point Hub Orchestrator at a keyed provider and enable it, but only if
-    its current provider is unusable (unset or missing key) or no model is
-    selected. Never overrides a working configuration, and respects a manual
-    disabled state as long as the configured provider is usable.
-
-    Returns True if the agent was updated.
-    """
+    """Assign a usable provider/model pair to Hub Orchestrator if unconfigured."""
     if not frappe.db.exists("Agent", HUB_AGENT_NAME):
         return False
 
@@ -231,7 +224,7 @@ def provision_hub_orchestrator(provider_doc=None) -> bool:
     if agent.provider and agent.model and _provider_has_key(agent.provider):
         return False
 
-    if provider_doc is not None and provider_doc.get_password("api_key"):
+    if provider_doc is not None and provider_doc.get_password("api_key", raise_exception=False):
         provider_name = provider_doc.name
     else:
         provider_name = _find_keyed_provider()
@@ -255,7 +248,7 @@ def on_ai_provider_update(doc, method=None):
     """doc_events hook: when an AI Provider is saved with an api_key, make sure
     Hub Orchestrator can use it (re-provision if it had no usable provider)."""
     try:
-        if doc.get_password("api_key"):
+        if doc.get_password("api_key", raise_exception=False):
             provision_hub_orchestrator(provider_doc=doc)
     except Exception as e:
         frappe.log_error(f"Hub Orchestrator re-provisioning failed: {e}", "Hub Orchestrator")
