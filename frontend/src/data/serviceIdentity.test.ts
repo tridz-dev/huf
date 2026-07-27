@@ -25,6 +25,7 @@ describe('service identities', () => {
     ['github', 'GitHub'],
     ['jira', 'Jira'],
     ['google_calendar', 'Google Calendar'],
+    ['serpapi', 'SerpApi'],
   ])('uses a mapped brand identity for %s', (service, title) => {
     const identity = getServiceIdentity(service);
 
