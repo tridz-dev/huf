@@ -22,7 +22,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Get Started",
-   "link_count": 5,
+   "link_count": 6,
    "link_type": "DocType",
    "onboard": 0,
    "type": "Card Break"
@@ -73,6 +73,16 @@
    "label": "Agent Trigger",
    "link_count": 0,
    "link_to": "Agent Trigger",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Frappe Cloud Account",
+   "link_count": 0,
+   "link_to": "Frappe Cloud Account",
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
