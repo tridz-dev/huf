@@ -33,6 +33,7 @@ interface AgentKnowledgeModalProps {
   onOpenChange: (open: boolean) => void;
   onSave: (row: AgentKnowledgeRow) => void;
   initialData?: AgentKnowledgeRow | null;
+  onCreateNew?: () => void;
 }
 
 export function AgentKnowledgeModal({
@@ -40,6 +41,7 @@ export function AgentKnowledgeModal({
   onOpenChange,
   onSave,
   initialData,
+  onCreateNew,
 }: AgentKnowledgeModalProps) {
   const [knowledgeSource, setKnowledgeSource] = useState('');
   const [mode, setMode] = useState<'Mandatory' | 'Optional'>('Optional');
@@ -108,15 +110,34 @@ export function AgentKnowledgeModal({
         <DialogScrollBody className="space-y-4 py-2">
           <div className="space-y-2">
             <Label>Knowledge Source *</Label>
-            <Combobox
-              options={sourceOptions}
-              value={knowledgeSource}
-              onValueChange={setKnowledgeSource}
-              placeholder="Select knowledge source..."
-              searchPlaceholder="Search knowledge sources..."
-              emptyText="No knowledge sources found."
-              linkTo={linkRoutes.knowledgeSource}
-            />
+            {sourceOptions.length === 0 && onCreateNew ? (
+              <div className="flex flex-col items-center gap-3 rounded-none border border-dashed py-6 text-center">
+                <p className="text-sm text-steel">No knowledge sources registered yet</p>
+                <Button type="button" variant="default" size="sm" onClick={onCreateNew}>
+                  Register your first knowledge source →
+                </Button>
+              </div>
+            ) : (
+              <Combobox
+                options={sourceOptions}
+                value={knowledgeSource}
+                onValueChange={setKnowledgeSource}
+                placeholder="Select knowledge source..."
+                searchPlaceholder="Search knowledge sources..."
+                emptyText="No knowledge sources found."
+                linkTo={linkRoutes.knowledgeSource}
+              />
+            )}
+            {sourceOptions.length > 0 && onCreateNew && (
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto p-0 text-xs"
+                onClick={onCreateNew}
+              >
+                Don't see it? Create a new knowledge source →
+              </Button>
+            )}
           </div>
 
           <div className="space-y-2">

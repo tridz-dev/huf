@@ -2214,7 +2214,6 @@ export function AgentFormPage() {
                 <KnowledgeTab
                   knowledgeSources={knowledgeSources}
                   onAdd={handleAddKnowledge}
-                  onCreate={handleCreateKnowledge}
                   onEdit={handleEditKnowledge}
                   onRemove={handleRemoveKnowledge}
                 />
@@ -2293,6 +2292,7 @@ export function AgentFormPage() {
         onOpenChange={setShowKnowledgeModal}
         onSave={handleSaveKnowledge}
         initialData={editingKnowledgeIndex !== null ? knowledgeSources[editingKnowledgeIndex] : null}
+        onCreateNew={handleCreateKnowledge}
       />
 
       {/* Tool Form Modal (for editing) */}

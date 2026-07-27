@@ -58,7 +58,7 @@ const STARTER_PATHS: Record<StarterPath, {
     modelName: 'openrouter/free',
     title: 'Try OpenRouter Free',
     description: 'Start with a zero-cost router that selects an available free model for each request.',
-    caution: 'Best for learning and demos. Free models can change, have lower limits, and are not a production reliability tier.',
+    caution: 'Best for learning and demos. Free models rotate often, have lower limits, and are not a production reliability tier. Visit openrouter.ai/models?max_price=0 to pick a specific free model.',
     signupUrl: 'https://openrouter.ai/keys',
     signupLabel: 'Get an OpenRouter key',
     freePricing: true,
@@ -722,6 +722,16 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                   <a className="inline-flex items-center gap-1 text-sm text-primary hover:underline" href={starter.signupUrl} target="_blank" rel="noreferrer">
                     {starter.signupLabel}<ExternalLink className="h-3.5 w-3.5" />
                   </a>
+                  {starterPath === 'openrouter' && (
+                    <a
+                      className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                      href="https://openrouter.ai/models?max_price=0"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Browse free models<ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
                 </div>
                 <div className="rounded-md border p-3 text-sm">
                   <p className="font-medium">Huf will configure</p>
