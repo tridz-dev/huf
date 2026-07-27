@@ -17,6 +17,7 @@ export const doctype = {
   "Agent Settings": "Agent Settings",
   "MCP Server": "MCP Server",
   "SSH Connection": "SSH Connection",
+  "Execution Profile": "Execution Profile",
   "Integration Settings": "Integration Settings",
   Gateway: "Gateway",
   "Gateway Binding": "Gateway Binding",

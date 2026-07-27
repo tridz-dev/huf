@@ -794,6 +794,8 @@ export function AgentFormPage() {
       selectedPromptField?: string;
       linkedKnowledge?: AgentKnowledgeRow;
       linkedMcpServer?: MCPServerRef;
+      selectedExecutionProfile?: string;
+      selectedSSHConnection?: string;
     } | null;
 
     if (state?.linkedKnowledge) {
@@ -834,6 +836,45 @@ export function AgentFormPage() {
       return;
     }
 
+    if (state?.selectedExecutionProfile) {
+      const profileName = state.selectedExecutionProfile;
+      db.getDoc('Execution Profile', profileName).then((doc: any) => {
+        if (doc) {
+          setExecutionProfileOptions((prev) => {
+            if (prev.some((p) => p.value === doc.name)) return prev;
+            return [{ value: doc.name, label: doc.profile_name || doc.name, approvalMode: doc.approval_mode }, ...prev];
+          });
+          form.setValue('execution_profile', doc.name, { shouldDirty: true });
+        }
+      }).catch(console.error);
+      if (state.showTab) {
+        setActiveTab(state.showTab);
+      }
+      navigate(`${location.pathname}${location.search}#advanced`, { replace: true, state: {} });
+      return;
+    }
+
+    if (state?.selectedSSHConnection) {
+      const connName = state.selectedSSHConnection;
+      db.getDoc('SSH Connection', connName).then((doc: any) => {
+        if (doc) {
+          setSSHConnectionOptions((prev) => {
+            if (prev.some((c) => c.value === doc.name)) return prev;
+            return [{ value: doc.name, label: doc.display_name || doc.name, description: [doc.username, doc.host].filter(Boolean).join('@') }, ...prev];
+          });
+          const currentConns = form.getValues('ssh_connections') || [];
+          if (!currentConns.includes(doc.name)) {
+            form.setValue('ssh_connections', [...currentConns, doc.name], { shouldDirty: true });
+          }
+        }
+      }).catch(console.error);
+      if (state.showTab) {
+        setActiveTab(state.showTab);
+      }
+      navigate(`${location.pathname}${location.search}#advanced`, { replace: true, state: {} });
+      return;
+    }
+
     if (state?.selectedPrompt) {
       setPendingSelectedPrompt(state.selectedPrompt);
       setPendingSelectedPromptField(state.selectedPromptField || 'agent_prompt');
@@ -841,7 +882,7 @@ export function AgentFormPage() {
         setActiveTab(state.showTab);
       }
     }
-  }, [location.state, location.pathname, location.search, navigate]);
+  }, [location.state, location.pathname, location.search, navigate, form]);
 
   useEffect(() => {
     if (!pendingSelectedPrompt) return;
