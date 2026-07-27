@@ -30,7 +30,7 @@ import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
-import { AdvancedTab, type ExecutionProfileOption, type SSHConnectionOption } from '../components/agent/AdvancedTab';
+import { AdvancedTab, type ExecutionProfileOption, type SSHConnectionOption, type MemoryPolicyOption } from '../components/agent/AdvancedTab';
 import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
@@ -64,6 +64,11 @@ type SSHConnectionListRow = {
   display_name?: string | null;
   host?: string | null;
   username?: string | null;
+};
+
+type MemoryPolicyListRow = {
+  name: string;
+  policy_name?: string | null;
 };
 
 type AgentToolRow = {
@@ -135,6 +140,10 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     inject_conversation_data: agent.inject_conversation_data === 1,
     conversation_data_api_permission: agent.conversation_data_api_permission || '',
     autonaming_of_conversation_title: agent.autonaming_of_conversation_title === 1,
+    enable_memory: agent.enable_memory === 1,
+    memory_policy: agent.memory_policy || '',
+    enable_memory_search_tool: agent.enable_memory_search_tool !== undefined ? agent.enable_memory_search_tool === 1 : true,
+    enable_memory_write_tool: agent.enable_memory_write_tool !== undefined ? agent.enable_memory_write_tool === 1 : true,
     agent_color: agent.agent_color?.trim() || '',
     show_tool_execution_details: agent.show_tool_execution_details === 1,
     agent_skill: (agent.agent_skill ?? []) as any,
@@ -239,6 +248,10 @@ export function AgentFormPage() {
         'inject_conversation_data',
         'conversation_data_api_permission',
         'autonaming_of_conversation_title',
+        'enable_memory',
+        'memory_policy',
+        'enable_memory_search_tool',
+        'enable_memory_write_tool',
         'agent_color',
         'show_tool_execution_details',
         'image_generation_model',
@@ -316,6 +329,8 @@ export function AgentFormPage() {
   const [loadingExecutionProfiles, setLoadingExecutionProfiles] = useState(false);
   const [sshConnectionOptions, setSSHConnectionOptions] = useState<SSHConnectionOption[]>([]);
   const [loadingSSHConnections, setLoadingSSHConnections] = useState(false);
+  const [memoryPolicyOptions, setMemoryPolicyOptions] = useState<MemoryPolicyOption[]>([]);
+  const [loadingMemoryPolicies, setLoadingMemoryPolicies] = useState(false);
   const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
   const [showTriggerModal, setShowTriggerModal] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
@@ -392,6 +407,10 @@ export function AgentFormPage() {
         inject_conversation_data: true,
         conversation_data_api_permission: '',
         autonaming_of_conversation_title: true,
+        enable_memory: false,
+        memory_policy: '',
+        enable_memory_search_tool: true,
+        enable_memory_write_tool: true,
         agent_color: '',
         show_tool_execution_details: false,
         image_generation_model: undefined,
@@ -754,6 +773,40 @@ export function AgentFormPage() {
 
     loadExecutionProfileOptions();
 
+    const loadMemoryPolicyOptions = async () => {
+      setLoadingMemoryPolicies(true);
+      try {
+        const policies = await db.getDocList('Memory Policy', {
+          fields: ['name', 'policy_name'],
+          filters: [['enabled', '=', 1]],
+          limit: 500,
+          orderBy: { field: 'modified', order: 'desc' },
+        }) as MemoryPolicyListRow[];
+
+        if (cancelled) {
+          return;
+        }
+
+        setMemoryPolicyOptions(
+          policies.map((policy) => ({
+            value: policy.name,
+            label: policy.policy_name || policy.name,
+          }))
+        );
+      } catch (error) {
+        console.error('Error loading memory policies:', error);
+        if (!cancelled) {
+          setMemoryPolicyOptions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingMemoryPolicies(false);
+        }
+      }
+    };
+
+    loadMemoryPolicyOptions();
+
     return () => {
       cancelled = true;
     };
@@ -1104,6 +1157,10 @@ export function AgentFormPage() {
             inject_conversation_data: data.inject_conversation_data === 1,
             conversation_data_api_permission: data.conversation_data_api_permission || '',
             autonaming_of_conversation_title: data.autonaming_of_conversation_title === 1,
+            enable_memory: data.enable_memory === 1,
+            memory_policy: data.memory_policy || '',
+            enable_memory_search_tool: data.enable_memory_search_tool !== undefined ? data.enable_memory_search_tool === 1 : true,
+            enable_memory_write_tool: data.enable_memory_write_tool !== undefined ? data.enable_memory_write_tool === 1 : true,
             agent_color: data.agent_color?.trim() || '',
             show_tool_execution_details: data.show_tool_execution_details === 1,
   
@@ -1306,6 +1363,10 @@ export function AgentFormPage() {
         inject_conversation_data: values.inject_conversation_data ? 1 : 0,
         conversation_data_api_permission: values.conversation_data_api_permission || undefined,
         autonaming_of_conversation_title: values.autonaming_of_conversation_title ? 1 : 0,
+        enable_memory: values.enable_memory ? 1 : 0,
+        memory_policy: values.memory_policy || undefined,
+        enable_memory_search_tool: values.enable_memory_search_tool ? 1 : 0,
+        enable_memory_write_tool: values.enable_memory_write_tool ? 1 : 0,
         agent_color: values.agent_color?.trim() || undefined,
         show_tool_execution_details: values.show_tool_execution_details ? 1 : 0,
 
@@ -1399,6 +1460,10 @@ export function AgentFormPage() {
           inject_conversation_data: newAgent.inject_conversation_data === 1,
           conversation_data_api_permission: newAgent.conversation_data_api_permission || '',
           autonaming_of_conversation_title: newAgent.autonaming_of_conversation_title === 1,
+          enable_memory: newAgent.enable_memory === 1,
+          memory_policy: newAgent.memory_policy || '',
+          enable_memory_search_tool: newAgent.enable_memory_search_tool !== undefined ? newAgent.enable_memory_search_tool === 1 : true,
+          enable_memory_write_tool: newAgent.enable_memory_write_tool !== undefined ? newAgent.enable_memory_write_tool === 1 : true,
           agent_color: newAgent.agent_color?.trim() || '',
           show_tool_execution_details: newAgent.show_tool_execution_details === 1,
 
@@ -1483,6 +1548,10 @@ export function AgentFormPage() {
           inject_conversation_data: values.inject_conversation_data,
           conversation_data_api_permission: values.conversation_data_api_permission,
           autonaming_of_conversation_title: values.autonaming_of_conversation_title,
+          enable_memory: values.enable_memory,
+          memory_policy: values.memory_policy,
+          enable_memory_search_tool: values.enable_memory_search_tool,
+          enable_memory_write_tool: values.enable_memory_write_tool,
           agent_color: values.agent_color,
           show_tool_execution_details: values.show_tool_execution_details,
 
@@ -2173,6 +2242,8 @@ export function AgentFormPage() {
                   loadingExecutionProfiles={loadingExecutionProfiles}
                   sshConnectionOptions={sshConnectionOptions}
                   loadingSSHConnections={loadingSSHConnections}
+                  memoryPolicyOptions={memoryPolicyOptions}
+                  loadingMemoryPolicies={loadingMemoryPolicies}
                 />
               </TabsContent>
             </Tabs>
