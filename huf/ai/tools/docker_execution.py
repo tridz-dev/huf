@@ -4,6 +4,7 @@ import shlex
 import frappe
 
 DESTRUCTIVE_ACTIONS = {"stop_container", "restart_container", "remove_container"}
+COMPOSE_DESTRUCTIVE_ACTIONS = {"compose_down"}
 DEFAULT_TIMEOUT_SECONDS = 60
 MAX_TIMEOUT_SECONDS = 300
 
@@ -19,6 +20,48 @@ def _split_csv(value):
     if not value:
         return []
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _compose_args(action, kwargs):
+    compose_file = _require_value(kwargs, "compose_file")
+    project_dir = kwargs.get("project_dir")
+    project_name = kwargs.get("project_name")
+    args = ["compose"]
+    if project_dir:
+        args.extend(["--project-directory", project_dir])
+    args.extend(["-f", compose_file])
+    if project_name:
+        args.extend(["-p", project_name])
+
+    if action == "compose_up":
+        args.append("up")
+        if kwargs.get("detach", True):
+            args.append("-d")
+        if kwargs.get("build"):
+            args.append("--build")
+        if kwargs.get("wait"):
+            args.append("--wait")
+        if kwargs.get("remove_orphans"):
+            args.append("--remove-orphans")
+        args.extend(_split_csv(kwargs.get("services")))
+    elif action == "compose_ps":
+        args.extend(["ps", "--all"])
+    elif action == "compose_logs":
+        args.append("logs")
+        if kwargs.get("tail") is not None:
+            args.extend(["--tail", str(kwargs["tail"])])
+        args.extend(_split_csv(kwargs.get("services")))
+    elif action == "compose_config":
+        args.append("config")
+    elif action == "compose_down":
+        args.append("down")
+        if kwargs.get("remove_orphans"):
+            args.append("--remove-orphans")
+        if kwargs.get("remove_volumes"):
+            args.append("--volumes")
+    else:
+        raise ValueError(f"Unknown action: {action}")
+    return args
 
 def _build_docker_base_cmd(kwargs):
     cmd = ["docker"]
@@ -105,7 +148,7 @@ def _run_via_ssh_connection(ssh_connection, cmd_str, timeout=DEFAULT_TIMEOUT_SEC
 def handle_action(**kwargs):
     action = kwargs.get("action")
     ssh_connection = kwargs.get("ssh_connection")
-    if action in DESTRUCTIVE_ACTIONS and not kwargs.get("confirm_destructive"):
+    if (action in DESTRUCTIVE_ACTIONS or action in COMPOSE_DESTRUCTIVE_ACTIONS) and not kwargs.get("confirm_destructive"):
         return {
             "success": False,
             "error": f"{action} requires confirm_destructive=true",
@@ -113,7 +156,9 @@ def handle_action(**kwargs):
 
     try:
         args = []
-        if action == "list_containers":
+        if action in {"compose_up", "compose_ps", "compose_logs", "compose_config", "compose_down"}:
+            args = _compose_args(action, kwargs)
+        elif action == "list_containers":
             args = ["ps", "-a", "--format", "{{json .}}"]
         elif action == "list_images":
             args = ["images", "--format", "{{json .}}"]
@@ -181,6 +226,7 @@ def handle_action(**kwargs):
         return {"success": False, "error": "timeout_seconds must be an integer"}
 
     if action not in {
+        "compose_up", "compose_ps", "compose_logs", "compose_config", "compose_down",
         "list_containers", "list_images", "inspect_container", "logs",
         "stop_container", "start_container", "restart_container",
         "remove_container", "pull_image", "run_container", "exec_container",
