@@ -2,7 +2,8 @@ import { ReactNode, RefObject } from 'react';
 import { cn } from '@/lib/utils';
 
 interface PageLayoutProps {
-  title?: string;
+  title?: ReactNode;
+  badge?: ReactNode;
   subtitle?: string;
   filters?: ReactNode;
   toolbar?: ReactNode;
@@ -13,6 +14,7 @@ interface PageLayoutProps {
 
 export function PageLayout({
   title,
+  badge,
   subtitle,
   filters,
   toolbar,
@@ -27,9 +29,12 @@ export function PageLayout({
           <div className="flex items-end justify-between gap-4">
             <div className="space-y-1">
               {title && (
-                <h1 className="font-display font-bold text-[36px] uppercase text-ink leading-tight">
-                  {title}
-                </h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="font-display font-bold text-[36px] uppercase text-ink leading-tight">
+                    {title}
+                  </h1>
+                  {badge}
+                </div>
               )}
               {subtitle && (
                 <p className="font-body text-steel text-[14.5px]">{subtitle}</p>
