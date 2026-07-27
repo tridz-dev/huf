@@ -842,17 +842,46 @@ This includes whether each tool call is completed and its corresponding result.`
 								render={({ field }) => (
 									<FormItem className="sm:col-span-2">
 										<FormLabel>Execution Profile</FormLabel>
-										<FormControl>
-											<Combobox
-												options={executionProfileComboboxOptions}
-												value={field.value}
-												onValueChange={(v) => field.onChange(v || undefined)}
-												placeholder={loadingExecutionProfiles ? 'Loading profiles...' : 'Select an Execution Profile'}
-												disabled={loadingExecutionProfiles}
-												searchPlaceholder="Search execution profiles..."
-												emptyText="No enabled Execution Profiles found."
-											/>
-										</FormControl>
+										<div className="flex items-center gap-2">
+											<FormControl>
+												<Combobox
+													options={executionProfileComboboxOptions}
+													value={field.value}
+													onValueChange={(v) => field.onChange(v || undefined)}
+													placeholder={loadingExecutionProfiles ? 'Loading profiles...' : 'Select an Execution Profile'}
+													disabled={loadingExecutionProfiles}
+													searchPlaceholder="Search execution profiles..."
+													emptyText="No enabled Execution Profiles found."
+													linkTo={linkRoutes.executionProfile}
+												/>
+											</FormControl>
+											<Button
+												type="button"
+												variant="secondary"
+												onClick={() => {
+													const returnTo = `${location.pathname}#advanced`;
+													const selectedField = 'execution_profile';
+													try {
+														localStorage.setItem(
+															'executionProfileCreateReturnTo',
+															JSON.stringify({ returnTo, selectedField }),
+														);
+													} catch {
+														// ignore storage failures
+													}
+													navigate('/execution-profiles/new', {
+														state: {
+															returnTo,
+															selectedField,
+															showTab: 'advanced',
+														},
+													});
+												}}
+											>
+												<Plus className="w-4 h-4 mr-2" />
+												New
+											</Button>
+										</div>
 										<FormDescription>
 											Caps modules, network, filesystem, broker capabilities, and resource limits for code runs. Execution Profiles are managed by admins in the Frappe desk.
 										</FormDescription>
@@ -927,17 +956,45 @@ This includes whether each tool call is completed and its corresponding result.`
 								render={({ field }) => (
 									<FormItem className="sm:col-span-2">
 										<FormLabel>Allowlisted SSH Connections</FormLabel>
-										<FormControl>
-											<MultiSelectCombobox
-												options={sshConnectionMultiSelectOptions}
-												values={field.value || []}
-												onValuesChange={field.onChange}
-												placeholder={loadingSSHConnections ? 'Loading SSH connections...' : 'Select SSH connections'}
-												searchPlaceholder="Search SSH connections..."
-												emptyText="No enabled SSH connections found."
-												disabled={loadingSSHConnections}
-											/>
-										</FormControl>
+										<div className="flex items-center gap-2">
+											<FormControl>
+												<MultiSelectCombobox
+													options={sshConnectionMultiSelectOptions}
+													values={field.value || []}
+													onValuesChange={field.onChange}
+													placeholder={loadingSSHConnections ? 'Loading SSH connections...' : 'Select SSH connections'}
+													searchPlaceholder="Search SSH connections..."
+													emptyText="No enabled SSH connections found."
+													disabled={loadingSSHConnections}
+												/>
+											</FormControl>
+											<Button
+												type="button"
+												variant="secondary"
+												onClick={() => {
+													const returnTo = `${location.pathname}#advanced`;
+													const selectedField = 'ssh_connections';
+													try {
+														localStorage.setItem(
+															'sshConnectionCreateReturnTo',
+															JSON.stringify({ returnTo, selectedField }),
+														);
+													} catch {
+														// ignore storage failures
+													}
+													navigate('/ssh-connections/new', {
+														state: {
+															returnTo,
+															selectedField,
+															showTab: 'advanced',
+														},
+													});
+												}}
+											>
+												<Plus className="w-4 h-4 mr-2" />
+												New
+											</Button>
+										</div>
 										<FormDescription>
 											Each command call must pick one of these connections. Use the Frappe desk SSH Connection DocType to store credentials, enroll host keys, and rotate secrets.
 										</FormDescription>

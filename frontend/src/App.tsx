@@ -16,6 +16,8 @@ import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
 import { SkillsHeaderActions } from './components/skills/SkillsHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
+import { ExecutionProfilesHeaderActions } from './components/ExecutionProfilesHeaderActions';
+import { SSHConnectionsHeaderActions } from './components/SSHConnectionsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
@@ -31,6 +33,10 @@ const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
 const AgentPromptFormPageWrapper = lazy(() => import('./pages/AgentPromptFormPageWrapper'));
 const AgentSummaryPromptsPage = lazy(() => import('./pages/AgentSummaryPromptsPage'));
 const AgentSummaryPromptFormPageWrapper = lazy(() => import('./pages/AgentSummaryPromptFormPageWrapper'));
+const ExecutionProfilesPage = lazy(() => import('./pages/ExecutionProfilesPage'));
+const ExecutionProfileFormPageWrapper = lazy(() => import('./pages/ExecutionProfileFormPageWrapper'));
+const SSHConnectionsPage = lazy(() => import('./pages/SSHConnectionsPage'));
+const SSHConnectionFormPageWrapper = lazy(() => import('./pages/SSHConnectionFormPageWrapper'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
@@ -218,6 +224,50 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <AgentSummaryPromptFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/execution-profiles"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<ExecutionProfilesHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <ExecutionProfilesPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/execution-profiles/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ExecutionProfileFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ssh-connections"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<SSHConnectionsHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <SSHConnectionsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ssh-connections/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <SSHConnectionFormPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
