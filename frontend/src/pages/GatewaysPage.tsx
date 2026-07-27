@@ -31,11 +31,13 @@ const providerNames: Record<GatewayProvider, string> = {
   Instagram: 'Instagram Direct Account',
   Telegram: 'Telegram Bot',
   Slack: 'Slack Workspace',
-  Email: 'Shared Email Inbox',
   Discord: 'Discord Server',
+  Email: 'Shared Email Inbox',
+  SMS: 'Twilio / SMS Number',
+  'Google Chat': 'Google Workspace Chat',
+  'Microsoft Teams': 'MS Teams Channel',
   VK: 'VK Community',
   WeCom: 'WeCom Work Account',
-  'Microsoft Teams': 'MS Teams Channel',
 };
 
 const uiProviders: GatewayProvider[] = [
@@ -44,7 +46,13 @@ const uiProviders: GatewayProvider[] = [
   'Instagram',
   'Telegram',
   'Slack',
+  'Discord',
   'Email',
+  'SMS',
+  'Google Chat',
+  'Microsoft Teams',
+  'VK',
+  'WeCom',
 ];
 
 export default function GatewaysPage() {
