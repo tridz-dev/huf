@@ -1880,9 +1880,10 @@ def _execute_agent_run(
         # model prefix, empty response). Surface it as a failed run — never
         # as assistant message content.
         error_msg = str(e)
+        log_error_msg = getattr(e, "log_message", error_msg)
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
-        frappe.log_error(f"Provider unavailable for agent '{agent_name}': {error_msg}", "Huf Provider")
+        frappe.log_error(f"Provider unavailable for agent '{agent_name}': {log_error_msg}", "Huf Provider")
         _emit_run_lifecycle_event(run_doc, conversation, "failed", {"error": error_msg})
 
         # Handle Sub-Agent Failure Lifecycle Hook
@@ -3037,7 +3038,8 @@ async def run_agent_stream(
                 # Expected operational failure (connection refused, model not
                 # pulled, bad model prefix) — message is self-explanatory, no
                 # traceback needed. The run is still marked Failed below.
-                frappe.log_error(f"Provider unavailable for agent '{agent_name}': {error_msg}", "Huf Provider")
+                log_error_msg = getattr(e, "log_message", error_msg)
+                frappe.log_error(f"Provider unavailable for agent '{agent_name}': {log_error_msg}", "Huf Provider")
             else:
                 frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
             if "ContextWindowExceededError" in error_msg:
