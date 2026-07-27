@@ -191,6 +191,58 @@ TELEGRAM_TOOLS = [
 	},
 ]
 
+WHATSAPP_TOOLS = [
+	{
+		"tool_name": "whatsapp",
+		"description": (
+			"Manage Meta WhatsApp messaging. Actions: "
+			"send_message (to, message), "
+			"send_template (to, template_name, language_code), "
+			"list_messages (to, from, limit), "
+			"get_account_info."
+		),
+		"function_path": "huf.ai.tools.whatsapp.handle_action",
+		"category": "Communication Tools",
+		"parameters": [
+			_action("send_message|send_template|list_messages|get_account_info"),
+			_p("to", description="Recipient phone number with country code (e.g. 15551234567)"),
+			_p("message", description="Message body text"),
+			_p("text", description="Alias for message body text"),
+			_p("template_name", description="Meta approved WhatsApp template name"),
+			_p("language_code", description="Language code for template (default en)"),
+			_p("limit", type="integer", description="Max number of messages to return"),
+			_p("phone_number_id", description="Override Meta WhatsApp Phone Number ID"),
+			_p("access_token", description="Override Meta Access Token"),
+		],
+	},
+]
+
+MESSENGER_TOOLS = [
+	{
+		"tool_name": "messenger",
+		"description": (
+			"Manage Facebook Messenger and Instagram Direct messaging. Actions: "
+			"send_message (recipient_id, message, platform), "
+			"list_conversations (platform, limit), "
+			"list_messages (conversation, limit)."
+		),
+		"function_path": "huf.ai.tools.messenger.handle_action",
+		"category": "Communication Tools",
+		"parameters": [
+			_action("send_message|list_conversations|list_messages"),
+			_p("recipient_id", description="Recipient PSID or IGSID user identifier"),
+			_p("to", description="Alias for recipient_id"),
+			_p("message", description="Message body text"),
+			_p("text", description="Alias for message body text"),
+			_p("platform", description="Channel platform: 'messenger' or 'instagram'"),
+			_p("conversation", description="Messenger Conversation ID for listing messages"),
+			_p("limit", type="integer", description="Max items to list"),
+			_p("page_id", description="Override Facebook Page ID or Instagram Professional ID"),
+			_p("access_token", description="Override Meta Access Token"),
+		],
+	},
+]
+
 
 # ---------------------------------------------------------------------------
 # Developer Tools
@@ -1239,6 +1291,8 @@ ALL_INTEGRATION_TOOLS = (
 	+ SLACK_TOOLS
 	+ DISCORD_TOOLS
 	+ TELEGRAM_TOOLS
+	+ WHATSAPP_TOOLS
+	+ MESSENGER_TOOLS
 	+ GITHUB_TOOLS
 	+ CRM_TOOLS
 	+ HELPDESK_TOOLS
