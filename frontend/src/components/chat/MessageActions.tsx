@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { BarChart2, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -17,10 +18,11 @@ import { CopyButton } from './CopyButton';
 interface MessageActionsProps {
   content: string;
   agentMessageId?: string;
+  agentRunId?: string;
   onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
 }
 
-export function MessageActions({ content, agentMessageId, onFeedback }: MessageActionsProps) {
+export function MessageActions({ content, agentMessageId, agentRunId, onFeedback }: MessageActionsProps) {
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
 
@@ -56,6 +58,25 @@ export function MessageActions({ content, agentMessageId, onFeedback }: MessageA
         >
           <ThumbsDown className="h-4 w-4" />
         </Button>
+        {agentRunId && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            asChild
+            aria-label="View context & cache metrics"
+          >
+            <Link
+              to={`/executions/${agentRunId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="View context & cache metrics"
+            >
+              <BarChart2 className="h-4 w-4" />
+            </Link>
+          </Button>
+        )}
       </div>
 
       <AlertDialog open={commentDialogOpen} onOpenChange={setCommentDialogOpen}>

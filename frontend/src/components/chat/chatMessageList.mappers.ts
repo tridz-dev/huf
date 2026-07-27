@@ -122,6 +122,7 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
   const newMessage: MessageType = {
     key: event.agent_run_id,
     from: 'assistant',
+    agentRunId: event.agent_run_id,
     kind: isImageGeneration ? 'Image' : undefined,
     versions: [
       {
@@ -178,13 +179,18 @@ export function upsertAgentRunStatusFromSocket(
     key: event.agent_run_id,
     from: 'assistant',
     runStatus: event.status,
+    agentRunId: event.agent_run_id,
     versions: [{ id: event.agent_run_id, content }],
   });
 
   if (event.status === 'Queued' || event.status === 'Started') {
     if (runIndex >= 0) {
       const updated = [...prev];
-      updated[runIndex] = { ...updated[runIndex], runStatus: event.status };
+      updated[runIndex] = {
+        ...updated[runIndex],
+        runStatus: event.status,
+        agentRunId: event.agent_run_id || updated[runIndex].agentRunId,
+      };
       return updated;
     }
     return [...prev, createPendingMessage()];
@@ -203,6 +209,7 @@ export function upsertAgentRunStatusFromSocket(
     updated[runIndex] = {
       ...existing,
       runStatus: 'Success',
+      agentRunId: event.agent_run_id || existing.agentRunId,
       versions: existing.versions.map((v, i) =>
         i === 0 ? { ...v, content: event.response ?? v.content } : v
       ),
@@ -226,6 +233,7 @@ export function upsertAgentRunStatusFromSocket(
           key: event.agent_run_id,
           from: 'assistant',
           runStatus: 'Failed',
+          agentRunId: event.agent_run_id,
           error: event.error,
           versions: [{ id: event.agent_run_id, content: event.error ?? '' }],
         },
@@ -235,6 +243,7 @@ export function upsertAgentRunStatusFromSocket(
     updated[targetIndex] = {
       ...updated[targetIndex],
       runStatus: 'Failed',
+      agentRunId: event.agent_run_id || updated[targetIndex].agentRunId,
       error: event.error,
     };
     return updated;
@@ -261,6 +270,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
       generatedAudio: event.generated_audio,
       generatedVideo: event.generated_video,
       injected_memories: event.injected_memories,
+      agentRunId: event.agent_run_id || existing.agentRunId,
       runStatus: undefined,
       error: undefined,
       versions: existing.versions.map((v) =>
@@ -280,6 +290,7 @@ export function upsertAgentMessageFromSocket(prev: MessageType[], event: NewAgen
     generatedAudio: event.generated_audio,
     generatedVideo: event.generated_video,
     injected_memories: event.injected_memories,
+    agentRunId: event.agent_run_id,
     versions: [
       {
         id: event.message_id,
@@ -459,6 +470,7 @@ export function mergePendingRunsIntoMessages(
         key: run.name,
         from: 'assistant',
         runStatus: status,
+        agentRunId: run.name,
         versions: [{ id: run.name, content: '' }],
       });
       existingKeys.add(run.name);
@@ -496,7 +508,7 @@ export function mergeConversationItemsIntoMessages(
     const baseMessage: MessageType = {
       key: item.id,
       from: item.isAgent ? 'assistant' : 'user',
-      agentRunId: !item.isAgent ? item.agentRun : undefined,
+      agentRunId: item.agentRun,
       kind: item.kind,
       generatedImage: item.generatedImage,
       generatedAudio: item.generatedAudio,
