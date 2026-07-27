@@ -15,7 +15,7 @@ import unittest
 import frappe
 
 from huf.ai.tools.code_execution import _make_broker_handler
-from huf.install import create_huf_roles
+from huf.install import create_default_execution_profiles, create_huf_roles
 
 
 class TestExecutionProfile(unittest.TestCase):
@@ -199,6 +199,20 @@ class TestExecutionProfile(unittest.TestCase):
 		self.assertTrue(ok, payload)
 		self.assertEqual(payload.get("name"), todo.name)
 
+	def test_default_execution_profiles_creation(self):
+		create_default_execution_profiles()
+		expected = {
+			"Restricted": "Ask Every Time",
+			"Trusted": "Auto Approve",
+			"Blocked": "Never Allow",
+		}
+		for name, approval_mode in expected.items():
+			self.assertTrue(frappe.db.exists("Execution Profile", name))
+			doc = frappe.get_doc("Execution Profile", name)
+			self.assertEqual(doc.approval_mode, approval_mode)
+			self.assertEqual(doc.is_builtin, 1)
+
 
 if __name__ == "__main__":
 	unittest.main()
+
