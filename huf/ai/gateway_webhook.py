@@ -18,6 +18,7 @@ from frappe import _
 _ADAPTER_CLASSES = {
 	"VK": ("huf.ai.gateway_adapters.vk", "VKGatewayAdapter"),
 	"WeCom": ("huf.ai.gateway_adapters.wecom", "WeComGatewayAdapter"),
+	"WhatsApp": ("huf.ai.gateway_adapters.whatsapp", "WhatsAppGatewayAdapter"),
 }
 
 
@@ -101,8 +102,8 @@ def handle_gateway_webhook(gateway_name: str) -> dict | None:
 
 	adapter = get_gateway_adapter(gateway)
 	request = _inbound_request()
-	if request.method == "GET" and gateway.provider == "WeCom":
-		_text_response(adapter.verify_url(request))
+	if request.method == "GET" and gateway.provider in ("WeCom", "WhatsApp"):
+		_text_response(adapter.verify_url(request) or "")
 		return None
 	if not adapter.verify_inbound(request):
 		return {"success": False, "error": "Provider verification failed"}

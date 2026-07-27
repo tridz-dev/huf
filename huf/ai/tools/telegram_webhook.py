@@ -153,29 +153,52 @@ def process_telegram_update(settings_name: str, update: dict):
             )
             return
 
-        # Run the HUF agent
-        try:
-            from huf.ai.agent_integration import run_agent_sync
+        gateway_name = frappe.db.get_value("Gateway", {"integration_settings": settings_name, "provider": "Telegram", "is_enabled": 1})
+        if not gateway_name:
+            # Fallback for old way if no gateway configured
+            try:
+                from huf.ai.agent_integration import run_agent_sync
 
-            result = run_agent_sync(
-                agent_name=agent_name,
-                prompt=text,
-                channel_id="telegram",
-                external_id=str(chat_id),
-                now=True,
-            )
-            response_text = result.get("response") if isinstance(result, dict) else str(result)
-        except Exception as e:
-            logger.warning(f"Agent run failed for Telegram message: {e}")
-            response_text = "Sorry, I couldn't process your message. Please try again later."
+                result = run_agent_sync(
+                    agent_name=agent_name,
+                    prompt=text,
+                    channel_id="telegram",
+                    external_id=str(chat_id),
+                    now=True,
+                )
+                response_text = result.get("response") if isinstance(result, dict) else str(result)
+            except Exception as e:
+                logger.warning(f"Agent run failed for Telegram message: {e}")
+                response_text = "Sorry, I couldn't process your message. Please try again later."
 
-        if response_text:
-            _send_telegram_message(
-                settings,
-                chat_id,
-                response_text,
-                reply_to_message_id=message_id,
-            )
+            if response_text:
+                _send_telegram_message(
+                    settings,
+                    chat_id,
+                    response_text,
+                    reply_to_message_id=message_id,
+                )
+            return
+
+        # Gateway Foundation logic
+        from huf.ai.gateway_service import ingest_gateway_event
+
+        context = {
+            "sender_id": str(message.get("username") or chat_id),
+            "conversation_id": str(chat_id),
+            "thread_id": str(message_id) if message_id else "",
+            "message_text": text,
+            "is_room": str(chat_id).startswith("-"),
+            "mentioned": False,
+        }
+
+        ingest_gateway_event(
+            gateway_name,
+            str(message_id or secrets.token_hex(8)),
+            context,
+            verified_sender=True,
+            raw_payload=update,
+        )
 
     except Exception as e:
         logger.warning(f"Error processing Telegram update: {e}")
