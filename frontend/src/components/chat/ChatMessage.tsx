@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { BarChart2 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import ChatAvatar from "./ChatAvatar";
 import { getInitials } from "@/utils/getInitials";
@@ -71,6 +73,9 @@ export function ChatMessage({
     const timestamp = message.versions[0]?.id ? undefined : undefined; // We'll get timestamp from message if available
     const timeDisplay = timestamp ? formatTime(timestamp) : '';
     const userInitials = user?.full_name ? getInitials(user.full_name) : 'You';
+    const runId = message.agentRunId || (
+        message.key.startsWith('AR-') || message.key.startsWith('run-') ? message.key : undefined
+    );
 
     const showLoading = isAssistant && !message.error && (
         ((status === 'submitted' || status === 'streaming') && isEmpty) ||
@@ -113,6 +118,19 @@ export function ChatMessage({
                     )}
                     {message.injected_memories && message.injected_memories.length > 0 && (
                         <MemoryContextBadge memoryRecordNames={message.injected_memories} />
+                    )}
+                    {!isUser && runId && (
+                        <Link
+                            to={`/executions/${runId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto group/analytics"
+                            title="View context & cache metrics (/executions/:runId)"
+                            aria-label="View context & cache metrics"
+                        >
+                            <BarChart2 className="h-3.5 w-3.5 text-muted-foreground group-hover/analytics:text-foreground" />
+                            <span className="text-[11px] font-medium">Cache metrics</span>
+                        </Link>
                     )}
                 </div>
                 
@@ -250,6 +268,7 @@ export function ChatMessage({
                                     content={message.versions[0].content}
                                     onFeedback={onFeedback}
                                     agentMessageId={message.versions[0].id}
+                                    agentRunId={runId}
                                 />
                             </div>
                         )}

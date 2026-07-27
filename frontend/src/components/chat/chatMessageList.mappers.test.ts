@@ -219,6 +219,22 @@ describe('mergeConversationItemsIntoMessages', () => {
     expect(next[0].key).toBe('UM-1');
     expect(next.find((msg) => msg.key === 'pending-user-AR-1')).toBeUndefined();
   });
+
+  it('maps agentRunId onto assistant messages from conversation items', () => {
+    const conversationItems: ChatMessage[] = [
+      {
+        id: 'AM-1',
+        conversation: 'CONV-1',
+        content: 'assistant response',
+        isAgent: true,
+        agentRun: 'AR-100',
+      },
+    ];
+    const next = mergeConversationItemsIntoMessages([], conversationItems, false);
+    expect(next).toHaveLength(1);
+    expect(next[0].from).toBe('assistant');
+    expect(next[0].agentRunId).toBe('AR-100');
+  });
 });
 
 describe('applyPolledRunStatus', () => {
