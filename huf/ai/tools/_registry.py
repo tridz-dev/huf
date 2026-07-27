@@ -1282,9 +1282,145 @@ BUILDER_TOOLS = [
 ]
 
 
+DOCKER_TOOLS = [
+	{
+		"tool_name": "docker_execution",
+		"description": "Manage Docker containers and images with bounded, explicit operations. Destructive actions require confirm_destructive=true. Supports local socket, Docker contexts, TLS endpoints, or a Frappe SSH Connection.",
+		"function_path": "huf.ai.tools.docker_execution.handle_action",
+		"category": "Developer Tools",
+		"parameters": [
+			_action("list_containers|list_images|inspect_container|logs|stop_container|start_container|restart_container|remove_container|pull_image|run_container|exec_container"),
+			_p("container", description="Container name or ID"),
+			_p("image", description="Image name"),
+			_p("command", description="Command to execute (for exec_container)"),
+			_p("name", description="Name for new container (for run_container)"),
+			_p("ports", description="Ports to publish (comma separated, e.g. '80:80')"),
+			_p("environment", description="Environment variables (comma separated KEY=VALUE entries)"),
+			_p("volumes", description="Bind mounts (comma separated host:container[:mode] entries)"),
+			_p("network", description="Docker network for a new container"),
+			_p("workdir", description="Working directory for run or exec"),
+			_p("user", description="User for a new container"),
+			_p("memory", description="Memory limit for a new container, e.g. 512m"),
+			_p("cpus", type="number", description="CPU limit for a new container"),
+			_p("auto_remove", type="boolean", description="Remove the container when it exits"),
+			_p("confirm_destructive", type="boolean", description="Required confirmation for stop, restart, or remove"),
+			_p("timeout_seconds", type="integer", description="Maximum operation time, capped at 300 seconds"),
+			_p("tail", type="integer", description="Number of log lines to tail"),
+			_p("connection_string", description="Docker daemon URL (unix://, ssh://, tcp://)"),
+			_p("context_name", description="Docker context name"),
+			_p("ssh_connection", description="Frappe SSH Connection doctype name to use for remote docker execution"),
+			_p("tls_verify", type="boolean", description="Enable TLS verification for TCP connections"),
+			_p("tls_ca_cert", description="Path to the CA certificate for a TLS Docker daemon"),
+			_p("tls_cert", description="Path to the client certificate for a TLS Docker daemon"),
+			_p("tls_key", description="Path to the client key for a TLS Docker daemon"),
+		],
+	},
+]
+
+
 # ---------------------------------------------------------------------------
 # Master list
 # ---------------------------------------------------------------------------
+
+FRAPPE_CLOUD_TOOLS = [
+	{
+		"tool_name": "fc_list_benches",
+		"description": "List Frappe Cloud benches.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_benches",
+		"category": "Frappe Cloud",
+		"parameters": [],
+	},
+	{
+		"tool_name": "fc_list_sites",
+		"description": "List Frappe Cloud sites.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_sites",
+		"category": "Frappe Cloud",
+		"parameters": [],
+	},
+	{
+		"tool_name": "fc_create_site",
+		"description": "Create a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_create_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("bench", required=True, description="Bench name"),
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_drop_site",
+		"description": "Drop a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_drop_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_backup_site",
+		"description": "Backup a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_backup_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_download_backup",
+		"description": "Download backup of a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_download_backup",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_migrate_site",
+		"description": "Migrate a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_migrate_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_clear_cache",
+		"description": "Clear cache of a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_clear_cache",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_update_site",
+		"description": "Update a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_update_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_clone_site",
+		"description": "Clone a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_clone_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("source_site", required=True, description="Source site name"),
+			_p("bench", required=True, description="Bench name to clone into"),
+		],
+	},
+	{
+		"tool_name": "fc_get_admin_login_link",
+		"description": "Get admin login link for a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_get_admin_login_link",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+]
 
 ALL_INTEGRATION_TOOLS = (
 	RECIPIENT_TOOLS
@@ -1313,4 +1449,6 @@ ALL_INTEGRATION_TOOLS = (
 	+ SERP_YOUTUBE_TOOLS
 	+ BUILDER_TOOLS
 	+ SSH_TOOLS
+	+ DOCKER_TOOLS
+	+ FRAPPE_CLOUD_TOOLS
 )
