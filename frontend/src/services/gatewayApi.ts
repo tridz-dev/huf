@@ -13,6 +13,8 @@ export type GatewayProvider =
   | 'Slack'
   | 'Discord'
   | 'Email'
+  | 'SMS'
+  | 'Google Chat'
   | 'VK'
   | 'WeCom'
   | 'Microsoft Teams';
