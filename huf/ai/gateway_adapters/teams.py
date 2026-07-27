@@ -24,7 +24,7 @@ def _requests_post(url: str, *, headers: Mapping[str, str], json_data: Any, time
 
 
 class TeamsGatewayAdapter(GatewayAdapter):
-	"""Handle Microsoft Teams Bot Framework activities and replies."""
+	"""Handle Microsoft Teams Bot Framework activities, replies, and Adaptive Cards."""
 
 	provider_id = "teams"
 	credential_schema = GatewayCredentialSchema(
@@ -105,4 +105,29 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		body = response.json() if hasattr(response, "json") else response
 		activity_id = str(body.get("id") or f"teams-{hash(reply.text)}") if isinstance(body, dict) else f"teams-{hash(reply.text)}"
 
+		return OutboundDelivery(activity_id, provider_response=body if isinstance(body, dict) else {"status": "ok"})
+
+	def send_adaptive_card(self, conversation_id: str, card_content: dict[str, Any]) -> OutboundDelivery:
+		"""Post an Adaptive Card attachment to an MS Teams conversation."""
+		service_url = "https://smba.trafficmanager.net/amer"
+		url = f"{service_url.rstrip('/')}/v3/conversations/{conversation_id}/activities"
+
+		data: dict[str, Any] = {
+			"type": "message",
+			"attachments": [
+				{
+					"contentType": "application/vnd.microsoft.card.adaptive",
+					"content": card_content,
+				}
+			],
+		}
+
+		response = self._http_post(
+			url,
+			headers={"Content-Type": "application/json"},
+			json_data=data,
+			timeout=10,
+		)
+		body = response.json() if hasattr(response, "json") else response
+		activity_id = str(body.get("id") or f"teams-card-{hash(str(card_content))}") if isinstance(body, dict) else f"teams-card-{hash(str(card_content))}"
 		return OutboundDelivery(activity_id, provider_response=body if isinstance(body, dict) else {"status": "ok"})

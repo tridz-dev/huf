@@ -24,7 +24,7 @@ def _requests_post(url: str, *, headers: Mapping[str, str], json_data: Any, time
 
 
 class GoogleChatGatewayAdapter(GatewayAdapter):
-	"""Handle Google Chat webhook verification and message replies."""
+	"""Handle Google Chat webhook verification, text & card messages, and thread replies."""
 
 	provider_id = "google_chat"
 	credential_schema = GatewayCredentialSchema(
@@ -112,4 +112,21 @@ class GoogleChatGatewayAdapter(GatewayAdapter):
 		body = response.json() if hasattr(response, "json") else response
 		msg_id = str(body.get("name") or f"gchat-{hash(reply.text)}") if isinstance(body, dict) else f"gchat-{hash(reply.text)}"
 
+		return OutboundDelivery(msg_id, provider_response=body if isinstance(body, dict) else {"status": "ok"})
+
+	def send_card(self, space_id: str, card_v2_payload: dict[str, Any], thread_id: str | None = None) -> OutboundDelivery:
+		"""Send a Card V2 interactive message to a Google Chat space."""
+		target_url = self._webhook_url or f"https://chat.googleapis.com/v1/{space_id}/messages"
+		data: dict[str, Any] = {"cardsV2": [card_v2_payload]}
+		if thread_id:
+			data["thread"] = {"name": thread_id}
+
+		response = self._http_post(
+			target_url,
+			headers={"Content-Type": "application/json"},
+			json_data=data,
+			timeout=10,
+		)
+		body = response.json() if hasattr(response, "json") else response
+		msg_id = str(body.get("name") or f"gchat-card-{hash(str(card_v2_payload))}") if isinstance(body, dict) else f"gchat-card-{hash(str(card_v2_payload))}"
 		return OutboundDelivery(msg_id, provider_response=body if isinstance(body, dict) else {"status": "ok"})

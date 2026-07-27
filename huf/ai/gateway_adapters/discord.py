@@ -1,9 +1,10 @@
-"""Discord Gateway Adapter for two-way messaging and interactions."""
+"""Discord Gateway Adapter for two-way messaging, DMs, interactions, and reactions."""
 
 from __future__ import annotations
 
 import json
 from typing import Any, Callable, Mapping
+from urllib.parse import quote
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
@@ -23,8 +24,14 @@ def _requests_post(url: str, *, headers: Mapping[str, str], json_data: Any, time
 	return requests.post(url, headers=headers, json=json_data, timeout=timeout)
 
 
+def _requests_put(url: str, *, headers: Mapping[str, str], timeout: int) -> Any:
+	import requests
+
+	return requests.put(url, headers=headers, timeout=timeout)
+
+
 class DiscordGatewayAdapter(GatewayAdapter):
-	"""Verify Discord Ed25519 interactions and deliver bot message replies."""
+	"""Verify Discord Ed25519 interactions and deliver bot message replies, DMs, and reactions."""
 
 	provider_id = "discord"
 	credential_schema = GatewayCredentialSchema(
@@ -44,6 +51,7 @@ class DiscordGatewayAdapter(GatewayAdapter):
 		credentials: Mapping[str, str],
 		*,
 		http_post: Callable[..., Any] = _requests_post,
+		http_put: Callable[..., Any] = _requests_put,
 	) -> None:
 		missing = self.credential_schema.missing_required(credentials)
 		if missing:
@@ -51,6 +59,7 @@ class DiscordGatewayAdapter(GatewayAdapter):
 		self._bot_token = credentials["bot_token"]
 		self._public_key = credentials["public_key"]
 		self._http_post = http_post
+		self._http_put = http_put
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
 		"""Verify Ed25519 signature from Discord."""
@@ -93,12 +102,12 @@ class DiscordGatewayAdapter(GatewayAdapter):
 			conversation_id=channel_id,
 			message_text=message_text.strip(),
 			thread_id=None,
-			is_room=True,
+			is_room=bool(payload.get("guild_id")),
 			raw_payload=payload,
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
-		"""Send reply message to a Discord channel via REST API."""
+		"""Send reply message to a Discord channel or DM via REST API."""
 		url = f"https://discord.com/api/v10/channels/{reply.conversation_id}/messages"
 		headers = {
 			"Authorization": f"Bot {self._bot_token}",
@@ -114,3 +123,30 @@ class DiscordGatewayAdapter(GatewayAdapter):
 			raise ValueError(f"Discord message delivery failed: {body}")
 
 		return OutboundDelivery(str(body["id"]), provider_response=body)
+
+	def send_dm(self, user_id: str, text: str) -> OutboundDelivery:
+		"""Create a DM channel with a user and send a direct message."""
+		headers = {
+			"Authorization": f"Bot {self._bot_token}",
+			"Content-Type": "application/json",
+		}
+		dm_res = self._http_post(
+			"https://discord.com/api/v10/users/@me/channels",
+			headers=headers,
+			json_data={"recipient_id": user_id},
+			timeout=10,
+		)
+		dm_channel = dm_res.json() if hasattr(dm_res, "json") else dm_res
+		channel_id = dm_channel.get("id")
+		if not channel_id:
+			raise ValueError(f"Failed to open DM channel with user {user_id}: {dm_channel}")
+
+		return self.send_reply(GatewayReply(conversation_id=channel_id, text=text))
+
+	def add_reaction(self, channel_id: str, message_id: str, emoji: str) -> bool:
+		"""Add an emoji reaction to a Discord message."""
+		headers = {"Authorization": f"Bot {self._bot_token}"}
+		encoded_emoji = quote(emoji)
+		url = f"https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}/reactions/{encoded_emoji}/@me"
+		res = self._http_put(url, headers=headers, timeout=10)
+		return getattr(res, "status_code", 200) in (200, 204)
