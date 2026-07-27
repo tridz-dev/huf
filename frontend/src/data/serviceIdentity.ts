@@ -1,20 +1,23 @@
+import type { ComponentType } from 'react';
+import { Search, Workflow } from 'lucide-react';
+import { FaMicrosoft, FaSlack } from 'react-icons/fa';
 import {
-  Bot,
-  CalendarDays,
-  Folder,
-  Github,
-  LucideIcon,
-  Mail,
-  Map,
-  MessageCircle,
-  PanelsTopLeft,
-  Search,
-  Send,
-  Slack,
-  Table2,
-  Video,
-  Workflow,
-} from 'lucide-react';
+  SiDiscord,
+  SiGithub,
+  SiGmail,
+  SiGooglecalendar,
+  SiGoogledrive,
+  SiGooglemaps,
+  SiGooglemeet,
+  SiGooglesheets,
+  SiJira,
+  SiTelegram,
+  SiVk,
+  SiWechat,
+  SiWhatsapp,
+} from 'react-icons/si';
+
+export type ServiceIcon = ComponentType<{ className?: string }>;
 
 export const messagingServiceNames = new Set([
   'telegram',
@@ -27,23 +30,23 @@ export const messagingServiceNames = new Set([
   'vk',
 ]);
 
-const serviceIdentities: Record<string, { title: string; icon: LucideIcon }> = {
-  telegram: { title: 'Telegram', icon: Send },
-  slack: { title: 'Slack', icon: Slack },
-  whatsapp: { title: 'WhatsApp', icon: MessageCircle },
-  discord: { title: 'Discord', icon: Bot },
-  microsoft_teams: { title: 'Microsoft Teams', icon: Video },
-  teams: { title: 'Microsoft Teams', icon: Video },
-  wecom: { title: 'WeCom', icon: MessageCircle },
-  vk: { title: 'VK', icon: MessageCircle },
-  github: { title: 'GitHub', icon: Github },
-  jira: { title: 'Jira', icon: PanelsTopLeft },
-  gmail: { title: 'Gmail', icon: Mail },
-  google_calendar: { title: 'Google Calendar', icon: CalendarDays },
-  google_drive: { title: 'Google Drive', icon: Folder },
-  google_sheets: { title: 'Google Sheets', icon: Table2 },
-  google_maps: { title: 'Google Maps', icon: Map },
-  google_meet: { title: 'Google Meet', icon: Video },
+const serviceIdentities: Record<string, { title: string; icon: ServiceIcon }> = {
+  telegram: { title: 'Telegram', icon: SiTelegram },
+  slack: { title: 'Slack', icon: FaSlack },
+  whatsapp: { title: 'WhatsApp', icon: SiWhatsapp },
+  discord: { title: 'Discord', icon: SiDiscord },
+  microsoft_teams: { title: 'Microsoft Teams', icon: FaMicrosoft },
+  teams: { title: 'Microsoft Teams', icon: FaMicrosoft },
+  wecom: { title: 'WeCom', icon: SiWechat },
+  vk: { title: 'VK', icon: SiVk },
+  github: { title: 'GitHub', icon: SiGithub },
+  jira: { title: 'Jira', icon: SiJira },
+  gmail: { title: 'Gmail', icon: SiGmail },
+  google_calendar: { title: 'Google Calendar', icon: SiGooglecalendar },
+  google_drive: { title: 'Google Drive', icon: SiGoogledrive },
+  google_sheets: { title: 'Google Sheets', icon: SiGooglesheets },
+  google_maps: { title: 'Google Maps', icon: SiGooglemaps },
+  google_meet: { title: 'Google Meet', icon: SiGooglemeet },
   serpapi: { title: 'SerpApi', icon: Search },
 };
 
