@@ -11,13 +11,18 @@ MAX_WINDOW_DAYS = 93
 
 
 def _require_analytics_access():
-    if "System Manager" not in frappe.get_roles():
-        frappe.throw("Execution analytics requires System Manager access", frappe.PermissionError)
+    user = frappe.session.user
+    if "System Manager" in frappe.get_roles(user):
+        return
+    from huf.permissions import has_capability, get_user_huf_role
+    if get_user_huf_role(user) in ("Huf Admin", "Huf Manager") or has_capability(user, "agent.view_all"):
+        return
+    frappe.throw("Execution analytics requires Agent view permission", frappe.PermissionError)
 
 
 @frappe.whitelist(methods=["GET"])
 def get_execution_analytics(from_date: str | None = None, to_date: str | None = None, granularity: str = "hour"):
-    """Return precomputed analytics only; never query or group Agent Run rows."""
+    """Return execution analytics; auto-refreshes rollups if empty."""
     _require_analytics_access()
     if granularity not in {"hour", "day"}:
         frappe.throw("granularity must be 'hour' or 'day'")
@@ -35,6 +40,18 @@ def get_execution_analytics(from_date: str | None = None, to_date: str | None = 
         order_by="bucket_start asc",
         limit_page_length=0,
     )
+
+    # If rollups are empty for this window, attempt a quick backfill refresh once and re-query
+    if not rows and frappe.db.exists("Agent Run"):
+        from huf.ai.agent_run_analytics import refresh_rollups
+        refresh_rollups(full_backfill=True)
+        rows = frappe.db.get_all(
+            ROLLUP_DOCTYPE,
+            filters={"granularity": granularity, "bucket_start": ["between", [start, end]]},
+            fields=["bucket_start", "agent", "provider", "model", "run_kind", "run_count", "success_count", "failed_count", "input_tokens", "output_tokens", "cached_tokens", "total_cost", "duration_ms_sum", "duration_count", "last_recomputed_at"],
+            order_by="bucket_start asc",
+            limit_page_length=0,
+        )
     summary = {"run_count": 0, "success_count": 0, "failed_count": 0, "input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "total_cost": 0, "duration_ms_sum": 0, "duration_count": 0}
     series_by_bucket, provider_by_name = {}, {}
     freshness = None
