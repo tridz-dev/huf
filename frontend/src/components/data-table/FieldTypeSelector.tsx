@@ -18,6 +18,8 @@ import {
 	Folder,
 	Minus,
 	Columns,
+	Paperclip,
+	Image,
 	LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -45,6 +47,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
 	Folder,
 	Minus,
 	Columns,
+	Paperclip,
+	Image,
 };
 
 interface FieldTypeGroup {
@@ -96,6 +100,13 @@ const GROUPS: FieldTypeGroup[] = [
 		types: [
 			{ type: 'Color', label: 'Color', icon: 'Palette' },
 			{ type: 'Phone', label: 'Phone', icon: 'Phone' },
+		],
+	},
+	{
+		label: 'Media',
+		types: [
+			{ type: 'Attach', label: 'File', icon: 'Paperclip' },
+			{ type: 'Attach Image', label: 'Image', icon: 'Image' },
 		],
 	},
 	{

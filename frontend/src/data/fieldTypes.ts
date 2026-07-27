@@ -160,6 +160,9 @@ export const FIELD_PROPERTIES: Record<string, string[]> = {
 	Rating: ['label', 'read_only', 'description', 'in_list_view'],
 	Color: ['label', 'reqd', 'read_only', 'description', 'in_list_view'],
 	Phone: ['label', 'reqd', 'unique', 'read_only', 'default', 'description', 'in_list_view'],
+	// Frappe does not permit `in_list_view` on Attach/Attach Image fields.
+	Attach: ['label', 'reqd', 'read_only', 'description'],
+	'Attach Image': ['label', 'reqd', 'read_only', 'description'],
 	'Section Break': ['label'],
 	'Column Break': [],
 };
