@@ -31,6 +31,13 @@ def _build_docker_base_cmd(kwargs):
         cmd.extend(["-H", connection_string])
         if kwargs.get("tls_verify"):
             cmd.append("--tlsverify")
+        for option, field in (
+            ("--tlscacert", "tls_ca_cert"),
+            ("--tlscert", "tls_cert"),
+            ("--tlskey", "tls_key"),
+        ):
+            if kwargs.get(field):
+                cmd.extend([option, kwargs[field]])
             
     return cmd
 

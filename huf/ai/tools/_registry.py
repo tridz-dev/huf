@@ -1258,6 +1258,9 @@ DOCKER_TOOLS = [
 			_p("context_name", description="Docker context name"),
 			_p("ssh_connection", description="Frappe SSH Connection doctype name to use for remote docker execution"),
 			_p("tls_verify", type="boolean", description="Enable TLS verification for TCP connections"),
+			_p("tls_ca_cert", description="Path to the CA certificate for a TLS Docker daemon"),
+			_p("tls_cert", description="Path to the client certificate for a TLS Docker daemon"),
+			_p("tls_key", description="Path to the client key for a TLS Docker daemon"),
 		],
 	},
 ]

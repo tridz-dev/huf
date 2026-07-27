@@ -82,5 +82,22 @@ class TestDockerExecution(unittest.TestCase):
         self.assertEqual(mock_run.call_args[0][0][:4], ["docker", "-H", "tcp://10.0.0.1:2376", "--tlsverify"])
         self.assertEqual(mock_run.call_args[0][0][-2:], ["inspect", "app"])
 
+    @patch("huf.ai.tools.docker_execution._run_subprocess")
+    def test_tls_certificate_flags(self, mock_run):
+        mock_run.return_value = {"success": True, "output": "", "stderr": ""}
+        handle_action(
+            action="list_containers",
+            connection_string="tcp://docker.example:2376",
+            tls_verify=True,
+            tls_ca_cert="/certs/ca.pem",
+            tls_cert="/certs/cert.pem",
+            tls_key="/certs/key.pem",
+        )
+        command = mock_run.call_args[0][0]
+        self.assertEqual(
+            command[:10],
+            ["docker", "-H", "tcp://docker.example:2376", "--tlsverify", "--tlscacert", "/certs/ca.pem", "--tlscert", "/certs/cert.pem", "--tlskey", "/certs/key.pem"],
+        )
+
 if __name__ == "__main__":
     unittest.main()
