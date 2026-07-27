@@ -6,6 +6,8 @@ from huf.ai.tools.frappe_cloud import (
     handle_fc_archive_bench,
     handle_fc_create_bench,
     handle_fc_delete_webhook,
+    handle_fc_add_ssh_key,
+    handle_fc_generate_bench_ssh_certificate,
     handle_fc_list_benches,
     handle_fc_create_site,
     handle_fc_site_options,
@@ -132,3 +134,36 @@ def test_handle_fc_delete_webhook(mock_request, mock_get_credential):
     assert data["success"] is True
     assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.client.delete")
     assert mock_request.call_args.kwargs["json"] == {"doctype": "Press Webhook", "name": "webhook-1"}
+
+@patch("huf.ai.tools.frappe_cloud.get_credential")
+@patch("huf.ai.tools.frappe_cloud.httpx.request")
+def test_handle_fc_add_ssh_key(mock_request, mock_get_credential):
+    mock_get_credential.side_effect = lambda service, key: "test_key" if key == "api_key" else "test_secret" if key == "api_secret" else "https://frappecloud.com"
+    mock_response = MagicMock()
+    mock_response.text = "{}"
+    mock_response.json.return_value = {}
+    mock_response.raise_for_status.return_value = None
+    mock_request.return_value = mock_response
+
+    result = handle_fc_add_ssh_key(key="ssh-ed25519 AAAATEST huf")
+    data = json.loads(result)
+    assert data["success"] is True
+    assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.account.add_key")
+    assert mock_request.call_args.kwargs["json"] == {"key": "ssh-ed25519 AAAATEST huf"}
+
+@patch("huf.ai.tools.frappe_cloud.get_credential")
+@patch("huf.ai.tools.frappe_cloud.httpx.request")
+def test_handle_fc_generate_bench_ssh_certificate(mock_request, mock_get_credential):
+    mock_get_credential.side_effect = lambda service, key: "test_key" if key == "api_key" else "test_secret" if key == "api_secret" else "https://frappecloud.com"
+    mock_response = MagicMock()
+    mock_response.text = '{"message": {"name": "cert-1", "valid_until": "soon", "private": "raw"}}'
+    mock_response.json.return_value = {"message": {"name": "cert-1", "valid_until": "soon", "private": "raw"}}
+    mock_response.raise_for_status.return_value = None
+    mock_request.return_value = mock_response
+
+    result = handle_fc_generate_bench_ssh_certificate(bench="bench-1")
+    data = json.loads(result)
+    assert data["success"] is True
+    assert data["results"] == {"name": "cert-1", "valid_until": "soon"}
+    assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.bench.generate_certificate")
+    assert mock_request.call_args.kwargs["json"] == {"name": "bench-1"}

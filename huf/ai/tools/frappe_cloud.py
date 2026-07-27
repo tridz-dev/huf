@@ -371,3 +371,54 @@ def handle_fc_delete_webhook(**kwargs) -> str:
 		return _success(_message(data))
 	except Exception as e:
 		return _failure("Delete Webhook", e)
+
+
+def handle_fc_list_ssh_keys(**kwargs) -> str:
+	try:
+		data = _make_fc_request("POST", "press.api.account.get_user_ssh_keys")
+		return _result(data, kwargs, fields=("name", "ssh_fingerprint", "creation", "is_default"))
+	except Exception as e:
+		return _failure("List SSH Keys", e)
+
+
+def handle_fc_add_ssh_key(**kwargs) -> str:
+	try:
+		if error := _required(kwargs, "key"):
+			return json.dumps({"success": False, "error": error})
+		data = _make_fc_request("POST", "press.api.account.add_key", json_data={"key": kwargs["key"]})
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Add SSH Key", e)
+
+
+def handle_fc_mark_ssh_key_default(**kwargs) -> str:
+	try:
+		key_name = kwargs.get("key_name") or kwargs.get("name")
+		if not key_name:
+			return json.dumps({"success": False, "error": "key_name is required"})
+		data = _make_fc_request("POST", "press.api.account.mark_key_as_default", json_data={"key_name": key_name})
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Mark SSH Key Default", e)
+
+
+def handle_fc_get_bench_ssh_certificate(**kwargs) -> str:
+	try:
+		bench = kwargs.get("bench") or kwargs.get("name")
+		if not bench:
+			return json.dumps({"success": False, "error": "bench is required"})
+		data = _make_fc_request("POST", "press.api.bench.certificate", json_data={"name": bench})
+		return _result(data, kwargs, fields=("name", "valid_until", "certificate_type", "group", "user_ssh_key"))
+	except Exception as e:
+		return _failure("Get Bench SSH Certificate", e)
+
+
+def handle_fc_generate_bench_ssh_certificate(**kwargs) -> str:
+	try:
+		bench = kwargs.get("bench") or kwargs.get("name")
+		if not bench:
+			return json.dumps({"success": False, "error": "bench is required"})
+		data = _make_fc_request("POST", "press.api.bench.generate_certificate", json_data={"name": bench})
+		return _result(data, kwargs, fields=("name", "valid_until", "certificate_type", "group", "user_ssh_key"))
+	except Exception as e:
+		return _failure("Generate Bench SSH Certificate", e)
