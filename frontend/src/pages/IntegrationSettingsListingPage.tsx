@@ -119,7 +119,7 @@ export function IntegrationSettingsListingPage({
       }
       filters={
         <FilterBar
-          searchPlaceholder="Search integrations..."
+          searchPlaceholder={kind === 'channels' ? 'Search channels...' : 'Search integrations...'}
           searchValue={search}
           onSearchChange={setSearch}
           filters={[

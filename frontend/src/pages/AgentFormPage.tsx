@@ -1366,7 +1366,8 @@ export function AgentFormPage() {
   }, [id, isNew, form]);
 
   useEffect(() => {
-    if (!id || isNew || activeTab === 'triggers') return;
+    // General is the bootstrap request above; only secondary sections are lazy-loaded here.
+    if (!id || isNew || activeTab === 'general' || activeTab === 'triggers') return;
     const section = activeTab as AgentConfigSection;
     if (loadedSections.has(section)) return;
 
