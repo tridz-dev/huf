@@ -93,12 +93,13 @@ def _fingerprint_for_key(server_key) -> str:
 
 def _load_private_key(private_key: str, passphrase: str | None):
 	password = passphrase or None
-	for key_cls in (
-		paramiko.Ed25519Key,
-		paramiko.RSAKey,
-		paramiko.ECDSAKey,
-		paramiko.DSSKey,
-	):
+	key_classes = [paramiko.Ed25519Key, paramiko.RSAKey, paramiko.ECDSAKey]
+	# DSSKey was removed from newer Paramiko releases. Keep compatibility with
+	# old installations without making all private-key auth fail at import time.
+	dss_key = getattr(paramiko, "DSSKey", None)
+	if dss_key is not None:
+		key_classes.append(dss_key)
+	for key_cls in key_classes:
 		try:
 			return key_cls.from_private_key(io.StringIO(private_key), password=password)
 		except Exception:
