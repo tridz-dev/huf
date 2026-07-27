@@ -73,14 +73,67 @@ def _has_access_entry(gateway, entry_type: str, external_id: str) -> bool:
     return bool(entries)
 
 
-def _create_pairing_request(gateway, sender_id: str) -> None:
-    """Create at most one live request. The original message is never executed."""
+def _create_pairing_request(gateway, sender_id: str, conversation_id: str | None = None) -> str:
+    """Create a live pairing request with a short pairing code (PAIR-XXXX)."""
     if not sender_id:
-        return
-    existing = frappe.db.exists("Gateway Access Entry", {"gateway": gateway.name, "entry_type": "Sender", "provider": gateway.provider, "external_id": str(sender_id), "state": "Pending"})
+        return ""
+    existing = frappe.get_all(
+        "Gateway Access Entry",
+        filters={
+            "gateway": gateway.name,
+            "entry_type": "Sender",
+            "provider": gateway.provider,
+            "external_id": str(sender_id),
+            "state": "Pending",
+        },
+        fields=["name", "pairing_code"],
+        limit_page_length=1,
+    )
     if existing:
-        return
-    frappe.get_doc({"doctype": "Gateway Access Entry", "gateway": gateway.name, "entry_type": "Sender", "provider": gateway.provider, "external_id": str(sender_id), "state": "Pending", "expires_at": add_to_date(now_datetime(), minutes=int(gateway.pairing_ttl_minutes or 60))}).insert(ignore_permissions=True)
+        return existing[0].get("pairing_code") or ""
+
+    import secrets
+
+    code_suffix = secrets.token_hex(2).upper()
+    pairing_code = f"PAIR-{code_suffix}"
+
+    doc = frappe.get_doc(
+        {
+            "doctype": "Gateway Access Entry",
+            "gateway": gateway.name,
+            "entry_type": "Sender",
+            "provider": gateway.provider,
+            "external_id": str(sender_id),
+            "pairing_code": pairing_code,
+            "state": "Pending",
+            "expires_at": add_to_date(now_datetime(), minutes=int(gateway.pairing_ttl_minutes or 60)),
+            "display_label": f"Sender {sender_id}",
+        }
+    ).insert(ignore_permissions=True)
+
+    try:
+        if gateway.integration_settings:
+            int_doc = frappe.get_doc("Integration Settings", gateway.integration_settings)
+            creds = {}
+            for row in getattr(int_doc, "credentials", []):
+                creds[row.key] = row.get_password("value") if hasattr(row, "get_password") else row.value
+
+            from huf.ai.gateway_webhook import _adapter_class_for_provider
+            from huf.ai.gateway_adapters.types import GatewayReply
+
+            adapter_cls = _adapter_class_for_provider(gateway.provider)
+            adapter = adapter_cls(creds)
+            target_conv = conversation_id or sender_id
+            reply_msg = (
+                f"🔒 Access approval required.\n\n"
+                f"Your pairing code is: `{pairing_code}`\n\n"
+                f"Please share this code with the bot administrator to get approved."
+            )
+            adapter.send_reply(GatewayReply(conversation_id=target_conv, text=reply_msg))
+    except Exception as exc:
+        frappe.logger("huf").warning(f"Failed to send pairing code message: {exc}")
+
+    return pairing_code
 
 
 def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
@@ -89,9 +142,10 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
     if not is_room:
         policy = gateway.direct_policy or "Allow list"
         if policy == "Pairing":
-            _create_pairing_request(gateway, sender_id)
-            return False, "Sender pairing approval is required"
+            code = _create_pairing_request(gateway, sender_id, conversation_id=conversation_id)
+            return False, f"Sender pairing approval is required. Pairing code: {code}"
         return (policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id), "Sender is not approved for this gateway")
+
     room_ok = gateway.room_policy == "Allow list" and _has_access_entry(gateway, "Room", conversation_id)
     sender_ok = gateway.room_sender_policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id)
     mentioned = bool(context.get("mentioned"))
