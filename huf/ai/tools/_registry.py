@@ -1230,9 +1230,132 @@ BUILDER_TOOLS = [
 ]
 
 
+DOCKER_TOOLS = [
+	{
+		"tool_name": "docker_execution",
+		"description": "Manage Docker containers and images. Actions: list_containers, list_images, inspect_container, logs, stop_container, start_container, restart_container, remove_container, pull_image, run_container, exec_container. Supports local socket, context_name, connection_string (e.g. ssh://, tcp://), or a Frappe ssh_connection name.",
+		"function_path": "huf.ai.tools.docker_execution.handle_action",
+		"category": "Developer Tools",
+		"parameters": [
+			_action("list_containers|list_images|inspect_container|logs|stop_container|start_container|restart_container|remove_container|pull_image|run_container|exec_container"),
+			_p("container", description="Container name or ID"),
+			_p("image", description="Image name"),
+			_p("command", description="Command to execute (for exec_container)"),
+			_p("name", description="Name for new container (for run_container)"),
+			_p("ports", description="Ports to publish (comma separated, e.g. '80:80')"),
+			_p("tail", type="integer", description="Number of log lines to tail"),
+			_p("connection_string", description="Docker daemon URL (unix://, ssh://, tcp://)"),
+			_p("context_name", description="Docker context name"),
+			_p("ssh_connection", description="Frappe SSH Connection doctype name to use for remote docker execution"),
+			_p("tls_verify", type="boolean", description="Enable TLS verification for TCP connections"),
+		],
+	},
+]
+
+
 # ---------------------------------------------------------------------------
 # Master list
 # ---------------------------------------------------------------------------
+
+FRAPPE_CLOUD_TOOLS = [
+	{
+		"tool_name": "fc_list_benches",
+		"description": "List Frappe Cloud benches.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_benches",
+		"category": "Frappe Cloud",
+		"parameters": [],
+	},
+	{
+		"tool_name": "fc_list_sites",
+		"description": "List Frappe Cloud sites.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_sites",
+		"category": "Frappe Cloud",
+		"parameters": [],
+	},
+	{
+		"tool_name": "fc_create_site",
+		"description": "Create a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_create_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("bench", required=True, description="Bench name"),
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_drop_site",
+		"description": "Drop a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_drop_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_backup_site",
+		"description": "Backup a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_backup_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_download_backup",
+		"description": "Download backup of a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_download_backup",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_migrate_site",
+		"description": "Migrate a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_migrate_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_clear_cache",
+		"description": "Clear cache of a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_clear_cache",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_update_site",
+		"description": "Update a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_update_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_clone_site",
+		"description": "Clone a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_clone_site",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("source_site", required=True, description="Source site name"),
+			_p("bench", required=True, description="Bench name to clone into"),
+		],
+	},
+	{
+		"tool_name": "fc_get_admin_login_link",
+		"description": "Get admin login link for a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_get_admin_login_link",
+		"category": "Frappe Cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+]
 
 ALL_INTEGRATION_TOOLS = (
 	RECIPIENT_TOOLS
@@ -1259,4 +1382,6 @@ ALL_INTEGRATION_TOOLS = (
 	+ SERP_YOUTUBE_TOOLS
 	+ BUILDER_TOOLS
 	+ SSH_TOOLS
+	+ DOCKER_TOOLS
+	+ FRAPPE_CLOUD_TOOLS
 )
