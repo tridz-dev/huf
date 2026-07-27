@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowUpDown, Loader2 } from 'lucide-react';
 import { FilterBar, PageLayout, LoadMoreButton } from '@/components/dashboard';
+import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
@@ -298,6 +299,7 @@ export default function Executions() {
   return (
     <PageLayout
       title="Executions"
+      badge={<ExperimentalBadge />}
       subtitle="Inspect agent runs and their results."
       filters={
         <FilterBar

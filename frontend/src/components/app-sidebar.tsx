@@ -48,6 +48,7 @@ const useNavItems = [
     url: "/apps",
     icon: LayoutGrid,
     capability: "agent.use",
+    badge: "Experimental",
   },
 ]
 
@@ -69,6 +70,7 @@ const buildNavItems = [
     url: "/flows",
     icon: Workflow,
     capability: "flows.use",
+    badge: "Experimental",
   },
 ]
 
@@ -100,12 +102,14 @@ const knowNavItems = [
     url: "/memory",
     icon: Brain,
     capability: "agent.use",
+    badge: "Experimental",
   },
   {
     title: "Skills",
     url: "/skills",
     icon: Sparkles,
     capability: "agent.use",
+    badge: "Experimental",
   },
 ]
 
@@ -121,6 +125,14 @@ const operateNavItems = [
 		url: "/executions",
 		icon: Zap,
 		capability: "agent.use",
+		badge: "Experimental",
+	},
+	{
+		title: "SSH",
+		url: "/ssh",
+		icon: Terminal,
+		capability: "agent.use",
+		badge: "Experimental",
 	},
 	{
 		title: "Artifacts",
