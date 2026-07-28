@@ -53,9 +53,9 @@ export function NavMain({
                           title={item.badge}
                           aria-label={item.badge}
                           role="img"
-                          className="flex items-center text-signal-ink dark:text-signal"
+                          className="flex items-center text-steel-soft dark:text-steel opacity-70 hover:opacity-100 transition-opacity"
                         >
-                          <FlaskConical className="!size-[13px]" strokeWidth={1.6} />
+                          <FlaskConical className="!size-[12.5px]" strokeWidth={1.5} />
                         </span>
                       )}
                       {typeof item.count === 'number' && (
