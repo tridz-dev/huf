@@ -180,13 +180,23 @@ export const WebPreviewBody = ({
 }: WebPreviewBodyProps) => {
   const { url } = useWebPreview();
 
+  const rawUrl = src ?? url;
+  const safeUrl = (() => {
+    if (!rawUrl) return undefined;
+    const trimmed = rawUrl.trim().toLowerCase();
+    if (trimmed.startsWith('javascript:') || trimmed.startsWith('data:text/html')) {
+      return 'about:blank';
+    }
+    return rawUrl;
+  })();
+
   return (
     <div className="flex-1">
       <iframe
         className={cn("size-full", className)}
         sandbox="allow-scripts allow-forms allow-popups-to-escape-sandbox"
         referrerPolicy="no-referrer"
-        src={(src ?? url) || undefined}
+        src={safeUrl}
         title="Preview"
         {...props}
       />

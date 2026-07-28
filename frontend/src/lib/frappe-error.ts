@@ -110,8 +110,22 @@ export function getFrappeErrorMessage(error: unknown): string {
   if (serverMessages && serverMessages.length > 0) {
     // Return the first message (usually the most relevant)
     const message = serverMessages[0].message || serverMessages[0].title || 'An error occurred';
-    // Remove HTML tags if present (e.g., <strong> tags)
-    return message.replace(/<[^>]*>/g, '');
+    // Remove HTML tags safely without multi-pass/nested tag bypass vulnerabilities
+    if (typeof DOMParser !== 'undefined') {
+      try {
+        const doc = new DOMParser().parseFromString(message, 'text/html');
+        return doc.body.textContent || '';
+      } catch {
+        // fallback to multi-pass replacement if DOMParser fails
+      }
+    }
+    let prev = '';
+    let curr = message;
+    while (curr !== prev) {
+      prev = curr;
+      curr = curr.replace(/<[^>]*>/g, '');
+    }
+    return curr;
   }
 
   // Fallback to exception message

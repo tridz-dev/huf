@@ -8,8 +8,8 @@ from frappe.utils.telemetry import capture
 
 no_cache = 1
 
-SCRIPT_TAG_PATTERN = re.compile(r"\<script[^<]*\</script\>")
-CLOSING_SCRIPT_TAG_PATTERN = re.compile(r"</script\>")
+SCRIPT_TAG_PATTERN = re.compile(r"<script[\s\S]*?</script>", re.IGNORECASE)
+CLOSING_SCRIPT_TAG_PATTERN = re.compile(r"</script>", re.IGNORECASE)
 
 
 def get_context(context):
