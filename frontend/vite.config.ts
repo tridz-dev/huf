@@ -84,6 +84,7 @@ export default defineConfig({
     },
   },
   build: {
+    target: 'es2022',
     outDir: '../huf/public/frontend',
     emptyOutDir: true,
     chunkSizeWarningLimit: 1000,
