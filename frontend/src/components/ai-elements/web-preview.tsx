@@ -176,6 +176,7 @@ export const WebPreviewBody = ({
   className,
   loading,
   src,
+  srcDoc: _unusedSrcDoc,
   ...props
 }: WebPreviewBodyProps) => {
   const { url } = useWebPreview();
@@ -203,12 +204,13 @@ export const WebPreviewBody = ({
   return (
     <div className="flex-1">
       <iframe
+        {...props}
         className={cn("size-full", className)}
         sandbox="allow-scripts allow-forms allow-popups-to-escape-sandbox"
         referrerPolicy="no-referrer"
         src={safeUrl}
+        srcDoc={undefined}
         title="Preview"
-        {...props}
       />
       {loading}
     </div>
