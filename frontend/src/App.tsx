@@ -130,9 +130,11 @@ function AppShell() {
             path="/"
             element={
               <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <HubSimplePage />
-                </Suspense>
+                <UnifiedLayout hideHeader>
+                  <Suspense fallback={<PageLoader />}>
+                    <HubSimplePage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
