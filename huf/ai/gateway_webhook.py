@@ -17,6 +17,7 @@ from frappe import _
 
 _ADAPTER_CLASSES = {
 	"WhatsApp": ("huf.ai.gateway_adapters.whatsapp", "WhatsAppGatewayAdapter"),
+	"Telegram": ("huf.ai.gateway_adapters.telegram", "TelegramGatewayAdapter"),
 	"Messenger": ("huf.ai.gateway_adapters.messenger", "MessengerGatewayAdapter"),
 	"Instagram": ("huf.ai.gateway_adapters.instagram", "InstagramGatewayAdapter"),
 	"Discord": ("huf.ai.gateway_adapters.discord", "DiscordGatewayAdapter"),

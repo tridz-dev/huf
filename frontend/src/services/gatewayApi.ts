@@ -27,6 +27,7 @@ export interface GatewayDoc {
   provider: GatewayProvider;
   is_enabled: 0 | 1;
   execution_user?: string;
+  integration_settings?: string;
   // TODO(#473-followup): admission UI is incomplete; direct_policy is shown as a
   // placeholder until the full admission form is built.
   direct_policy: GatewayPolicy;
@@ -45,7 +46,7 @@ export interface GatewayDoc {
 export async function getGateways(): Promise<GatewayDoc[]> {
   return (await db.getDocList(doctype.Gateway, {
     fields: [
-      'name', 'gateway_name', 'provider', 'is_enabled', 'execution_user',
+      'name', 'gateway_name', 'provider', 'is_enabled', 'execution_user', 'integration_settings',
       'direct_policy', 'room_policy', 'room_sender_policy',
       'mention_required', 'pairing_ttl_minutes', 'description',
       'default_target_type', 'default_agent', 'default_flow', 'last_event_at', 'last_error',

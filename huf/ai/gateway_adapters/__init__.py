@@ -17,6 +17,7 @@ from huf.ai.gateway_adapters.types import (
 	NormalizedGatewayEvent,
 	OutboundDelivery,
 )
+from huf.ai.gateway_adapters.telegram import TelegramGatewayAdapter
 from huf.ai.gateway_adapters.vk import VKGatewayAdapter
 from huf.ai.gateway_adapters.wecom import WeComGatewayAdapter
 from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter
@@ -32,6 +33,7 @@ __all__ = [
 	"GatewayReply",
 	"NormalizedGatewayEvent",
 	"OutboundDelivery",
+	"TelegramGatewayAdapter",
 	"VKGatewayAdapter",
 	"WeComGatewayAdapter",
 	"WhatsAppGatewayAdapter",
