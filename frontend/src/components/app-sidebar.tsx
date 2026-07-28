@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ArrowLeft, Home, LayoutDashboard, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Terminal, Settings, Shield, LayoutGrid, Brain, Sparkles, Keyboard } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Plug, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, Layers, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -37,7 +37,7 @@ const dashboardNavItems = [
   {
     title: "Dashboard",
     url: "/dashboard",
-    icon: LayoutDashboard,
+    icon: ChartColumnIncreasing,
     capability: null,
   },
 ]
@@ -66,13 +66,13 @@ const buildNavItems = [
   {
     title: "Agents",
     url: "/agents",
-    icon: Bot,
+    icon: SquareAsterisk,
     capability: "agent.use",
   },
   {
     title: "Prompts",
     url: "/prompts",
-    icon: ScrollText,
+    icon: FileText,
     capability: "agent.use",
   },
   {
@@ -149,20 +149,20 @@ const settingsNavGroups = [
     label: "Intelligence",
     items: [
       { title: "AI Providers", url: "/providers", icon: Plug, capability: "system.providers.manage" },
-      { title: "Models", url: "/models", icon: Cpu, capability: "system.providers.manage" },
+      { title: "Models", url: "/models", icon: Layers, capability: "system.providers.manage" },
     ],
   },
   {
     label: "Runtime",
     items: [
-      { title: "Code Execution", url: "/execution-profiles", icon: Shield, capability: "agent.use" },
-      { title: "SSH Connections", url: "/ssh-connections", icon: Terminal, capability: "agent.use" },
+      { title: "Code Execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
+      { title: "SSH Connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },
     ],
   },
   {
     label: "Connectivity",
     items: [
-      { title: "Gateways", url: "/gateways", icon: MessageSquare, capability: "system.integrations.manage" },
+      { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
       { title: "Channels", url: "/channels", icon: MessageSquare, capability: "system.integrations.manage" },
       { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
       { title: "MCP Servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
