@@ -763,11 +763,45 @@ def _apply_limits(limits: dict) -> None:
 	if hasattr(resource, "RLIMIT_FSIZE"):
 		_set(resource.RLIMIT_FSIZE, MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_BYTES)
 
-	if hasattr(resource, "RLIMIT_NPROC"):
-		_set(resource.RLIMIT_NPROC, MAX_NPROC, MAX_NPROC)
+	# RLIMIT_NPROC is intentionally omitted: in Linux, RLIMIT_NPROC is enforced per
+	# real UID across the entire OS. In shared-UID bench/worker processes (e.g. frappe),
+	# setting RLIMIT_NPROC to a low number like 4 causes pthread_create to fail with
+	# "RuntimeError: can't start new thread" when threads (watchdog, BLAS pools) spawn.
 
 
-def _build_globals(control_fd: int | None = None, workdir: str | None = None) -> dict:
+def _make_safe_import(allowed_modules: list[str] | None):
+	"""Build a restricted __import__ function for sandboxed code.
+
+	Enforces the profile's ``allowed_modules`` list.
+	- If ``allowed_modules`` is empty or None: no imports are permitted.
+	- If ``"*"`` is in ``allowed_modules``: any module may be imported.
+	- Otherwise: only modules whose full name or top-level package name
+	  (e.g. ``"pandas"`` for ``"pandas.core.frame"``) is in ``allowed_modules``
+	  are permitted.
+	"""
+	allowed_set = set(allowed_modules or [])
+	allow_all = "*" in allowed_set
+
+	def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+		if not name or not isinstance(name, str):
+			raise ImportError("Module name must be a non-empty string")
+		if level > 0:
+			raise ImportError("Relative imports are not permitted in the sandbox")
+		root_module = name.split(".")[0]
+		if not allow_all and name not in allowed_set and root_module not in allowed_set:
+			raise ImportError(
+				f"Import of module '{name}' is not permitted by execution profile policy"
+			)
+		return __import__(name, globals, locals, fromlist, level)
+
+	return _safe_import
+
+
+def _build_globals(
+	control_fd: int | None = None,
+	workdir: str | None = None,
+	allowed_modules: list[str] | None = None,
+) -> dict:
 	"""Assemble the curated globals dict for ``exec``.
 
 	NOTHING from ``frappe``/``os``/``sys``/``socket``/``subprocess`` is present.
@@ -790,8 +824,11 @@ def _build_globals(control_fd: int | None = None, workdir: str | None = None) ->
 		safer_getattr,
 	)
 
+	builtins_dict = _safe_builtins()
+	builtins_dict["__import__"] = _make_safe_import(allowed_modules)
+
 	globals_dict = {
-		"__builtins__": _safe_builtins(),
+		"__builtins__": builtins_dict,
 		"_getattr_": _make_getattr(safer_getattr),
 		"_getitem_": _safe_getitem,
 		"_write_": full_write_guard,
@@ -854,8 +891,13 @@ def _start_memory_watchdog(max_memory_mb: int):
 					os._exit(137)
 			stop.wait(0.01)
 
-	threading.Thread(target=_watch, name="huf-mem-watchdog", daemon=True).start()
-	return stop
+	try:
+		threading.Thread(target=_watch, name="huf-mem-watchdog", daemon=True).start()
+		return stop
+	except (RuntimeError, MemoryError):
+		# Under tight RLIMIT_AS, pthread_create may fail due to stack memory limits.
+		# In that case, RLIMIT_AS itself enforces the memory ceiling.
+		return None
 
 
 def _run_user_code(
@@ -864,6 +906,7 @@ def _run_user_code(
 	max_memory_mb: int,
 	control_fd: int | None = None,
 	workdir: str | None = None,
+	allowed_modules: list[str] | None = None,
 ) -> dict:
 	"""Compile + execute ``code`` in the (already rlimit-ed) child process.
 
@@ -879,19 +922,6 @@ def _run_user_code(
 	"""
 	global _CAPTURE_BUF
 
-	# Local imports: the parent must be able to import this module without
-	# RestrictedPython present (e.g. for py_compile / unit import); only the
-	# child actually needs the library.
-	from RestrictedPython import compile_restricted
-	from RestrictedPython.transformer import RestrictingNodeTransformer
-
-	# RestrictedPython warns when user code prints but never assigns the
-	# collector to a variable; we route print through our own collector, so this
-	# warning is pure noise on the audit record.
-	import warnings
-
-	warnings.filterwarnings("ignore", message=".*never reads 'printed' variable.*")
-
 	_CAPTURE_BUF = _CappedBuffer(max_output_bytes)
 	mem_stop = _start_memory_watchdog(max_memory_mb)
 
@@ -905,54 +935,58 @@ def _run_user_code(
 	result: dict | None = None
 
 	try:
-		globals_dict = _build_globals(control_fd=control_fd, workdir=workdir)
+		# Local imports: the parent must be able to import this module without
+		# RestrictedPython present (e.g. for py_compile / unit import); only the
+		# child actually needs the library.
+		from RestrictedPython import compile_restricted
+		from RestrictedPython.transformer import RestrictingNodeTransformer
+
+		# RestrictedPython warns when user code prints but never assigns the
+		# collector to a variable; we route print through our own collector, so this
+		# warning is pure noise on the audit record.
+		import warnings
+
+		warnings.filterwarnings("ignore", message=".*never reads 'printed' variable.*")
+
+		globals_dict = _build_globals(
+			control_fd=control_fd, workdir=workdir, allowed_modules=allowed_modules
+		)
 		locals_dict: dict = {}
 
-		try:
-			compiled = compile_restricted(
-				code, filename="<huf-exec>", policy=RestrictingNodeTransformer, mode="exec"
-			)
-		except SyntaxError as exc:
-			result = {
-				"exit_status": "Error",
-				"stdout": "",
-				"stderr": f"SyntaxError: {exc}",
-				"limits_hit": False,
-			}
-		except Exception as exc:  # RestrictedPython may raise its own error types
-			result = {
-				"exit_status": "Error",
-				"stdout": "",
-				"stderr": f"{type(exc).__name__}: {exc}",
-				"limits_hit": False,
-			}
-		else:
-			try:
-				exec(compiled, globals_dict, locals_dict)  # noqa: S102 - intentional sandbox exec
-			except MemoryError as exc:
-				result = {
-					"exit_status": "OOM",
-					"stdout": _CAPTURE_BUF.getvalue(),
-					"stderr": f"MemoryError: {exc}",
-					"limits_hit": True,
-				}
-			except BaseException as exc:  # noqa: BLE001 - we must classify everything
-				# SystemExit/KeyboardInterrupt are BaseException; treat any uncaught
-				# user error as "Error" with a traceback summary.
-				tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
-				result = {
-					"exit_status": "Error",
-					"stdout": _CAPTURE_BUF.getvalue(),
-					"stderr": tb,
-					"limits_hit": _CAPTURE_BUF.hit,
-				}
-			else:
-				result = {
-					"exit_status": "Ok",
-					"stdout": _CAPTURE_BUF.getvalue(),
-					"stderr": "",
-					"limits_hit": _CAPTURE_BUF.hit,
-				}
+		compiled = compile_restricted(
+			code, filename="<huf-exec>", policy=RestrictingNodeTransformer, mode="exec"
+		)
+		exec(compiled, globals_dict, locals_dict)  # noqa: S102 - intentional sandbox exec
+		result = {
+			"exit_status": "Ok",
+			"stdout": _CAPTURE_BUF.getvalue(),
+			"stderr": "",
+			"limits_hit": _CAPTURE_BUF.hit,
+		}
+	except MemoryError as exc:
+		result = {
+			"exit_status": "OOM",
+			"stdout": _CAPTURE_BUF.getvalue(),
+			"stderr": f"MemoryError: {exc}",
+			"limits_hit": True,
+		}
+	except SyntaxError as exc:
+		result = {
+			"exit_status": "Error",
+			"stdout": "",
+			"stderr": f"SyntaxError: {exc}",
+			"limits_hit": False,
+		}
+	except BaseException as exc:  # noqa: BLE001 - we must classify everything
+		# SystemExit/KeyboardInterrupt are BaseException; treat any uncaught
+		# user error as "Error" with a traceback summary.
+		tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+		result = {
+			"exit_status": "Error",
+			"stdout": _CAPTURE_BUF.getvalue(),
+			"stderr": tb,
+			"limits_hit": _CAPTURE_BUF.hit,
+		}
 	finally:
 		if mem_stop is not None:
 			mem_stop.set()
@@ -1030,6 +1064,7 @@ def _child_main(argv: list[str]) -> int:
 	limits = payload.get("limits") or {}
 	max_output_bytes = int(payload.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 	max_memory_mb = int(limits.get("max_memory_mb") or 0)
+	allowed_modules = payload.get("allowed_modules") or []
 
 	control_fd = payload.get(CONTROL_FD_PAYLOAD_KEY)
 	if control_fd is not None:
@@ -1048,7 +1083,12 @@ def _child_main(argv: list[str]) -> int:
 	_apply_limits(limits)
 
 	result = _run_user_code(
-		code, max_output_bytes, max_memory_mb, control_fd=control_fd, workdir=workdir
+		code,
+		max_output_bytes,
+		max_memory_mb,
+		control_fd=control_fd,
+		workdir=workdir,
+		allowed_modules=allowed_modules,
 	)
 	result["output_bytes"] = len((result.get("stdout") or "").encode("utf-8", "replace"))
 
@@ -1069,6 +1109,13 @@ def _sanitize_child_env() -> dict:
 		upper = key.upper()
 		if any(fragment in upper for fragment in _SECRET_ENV_FRAGMENTS):
 			env.pop(key, None)
+	# Single-thread BLAS/OpenMP math libraries to avoid huge mmap virtual memory
+	# allocations that fail under RLIMIT_AS or cause thread thrashing in sandboxes.
+	env["OPENBLAS_NUM_THREADS"] = "1"
+	env["OMP_NUM_THREADS"] = "1"
+	env["MKL_NUM_THREADS"] = "1"
+	env["VECLIB_MAXIMUM_THREADS"] = "1"
+	env["NUMEXPR_NUM_THREADS"] = "1"
 	return env
 
 
@@ -1079,16 +1126,18 @@ def _rusage_mb(ru_maxrss: int) -> float:
 	return ru_maxrss / 1024.0
 
 
-def _classify_signal(returncode: int) -> tuple[str, bool]:
+def _classify_signal(returncode: int, max_memory_mb: int = 0) -> tuple[str, bool]:
 	"""Map a signal-based child death to ``(exit_status, limits_hit)``."""
 	sig = -returncode
 	if sig == getattr(signal, "SIGXCPU", None):
 		# CPU rlimit exceeded.
 		return "Killed", True
 	if sig in (signal.SIGKILL, getattr(signal, "SIGSEGV", -1), getattr(signal, "SIGABRT", -2)):
-		# Best-effort: an unsolicited SIGKILL/SIGSEGV under RLIMIT_AS is the OOM
-		# killer / address-space limit. The gate accepts OOM-or-Killed here.
-		return "OOM", True
+		if max_memory_mb > 0:
+			# Best-effort: an unsolicited SIGKILL/SIGSEGV under RLIMIT_AS is the OOM
+			# killer / address-space limit.
+			return "OOM", True
+		return "Killed", True
 	return "Killed", False
 
 
@@ -1190,6 +1239,7 @@ def run_sandboxed(
 	code: str,
 	limits: dict,
 	scratch_dir: str | None,
+	allowed_modules: list[str] | None = None,
 	broker_handler=None,
 	broker_thread_start=None,
 	broker_thread_end=None,
@@ -1237,6 +1287,7 @@ def run_sandboxed(
 			work_dir,
 			mounted_dir,
 			bookkeeping_dir,
+			allowed_modules,
 			broker_handler,
 			broker_thread_start,
 			broker_thread_end,
@@ -1251,6 +1302,7 @@ def _supervise_child(
 	work_dir: str,
 	mounted_dir: str | None,
 	bookkeeping_dir: str,
+	allowed_modules: list[str] | None = None,
 	broker_handler=None,
 	broker_thread_start=None,
 	broker_thread_end=None,
@@ -1270,7 +1322,12 @@ def _supervise_child(
 	if broker_handler is not None:
 		parent_sock, child_sock = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
 
-	payload = {"code": code, "limits": limits or {}, "max_output_bytes": max_output_bytes}
+	payload = {
+		"code": code,
+		"limits": limits or {},
+		"max_output_bytes": max_output_bytes,
+		"allowed_modules": allowed_modules or [],
+	}
 	if child_sock is not None:
 		payload[CONTROL_FD_PAYLOAD_KEY] = child_sock.fileno()
 	if mounted_dir is not None:
@@ -1392,7 +1449,8 @@ def _supervise_child(
 	# No structured result: the child crashed or was killed by a signal.
 	rc = proc.returncode
 	if rc is not None and rc < 0:
-		exit_status, limits_hit = _classify_signal(rc)
+		max_mem = int((limits or {}).get("max_memory_mb") or 0)
+		exit_status, limits_hit = _classify_signal(rc, max_memory_mb=max_mem)
 		return ExecutionResult(
 			exit_status=exit_status,
 			stdout="",
