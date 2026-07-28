@@ -45,7 +45,7 @@ The following CodeQL and Secret Leak security issues were logged and investigate
 
 ### 🔑 Secret Leak Alert #1: Public Leak of OpenRouter API Key
 - **Severity:** High (Secret Exposure)
-- **Detected Secret:** `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`
+- **Detected Secret:** `sk-or-v1-[REDACTED_OPENROUTER_KEY]`
 - **Location:** `agentflo/.../providers/openrouter.py:8` / `huf/ai/providers/openrouter.py`
 - **Details:** An OpenRouter API key was detected in plaintext in a provider config file in repository history.
 - **Remediation Required:**
