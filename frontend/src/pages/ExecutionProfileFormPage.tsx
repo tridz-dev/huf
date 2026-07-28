@@ -194,7 +194,8 @@ export function ExecutionProfileFormPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-12">
+    <div className="flex-1 overflow-y-auto">
+      <div className="space-y-6 max-w-4xl mx-auto p-6 pb-12">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10 text-primary">
@@ -405,6 +406,7 @@ export function ExecutionProfileFormPage() {
           </Card>
         </form>
       </Form>
+      </div>
     </div>
   );
 }

@@ -431,7 +431,11 @@ export const SidebarGroup = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="group"
-      className={cn("relative flex w-full min-w-0 flex-col px-2 py-0.5", className)}
+      className={cn(
+        "relative flex w-full min-w-0 flex-col px-2 py-0.5",
+        "group-data-[collapsible=icon]:mt-1.5 group-data-[collapsible=icon]:pt-1.5 group-data-[collapsible=icon]:first:mt-0 group-data-[collapsible=icon]:first:pt-0.5 group-data-[collapsible=icon]:first:border-t-0 group-data-[collapsible=icon]:border-t group-data-[collapsible=icon]:border-sidebar-border",
+        className
+      )}
       {...props}
     />
   )
@@ -450,7 +454,7 @@ export const SidebarGroupLabel = React.forwardRef<
       data-sidebar="group-label"
       className={cn(
         "flex h-6 shrink-0 items-center rounded-none px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
-        "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
+        "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:pointer-events-none",
         className
       )}
       {...props}
