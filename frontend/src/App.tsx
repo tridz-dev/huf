@@ -61,7 +61,6 @@ const ConsolePage = lazy(() => import('./pages/ConsolePage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
-const ChannelsPageWrapper = lazy(() => import('./pages/ChannelsPageWrapper'));
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
@@ -444,6 +443,7 @@ function AppShell() {
             }
           />
           <Route path="/artifacts/*" element={<Navigate to="/executions" replace />} />
+          <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"
             element={
@@ -521,16 +521,6 @@ function AppShell() {
                     <SshPage />
                   </Suspense>
                 </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/channels"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <ChannelsPageWrapper />
-                </Suspense>
               </ProtectedRoute>
             }
           />
