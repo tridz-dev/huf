@@ -109,13 +109,8 @@ def handle_gateway_webhook(gateway_name: str) -> dict | None:
 
 	adapter = get_gateway_adapter(gateway)
 	request = _inbound_request()
-<<<<<<< HEAD
-	if request.method == "GET" and gateway.provider in ("WeCom", "WhatsApp"):
-		_text_response(adapter.verify_url(request) or "")
-=======
 	if request.method == "GET" and hasattr(adapter, "verify_url"):
-		_text_response(adapter.verify_url(request))
->>>>>>> develop
+		_text_response(adapter.verify_url(request) or "")
 		return None
 	if not adapter.verify_inbound(request):
 		return {"success": False, "error": "Provider verification failed"}
