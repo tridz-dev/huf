@@ -42,11 +42,12 @@ class TestGatewayWebhook(unittest.TestCase):
         adapter.verify_inbound.return_value = True
         adapter.normalize_inbound.return_value = normalized
         mock_frappe.get_doc.return_value = configured_gateway
+        mock_frappe.request = SimpleNamespace(args={"gateway_name": "Support VK"})
         mock_request.return_value = fake_request
         mock_adapter.return_value = adapter
 
         with patch("huf.ai.gateway_service.ingest_gateway_event", return_value={"event_name": "GE-1"}) as ingest:
-            result = gateway_webhook.handle_gateway_webhook("Support VK")
+            result = gateway_webhook.handle_gateway_webhook()
 
         assert result == {"success": True, "event_name": "GE-1"}
         adapter.normalize_inbound.assert_called_once_with(fake_request)
@@ -58,12 +59,13 @@ class TestGatewayWebhook(unittest.TestCase):
     @patch("huf.ai.gateway_webhook.frappe")
     def test_unverified_request_is_never_normalized(self, mock_frappe, mock_request, mock_adapter):
         mock_frappe.get_doc.return_value = SimpleNamespace(name="Support VK", provider="VK", is_enabled=1)
+        mock_frappe.request = SimpleNamespace(args={"gateway_name": "Support VK"})
         mock_request.return_value = SimpleNamespace(method="POST")
         adapter = MagicMock()
         adapter.verify_inbound.return_value = False
         mock_adapter.return_value = adapter
 
-        assert gateway_webhook.handle_gateway_webhook("Support VK") == {
+        assert gateway_webhook.handle_gateway_webhook() == {
             "success": False,
             "error": "Provider verification failed",
         }
@@ -77,10 +79,26 @@ class TestGatewayWebhook(unittest.TestCase):
         self, mock_frappe, mock_text_response, mock_request, mock_adapter
     ):
         mock_frappe.get_doc.return_value = SimpleNamespace(name="Support WeCom", provider="WeCom", is_enabled=1)
+        mock_frappe.request = SimpleNamespace(args={"gateway_name": "Support WeCom"})
         mock_request.return_value = SimpleNamespace(method="GET")
         adapter = MagicMock()
         adapter.verify_url.return_value = "decrypted-echo"
         mock_adapter.return_value = adapter
 
-        assert gateway_webhook.handle_gateway_webhook("Support WeCom") is None
+        assert gateway_webhook.handle_gateway_webhook() is None
         mock_text_response.assert_called_once_with("decrypted-echo")
+
+    @patch("huf.ai.gateway_webhook.frappe")
+    def test_missing_gateway_name_is_rejected(self, mock_frappe):
+        """Every provider here posts application/json, and
+        frappe.app.make_form_dict replaces frappe.form_dict wholesale with
+        the parsed JSON body whenever Content-Type is JSON — so
+        gateway_name must be read from frappe.request.args, never taken as
+        a function argument, or every real webhook call 500s."""
+        mock_frappe.request = SimpleNamespace(args={})
+
+        assert gateway_webhook.handle_gateway_webhook() == {
+            "success": False,
+            "error": "Missing gateway_name",
+        }
+        mock_frappe.get_doc.assert_not_called()
