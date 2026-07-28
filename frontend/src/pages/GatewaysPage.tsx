@@ -183,7 +183,7 @@ export default function GatewaysPage() {
 
   function getWebhookUrl(gwName: string) {
     const host = window.location.origin;
-    return `${host}/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway=${encodeURIComponent(gwName)}`;
+    return `${host}/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=${encodeURIComponent(gwName)}`;
   }
 
   function handleCopyWebhook(gwName: string) {
