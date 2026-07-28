@@ -71,10 +71,10 @@ The following CodeQL and Secret Leak security issues were logged and investigate
 - **Location:** `frontend/src/components/ai-elements/web-preview.tsx`
 - **Status:** **FIXED** — Implemented URL constructor protocol allowlist (`http:`, `https:`, `blob:`, `about:`) and strict sandboxing.
 
-### 🧼 CodeQL Alert #3, #14, #15: Client-side XSS / Incomplete Sanitization
+### 🧼 CodeQL Alert #3, #14, #15, #17, #18, #19, #20, #21: Client-side XSS / DOM Sanitization / Double Escaping
 - **Severity:** High / Medium
 - **Location:** `frontend/src/lib/frappe-error.ts`
-- **Status:** **FIXED** — Replaced `DOMParser().parseFromString` sink with safe string HTML tag stripping and entity decoding.
+- **Status:** **FIXED** — Integrated `DOMPurify.sanitize(message, { ALLOWED_TAGS: [] })` to safely strip HTML tags without regexes, multi-character sanitization issues, or double-escaping risks.
 
 ### 🔍 CodeQL Alert #2, #12: Bad HTML Filtering Regexp
 - **Severity:** High
