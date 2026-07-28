@@ -29,11 +29,11 @@ SEED_FILE = "hub-orchestrator.json"
 # chosen provider wins. Falls back to the provider's first non-specialized model.
 PREFERRED_MODELS = [
     "gpt-4o-mini",
-    "gemini-2.5-flash",
+    "gemini-3.5-flash",
     "claude-haiku-4.5",
     "claude-sonnet-4.5",
     "openai/gpt-4o-mini",
-    "google/gemini-2.5-flash",
+    "google/gemini-3.5-flash",
     "sonar",
     "command-a-03-2025",
 ]
