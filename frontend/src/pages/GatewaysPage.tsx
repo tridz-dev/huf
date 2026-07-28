@@ -22,6 +22,7 @@ import {
 } from '@/services/gatewayApi';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
+import { useUser } from '@/contexts/UserContext';
 import { Button } from '@/components/ui/button';
 import { getProviderBrandIcon } from '@/components/common/BrandIcons';
 import { IntegrationSettingsProvider } from '@/contexts/IntegrationSettingsContext';
@@ -62,6 +63,7 @@ const uiProviders: GatewayProvider[] = [
 ];
 
 export default function GatewaysPage() {
+  const { user } = useUser();
   const [activeTab, setActiveTab] = useState<GatewaysTab>('gateways');
   const [catalogOpenKey, setCatalogOpenKey] = useState(0);
   const [gateways, setGateways] = useState<GatewayDoc[]>([]);
@@ -114,14 +116,15 @@ export default function GatewaysPage() {
         provider,
         is_enabled: 1,
         direct_policy: 'Allow list',
+        execution_user: user?.name,
       })) as GatewayDoc;
       setGateways((current) => [created, ...current]);
       setGatewayName('');
       setShowSetup(false);
       // Open configuration modal immediately for the new gateway
       setEditingGateway(created);
-    } catch {
-      setError('Could not create the gateway. Please ensure the name is unique.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the gateway. Please ensure the name is unique.');
     } finally {
       setCreating(false);
     }
@@ -133,6 +136,7 @@ export default function GatewaysPage() {
     try {
       const updated = await updateGateway(editingGateway.name, {
         is_enabled: editingGateway.is_enabled,
+        execution_user: editingGateway.execution_user || '',
         description: editingGateway.description || '',
         direct_policy: editingGateway.direct_policy,
         default_target_type: editingGateway.default_target_type,
@@ -143,8 +147,8 @@ export default function GatewaysPage() {
         prev.map((gw) => (gw.name === updated.name ? { ...gw, ...updated } : gw))
       );
       setEditingGateway(null);
-    } catch {
-      setError('Failed to save gateway configuration.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save gateway configuration.');
     } finally {
       setSaving(false);
     }
@@ -400,6 +404,23 @@ export default function GatewaysPage() {
                   <div className="w-9 h-5 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                 </label>
               </div>
+
+              {/* Run as user */}
+              <label className="grid gap-1 text-xs font-medium text-ink">
+                Run as user
+                <input
+                  className="h-9 rounded-lg border border-input bg-background px-3 text-xs"
+                  value={editingGateway.execution_user || ''}
+                  onChange={(e) =>
+                    setEditingGateway({ ...editingGateway, execution_user: e.target.value })
+                  }
+                  placeholder="e.g. gateway-service@yourcompany.com"
+                />
+                <span className="text-[11px] font-normal text-steel">
+                  Least-privileged user this gateway runs Agents/Flows as. Required while
+                  enabled — never use Administrator.
+                </span>
+              </label>
 
               {/* Description */}
               <label className="grid gap-1 text-xs font-medium text-ink">
