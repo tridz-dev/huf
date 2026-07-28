@@ -27,7 +27,6 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/data')) return 'Data';
     if (path.startsWith('/providers')) return 'AI Providers';
     if (path.startsWith('/integration-services')) return 'Integration Catalog';
-    if (path.startsWith('/channels')) return 'Channels';
     if (path.startsWith('/integrations')) return 'Integrations';
     if (path.startsWith('/gateways')) return 'Gateways';
     if (path.startsWith('/settings')) return 'Settings';

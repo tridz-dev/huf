@@ -163,7 +163,6 @@ const settingsNavGroups = [
     label: "Connectivity",
     items: [
       { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
-      { title: "Channels", url: "/channels", icon: MessageSquare, capability: "system.integrations.manage" },
       { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
       { title: "MCP Servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
     ],

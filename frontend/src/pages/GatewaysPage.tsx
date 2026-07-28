@@ -24,6 +24,12 @@ import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { Button } from '@/components/ui/button';
 import { getProviderBrandIcon } from '@/components/common/BrandIcons';
+import { IntegrationSettingsProvider } from '@/contexts/IntegrationSettingsContext';
+import { IntegrationSettingsListingPage } from './IntegrationSettingsListingPage';
+import { IntegrationSettingsHeaderActions } from '@/components/integrations/IntegrationSettingsHeaderActions';
+import { cn } from '@/lib/utils';
+
+type GatewaysTab = 'gateways' | 'credentials';
 
 const providerNames: Record<GatewayProvider, string> = {
   WhatsApp: 'WhatsApp Business Number',
@@ -56,6 +62,8 @@ const uiProviders: GatewayProvider[] = [
 ];
 
 export default function GatewaysPage() {
+  const [activeTab, setActiveTab] = useState<GatewaysTab>('gateways');
+  const [catalogOpenKey, setCatalogOpenKey] = useState(0);
   const [gateways, setGateways] = useState<GatewayDoc[]>([]);
   const [agents, setAgents] = useState<{ name: string; agent_name: string }[]>([]);
   const [flows, setFlows] = useState<{ name: string; title: string }[]>([]);
@@ -166,8 +174,51 @@ export default function GatewaysPage() {
     setTimeout(() => setCopiedWebhook(false), 2000);
   }
 
+  const tabBar = (
+    <div className="mb-6 flex items-center gap-1 border-b border-line">
+      {(
+        [
+          { key: 'gateways' as const, label: 'Gateways' },
+          { key: 'credentials' as const, label: 'Channel Credentials' },
+        ]
+      ).map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          onClick={() => setActiveTab(tab.key)}
+          className={cn(
+            'px-3 pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            activeTab === tab.key
+              ? 'border-primary text-ink'
+              : 'border-transparent text-steel hover:text-ink'
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (activeTab === 'credentials') {
+    return (
+      <IntegrationSettingsProvider onAddIntegration={() => setCatalogOpenKey((v) => v + 1)}>
+        <div className="flex h-full flex-col">
+          <div className="flex items-end justify-between gap-4 px-6 pt-6">
+            {tabBar}
+            <IntegrationSettingsHeaderActions kind="channels" />
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <IntegrationSettingsListingPage kind="channels" catalogOpenKey={catalogOpenKey} />
+          </div>
+        </div>
+      </IntegrationSettingsProvider>
+    );
+  }
+
   return (
     <PageLayout subtitle="Let people reach Huf from WhatsApp, Messenger, Instagram, Telegram, and Slack — safely with clear AI routing.">
+      {tabBar}
+
       {/* Overview Card */}
       <div className="mb-6 rounded-xl border border-line bg-panel p-5 shadow-xs">
         <div className="flex gap-4">
