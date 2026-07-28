@@ -1334,6 +1334,7 @@ def execute_job(
 	limits = (profile_snapshot or {}).get("limits") or {}
 	max_output = int(limits.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 	filesystem_policy = (profile_snapshot or {}).get("filesystem_policy") or "None"
+	allowed_modules = (profile_snapshot or {}).get("allowed_modules") or []
 
 	# Do not run if a (Phase 5) approval exists and was not granted.
 	blocked = _approval_blocks(call.name)
@@ -1368,6 +1369,7 @@ def execute_job(
 			code,
 			limits=limits,
 			scratch_dir=mount_dir,
+			allowed_modules=allowed_modules,
 			broker_handler=broker_handler,
 			broker_thread_start=broker_handler.thread_start,
 			broker_thread_end=broker_handler.thread_end,
