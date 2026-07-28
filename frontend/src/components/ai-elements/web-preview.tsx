@@ -183,11 +183,21 @@ export const WebPreviewBody = ({
   const rawUrl = src ?? url;
   const safeUrl = (() => {
     if (!rawUrl) return undefined;
-    const trimmed = rawUrl.trim().toLowerCase();
-    if (trimmed.startsWith('javascript:') || trimmed.startsWith('data:text/html')) {
-      return 'about:blank';
+    const trimmed = rawUrl.trim();
+    if (trimmed.startsWith('/') || trimmed.startsWith('./')) {
+      return trimmed;
     }
-    return rawUrl;
+    try {
+      const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+      const parsed = new URL(trimmed, base);
+      const protocol = parsed.protocol.toLowerCase();
+      if (['http:', 'https:', 'blob:', 'about:'].includes(protocol)) {
+        return parsed.href;
+      }
+    } catch {
+      // Invalid URL
+    }
+    return 'about:blank';
   })();
 
   return (

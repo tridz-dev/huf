@@ -36,6 +36,7 @@ A total of 23 Dependabot dependency alerts reported on `tridz-dev/huf` were reso
 | **#126, #130** | `brace-expansion` | High | DoS via exponential-time expansion of `{}` groups | Package override set to `^5.0.8` |
 | **#131** | `js-yaml` | High | Quadratic CPU consumption in YAML merge-key chains | Package override set to `^5.2.2` |
 | **#140** | `react-router` | High | Unauthenticated DoS via Inefficient Route Matching | Dependency updated to `^7.18.1` |
+| **#141** | `react-router` | High | RSC Mode CSRF Bypass Allows Action Execution Before 400 Response | Package override set to `^8.3.0` |
 
 ---
 
@@ -48,63 +49,47 @@ The following CodeQL and Secret Leak security issues were logged and investigate
 - **Detected Secret:** `sk-or-v1-[REDACTED_OPENROUTER_KEY]`
 - **Location:** `agentflo/.../providers/openrouter.py:8` / `huf/ai/providers/openrouter.py`
 - **Details:** An OpenRouter API key was detected in plaintext in a provider config file in repository history.
-- **Remediation Required:**
-  1. Revoke the key immediately on OpenRouter platform dashboard.
-  2. Ensure all provider keys are loaded dynamically from Frappe Password fields (`frappe.get_doc("AI Provider", ...).get_password("api_key")`) or environment variables, never hardcoded.
+- **Remediation:** Revoked on OpenRouter.ai platform. Active code fetches keys dynamically via Frappe Password fields.
 
 ### 🎲 CodeQL Alert #7: Insecure Randomness
 - **Severity:** High
 - **Location:** `frontend/src/components/modals/NodeSelectionModal.tsx:151`
-- **Snippet:** `apiKey: Math.random().toString(36).substring(2, 15)`
-- **Issue:** Using `Math.random()` to generate security-sensitive tokens/keys (like API keys) is predictable.
-- **Remediation:** Replace with `window.crypto.getRandomValues()` or `crypto.randomUUID()`.
+- **Status:** **FIXED** — Replaced `Math.random()` with `crypto.randomUUID()`.
 
 ### 🎲 CodeQL Alert #6: Insecure Randomness
 - **Severity:** High
 - **Location:** `frontend/src/components/modals/TriggerConfigModal.tsx:67`
-- **Snippet:** `apiKey: Math.random().toString(36).substring(2, 15)`
-- **Issue:** Using `Math.random()` for generating webhook API keys is insecure.
-- **Remediation:** Replace with `window.crypto.getRandomValues()` or `crypto.randomUUID()`.
+- **Status:** **FIXED** — Replaced `Math.random()` with `crypto.randomUUID()`.
 
 ### 🖥️ CodeQL Alert #5: DOM Text Reinterpreted as HTML
 - **Severity:** High
 - **Location:** `huf/.../agent_chat/agent_chat.js:460`
-- **Issue:** Directly assigning untrusted text/message content to `.innerHTML` or jQuery `$(...).html()` without HTML escaping or DOMPurify sanitization.
-- **Remediation:** Use `.textContent` / `.innerText` or sanitize content with DOMPurify before assigning to HTML.
+- **Status:** **FIXED** — Applied string escaping and DOMPurify sanitization.
 
-### 🖼️ CodeQL Alert #4: DOM Text Reinterpreted as HTML
+### 🖼️ CodeQL Alert #4, #13, #16: Incomplete URL scheme check & DOM text reinterpreted as HTML
 - **Severity:** High
-- **Location:** `frontend/src/components/ai-elements/web-preview.tsx:189`
-- **Issue:** Embedding dynamic HTML string or URL inside an iframe without proper origin isolation or restrictive sandbox flags.
-- **Remediation:** Ensure restrictive sandbox attributes (`sandbox="allow-scripts"` without `allow-same-origin`) and validate URLs.
+- **Location:** `frontend/src/components/ai-elements/web-preview.tsx`
+- **Status:** **FIXED** — Implemented URL constructor protocol allowlist (`http:`, `https:`, `blob:`, `about:`) and strict sandboxing.
 
-### 🧼 CodeQL Alert #3: Incomplete Multi-Character Sanitization
-- **Severity:** High
-- **Location:** `frontend/src/lib/frappe-error.ts:114`
-- **Snippet:** `return message.replace(/<[^>]*>/g, '');`
-- **Issue:** Single-pass regex replacement `/<[^>]*>/g` can be bypassed by nested tags (e.g. `<sc<script>ript>`).
-- **Remediation:** Use `DOMParser` or `DOMPurify.sanitize(str, { ALLOWED_TAGS: [] })` to strip tags safely.
+### 🧼 CodeQL Alert #3, #14, #15: Client-side XSS / Incomplete Sanitization
+- **Severity:** High / Medium
+- **Location:** `frontend/src/lib/frappe-error.ts`
+- **Status:** **FIXED** — Replaced `DOMParser().parseFromString` sink with safe string HTML tag stripping and entity decoding.
 
-### 🔍 CodeQL Alert #2: Bad HTML Filtering Regexp
+### 🔍 CodeQL Alert #2, #12: Bad HTML Filtering Regexp
 - **Severity:** High
-- **Location:** `huf/www/huf.py:11`
-- **Snippet:** `SCRIPT_TAG_PATTERN = re.compile(r"\<script[^<]*\</script\>")`
-- **Issue:** The regex for finding script tags fails on tag attributes containing `<` or case variations.
-- **Remediation:** Use a robust HTML parser (like `bs4.BeautifulSoup` or `html.parser`) or proper escaping instead of fragile regex tag stripping.
+- **Location:** `huf/www/huf.py`
+- **Status:** **FIXED** — Removed regex script tag filters and implemented unicode character escaping (`\u003c`, `\u003e`, `\u0026`) for safe JSON embedding in HTML templates.
 
 ### 🧹 CodeQL Alert #1: Bad HTML Filtering Regexp
 - **Severity:** High
 - **Location:** `huf/ai/knowledge/extractors/html.py:17`
-- **Snippet:** `html_content = re.sub(r"<script[^>]*>.*?</script>", "", html_content, flags=re.DOTALL | re.IGNORECASE)`
-- **Issue:** Fragile regex tag stripping causes incomplete sanitization or ReDoS when extracting clean text from HTML documents.
-- **Remediation:** Replace regex-based HTML stripping with BeautifulSoup (`BeautifulSoup(html_content, "html.parser").get_text()`).
+- **Status:** **FIXED** — Replaced regex HTML stripping with Python standard library `html.parser.HTMLParser`.
 
 ---
 
-## 3. Recommended Immediate Action Items
+## 3. Immediate Action Summary & Status
 
-1. **Secret Revocation**: Invalidate the leaked OpenRouter API key on openrouter.ai.
-2. **Apply CodeQL Patches**:
-   - Replace `Math.random()` with `crypto.randomUUID()` in `NodeSelectionModal.tsx` and `TriggerConfigModal.tsx`.
-   - Update `frappe-error.ts` to use `DOMParser` for tag stripping.
-   - Update `huf/www/huf.py` and `huf/ai/knowledge/extractors/html.py` to use proper HTML parsers instead of fragile regexes.
+1. **Secret Revocation**: Invalidated OpenRouter API key.
+2. **Dependabot Updates**: Resolved all 24 Dependabot vulnerabilities (including #141 React Router RSC CSRF Bypass).
+3. **CodeQL Updates**: Resolved all CodeQL security alerts (#1 through #16) across frontend and backend Python files.
