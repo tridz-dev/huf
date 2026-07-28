@@ -119,6 +119,7 @@ def after_migrate():
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
+	create_demo_ai_providers()
 	create_demo_ai_models()
 	setup_desktop_icon_as_workspace("huf")
 	try:
