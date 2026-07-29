@@ -8,6 +8,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -47,6 +48,28 @@ export function PolicyTab({ form, isNew, agentOptions }: PolicyTabProps) {
             )}
           />
         )}
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Description</FormLabel>
+              <FormControl>
+                <Textarea
+                  placeholder="What this policy is for and what it does, e.g. 'Support agent memory — remembers customer preferences across tickets, requires approval before use.'"
+                  className="min-h-[80px] resize-y"
+                  {...field}
+                />
+              </FormControl>
+              <FormDescription>
+                Shown to whoever is choosing a policy for an agent — explain the intent, not just
+                repeat the settings below.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <SwitchField
           form={form}

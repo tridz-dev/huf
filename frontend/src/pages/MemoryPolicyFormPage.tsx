@@ -35,6 +35,7 @@ export default MemoryPolicyFormPage;
 function mapDocToFormValues(doc: Partial<MemoryPolicyDoc>): MemoryPolicyFormValues {
   return {
     policy_name: doc.policy_name || '',
+    description: doc.description || '',
     enabled: doc.enabled === undefined ? true : doc.enabled === 1,
     agent: doc.agent || undefined,
     scope_type: doc.scope_type || 'Agent',
@@ -192,6 +193,7 @@ function MemoryPolicyFormPage() {
     try {
       const payload: Partial<MemoryPolicyDoc> = {
         policy_name: values.policy_name,
+        description: values.description || null,
         enabled: values.enabled ? 1 : 0,
         agent: values.agent || null,
         scope_type: values.scope_type,

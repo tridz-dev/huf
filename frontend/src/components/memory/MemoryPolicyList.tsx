@@ -135,7 +135,9 @@ export function MemoryPolicyList() {
         renderItem={(policy) => (
           <ItemCard
             title={policy.policy_name || policy.name}
-            description={`${policy.scope_type} scope · ${policy.inject_mode} inject`}
+            description={
+              policy.description?.trim() || `${policy.scope_type} scope · ${policy.inject_mode} inject`
+            }
             status={{
               label: policy.enabled ? 'Enabled' : 'Disabled',
               variant: policy.enabled ? 'success' : 'secondary',

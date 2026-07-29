@@ -8,6 +8,7 @@ import { fetchPaginatedCount } from './utilsApi';
 const MEMORY_POLICY_LIST_FIELDS = [
   'name',
   'policy_name',
+  'description',
   'enabled',
   'agent',
   'scope_type',
