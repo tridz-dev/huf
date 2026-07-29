@@ -1,22 +1,23 @@
 # Memory Policy: Capture Delegation (`capture_mode` + `learning_agent`)
 
-Status: **not implemented — planning doc for a follow-up PR**
-Depends on: the base Memory Policy management UI (list/create/edit/delete).
+Status: **implemented and live-tested** (background extraction job, enqueued on
+run completion, verified end-to-end against a live bench with a real LLM call).
 
-## Why this was pulled out of the base UI PR
+## Why this was pulled out of the base UI PR, then brought back
 
 `Memory Policy.capture_mode` and `Memory Policy.learning_agent` exist as
 doctype fields and were originally exposed in the policy edit form (Capture
 Mode select: Manual / Agent Suggested / Automatic, plus a Learning Agent
-picker). Auditing the runtime found **zero reads** of either field anywhere
-outside the doctype and the seed data in `install.py` — choosing "Automatic"
-in the UI silently behaved identically to "Manual". Shipping a control that
-looks live but does nothing is worse than not shipping it, so both fields
-were removed from the form for the base PR and are tracked here instead.
+picker). An audit of the runtime found **zero reads** of either field outside
+the doctype and the seed data in `install.py` — choosing "Automatic" in the
+UI silently behaved identically to "Manual". Shipping a control that looks
+live but does nothing is worse than not shipping it, so both fields were
+removed from the base UI PR. This follow-up PR wires them up for real and
+re-adds them to the form.
 
-## What this feature is meant to do
+## What this feature does
 
-A memory policy currently only supports two capture paths, both driven by
+A memory policy previously only supported two capture paths, both driven by
 explicit tool calls from the conversation's own agent:
 
 - `save_memory_record` called manually by the user, or
@@ -27,8 +28,8 @@ explicit tool calls from the conversation's own agent:
 where memory formation isn't bounded by the main agent's context window or
 per-turn cost.
 
-- **`capture_mode = "Manual"`** (current, only implemented behavior): nothing
-  changes — writes only happen via explicit tool calls.
+- **`capture_mode = "Manual"`**: unchanged — writes only happen via explicit
+  tool calls.
 - **`capture_mode = "Agent Suggested"`**: after a run completes, a background
   job reviews the transcript and proposes candidate memory records. These
   always land as `Draft`, regardless of `approval_required`, and need human
@@ -42,131 +43,67 @@ per-turn cost.
   can run over every conversation without the main agent's context or budget
   ever being touched.
 
-## Implementation sketch (not yet built)
+## How it's implemented
 
-1. On Agent Run completion, if `capture_mode != "Manual"`, `frappe.enqueue` an
-   extraction job (the codebase already uses this exact pattern extensively
-   in `huf/ai/agent_integration.py` — `enqueue_after_commit=True`, etc.).
-2. The job resolves the extraction agent: `policy.learning_agent` if set,
-   else the conversation's agent.
-3. It runs that agent over the transcript with an extraction-specific prompt
-   and emits candidate records via the *existing* `save_memory_record` path —
-   no new write path, no new permission model. This means all the write-
-   permission and promotion enforcement already in `memory_tools.py`
-   (`_can_write_memory`, `allowed_record_types`, `auto_promote_to_knowledge`,
-   the promotion thresholds) applies unchanged.
-4. `Agent Suggested` forces `status="Draft"` before calling
-   `save_memory_record`, overriding whatever `default_status` would have set.
-   `Automatic` does not override — it lets the existing `approval_required` /
-   `default_status` logic in `save_memory_record` decide.
+1. `huf/ai/agent_integration.py`, in `run_agent_sync`: immediately after a run
+   is marked `"status": "Success"`, `frappe.enqueue`s
+   `huf.ai.memory_tools.extract_memory_from_run(run_id=...)`
+   (`enqueue_after_commit=True`, `queue="default"`). This call is
+   unconditional — it's always cheap to enqueue, because the job itself does
+   all the gating.
+2. `huf/ai/memory_tools.py`, `extract_memory_from_run(run_id)`:
+   - Loads the run's agent and its Memory Policy. No-ops if there's no
+     policy, the policy is disabled, or `capture_mode == "Manual"`.
+   - Resolves the extraction agent: `policy.learning_agent` if set, else the
+     run's own agent.
+   - Builds a transcript from `ConversationManager.get_conversation_history`.
+   - Calls `run_agent_sync(agent_name=extraction_agent, now=1,
+     skip_user_message=True, response_format=<json schema>)` — synchronous
+     (since we're already in a background job), and using
+     `response_format` to get structured JSON back directly in
+     `result["structured"]` rather than parsing free text.
+   - For each candidate memory, calls the *existing* `save_memory_record`
+     path — no new write path, no new permission model. All the
+     write-permission and promotion enforcement already in
+     `memory_tools.py` (`_can_write_memory`, `allowed_record_types`,
+     `auto_promote_to_knowledge`, the promotion thresholds) applies
+     unchanged. `Agent Suggested` forces `status="Draft"` before calling
+     `save_memory_record`; `Automatic` passes `status="Active"` as a request
+     only — `save_memory_record` already downgrades it to Draft internally
+     if `policy.approval_required` is true.
+3. Frontend: `capture_mode` + `learning_agent` are back in
+   `MemoryPolicyFields.tsx` (Capture card), `memoryPolicyFormSchema.ts`,
+   `MemoryPolicyFormPage.tsx` (form value mapping), and
+   `memoryPolicyApi.ts` (list fields). The policy card in `MemoryPolicyList.tsx`
+   now shows Capture Mode as a metadata badge.
 
-## Code / UI already written (removed from the base PR, for reuse here)
+## Live verification performed
 
-The following existed in the base UI branch and was reverted before merge.
-It's a reasonable starting point, not a final design — in particular the
-"Learning Agent" combobox and Capture Mode `<Select>` will need to move into
-whatever container the tabs restructure below settles on.
+Ran against a real bench (`memory-policy-test`, Gemini-backed `AI Provider`):
+created a Memory Policy with `capture_mode: "Agent Suggested"`, ran a real
+conversation ("My favorite programming language is Rust and I always deploy
+on a Tuesday"), and confirmed:
 
-`frontend/src/components/memory/memoryPolicyFormSchema.ts` (schema piece):
-
-```ts
-export const memoryCaptureModes = ['Manual', 'Agent Suggested', 'Automatic'] as const;
-// ...
-capture_mode: z.enum(memoryCaptureModes).default('Manual'),
-learning_agent: z.string().optional(),
-```
-
-`frontend/src/components/memory/MemoryPolicyFields.tsx` (form fields):
-
-```tsx
-<FormField
-  control={form.control}
-  name="capture_mode"
-  render={({ field }) => (
-    <FormItem>
-      <FormLabel>Capture Mode</FormLabel>
-      <Select value={field.value} onValueChange={field.onChange}>
-        <FormControl>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-        </FormControl>
-        <SelectContent>
-          {memoryCaptureModes.map((mode) => (
-            <SelectItem key={mode} value={mode}>
-              {mode}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <FormDescription>
-        <span className="block"><strong>Manual</strong> — only explicit user or tool-call writes create memory.</span>
-        <span className="block"><strong>Agent Suggested</strong> — the agent proposes memory records for approval.</span>
-        <span className="block"><strong>Automatic</strong> — memory is extracted from conversations in the background.</span>
-      </FormDescription>
-      <FormMessage />
-    </FormItem>
-  )}
-/>
-
-<FormField
-  control={form.control}
-  name="learning_agent"
-  render={({ field }) => (
-    <FormItem>
-      <FormLabel>Learning Agent</FormLabel>
-      <FormControl>
-        <Combobox
-          options={agentOptions}
-          value={field.value}
-          onValueChange={(v) => field.onChange(v || undefined)}
-          placeholder="Use the conversation's agent"
-          searchPlaceholder="Search agents..."
-          emptyText="No agents found."
-          linkTo={linkRoutes.agent}
-        />
-      </FormControl>
-      <FormDescription>
-        Optional dedicated agent that runs background memory extraction, instead of the
-        conversation's own agent.
-      </FormDescription>
-      <FormMessage />
-    </FormItem>
-  )}
-/>
-```
-
-`frontend/src/pages/MemoryPolicyFormPage.tsx` (map to/from form values):
-
-```ts
-// mapDocToFormValues
-capture_mode: doc.capture_mode || 'Manual',
-learning_agent: doc.learning_agent || undefined,
-
-// onSubmit payload
-capture_mode: values.capture_mode,
-learning_agent: values.learning_agent || null,
-```
-
-`frontend/src/services/memoryPolicyApi.ts`: re-add `'capture_mode'` to
-`MEMORY_POLICY_LIST_FIELDS` if the list card should surface it again.
+- The extraction job was enqueued and executed (`Job OK` in `worker.log`).
+- Two `Memory Record`s were created, `source_type: "Extracted"`,
+  `status: "Draft"` (correct — Agent Suggested always forces Draft), with
+  accurate, non-hallucinated summaries and sane confidence/importance scores.
+- Test data cleaned up afterward.
 
 ## TODO: switch the Memory Policy form to tabs
 
-Filed here rather than in the base UI PR because it only earns its cost once
-this feature lands. The base form (~14 fields across 5 cards: Policy,
-Capture, Retrieval, Write Permissions, Knowledge Projection, Lifecycle) reads
-fine as a single scroll — it's smaller than `KnowledgeSourceFormPage`, which
-gets by on 2 tabs. But once Capture grows a learning-agent picker, an
-extraction schedule, and (likely) an extraction-prompt editor, it stops being
-a section and becomes a surface of its own.
+Deliberately **not** part of this PR — filed here for the next one. The form
+is now ~19 fields across 6 cards: Policy, Capture (now includes Capture Mode
++ Learning Agent), Retrieval, Write Permissions, Knowledge Projection,
+Lifecycle. It's grown past the point a single scroll reads well, and once
+Capture is likely to grow further (an extraction schedule, an
+extraction-prompt editor), it becomes a surface of its own.
 
-Proposed end state, to implement **alongside** the capture-delegation PR
-(not before it — restructuring the form twice is wasted motion):
+Proposed end state:
 
 - **Policy** — name, enabled, agent, scope
 - **Capture** — capture mode, learning agent, approval/default status,
-  allowed record types, (new) extraction schedule/prompt
+  allowed record types
 - **Retrieval** — inject mode, max records, token budget
 - **Guardrails** — write permissions (rename from "Write Permissions"),
   knowledge projection, TTL
