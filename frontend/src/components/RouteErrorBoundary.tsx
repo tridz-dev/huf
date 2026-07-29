@@ -1,4 +1,5 @@
-import { Component, useEffect, type ReactNode } from 'react';
+import { useEffect } from 'react';
+import { useRouteError } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 
 const RELOAD_FLAG = 'huf:chunk-reload';
@@ -10,12 +11,14 @@ function isChunkLoadError(error: unknown): boolean {
 }
 
 /**
- * Dynamic-import failures mean the browser holds a stale bundle (a new build
- * replaced the hashed chunks) — the only fix is a reload, so do it once
- * automatically and show a calm message instead of a raw error screen. The
- * flag is cleared on healthy load (AppShell) so future redeploys reload again.
+ * Route errorElement. Dynamic-import failures mean the browser holds a stale
+ * bundle (a new build replaced the hashed chunks) — the only fix is a reload,
+ * so do it once automatically and show a calm message instead of the raw
+ * "Unexpected Application Error" screen. The flag is cleared on healthy load
+ * (AppShell) so future real redeploys reload again.
  */
-function ErrorScreen({ error }: { error: unknown }) {
+export function RouteErrorBoundary() {
+	const error = useRouteError();
 	const chunkError = isChunkLoadError(error);
 	const alreadyRetried =
 		typeof sessionStorage !== 'undefined' && sessionStorage.getItem(RELOAD_FLAG) === '1';
@@ -57,25 +60,6 @@ function ErrorScreen({ error }: { error: unknown }) {
 			</Button>
 		</div>
 	);
-}
-
-/**
- * Top-level error boundary. This is a plain React boundary rather than a
- * route `errorElement` because the app renders through <BrowserRouter> — see
- * App.tsx for why the data router (createBrowserRouter/RouterProvider) is not
- * used here.
- */
-export class AppErrorBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
-	state: { error: unknown } = { error: null };
-
-	static getDerivedStateFromError(error: unknown) {
-		return { error };
-	}
-
-	render() {
-		if (this.state.error) return <ErrorScreen error={this.state.error} />;
-		return this.props.children;
-	}
 }
 
 /** Clear the reload guard once the app has loaded healthy. Call from AppShell. */

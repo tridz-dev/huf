@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { UserProvider } from './contexts/UserContext';
 import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
@@ -76,7 +76,7 @@ const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 
 import { useEffect } from 'react';
-import { AppErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
+import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
 import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
@@ -674,6 +674,11 @@ function AppShell() {
   );
 }
 
+const router = createBrowserRouter(
+  [{ path: '*', element: <AppShell />, errorElement: <RouteErrorBoundary /> }],
+  { basename: '/huf' },
+);
+
 function App() {
   useEffect(() => {
     // Streaming (SSE) is the explicit direct-execution mode: it is only used
@@ -686,21 +691,7 @@ function App() {
     });
   }, []);
 
-  // Deliberately <BrowserRouter>, not createBrowserRouter/<RouterProvider>.
-  // All routing here is a descendant <Routes> inside AppShell — there are no
-  // loaders or actions, so the data router adds nothing. It also broke
-  // navigation: RouterProvider kept its own copy of router state, and after
-  // the first commit that copy stopped tracking the router. Clicking a nav
-  // link updated history and router.state (URL changed) while the rendered
-  // tree stayed pinned to the location it mounted with, so the page only
-  // changed on a manual refresh. BrowserRouter has no such intermediate copy.
-  return (
-    <AppErrorBoundary>
-      <BrowserRouter basename="/huf">
-        <AppShell />
-      </BrowserRouter>
-    </AppErrorBoundary>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;
