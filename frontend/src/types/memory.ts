@@ -47,7 +47,9 @@ export interface MemoryPolicyDoc {
   scope_type: MemoryScopeType;
   scope_key?: string | null;
 
-  capture_mode: MemoryCaptureMode;
+  // Backend-only for now — not yet surfaced in the Memory Policy UI or
+  // enforced at runtime. See docs/memory-policy-capture-delegation.md.
+  capture_mode?: MemoryCaptureMode;
   learning_agent?: string | null;
   approval_required: 0 | 1;
   default_status: MemoryDefaultStatus;

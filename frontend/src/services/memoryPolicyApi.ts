@@ -11,7 +11,6 @@ const MEMORY_POLICY_LIST_FIELDS = [
   'enabled',
   'agent',
   'scope_type',
-  'capture_mode',
   'inject_mode',
   'approval_required',
   'auto_promote_to_knowledge',
