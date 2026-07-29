@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { Form } from '@/components/ui/form';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -20,8 +21,13 @@ import {
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { MemoryPolicyDoc } from '@/types/memory';
 import { memoryPolicyFormSchema, type MemoryPolicyFormValues } from '@/components/memory/memoryPolicyFormSchema';
-import { MemoryPolicyFields } from '@/components/memory/MemoryPolicyFields';
+import { PolicyTab } from '@/components/memory/tabs/PolicyTab';
+import { CaptureTab } from '@/components/memory/tabs/CaptureTab';
+import { RetrievalTab } from '@/components/memory/tabs/RetrievalTab';
+import { GuardrailsTab } from '@/components/memory/tabs/GuardrailsTab';
 import { DeleteMemoryPolicyDialog } from '@/components/memory/DeleteMemoryPolicyDialog';
+import { createFormSubmitHandler, type TabFieldMapping } from '@/utils/formValidation';
+import type { ComboboxOption } from '@/components/ui/combobox';
 
 export { MemoryPolicyFormPage };
 export default MemoryPolicyFormPage;
@@ -55,6 +61,42 @@ function mapDocToFormValues(doc: Partial<MemoryPolicyDoc>): MemoryPolicyFormValu
   };
 }
 
+const tabConfig = {
+  policy: { label: 'Policy', fields: ['policy_name', 'enabled', 'agent', 'scope_type', 'scope_key'], default: true },
+  capture: {
+    label: 'Capture',
+    fields: ['capture_mode', 'learning_agent', 'approval_required', 'default_status', 'allowed_record_types'],
+    default: false,
+  },
+  retrieval: { label: 'Retrieval', fields: ['inject_mode', 'max_records', 'token_budget'], default: false },
+  guardrails: {
+    label: 'Guardrails',
+    fields: [
+      'allow_agent_write',
+      'allow_user_scope_write',
+      'allow_role_scope_write',
+      'allow_agent_scope_write',
+      'allow_site_scope_write',
+      'auto_promote_to_knowledge',
+      'knowledge_source',
+      'promotion_min_confidence',
+      'promotion_min_importance',
+      'ttl_days',
+      'metadata_json',
+    ],
+    default: false,
+  },
+} as const;
+
+const validTabs = Object.keys(tabConfig);
+const defaultTab = Object.entries(tabConfig).find(([, c]) => c.default)?.[0] || validTabs[0];
+const tabFieldMapping: TabFieldMapping = Object.fromEntries(
+  Object.entries(tabConfig).map(([key, c]) => [key, [...c.fields]]),
+);
+const tabLabels: Record<string, string> = Object.fromEntries(
+  Object.entries(tabConfig).map(([key, c]) => [key, c.label]),
+);
+
 function MemoryPolicyFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -66,6 +108,38 @@ function MemoryPolicyFormPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [agents, setAgents] = useState<Array<{ name: string; agent_name?: string }>>([]);
   const [knowledgeSources, setKnowledgeSources] = useState<Array<{ name: string; source_name?: string }>>([]);
+
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const hashFromUrl = window.location.hash.slice(1);
+    return hashFromUrl && validTabs.includes(hashFromUrl) ? hashFromUrl : defaultTab;
+  });
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hashFromUrl = window.location.hash.slice(1);
+      setActiveTab(hashFromUrl && validTabs.includes(hashFromUrl) ? hashFromUrl : defaultTab);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (value === defaultTab) {
+      window.history.replaceState(null, '', window.location.pathname);
+    } else {
+      window.location.hash = value;
+    }
+  };
+
+  const agentOptions: ComboboxOption[] = useMemo(
+    () => agents.map((a) => ({ value: a.name, label: a.agent_name || a.name })),
+    [agents],
+  );
+  const knowledgeSourceOptions: ComboboxOption[] = useMemo(
+    () => knowledgeSources.map((k) => ({ value: k.name, label: k.source_name || k.name })),
+    [knowledgeSources],
+  );
 
   const form = useForm<MemoryPolicyFormValues>({
     resolver: zodResolver(memoryPolicyFormSchema),
@@ -162,6 +236,11 @@ function MemoryPolicyFormPage() {
     }
   };
 
+  const handleFormSubmit = useMemo(
+    () => createFormSubmitHandler(form, activeTab, tabFieldMapping, tabLabels, onSubmit),
+    [form, activeTab],
+  );
+
   const handleDeleteConfirm = async () => {
     if (!id || isNew) return;
     setDeleting(true);
@@ -231,7 +310,7 @@ function MemoryPolicyFormPage() {
                 Delete
               </Button>
             )}
-            <Button size="sm" onClick={form.handleSubmit(onSubmit)} disabled={saving}>
+            <Button size="sm" onClick={handleFormSubmit} disabled={saving}>
               <Save className="w-4 h-4 mr-2" />
               {saving ? 'Saving...' : 'Save'}
             </Button>
@@ -239,8 +318,32 @@ function MemoryPolicyFormPage() {
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <MemoryPolicyFields form={form} isNew={isNew} agents={agents} knowledgeSources={knowledgeSources} />
+          <form onSubmit={handleFormSubmit} className="space-y-6">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+              <TabsList layout="grid" cols={4}>
+                {Object.entries(tabConfig).map(([tabKey, config]) => (
+                  <TabsTrigger key={tabKey} value={tabKey}>
+                    {config.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              <TabsContent value="policy" className="space-y-4">
+                <PolicyTab form={form} isNew={isNew} agentOptions={agentOptions} />
+              </TabsContent>
+
+              <TabsContent value="capture" className="space-y-4">
+                <CaptureTab form={form} agentOptions={agentOptions} />
+              </TabsContent>
+
+              <TabsContent value="retrieval" className="space-y-4">
+                <RetrievalTab form={form} />
+              </TabsContent>
+
+              <TabsContent value="guardrails" className="space-y-4">
+                <GuardrailsTab form={form} knowledgeSourceOptions={knowledgeSourceOptions} />
+              </TabsContent>
+            </Tabs>
           </form>
         </Form>
 
