@@ -50,6 +50,7 @@ const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
 const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourceFormPageWrapper'));
 const MemoryPage = lazy(() => import('./pages/MemoryPage'));
+const MemoryPolicyFormPageWrapper = lazy(() => import('./pages/MemoryPolicyFormPageWrapper'));
 const SkillsPage = lazy(() => import('./pages/SkillsPage'));
 const SkillFormPageWrapper = lazy(() => import('./pages/SkillFormPageWrapper'));
 const SshPage = lazy(() => import('./pages/SshPage'));
@@ -488,6 +489,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <KnowledgeSourceFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/memory/policies/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <MemoryPolicyFormPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }

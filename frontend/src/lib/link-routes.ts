@@ -11,7 +11,7 @@ export const linkRoutes = {
 	knowledgeSource: (id: string) => `/knowledge/${encodeId(id)}`,
 	aiModel: (id: string) => `/models?configure=${encodeId(id)}`,
 	aiProvider: (id: string) => `/providers?configure=${encodeId(id)}`,
-	memoryPolicy: (id: string) => `/app/memory-policy/${encodeId(id)}`,
+	memoryPolicy: (id: string) => `/memory/policies/${encodeId(id)}`,
 } as const;
 
 export type LinkRouteKey = keyof typeof linkRoutes;
