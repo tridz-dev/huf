@@ -41,6 +41,7 @@ export interface MemoryPolicyDoc {
   doctype?: 'Memory Policy';
 
   policy_name: string;
+  description?: string | null;
   enabled: 0 | 1;
   agent?: string | null;
 

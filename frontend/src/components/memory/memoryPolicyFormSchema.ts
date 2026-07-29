@@ -16,6 +16,7 @@ export const memoryInjectModes = ['Never', 'Relevant Only', 'Always', 'Tool Only
 
 export const memoryPolicyFormSchema = z.object({
   policy_name: z.string().min(1, 'Policy name is required'),
+  description: z.string().optional(),
   enabled: z.boolean().default(true),
   agent: z.string().optional(),
 
