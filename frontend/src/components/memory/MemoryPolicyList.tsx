@@ -142,6 +142,7 @@ export function MemoryPolicyList() {
             }}
             metadata={[
               { label: 'Agent', value: policy.agent || 'Any', icon: ShieldCheck },
+              { label: 'Capture', value: policy.capture_mode, icon: Layers },
               { label: 'Inject Mode', value: policy.inject_mode, icon: Layers },
               {
                 label: 'Auto-promote',

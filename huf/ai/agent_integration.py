@@ -1781,6 +1781,18 @@ def _execute_agent_run(
             "provider": resolved_provider,
             "end_time": now_datetime()
         }, update_modified=True)
+        try:
+            frappe.enqueue(
+                "huf.ai.memory_tools.extract_memory_from_run",
+                queue="default",
+                timeout=300,
+                is_async=True,
+                enqueue_after_commit=True,
+                run_id=run_doc.name,
+            )
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as e:
+            frappe.logger("huf").warning(f"Memory extraction enqueue failed: {e!s}")
         _emit_run_lifecycle_event(
             run_doc,
             conversation,

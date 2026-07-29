@@ -10,6 +10,7 @@ export const memoryScopeTypes = [
   'Global',
 ] as const;
 
+export const memoryCaptureModes = ['Manual', 'Agent Suggested', 'Automatic'] as const;
 export const memoryDefaultStatuses = ['Draft', 'Active'] as const;
 export const memoryInjectModes = ['Never', 'Relevant Only', 'Always', 'Tool Only'] as const;
 
@@ -21,6 +22,8 @@ export const memoryPolicyFormSchema = z.object({
   scope_type: z.enum(memoryScopeTypes).default('Agent'),
   scope_key: z.string().optional(),
 
+  capture_mode: z.enum(memoryCaptureModes).default('Manual'),
+  learning_agent: z.string().optional(),
   approval_required: z.boolean().default(true),
   default_status: z.enum(memoryDefaultStatuses).default('Draft'),
   allowed_record_types: z.string().optional(),

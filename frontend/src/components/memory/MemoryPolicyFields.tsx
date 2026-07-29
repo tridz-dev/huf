@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { linkRoutes } from '@/lib/link-routes';
 import {
   memoryScopeTypes,
+  memoryCaptureModes,
   memoryDefaultStatuses,
   memoryInjectModes,
   type MemoryPolicyFormValues,
@@ -198,17 +199,66 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
         <CardHeader>
           <CardTitle>Capture</CardTitle>
           <CardDescription>Control how new memory records are created and approved.</CardDescription>
-          {/*
-            Capture Mode + Learning Agent (background extraction, delegated to a
-            dedicated agent) intentionally live outside this form for now — the
-            doctype fields exist but nothing reads them at runtime yet. See
-            frontend/docs/MEMORY_POLICY_CAPTURE_DELEGATION.md for the design and
-            the UI code to reintroduce once the extraction job is built. That doc
-            also proposes switching this form to tabs (Policy/Capture/Retrieval/
-            Guardrails) once Capture grows enough to justify it.
-          */}
         </CardHeader>
         <CardContent className="grid gap-6">
+          <FormField
+            control={form.control}
+            name="capture_mode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Capture Mode</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {memoryCaptureModes.map((mode) => (
+                      <SelectItem key={mode} value={mode}>
+                        {mode}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  <span className="block"><strong>Manual</strong> — only explicit user or tool-call writes create memory.</span>
+                  <span className="block"><strong>Agent Suggested</strong> — a background job proposes memory records after each run; they always land as Draft for approval.</span>
+                  <span className="block"><strong>Automatic</strong> — same background extraction, but records follow this policy's normal Approval Required / Default Status handling.</span>
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="learning_agent"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Learning Agent</FormLabel>
+                <FormControl>
+                  <Combobox
+                    options={agentOptions}
+                    value={field.value}
+                    onValueChange={(v) => field.onChange(v || undefined)}
+                    placeholder="Use the conversation's agent"
+                    searchPlaceholder="Search agents..."
+                    emptyText="No agents found."
+                    linkTo={linkRoutes.agent}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Optional dedicated agent that runs background memory extraction (used when
+                  Capture Mode is Agent Suggested or Automatic), instead of the conversation's own
+                  agent. Lets extraction run on a cheap model without touching the main agent's
+                  context or budget.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
           <SwitchField
             form={form}
             name="approval_required"
