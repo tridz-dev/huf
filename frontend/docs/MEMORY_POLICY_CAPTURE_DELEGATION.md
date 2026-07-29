@@ -90,24 +90,21 @@ on a Tuesday"), and confirmed:
   accurate, non-hallucinated summaries and sane confidence/importance scores.
 - Test data cleaned up afterward.
 
-## TODO: switch the Memory Policy form to tabs
+## DONE: Memory Policy form switched to tabs
 
-Deliberately **not** part of this PR — filed here for the next one. The form
-is now ~19 fields across 6 cards: Policy, Capture (now includes Capture Mode
-+ Learning Agent), Retrieval, Write Permissions, Knowledge Projection,
-Lifecycle. It's grown past the point a single scroll reads well, and once
-Capture is likely to grow further (an extraction schedule, an
-extraction-prompt editor), it becomes a surface of its own.
+Implemented and live-verified. The form's 6 cards are now grouped into 4
+tabs — **Policy** / **Capture** / **Retrieval** / **Guardrails** (Write
+Permissions + Knowledge Projection + Lifecycle) — reusing the existing
+tab-with-validation pattern from `KnowledgeSourceFormPage.tsx`
+(`tabConfig` / `tabFieldMapping` / `createFormSubmitHandler`), hash-synced
+tab state, and per-tab validation-error toasts.
 
-Proposed end state:
+Each card was extracted into its own component under
+`frontend/src/components/memory/tabs/` (`PolicyTab.tsx`, `CaptureTab.tsx`,
+`RetrievalTab.tsx`, `GuardrailsTab.tsx`), with the shared `SwitchField`
+helper moved out of the old monolithic `MemoryPolicyFields.tsx` (deleted)
+into `frontend/src/components/memory/SwitchField.tsx`.
 
-- **Policy** — name, enabled, agent, scope
-- **Capture** — capture mode, learning agent, approval/default status,
-  allowed record types
-- **Retrieval** — inject mode, max records, token budget
-- **Guardrails** — write permissions (rename from "Write Permissions"),
-  knowledge projection, TTL
-
-Reuse the existing tab-with-validation pattern from
-`KnowledgeSourceFormPage.tsx` (`tabConfig` / `tabFieldMapping` /
-`createFormSubmitHandler`) rather than inventing a new one.
+Live-verified against the `memory-policy-test` bench: all four tabs render
+their correct fields, tab switching updates the URL hash, and Save still
+round-trips correctly (`PUT /api/resource/Memory Policy/... → 200`).
