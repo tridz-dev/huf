@@ -48,6 +48,16 @@ export default defineConfig({
         // /huf/workbox-<hash>.js file cannot be routed and 404s.
         inlineWorkboxRuntime: true,
         navigateFallback: null,
+        // Without these, a new deploy installs as a "waiting" service worker
+        // that never takes over the already-open tab — the page keeps running
+        // the OLD JS bundle (stale routes/components) until every tab is
+        // closed and reopened. skipWaiting + clientsClaim make a new worker
+        // activate and take control immediately; paired with the
+        // controllerchange listener in src/pwa/registerSW.ts, the app
+        // reloads itself once to pick up the new bundle instead of requiring
+        // the user to manually refresh (often twice).
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2,ttf}'],
         modifyURLPrefix: {
           '': '/assets/huf/frontend/',
