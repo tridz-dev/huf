@@ -151,6 +151,7 @@ def save_memory_record(
 		frappe.throw(_("Knowledge promotion blocked"))
 
 	# Apply Memory Policy rules if Agent has a policy
+	record_ttl_days = 0
 	if policy:
 		# Record type validation
 		if policy.allowed_record_types:
@@ -170,6 +171,10 @@ def save_memory_record(
 				promote_to_knowledge = True
 				if not knowledge_source:
 					knowledge_source = policy.knowledge_source
+
+		# TTL: propagate policy expiry onto the record (record controller converts this to effective_until)
+		if policy.ttl_days:
+			record_ttl_days = int(policy.ttl_days)
 
 	tag_text = ", ".join(tags) if isinstance(tags, list) else (tags or "")
 	doc = frappe.get_doc(
@@ -193,6 +198,7 @@ def save_memory_record(
 			"raw_context_excerpt": raw_context_excerpt,
 			"promote_to_knowledge": 1 if promote_to_knowledge else 0,
 			"knowledge_source": knowledge_source,
+			"ttl_days": record_ttl_days,
 		}
 	)
 	# P0-5: Use ignore_permissions=True — the _can_write_memory check above is the sole authority.
@@ -212,13 +218,15 @@ def save_memory_record(
 	}
 
 
-def get_injected_memory_text(agent_name, policy, conversation_id=None):
+def get_injected_memory_text(agent_name, policy, conversation_id=None, query=None):
 	"""Fetch memories to inject into system prompt based on policy.
 
 	P1-8: Wrap injected content in a data-not-instructions envelope to
 	      prevent prompt-injection attacks from user-authored memory content.
 	P2-1: Respect policy.enabled — disabled policies do nothing.
 	P2-3: Tool Only mode means agent can call search tool but nothing auto-injects.
+	"Relevant Only" narrows results to the current turn's text (substring match);
+	"Always" ignores query and injects every active record for the scope.
 	"""
 	if not policy:
 		return None
@@ -241,8 +249,10 @@ def get_injected_memory_text(agent_name, policy, conversation_id=None):
 
 	# Use search to get active memories the agent is allowed to read
 	# P1-8: Pass conversation_id so Conversation-scoped memories are included
+	# "Relevant Only" narrows by the current turn's text; "Always" injects everything active.
+	relevance_query = query if policy.inject_mode == "Relevant Only" else None
 	res = search_memory_records(
-		query=None,
+		query=relevance_query,
 		status="Active",
 		limit=limit * 2,  # Fetch more in case we hit token limits
 		conversation_id=conversation_id,
