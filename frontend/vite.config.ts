@@ -58,7 +58,7 @@ export default defineConfig({
         // the user to manually refresh (often twice).
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2,ttf}'],
+        globPatterns: [],
         modifyURLPrefix: {
           '': '/assets/huf/frontend/',
         },
@@ -79,7 +79,7 @@ export default defineConfig({
           },
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/assets/huf/frontend/'),
-            handler: 'StaleWhileRevalidate',
+            handler: 'NetworkOnly',
             options: {
               cacheName: 'huf-frontend-assets',
             },
