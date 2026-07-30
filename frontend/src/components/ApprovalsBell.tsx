@@ -6,12 +6,14 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { approveFlowRun, getPendingApprovals, rejectFlowRun } from '../services/flowApi';
 import type { PendingApproval } from '../services/flowApi';
+import { useUser } from '../contexts/UserContext';
 
 const REFRESH_INTERVAL_MS = 60000;
 const FLOW_EVENTS = ['frappe:flow_paused', 'frappe:flow_completed', 'frappe:flow_error'];
 
 export function ApprovalsBell() {
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
+  const { isAuthenticated } = useUser();
 
   const fetchApprovals = useCallback(async () => {
     try {
@@ -23,6 +25,7 @@ export function ApprovalsBell() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     fetchApprovals();
     const interval = setInterval(fetchApprovals, REFRESH_INTERVAL_MS);
     FLOW_EVENTS.forEach((event) => window.addEventListener(event, fetchApprovals));
@@ -30,7 +33,7 @@ export function ApprovalsBell() {
       clearInterval(interval);
       FLOW_EVENTS.forEach((event) => window.removeEventListener(event, fetchApprovals));
     };
-  }, [fetchApprovals]);
+  }, [fetchApprovals, isAuthenticated]);
 
   const handleApprove = async (flowRunId: string) => {
     try {

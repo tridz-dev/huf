@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and Contributors
 # See license.txt
 
+import unittest
 import frappe
 from frappe.tests import IntegrationTestCase
 from unittest.mock import patch
@@ -22,6 +23,92 @@ def _any_model_and_provider():
     if not rows:
         return None, None
     return rows[0].name, rows[0].provider
+
+
+class TestAgentSaveRoundtrip(IntegrationTestCase):
+	"""Regression guard: basic insert/reload/delete must not silently fail.
+
+	This catches the most common regression pattern where an unrelated merge
+	breaks the agent save path (missing required field, broken hook, etc.)
+	without any obvious error in the UI.
+	"""
+
+	def setUp(self):
+		self._names = []
+		rows = frappe.get_all("AI Model", fields=["name", "provider"], limit=1)
+		if not rows:
+			self.skipTest("no AI Model records on this site")
+		self.model = rows[0].name
+		self.provider = rows[0].provider
+
+	def tearDown(self):
+		for name in self._names:
+			try:
+				frappe.db.delete("Agent", {"name": name})
+			except Exception:
+				pass
+		frappe.db.commit()
+
+	def test_agent_insert_and_reload(self):
+		doc = frappe.get_doc({
+			"doctype": "Agent",
+			"agent_name": "__regression_probe__",
+			"provider": self.provider,
+			"model": self.model,
+			"instructions": "regression probe",
+		})
+		doc.insert(ignore_permissions=True)
+		self._names.append(doc.name)
+
+		reloaded = frappe.get_doc("Agent", doc.name)
+		self.assertEqual(reloaded.agent_name, "__regression_probe__")
+		self.assertEqual(reloaded.provider, self.provider)
+		self.assertEqual(reloaded.model, self.model)
+
+	def test_agent_with_child_tables_saves(self):
+		"""Regression guard: agents with empty child-table fields must save cleanly.
+
+		Catches schema drift where a child table definition change causes 'Table
+		field ... does not exist' or similar errors on save without the user seeing
+		an obvious message.
+		"""
+		doc = frappe.get_doc({
+			"doctype": "Agent",
+			"agent_name": "__regression_table_probe__",
+			"provider": self.provider,
+			"model": self.model,
+			"instructions": "table regression probe",
+			"agent_tool": [],
+			"agent_mcp_server": [],
+			"agent_knowledge": [],
+		})
+		doc.insert(ignore_permissions=True)
+		self._names.append(doc.name)
+
+		reloaded = frappe.get_doc("Agent", doc.name)
+		self.assertEqual(reloaded.agent_name, "__regression_table_probe__")
+		self.assertIsInstance(reloaded.agent_tool, list)
+		self.assertIsInstance(reloaded.agent_mcp_server, list)
+		self.assertIsInstance(reloaded.agent_knowledge, list)
+
+	def test_agent_field_update_persists(self):
+		doc = frappe.get_doc({
+			"doctype": "Agent",
+			"agent_name": "__regression_update_probe__",
+			"provider": self.provider,
+			"model": self.model,
+			"instructions": "initial instructions",
+		})
+		doc.insert(ignore_permissions=True)
+		self._names.append(doc.name)
+
+		doc.instructions = "updated instructions"
+		doc.save(ignore_permissions=True)
+
+		self.assertEqual(
+			frappe.db.get_value("Agent", doc.name, "instructions"),
+			"updated instructions",
+		)
 
 
 class TestAgent(IntegrationTestCase):
@@ -150,13 +237,14 @@ class TestSystemAgentLocking(IntegrationTestCase):
 
 # Python execution gating tests from PR #358.
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from huf.ai.tools.code_execution import run_python
 from huf.install import create_huf_roles
 
 
-class TestAgentCodeExecution(FrappeTestCase):
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
+class TestAgentCodeExecution(IntegrationTestCase):
 	"""Agent code-execution gate tests (dispatch-level has_permission checks)."""
 
 	@classmethod

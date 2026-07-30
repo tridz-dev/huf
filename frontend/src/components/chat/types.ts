@@ -33,4 +33,7 @@ export type MessageType = {
     error: string | undefined;
   }[];
   injected_memories?: string[];
+  /** Provider thinking/reasoning text, shown collapsed above the answer. */
+  reasoning?: string;
+  reasoningStreaming?: boolean;
 };

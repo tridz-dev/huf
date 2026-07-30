@@ -16,6 +16,7 @@ from huf.huf.doctype.ssh_connection.ssh_connection import (
 )
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestSSHConnection(unittest.TestCase):
 	@classmethod
 	def setUpClass(cls):

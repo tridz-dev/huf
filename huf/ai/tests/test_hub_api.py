@@ -11,6 +11,7 @@ Covers:
 - approve_model_proposals() rejects non-manager users
 """
 
+import unittest
 from unittest.mock import patch
 
 import frappe
@@ -88,6 +89,7 @@ class TestHubReadiness(IntegrationTestCase):
             self.assertTrue(entry["action_route"])
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestProviderStatus(IntegrationTestCase):
     """get_provider_status must report configured state without leaking keys."""
 

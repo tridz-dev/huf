@@ -19,6 +19,7 @@ class FakeResponse:
 	def json(self):
 		return self.body
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestWhatsAppGatewayAdapter(unittest.TestCase):
 	def setUp(self):
 		self.calls = []

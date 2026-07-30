@@ -9,6 +9,9 @@
   "model_name",
   "provider",
   "modalities",
+  "capabilities_section",
+  "supports_reasoning",
+  "reasoning_config_override",
   "pricing_section",
   "use_custom_pricing",
   "input_cost_per_1m_tokens",
@@ -41,10 +44,30 @@
    "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings\nVision\nOCR"
   },
   {
+   "description": "Configure internal model reasoning support and overrides.",
+   "fieldname": "capabilities_section",
+   "fieldtype": "Section Break",
+   "label": "Reasoning Capabilities (Optional)"
+  },
+  {
+   "default": "0",
+   "description": "Check to force reasoning support on for this model (overriding automatic LiteLLM detection).",
+   "fieldname": "supports_reasoning",
+   "fieldtype": "Check",
+   "label": "Supports Reasoning"
+  },
+  {
+   "description": "Optional JSON object to override reasoning capabilities (e.g. supports_thinking_blocks, supported_efforts).",
+   "fieldname": "reasoning_config_override",
+   "fieldtype": "Code",
+   "label": "Reasoning Configuration Override (JSON)",
+   "options": "JSON"
+  },
+  {
+   "description": "Enable custom prices to override LiteLLM's automatic pricing lookup. When disabled, LiteLLM's built-in price table is used as fallback. Values are in USD per 1 million tokens.",
    "fieldname": "pricing_section",
    "fieldtype": "Section Break",
-   "label": "Custom Pricing (Optional)",
-   "description": "Enable custom prices to override LiteLLM's automatic pricing lookup. When disabled, LiteLLM's built-in price table is used as fallback. Values are in USD per 1 million tokens."
+   "label": "Pricing"
   },
   {
    "fieldname": "use_custom_pricing",
