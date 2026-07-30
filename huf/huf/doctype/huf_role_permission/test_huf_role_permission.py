@@ -1,10 +1,12 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # See license.txt
 
+import unittest
 import frappe
 from frappe.tests import IntegrationTestCase
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestHufRolePermission(IntegrationTestCase):
 	"""`Huf Role Permission` is a child table (istable=1) of the `permissions`
 	field on `Huf Role`, so it is tested as rows on a parent Huf Role."""

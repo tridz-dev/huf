@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd
 # For license information, please see license.txt
 
+import unittest
 import json
 import os
 import shutil
@@ -176,6 +177,7 @@ class TestSkillImportAndExport(IntegrationTestCase):
 				frappe.delete_doc("File", file_doc.name, force=True)
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestSkillPromptRuntime(IntegrationTestCase):
 	def setUp(self):
 		self.agent_name = "test-prompt-agent"

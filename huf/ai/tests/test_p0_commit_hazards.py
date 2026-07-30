@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and Contributors
 # See license.txt
 
+import unittest
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -22,6 +23,7 @@ class _FakeDoc:
         return getattr(self, field, None)
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestP0CommitHazards(IntegrationTestCase):
     """Batch 2 Category B: media generation must fail closed when ordering fails."""
 

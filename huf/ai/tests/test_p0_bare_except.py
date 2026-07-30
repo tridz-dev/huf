@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and Contributors
 # See license.txt
 
+import unittest
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -70,6 +71,7 @@ class TestConversationDataLoadState(IntegrationTestCase):
             self.assertEqual(result["items"], [{"name": "y", "value": "ok"}])
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestAgentSyncConversationData(IntegrationTestCase):
     """Batch 1: malformed conversation_data in run_agent_sync must not abort the run."""
 

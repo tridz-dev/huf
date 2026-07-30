@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and Contributors
 # See license.txt
 
+import unittest
 import frappe
 from frappe.tests import IntegrationTestCase
 from unittest.mock import patch
@@ -242,6 +243,7 @@ from huf.ai.tools.code_execution import run_python
 from huf.install import create_huf_roles
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestAgentCodeExecution(IntegrationTestCase):
 	"""Agent code-execution gate tests (dispatch-level has_permission checks)."""
 

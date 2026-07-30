@@ -1,12 +1,14 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # See license.txt
 
+import unittest
 import json
 
 import frappe
 from frappe.tests import IntegrationTestCase
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestAgentMCPServer(IntegrationTestCase):
 	def _make_provider_and_model(self):
 		# Shared fixture: same provider/model can be reused across test

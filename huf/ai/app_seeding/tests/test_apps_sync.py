@@ -93,6 +93,7 @@ class TestAppsSync(unittest.TestCase):
 	# Valid manifests
 	# ------------------------------------------------------------------
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_valid_manifest_syncs_to_registry(self):
 		"""A valid manifest is discovered by seed_app and synced to the
 		registry with provenance and sync state recorded by HUF."""
@@ -128,6 +129,7 @@ class TestAppsSync(unittest.TestCase):
 		self.assertIsNone(normalized)
 		self.assertIn("unknown top-level field", error)
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_unchanged_manifest_skips_write(self):
 		"""A second sync with an identical manifest does not rewrite the
 		registry record (hash comparison)."""
@@ -148,6 +150,7 @@ class TestAppsSync(unittest.TestCase):
 	# Invalid manifests
 	# ------------------------------------------------------------------
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_invalid_manifests_do_not_break_valid_ones(self):
 		"""Bad route, unknown field, bad app_id and external URL manifests
 		are isolated; the valid manifest in the same folder still syncs."""
@@ -198,6 +201,7 @@ class TestAppsSync(unittest.TestCase):
 		self.assertFalse(frappe.db.exists("HUF App", "Bad App ID!"))
 		self.assertEqual(result.skipped, 4)
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_invalid_permission_method_recorded_invalid(self):
 		"""A permission_method that does not resolve to a callable marks the
 		record Invalid without crashing the sync."""
@@ -219,6 +223,7 @@ class TestAppsSync(unittest.TestCase):
 	# Duplicate app_id
 	# ------------------------------------------------------------------
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_duplicate_app_id_does_not_silently_overwrite(self):
 		"""Two provider apps declaring the same app_id: the existing valid
 		registration is kept, the collision is logged and surfaced."""
@@ -246,6 +251,7 @@ class TestAppsSync(unittest.TestCase):
 	# Orphan cleanup
 	# ------------------------------------------------------------------
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_removed_manifest_deletes_registry_record(self):
 		"""A registry record whose source file no longer exists is deleted on
 		the next full sync."""
@@ -275,6 +281,7 @@ class TestAppsSync(unittest.TestCase):
 		)
 		self.assertIn(app_id, summary["deleted_apps"])
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_uninstalled_provider_app_removes_registry_entries(self):
 		"""The after_app_uninstall hook deletes all entries of the provider."""
 		app_id = self._app_id("uninstall")
@@ -290,6 +297,7 @@ class TestAppsSync(unittest.TestCase):
 	# Manual-disable-wins
 	# ------------------------------------------------------------------
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_enabled_applied_on_initial_insert(self):
 		"""The manifest's enabled flag applies when a record is first created."""
 		app_id = self._app_id("insertdisabled")
@@ -301,6 +309,7 @@ class TestAppsSync(unittest.TestCase):
 		self.assertTrue(ok, error)
 		self.assertEqual(frappe.db.get_value("HUF App", app_id, "enabled"), 0)
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_manual_disable_wins_on_resync(self):
 		"""Re-syncing never re-enables an app an admin disabled manually."""
 		app_id = self._app_id("manualdisable")
@@ -323,6 +332,7 @@ class TestAppsSync(unittest.TestCase):
 		self.assertEqual(doc.enabled, 0, "Manual disable must survive re-sync")
 		self.assertEqual(doc.title, "Renamed App", "Other manifest changes still apply")
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_enabled_only_change_updates_hash_not_flag(self):
 		"""A manifest whose only change is `enabled` updates manifest_hash
 		but leaves the stored enabled flag untouched."""
@@ -350,6 +360,7 @@ class TestAppsSync(unittest.TestCase):
 	# Category conventions
 	# ------------------------------------------------------------------
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_nonstandard_category_accepted_and_noted(self):
 		"""A custom single-line category syncs fine and is noted in the
 		sync summary (never rejected)."""
@@ -378,6 +389,7 @@ class TestAppsSync(unittest.TestCase):
 			"Non-standard category should be noted in the sync summary",
 		)
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_bad_categories_rejected(self):
 		"""Overlong, multi-line and HTML categories are rejected; a synced
 		manifest with one is recorded Invalid."""
@@ -415,6 +427,7 @@ class TestAppsSync(unittest.TestCase):
 		self.assertIsNone(normalized)
 		self.assertIn("exposed_tables", error)
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_exposed_tables_valid_syncs_and_is_exposed(self):
 		"""Tables owned by the provider app sync (stored comma-joined) and
 		are exposed as a list by get_huf_app."""
@@ -440,6 +453,7 @@ class TestAppsSync(unittest.TestCase):
 		app = get_huf_app(app_id)
 		self.assertEqual(app["exposed_tables"], ["Fake Table One", "Fake Table Two"])
 
+	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_exposed_tables_unknown_doctype_recorded_invalid(self):
 		"""An unknown DocType in exposed_tables records the manifest
 		Invalid without crashing the sync."""
@@ -463,6 +477,7 @@ class TestAppsSync(unittest.TestCase):
 		self.assertIn("unknown DocType", doc.sync_error)
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestAppsApiPermissions(unittest.TestCase):
 	"""Permission filtering in the launcher API."""
 

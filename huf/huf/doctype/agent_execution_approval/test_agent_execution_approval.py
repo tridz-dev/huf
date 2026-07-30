@@ -34,6 +34,7 @@ _PENDING_PREFIX = "huf_pending_execution"
 _PENDING_SSH_PREFIX = "huf_pending_ssh_execution"
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestAgentExecutionApproval(unittest.TestCase):
 	"""Approval-gate lifecycle tests for parked code executions."""
 

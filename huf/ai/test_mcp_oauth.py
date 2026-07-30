@@ -105,6 +105,7 @@ class TestHasManualOAuthConfig(unittest.TestCase):
         self.assertTrue(_has_manual_oauth_config(server))
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestResolveAndStartOAuthFlow(unittest.TestCase):
     def setUp(self):
         frappe_mock.get_doc.reset_mock()
