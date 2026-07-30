@@ -1,0 +1,11 @@
+[
+  {
+    "doctype": "SSH Connection",
+    "display_name": "_TestSSHConnection",
+    "host": "ssh.test.invalid",
+    "port": 22,
+    "username": "testuser",
+    "auth_method": "Password",
+    "password": "test-password-never-used"
+  }
+]

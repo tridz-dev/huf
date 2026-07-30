@@ -1,0 +1,8 @@
+[
+  {
+    "doctype": "AI Provider",
+    "provider_name": "_TestProvider",
+    "provider_brand": "openai",
+    "api_key": "sk-test-key-never-used"
+  }
+]

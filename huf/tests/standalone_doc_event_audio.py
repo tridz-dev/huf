@@ -9,11 +9,11 @@ per file: audio goes to the canonical audio service
 (``audio_service.transcribe_audio_file``), other documents keep going to OCR
 (``handle_ocr_document``), and images go to neither.
 
-These tests reuse the frappe mock installed by huf.tests.test_audio_service
+These tests reuse the frappe mock installed by huf.tests.standalone_audio_service
 so both suites share a single mocked frappe module (and a single binding of
 huf.ai.audio_service) regardless of test ordering:
 
-    python -m unittest huf.tests.test_doc_event_audio huf.tests.test_audio_service
+    python -m unittest huf.tests.standalone_doc_event_audio huf.tests.standalone_audio_service
 """
 
 import sys
@@ -22,6 +22,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+# NOTE: deliberately NOT named test_*.py — see standalone_audio_service.py.
+# This module stubs sys.modules and would corrupt bench test discovery.
+# Run explicitly:  python -m unittest huf.tests.standalone_doc_event_audio
+
 # Importing the audio service test module installs its frappe/frappe.utils/
 # litellm stubs into sys.modules and imports huf.ai.audio_service against
 # them. Reusing that mock keeps audio_service.frappe bound to one shared
@@ -29,17 +33,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 #
 # The module may already be loaded under a different name: unittest
 # discovery (``python -m unittest discover -s huf/tests``) imports it as the
-# top-level module "test_audio_service", while dotted runs
-# (``python -m unittest huf.tests.test_doc_event_audio``) import it as
-# "huf.tests.test_audio_service". Reuse whichever copy is already loaded so
+# top-level module "standalone_audio_service", while dotted runs
+# (``python -m unittest huf.tests.standalone_doc_event_audio``) import it as
+# "huf.tests.standalone_audio_service". Reuse whichever copy is already loaded so
 # its module-level mock setup executes exactly once; importing it a second
 # time under the other name would rebind sys.modules["litellm"] and break
 # the first copy's mock assertions.
-_audio_mocks = sys.modules.get("huf.tests.test_audio_service") or sys.modules.get(
-    "test_audio_service"
+_audio_mocks = sys.modules.get("huf.tests.standalone_audio_service") or sys.modules.get(
+    "standalone_audio_service"
 )
 if _audio_mocks is None:
-    from huf.tests import test_audio_service as _audio_mocks
+    from huf.tests import standalone_audio_service as _audio_mocks
 
 frappe_mock = _audio_mocks.frappe_mock
 frappe_utils = sys.modules["frappe.utils"]

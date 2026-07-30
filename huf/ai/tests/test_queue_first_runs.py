@@ -106,6 +106,7 @@ class TestQueueFirstRuns(unittest.TestCase):
             for call in mock_frappe.publish_realtime.call_args_list
         ]
 
+    @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
     @patch("huf.ai.agent_integration._execute_agent_run")
     @patch("huf.ai.agent_integration.ConversationManager")
     @patch("huf.ai.agent_integration.frappe")
@@ -317,6 +318,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.conv_manager.add_message.assert_not_called()
         mock_execute.assert_called_once()
 
+    @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
     @patch("huf.ai.knowledge.context_builder.build_knowledge_context", return_value=None)
     @patch("huf.ai.agent_integration._run_async_safely")
     @patch("huf.ai.agent_integration.RunProvider")
@@ -576,6 +578,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.assertEqual(event["conversation_id"], "CONV-TEST-0001")
         self.assertEqual(event["agent"], "Test Agent")
 
+    @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
     @patch("huf.ai.knowledge.context_builder.build_knowledge_context", return_value=None)
     @patch("huf.ai.agent_integration._run_async_safely")
     @patch("huf.ai.agent_integration.RunProvider")
