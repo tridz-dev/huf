@@ -52,7 +52,7 @@ export function UserProvider({ children }: UserProviderProps) {
     try {
       setIsLoading(true);
       const loggedUserId = await auth.getLoggedInUser();
-      if (loggedUserId) {
+      if (loggedUserId && loggedUserId !== 'Guest') {
         const userDetails = await fetchUserDetails(loggedUserId);
         setUser(userDetails);
       } else {
