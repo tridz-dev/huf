@@ -39,12 +39,13 @@ jobs:
         with:
           python-version: "3.14"
 
-      # Node 22: bench init runs `yarn install` for frappe's own frontend even
-      # with --skip-assets, and frappe v16 requires a newer Node than 18.
+      # Node 24: bench init runs `yarn install` for frappe's own frontend even
+      # with --skip-assets, and frappe-framework's package.json declares
+      # engines.node ">=24".
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Install bench
         run: pip install frappe-bench
