@@ -16,7 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  frontend:
+    name: Frontend · typecheck, vitest, build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:

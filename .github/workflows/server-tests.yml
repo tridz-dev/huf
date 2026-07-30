@@ -1,4 +1,4 @@
-name: Server Tests
+name: Backend Tests
 
 on:
   pull_request:
@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  backend:
+    name: Backend · bench run-tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -38,10 +39,12 @@ jobs:
         with:
           python-version: "3.14"
 
+      # Node 22: bench init runs `yarn install` for frappe's own frontend even
+      # with --skip-assets, and frappe v16 requires a newer Node than 18.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "22"
 
       - name: Install bench
         run: pip install frappe-bench

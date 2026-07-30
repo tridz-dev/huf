@@ -8,7 +8,7 @@ name: Failure Analysis
 
 on:
   workflow_run:
-    workflows: ['Server Tests', 'Frontend Tests', 'E2E Tests']
+    workflows: ['Backend Tests', 'Frontend Tests']
     types: [completed]
     branches: [develop]
 
@@ -79,17 +79,15 @@ jobs:
 
           About huf:
           - Python/Frappe v16 backend with bench run-tests test runner
-          - React/Vite/TypeScript frontend with Vitest unit tests and Playwright E2E
-          - 'Server Tests' runs: bench --site test_site run-tests --app huf
+          - React/Vite/TypeScript frontend with Vitest unit tests
+          - 'Backend Tests' runs: bench --site test_site run-tests --app huf
           - 'Frontend Tests' runs: npm run typecheck && npm run test && npm run build
-          - 'E2E Tests' runs: npx playwright test (offline, mocked Frappe API via Vite dev server)
 
           Common causes by workflow:
-          - Server Tests / 'Run tests': FrappeTestCase import (use IntegrationTestCase), sys.modules mock clobbering real frappe, missing required field on doctype insert, broken Frappe controller hook
+          - Backend Tests / 'Run tests': FrappeTestCase import (use IntegrationTestCase), sys.modules mock clobbering real frappe, missing required field on doctype insert, broken Frappe controller hook
           - Frontend Tests / 'Typecheck': missing type, wrong import path, broken interface
           - Frontend Tests / 'Unit tests': broken component test after prop change, missing mock
           - Frontend Tests / 'Build': missing import, incompatible vite/typescript config
-          - E2E Tests: selector no longer matches, API mock shape mismatch, page load timeout
 
           Respond in this exact format — no preamble, no markdown headings outside the sections below:
 
