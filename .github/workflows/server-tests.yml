@@ -50,9 +50,12 @@ jobs:
           bench set-mariadb-host 127.0.0.1
           bench set-config -g db_password root
 
+      # --skip-assets: backend tests need no built frontend, and bench would
+      # otherwise run `yarn install --check-files` against frontend/, which
+      # fails on this repo's stale yarn.lock.
       - name: Get huf app
         working-directory: frappe-bench
-        run: bench get-app huf "${{ github.workspace }}"
+        run: bench get-app --skip-assets huf "${{ github.workspace }}"
 
       - name: New site
         working-directory: frappe-bench
