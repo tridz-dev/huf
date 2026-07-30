@@ -8,7 +8,7 @@ public audio API (huf.ai.audio_api).
 These tests mock frappe (and LiteLLM) so the pure logic can be exercised
 without a full Frappe bench and without hitting real providers:
 
-    python -m unittest huf.tests.test_audio_service
+    python -m unittest huf.tests.standalone_audio_service
 """
 
 import base64
@@ -19,17 +19,20 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-# Standalone-only. Everything below replaces real modules in sys.modules
-# ("frappe.utils.*", "litellm", "huf.ai.providers.litellm") at import time.
-# Under `bench run-tests` those replacements leak into the shared interpreter
-# and break test discovery for the whole app with errors like
-# "cannot import name 'ProviderUnavailableError' ... (unknown location)".
-# Bail out before mutating anything when a real frappe is importable.
-if getattr(sys.modules.get("frappe"), "__file__", None):
-    raise unittest.SkipTest(
-        "huf.tests.test_audio_service is a standalone unit-test module; "
-        "it stubs sys.modules and is skipped under a real Frappe bench"
-    )
+# NOTE: this file is deliberately NOT named test_*.py.
+#
+# Everything below replaces real modules in sys.modules ("frappe.utils.*",
+# "litellm", "huf.ai.providers.litellm") at import time. Test discovery imports
+# every matching module into a single interpreter, so those replacements leak
+# process-wide and break discovery for the whole app:
+#
+#   ImportError: cannot import name 'ProviderUnavailableError' from
+#   'huf.ai.providers.litellm' (unknown location)
+#
+# The standalone_ prefix keeps `bench run-tests` from discovering it. Run it
+# explicitly instead:
+#
+#   python -m unittest huf.tests.standalone_audio_service
 
 
 class ThrowError(Exception):

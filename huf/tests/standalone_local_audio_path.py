@@ -7,11 +7,11 @@ huf.ai.audio_service and huf.ai.audio_api: ``resolve_local_audio_path``,
 ``transcribe_audio_file(local_path=...)``, ``import_local_audio``, and the
 ``file_path`` branch of the public transcribe API.
 
-These tests reuse the frappe mock installed by huf.tests.test_audio_service
+These tests reuse the frappe mock installed by huf.tests.standalone_audio_service
 so all suites share a single mocked frappe module (and a single binding of
 huf.ai.audio_service) regardless of test ordering:
 
-    python -m unittest huf.tests.test_local_audio_path
+    python -m unittest huf.tests.standalone_local_audio_path
 """
 
 import os
@@ -21,24 +21,20 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-# Standalone-only — see the matching note in test_audio_service.py. This module
-# reads the stubs that module installs into sys.modules.
-if getattr(sys.modules.get("frappe"), "__file__", None):
-    raise unittest.SkipTest(
-        "huf.tests.test_local_audio_path is a standalone unit-test module; "
-        "it stubs sys.modules and is skipped under a real Frappe bench"
-    )
+# NOTE: deliberately NOT named test_*.py — see standalone_audio_service.py.
+# This module stubs sys.modules and would corrupt bench test discovery.
+# Run explicitly:  python -m unittest huf.tests.standalone_local_audio_path
 
 # Importing the audio service test module installs its frappe/frappe.utils/
 # litellm stubs into sys.modules and imports huf.ai.audio_service against
 # them. Reusing that mock keeps audio_service.frappe bound to one shared
 # mock no matter which suite is imported first. It may already be loaded
 # under a different name depending on how unittest discovered it.
-_audio_mocks = sys.modules.get("huf.tests.test_audio_service") or sys.modules.get(
-    "test_audio_service"
+_audio_mocks = sys.modules.get("huf.tests.standalone_audio_service") or sys.modules.get(
+    "standalone_audio_service"
 )
 if _audio_mocks is None:
-    from huf.tests import test_audio_service as _audio_mocks
+    from huf.tests import standalone_audio_service as _audio_mocks
 
 frappe_mock = _audio_mocks.frappe_mock
 frappe_file_manager = sys.modules["frappe.utils.file_manager"]
