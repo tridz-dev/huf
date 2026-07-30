@@ -72,4 +72,16 @@ jobs:
 
       - name: Run tests
         working-directory: frappe-bench
-        run: bench --site test_site run-tests --app huf
+        run: bench --site test_site run-tests --app huf --junit-xml-output test-results.xml
+
+      # Full failure detail. The console reporter dumps whole embedding vectors
+      # on some knowledge tests, which overruns the Actions log limit and hides
+      # every traceback after the first.
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-results
+          path: frappe-bench/test-results.xml
+          retention-days: 14
+          if-no-files-found: warn
