@@ -2630,6 +2630,9 @@ async def run_agent_stream(
                     full_response = chunk.get("full_response", full_response)
                     yield chunk
 
+                elif chunk_type == "reasoning":
+                    yield chunk
+
                 elif chunk_type == "tool_call":
                     # Log tool call
                     tool_call = chunk.get("tool_call", {})

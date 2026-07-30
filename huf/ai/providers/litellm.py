@@ -1478,8 +1478,22 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     # Handle thinking / reasoning deltas
                     if hasattr(delta, "thinking_blocks") and delta.thinking_blocks:
                         accumulated_thinking_blocks.extend(delta.thinking_blocks)
+                        for block in delta.thinking_blocks:
+                            block_text = block.get("thinking") if isinstance(block, dict) else getattr(block, "thinking", None)
+                            if block_text:
+                                accumulated_reasoning_content += str(block_text)
+                                yield {
+                                    "type": "reasoning",
+                                    "content": str(block_text),
+                                    "full_reasoning": accumulated_reasoning_content,
+                                }
                     if hasattr(delta, "reasoning_content") and delta.reasoning_content:
                         accumulated_reasoning_content += str(delta.reasoning_content)
+                        yield {
+                            "type": "reasoning",
+                            "content": str(delta.reasoning_content),
+                            "full_reasoning": accumulated_reasoning_content,
+                        }
 
                     # Handle tool call delta
                     if hasattr(delta, "tool_calls") and delta.tool_calls:
@@ -1839,6 +1853,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "full_response": full_response or "Agent stopped after max rounds.",
             "usage": stream_usage,
             "cost": stream_cost,
+            "reasoning_content": accumulated_reasoning_content or None,
         }
 
 

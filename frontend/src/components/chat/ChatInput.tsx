@@ -154,6 +154,7 @@ export function ChatInput({
             conversationId: string | undefined;
             assistantMessageId: string;
             updateAssistantContent: (content: string) => void;
+            updateAssistantReasoning?: (reasoning: string) => void;
             skipUserMessage?: boolean;
             files?: PrepareMessageWithFileFile[];
         }) => {
@@ -168,6 +169,10 @@ export function ChatInput({
                 lastRunActivityRef.current = Date.now();
                 params.updateAssistantContent(content);
             };
+            const trackReasoningActivity = (reasoning: string) => {
+                lastRunActivityRef.current = Date.now();
+                params.updateAssistantReasoning?.(reasoning);
+            };
             try {
                 const response = await sendMessage(
                     {
@@ -180,6 +185,7 @@ export function ChatInput({
                     {
                         useStreaming,
                         onDelta: useStreaming ? trackActivity : undefined,
+                        onReasoningDelta: useStreaming ? trackReasoningActivity : undefined,
                         skipUserMessage: params.skipUserMessage,
                         files: params.files,
                     }
@@ -321,6 +327,16 @@ export function ChatInput({
                 );
                 scrollToBottomAfterPaint?.(false);
             };
+            const updateAssistantReasoning = (reasoning: string) => {
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.key === assistantMessageId
+                            ? { ...msg, reasoning, reasoningStreaming: true }
+                            : msg
+                    )
+                );
+                scrollToBottomAfterPaint?.(false);
+            };
             let assistantKey = assistantMessageId;
 
             let runPhase = false;
@@ -367,6 +383,7 @@ export function ChatInput({
                     conversationId: prepareRes.conversation_id ?? chatId ?? undefined,
                     assistantMessageId,
                     updateAssistantContent,
+                    updateAssistantReasoning,
                     skipUserMessage: true,
                     files: prepareRes.files,
                 });
@@ -377,6 +394,13 @@ export function ChatInput({
                 }
 
                 assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        (msg.key === assistantKey || msg.key === assistantMessageId)
+                            ? { ...msg, reasoningStreaming: false }
+                            : msg
+                    )
+                );
                 if (queued && agentRunId) {
                     linkUserMessageToRun(userMessageKey, agentRunId);
                     setMessages((prev) =>
@@ -464,6 +488,16 @@ export function ChatInput({
             );
             scrollToBottomAfterPaint?.(false);
         };
+        const updateAssistantReasoning = (reasoning: string) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === assistantMessageId
+                        ? { ...msg, reasoning, reasoningStreaming: true }
+                        : msg
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
 
         let assistantKey = assistantMessageId;
         try {
@@ -473,6 +507,7 @@ export function ChatInput({
                 conversationId: chatId ?? undefined,
                 assistantMessageId,
                 updateAssistantContent,
+                updateAssistantReasoning,
             });
             if (runTimedOutRef.current) {
                 // Hang guard already converted the bubble to an error card.
@@ -480,6 +515,13 @@ export function ChatInput({
                 return;
             }
             assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    (msg.key === assistantKey || msg.key === assistantMessageId)
+                        ? { ...msg, reasoningStreaming: false }
+                        : msg
+                )
+            );
             if (queued && agentRunId) {
                 linkUserMessageToRun(userMessageKey, agentRunId);
                 setMessages((prev) =>
@@ -604,6 +646,14 @@ export function ChatInput({
             );
             scrollToBottomAfterPaint?.(false);
         };
+        const updateAssistantReasoning = (reasoning: string) => {
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.key === assistantMessageId ? { ...m, reasoning, reasoningStreaming: true } : m
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
         let currentAssistantKey = assistantMessageId;
         try {
             // The transcribe endpoint already persisted the user message;
@@ -614,6 +664,7 @@ export function ChatInput({
                 conversationId: res?.conversation_id,
                 assistantMessageId,
                 updateAssistantContent,
+                updateAssistantReasoning,
                 skipUserMessage: true,
             });
             if (runTimedOutRef.current) {
@@ -622,6 +673,13 @@ export function ChatInput({
                 return transcript;
             }
             currentAssistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    (msg.key === currentAssistantKey || msg.key === assistantMessageId)
+                        ? { ...msg, reasoningStreaming: false }
+                        : msg
+                )
+            );
             if (queued && agentRunId) {
                 linkUserMessageToRun(userMessageKey, agentRunId);
                 setMessages((prev) =>
