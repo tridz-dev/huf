@@ -16,10 +16,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
-class TestTransactionCheckpoint(FrappeTestCase):
+class TestTransactionCheckpoint(IntegrationTestCase):
     """transaction_checkpoint must delegate to commit_if_background."""
 
     def test_checkpoint_calls_commit_if_background(self):
@@ -30,7 +30,7 @@ class TestTransactionCheckpoint(FrappeTestCase):
             mock_commit.assert_called_once()
 
 
-class TestCommitIfBackground(FrappeTestCase):
+class TestCommitIfBackground(IntegrationTestCase):
     """commit_if_background must only commit outside HTTP requests."""
 
     def test_no_commit_inside_request(self):
@@ -56,7 +56,7 @@ class TestCommitIfBackground(FrappeTestCase):
             mock_commit.assert_called_once()
 
 
-class TestAudioServiceCommitGating(FrappeTestCase):
+class TestAudioServiceCommitGating(IntegrationTestCase):
     """create_audio_user_message must not hard-commit in request handlers."""
 
     def test_create_audio_user_message_uses_commit_if_background(self):
@@ -98,7 +98,7 @@ class TestAudioServiceCommitGating(FrappeTestCase):
                 delattr(frappe.local, "request")
 
 
-class TestOrchestratorCommitGating(FrappeTestCase):
+class TestOrchestratorCommitGating(IntegrationTestCase):
     """create_orchestration must not hard-commit in request handlers."""
 
     def _make_agent_doc(self):
@@ -130,7 +130,7 @@ class TestOrchestratorCommitGating(FrappeTestCase):
                 delattr(frappe.local, "request")
 
 
-class TestSetUserRestoreGuards(FrappeTestCase):
+class TestSetUserRestoreGuards(IntegrationTestCase):
     """Temporary user switches must restore the original user."""
 
     def _tracking_set_user(self, user):
@@ -181,7 +181,7 @@ class TestSetUserRestoreGuards(FrappeTestCase):
             frappe.session.user = "Administrator"
 
 
-class TestPromptApiCapabilityChecks(FrappeTestCase):
+class TestPromptApiCapabilityChecks(IntegrationTestCase):
     """prompt_api endpoints require capabilities after removing ignore_permissions."""
 
     def test_create_new_version_requires_agent_create(self):
@@ -206,7 +206,7 @@ class TestPromptApiCapabilityChecks(FrappeTestCase):
                 prompt_api.get_version_history("PROMPT-001")
 
 
-class TestHufDataTableCapabilityChecks(FrappeTestCase):
+class TestHufDataTableCapabilityChecks(IntegrationTestCase):
     """huf_data_table/api.py endpoints require capabilities after removing ignore_permissions."""
 
     def test_create_data_table_requires_flows_manage(self):
@@ -224,7 +224,7 @@ class TestHufDataTableCapabilityChecks(FrappeTestCase):
                 data_table_api.get_table_schema("TABLE-001")
 
 
-class TestWebhookEndpointSecurity(FrappeTestCase):
+class TestWebhookEndpointSecurity(IntegrationTestCase):
     """allow_guest webhook endpoints must reject unsigned/invalid requests."""
 
     def test_telegram_webhook_rejects_missing_secret(self):

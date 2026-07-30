@@ -21,7 +21,7 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from huf.ai.providers import litellm as litellm_module
 from huf.ai.providers.litellm import (
@@ -75,7 +75,7 @@ def _run_patches(provider_doc, completion_mock):
     ]
 
 
-class TestProviderFailureContract(FrappeTestCase):
+class TestProviderFailureContract(IntegrationTestCase):
     """Provider failures must raise, never be returned as a successful SimpleResult."""
 
     def test_connection_error_raises_provider_unavailable(self):
@@ -126,7 +126,7 @@ class TestProviderFailureContract(FrappeTestCase):
         self.assertIn("ollama_chat/", str(ctx.exception))
 
 
-class TestResolveApiBase(FrappeTestCase):
+class TestResolveApiBase(IntegrationTestCase):
     def test_api_base_url_field_wins(self):
         doc = _FakeDoc(
             is_local_llm=1,
@@ -153,7 +153,7 @@ class TestResolveApiBase(FrappeTestCase):
         self.assertIsNone(_resolve_api_base(None))
 
 
-class TestNormalizeModelName(FrappeTestCase):
+class TestNormalizeModelName(IntegrationTestCase):
     def test_ollama_maps_to_chat_endpoint(self):
         self.assertEqual(
             _normalize_model_name("gpt-oss:20b", "Ollama"), "ollama_chat/gpt-oss:20b"
@@ -172,7 +172,7 @@ class TestNormalizeModelName(FrappeTestCase):
         self.assertEqual(_normalize_model_name("openai/gpt-4o", "OpenAI"), "openai/gpt-4o")
 
 
-class TestTransientRetryKeywords(FrappeTestCase):
+class TestTransientRetryKeywords(IntegrationTestCase):
     def test_connection_refused_is_transient(self):
         self.assertTrue(
             _is_transient_litellm_error(
@@ -191,7 +191,7 @@ class TestTransientRetryKeywords(FrappeTestCase):
         self.assertFalse(_is_transient_litellm_error(Exception("model not found")))
 
 
-class TestProviderErrorSanitization(FrappeTestCase):
+class TestProviderErrorSanitization(IntegrationTestCase):
     def test_unavailable_model_message_hides_litellm_details(self):
         message = _sanitize_provider_error_message(
             "LiteLLM error: litellm.NotFoundError: Vertex_ai_betaException - model models/gemini-2.5-flash is no longer available",

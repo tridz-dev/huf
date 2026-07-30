@@ -22,7 +22,7 @@ Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_ai_
 from unittest.mock import MagicMock, patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
 
@@ -34,7 +34,7 @@ def _get_update_agent_run_stats():
     return _update_agent_run_stats
 
 
-class TestAIProviderValidation(FrappeTestCase):
+class TestAIProviderValidation(IntegrationTestCase):
     created_providers = []
 
     def tearDown(self):
@@ -100,7 +100,7 @@ class TestAIProviderValidation(FrappeTestCase):
             )
 
 
-class TestUpdateAgentRunStats(FrappeTestCase):
+class TestUpdateAgentRunStats(IntegrationTestCase):
     def _mock_frappe(self):
         mock_frappe = MagicMock()
         # The except clause needs the real exception class.

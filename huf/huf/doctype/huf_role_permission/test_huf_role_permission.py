@@ -2,10 +2,10 @@
 # See license.txt
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
-class TestHufRolePermission(FrappeTestCase):
+class TestHufRolePermission(IntegrationTestCase):
 	"""`Huf Role Permission` is a child table (istable=1) of the `permissions`
 	field on `Huf Role`, so it is tested as rows on a parent Huf Role."""
 

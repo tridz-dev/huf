@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from huf.ai.sdk_tools import handle_generate_image, handle_generate_audio
 
@@ -22,7 +22,7 @@ class _FakeDoc:
         return getattr(self, field, None)
 
 
-class TestP0CommitHazards(FrappeTestCase):
+class TestP0CommitHazards(IntegrationTestCase):
     """Batch 2 Category B: media generation must fail closed when ordering fails."""
 
     def _mock_agent_setup(self, mock_get_doc, with_image_model=True):

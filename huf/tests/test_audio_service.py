@@ -53,9 +53,10 @@ frappe_file_manager.save_file = MagicMock()
 frappe_utils.file_manager = frappe_file_manager
 frappe_mock.utils = frappe_utils
 
-sys.modules["frappe"] = frappe_mock
-sys.modules["frappe.utils"] = frappe_utils
-sys.modules["frappe.utils.file_manager"] = frappe_file_manager
+if "frappe" not in sys.modules:
+    sys.modules["frappe"] = frappe_mock
+    sys.modules["frappe.utils"] = frappe_utils
+    sys.modules["frappe.utils.file_manager"] = frappe_file_manager
 
 # Mock litellm so no real provider is ever called.
 litellm_mock = types.ModuleType("litellm")

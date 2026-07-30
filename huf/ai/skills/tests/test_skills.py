@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from huf.ai.skills.exporter import build_huf_archive, build_skill_md
 from huf.ai.skills.importer import (
@@ -22,7 +22,7 @@ from huf.ai.skills.importer import (
 from huf.ai.skills.loader import get_skill_prompts
 
 
-class TestSkillManifestParsing(FrappeTestCase):
+class TestSkillManifestParsing(IntegrationTestCase):
 	def test_parse_skill_md_with_huf_block(self):
 		skill_dir = Path(tempfile.mkdtemp())
 		skill_md = skill_dir / "SKILL.md"
@@ -86,7 +86,7 @@ class TestSkillManifestParsing(FrappeTestCase):
 		shutil.rmtree(skill_dir)
 
 
-class TestSkillLinkResolution(FrappeTestCase):
+class TestSkillLinkResolution(IntegrationTestCase):
 	def test_resolve_link_skips_missing(self):
 		warnings = []
 		result = _resolve_link("Agent Tool Function", "tool_name", "Missing Tool", warnings)
@@ -100,7 +100,7 @@ class TestSkillLinkResolution(FrappeTestCase):
 		self.assertTrue(any("Also Missing" in w for w in warnings))
 
 
-class TestSkillImportAndExport(FrappeTestCase):
+class TestSkillImportAndExport(IntegrationTestCase):
 	def setUp(self):
 		self.skill_name = "test-export-import-skill"
 		if frappe.db.exists("Skill", {"skill_name": self.skill_name}):
@@ -176,7 +176,7 @@ class TestSkillImportAndExport(FrappeTestCase):
 				frappe.delete_doc("File", file_doc.name, force=True)
 
 
-class TestSkillPromptRuntime(FrappeTestCase):
+class TestSkillPromptRuntime(IntegrationTestCase):
 	def setUp(self):
 		self.agent_name = "test-prompt-agent"
 		self.skill_name = "test-prompt-skill"
@@ -260,7 +260,7 @@ class TestSkillPromptRuntime(FrappeTestCase):
 		self.assertEqual(prompts[0]["body"], "You are a helpful tester.")
 
 
-class TestSkillDestinations(FrappeTestCase):
+class TestSkillDestinations(IntegrationTestCase):
 	def test_default_destinations_returned(self):
 		destinations = _get_common_destinations()
 		self.assertIn("huf-skills", destinations)

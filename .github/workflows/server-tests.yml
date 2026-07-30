@@ -1,0 +1,62 @@
+name: Server Tests
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install bench
+        run: pip install frappe-bench
+
+      - name: Init bench
+        run: |
+          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" frappe-bench
+          cd frappe-bench
+          bench set-mariadb-host 127.0.0.1
+          bench set-config -g db_password root
+
+      - name: Get huf app
+        working-directory: frappe-bench
+        run: bench get-app huf "${{ github.workspace }}"
+
+      - name: New site
+        working-directory: frappe-bench
+        run: |
+          bench new-site test_site --mariadb-root-password root --admin-password admin --no-mariadb-socket
+          bench --site test_site install-app huf
+
+      - name: Run tests
+        working-directory: frappe-bench
+        run: bench --site test_site run-tests --app huf
