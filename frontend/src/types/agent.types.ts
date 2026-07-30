@@ -17,6 +17,8 @@ export type AIModel = {
   input_cost_per_1m_tokens?: number | null;
   output_cost_per_1m_tokens?: number | null;
   cached_input_cost_per_1m_tokens?: number | null;
+  supports_reasoning?: number;
+  reasoning_config_override?: string;
 };
 
 export type ToolType =
@@ -120,6 +122,10 @@ export type Agent = {
   allow_chat?: boolean;
   is_system?: boolean;
   persist_conversation?: boolean;
+  reasoning_mode?: "Auto" | "Off" | "On";
+  reasoning_effort?: "Auto" | "Low" | "Medium" | "High";
+  reasoning_budget_tokens?: number;
+  reasoning_summary?: "None" | "Concise" | "Detailed";
   triggers: AgentTrigger[];
   tags?: string[];
   category?: AgentCategory;
@@ -170,6 +176,7 @@ export type AgentRun = {
   total_tokens?: number;
   total_cost?: number;
   latency_ms?: number;
+  reasoning_snapshot?: string;
   created_at: string;
 };
 

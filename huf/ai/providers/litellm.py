@@ -30,6 +30,13 @@ from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.transaction import transaction_checkpoint
 from huf.ai.cost_calculator import calculate_cost
 from huf.ai.conversation_manager import repair_message_sequence
+from huf.ai.reasoning import (
+    ReasoningPolicy,
+    ReasoningResolution,
+    detect_model_capabilities,
+    resolve_reasoning,
+    build_reasoning_kwargs,
+)
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -712,6 +719,40 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             provider_name = normalized_model.split("/")[0]
             _setup_api_key(provider_name, api_key, completion_kwargs)
 
+            # Resolve provider-aware reasoning parameters
+            reasoning_policy_data = None
+            if context and context.get("reasoning_policy"):
+                reasoning_policy_data = context["reasoning_policy"]
+            elif agent_doc:
+                reasoning_policy_data = {
+                    "mode": agent_doc.get("reasoning_mode"),
+                    "effort": agent_doc.get("reasoning_effort"),
+                    "budget_tokens": agent_doc.get("reasoning_budget_tokens"),
+                    "summary": agent_doc.get("reasoning_summary"),
+                }
+            elif hasattr(agent, "reasoning_mode"):
+                reasoning_policy_data = {
+                    "mode": getattr(agent, "reasoning_mode", "auto"),
+                    "effort": getattr(agent, "reasoning_effort", "auto"),
+                    "budget_tokens": getattr(agent, "reasoning_budget_tokens", None),
+                    "summary": getattr(agent, "reasoning_summary", "none"),
+                }
+
+            ai_model_doc = None
+            if model:
+                try:
+                    ai_model_doc = frappe.get_doc("AI Model", model)
+                except Exception:
+                    pass
+
+            r_policy = ReasoningPolicy.from_dict(reasoning_policy_data)
+            r_caps = detect_model_capabilities(normalized_model, provider, ai_model_doc=ai_model_doc)
+            r_res = resolve_reasoning(r_policy, r_caps, provider=provider, model_name=normalized_model)
+            if context is not None:
+                context["reasoning_resolution"] = r_res
+
+            completion_kwargs.update(build_reasoning_kwargs(r_res))
+
             capability_cache_key = f"litellm_tool_json_conflict:{provider_name}"
             
             known_conflict = _L1_CAPABILITY_CACHE.get(capability_cache_key)
@@ -923,6 +964,11 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
             if hasattr(choice, "tool_calls") and choice.tool_calls:
                 assistant_message["tool_calls"] = choice.tool_calls
+
+            if getattr(choice, "thinking_blocks", None):
+                assistant_message["thinking_blocks"] = choice.thinking_blocks
+            elif getattr(choice, "reasoning_content", None):
+                assistant_message["reasoning_content"] = choice.reasoning_content
 
             messages.append(assistant_message)
 
@@ -1323,6 +1369,40 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         provider_name = normalized_model.split("/")[0]
         _setup_api_key(provider_name, api_key, completion_kwargs)
 
+        # Resolve provider-aware reasoning parameters
+        reasoning_policy_data = None
+        if context and context.get("reasoning_policy"):
+            reasoning_policy_data = context["reasoning_policy"]
+        elif agent_doc:
+            reasoning_policy_data = {
+                "mode": agent_doc.get("reasoning_mode"),
+                "effort": agent_doc.get("reasoning_effort"),
+                "budget_tokens": agent_doc.get("reasoning_budget_tokens"),
+                "summary": agent_doc.get("reasoning_summary"),
+            }
+        elif hasattr(agent, "reasoning_mode"):
+            reasoning_policy_data = {
+                "mode": getattr(agent, "reasoning_mode", "auto"),
+                "effort": getattr(agent, "reasoning_effort", "auto"),
+                "budget_tokens": getattr(agent, "reasoning_budget_tokens", None),
+                "summary": getattr(agent, "reasoning_summary", "none"),
+            }
+
+        ai_model_doc = None
+        if model:
+            try:
+                ai_model_doc = frappe.get_doc("AI Model", model)
+            except Exception:
+                pass
+
+        r_policy = ReasoningPolicy.from_dict(reasoning_policy_data)
+        r_caps = detect_model_capabilities(normalized_model, provider, ai_model_doc=ai_model_doc)
+        r_res = resolve_reasoning(r_policy, r_caps, provider=provider, model_name=normalized_model)
+        if context is not None:
+            context["reasoning_resolution"] = r_res
+
+        completion_kwargs.update(build_reasoning_kwargs(r_res))
+
         if tools and local_overrides.get("supports_tools") is False:
             # Model does not support tool calling — strip tools and continue
             # instead of letting the provider fail with a cryptic 400.
@@ -1358,9 +1438,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 # LiteLLM completion() supports streaming when stream=True
                 stream = await _litellm_completion_with_retry(**completion_kwargs)
 
-                # Buffer for tool calls
+                # Buffer for tool calls and thinking blocks
                 current_tool_calls = {}
                 streaming_content = ""
+                accumulated_thinking_blocks = []
+                accumulated_reasoning_content = ""
 
                 # Process streaming chunks
                 stream_usage = None
@@ -1392,6 +1474,12 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                             "content": delta.content,
                             "full_response": full_response,
                         }
+
+                    # Handle thinking / reasoning deltas
+                    if hasattr(delta, "thinking_blocks") and delta.thinking_blocks:
+                        accumulated_thinking_blocks.extend(delta.thinking_blocks)
+                    if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                        accumulated_reasoning_content += str(delta.reasoning_content)
 
                     # Handle tool call delta
                     if hasattr(delta, "tool_calls") and delta.tool_calls:
@@ -1625,13 +1713,17 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                 )
 
                             # Add tool results to messages and continue
-                            messages.append(
-                                {
-                                    "role": "assistant",
-                                    "content": streaming_content,
-                                    "tool_calls": tool_calls_list,
-                                }
-                            )
+                            assistant_msg = {
+                                "role": "assistant",
+                                "content": streaming_content,
+                                "tool_calls": tool_calls_list,
+                            }
+                            if accumulated_thinking_blocks:
+                                assistant_msg["thinking_blocks"] = accumulated_thinking_blocks
+                            if accumulated_reasoning_content:
+                                assistant_msg["reasoning_content"] = accumulated_reasoning_content
+
+                            messages.append(assistant_msg)
                             messages.extend(tool_results)
 
                             # Reset for next round

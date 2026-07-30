@@ -21,6 +21,7 @@
   "start_time",
   "input_tokens",
   "usage_snapshot",
+  "reasoning_snapshot",
   "cost",
   "cost_source",
   "cost_calculation_status",
@@ -160,6 +161,13 @@
    "fieldname": "usage_snapshot",
    "fieldtype": "JSON",
    "label": "Usage Snapshot",
+   "read_only": 1
+  },
+  {
+   "description": "Reasoning telemetry snapshot containing requested vs resolved policies, native parameters, and fallback details.",
+   "fieldname": "reasoning_snapshot",
+   "fieldtype": "JSON",
+   "label": "Reasoning Snapshot",
    "read_only": 1
   },
   {
