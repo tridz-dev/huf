@@ -7,6 +7,7 @@ from frappe import client
 from frappe import _
 
 from huf.ai.tool_functions import (
+    get_documents,
     create_documents,
     update_documents,
     delete_documents,
@@ -37,11 +38,11 @@ def wrap_frappe_function(func: Callable) -> Callable:
         try:
             result = func(*args, **kwargs)
 
-            if hasattr(result, "as_dict"):
+            if hasattr(result, "as_dict") and callable(getattr(result, "as_dict", None)):
                 result = result.as_dict()
 
-            elif isinstance(result, list) and result and hasattr(result[0], "as_dict"):
-                result = [item.as_dict() if hasattr(item, "as_dict") else item for item in result]
+            elif isinstance(result, list) and result:
+                result = [item.as_dict() if callable(getattr(item, "as_dict", None)) else item for item in result]
 
             return {"success": True, "result": result}
         except Exception as e:
@@ -552,6 +553,39 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
     except Exception as e:
         # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_get_document failed: {e!s}\n{frappe.get_traceback()}")
+        return {"success": False, "error": str(e)}
+
+
+def handle_get_documents(reference_doctype: str = None, document_ids: list = None, **kwargs):
+    """
+    Get multiple documents by ID for a DocType.
+    """
+    try:
+        if not reference_doctype:
+            reference_doctype = frappe.flags.get("current_function_doctype")
+
+        if not reference_doctype:
+            return {"success": False, "error": "No reference doctype provided."}
+
+        ids = document_ids or kwargs.get("ids") or kwargs.get("documents") or []
+        if not isinstance(ids, list):
+            ids = [ids]
+
+        if not ids:
+            return {"success": False, "error": "No document_ids provided."}
+
+        docs = get_documents(reference_doctype, ids)
+        res_docs = [doc.as_dict() if callable(getattr(doc, "as_dict", None)) else doc for doc in docs]
+        return {
+            "success": True,
+            "result": res_docs,
+            "message": f"{len(res_docs)} {reference_doctype} document(s) fetched successfully",
+        }
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_get_documents failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 

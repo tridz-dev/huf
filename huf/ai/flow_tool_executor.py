@@ -139,7 +139,7 @@ def _execute_tool(tool_name: str, args: dict) -> dict:
 				loop.close()
 
 		# Normalize result
-		if hasattr(result, "as_dict"):
+		if hasattr(result, "as_dict") and callable(getattr(result, "as_dict", None)):
 			result = result.as_dict()
 
 		if isinstance(result, (dict, list)):

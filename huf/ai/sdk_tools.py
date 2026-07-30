@@ -437,7 +437,7 @@ def create_function_tool(
                 if asyncio.iscoroutine(result):
                     result = await result
 
-                if hasattr(result, "as_dict"):
+                if hasattr(result, "as_dict") and callable(getattr(result, "as_dict", None)):
                     result = result.as_dict()
 
                 return json.dumps(result, default=str) if isinstance(result, (dict, list)) else str(result)
