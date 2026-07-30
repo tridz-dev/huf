@@ -55,6 +55,7 @@ class PermissionAwareToolRegistry:
                     cls._can_use_tool(tool_doc, user)
                     and cls._allows_code_execution(tool_doc, agent_doc, user)
                     and cls._allows_ssh_execution(tool_doc, agent_doc, user)
+                    and cls._allows_docker_execution(tool_doc, user)
                 ):
                     all_tools.append(tool_doc)
 
@@ -168,6 +169,18 @@ class PermissionAwareToolRegistry:
             if enabled:
                 return True
         return False
+
+    @classmethod
+    def _allows_docker_execution(cls, tool_doc, user: str) -> bool:
+        """Require the dedicated capability before exposing Docker control."""
+        function_path = (getattr(tool_doc, "function_path", None) or "").strip()
+        tool_name = (getattr(tool_doc, "tool_name", None) or "").strip()
+        if function_path != "huf.ai.tools.docker_execution.handle_action" and tool_name != "docker_execution":
+            return True
+
+        from huf.permissions import has_capability
+
+        return has_capability(user, "docker.run")
 
 def _get_app_modified_time(app_name):
     """

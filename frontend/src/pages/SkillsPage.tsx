@@ -1,11 +1,21 @@
-import { useEffect } from 'react';
-import { Sparkles, Settings } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Sparkles, Settings, Trash2, Ban, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
-import { getSkills } from '../services/skillApi';
+import { getSkills, deleteSkill, updateSkill } from '../services/skillApi';
 import { formatTimeAgo } from '../utils/time';
 import type { SkillDoc } from '../types/skill.types';
 
@@ -42,6 +52,8 @@ function getStatusVariant(status: string): 'default' | 'secondary' | 'destructiv
 
 export function SkillsPage() {
   const navigate = useNavigate();
+  const [deleteSkillTarget, setDeleteSkillTarget] = useState<SkillDoc | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const {
     items: skills,
@@ -88,6 +100,36 @@ export function SkillsPage() {
       });
     }
   }, [error]);
+
+  const handleToggleStatus = async (skill: SkillDoc) => {
+    const nextStatus = skill.status === 'Disabled' ? 'Active' : 'Disabled';
+    try {
+      await updateSkill(skill.name, { status: nextStatus });
+      toast.success(nextStatus === 'Disabled' ? 'Skill disabled' : 'Skill enabled');
+      window.location.reload();
+    } catch (err) {
+      toast.error('Failed to update skill', {
+        description: err instanceof Error ? err.message : 'An error occurred.',
+      });
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteSkillTarget) return;
+    setDeleting(true);
+    try {
+      await deleteSkill(deleteSkillTarget.name);
+      toast.success('Skill deleted');
+      setDeleteSkillTarget(null);
+      window.location.reload();
+    } catch (err) {
+      toast.error('Failed to delete skill', {
+        description: err instanceof Error ? err.message : 'An error occurred.',
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <PageLayout
@@ -154,6 +196,20 @@ export function SkillsPage() {
                 onClick: () => navigate(`/skills/${skill.name}`),
               },
             ]}
+            menuIcon={Settings}
+            menuActions={[
+              {
+                icon: skill.status === 'Disabled' ? CheckCircle2 : Ban,
+                label: skill.status === 'Disabled' ? 'Enable' : 'Disable',
+                onClick: () => handleToggleStatus(skill),
+              },
+              {
+                icon: Trash2,
+                label: 'Delete Skill',
+                variant: 'destructive',
+                onClick: () => setDeleteSkillTarget(skill),
+              },
+            ]}
             onClick={() => navigate(`/skills/${skill.name}`)}
           />
         )}
@@ -170,6 +226,25 @@ export function SkillsPage() {
           {total !== undefined ? `Showing all ${total} skills` : 'No more skills to load'}
         </div>
       )}
+      <AlertDialog open={!!deleteSkillTarget} onOpenChange={(open) => !open && setDeleteSkillTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete skill "{deleteSkillTarget?.title || deleteSkillTarget?.skill_name || deleteSkillTarget?.name}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the skill. Skills attached to an agent cannot be deleted —
+              remove them from any agent first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} disabled={deleting}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageLayout>
   );
 }

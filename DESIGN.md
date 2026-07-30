@@ -2,9 +2,9 @@
 
 ## Instrument / Control-Room Direction
 
-**Status:** v1.1 — derived from marketing redesign (`huf-redesign.html`) and product UI redesign (`huf-dashboard-redesign.html`)
+**Status:** v2.0 (UI v2) — derived from marketing redesign (`huf-redesign.html`), product UI redesign (`huf-dashboard-redesign.html`), and recent UI v2 iterations.
 
-**v1.1 change:** introduces a **product type layer** (§3.1) — the marketing site keeps its loud Big Shoulders / Archivo / Martian Mono voice, but the product UI runs on a calmer, more legible workhorse (IBM Plex Sans + IBM Plex Mono) with display type rationed to a few character moments. This makes the app feel like a tool you live in (Slack / Grafana / Redis dashboard) rather than a poster you read once.
+**v2.0 change:** Transitioned to UI v2 with tighter muted experimental sidebar density, integrated Chat PWA, and dedicated Execution Profiles & Management UI. (Builds upon v1.1 product type layer).
 
 **Core idea:** HUF's real differentiator isn't "AI" — it's *control*: every agent action is recorded, permissioned, and auditable. The visual system should feel like an instrument panel or engineering ledger, not a glowing AI-startup gradient page. Light technical paper, condensed industrial type, hairline rules, and a single signal color used the way a warning lamp is used — sparingly, and always meaningfully.
 
@@ -194,6 +194,7 @@ Same tokens and structural primitives as marketing, but running on the **product
 
 ### 6.1 Sidebar (Instrument Panel)
 - Background `--paper-deep`, 1px right border.
+- **Muted Experimental Sidebar Density:** Tighter vertical rhythm and spacing between items. Inactive items use more subdued text colors (`--steel-soft`) to reduce visual fatigue during extended sessions.
 - Brand block: same wordmark + signal-square mark as marketing nav, plus a mono "AI Platform" sub-label (IBM Plex Mono) — **no colored icon-in-rounded-square logo**.
 - Nav items: plain 1.6px-stroke line icons in `--steel` (→ `--ink` on hover), **IBM Plex Sans** medium 13.5px labels, sentence case.
 - **Active state**: 2px solid signal-orange left edge + `--panel` background + subtle inset border — *not* a gray rounded pill (the most common dashboard-template tell).
@@ -229,6 +230,17 @@ Same tokens and structural primitives as marketing, but running on the **product
   - `--steel-soft` (gray), static → *Idle*
   - `--good` (green), static → *Healthy*
 - Row hover: background → `--paper-deep`, chevron color → `--ink`. No card lift/shadow on hover.
+
+### 6.7 Execution Management UI
+- **Purpose:** Interface for managing execution profiles (Local Python, SSH, Docker) and SSH Connections.
+- **Layout:** Grid-based cards or list layouts framed as infrastructure configuration.
+- **Typography:** Strong use of **IBM Plex Mono** for environment variables, paths, and server addresses to reinforce the technical/infrastructure context.
+- **Status:** Health and connection status use the standard dot vocabulary (`--good` for healthy connections, `--signal` for pending/failed).
+
+### 6.8 Chat PWA
+- **Control-Room Aesthetic:** The unified Chat PWA avoids typical consumer chat bubbles (no large colored rounded pills).
+- **Message Ledger:** Messages are presented as ledger entries. User inputs and Agent responses are distinct but structured in a single stream with hairline dividers where appropriate.
+- **Mobile Constraints:** Adapts cleanly to mobile dimensions while preserving the technical ledger feel.
 
 ---
 

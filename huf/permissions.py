@@ -76,6 +76,8 @@ CAPABILITIES: dict[str, str] = {
 	"ssh_connection.manage": "Manage SSH Connections",
 	"ssh.run": "Run SSH Tool",
 	"ssh.approve": "Approve SSH Executions",
+	# --- Docker Execution ---
+	"docker.run": "Run Docker Execution Tool",
 }
 
 # Capabilities granted to each default Huf Role.
@@ -111,6 +113,7 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"ssh_connection.manage",
 		"ssh.run",
 		"ssh.approve",
+		"docker.run",
 	],
 	"Huf User": [
 		"agent.use",

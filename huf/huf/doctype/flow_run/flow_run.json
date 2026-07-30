@@ -87,7 +87,7 @@
    "fieldname": "trigger_type",
    "fieldtype": "Select",
    "label": "Trigger Type",
-   "options": "Manual\nWebhook\nSchedule\nDoc Event",
+   "options": "Manual\nWebhook\nSchedule\nDoc Event\nGateway",
    "read_only": 1
   },
   {

@@ -38,10 +38,12 @@ import tempfile
 from typing import Any
 from urllib.parse import urlparse
 
-import frappe
-from frappe.utils import get_files_path
 from frappe.utils.data import add_to_date, now_datetime
 from frappe.utils.file_manager import save_file
+
+
+def get_files_path(is_private: bool = True) -> str:
+	return frappe.get_site_path("private" if is_private else "public", "files")
 
 from huf.ai.http_handler import handle_http_request
 from huf.ai.tool_functions import get_report_result
@@ -1332,6 +1334,7 @@ def execute_job(
 	limits = (profile_snapshot or {}).get("limits") or {}
 	max_output = int(limits.get("max_output_bytes") or DEFAULT_MAX_OUTPUT_BYTES)
 	filesystem_policy = (profile_snapshot or {}).get("filesystem_policy") or "None"
+	allowed_modules = (profile_snapshot or {}).get("allowed_modules") or []
 
 	# Do not run if a (Phase 5) approval exists and was not granted.
 	blocked = _approval_blocks(call.name)
@@ -1366,6 +1369,7 @@ def execute_job(
 			code,
 			limits=limits,
 			scratch_dir=mount_dir,
+			allowed_modules=allowed_modules,
 			broker_handler=broker_handler,
 			broker_thread_start=broker_handler.thread_start,
 			broker_thread_end=broker_handler.thread_end,

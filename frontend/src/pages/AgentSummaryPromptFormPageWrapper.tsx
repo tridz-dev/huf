@@ -29,7 +29,7 @@ function AgentSummaryPromptFormPageWrapper() {
   }, [id, isNew]);
 
   const breadcrumbs = [
-    { label: 'Agent Summary Prompts', href: '/summary-prompts' },
+    { label: 'Prompts', href: '/summary-prompts' },
     { label: promptTitle },
   ];
 

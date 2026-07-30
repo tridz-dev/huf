@@ -1,4 +1,4 @@
-import { type LucideIcon } from "lucide-react"
+import { FlaskConical, type LucideIcon } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 
 import {
@@ -49,8 +49,13 @@ export function NavMain({
                   {(item.badge || typeof item.count === 'number') && (
                     <div className="ml-auto flex items-center gap-1.5 group-data-[collapsible=icon]:hidden">
                       {item.badge && (
-                        <span className="font-mono text-[8.5px] uppercase tracking-wider px-1.5 py-0.5 rounded-none border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium">
-                          {item.badge}
+                        <span
+                          title={item.badge}
+                          aria-label={item.badge}
+                          role="img"
+                          className="flex items-center text-steel-soft dark:text-steel opacity-70 hover:opacity-100 transition-opacity"
+                        >
+                          <FlaskConical className="!size-[12.5px]" strokeWidth={1.5} />
                         </span>
                       )}
                       {typeof item.count === 'number' && (

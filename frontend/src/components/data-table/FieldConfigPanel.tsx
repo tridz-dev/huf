@@ -264,15 +264,18 @@ export function FieldConfigPanel({
 				</div>
 			)}
 
-			<div className="pt-4 border-t border-line mt-4">
+			<div className="pt-4 border-t border-line mt-4 flex items-center justify-between gap-2">
+				<p className="text-[10px] text-steel">
+					Changes save with the table.
+				</p>
 				<Button
-					variant="destructive"
+					variant="ghost"
 					size="sm"
-					className="w-full rounded-none"
+					className="text-destructive hover:text-destructive hover:bg-destructive/10"
 					onClick={onDelete}
 				>
-					<Trash2 className="w-3.5 h-3.5 mr-2" />
-					Delete Field
+					<Trash2 className="w-3.5 h-3.5 mr-1.5" />
+					Delete field
 				</Button>
 			</div>
 		</div>

@@ -16,13 +16,19 @@ import { parseRequiredCredentials } from '@/types/integration.types';
 import type { IntegrationServiceDoc } from '@/types/integration.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { toast } from 'sonner';
+import { getServiceIdentity, messagingServiceNames } from '@/data/serviceIdentity';
 
 interface ServiceCatalogModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  kind?: 'channels' | 'integrations';
 }
 
-export function ServiceCatalogModal({ open, onOpenChange }: ServiceCatalogModalProps) {
+export function ServiceCatalogModal({
+  open,
+  onOpenChange,
+  kind = 'integrations',
+}: ServiceCatalogModalProps) {
   const navigate = useNavigate();
   const [services, setServices] = useState<IntegrationServiceDoc[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,15 +55,17 @@ export function ServiceCatalogModal({ open, onOpenChange }: ServiceCatalogModalP
   const filteredServices = useMemo(() => {
     const query = search.trim().toLowerCase();
     return services.filter((service) => {
+      const isMessaging = messagingServiceNames.has(service.service_name.toLowerCase());
+      const matchesKind = kind === 'channels' ? isMessaging : !isMessaging;
       const matchesCategory = category === 'all' || service.category === category;
       const matchesSearch =
         !query ||
         service.service_name.toLowerCase().includes(query) ||
         service.description?.toLowerCase().includes(query) ||
         service.category?.toLowerCase().includes(query);
-      return matchesCategory && matchesSearch;
+      return matchesKind && matchesCategory && matchesSearch;
     });
-  }, [services, search, category]);
+  }, [services, search, category, kind]);
 
   const handleSelect = (serviceName: string) => {
     onOpenChange(false);
@@ -70,7 +78,7 @@ export function ServiceCatalogModal({ open, onOpenChange }: ServiceCatalogModalP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Add Integration</DialogTitle>
+          <DialogTitle>{kind === 'channels' ? 'Add Channel' : 'Add Integration'}</DialogTitle>
           <DialogDescription>
             Choose a service to connect. Required credentials are shown for each integration.
           </DialogDescription>
@@ -108,6 +116,8 @@ export function ServiceCatalogModal({ open, onOpenChange }: ServiceCatalogModalP
             <div className="grid gap-3 sm:grid-cols-2">
               {filteredServices.map((service) => {
                 const credSchema = parseRequiredCredentials(service.required_credentials);
+                const identity = getServiceIdentity(service.service_name);
+                const Icon = identity.icon;
                 return (
                   <Card
                     key={service.name}
@@ -116,8 +126,9 @@ export function ServiceCatalogModal({ open, onOpenChange }: ServiceCatalogModalP
                   >
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-base capitalize">
-                          {service.service_name.replace(/_/g, ' ')}
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Icon className="h-5 w-5 text-steel-soft" />
+                          {identity.title}
                         </CardTitle>
                         <Badge variant="outline">{service.category}</Badge>
                       </div>
@@ -151,7 +162,7 @@ export function ServiceCatalogModal({ open, onOpenChange }: ServiceCatalogModalP
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 pt-2 border-t">
+        {kind === 'integrations' && <div className="flex items-center justify-between gap-3 pt-2 border-t">
           <button
             type="button"
             className="text-sm text-primary hover:underline"
@@ -162,7 +173,7 @@ export function ServiceCatalogModal({ open, onOpenChange }: ServiceCatalogModalP
           >
             Create custom service
           </button>
-        </div>
+        </div>}
       </DialogContent>
     </Dialog>
   );

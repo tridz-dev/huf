@@ -119,6 +119,8 @@ def after_migrate():
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
+	create_demo_ai_providers()
+	create_demo_ai_models()
 	setup_desktop_icon_as_workspace("huf")
 	try:
 		create_image_generation_tool()
@@ -215,6 +217,15 @@ def create_demo_ai_providers():
             doc.insert(ignore_permissions=True)
 
 def create_demo_ai_models():
+    deprecated_models = (
+        "gemini-2.5-flash",
+        "google/gemini-2.5-flash",
+    )
+
+    for model_name in deprecated_models:
+        if frappe.db.exists("AI Model", model_name):
+            frappe.delete_doc("AI Model", model_name, ignore_permissions=True, force=True)
+
     models = [
         # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "DeepSeek"},
         # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3", "provider": "DeepSeek"},
@@ -238,7 +249,6 @@ def create_demo_ai_models():
         {"doctype": "AI Model", "model_name": "gemini-3.1-flash-lite", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemini-3-flash-preview", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemini-2.5-pro", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-flash", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemini-2.5-flash-lite", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemma-3-27b-it", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemma-3-9b-it", "provider": "Google"},
@@ -256,7 +266,6 @@ def create_demo_ai_models():
         {"doctype": "AI Model", "model_name": "openai/gpt-5-mini", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "openai/gpt-5-nano", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "openai/gpt-4o-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash-lite-preview-06-17", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "google/gemma-3-27b-it", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "deepseek/deepseek-v4-pro", "provider": "OpenRouter"},
@@ -1245,4 +1254,3 @@ def create_default_execution_profiles():
 			)
 
 	frappe.db.commit()
-

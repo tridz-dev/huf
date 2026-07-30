@@ -1,5 +1,4 @@
 import json
-import re
 
 import frappe
 import frappe.sessions
@@ -8,8 +7,12 @@ from frappe.utils.telemetry import capture
 
 no_cache = 1
 
-SCRIPT_TAG_PATTERN = re.compile(r"\<script[^<]*\</script\>")
-CLOSING_SCRIPT_TAG_PATTERN = re.compile(r"</script\>")
+
+def _safe_json_embed(data_dict) -> str:
+	raw_json = frappe.as_json(data_dict, indent=None, separators=(",", ":"))
+	# Escape HTML special characters to unicode escapes so JSON can be safely embedded in HTML templates
+	safe_json = raw_json.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+	return json.dumps(safe_json)
 
 
 def get_context(context):
@@ -32,11 +35,7 @@ def get_context(context):
 		enabled = True
 	boot["server_script_enabled"] = enabled
 
-	boot_json = frappe.as_json(boot, indent=None, separators=(",", ":"))
-	boot_json = SCRIPT_TAG_PATTERN.sub("", boot_json)
-
-	boot_json = CLOSING_SCRIPT_TAG_PATTERN.sub("", boot_json)
-	boot_json = json.dumps(boot_json)
+	boot_json = _safe_json_embed(boot)
 
 	context.update(
 		{"build_version": frappe.utils.get_build_version(), "boot": boot_json, "csrf_token": csrf_token}
@@ -58,10 +57,4 @@ def get_boot():
 		raise frappe.SessionBootFailed from e
 
 	boot["push_relay_server_url"] = frappe.conf.get("push_relay_server_url")
-	boot_json = frappe.as_json(boot, indent=None, separators=(",", ":"))
-	boot_json = SCRIPT_TAG_PATTERN.sub("", boot_json)
-
-	boot_json = CLOSING_SCRIPT_TAG_PATTERN.sub("", boot_json)
-	boot_json = json.dumps(boot_json)
-
-	return boot_json
+	return _safe_json_embed(boot)

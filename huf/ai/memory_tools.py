@@ -151,6 +151,7 @@ def save_memory_record(
 		frappe.throw(_("Knowledge promotion blocked"))
 
 	# Apply Memory Policy rules if Agent has a policy
+	record_ttl_days = 0
 	if policy:
 		# Record type validation
 		if policy.allowed_record_types:
@@ -170,6 +171,10 @@ def save_memory_record(
 				promote_to_knowledge = True
 				if not knowledge_source:
 					knowledge_source = policy.knowledge_source
+
+		# TTL: propagate policy expiry onto the record (record controller converts this to effective_until)
+		if policy.ttl_days:
+			record_ttl_days = int(policy.ttl_days)
 
 	tag_text = ", ".join(tags) if isinstance(tags, list) else (tags or "")
 	doc = frappe.get_doc(
@@ -193,6 +198,7 @@ def save_memory_record(
 			"raw_context_excerpt": raw_context_excerpt,
 			"promote_to_knowledge": 1 if promote_to_knowledge else 0,
 			"knowledge_source": knowledge_source,
+			"ttl_days": record_ttl_days,
 		}
 	)
 	# P0-5: Use ignore_permissions=True — the _can_write_memory check above is the sole authority.
@@ -212,13 +218,15 @@ def save_memory_record(
 	}
 
 
-def get_injected_memory_text(agent_name, policy, conversation_id=None):
+def get_injected_memory_text(agent_name, policy, conversation_id=None, query=None):
 	"""Fetch memories to inject into system prompt based on policy.
 
 	P1-8: Wrap injected content in a data-not-instructions envelope to
 	      prevent prompt-injection attacks from user-authored memory content.
 	P2-1: Respect policy.enabled — disabled policies do nothing.
 	P2-3: Tool Only mode means agent can call search tool but nothing auto-injects.
+	"Relevant Only" narrows results to the current turn's text (substring match);
+	"Always" ignores query and injects every active record for the scope.
 	"""
 	if not policy:
 		return None
@@ -241,8 +249,10 @@ def get_injected_memory_text(agent_name, policy, conversation_id=None):
 
 	# Use search to get active memories the agent is allowed to read
 	# P1-8: Pass conversation_id so Conversation-scoped memories are included
+	# "Relevant Only" narrows by the current turn's text; "Always" injects everything active.
+	relevance_query = query if policy.inject_mode == "Relevant Only" else None
 	res = search_memory_records(
-		query=None,
+		query=relevance_query,
 		status="Active",
 		limit=limit * 2,  # Fetch more in case we hit token limits
 		conversation_id=conversation_id,
@@ -403,3 +413,118 @@ def expire_stale_memory_records():
 			)
 	except Exception as e:
 		frappe.log_error(f"Memory expiry scheduler failed: {str(e)}", "Memory Expiry Error")
+
+
+def extract_memory_from_run(run_id):
+	"""Background extraction: reviews a completed run's conversation and proposes
+	candidate Memory Records via the learning agent, if the owning Agent's Memory
+	Policy has capture_mode != "Manual". No-ops otherwise. Always safe to enqueue
+	unconditionally — this function does its own gating.
+	"""
+	run = frappe.db.get_value("Agent Run", run_id, ["agent", "conversation"], as_dict=True)
+	if not run or not run.agent or not run.conversation:
+		return
+
+	agent_name = run.agent
+	policy_name = frappe.db.get_value("Agent", agent_name, "memory_policy")
+	if not policy_name:
+		return
+
+	policy = frappe.get_doc("Memory Policy", policy_name)
+	if not policy.enabled or policy.capture_mode not in ("Agent Suggested", "Automatic"):
+		return
+
+	extraction_agent = policy.learning_agent or agent_name
+
+	from huf.ai.conversation_manager import ConversationManager
+	conv_manager = ConversationManager(agent_name=agent_name)
+	history = conv_manager.get_conversation_history(run.conversation, limit=40)
+	transcript_lines = []
+	for msg in history:
+		role = msg.get("role") or "unknown"
+		content = msg.get("content")
+		if not content or not isinstance(content, str):
+			continue
+		transcript_lines.append(f"{role}: {content}")
+	transcript = "\n".join(transcript_lines)
+	if not transcript.strip():
+		return
+
+	extraction_prompt = (
+		"Review the following conversation transcript. Identify any durable facts, "
+		"preferences, or important details worth remembering long-term. Do NOT "
+		"invent facts that aren't in the transcript. If there is nothing worth "
+		"remembering, return an empty list.\n\n"
+		f"TRANSCRIPT:\n{transcript}\n\n"
+		"Respond with JSON only, matching this shape: "
+		'{"memories": [{"title": str, "summary_text": str, "record_type": '
+		'"Fact"|"Preference"|"Instruction", "confidence": float (0-1), '
+		'"importance_score": float (0-1)}]}'
+	)
+
+	response_format = {
+		"type": "json_schema",
+		"json_schema": {
+			"name": "memory_extraction",
+			"schema": {
+				"type": "object",
+				"properties": {
+					"memories": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"title": {"type": "string"},
+								"summary_text": {"type": "string"},
+								"record_type": {"type": "string", "enum": ["Fact", "Preference", "Instruction"]},
+								"confidence": {"type": "number"},
+								"importance_score": {"type": "number"},
+							},
+							"required": ["title", "summary_text", "record_type"],
+						},
+					}
+				},
+				"required": ["memories"],
+			},
+		},
+	}
+
+	try:
+		from huf.ai.agent_integration import run_agent_sync
+		result = run_agent_sync(
+			agent_name=extraction_agent,
+			prompt=extraction_prompt,
+			now=1,
+			skip_user_message=True,
+			response_format=response_format,
+		)
+	except Exception:
+		frappe.log_error(title="Memory extraction failed", message=frappe.get_traceback())
+		return
+
+	if not result or not result.get("success"):
+		return
+
+	candidates = (result.get("structured") or {}).get("memories") or []
+	for candidate in candidates:
+		title = candidate.get("title")
+		summary_text = candidate.get("summary_text")
+		if not title or not summary_text:
+			continue
+		status = "Draft" if policy.capture_mode == "Agent Suggested" else "Active"
+		try:
+			save_memory_record(
+				title=title,
+				summary_text=summary_text,
+				record_type=candidate.get("record_type") or "Fact",
+				scope_type=policy.scope_type or "Agent",
+				scope_key=agent_name if (policy.scope_type or "Agent") == "Agent" else None,
+				status=status,
+				confidence=candidate.get("confidence") or 0,
+				importance_score=candidate.get("importance_score") or 0,
+				source_type="Extracted",
+				agent_run_id=run_id,
+				agent_name=agent_name,
+			)
+		except Exception:
+			frappe.log_error(title="Memory extraction: failed to save candidate", message=frappe.get_traceback())

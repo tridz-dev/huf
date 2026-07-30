@@ -21,7 +21,7 @@ class Gateway(Document):
         if self.direct_policy == "Open":
             frappe.throw(_("Public direct-message gateways are not available in this release."))
 
-        expected_service = {"VK": "vk", "WeCom": "wecom"}.get(self.provider)
+        expected_service = {"VK": "vk", "WeCom": "wecom", "WhatsApp": "whatsapp", "Telegram": "telegram"}.get(self.provider)
         if expected_service and self.is_enabled:
             if not self.integration_settings:
                 frappe.throw(_("Enabled {0} gateways need a connected integration.").format(self.provider))

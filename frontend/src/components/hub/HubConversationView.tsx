@@ -176,8 +176,7 @@ export function HubConversationView({
 
       {/* Input */}
       <div className="px-4 py-4 border-t border-line bg-panel">
-        <div className="max-w-2xl mx-auto relative">
-          <SlashCommandMenu isVisible={showSlashMenu} query={slashQuery} onSelect={onSlashSelect} />
+        <div className="max-w-2xl mx-auto">
           <div className={`relative bg-panel border transition-all rounded-sm ${
             showSlashMenu ? 'border-signal' : 'border-line shadow-sm hover:border-steel-soft focus-within:border-signal'
           }`}>
@@ -196,6 +195,7 @@ export function HubConversationView({
                 <Send className="w-4 h-4" />
               </button>
             </div>
+            <SlashCommandMenu isVisible={showSlashMenu} query={slashQuery} onSelect={onSlashSelect} placement="above" />
           </div>
         </div>
       </div>

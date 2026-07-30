@@ -267,8 +267,12 @@ class AgentManager:
         return None
 
 
-    def create_agent(self) -> Agent:
-        """Create main agent """
+    def create_agent(self, memory_query: str = None, conversation_id: str = None) -> Agent:
+        """Create main agent
+
+        memory_query/conversation_id are the current turn's user text and
+        conversation, used to narrow "Relevant Only" memory injection.
+        """
 
         if not self.agent_doc.model:
             frappe.throw(_("Agent model is not configured"))
@@ -358,7 +362,9 @@ class AgentManager:
                     policy = frappe.get_doc("Memory Policy", self.agent_doc.memory_policy)
                     from huf.ai.memory_tools import get_injected_memory_text
 
-                    injected_memory = get_injected_memory_text(self.agent_doc.name, policy)
+                    injected_memory = get_injected_memory_text(
+                        self.agent_doc.name, policy, conversation_id=conversation_id, query=memory_query
+                    )
                     if injected_memory:
                         instructions += f"\n\n{injected_memory}\n"
                 except Exception as e:
@@ -1323,7 +1329,7 @@ def _execute_agent_run(
             manager.agent_doc.agent_prompt = resolved_prompt_template
             manager.agent_doc.prompt_version_locked = 0
 
-        agent = manager.create_agent()
+        agent = manager.create_agent(memory_query=prompt, conversation_id=conversation_id)
 
         # Build knowledge context for mandatory sources
         knowledge_context = None
@@ -1775,6 +1781,18 @@ def _execute_agent_run(
             "provider": resolved_provider,
             "end_time": now_datetime()
         }, update_modified=True)
+        try:
+            frappe.enqueue(
+                "huf.ai.memory_tools.extract_memory_from_run",
+                queue="default",
+                timeout=300,
+                is_async=True,
+                enqueue_after_commit=True,
+                run_id=run_doc.name,
+            )
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as e:
+            frappe.logger("huf").warning(f"Memory extraction enqueue failed: {e!s}")
         _emit_run_lifecycle_event(
             run_doc,
             conversation,
@@ -1880,9 +1898,10 @@ def _execute_agent_run(
         # model prefix, empty response). Surface it as a failed run — never
         # as assistant message content.
         error_msg = str(e)
+        log_error_msg = getattr(e, "log_message", error_msg)
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
-        frappe.log_error(f"Provider unavailable for agent '{agent_name}': {error_msg}", "Huf Provider")
+        frappe.log_error(f"Provider unavailable for agent '{agent_name}': {log_error_msg}", "Huf Provider")
         _emit_run_lifecycle_event(run_doc, conversation, "failed", {"error": error_msg})
 
         # Handle Sub-Agent Failure Lifecycle Hook
@@ -2482,7 +2501,7 @@ async def run_agent_stream(
                 "prompt_version_locked": 0
             })
 
-        agent = manager.create_agent()
+        agent = manager.create_agent(memory_query=prompt, conversation_id=conversation.name)
 
         resolved_prompt_cache = _resolve_prompt_cache_options(channel_id, prompt_cache_options)
 
@@ -3037,7 +3056,8 @@ async def run_agent_stream(
                 # Expected operational failure (connection refused, model not
                 # pulled, bad model prefix) — message is self-explanatory, no
                 # traceback needed. The run is still marked Failed below.
-                frappe.log_error(f"Provider unavailable for agent '{agent_name}': {error_msg}", "Huf Provider")
+                log_error_msg = getattr(e, "log_message", error_msg)
+                frappe.log_error(f"Provider unavailable for agent '{agent_name}': {log_error_msg}", "Huf Provider")
             else:
                 frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
             if "ContextWindowExceededError" in error_msg:

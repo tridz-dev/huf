@@ -64,7 +64,7 @@ export function TriggerConfigModal({
       setConfig({
         type: 'webhook',
         url: `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook`,
-        apiKey: Math.random().toString(36).substring(2, 15),
+        apiKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''),
         method: 'POST'
       });
     } else if (triggerId === 'schedule') {

@@ -176,19 +176,41 @@ export const WebPreviewBody = ({
   className,
   loading,
   src,
+  srcDoc: _unusedSrcDoc,
   ...props
 }: WebPreviewBodyProps) => {
   const { url } = useWebPreview();
 
+  const rawUrl = src ?? url;
+  const safeUrl = (() => {
+    if (!rawUrl) return undefined;
+    const trimmed = rawUrl.trim();
+    if (trimmed.startsWith('/') || trimmed.startsWith('./')) {
+      return trimmed;
+    }
+    try {
+      const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+      const parsed = new URL(trimmed, base);
+      const protocol = parsed.protocol.toLowerCase();
+      if (['http:', 'https:', 'blob:', 'about:'].includes(protocol)) {
+        return parsed.href;
+      }
+    } catch {
+      // Invalid URL
+    }
+    return 'about:blank';
+  })();
+
   return (
     <div className="flex-1">
       <iframe
+        {...props}
         className={cn("size-full", className)}
         sandbox="allow-scripts allow-forms allow-popups-to-escape-sandbox"
         referrerPolicy="no-referrer"
-        src={(src ?? url) || undefined}
+        src={safeUrl}
+        srcDoc={undefined}
         title="Preview"
-        {...props}
       />
       {loading}
     </div>

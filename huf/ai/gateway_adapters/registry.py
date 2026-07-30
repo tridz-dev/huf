@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
+from huf.ai.gateway_adapters.whatsapp import WhatsAppGatewayAdapter
 
 
 class GatewayAdapterRegistry:

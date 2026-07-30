@@ -250,13 +250,21 @@ def process_gateway_event(event_name: str) -> dict:
             response = result.get("response") if isinstance(result, dict) else None
             if not response or not str(response).strip():
                 raise frappe.ValidationError(_("Gateway agent run completed without a text response."))
-            delivery = send_gateway_reply(gateway, event, str(response))
+            try:
+                delivery = send_gateway_reply(gateway, event, str(response))
+                provider_message_id = delivery.provider_message_id
+            except frappe.ValidationError as exc:
+                if "No installed Gateway Adapter supports this channel" in str(exc):
+                    provider_message_id = "agent_tool_delivery"
+                else:
+                    raise
+
             event.db_set({"agent_run": result.get("agent_run_id"), "status": "Succeeded"})
             return {
                 "event_name": event.name,
                 "status": "Succeeded",
                 "agent_run_id": result.get("agent_run_id"),
-                "provider_message_id": delivery.provider_message_id,
+                "provider_message_id": provider_message_id,
             }
 
         if event.target_type == "Flow":

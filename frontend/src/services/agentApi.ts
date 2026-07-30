@@ -7,6 +7,56 @@ import { handleFrappeError } from '@/lib/frappe-error';
 import { getBrandLabel } from '@/utils/providerBrands';
 import { fetchPaginatedCount } from './utilsApi';
 
+export type AgentConfigSection =
+  | 'general'
+  | 'behavior'
+  | 'tools'
+  | 'knowledge'
+  | 'skills'
+  | 'permissions'
+  | 'advanced';
+
+export interface AgentSectionResponse {
+  name: string;
+  section: AgentConfigSection;
+  modified: string;
+  values: Partial<AgentDoc>;
+}
+
+export async function getAgentSection(
+  name: string,
+  section: AgentConfigSection,
+): Promise<AgentSectionResponse> {
+  try {
+    const result = await call.get('huf.ai.agent_config_api.get_agent_section', {
+      agent_name: name,
+      section,
+    });
+    return result.message as AgentSectionResponse;
+  } catch (error) {
+    handleFrappeError(error, `Error fetching ${section} settings for agent ${name}`);
+  }
+}
+
+export async function updateAgentSection(
+  name: string,
+  section: AgentConfigSection,
+  values: Partial<AgentDoc>,
+  expectedModified: string,
+): Promise<AgentSectionResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_config_api.update_agent_section', {
+      agent_name: name,
+      section,
+      values: JSON.stringify(values),
+      expected_modified: expectedModified,
+    });
+    return result.message as AgentSectionResponse;
+  } catch (error) {
+    handleFrappeError(error, `Error updating ${section} settings for agent ${name}`);
+  }
+}
+
 /**
  * Trigger type from API
  */

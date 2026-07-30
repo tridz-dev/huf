@@ -5,7 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronLeft, Plus, Bot, Workflow } from 'lucide-react';
+import { Plus, Bot, Workflow } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function HomeHeaderActions() {
@@ -21,10 +21,6 @@ export function HomeHeaderActions() {
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="gap-1.5 text-slate-600">
-        <ChevronLeft className="w-4 h-4" />
-        Hub
-      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="display" size="sm">
