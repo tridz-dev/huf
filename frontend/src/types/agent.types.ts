@@ -288,6 +288,10 @@ export interface AgentDoc {
   summary_template_version_at_attach?: number;
   summary_prompt?: string | null;
   history_limit?: number | null; // Maximum number of messages to keep
+  reasoning_mode?: 'Auto' | 'Off' | 'On' | null;
+  reasoning_effort?: 'Auto' | 'Low' | 'Medium' | 'High' | null;
+  reasoning_budget_tokens?: number | null;
+  reasoning_summary?: 'None' | 'Concise' | 'Detailed' | null;
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
   max_turns?: number | null; // Maximum consecutive turns/steps
   max_context_chars?: number | null; // Maximum characters for tool results before truncation
