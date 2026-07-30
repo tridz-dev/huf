@@ -1,0 +1,9 @@
+[
+  {
+    "doctype": "Agent",
+    "agent_name": "_TestAgent",
+    "provider": "_TestProvider",
+    "model": "_TestModel",
+    "instructions": "Test agent instructions."
+  }
+]
