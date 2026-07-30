@@ -70,18 +70,25 @@ jobs:
           bench new-site test_site --mariadb-root-password root --admin-password admin --no-mariadb-socket
           bench --site test_site install-app huf
 
+      # Full failure detail, captured to a file rather than relying on the
+      # Actions log: the console reporter dumps whole embedding vectors on
+      # some knowledge tests, which overruns the log's line-length limit and
+      # truncates every traceback after the first. --junit-xml-output needs
+      # the optional xmlrunner dependency, which frappe-bench does not pull
+      # in by default, so a plain tee is more reliable here.
       - name: Run tests
         working-directory: frappe-bench
-        run: bench --site test_site run-tests --app huf --junit-xml-output test-results.xml
+        # pipefail: `| tee` would otherwise report tee's exit code (always 0),
+        # masking a failing test suite as a passing step.
+        run: |
+          set -o pipefail
+          bench --site test_site run-tests --app huf 2>&1 | tee test-output.log
 
-      # Full failure detail. The console reporter dumps whole embedding vectors
-      # on some knowledge tests, which overruns the Actions log limit and hides
-      # every traceback after the first.
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: backend-test-results
-          path: frappe-bench/test-results.xml
+          path: frappe-bench/test-output.log
           retention-days: 14
           if-no-files-found: warn

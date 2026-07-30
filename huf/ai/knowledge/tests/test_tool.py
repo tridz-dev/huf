@@ -63,7 +63,7 @@ class TestKnowledgeTool(IntegrationTestCase):
         doc = frappe.get_doc({
             "doctype": "Agent",
             "agent_name": self.agent_name,
-            "provider": "Test Provider",
+            "provider": "TestProvider",
             "model": "gpt-4",
             "instructions": "You are a test agent.",
             "agent_knowledge": [
