@@ -475,6 +475,43 @@
    "label": "LLM Configuration"
   },
   {
+   "description": "Configure provider-aware reasoning controls (e.g. OpenAI reasoning_effort, Anthropic thinking budget)",
+   "fieldname": "reasoning_section",
+   "fieldtype": "Section Break",
+   "label": "Reasoning"
+  },
+  {
+   "default": "Auto",
+   "description": "Auto delegates to provider/model defaults. On forces reasoning. Off disables reasoning.",
+   "fieldname": "reasoning_mode",
+   "fieldtype": "Select",
+   "label": "Reasoning Mode",
+   "options": "Auto\nOff\nOn"
+  },
+  {
+   "default": "Auto",
+   "description": "Portable effort level for reasoning models (low, medium, high).",
+   "fieldname": "reasoning_effort",
+   "fieldtype": "Select",
+   "label": "Reasoning Effort",
+   "options": "Auto\nLow\nMedium\nHigh"
+  },
+  {
+   "depends_on": "eval:doc.reasoning_mode=='On'",
+   "description": "Explicit token budget for thinking models (primarily Anthropic extended thinking).",
+   "fieldname": "reasoning_budget_tokens",
+   "fieldtype": "Int",
+   "label": "Reasoning Token Budget"
+  },
+  {
+   "default": "None",
+   "description": "Reasoning summary preference (for supported Response APIs).",
+   "fieldname": "reasoning_summary",
+   "fieldtype": "Select",
+   "label": "Reasoning Summary",
+   "options": "None\nConcise\nDetailed"
+  },
+  {
    "description": "Configure conversation behaviour",
    "fieldname": "conversation_settings_section",
    "fieldtype": "Section Break",
@@ -524,43 +561,7 @@
    "fieldtype": "Check",
    "label": "Enable Multi Run"
   },
-  {
-    "fieldname": "reasoning_section",
-    "fieldtype": "Section Break",
-    "label": "Reasoning",
-    "description": "Configure provider-aware reasoning controls (e.g. OpenAI reasoning_effort, Anthropic thinking budget)"
-   },
-   {
-    "default": "Auto",
-    "description": "Auto delegates to provider/model defaults. On forces reasoning. Off disables reasoning.",
-    "fieldname": "reasoning_mode",
-    "fieldtype": "Select",
-    "label": "Reasoning Mode",
-    "options": "Auto\nOff\nOn"
-   },
-   {
-    "default": "Auto",
-    "description": "Portable effort level for reasoning models (low, medium, high).",
-    "fieldname": "reasoning_effort",
-    "fieldtype": "Select",
-    "label": "Reasoning Effort",
-    "options": "Auto\nLow\nMedium\nHigh"
-   },
-   {
-    "depends_on": "eval:doc.reasoning_mode=='On'",
-    "description": "Explicit token budget for thinking models (primarily Anthropic extended thinking).",
-    "fieldname": "reasoning_budget_tokens",
-    "fieldtype": "Int",
-    "label": "Reasoning Token Budget"
-   },
-   {
-    "default": "None",
-    "description": "Reasoning summary preference (for supported Response APIs).",
-    "fieldname": "reasoning_summary",
-    "fieldtype": "Select",
-    "label": "Reasoning Summary",
-    "options": "None\nConcise\nDetailed"
-   },
+
   {
    "depends_on": "eval:!doc.disabled",
    "description": "Configure prompt caching to reduce costs by caching repeated prompt content",
