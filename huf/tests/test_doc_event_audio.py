@@ -22,6 +22,15 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+# Standalone-only — see the matching note in test_audio_service.py. This module
+# additionally replaces "frappe.utils.safe_exec", "huf.ai.agent_integration"
+# and "huf.ai.sdk_tools", which corrupts a bench test run.
+if getattr(sys.modules.get("frappe"), "__file__", None):
+    raise unittest.SkipTest(
+        "huf.tests.test_doc_event_audio is a standalone unit-test module; "
+        "it stubs sys.modules and is skipped under a real Frappe bench"
+    )
+
 # Importing the audio service test module installs its frappe/frappe.utils/
 # litellm stubs into sys.modules and imports huf.ai.audio_service against
 # them. Reusing that mock keeps audio_service.frappe bound to one shared

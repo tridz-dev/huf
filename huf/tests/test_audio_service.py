@@ -19,6 +19,18 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+# Standalone-only. Everything below replaces real modules in sys.modules
+# ("frappe.utils.*", "litellm", "huf.ai.providers.litellm") at import time.
+# Under `bench run-tests` those replacements leak into the shared interpreter
+# and break test discovery for the whole app with errors like
+# "cannot import name 'ProviderUnavailableError' ... (unknown location)".
+# Bail out before mutating anything when a real frappe is importable.
+if getattr(sys.modules.get("frappe"), "__file__", None):
+    raise unittest.SkipTest(
+        "huf.tests.test_audio_service is a standalone unit-test module; "
+        "it stubs sys.modules and is skipped under a real Frappe bench"
+    )
+
 
 class ThrowError(Exception):
     """Stand-in for frappe.throw so tests can assert on thrown messages."""
