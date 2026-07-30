@@ -59,15 +59,18 @@ jobs:
       - name: Install bench
         run: pip install frappe-bench
 
-      # No --skip-redis-config-generation: bench init's default redis config
-      # points cache/queue/socketio at 127.0.0.1 on frappe's dev ports, none
-      # of which are backed by anything in CI. That surfaced as an 11-test
-      # setUpClass failure cluster — ConnectionRefusedError on 127.0.0.1:13000
-      # — that looked like a fixture bug but was actually a missing service.
-      # Point all three at the redis service container instead.
+      # --skip-redis-config-generation is required here: without it, `bench
+      # init` shells out to a local `redis-server --version` to auto-detect
+      # config, which doesn't exist on this runner (exit 127) and aborts init
+      # entirely. Skip generation, then point cache/queue/socketio at the
+      # redis service container explicitly. Doing this — rather than leaving
+      # frappe's un-backed dev-port defaults in place — is what fixed an
+      # 11-test setUpClass failure cluster (ConnectionRefusedError on
+      # 127.0.0.1:13000) that looked like a fixture bug but was a missing
+      # service.
       - name: Init bench
         run: |
-          bench init --skip-assets --python "$(which python)" frappe-bench
+          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" frappe-bench
           cd frappe-bench
           bench set-mariadb-host 127.0.0.1
           bench set-config -g db_password root
