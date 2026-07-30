@@ -28,7 +28,12 @@ class TestChromaBackend(IntegrationTestCase):
 		
 		self.patcher_embeds = patch("huf.ai.knowledge.embedding.get_embeddings")
 		self.mock_get_embeds = self.patcher_embeds.start()
-		self.mock_get_embeds.return_value = [[0.1] * 1536 for _ in range(10)]
+		# One embedding per input text. add_chunks() zips chunks with embeddings
+		# under strict=True, so a fixed-length return value fails for any input
+		# whose length differs from it.
+		self.mock_get_embeds.side_effect = lambda texts, **kwargs: [
+			[0.1] * 1536 for _ in texts
+		]
 		
 		self.patcher_embed = patch("huf.ai.knowledge.embedding.get_embedding")
 		self.mock_get_embed = self.patcher_embed.start()
