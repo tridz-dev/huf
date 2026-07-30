@@ -205,6 +205,9 @@ def _inject_extra_args(args: dict, tool_doc: dict):
 		"Update Multiple Documents",
 		"Delete Document",
 		"Delete Multiple Documents",
+		"Submit Document",
+		"Cancel Document",
+		"Get Amended Document",
 	):
 		if tool_doc.get("reference_doctype"):
 			args.setdefault("reference_doctype", tool_doc["reference_doctype"])

@@ -622,22 +622,60 @@ def handle_delete_documents(reference_doctype: str, document_ids: list, **kwargs
     return delete_documents(reference_doctype, document_ids or [])
 
 
-def handle_submit_document(reference_doctype: str, document_id: str, ignore_permissions=False, **kwargs):
-    if not ignore_permissions and not frappe.has_permission(reference_doctype, "submit", doc=document_id):
-        return {"success": False, "error": "No permission to submit"}
+def handle_submit_document(reference_doctype: str = None, document_id: str = None, ignore_permissions=False, **kwargs):
+    try:
+        if not reference_doctype:
+            reference_doctype = frappe.flags.get("current_function_doctype")
 
-    doc = frappe.get_doc(reference_doctype, document_id)
-    doc.submit()
-    return {"success": True, "message": "Submitted"}
+        if not reference_doctype:
+            return {"success": False, "error": "No reference doctype provided."}
+
+        if not document_id:
+            document_id = kwargs.get("name")
+
+        if not document_id:
+            return {"success": False, "error": "No document ID provided."}
+
+        if not ignore_permissions and not frappe.has_permission(reference_doctype, "submit", doc=document_id):
+            return {"success": False, "error": f"No permission to submit {reference_doctype} {document_id}"}
+
+        doc = frappe.get_doc(reference_doctype, document_id)
+        doc.submit()
+        commit_if_background()
+        return {"success": True, "message": f"{reference_doctype} {document_id} submitted successfully"}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.warning(f"handle_submit_document failed: {e!s}\n{frappe.get_traceback()}")
+        return {"success": False, "error": str(e)}
 
 
-def handle_cancel_document(reference_doctype: str, document_id: str, ignore_permissions=False, **kwargs):
-    if not ignore_permissions and not frappe.has_permission(reference_doctype, "cancel", doc=document_id):
-        return {"success": False, "error": "No permission to cancel"}
+def handle_cancel_document(reference_doctype: str = None, document_id: str = None, ignore_permissions=False, **kwargs):
+    try:
+        if not reference_doctype:
+            reference_doctype = frappe.flags.get("current_function_doctype")
 
-    doc = frappe.get_doc(reference_doctype, document_id)
-    doc.cancel()
-    return {"success": True, "message": "Cancelled"}
+        if not reference_doctype:
+            return {"success": False, "error": "No reference doctype provided."}
+
+        if not document_id:
+            document_id = kwargs.get("name")
+
+        if not document_id:
+            return {"success": False, "error": "No document ID provided."}
+
+        if not ignore_permissions and not frappe.has_permission(reference_doctype, "cancel", doc=document_id):
+            return {"success": False, "error": f"No permission to cancel {reference_doctype} {document_id}"}
+
+        doc = frappe.get_doc(reference_doctype, document_id)
+        doc.cancel()
+        commit_if_background()
+        return {"success": True, "message": f"{reference_doctype} {document_id} cancelled successfully"}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.warning(f"handle_cancel_document failed: {e!s}\n{frappe.get_traceback()}")
+        return {"success": False, "error": str(e)}
 
 
 def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, ignore_permissions=False, **kwargs):

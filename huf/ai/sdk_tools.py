@@ -187,7 +187,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                         "Get Document", "Get Multiple Documents", "Get List",
                         "Create Document", "Create Multiple Documents",
                         "Update Document", "Update Multiple Documents",
-                        "Delete Document", "Delete Multiple Documents"
+                        "Delete Document", "Delete Multiple Documents",
+                        "Submit Document", "Cancel Document", "Get Amended Document"
                     ]
                     and function_doc.reference_doctype
                 ):
