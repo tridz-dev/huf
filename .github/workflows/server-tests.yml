@@ -27,10 +27,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Frappe v16 requires Python 3.14 (see pyproject.toml dependency notes).
+      # Older interpreters fail to even parse frappe's PEP 695 `type X = ...`
+      # aliases during the editable install.
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.14"
 
       - name: Setup Node
         uses: actions/setup-node@v4
