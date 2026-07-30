@@ -12,6 +12,9 @@ on:
     types: [completed]
     branches: [develop]
 
+permissions:
+  contents: read
+
 jobs:
   analyze:
     if: |
