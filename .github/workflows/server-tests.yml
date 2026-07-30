@@ -27,6 +27,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     steps:
       - uses: actions/checkout@v4
@@ -50,12 +59,21 @@ jobs:
       - name: Install bench
         run: pip install frappe-bench
 
+      # No --skip-redis-config-generation: bench init's default redis config
+      # points cache/queue/socketio at 127.0.0.1 on frappe's dev ports, none
+      # of which are backed by anything in CI. That surfaced as an 11-test
+      # setUpClass failure cluster — ConnectionRefusedError on 127.0.0.1:13000
+      # — that looked like a fixture bug but was actually a missing service.
+      # Point all three at the redis service container instead.
       - name: Init bench
         run: |
-          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" frappe-bench
+          bench init --skip-assets --python "$(which python)" frappe-bench
           cd frappe-bench
           bench set-mariadb-host 127.0.0.1
           bench set-config -g db_password root
+          bench set-config -g redis_cache "redis://127.0.0.1:6379/0"
+          bench set-config -g redis_queue "redis://127.0.0.1:6379/1"
+          bench set-config -g redis_socketio "redis://127.0.0.1:6379/2"
 
       # --skip-assets: backend tests need no built frontend, and bench would
       # otherwise run `yarn install --check-files` against frontend/, which
