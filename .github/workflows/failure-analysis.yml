@@ -119,6 +119,10 @@ jobs:
 
           # Picode
           pi \"the ${WORKFLOW} CI job failed on huf. Failed step: ${SUMMARY}. What broke and how do I fix it?\"
+
+          # Cursor Agent (run inside Cursor, or via cursor CLI if available)
+          # Open the huf repo in Cursor, then in the Agent panel paste:
+          # "CI failure: ${WORKFLOW} failed at step '${SUMMARY}'. Find the root cause and fix it."
           \`\`\`"
 
           RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
