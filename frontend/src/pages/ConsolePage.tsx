@@ -17,6 +17,8 @@ import { getAgents } from '@/services/agentApi';
 import { getProviders, getModels } from '@/services/providerApi';
 import { runAgentSync } from '@/services/consoleApi';
 import type { AgentDoc, AIProvider, AIModel } from '@/types/agent.types';
+import { settleAll } from '@/lib/settleAll';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 export { ConsolePage };
 export default ConsolePage;
@@ -38,9 +40,15 @@ function ConsolePage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [agentsRes, providersRes] = await Promise.all([getAgents(), getProviders()]);
-      setAgents(Array.isArray(agentsRes) ? agentsRes : agentsRes.items);
-      setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
+      const errorLabels = ['agents', 'providers'];
+      const [agentsRes, providersRes] = await settleAll(
+        [getAgents(), getProviders()],
+        (index, error) => {
+          toast.error(`Failed to load ${errorLabels[index]}: ${getFrappeErrorMessage(error)}`);
+        },
+      );
+      if (agentsRes) setAgents(Array.isArray(agentsRes) ? agentsRes : agentsRes.items);
+      if (providersRes) setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
       setLoading(false);
     })();
   }, []);

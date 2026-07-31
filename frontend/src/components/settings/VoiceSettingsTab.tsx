@@ -25,6 +25,8 @@ import {
 import { getProviders } from '@/services/providerApi';
 import type { AIProvider } from '@/types/agent.types';
 import type { ElevenlabsSettingsDoc, HttpProviderSettingsDoc } from '@/types/integration.types';
+import { settleAll } from '@/lib/settleAll';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 export { VoiceSettingsTab };
 export default VoiceSettingsTab;
@@ -292,13 +294,16 @@ function VoiceSettingsTab() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [providersRes, openaiRes, groqRes, elevenlabsRes] = await Promise.all([
-        getProviders(),
-        getOpenAISettings(),
-        getGroqSettings(),
-        getElevenlabsSettings(),
-      ]);
-      setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
+      const errorLabels = ['providers', 'OpenAI settings', 'Groq settings', 'ElevenLabs settings'];
+      const [providersRes, openaiRes, groqRes, elevenlabsRes] = await settleAll(
+        [getProviders(), getOpenAISettings(), getGroqSettings(), getElevenlabsSettings()],
+        (index, error) => {
+          toast.error(`Failed to load ${errorLabels[index]}: ${getFrappeErrorMessage(error)}`);
+        },
+      );
+      if (providersRes) {
+        setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
+      }
       if (openaiRes) setOpenai(openaiRes);
       if (groqRes) setGroq(groqRes);
       if (elevenlabsRes) setElevenlabs(elevenlabsRes);
