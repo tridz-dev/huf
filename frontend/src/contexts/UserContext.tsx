@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { toast } from 'sonner';
 import { auth, db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
+import { onSessionInvalidated } from '@/lib/sessionInvalidation';
+
+const SESSION_ENDED_FLAG = 'huf:session-ended';
 
 interface User {
   name: string;
@@ -99,6 +103,24 @@ export function UserProvider({ children }: UserProviderProps) {
     window.location.href = `${LOGIN_URL}${redirectTo}#login`;
   };
 
+  /**
+   * A dead session surfaces as a "not whitelisted" PermissionError on
+   * whichever API call notices it first (see lib/sessionInvalidation.ts) -
+   * anywhere in the app, not just the login-check call this context owns.
+   * Redirect immediately with a clear reason instead of leaving the
+   * triggering page to show a confusing one-off "permission denied" toast
+   * and leaving every other stale/unretried call to fail the same way.
+   */
+  const handleSessionInvalidated = () => {
+    try {
+      sessionStorage.setItem(SESSION_ENDED_FLAG, '1');
+    } catch {
+      // sessionStorage unavailable - the flag is only a nice-to-have message
+    }
+    setUser(null);
+    redirectToLogin();
+  };
+
   const checkAuth = async () => {
     try {
       setIsLoading(true);
@@ -121,6 +143,14 @@ export function UserProvider({ children }: UserProviderProps) {
       if (loggedUserId) {
         const userDetails = await fetchUserDetails(loggedUserId);
         setUser(userDetails);
+        try {
+          if (sessionStorage.getItem(SESSION_ENDED_FLAG) === '1') {
+            sessionStorage.removeItem(SESSION_ENDED_FLAG);
+            toast.info('You were signed out because your session ended. Please retry your last action.');
+          }
+        } catch {
+          // sessionStorage unavailable - nothing to clean up
+        }
       } else {
         setUser(null);
         redirectToLogin();
@@ -151,6 +181,10 @@ export function UserProvider({ children }: UserProviderProps) {
 
   useEffect(() => {
     checkAuth();
+  }, []);
+
+  useEffect(() => {
+    onSessionInvalidated(handleSessionInvalidated);
   }, []);
 
   const value: UserContextType = {
