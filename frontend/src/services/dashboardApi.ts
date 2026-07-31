@@ -117,18 +117,31 @@ export async function getDashboardActiveFlows(limit = 10): Promise<DashboardFlow
 
     return Promise.all(
       active.map(async (flow) => {
-        const [runCount, recentRuns] = await Promise.all([
-          fetchDocCount(doctype['Flow Run'], [['flow_id', '=', flow.flow_id]]),
-          listFlowRuns(flow.flow_id, undefined, 1),
-        ]);
+        try {
+          const [runCount, recentRuns] = await Promise.all([
+            fetchDocCount(doctype['Flow Run'], [['flow_id', '=', flow.flow_id]]),
+            listFlowRuns(flow.flow_id, undefined, 1),
+          ]);
 
-        return {
-          id: flow.flow_id,
-          name: flow.flow_name,
-          status: mapBackendStatusToFrontend(flow.status),
-          runCount: runCount ?? 0,
-          lastRunAt: recentRuns[0]?.started_at ?? null,
-        };
+          return {
+            id: flow.flow_id,
+            name: flow.flow_name,
+            status: mapBackendStatusToFrontend(flow.status),
+            runCount: runCount ?? 0,
+            lastRunAt: recentRuns[0]?.started_at ?? null,
+          };
+        } catch (error) {
+          // One flow's run stats being denied/unavailable must not blank the
+          // whole active-flows widget - show it with unknown stats instead.
+          console.error(`Error fetching run stats for flow ${flow.flow_id}:`, error);
+          return {
+            id: flow.flow_id,
+            name: flow.flow_name,
+            status: mapBackendStatusToFrontend(flow.status),
+            runCount: 0,
+            lastRunAt: null,
+          };
+        }
       })
     );
   } catch (error) {

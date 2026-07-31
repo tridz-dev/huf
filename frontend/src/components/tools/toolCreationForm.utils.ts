@@ -655,13 +655,22 @@ export async function loadDocTypeFieldCatalog(doctypeName: string): Promise<DocT
   const childMetaEntries = await Promise.all(
     childTableFields.map(async (tableDf) => {
       const childDoctype = tableDf.options || '';
-      const childMeta = (await getDocTypeMeta(childDoctype)) as DocTypeMeta;
-      return [tableDf.fieldname || '', childMeta] as const;
+      try {
+        const childMeta = (await getDocTypeMeta(childDoctype)) as DocTypeMeta;
+        return [tableDf.fieldname || '', childMeta] as const;
+      } catch (error) {
+        // One child table's meta being denied/unavailable must not break
+        // building the tool schema for every other field on this doctype.
+        console.error(`Error loading child table meta for ${childDoctype}:`, error);
+        return null;
+      }
     })
   );
 
   const childTableMetas: Record<string, DocTypeMeta> = {};
-  childMetaEntries.forEach(([tableFieldname, meta]) => {
+  childMetaEntries.forEach((entry) => {
+    if (!entry) return;
+    const [tableFieldname, meta] = entry;
     childTableMetas[tableFieldname] = meta;
   });
 
